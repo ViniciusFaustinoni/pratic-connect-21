@@ -1,9 +1,9 @@
 // Tipos manuais para o SGA PRATIC 2.0
 // Complementam os tipos gerados automaticamente pelo Supabase
 
-export type AppRole =
-  | 'diretor'
-  | 'gerente_comercial'
+export type AppRole = 
+  | 'diretor' 
+  | 'gerente_comercial' 
   | 'supervisor_vendas'
   | 'vendedor_clt'
   | 'vendedor_externo'
@@ -11,7 +11,8 @@ export type AppRole =
   | 'coordenador_monitoramento'
   | 'analista_plataforma'
   | 'instalador_vistoriador'
-  | 'associado';
+  | 'associado'
+  | 'analista_marketing';
 
 export type TipoUsuario = 'funcionario' | 'associado' | 'prestador';
 
@@ -489,6 +490,7 @@ export const ROLE_LABELS: Record<AppRole, string> = {
   analista_plataforma: 'Analista de Plataforma',
   instalador_vistoriador: 'Instalador/Vistoriador',
   associado: 'Associado',
+  analista_marketing: 'Analista de Marketing',
 };
 
 export const STATUS_RASTREADOR_LABELS: Record<StatusRastreador, string> = {

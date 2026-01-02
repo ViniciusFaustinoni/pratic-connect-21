@@ -18,6 +18,7 @@ interface AuthContextType {
   isGerencia: () => boolean;
   isVendedor: () => boolean;
   isFuncionario: () => boolean;
+  canAccessApiSettings: () => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -151,6 +152,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const isFuncionario = () => profile?.tipo === 'funcionario';
 
+  const canAccessApiSettings = () => 
+    hasRole('diretor') || hasRole('analista_marketing');
+
   return (
     <AuthContext.Provider
       value={{
@@ -168,6 +172,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isGerencia,
         isVendedor,
         isFuncionario,
+        canAccessApiSettings,
       }}
     >
       {children}

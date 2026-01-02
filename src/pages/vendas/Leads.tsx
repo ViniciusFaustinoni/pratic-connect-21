@@ -30,7 +30,7 @@ import { LeadFormDialog } from '@/components/leads/LeadFormDialog';
 import { LeadEditDialog } from '@/components/leads/LeadEditDialog';
 import { LeadFilters } from '@/components/leads/LeadFilters';
 import { LeadKanbanCard } from '@/components/leads/LeadKanbanCard';
-import { LeadApiTab } from '@/components/leads/LeadApiTab';
+
 import { CotacaoFormDialog } from '@/components/cotacoes/CotacaoFormDialog';
 import { toast } from 'sonner';
 import {
@@ -72,7 +72,7 @@ export default function Leads() {
   const navigate = useNavigate();
   const [filters, setFilters] = useState<LeadFiltersType>({});
   const [page, setPage] = useState(1);
-  const [view, setView] = useState<'table' | 'kanban' | 'api'>('table');
+  const [view, setView] = useState<'table' | 'kanban'>('table');
   const [showLeadForm, setShowLeadForm] = useState(false);
   const [showCotacaoForm, setShowCotacaoForm] = useState(false);
   const [selectedLeadId, setSelectedLeadId] = useState<string | undefined>();
@@ -182,29 +182,21 @@ export default function Leads() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Tabs value={view} onValueChange={(v) => setView(v as 'table' | 'kanban' | 'api')}>
+          <Tabs value={view} onValueChange={(v) => setView(v as 'table' | 'kanban')}>
             <TabsList>
               <TabsTrigger value="table">Lista</TabsTrigger>
               <TabsTrigger value="kanban">Kanban</TabsTrigger>
-              <TabsTrigger value="api">API</TabsTrigger>
             </TabsList>
           </Tabs>
-          {view !== 'api' && (
-            <Button className="gap-2" onClick={() => setShowLeadForm(true)}>
-              <Plus className="h-4 w-4" />
-              Novo Lead
-            </Button>
-          )}
+          <Button className="gap-2" onClick={() => setShowLeadForm(true)}>
+            <Plus className="h-4 w-4" />
+            Novo Lead
+          </Button>
         </div>
       </div>
 
-      {/* Filters - hidden for API view */}
-      {view !== 'api' && (
-        <LeadFilters filters={filters} onFiltersChange={(f) => { setFilters(f); setPage(1); }} />
-      )}
-
-      {/* API Tab */}
-      {view === 'api' && <LeadApiTab />}
+      {/* Filters */}
+      <LeadFilters filters={filters} onFiltersChange={(f) => { setFilters(f); setPage(1); }} />
 
       {/* Table View */}
       {view === 'table' && (
