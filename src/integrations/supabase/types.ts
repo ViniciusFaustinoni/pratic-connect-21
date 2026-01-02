@@ -1278,6 +1278,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_access_api_settings: { Args: { _user_id: string }; Returns: boolean }
       get_my_associado_id: { Args: { _user_id: string }; Returns: string }
       get_user_tipo: {
         Args: { _user_id: string }
@@ -1307,6 +1308,7 @@ export type Database = {
         | "analista_plataforma"
         | "instalador_vistoriador"
         | "associado"
+        | "analista_marketing"
       etapa_lead:
         | "novo"
         | "contato_inicial"
@@ -1523,6 +1525,7 @@ export const Constants = {
         "analista_plataforma",
         "instalador_vistoriador",
         "associado",
+        "analista_marketing",
       ],
       etapa_lead: [
         "novo",
