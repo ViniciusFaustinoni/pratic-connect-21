@@ -60,6 +60,18 @@ export function LeadFormDialog({ open, onOpenChange }: LeadFormDialogProps) {
     },
   });
 
+  // Campos por etapa para validação
+  const step1Fields: (keyof LeadFormData)[] = ['nome', 'telefone'];
+  const step2Fields: (keyof LeadFormData)[] = [];
+
+  const handleNextStep = async () => {
+    const fieldsToValidate = step === 1 ? step1Fields : step2Fields;
+    const isValid = await form.trigger(fieldsToValidate);
+    if (isValid) {
+      setStep(step + 1);
+    }
+  };
+
   const onSubmit = async (data: LeadFormData) => {
     try {
       await createLead.mutateAsync({
@@ -308,7 +320,7 @@ export function LeadFormDialog({ open, onOpenChange }: LeadFormDialogProps) {
                 </Button>
               )}
               {step < 3 ? (
-                <Button type="button" onClick={() => setStep(step + 1)}>
+                <Button type="button" onClick={handleNextStep}>
                   Próximo
                 </Button>
               ) : (
