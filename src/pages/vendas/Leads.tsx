@@ -23,13 +23,14 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ETAPA_LABELS, ORIGEM_LABELS, type EtapaLead } from '@/types/database';
 import { useLeads, useAllLeads, useUpdateLead, type LeadFilters as LeadFiltersType } from '@/hooks/useLeads';
 import { LeadFormDialog } from '@/components/leads/LeadFormDialog';
 import { LeadEditDialog } from '@/components/leads/LeadEditDialog';
 import { LeadFilters } from '@/components/leads/LeadFilters';
 import { LeadKanbanCard } from '@/components/leads/LeadKanbanCard';
+import { LeadApiTab } from '@/components/leads/LeadApiTab';
 import { CotacaoFormDialog } from '@/components/cotacoes/CotacaoFormDialog';
 import { toast } from 'sonner';
 import {
@@ -71,7 +72,7 @@ export default function Leads() {
   const navigate = useNavigate();
   const [filters, setFilters] = useState<LeadFiltersType>({});
   const [page, setPage] = useState(1);
-  const [view, setView] = useState<'table' | 'kanban'>('table');
+  const [view, setView] = useState<'table' | 'kanban' | 'api'>('table');
   const [showLeadForm, setShowLeadForm] = useState(false);
   const [showCotacaoForm, setShowCotacaoForm] = useState(false);
   const [selectedLeadId, setSelectedLeadId] = useState<string | undefined>();
@@ -181,21 +182,29 @@ export default function Leads() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Tabs value={view} onValueChange={(v) => setView(v as 'table' | 'kanban')}>
+          <Tabs value={view} onValueChange={(v) => setView(v as 'table' | 'kanban' | 'api')}>
             <TabsList>
               <TabsTrigger value="table">Lista</TabsTrigger>
               <TabsTrigger value="kanban">Kanban</TabsTrigger>
+              <TabsTrigger value="api">API</TabsTrigger>
             </TabsList>
           </Tabs>
-          <Button className="gap-2" onClick={() => setShowLeadForm(true)}>
-            <Plus className="h-4 w-4" />
-            Novo Lead
-          </Button>
+          {view !== 'api' && (
+            <Button className="gap-2" onClick={() => setShowLeadForm(true)}>
+              <Plus className="h-4 w-4" />
+              Novo Lead
+            </Button>
+          )}
         </div>
       </div>
 
-      {/* Filters */}
-      <LeadFilters filters={filters} onFiltersChange={(f) => { setFilters(f); setPage(1); }} />
+      {/* Filters - hidden for API view */}
+      {view !== 'api' && (
+        <LeadFilters filters={filters} onFiltersChange={(f) => { setFilters(f); setPage(1); }} />
+      )}
+
+      {/* API Tab */}
+      {view === 'api' && <LeadApiTab />}
 
       {/* Table View */}
       {view === 'table' && (

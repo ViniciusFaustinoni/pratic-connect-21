@@ -33,7 +33,8 @@ export type OrigemLead =
   | 'telefone'
   | 'presencial'
   | 'parceiro'
-  | 'outro';
+  | 'outro'
+  | 'api';
 
 export type StatusAssociado =
   | 'em_analise'
@@ -119,6 +120,32 @@ export interface Lead {
   vendedor_id?: string;
   observacoes?: string;
   motivo_perda?: string;
+  fonte_id?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ApiKey {
+  id: string;
+  nome: string;
+  key_hash: string;
+  key_prefix: string;
+  ativa: boolean;
+  created_by?: string;
+  last_used_at?: string;
+  expires_at?: string;
+  created_at: string;
+}
+
+export interface LeadFonte {
+  id: string;
+  codigo: string;
+  nome: string;
+  descricao?: string;
+  vendedor_padrao_id?: string;
+  etapa_inicial: EtapaLead;
+  ativa: boolean;
+  total_leads: number;
   created_at: string;
   updated_at: string;
 }
@@ -418,6 +445,7 @@ export const ORIGEM_LABELS: Record<OrigemLead, string> = {
   presencial: 'Presencial',
   parceiro: 'Parceiro',
   outro: 'Outro',
+  api: 'API',
 };
 
 export const STATUS_ASSOCIADO_LABELS: Record<StatusAssociado, string> = {
