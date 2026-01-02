@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      api_keys: {
+        Row: {
+          ativa: boolean | null
+          created_at: string | null
+          created_by: string | null
+          expires_at: string | null
+          id: string
+          key_hash: string
+          key_prefix: string
+          last_used_at: string | null
+          nome: string
+        }
+        Insert: {
+          ativa?: boolean | null
+          created_at?: string | null
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          key_hash: string
+          key_prefix: string
+          last_used_at?: string | null
+          nome: string
+        }
+        Update: {
+          ativa?: boolean | null
+          created_at?: string | null
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          key_hash?: string
+          key_prefix?: string
+          last_used_at?: string | null
+          nome?: string
+        }
+        Relationships: []
+      }
       associados: {
         Row: {
           bairro: string | null
@@ -561,12 +597,52 @@ export type Database = {
           },
         ]
       }
+      lead_fontes: {
+        Row: {
+          ativa: boolean | null
+          codigo: string
+          created_at: string | null
+          descricao: string | null
+          etapa_inicial: Database["public"]["Enums"]["etapa_lead"] | null
+          id: string
+          nome: string
+          total_leads: number | null
+          updated_at: string | null
+          vendedor_padrao_id: string | null
+        }
+        Insert: {
+          ativa?: boolean | null
+          codigo: string
+          created_at?: string | null
+          descricao?: string | null
+          etapa_inicial?: Database["public"]["Enums"]["etapa_lead"] | null
+          id?: string
+          nome: string
+          total_leads?: number | null
+          updated_at?: string | null
+          vendedor_padrao_id?: string | null
+        }
+        Update: {
+          ativa?: boolean | null
+          codigo?: string
+          created_at?: string | null
+          descricao?: string | null
+          etapa_inicial?: Database["public"]["Enums"]["etapa_lead"] | null
+          id?: string
+          nome?: string
+          total_leads?: number | null
+          updated_at?: string | null
+          vendedor_padrao_id?: string | null
+        }
+        Relationships: []
+      }
       leads: {
         Row: {
           cpf: string | null
           created_at: string
           email: string | null
           etapa: Database["public"]["Enums"]["etapa_lead"]
+          fonte_id: string | null
           id: string
           motivo_perda: string | null
           nome: string
@@ -586,6 +662,7 @@ export type Database = {
           created_at?: string
           email?: string | null
           etapa?: Database["public"]["Enums"]["etapa_lead"]
+          fonte_id?: string | null
           id?: string
           motivo_perda?: string | null
           nome: string
@@ -605,6 +682,7 @@ export type Database = {
           created_at?: string
           email?: string | null
           etapa?: Database["public"]["Enums"]["etapa_lead"]
+          fonte_id?: string | null
           id?: string
           motivo_perda?: string | null
           nome?: string
@@ -619,7 +697,15 @@ export type Database = {
           veiculo_placa?: string | null
           vendedor_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "leads_fonte_id_fkey"
+            columns: ["fonte_id"]
+            isOneToOne: false
+            referencedRelation: "lead_fontes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       notificacoes: {
         Row: {
@@ -1239,6 +1325,7 @@ export type Database = {
         | "presencial"
         | "parceiro"
         | "outro"
+        | "api"
       periodo_instalacao: "manha" | "tarde" | "noite"
       status_associado:
         | "em_analise"
@@ -1456,6 +1543,7 @@ export const Constants = {
         "presencial",
         "parceiro",
         "outro",
+        "api",
       ],
       periodo_instalacao: ["manha", "tarde", "noite"],
       status_associado: [
