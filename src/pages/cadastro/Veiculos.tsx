@@ -3,6 +3,7 @@ import { Search, Car, User } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
   TableBody,
@@ -11,83 +12,31 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-
-const mockVeiculos = [
-  {
-    id: '1',
-    placa: 'ABC-1234',
-    marca: 'Honda',
-    modelo: 'Civic',
-    ano_fabricacao: 2022,
-    ano_modelo: 2022,
-    cor: 'Preto',
-    valor_fipe: 95000,
-    associado_nome: 'João Silva',
-    ativo: true,
-  },
-  {
-    id: '2',
-    placa: 'DEF-5678',
-    marca: 'Toyota',
-    modelo: 'Corolla',
-    ano_fabricacao: 2021,
-    ano_modelo: 2021,
-    cor: 'Prata',
-    valor_fipe: 105000,
-    associado_nome: 'Maria Santos',
-    ativo: true,
-  },
-  {
-    id: '3',
-    placa: 'GHI-9012',
-    marca: 'Toyota',
-    modelo: 'Yaris',
-    ano_fabricacao: 2020,
-    ano_modelo: 2020,
-    cor: 'Branco',
-    valor_fipe: 72000,
-    associado_nome: 'Maria Santos',
-    ativo: true,
-  },
-  {
-    id: '4',
-    placa: 'JKL-3456',
-    marca: 'Hyundai',
-    modelo: 'HB20',
-    ano_fabricacao: 2023,
-    ano_modelo: 2023,
-    cor: 'Vermelho',
-    valor_fipe: 75000,
-    associado_nome: 'Pedro Oliveira',
-    ativo: true,
-  },
-  {
-    id: '5',
-    placa: 'MNO-7890',
-    marca: 'Chevrolet',
-    modelo: 'Onix',
-    ano_fabricacao: 2022,
-    ano_modelo: 2022,
-    cor: 'Cinza',
-    valor_fipe: 68000,
-    associado_nome: 'Ana Costa',
-    ativo: false,
-  },
-];
+import { useVeiculos } from '@/hooks/useVeiculos';
+import { useAssociados } from '@/hooks/useAssociados';
 
 export default function Veiculos() {
   const [search, setSearch] = useState('');
+  const { data: veiculos, isLoading } = useVeiculos();
+  const { data: associados } = useAssociados();
 
-  const filteredVeiculos = mockVeiculos.filter((veiculo) => {
+  // Create a map of associado_id to nome for quick lookup
+  const associadoMap = new Map(
+    associados?.map((a) => [a.id, a.nome]) || []
+  );
+
+  const filteredVeiculos = veiculos?.filter((veiculo) => {
+    const associadoNome = associadoMap.get(veiculo.associado_id) || '';
     return (
       veiculo.placa.toLowerCase().includes(search.toLowerCase()) ||
       veiculo.marca.toLowerCase().includes(search.toLowerCase()) ||
       veiculo.modelo.toLowerCase().includes(search.toLowerCase()) ||
-      veiculo.associado_nome.toLowerCase().includes(search.toLowerCase())
+      associadoNome.toLowerCase().includes(search.toLowerCase())
     );
-  });
+  }) || [];
 
-  const formatCurrency = (value: number) => {
+  const formatCurrency = (value: number | null) => {
+    if (!value) return 'N/A';
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
       currency: 'BRL',
@@ -96,9 +45,9 @@ export default function Veiculos() {
 
   // Stats
   const stats = {
-    total: mockVeiculos.length,
-    ativos: mockVeiculos.filter((v) => v.ativo).length,
-    valorTotal: mockVeiculos.filter((v) => v.ativo).reduce((acc, v) => acc + v.valor_fipe, 0),
+    total: veiculos?.length || 0,
+    ativos: veiculos?.filter((v) => v.ativo).length || 0,
+    valorTotal: veiculos?.filter((v) => v.ativo).reduce((acc, v) => acc + (v.valor_fipe || 0), 0) || 0,
   };
 
   return (
@@ -120,7 +69,11 @@ export default function Veiculos() {
                 <Car className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{stats.total}</p>
+                {isLoading ? (
+                  <Skeleton className="h-8 w-12" />
+                ) : (
+                  <p className="text-2xl font-bold">{stats.total}</p>
+                )}
                 <p className="text-xs text-muted-foreground">Total de Veículos</p>
               </div>
             </div>
@@ -133,7 +86,11 @@ export default function Veiculos() {
                 <Car className="h-5 w-5 text-green-500" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{stats.ativos}</p>
+                {isLoading ? (
+                  <Skeleton className="h-8 w-12" />
+                ) : (
+                  <p className="text-2xl font-bold">{stats.ativos}</p>
+                )}
                 <p className="text-xs text-muted-foreground">Veículos Ativos</p>
               </div>
             </div>
@@ -146,7 +103,11 @@ export default function Veiculos() {
                 <Car className="h-5 w-5 text-accent" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{formatCurrency(stats.valorTotal)}</p>
+                {isLoading ? (
+                  <Skeleton className="h-8 w-24" />
+                ) : (
+                  <p className="text-2xl font-bold">{formatCurrency(stats.valorTotal)}</p>
+                )}
                 <p className="text-xs text-muted-foreground">Valor FIPE Total</p>
               </div>
             </div>
@@ -170,53 +131,69 @@ export default function Veiculos() {
       {/* Table */}
       <Card>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Veículo</TableHead>
-                <TableHead>Placa</TableHead>
-                <TableHead>Ano</TableHead>
-                <TableHead>Cor</TableHead>
-                <TableHead>Valor FIPE</TableHead>
-                <TableHead>Associado</TableHead>
-                <TableHead>Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredVeiculos.map((veiculo) => (
-                <TableRow key={veiculo.id} className="cursor-pointer hover:bg-muted/50">
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <div className="rounded-lg bg-primary/10 p-2">
-                        <Car className="h-4 w-4 text-primary" />
-                      </div>
-                      <div>
-                        <p className="font-medium">{veiculo.marca}</p>
-                        <p className="text-sm text-muted-foreground">{veiculo.modelo}</p>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="font-mono">{veiculo.placa}</TableCell>
-                  <TableCell>
-                    {veiculo.ano_fabricacao}/{veiculo.ano_modelo}
-                  </TableCell>
-                  <TableCell>{veiculo.cor}</TableCell>
-                  <TableCell>{formatCurrency(veiculo.valor_fipe)}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <User className="h-3 w-3 text-muted-foreground" />
-                      {veiculo.associado_nome}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge className={veiculo.ativo ? 'bg-green-500 text-white' : 'bg-muted text-muted-foreground'}>
-                      {veiculo.ativo ? 'Ativo' : 'Inativo'}
-                    </Badge>
-                  </TableCell>
-                </TableRow>
+          {isLoading ? (
+            <div className="p-6 space-y-4">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <Skeleton key={i} className="h-16 w-full" />
               ))}
-            </TableBody>
-          </Table>
+            </div>
+          ) : filteredVeiculos.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12">
+              <Car className="h-12 w-12 text-muted-foreground/50" />
+              <h3 className="mt-4 font-semibold text-foreground">Nenhum veículo encontrado</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {search ? 'Tente uma busca diferente' : 'Nenhum veículo cadastrado ainda'}
+              </p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Veículo</TableHead>
+                  <TableHead>Placa</TableHead>
+                  <TableHead>Ano</TableHead>
+                  <TableHead>Cor</TableHead>
+                  <TableHead>Valor FIPE</TableHead>
+                  <TableHead>Associado</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredVeiculos.map((veiculo) => (
+                  <TableRow key={veiculo.id} className="cursor-pointer hover:bg-muted/50">
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <div className="rounded-lg bg-primary/10 p-2">
+                          <Car className="h-4 w-4 text-primary" />
+                        </div>
+                        <div>
+                          <p className="font-medium">{veiculo.marca}</p>
+                          <p className="text-sm text-muted-foreground">{veiculo.modelo}</p>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="font-mono">{veiculo.placa}</TableCell>
+                    <TableCell>
+                      {veiculo.ano_fabricacao}/{veiculo.ano_modelo}
+                    </TableCell>
+                    <TableCell>{veiculo.cor || '-'}</TableCell>
+                    <TableCell>{formatCurrency(veiculo.valor_fipe)}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <User className="h-3 w-3 text-muted-foreground" />
+                        {associadoMap.get(veiculo.associado_id) || 'Desconhecido'}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge className={veiculo.ativo ? 'bg-green-500 text-white' : 'bg-muted text-muted-foreground'}>
+                        {veiculo.ativo ? 'Ativo' : 'Inativo'}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>

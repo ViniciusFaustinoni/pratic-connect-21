@@ -1,27 +1,33 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import { 
   AlertTriangle, 
   Plus, 
   ChevronRight, 
   Clock, 
   CheckCircle,
-  XCircle
+  XCircle,
+  DollarSign
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useMySinistros } from '@/hooks/useMyData';
+import type { Tables } from '@/integrations/supabase/types';
 
-interface Sinistro {
-  id: string;
-  protocolo: string;
-  tipo: string;
-  status: 'em_analise' | 'aprovado' | 'reprovado' | 'indenizado';
-  dataOcorrencia: Date;
-}
+type Sinistro = Tables<'sinistros'>;
+
+const TIPO_LABELS: Record<string, string> = {
+  roubo: 'Roubo',
+  furto: 'Furto',
+  colisao: 'Colisão',
+  incendio: 'Incêndio',
+  alagamento: 'Alagamento',
+  outro: 'Outro',
+};
 
 export default function AppSinistros() {
-  // Mock data
-  const sinistros: Sinistro[] = [];
+  const { data: sinistros, isLoading } = useMySinistros();
 
   const getStatusBadge = (status: Sinistro['status']) => {
     switch (status) {
@@ -49,15 +55,22 @@ export default function AppSinistros() {
       case 'indenizado':
         return (
           <Badge variant="outline" className="bg-blue-50 text-blue-700">
-            <CheckCircle className="mr-1 h-3 w-3" />
+            <DollarSign className="mr-1 h-3 w-3" />
             Indenizado
+          </Badge>
+        );
+      case 'cancelado':
+        return (
+          <Badge variant="outline" className="bg-gray-50 text-gray-700">
+            <XCircle className="mr-1 h-3 w-3" />
+            Cancelado
           </Badge>
         );
     }
   };
 
-  const formatDate = (date: Date) => {
-    return date.toLocaleDateString('pt-BR', {
+  const formatDate = (dateStr: string) => {
+    return new Date(dateStr).toLocaleDateString('pt-BR', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
@@ -93,7 +106,17 @@ export default function AppSinistros() {
       </Card>
 
       {/* Sinistros List */}
-      {sinistros.length === 0 ? (
+      {isLoading ? (
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => (
+            <Card key={i} className="border-0 shadow-sm">
+              <CardContent className="p-4">
+                <Skeleton className="h-16 w-full" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : !sinistros || sinistros.length === 0 ? (
         <Card className="border-0 shadow-sm">
           <CardContent className="flex flex-col items-center justify-center py-12">
             <AlertTriangle className="h-12 w-12 text-muted-foreground/50" />
@@ -125,9 +148,9 @@ export default function AppSinistros() {
                     {getStatusBadge(sinistro.status)}
                   </div>
                   <div className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
-                    <span>{sinistro.tipo}</span>
+                    <span>{TIPO_LABELS[sinistro.tipo] || sinistro.tipo}</span>
                     <span>•</span>
-                    <span>{formatDate(sinistro.dataOcorrencia)}</span>
+                    <span>{formatDate(sinistro.data_ocorrencia)}</span>
                   </div>
                 </div>
                 <ChevronRight className="h-5 w-5 text-muted-foreground" />

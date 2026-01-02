@@ -1,7 +1,8 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/contexts/AuthContext';
+import { useMyVehicles, useMyVehicleWithTracker } from '@/hooks/useMyData';
 import { 
   Car, 
   ReceiptText, 
@@ -9,32 +10,18 @@ import {
   Phone,
   Wifi,
   WifiOff,
-  Calendar,
   ChevronRight
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export default function AppHome() {
   const { profile } = useAuth();
+  const { data: vehicles, isLoading: vehiclesLoading } = useMyVehicles();
+  const { data: tracker, isLoading: trackerLoading } = useMyVehicleWithTracker();
+  
   const firstName = profile?.nome?.split(' ')[0] || 'Associado';
-
-  // Mock data - will be replaced with real data
-  const vehicle = {
-    placa: 'ABC-1234',
-    modelo: 'Fiat Uno 1.0',
-    marca: 'Fiat',
-  };
-
-  const nextPayment = {
-    valor: 189.90,
-    vencimento: new Date(2026, 0, 15),
-    diasRestantes: 13,
-  };
-
-  const trackerStatus = {
-    online: true,
-    ultimaComunicacao: new Date(),
-  };
+  const vehicle = vehicles?.[0];
+  const isOnline = tracker?.status === 'instalado' && tracker?.ultima_comunicacao;
 
   return (
     <div className="space-y-4 p-4">
@@ -50,43 +37,29 @@ export default function AppHome() {
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
             <Car className="h-6 w-6 text-primary" />
           </div>
-          <div className="flex-1">
-            <p className="text-2xl font-bold tracking-wider text-foreground">
-              {vehicle.placa}
-            </p>
-            <p className="text-sm text-muted-foreground">
-              {vehicle.marca} {vehicle.modelo}
-            </p>
-          </div>
-          <ChevronRight className="h-5 w-5 text-muted-foreground" />
-        </CardContent>
-      </Card>
-
-      {/* Next Payment Card */}
-      <Card className="border-0 shadow-sm">
-        <CardContent className="p-4">
-          <div className="flex items-start justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-warning/10">
-                <Calendar className="h-5 w-5 text-yellow-600" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Próximo vencimento</p>
-                <p className="text-xl font-bold text-foreground">
-                  R$ {nextPayment.valor.toFixed(2).replace('.', ',')}
-                </p>
-              </div>
+          {vehiclesLoading ? (
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-6 w-24" />
+              <Skeleton className="h-4 w-32" />
             </div>
-            <Badge variant="outline" className="bg-yellow-50 text-yellow-700">
-              Vence em {nextPayment.diasRestantes} dias
-            </Badge>
-          </div>
-          <Button asChild className="mt-3 w-full" variant="outline">
-            <Link to="/app/boletos">
-              <ReceiptText className="mr-2 h-4 w-4" />
-              Ver Boletos
-            </Link>
-          </Button>
+          ) : vehicle ? (
+            <div className="flex-1">
+              <p className="text-2xl font-bold tracking-wider text-foreground">
+                {vehicle.placa}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {vehicle.marca} {vehicle.modelo}
+              </p>
+            </div>
+          ) : (
+            <div className="flex-1">
+              <p className="font-medium text-foreground">Nenhum veículo</p>
+              <p className="text-sm text-muted-foreground">
+                Veículo não cadastrado
+              </p>
+            </div>
+          )}
+          <ChevronRight className="h-5 w-5 text-muted-foreground" />
         </CardContent>
       </Card>
 
@@ -94,25 +67,49 @@ export default function AppHome() {
       <Card className="border-0 shadow-sm">
         <CardContent className="flex items-center justify-between p-4">
           <div className="flex items-center gap-3">
-            {trackerStatus.online ? (
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100">
-                <Wifi className="h-5 w-5 text-green-600" />
-              </div>
+            {trackerLoading ? (
+              <>
+                <Skeleton className="h-10 w-10 rounded-full" />
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-20" />
+                  <Skeleton className="h-4 w-16" />
+                </div>
+              </>
+            ) : tracker ? (
+              <>
+                {isOnline ? (
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100">
+                    <Wifi className="h-5 w-5 text-green-600" />
+                  </div>
+                ) : (
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100">
+                    <WifiOff className="h-5 w-5 text-red-600" />
+                  </div>
+                )}
+                <div>
+                  <p className="text-sm text-muted-foreground">Rastreador</p>
+                  <p className={`font-semibold ${isOnline ? 'text-green-600' : 'text-red-600'}`}>
+                    {isOnline ? 'Online' : 'Offline'}
+                  </p>
+                </div>
+              </>
             ) : (
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100">
-                <WifiOff className="h-5 w-5 text-red-600" />
-              </div>
+              <>
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+                  <WifiOff className="h-5 w-5 text-muted-foreground" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Rastreador</p>
+                  <p className="font-semibold text-muted-foreground">Não instalado</p>
+                </div>
+              </>
             )}
-            <div>
-              <p className="text-sm text-muted-foreground">Rastreador</p>
-              <p className={`font-semibold ${trackerStatus.online ? 'text-green-600' : 'text-red-600'}`}>
-                {trackerStatus.online ? 'Online' : 'Offline'}
-              </p>
+          </div>
+          {tracker && (
+            <div className="flex items-center gap-2">
+              <span className={`h-3 w-3 rounded-full ${isOnline ? 'animate-pulse bg-green-500' : 'bg-red-500'}`} />
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className={`h-3 w-3 rounded-full ${trackerStatus.online ? 'animate-pulse bg-green-500' : 'bg-red-500'}`} />
-          </div>
+          )}
         </CardContent>
       </Card>
 
