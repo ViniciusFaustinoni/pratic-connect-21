@@ -55,7 +55,7 @@ export function useCreateLeadFonte() {
           nome: data.nome,
           descricao: data.descricao || null,
           vendedor_padrao_id: data.vendedor_padrao_id || null,
-          etapa_inicial: data.etapa_inicial || 'novo',
+          etapa_inicial: (data.etapa_inicial || 'novo') as 'novo',
         })
         .select()
         .single();
@@ -84,9 +84,15 @@ export function useUpdateLeadFonte() {
 
   return useMutation({
     mutationFn: async ({ id, ...data }: UpdateLeadFonteData) => {
+      // Cast etapa_inicial to the type expected by Supabase
+      const updateData: Record<string, unknown> = { ...data };
+      if (data.etapa_inicial) {
+        updateData.etapa_inicial = data.etapa_inicial;
+      }
+      
       const { data: result, error } = await supabase
         .from('lead_fontes')
-        .update(data)
+        .update(updateData as Record<string, unknown>)
         .eq('id', id)
         .select()
         .single();

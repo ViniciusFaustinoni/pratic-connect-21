@@ -16,12 +16,19 @@ export type AppRole =
 
 export type TipoUsuario = 'funcionario' | 'associado' | 'prestador';
 
+// Etapas do funil de vendas (11 etapas conforme PRD)
 export type EtapaLead =
   | 'novo'
-  | 'contato_inicial'
-  | 'apresentacao'
+  | 'contato_inicial'      // Mantido para compatibilidade, mapeia para 'contato'
+  | 'contato'
+  | 'apresentacao'         // Mantido para compatibilidade, mapeia para 'qualificado'
+  | 'qualificado'
   | 'cotacao_enviada'
   | 'negociacao'
+  | 'vistoria_agendada'
+  | 'contrato_enviado'
+  | 'contrato_assinado'
+  | 'instalacao_agendada'
   | 'ganho'
   | 'perdido';
 
@@ -36,6 +43,15 @@ export type OrigemLead =
   | 'parceiro'
   | 'outro'
   | 'api';
+
+export type MotivoPerda =
+  | 'preco'
+  | 'concorrencia'
+  | 'desistiu'
+  | 'nao_qualificado'
+  | 'veiculo_reprovado'
+  | 'nao_respondeu'
+  | 'outro';
 
 export type StatusAssociado =
   | 'em_analise'
@@ -62,7 +78,7 @@ export type TipoDocumento =
 
 export type StatusCotacao = 'rascunho' | 'enviada' | 'aceita' | 'recusada' | 'expirada';
 
-export type StatusContrato = 'pendente' | 'ativo' | 'suspenso' | 'cancelado';
+export type StatusContrato = 'pendente' | 'enviado' | 'assinado' | 'ativo' | 'suspenso' | 'cancelado';
 
 // Novos tipos para as tabelas adicionadas
 export type StatusRastreador = 'estoque' | 'instalado' | 'manutencao' | 'baixado';
@@ -119,11 +135,30 @@ export interface Lead {
   origem: OrigemLead;
   etapa: EtapaLead;
   vendedor_id?: string;
-  observacoes?: string;
-  motivo_perda?: string;
   fonte_id?: string;
+  indicador_id?: string;
+  observacoes?: string;
+  motivo_perda?: MotivoPerda | string;
+  observacao_perda?: string;
+  data_primeiro_contato?: string;
+  data_ultimo_contato?: string;
+  data_proxima_acao?: string;
+  data_perda?: string;
+  data_conversao?: string;
+  associado_id?: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface LeadHistorico {
+  id: string;
+  lead_id: string;
+  usuario_id?: string;
+  etapa_anterior?: EtapaLead;
+  etapa_nova?: EtapaLead;
+  acao: string;
+  descricao?: string;
+  created_at: string;
 }
 
 export interface ApiKey {
@@ -425,15 +460,31 @@ export interface Sinistro {
   updated_at: string;
 }
 
-// Labels para exibição
+// Labels para exibição - 11 etapas do funil
 export const ETAPA_LABELS: Record<EtapaLead, string> = {
   novo: 'Novo',
-  contato_inicial: 'Contato Inicial',
-  apresentacao: 'Apresentação',
+  contato_inicial: 'Contato',      // Alias para compatibilidade
+  contato: 'Contato',
+  apresentacao: 'Qualificado',     // Alias para compatibilidade
+  qualificado: 'Qualificado',
   cotacao_enviada: 'Cotação Enviada',
   negociacao: 'Negociação',
+  vistoria_agendada: 'Vistoria Agendada',
+  contrato_enviado: 'Contrato Enviado',
+  contrato_assinado: 'Contrato Assinado',
+  instalacao_agendada: 'Instalação Agendada',
   ganho: 'Ganho',
   perdido: 'Perdido',
+};
+
+export const MOTIVO_PERDA_LABELS: Record<MotivoPerda, string> = {
+  preco: 'Preço',
+  concorrencia: 'Concorrência',
+  desistiu: 'Desistiu',
+  nao_qualificado: 'Não Qualificado',
+  veiculo_reprovado: 'Veículo Reprovado',
+  nao_respondeu: 'Não Respondeu',
+  outro: 'Outro',
 };
 
 export const ORIGEM_LABELS: Record<OrigemLead, string> = {
@@ -537,6 +588,21 @@ export const STATUS_SINISTRO_LABELS: Record<StatusSinistro, string> = {
   reprovado: 'Reprovado',
   indenizado: 'Indenizado',
   cancelado: 'Cancelado',
+};
+
+export const STATUS_CONTRATO_LABELS: Record<StatusContrato, string> = {
+  pendente: 'Pendente',
+  enviado: 'Enviado',
+  assinado: 'Assinado',
+  ativo: 'Ativo',
+  suspenso: 'Suspenso',
+  cancelado: 'Cancelado',
+};
+
+export const TIPO_VISTORIA_LABELS: Record<TipoVistoria, string> = {
+  entrada: 'Entrada',
+  saida: 'Saída',
+  sinistro: 'Sinistro',
 };
 
 export const TIPO_SINISTRO_LABELS: Record<TipoSinistro, string> = {

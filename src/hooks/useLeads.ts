@@ -36,9 +36,9 @@ export function useLeads(options?: UseLeadsOptions) {
     queryFn: async (): Promise<LeadsResult> => {
       let query = supabase.from('leads').select('*', { count: 'exact' });
 
-      // Apply filters
+      // Apply filters - cast etapa to the type expected by Supabase
       if (filters?.etapa && filters.etapa !== 'all') {
-        query = query.eq('etapa', filters.etapa);
+        query = query.eq('etapa', filters.etapa as 'novo');
       }
 
       if (filters?.origem && filters.origem !== 'all') {
