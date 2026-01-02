@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Phone, Mail, Car, Edit, MessageSquare, Loader2, FileText, ArrowRight } from 'lucide-react';
+import { ArrowLeft, Phone, Mail, Car, Edit, MessageSquare, Loader2, FileText, ArrowRight, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,36 +8,21 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useLead, useUpdateLead } from '@/hooks/useLeads';
+import { useLead } from '@/hooks/useLeads';
 import { useCotacoesByLead } from '@/hooks/useCotacoesByLead';
 import { ETAPA_LABELS, ORIGEM_LABELS, type EtapaLead } from '@/types/database';
+import { etapaColors, ETAPAS_FUNIL, getNextStages } from '@/lib/lead-transitions';
+import { useChangeLeadEtapa } from '@/hooks/useLeadHistorico';
 import { CotacaoFormDialog } from '@/components/cotacoes/CotacaoFormDialog';
 import { LeadEditDialog } from '@/components/leads/LeadEditDialog';
+import { LeadLossDialog } from '@/components/leads/LeadLossDialog';
+import { LeadTimeline } from '@/components/leads/LeadTimeline';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-
-const etapaColors: Record<EtapaLead, string> = {
-  novo: 'bg-[hsl(var(--etapa-novo))] text-white',
-  contato_inicial: 'bg-[hsl(var(--etapa-contato))] text-white',
-  apresentacao: 'bg-[hsl(var(--etapa-apresentacao))] text-white',
-  cotacao_enviada: 'bg-[hsl(var(--etapa-cotacao))] text-white',
-  negociacao: 'bg-[hsl(var(--etapa-negociacao))] text-white',
-  ganho: 'bg-[hsl(var(--etapa-ganho))] text-white',
-  perdido: 'bg-[hsl(var(--etapa-perdido))] text-white',
-};
-
-const etapas: EtapaLead[] = [
-  'novo',
-  'contato_inicial',
-  'apresentacao',
-  'cotacao_enviada',
-  'negociacao',
-  'ganho',
-  'perdido',
-];
 
 const STATUS_COTACAO_LABELS: Record<string, string> = {
   rascunho: 'Rascunho',
@@ -52,10 +37,11 @@ export default function LeadDetalhe() {
   const navigate = useNavigate();
   const { data: lead, isLoading } = useLead(id);
   const { data: cotacoes, isLoading: isLoadingCotacoes } = useCotacoesByLead(id);
-  const updateLead = useUpdateLead();
+  const changeEtapa = useChangeLeadEtapa();
   
   const [showCotacaoForm, setShowCotacaoForm] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showLossDialog, setShowLossDialog] = useState(false);
 
   const formatCurrency = (value: number | null) => {
     if (!value) return '-';
@@ -70,8 +56,19 @@ export default function LeadDetalhe() {
 
   const handleAdvanceStage = async (newEtapa: EtapaLead) => {
     if (!lead) return;
+    
+    // Se for perdido, abrir modal
+    if (newEtapa === 'perdido') {
+      setShowLossDialog(true);
+      return;
+    }
+    
     try {
-      await updateLead.mutateAsync({ id: lead.id, etapa: newEtapa });
+      await changeEtapa.mutateAsync({
+        leadId: lead.id,
+        etapaAnterior: lead.etapa as EtapaLead,
+        etapaNova: newEtapa,
+      });
       toast.success(`Lead movido para ${ETAPA_LABELS[newEtapa]}`);
     } catch (error) {
       toast.error('Erro ao atualizar lead');
@@ -84,6 +81,9 @@ export default function LeadDetalhe() {
     const message = encodeURIComponent(`Olá ${lead.nome}, tudo bem?`);
     window.open(`https://wa.me/55${phone}?text=${message}`, '_blank');
   };
+
+  // Próximas etapas permitidas
+  const nextStages = lead ? getNextStages(lead.etapa as EtapaLead) : [];
 
   if (isLoading) {
     return (
@@ -108,7 +108,7 @@ export default function LeadDetalhe() {
           <h1 className="text-2xl font-bold">{lead.nome}</h1>
           <p className="text-muted-foreground">Lead criado em {formatDate(lead.created_at)}</p>
         </div>
-        <Badge className={etapaColors[lead.etapa]}>{ETAPA_LABELS[lead.etapa]}</Badge>
+        <Badge className={etapaColors[lead.etapa as EtapaLead]}>{ETAPA_LABELS[lead.etapa as EtapaLead]}</Badge>
       </div>
 
       {/* Actions */}
@@ -121,21 +121,35 @@ export default function LeadDetalhe() {
           <MessageSquare className="mr-2 h-4 w-4" />
           WhatsApp
         </Button>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline">
-              <ArrowRight className="mr-2 h-4 w-4" />
-              Avançar Etapa
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent>
-            {etapas.filter(e => e !== lead.etapa).map((etapa) => (
-              <DropdownMenuItem key={etapa} onClick={() => handleAdvanceStage(etapa)}>
-                {ETAPA_LABELS[etapa]}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {nextStages.length > 0 && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline">
+                <ArrowRight className="mr-2 h-4 w-4" />
+                Avançar Etapa
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              {nextStages.filter(e => e !== 'perdido').map((etapa) => (
+                <DropdownMenuItem key={etapa} onClick={() => handleAdvanceStage(etapa)}>
+                  {ETAPA_LABELS[etapa]}
+                </DropdownMenuItem>
+              ))}
+              {nextStages.includes('perdido') && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="text-destructive"
+                    onClick={() => setShowLossDialog(true)}
+                  >
+                    <XCircle className="mr-2 h-4 w-4" />
+                    Marcar como Perdido
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
         <Button onClick={() => setShowCotacaoForm(true)}>
           <FileText className="mr-2 h-4 w-4" />
           Criar Cotação
@@ -232,6 +246,9 @@ export default function LeadDetalhe() {
         </Card>
       )}
 
+      {/* Timeline/Histórico */}
+      <LeadTimeline leadId={lead.id} />
+
       {/* Motivo da Perda */}
       {lead.etapa === 'perdido' && lead.motivo_perda && (
         <Card className="border-destructive/50">
@@ -252,6 +269,13 @@ export default function LeadDetalhe() {
         open={showEditDialog}
         onOpenChange={setShowEditDialog}
         lead={lead}
+      />
+      <LeadLossDialog
+        open={showLossDialog}
+        onOpenChange={setShowLossDialog}
+        leadId={lead.id}
+        leadNome={lead.nome}
+        etapaAtual={lead.etapa as EtapaLead}
       />
     </div>
   );

@@ -24,6 +24,8 @@ import { useContratos } from '@/hooks/useContratos';
 
 const statusConfig: Record<StatusContrato, { label: string; color: string; icon: typeof FileText }> = {
   pendente: { label: 'Pendente', color: 'bg-yellow-500 text-white', icon: Clock },
+  enviado: { label: 'Enviado', color: 'bg-blue-500 text-white', icon: FileText },
+  assinado: { label: 'Assinado', color: 'bg-indigo-500 text-white', icon: CheckCircle },
   ativo: { label: 'Ativo', color: 'bg-green-500 text-white', icon: CheckCircle },
   suspenso: { label: 'Suspenso', color: 'bg-orange-500 text-white', icon: Clock },
   cancelado: { label: 'Cancelado', color: 'bg-destructive text-destructive-foreground', icon: XCircle },

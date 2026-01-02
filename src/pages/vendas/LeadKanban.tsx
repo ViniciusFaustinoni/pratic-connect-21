@@ -13,10 +13,14 @@ import {
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { ETAPA_LABELS, type EtapaLead } from '@/types/database';
-import { useAllLeads, useUpdateLead, type LeadFilters } from '@/hooks/useLeads';
+import { etapaColors, ETAPAS_FUNIL, canTransition } from '@/lib/lead-transitions';
+import { useAllLeads, type LeadFilters } from '@/hooks/useLeads';
+import { useChangeLeadEtapa } from '@/hooks/useLeadHistorico';
 import { useVendedores } from '@/hooks/useVendedores';
 import { LeadFormDialog } from '@/components/leads/LeadFormDialog';
+import { LeadLossDialog } from '@/components/leads/LeadLossDialog';
 import { LeadKanbanCard } from '@/components/leads/LeadKanbanCard';
+import { LeadMetricsCards } from '@/components/leads/LeadMetricsCards';
 import { toast } from 'sonner';
 import {
   DndContext,
@@ -30,26 +34,9 @@ import {
   useDroppable,
 } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import type { Tables } from '@/integrations/supabase/types';
 
-const etapaColors: Record<EtapaLead, string> = {
-  novo: 'bg-[hsl(var(--etapa-novo))] text-white',
-  contato_inicial: 'bg-[hsl(var(--etapa-contato))] text-white',
-  apresentacao: 'bg-[hsl(var(--etapa-apresentacao))] text-white',
-  cotacao_enviada: 'bg-[hsl(var(--etapa-cotacao))] text-white',
-  negociacao: 'bg-[hsl(var(--etapa-negociacao))] text-white',
-  ganho: 'bg-[hsl(var(--etapa-ganho))] text-white',
-  perdido: 'bg-[hsl(var(--etapa-perdido))] text-white',
-};
-
-const etapas: EtapaLead[] = [
-  'novo',
-  'contato_inicial',
-  'apresentacao',
-  'cotacao_enviada',
-  'negociacao',
-  'ganho',
-  'perdido',
-];
+type Lead = Tables<'leads'>;
 
 interface DroppableColumnProps {
   etapa: EtapaLead;
@@ -63,7 +50,7 @@ function DroppableColumn({ etapa, children, count }: DroppableColumnProps) {
   return (
     <div
       ref={setNodeRef}
-      className={`flex flex-col rounded-lg bg-muted/50 p-3 min-h-[calc(100vh-220px)] transition-colors ${
+      className={`flex flex-col rounded-lg bg-muted/50 p-3 min-h-[calc(100vh-320px)] transition-colors ${
         isOver ? 'bg-primary/10 ring-2 ring-primary/50' : ''
       }`}
     >
@@ -83,10 +70,11 @@ export default function LeadKanban() {
   const [filters, setFilters] = useState<LeadFilters>({});
   const [showLeadForm, setShowLeadForm] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [lossDialogLead, setLossDialogLead] = useState<Lead | null>(null);
 
   const { data: leads, isLoading } = useAllLeads(filters);
   const { data: vendedores } = useVendedores();
-  const updateLead = useUpdateLead();
+  const changeEtapa = useChangeLeadEtapa();
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -108,13 +96,29 @@ export default function LeadKanban() {
     const targetEtapa = over.id as EtapaLead;
 
     // Verifica se é uma etapa válida
-    if (!etapas.includes(targetEtapa)) return;
+    if (!ETAPAS_FUNIL.includes(targetEtapa)) return;
 
     const lead = leads?.find((l) => l.id === leadId);
     if (!lead || lead.etapa === targetEtapa) return;
 
+    // Verificar se transição é permitida
+    if (!canTransition(lead.etapa as EtapaLead, targetEtapa)) {
+      toast.error('Transição não permitida');
+      return;
+    }
+
+    // Se for perdido, abrir modal de motivo
+    if (targetEtapa === 'perdido') {
+      setLossDialogLead(lead);
+      return;
+    }
+
     try {
-      await updateLead.mutateAsync({ id: leadId, etapa: targetEtapa });
+      await changeEtapa.mutateAsync({
+        leadId,
+        etapaAnterior: lead.etapa as EtapaLead,
+        etapaNova: targetEtapa,
+      });
       toast.success(`Lead movido para ${ETAPA_LABELS[targetEtapa]}`);
     } catch (error) {
       toast.error('Erro ao mover lead');
@@ -146,6 +150,9 @@ export default function LeadKanban() {
           Novo Lead
         </Button>
       </div>
+
+      {/* Metrics */}
+      <LeadMetricsCards leads={leads || []} />
 
       {/* Filters */}
       <div className="flex flex-wrap gap-4">
@@ -180,8 +187,8 @@ export default function LeadKanban() {
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <div className="grid auto-cols-[280px] grid-flow-col gap-4 overflow-x-auto pb-4">
-          {etapas.map((etapa) => {
+        <div className="grid auto-cols-[260px] grid-flow-col gap-3 overflow-x-auto pb-4">
+          {ETAPAS_FUNIL.map((etapa) => {
             const leadsInEtapa = (leads || []).filter((l) => l.etapa === etapa);
             return (
               <DroppableColumn key={etapa} etapa={etapa} count={leadsInEtapa.length}>
@@ -198,7 +205,7 @@ export default function LeadKanban() {
                       />
                     ))}
                     {leadsInEtapa.length === 0 && (
-                      <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
+                      <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm min-h-[100px]">
                         Arraste leads para cá
                       </div>
                     )}
@@ -226,6 +233,16 @@ export default function LeadKanban() {
       </DndContext>
 
       <LeadFormDialog open={showLeadForm} onOpenChange={setShowLeadForm} />
+      
+      {lossDialogLead && (
+        <LeadLossDialog
+          open={!!lossDialogLead}
+          onOpenChange={(open) => !open && setLossDialogLead(null)}
+          leadId={lossDialogLead.id}
+          leadNome={lossDialogLead.nome}
+          etapaAtual={lossDialogLead.etapa as EtapaLead}
+        />
+      )}
     </div>
   );
 }

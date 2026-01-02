@@ -638,14 +638,22 @@ export type Database = {
       }
       leads: {
         Row: {
+          associado_id: string | null
           cpf: string | null
           created_at: string
+          data_conversao: string | null
+          data_perda: string | null
+          data_primeiro_contato: string | null
+          data_proxima_acao: string | null
+          data_ultimo_contato: string | null
           email: string | null
           etapa: Database["public"]["Enums"]["etapa_lead"]
           fonte_id: string | null
           id: string
+          indicador_id: string | null
           motivo_perda: string | null
           nome: string
+          observacao_perda: string | null
           observacoes: string | null
           origem: Database["public"]["Enums"]["origem_lead"]
           telefone: string
@@ -658,14 +666,22 @@ export type Database = {
           vendedor_id: string | null
         }
         Insert: {
+          associado_id?: string | null
           cpf?: string | null
           created_at?: string
+          data_conversao?: string | null
+          data_perda?: string | null
+          data_primeiro_contato?: string | null
+          data_proxima_acao?: string | null
+          data_ultimo_contato?: string | null
           email?: string | null
           etapa?: Database["public"]["Enums"]["etapa_lead"]
           fonte_id?: string | null
           id?: string
+          indicador_id?: string | null
           motivo_perda?: string | null
           nome: string
+          observacao_perda?: string | null
           observacoes?: string | null
           origem?: Database["public"]["Enums"]["origem_lead"]
           telefone: string
@@ -678,14 +694,22 @@ export type Database = {
           vendedor_id?: string | null
         }
         Update: {
+          associado_id?: string | null
           cpf?: string | null
           created_at?: string
+          data_conversao?: string | null
+          data_perda?: string | null
+          data_primeiro_contato?: string | null
+          data_proxima_acao?: string | null
+          data_ultimo_contato?: string | null
           email?: string | null
           etapa?: Database["public"]["Enums"]["etapa_lead"]
           fonte_id?: string | null
           id?: string
+          indicador_id?: string | null
           motivo_perda?: string | null
           nome?: string
+          observacao_perda?: string | null
           observacoes?: string | null
           origem?: Database["public"]["Enums"]["origem_lead"]
           telefone?: string
@@ -699,10 +723,58 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "leads_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "leads_fonte_id_fkey"
             columns: ["fonte_id"]
             isOneToOne: false
             referencedRelation: "lead_fontes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      leads_historico: {
+        Row: {
+          acao: string
+          created_at: string | null
+          descricao: string | null
+          etapa_anterior: string | null
+          etapa_nova: string | null
+          id: string
+          lead_id: string
+          usuario_id: string | null
+        }
+        Insert: {
+          acao: string
+          created_at?: string | null
+          descricao?: string | null
+          etapa_anterior?: string | null
+          etapa_nova?: string | null
+          id?: string
+          lead_id: string
+          usuario_id?: string | null
+        }
+        Update: {
+          acao?: string
+          created_at?: string | null
+          descricao?: string | null
+          etapa_anterior?: string | null
+          etapa_nova?: string | null
+          id?: string
+          lead_id?: string
+          usuario_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leads_historico_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
             referencedColumns: ["id"]
           },
         ]
@@ -1315,8 +1387,20 @@ export type Database = {
         | "apresentacao"
         | "cotacao_enviada"
         | "negociacao"
+        | "vistoria_agendada"
+        | "contrato_enviado"
+        | "contrato_assinado"
+        | "instalacao_agendada"
         | "ganho"
         | "perdido"
+      motivo_perda:
+        | "preco"
+        | "concorrencia"
+        | "desistiu"
+        | "nao_qualificado"
+        | "veiculo_reprovado"
+        | "nao_respondeu"
+        | "outro"
       origem_lead:
         | "indicacao"
         | "site"
@@ -1343,7 +1427,13 @@ export type Database = {
         | "em_deslocamento"
         | "concluido"
         | "cancelado"
-      status_contrato: "pendente" | "ativo" | "suspenso" | "cancelado"
+      status_contrato:
+        | "pendente"
+        | "enviado"
+        | "assinado"
+        | "ativo"
+        | "suspenso"
+        | "cancelado"
       status_cotacao:
         | "rascunho"
         | "enviada"
@@ -1533,8 +1623,21 @@ export const Constants = {
         "apresentacao",
         "cotacao_enviada",
         "negociacao",
+        "vistoria_agendada",
+        "contrato_enviado",
+        "contrato_assinado",
+        "instalacao_agendada",
         "ganho",
         "perdido",
+      ],
+      motivo_perda: [
+        "preco",
+        "concorrencia",
+        "desistiu",
+        "nao_qualificado",
+        "veiculo_reprovado",
+        "nao_respondeu",
+        "outro",
       ],
       origem_lead: [
         "indicacao",
@@ -1565,7 +1668,14 @@ export const Constants = {
         "concluido",
         "cancelado",
       ],
-      status_contrato: ["pendente", "ativo", "suspenso", "cancelado"],
+      status_contrato: [
+        "pendente",
+        "enviado",
+        "assinado",
+        "ativo",
+        "suspenso",
+        "cancelado",
+      ],
       status_cotacao: ["rascunho", "enviada", "aceita", "recusada", "expirada"],
       status_documento: ["pendente", "em_analise", "aprovado", "reprovado"],
       status_instalacao: [

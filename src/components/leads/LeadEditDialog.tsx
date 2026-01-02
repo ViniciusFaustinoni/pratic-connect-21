@@ -40,15 +40,9 @@ interface LeadEditDialogProps {
   lead: Lead | null;
 }
 
-const etapas: EtapaLead[] = [
-  'novo',
-  'contato_inicial',
-  'apresentacao',
-  'cotacao_enviada',
-  'negociacao',
-  'ganho',
-  'perdido',
-];
+import { ETAPAS_FUNIL } from '@/lib/lead-transitions';
+
+const etapas = ETAPAS_FUNIL;
 
 export function LeadEditDialog({ open, onOpenChange, lead }: LeadEditDialogProps) {
   const updateLead = useUpdateLead();
@@ -108,7 +102,7 @@ export function LeadEditDialog({ open, onOpenChange, lead }: LeadEditDialogProps
         veiculo_fipe: data.veiculo_fipe || null,
         origem: data.origem,
         observacoes: data.observacoes || null,
-        etapa: data.etapa,
+        etapa: data.etapa as 'novo', // Cast for Supabase compatibility
         motivo_perda: data.motivo_perda || null,
       });
       toast.success('Lead atualizado com sucesso!');
