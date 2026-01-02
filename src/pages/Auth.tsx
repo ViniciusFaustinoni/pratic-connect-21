@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -7,8 +7,15 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Shield, AlertCircle, Mail, CheckCircle2 } from 'lucide-react';
+import { Loader2, Shield, AlertCircle, Mail, CheckCircle2, Lock } from 'lucide-react';
 import { z } from 'zod';
+import { 
+  isLocked, 
+  getRemainingLockTimeSeconds, 
+  recordFailedAttempt, 
+  resetAttempts,
+  getAttemptsRemaining 
+} from '@/lib/login-rate-limit';
 
 const emailSchema = z.string().email('Email inválido');
 
@@ -37,6 +44,10 @@ export default function Auth() {
   const [success, setSuccess] = useState<string | null>(null);
   const [magicLinkSent, setMagicLinkSent] = useState(false);
   
+  // Lockout state
+  const [accountLocked, setAccountLocked] = useState(false);
+  const [lockTimeRemaining, setLockTimeRemaining] = useState(0);
+  
   // Magic link form
   const [magicLinkEmail, setMagicLinkEmail] = useState('');
   
@@ -49,6 +60,44 @@ export default function Auth() {
   const [signupEmail, setSignupEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
   const [signupConfirmPassword, setSignupConfirmPassword] = useState('');
+
+  // Check lockout status and start countdown timer
+  useEffect(() => {
+    if (!loginEmail) {
+      setAccountLocked(false);
+      setLockTimeRemaining(0);
+      return;
+    }
+
+    const checkLockStatus = () => {
+      if (isLocked(loginEmail)) {
+        setAccountLocked(true);
+        setLockTimeRemaining(getRemainingLockTimeSeconds(loginEmail));
+      } else {
+        setAccountLocked(false);
+        setLockTimeRemaining(0);
+      }
+    };
+
+    checkLockStatus();
+
+    // Update countdown every second when locked
+    const interval = setInterval(() => {
+      if (isLocked(loginEmail)) {
+        const remaining = getRemainingLockTimeSeconds(loginEmail);
+        setLockTimeRemaining(remaining);
+        if (remaining <= 0) {
+          setAccountLocked(false);
+          setError(null);
+        }
+      } else {
+        setAccountLocked(false);
+        setLockTimeRemaining(0);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [loginEmail]);
 
   if (authLoading) {
     return (
@@ -84,9 +133,27 @@ export default function Auth() {
     }
   };
 
+  const formatLockTime = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    if (mins > 0) {
+      return `${mins}m ${secs.toString().padStart(2, '0')}s`;
+    }
+    return `${secs}s`;
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    
+    // Check if account is locked
+    if (isLocked(loginEmail)) {
+      const remaining = getRemainingLockTimeSeconds(loginEmail);
+      setAccountLocked(true);
+      setLockTimeRemaining(remaining);
+      setError(`Conta bloqueada. Tente novamente em ${formatLockTime(remaining)}.`);
+      return;
+    }
     
     const validation = loginSchema.safeParse({ email: loginEmail, password: loginPassword });
     if (!validation.success) {
@@ -100,12 +167,23 @@ export default function Auth() {
     
     if (error) {
       if (error.message.includes('Invalid login credentials')) {
-        setError('Email ou senha inválidos');
+        const { isNowLocked, attemptsRemaining } = recordFailedAttempt(loginEmail);
+        
+        if (isNowLocked) {
+          setAccountLocked(true);
+          setLockTimeRemaining(getRemainingLockTimeSeconds(loginEmail));
+          setError('Muitas tentativas falhas. Conta bloqueada por 15 minutos.');
+        } else {
+          setError(`Email ou senha inválidos. ${attemptsRemaining} tentativa${attemptsRemaining !== 1 ? 's' : ''} restante${attemptsRemaining !== 1 ? 's' : ''}.`);
+        }
       } else if (error.message.includes('Email not confirmed')) {
         setError('Por favor, confirme seu email antes de fazer login');
       } else {
         setError(error.message);
       }
+    } else {
+      // Login successful, reset attempts
+      resetAttempts(loginEmail);
     }
   };
 
@@ -308,6 +386,15 @@ export default function Auth() {
 
               {/* Password Login Tab */}
               <TabsContent value="login" className="mt-0">
+                {accountLocked && lockTimeRemaining > 0 && (
+                  <Alert variant="destructive" className="mb-4">
+                    <Lock className="h-4 w-4" />
+                    <AlertDescription className="tracking-tight-magic">
+                      Conta bloqueada por segurança. Tente novamente em{' '}
+                      <span className="font-bold">{formatLockTime(lockTimeRemaining)}</span>
+                    </AlertDescription>
+                  </Alert>
+                )}
                 <form onSubmit={handleLogin} className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="login-email" className="tracking-tight-magic text-muted-foreground">
@@ -335,19 +422,24 @@ export default function Auth() {
                       value={loginPassword}
                       onChange={(e) => setLoginPassword(e.target.value)}
                       required
-                      disabled={isLoading}
+                      disabled={isLoading || accountLocked}
                       className="tracking-tight-magic"
                     />
                   </div>
                   <Button 
                     type="submit" 
                     className="tracking-tight-magic w-full" 
-                    disabled={isLoading}
+                    disabled={isLoading || accountLocked}
                   >
                     {isLoading ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         Entrando...
+                      </>
+                    ) : accountLocked ? (
+                      <>
+                        <Lock className="mr-2 h-4 w-4" />
+                        Bloqueado
                       </>
                     ) : (
                       'Entrar'
