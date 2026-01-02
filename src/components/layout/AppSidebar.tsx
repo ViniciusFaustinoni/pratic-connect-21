@@ -10,6 +10,10 @@ import {
   Settings,
   ChevronDown,
   Shield,
+  Wrench,
+  MapPin,
+  Package,
+  Radio,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
@@ -31,7 +35,6 @@ import {
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 import { useAuth } from '@/contexts/AuthContext';
-import { cn } from '@/lib/utils';
 
 const menuItems = {
   main: [
@@ -46,6 +49,12 @@ const menuItems = {
     { title: 'Associados', url: '/cadastro/associados', icon: Users },
     { title: 'Veículos', url: '/cadastro/veiculos', icon: Car },
     { title: 'Documentos', url: '/cadastro/documentos', icon: FileCheck },
+  ],
+  monitoramento: [
+    { title: 'Instalações', url: '/monitoramento/instalacoes', icon: Wrench },
+    { title: 'Rotas', url: '/monitoramento/rotas', icon: MapPin },
+    { title: 'Estoque', url: '/monitoramento/estoque', icon: Package },
+    { title: 'Rastreadores', url: '/monitoramento/rastreadores', icon: Radio },
   ],
   config: [
     { title: 'Configurações', url: '/configuracoes', icon: Settings },
@@ -146,6 +155,38 @@ export function AppSidebar() {
               <SidebarGroupContent>
                 <SidebarMenu>
                   {menuItems.cadastro.map((item) => (
+                    <SidebarMenuItem key={item.url}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={isActive(item.url)}
+                        tooltip={item.title}
+                      >
+                        <NavLink to={item.url}>
+                          <item.icon className="h-4 w-4" />
+                          <span>{item.title}</span>
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </CollapsibleContent>
+          </Collapsible>
+        </SidebarGroup>
+
+        {/* Monitoramento */}
+        <SidebarGroup>
+          <Collapsible defaultOpen={isGroupActive(menuItems.monitoramento)}>
+            <CollapsibleTrigger asChild>
+              <SidebarGroupLabel className="cursor-pointer hover:bg-sidebar-accent/50">
+                <span>Monitoramento</span>
+                <ChevronDown className="ml-auto h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
+              </SidebarGroupLabel>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {menuItems.monitoramento.map((item) => (
                     <SidebarMenuItem key={item.url}>
                       <SidebarMenuButton
                         asChild
