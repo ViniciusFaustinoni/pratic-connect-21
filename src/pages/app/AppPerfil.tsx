@@ -1,7 +1,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/contexts/AuthContext';
+import { useMyAssociado, useMyVehicles } from '@/hooks/useMyData';
 import { 
   User, 
   Mail, 
@@ -14,34 +16,54 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
+const STATUS_LABELS: Record<string, string> = {
+  em_analise: 'Em Análise',
+  documentacao_pendente: 'Documentação Pendente',
+  aguardando_instalacao: 'Aguardando Instalação',
+  ativo: 'Ativo',
+  inadimplente: 'Inadimplente',
+  suspenso: 'Suspenso',
+  cancelado: 'Cancelado',
+};
+
 export default function AppPerfil() {
   const { profile } = useAuth();
+  const { data: associado, isLoading: associadoLoading } = useMyAssociado();
+  const { data: vehicles, isLoading: vehiclesLoading } = useMyVehicles();
 
-  // Mock data - will be replaced with real data
-  const associado = {
-    nome: profile?.nome || 'Associado',
-    cpf: '***.***.***-00',
-    email: profile?.email || '',
-    telefone: profile?.telefone || '(11) 99999-9999',
-    endereco: 'Av. Paulista, 1000 - São Paulo/SP',
-    plano: 'Proteção Total',
-    status: 'ativo' as const,
-    dataCadastro: new Date(2025, 5, 15),
-  };
+  const isLoading = associadoLoading || vehiclesLoading;
+  const vehicle = vehicles?.[0];
 
-  const veiculo = {
-    placa: 'ABC-1234',
-    modelo: 'Fiat Uno 1.0',
-    ano: '2022/2023',
-  };
-
-  const getStatusBadge = (status: typeof associado.status) => {
+  const getStatusBadge = (status: string) => {
     switch (status) {
       case 'ativo':
         return <Badge className="bg-green-500">Ativo</Badge>;
+      case 'inadimplente':
+        return <Badge className="bg-red-500">Inadimplente</Badge>;
+      case 'suspenso':
+        return <Badge className="bg-yellow-500">Suspenso</Badge>;
+      case 'cancelado':
+        return <Badge variant="secondary">Cancelado</Badge>;
       default:
-        return <Badge variant="secondary">{status}</Badge>;
+        return <Badge variant="outline">{STATUS_LABELS[status] || status}</Badge>;
     }
+  };
+
+  const formatAddress = () => {
+    if (!associado) return 'Endereço não cadastrado';
+    const parts = [
+      associado.logradouro,
+      associado.numero,
+      associado.bairro,
+      associado.cidade,
+      associado.uf,
+    ].filter(Boolean);
+    return parts.length > 0 ? parts.join(', ') : 'Endereço não cadastrado';
+  };
+
+  const formatCpf = (cpf: string) => {
+    // Mask CPF for privacy
+    return cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '***.$2.***-**');
   };
 
   return (
@@ -60,11 +82,22 @@ export default function AppPerfil() {
           <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
             <User className="h-8 w-8 text-primary" />
           </div>
-          <div className="flex-1">
-            <h2 className="text-lg font-bold text-foreground">{associado.nome}</h2>
-            <p className="text-sm text-muted-foreground">CPF: {associado.cpf}</p>
-            {getStatusBadge(associado.status)}
-          </div>
+          {isLoading ? (
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-6 w-32" />
+              <Skeleton className="h-4 w-24" />
+            </div>
+          ) : (
+            <div className="flex-1">
+              <h2 className="text-lg font-bold text-foreground">
+                {associado?.nome || profile?.nome || 'Associado'}
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                CPF: {associado?.cpf ? formatCpf(associado.cpf) : '***.***.***-**'}
+              </p>
+              {associado && getStatusBadge(associado.status)}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -80,7 +113,13 @@ export default function AppPerfil() {
             </div>
             <div>
               <p className="text-sm text-muted-foreground">E-mail</p>
-              <p className="font-medium text-foreground">{associado.email}</p>
+              {isLoading ? (
+                <Skeleton className="h-5 w-40" />
+              ) : (
+                <p className="font-medium text-foreground">
+                  {associado?.email || profile?.email || 'Não cadastrado'}
+                </p>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -89,7 +128,13 @@ export default function AppPerfil() {
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Telefone</p>
-              <p className="font-medium text-foreground">{associado.telefone}</p>
+              {isLoading ? (
+                <Skeleton className="h-5 w-32" />
+              ) : (
+                <p className="font-medium text-foreground">
+                  {associado?.telefone || profile?.telefone || 'Não cadastrado'}
+                </p>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -98,7 +143,11 @@ export default function AppPerfil() {
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Endereço</p>
-              <p className="font-medium text-foreground">{associado.endereco}</p>
+              {isLoading ? (
+                <Skeleton className="h-5 w-48" />
+              ) : (
+                <p className="font-medium text-foreground">{formatAddress()}</p>
+              )}
             </div>
           </div>
         </CardContent>
@@ -113,14 +162,22 @@ export default function AppPerfil() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="rounded-lg bg-muted p-4">
-            <p className="text-xl font-bold tracking-wider text-foreground">
-              {veiculo.placa}
-            </p>
-            <p className="text-sm text-muted-foreground">
-              {veiculo.modelo} - {veiculo.ano}
-            </p>
-          </div>
+          {isLoading ? (
+            <Skeleton className="h-16 w-full" />
+          ) : vehicle ? (
+            <div className="rounded-lg bg-muted p-4">
+              <p className="text-xl font-bold tracking-wider text-foreground">
+                {vehicle.placa}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {vehicle.marca} {vehicle.modelo} - {vehicle.ano_fabricacao}/{vehicle.ano_modelo}
+              </p>
+            </div>
+          ) : (
+            <div className="rounded-lg bg-muted p-4 text-center">
+              <p className="text-muted-foreground">Nenhum veículo cadastrado</p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -133,15 +190,23 @@ export default function AppPerfil() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-semibold text-foreground">{associado.plano}</p>
-              <p className="text-sm text-muted-foreground">
-                Associado desde {associado.dataCadastro.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
-              </p>
+          {isLoading ? (
+            <Skeleton className="h-12 w-full" />
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-semibold text-foreground">
+                  {associado?.planos?.nome || 'Plano não definido'}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Associado desde {associado?.created_at 
+                    ? new Date(associado.created_at).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+                    : '-'}
+                </p>
+              </div>
+              <ChevronRight className="h-5 w-5 text-muted-foreground" />
             </div>
-            <ChevronRight className="h-5 w-5 text-muted-foreground" />
-          </div>
+          )}
         </CardContent>
       </Card>
 

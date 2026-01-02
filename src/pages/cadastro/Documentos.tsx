@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
   TableBody,
@@ -20,56 +21,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { STATUS_DOCUMENTO_LABELS, TIPO_DOCUMENTO_LABELS, type StatusDocumento, type TipoDocumento } from '@/types/database';
-
-const mockDocumentos = [
-  {
-    id: '1',
-    tipo: 'cnh' as TipoDocumento,
-    associado_nome: 'João Silva',
-    nome_arquivo: 'cnh_joao_silva.pdf',
-    status: 'aprovado' as StatusDocumento,
-    created_at: '2024-01-15T10:00:00',
-    analista_nome: 'Ana Analista',
-    data_analise: '2024-01-15T14:00:00',
-  },
-  {
-    id: '2',
-    tipo: 'crlv' as TipoDocumento,
-    associado_nome: 'João Silva',
-    nome_arquivo: 'crlv_abc1234.pdf',
-    status: 'aprovado' as StatusDocumento,
-    created_at: '2024-01-15T10:05:00',
-    analista_nome: 'Ana Analista',
-    data_analise: '2024-01-15T14:10:00',
-  },
-  {
-    id: '3',
-    tipo: 'cnh' as TipoDocumento,
-    associado_nome: 'Maria Santos',
-    nome_arquivo: 'cnh_maria.jpg',
-    status: 'pendente' as StatusDocumento,
-    created_at: '2024-01-14T16:00:00',
-  },
-  {
-    id: '4',
-    tipo: 'foto_frontal_veiculo' as TipoDocumento,
-    associado_nome: 'Pedro Oliveira',
-    nome_arquivo: 'frontal_ghi9012.jpg',
-    status: 'em_analise' as StatusDocumento,
-    created_at: '2024-01-13T09:00:00',
-  },
-  {
-    id: '5',
-    tipo: 'comprovante_residencia' as TipoDocumento,
-    associado_nome: 'Ana Costa',
-    nome_arquivo: 'conta_luz_ana.pdf',
-    status: 'reprovado' as StatusDocumento,
-    created_at: '2024-01-12T11:00:00',
-    analista_nome: 'Carlos Analista',
-    data_analise: '2024-01-12T15:00:00',
-    motivo_reprovacao: 'Documento com data superior a 90 dias',
-  },
-];
+import { useDocumentos } from '@/hooks/useDocumentos';
 
 const statusConfig: Record<StatusDocumento, { color: string; icon: typeof FileCheck }> = {
   pendente: { color: 'bg-yellow-500 text-white', icon: Clock },
@@ -82,15 +34,18 @@ export default function Documentos() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [tipoFilter, setTipoFilter] = useState<string>('all');
+  
+  const { data: documentos, isLoading } = useDocumentos();
 
-  const filteredDocumentos = mockDocumentos.filter((doc) => {
+  const filteredDocumentos = documentos?.filter((doc) => {
+    const associadoNome = doc.associados?.nome || '';
     const matchesSearch =
-      doc.associado_nome.toLowerCase().includes(search.toLowerCase()) ||
+      associadoNome.toLowerCase().includes(search.toLowerCase()) ||
       doc.nome_arquivo.toLowerCase().includes(search.toLowerCase());
     const matchesStatus = statusFilter === 'all' || doc.status === statusFilter;
     const matchesTipo = tipoFilter === 'all' || doc.tipo === tipoFilter;
     return matchesSearch && matchesStatus && matchesTipo;
-  });
+  }) || [];
 
   const formatDateTime = (dateStr: string) => {
     return new Date(dateStr).toLocaleString('pt-BR', {
@@ -104,10 +59,10 @@ export default function Documentos() {
 
   // Stats
   const stats = {
-    total: mockDocumentos.length,
-    pendentes: mockDocumentos.filter((d) => d.status === 'pendente').length,
-    emAnalise: mockDocumentos.filter((d) => d.status === 'em_analise').length,
-    aprovados: mockDocumentos.filter((d) => d.status === 'aprovado').length,
+    total: documentos?.length || 0,
+    pendentes: documentos?.filter((d) => d.status === 'pendente').length || 0,
+    emAnalise: documentos?.filter((d) => d.status === 'em_analise').length || 0,
+    aprovados: documentos?.filter((d) => d.status === 'aprovado').length || 0,
   };
 
   return (
@@ -129,7 +84,11 @@ export default function Documentos() {
                 <FileCheck className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{stats.total}</p>
+                {isLoading ? (
+                  <Skeleton className="h-8 w-12" />
+                ) : (
+                  <p className="text-2xl font-bold">{stats.total}</p>
+                )}
                 <p className="text-xs text-muted-foreground">Total</p>
               </div>
             </div>
@@ -142,7 +101,11 @@ export default function Documentos() {
                 <Clock className="h-5 w-5 text-yellow-500" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{stats.pendentes}</p>
+                {isLoading ? (
+                  <Skeleton className="h-8 w-12" />
+                ) : (
+                  <p className="text-2xl font-bold">{stats.pendentes}</p>
+                )}
                 <p className="text-xs text-muted-foreground">Pendentes</p>
               </div>
             </div>
@@ -155,7 +118,11 @@ export default function Documentos() {
                 <Eye className="h-5 w-5 text-blue-500" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{stats.emAnalise}</p>
+                {isLoading ? (
+                  <Skeleton className="h-8 w-12" />
+                ) : (
+                  <p className="text-2xl font-bold">{stats.emAnalise}</p>
+                )}
                 <p className="text-xs text-muted-foreground">Em Análise</p>
               </div>
             </div>
@@ -168,7 +135,11 @@ export default function Documentos() {
                 <CheckCircle className="h-5 w-5 text-green-500" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{stats.aprovados}</p>
+                {isLoading ? (
+                  <Skeleton className="h-8 w-12" />
+                ) : (
+                  <p className="text-2xl font-bold">{stats.aprovados}</p>
+                )}
                 <p className="text-xs text-muted-foreground">Aprovados</p>
               </div>
             </div>
@@ -218,67 +189,85 @@ export default function Documentos() {
       {/* Table */}
       <Card>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Documento</TableHead>
-                <TableHead>Associado</TableHead>
-                <TableHead>Arquivo</TableHead>
-                <TableHead>Enviado em</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="w-24">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredDocumentos.map((doc) => {
-                const status = statusConfig[doc.status];
-                return (
-                  <TableRow key={doc.id}>
-                    <TableCell>
-                      <Badge variant="outline">{TIPO_DOCUMENTO_LABELS[doc.tipo]}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
-                          {doc.associado_nome.charAt(0)}
+          {isLoading ? (
+            <div className="p-6 space-y-4">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <Skeleton key={i} className="h-16 w-full" />
+              ))}
+            </div>
+          ) : filteredDocumentos.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12">
+              <FileCheck className="h-12 w-12 text-muted-foreground/50" />
+              <h3 className="mt-4 font-semibold text-foreground">Nenhum documento encontrado</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {search || statusFilter !== 'all' || tipoFilter !== 'all' 
+                  ? 'Tente ajustar os filtros' 
+                  : 'Nenhum documento enviado ainda'}
+              </p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Documento</TableHead>
+                  <TableHead>Associado</TableHead>
+                  <TableHead>Arquivo</TableHead>
+                  <TableHead>Enviado em</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="w-24">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredDocumentos.map((doc) => {
+                  const status = statusConfig[doc.status];
+                  return (
+                    <TableRow key={doc.id}>
+                      <TableCell>
+                        <Badge variant="outline">{TIPO_DOCUMENTO_LABELS[doc.tipo as TipoDocumento]}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
+                            {doc.associados?.nome?.charAt(0) || '?'}
+                          </div>
+                          <span>{doc.associados?.nome || 'Desconhecido'}</span>
                         </div>
-                        <span>{doc.associado_nome}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-mono text-sm text-muted-foreground">
-                      {doc.nome_arquivo}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {formatDateTime(doc.created_at)}
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={status.color}>
-                        <status.icon className="mr-1 h-3 w-3" />
-                        {STATUS_DOCUMENTO_LABELS[doc.status]}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
-                        <Button variant="ghost" size="sm">
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        {(doc.status === 'pendente' || doc.status === 'em_analise') && (
-                          <>
-                            <Button variant="ghost" size="sm" className="text-green-600">
-                              <CheckCircle className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="sm" className="text-destructive">
-                              <XCircle className="h-4 w-4" />
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+                      </TableCell>
+                      <TableCell className="font-mono text-sm text-muted-foreground">
+                        {doc.nome_arquivo}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {formatDateTime(doc.created_at)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={status.color}>
+                          <status.icon className="mr-1 h-3 w-3" />
+                          {STATUS_DOCUMENTO_LABELS[doc.status]}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-1">
+                          <Button variant="ghost" size="sm">
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          {(doc.status === 'pendente' || doc.status === 'em_analise') && (
+                            <>
+                              <Button variant="ghost" size="sm" className="text-green-600">
+                                <CheckCircle className="h-4 w-4" />
+                              </Button>
+                              <Button variant="ghost" size="sm" className="text-destructive">
+                                <XCircle className="h-4 w-4" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>
