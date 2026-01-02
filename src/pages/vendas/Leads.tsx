@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Plus, Search, Filter, MoreHorizontal, Phone, Mail, Car } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Plus, Search, MoreHorizontal, Phone, Car, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -27,87 +28,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ETAPA_LABELS, ORIGEM_LABELS, type EtapaLead, type OrigemLead } from '@/types/database';
-
-// Dados simulados
-const mockLeads = [
-  {
-    id: '1',
-    nome: 'João Silva',
-    telefone: '(11) 99999-1234',
-    email: 'joao@email.com',
-    veiculo_marca: 'Honda',
-    veiculo_modelo: 'Civic',
-    veiculo_ano: 2022,
-    veiculo_placa: 'ABC-1234',
-    veiculo_fipe: 95000,
-    origem: 'indicacao' as OrigemLead,
-    etapa: 'cotacao_enviada' as EtapaLead,
-    vendedor: 'Carlos Vendedor',
-    created_at: '2024-01-15T10:00:00',
-  },
-  {
-    id: '2',
-    nome: 'Maria Santos',
-    telefone: '(11) 98888-5678',
-    email: 'maria@email.com',
-    veiculo_marca: 'Toyota',
-    veiculo_modelo: 'Corolla',
-    veiculo_ano: 2021,
-    veiculo_placa: 'DEF-5678',
-    veiculo_fipe: 105000,
-    origem: 'site' as OrigemLead,
-    etapa: 'contato_inicial' as EtapaLead,
-    vendedor: 'Ana Vendedora',
-    created_at: '2024-01-14T14:30:00',
-  },
-  {
-    id: '3',
-    nome: 'Pedro Oliveira',
-    telefone: '(11) 97777-9012',
-    email: 'pedro@email.com',
-    veiculo_marca: 'Hyundai',
-    veiculo_modelo: 'HB20',
-    veiculo_ano: 2023,
-    veiculo_placa: 'GHI-9012',
-    veiculo_fipe: 75000,
-    origem: 'facebook' as OrigemLead,
-    etapa: 'novo' as EtapaLead,
-    vendedor: 'Carlos Vendedor',
-    created_at: '2024-01-15T08:00:00',
-  },
-  {
-    id: '4',
-    nome: 'Ana Costa',
-    telefone: '(11) 96666-3456',
-    email: 'ana@email.com',
-    veiculo_marca: 'Chevrolet',
-    veiculo_modelo: 'Onix',
-    veiculo_ano: 2022,
-    veiculo_placa: 'JKL-3456',
-    veiculo_fipe: 68000,
-    origem: 'instagram' as OrigemLead,
-    etapa: 'negociacao' as EtapaLead,
-    vendedor: 'Ana Vendedora',
-    created_at: '2024-01-13T16:00:00',
-  },
-  {
-    id: '5',
-    nome: 'Carlos Lima',
-    telefone: '(11) 95555-7890',
-    email: 'carlos@email.com',
-    veiculo_marca: 'Volkswagen',
-    veiculo_modelo: 'Polo',
-    veiculo_ano: 2021,
-    veiculo_placa: 'MNO-7890',
-    veiculo_fipe: 72000,
-    origem: 'telefone' as OrigemLead,
-    etapa: 'apresentacao' as EtapaLead,
-    vendedor: 'Carlos Vendedor',
-    created_at: '2024-01-12T11:00:00',
-  },
-];
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ETAPA_LABELS, ORIGEM_LABELS, type EtapaLead } from '@/types/database';
+import { useLeads, useUpdateLead } from '@/hooks/useLeads';
+import { LeadFormDialog } from '@/components/leads/LeadFormDialog';
+import { CotacaoFormDialog } from '@/components/cotacoes/CotacaoFormDialog';
+import { toast } from 'sonner';
 
 const etapaColors: Record<EtapaLead, string> = {
   novo: 'bg-[hsl(var(--etapa-novo))] text-white',
@@ -130,15 +56,22 @@ const etapas: EtapaLead[] = [
 ];
 
 export default function Leads() {
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [etapaFilter, setEtapaFilter] = useState<string>('all');
   const [view, setView] = useState<'table' | 'kanban'>('table');
+  const [showLeadForm, setShowLeadForm] = useState(false);
+  const [showCotacaoForm, setShowCotacaoForm] = useState(false);
+  const [selectedLeadId, setSelectedLeadId] = useState<string | undefined>();
 
-  const filteredLeads = mockLeads.filter((lead) => {
+  const { data: leads, isLoading } = useLeads();
+  const updateLead = useUpdateLead();
+
+  const filteredLeads = (leads || []).filter((lead) => {
     const matchesSearch =
       lead.nome.toLowerCase().includes(search.toLowerCase()) ||
       lead.telefone.includes(search) ||
-      lead.veiculo_modelo.toLowerCase().includes(search.toLowerCase());
+      (lead.veiculo_modelo?.toLowerCase().includes(search.toLowerCase()) ?? false);
     const matchesEtapa = etapaFilter === 'all' || lead.etapa === etapaFilter;
     return matchesSearch && matchesEtapa;
   });
@@ -151,12 +84,35 @@ export default function Leads() {
     });
   };
 
-  const formatCurrency = (value: number) => {
+  const formatCurrency = (value: number | null) => {
+    if (!value) return '-';
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
       currency: 'BRL',
     }).format(value);
   };
+
+  const handleCreateCotacao = (leadId: string) => {
+    setSelectedLeadId(leadId);
+    setShowCotacaoForm(true);
+  };
+
+  const handleMarkAsLost = async (leadId: string) => {
+    try {
+      await updateLead.mutateAsync({ id: leadId, etapa: 'perdido' });
+      toast.success('Lead marcado como perdido');
+    } catch (error) {
+      toast.error('Erro ao atualizar lead');
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -168,7 +124,7 @@ export default function Leads() {
             Gerencie seus leads e acompanhe o funil de vendas
           </p>
         </div>
-        <Button className="gap-2">
+        <Button className="gap-2" onClick={() => setShowLeadForm(true)}>
           <Plus className="h-4 w-4" />
           Novo Lead
         </Button>
@@ -217,75 +173,104 @@ export default function Leads() {
                   <TableHead>Veículo</TableHead>
                   <TableHead>Origem</TableHead>
                   <TableHead>Etapa</TableHead>
-                  <TableHead>Vendedor</TableHead>
                   <TableHead>Data</TableHead>
                   <TableHead className="w-12"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredLeads.map((lead) => (
-                  <TableRow key={lead.id} className="cursor-pointer hover:bg-muted/50">
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-sm font-medium text-primary">
-                          {lead.nome.charAt(0)}
-                        </div>
-                        <div>
-                          <p className="font-medium">{lead.nome}</p>
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <Phone className="h-3 w-3" />
-                            {lead.telefone}
-                          </div>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Car className="h-4 w-4 text-muted-foreground" />
-                        <div>
-                          <p className="text-sm">
-                            {lead.veiculo_marca} {lead.veiculo_modelo}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {lead.veiculo_ano} • {formatCurrency(lead.veiculo_fipe)}
-                          </p>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{ORIGEM_LABELS[lead.origem]}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={etapaColors[lead.etapa]}>
-                        {ETAPA_LABELS[lead.etapa]}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-sm">{lead.vendedor}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {formatDate(lead.created_at)}
-                    </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Ações</DropdownMenuLabel>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem>Ver detalhes</DropdownMenuItem>
-                          <DropdownMenuItem>Editar</DropdownMenuItem>
-                          <DropdownMenuItem>Criar cotação</DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-destructive">
-                            Marcar como perdido
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                {filteredLeads.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      Nenhum lead encontrado
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  filteredLeads.map((lead) => (
+                    <TableRow 
+                      key={lead.id} 
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => navigate(`/vendas/leads/${lead.id}`)}
+                    >
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-sm font-medium text-primary">
+                            {lead.nome.charAt(0)}
+                          </div>
+                          <div>
+                            <p className="font-medium">{lead.nome}</p>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <Phone className="h-3 w-3" />
+                              {lead.telefone}
+                            </div>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {lead.veiculo_marca ? (
+                          <div className="flex items-center gap-2">
+                            <Car className="h-4 w-4 text-muted-foreground" />
+                            <div>
+                              <p className="text-sm">
+                                {lead.veiculo_marca} {lead.veiculo_modelo}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {lead.veiculo_ano} • {formatCurrency(lead.veiculo_fipe)}
+                              </p>
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{ORIGEM_LABELS[lead.origem]}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={etapaColors[lead.etapa]}>
+                          {ETAPA_LABELS[lead.etapa]}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {formatDate(lead.created_at)}
+                      </TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                            <Button variant="ghost" size="icon">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Ações</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/vendas/leads/${lead.id}`);
+                            }}>
+                              Ver detalhes
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={(e) => {
+                              e.stopPropagation();
+                              handleCreateCotacao(lead.id);
+                            }}>
+                              Criar cotação
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem 
+                              className="text-destructive"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleMarkAsLost(lead.id);
+                              }}
+                            >
+                              Marcar como perdido
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </CardContent>
@@ -296,7 +281,7 @@ export default function Leads() {
       {view === 'kanban' && (
         <div className="grid auto-cols-[280px] grid-flow-col gap-4 overflow-x-auto pb-4">
           {etapas.slice(0, 5).map((etapa) => {
-            const leadsInEtapa = mockLeads.filter((l) => l.etapa === etapa);
+            const leadsInEtapa = filteredLeads.filter((l) => l.etapa === etapa);
             return (
               <div key={etapa} className="flex flex-col rounded-lg bg-muted/50 p-3">
                 <div className="mb-3 flex items-center justify-between">
@@ -312,6 +297,7 @@ export default function Leads() {
                     <Card
                       key={lead.id}
                       className="cursor-pointer transition-shadow hover:shadow-md"
+                      onClick={() => navigate(`/vendas/leads/${lead.id}`)}
                     >
                       <CardContent className="p-3">
                         <div className="mb-2 flex items-center gap-2">
@@ -321,10 +307,12 @@ export default function Leads() {
                           <span className="font-medium">{lead.nome}</span>
                         </div>
                         <div className="space-y-1 text-xs text-muted-foreground">
-                          <div className="flex items-center gap-1">
-                            <Car className="h-3 w-3" />
-                            {lead.veiculo_marca} {lead.veiculo_modelo}
-                          </div>
+                          {lead.veiculo_marca && (
+                            <div className="flex items-center gap-1">
+                              <Car className="h-3 w-3" />
+                              {lead.veiculo_marca} {lead.veiculo_modelo}
+                            </div>
+                          )}
                           <div className="flex items-center gap-1">
                             <Phone className="h-3 w-3" />
                             {lead.telefone}
@@ -339,6 +327,14 @@ export default function Leads() {
           })}
         </div>
       )}
+
+      {/* Dialogs */}
+      <LeadFormDialog open={showLeadForm} onOpenChange={setShowLeadForm} />
+      <CotacaoFormDialog 
+        open={showCotacaoForm} 
+        onOpenChange={setShowCotacaoForm} 
+        leadId={selectedLeadId}
+      />
     </div>
   );
 }

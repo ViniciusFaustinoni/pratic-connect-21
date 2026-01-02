@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Search, FileText, CheckCircle, XCircle, Clock } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { useNavigate } from 'react-router-dom';
+import { Search, FileText, CheckCircle, XCircle, Clock, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -20,53 +20,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import type { StatusContrato } from '@/types/database';
-
-const mockContratos = [
-  {
-    id: '1',
-    numero: 'CTR-20240115-0001',
-    associado_nome: 'João Silva',
-    associado_cpf: '123.456.789-00',
-    plano_nome: 'Proteção Total',
-    valor_adesao: 350,
-    valor_mensal: 365,
-    data_inicio: '2024-01-15',
-    status: 'ativo' as StatusContrato,
-  },
-  {
-    id: '2',
-    numero: 'CTR-20240114-0001',
-    associado_nome: 'Maria Santos',
-    associado_cpf: '987.654.321-00',
-    plano_nome: 'Proteção Básica',
-    valor_adesao: 350,
-    valor_mensal: 395,
-    data_inicio: '2024-01-14',
-    status: 'ativo' as StatusContrato,
-  },
-  {
-    id: '3',
-    numero: 'CTR-20240110-0001',
-    associado_nome: 'Pedro Oliveira',
-    associado_cpf: '456.789.123-00',
-    plano_nome: 'Proteção Total',
-    valor_adesao: 350,
-    valor_mensal: 305,
-    data_inicio: '2024-01-10',
-    status: 'pendente' as StatusContrato,
-  },
-  {
-    id: '4',
-    numero: 'CTR-20240105-0001',
-    associado_nome: 'Ana Costa',
-    associado_cpf: '789.123.456-00',
-    plano_nome: 'Proteção Premium',
-    valor_adesao: 400,
-    valor_mensal: 430,
-    data_inicio: '2024-01-05',
-    status: 'cancelado' as StatusContrato,
-  },
-];
+import { useContratos } from '@/hooks/useContratos';
 
 const statusConfig: Record<StatusContrato, { label: string; color: string; icon: typeof FileText }> = {
   pendente: { label: 'Pendente', color: 'bg-yellow-500 text-white', icon: Clock },
@@ -76,14 +30,17 @@ const statusConfig: Record<StatusContrato, { label: string; color: string; icon:
 };
 
 export default function Contratos() {
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
-  const filteredContratos = mockContratos.filter((contrato) => {
+  const { data: contratos, isLoading } = useContratos();
+
+  const filteredContratos = (contratos || []).filter((contrato) => {
     const matchesSearch =
       contrato.numero.toLowerCase().includes(search.toLowerCase()) ||
-      contrato.associado_nome.toLowerCase().includes(search.toLowerCase()) ||
-      contrato.associado_cpf.includes(search);
+      (contrato.associados?.nome?.toLowerCase().includes(search.toLowerCase()) ?? false) ||
+      (contrato.associados?.cpf?.includes(search) ?? false);
     const matchesStatus = statusFilter === 'all' || contrato.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -101,13 +58,21 @@ export default function Contratos() {
 
   // Stats
   const stats = {
-    total: mockContratos.length,
-    ativos: mockContratos.filter((c) => c.status === 'ativo').length,
-    pendentes: mockContratos.filter((c) => c.status === 'pendente').length,
-    valorTotal: mockContratos
-      .filter((c) => c.status === 'ativo')
-      .reduce((acc, c) => acc + c.valor_mensal, 0),
+    total: contratos?.length || 0,
+    ativos: contratos?.filter((c) => c.status === 'ativo').length || 0,
+    pendentes: contratos?.filter((c) => c.status === 'pendente').length || 0,
+    valorTotal: contratos
+      ?.filter((c) => c.status === 'ativo')
+      .reduce((acc, c) => acc + c.valor_mensal, 0) || 0,
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -219,36 +184,48 @@ export default function Contratos() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredContratos.map((contrato) => {
-                const status = statusConfig[contrato.status];
-                return (
-                  <TableRow key={contrato.id} className="cursor-pointer hover:bg-muted/50">
-                    <TableCell className="font-mono text-sm">{contrato.numero}</TableCell>
-                    <TableCell>
-                      <div>
-                        <p className="font-medium">{contrato.associado_nome}</p>
-                        <p className="text-xs text-muted-foreground">{contrato.associado_cpf}</p>
-                      </div>
-                    </TableCell>
-                    <TableCell>{contrato.plano_nome}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {formatCurrency(contrato.valor_adesao)}
-                    </TableCell>
-                    <TableCell className="font-medium">
-                      {formatCurrency(contrato.valor_mensal)}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {formatDate(contrato.data_inicio)}
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={status.color}>
-                        <status.icon className="mr-1 h-3 w-3" />
-                        {status.label}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
+              {filteredContratos.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    Nenhum contrato encontrado
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredContratos.map((contrato) => {
+                  const status = statusConfig[contrato.status];
+                  return (
+                    <TableRow 
+                      key={contrato.id} 
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => navigate(`/vendas/contratos/${contrato.id}`)}
+                    >
+                      <TableCell className="font-mono text-sm">{contrato.numero}</TableCell>
+                      <TableCell>
+                        <div>
+                          <p className="font-medium">{contrato.associados?.nome || '-'}</p>
+                          <p className="text-xs text-muted-foreground">{contrato.associados?.cpf}</p>
+                        </div>
+                      </TableCell>
+                      <TableCell>{contrato.planos?.nome || '-'}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {formatCurrency(contrato.valor_adesao)}
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        {formatCurrency(contrato.valor_mensal)}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {formatDate(contrato.data_inicio)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={status.color}>
+                          <status.icon className="mr-1 h-3 w-3" />
+                          {status.label}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
             </TableBody>
           </Table>
         </CardContent>
