@@ -14,6 +14,7 @@ import {
   MapPin,
   Package,
   Radio,
+  Kanban,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
@@ -42,6 +43,7 @@ const menuItems = {
   ],
   vendas: [
     { title: 'Leads', url: '/vendas/leads', icon: UserPlus },
+    { title: 'Kanban', url: '/vendas/kanban', icon: Kanban },
     { title: 'Cotações', url: '/vendas/cotacoes', icon: Calculator },
     { title: 'Contratos', url: '/vendas/contratos', icon: FileText },
   ],

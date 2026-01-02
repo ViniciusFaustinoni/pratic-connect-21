@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, MoreHorizontal, Phone, Car, Loader2 } from 'lucide-react';
+import { Plus, MoreHorizontal, Phone, Car, Loader2, ChevronLeft, ChevronRight, Edit, ArrowRight, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -20,20 +19,33 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ETAPA_LABELS, ORIGEM_LABELS, type EtapaLead } from '@/types/database';
-import { useLeads, useUpdateLead } from '@/hooks/useLeads';
+import { useLeads, useAllLeads, useUpdateLead, type LeadFilters as LeadFiltersType } from '@/hooks/useLeads';
 import { LeadFormDialog } from '@/components/leads/LeadFormDialog';
+import { LeadEditDialog } from '@/components/leads/LeadEditDialog';
+import { LeadFilters } from '@/components/leads/LeadFilters';
+import { LeadKanbanCard } from '@/components/leads/LeadKanbanCard';
 import { CotacaoFormDialog } from '@/components/cotacoes/CotacaoFormDialog';
 import { toast } from 'sonner';
+import {
+  DndContext,
+  DragEndEvent,
+  DragOverlay,
+  DragStartEvent,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import type { Tables } from '@/integrations/supabase/types';
+
+type Lead = Tables<'leads'>;
 
 const etapaColors: Record<EtapaLead, string> = {
   novo: 'bg-[hsl(var(--etapa-novo))] text-white',
@@ -57,24 +69,28 @@ const etapas: EtapaLead[] = [
 
 export default function Leads() {
   const navigate = useNavigate();
-  const [search, setSearch] = useState('');
-  const [etapaFilter, setEtapaFilter] = useState<string>('all');
+  const [filters, setFilters] = useState<LeadFiltersType>({});
+  const [page, setPage] = useState(1);
   const [view, setView] = useState<'table' | 'kanban'>('table');
   const [showLeadForm, setShowLeadForm] = useState(false);
   const [showCotacaoForm, setShowCotacaoForm] = useState(false);
   const [selectedLeadId, setSelectedLeadId] = useState<string | undefined>();
+  const [editingLead, setEditingLead] = useState<Lead | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
 
-  const { data: leads, isLoading } = useLeads();
+  // Para tabela com paginação
+  const { data: leadsData, isLoading } = useLeads({ filters, page, perPage: 20 });
+  
+  // Para kanban (todos os leads)
+  const { data: allLeads } = useAllLeads({ vendedor_id: filters.vendedor_id, search: filters.search });
+  
   const updateLead = useUpdateLead();
 
-  const filteredLeads = (leads || []).filter((lead) => {
-    const matchesSearch =
-      lead.nome.toLowerCase().includes(search.toLowerCase()) ||
-      lead.telefone.includes(search) ||
-      (lead.veiculo_modelo?.toLowerCase().includes(search.toLowerCase()) ?? false);
-    const matchesEtapa = etapaFilter === 'all' || lead.etapa === etapaFilter;
-    return matchesSearch && matchesEtapa;
-  });
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 8 },
+    })
+  );
 
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleDateString('pt-BR', {
@@ -106,6 +122,42 @@ export default function Leads() {
     }
   };
 
+  const handleAdvanceStage = async (leadId: string, newEtapa: EtapaLead) => {
+    try {
+      await updateLead.mutateAsync({ id: leadId, etapa: newEtapa });
+      toast.success(`Lead movido para ${ETAPA_LABELS[newEtapa]}`);
+    } catch (error) {
+      toast.error('Erro ao atualizar lead');
+    }
+  };
+
+  // Drag and drop handlers
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(event.active.id as string);
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveId(null);
+
+    if (!over) return;
+
+    const leadId = active.id as string;
+    const targetEtapa = over.id as EtapaLead;
+
+    const lead = allLeads?.find((l) => l.id === leadId);
+    if (!lead || lead.etapa === targetEtapa) return;
+
+    try {
+      await updateLead.mutateAsync({ id: leadId, etapa: targetEtapa });
+      toast.success(`Lead movido para ${ETAPA_LABELS[targetEtapa]}`);
+    } catch (error) {
+      toast.error('Erro ao mover lead');
+    }
+  };
+
+  const activeLead = activeId ? allLeads?.find((l) => l.id === activeId) : null;
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -114,6 +166,10 @@ export default function Leads() {
     );
   }
 
+  const leads = leadsData?.leads || [];
+  const totalPages = leadsData?.totalPages || 1;
+  const total = leadsData?.total || 0;
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -121,215 +177,272 @@ export default function Leads() {
         <div>
           <h1 className="text-2xl font-bold">Leads</h1>
           <p className="text-muted-foreground">
-            Gerencie seus leads e acompanhe o funil de vendas
+            {total} leads encontrados
           </p>
         </div>
-        <Button className="gap-2" onClick={() => setShowLeadForm(true)}>
-          <Plus className="h-4 w-4" />
-          Novo Lead
-        </Button>
+        <div className="flex gap-2">
+          <Tabs value={view} onValueChange={(v) => setView(v as 'table' | 'kanban')}>
+            <TabsList>
+              <TabsTrigger value="table">Lista</TabsTrigger>
+              <TabsTrigger value="kanban">Kanban</TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <Button className="gap-2" onClick={() => setShowLeadForm(true)}>
+            <Plus className="h-4 w-4" />
+            Novo Lead
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Buscar por nome, telefone ou veículo..."
-            className="pl-9"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <Select value={etapaFilter} onValueChange={setEtapaFilter}>
-          <SelectTrigger className="w-full sm:w-48">
-            <SelectValue placeholder="Filtrar por etapa" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas as etapas</SelectItem>
-            {etapas.map((etapa) => (
-              <SelectItem key={etapa} value={etapa}>
-                {ETAPA_LABELS[etapa]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Tabs value={view} onValueChange={(v) => setView(v as 'table' | 'kanban')}>
-          <TabsList>
-            <TabsTrigger value="table">Lista</TabsTrigger>
-            <TabsTrigger value="kanban">Kanban</TabsTrigger>
-          </TabsList>
-        </Tabs>
-      </div>
+      <LeadFilters filters={filters} onFiltersChange={(f) => { setFilters(f); setPage(1); }} />
 
       {/* Table View */}
       {view === 'table' && (
-        <Card>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Lead</TableHead>
-                  <TableHead>Veículo</TableHead>
-                  <TableHead>Origem</TableHead>
-                  <TableHead>Etapa</TableHead>
-                  <TableHead>Data</TableHead>
-                  <TableHead className="w-12"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredLeads.length === 0 ? (
+        <>
+          <Card>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                      Nenhum lead encontrado
-                    </TableCell>
+                    <TableHead>Lead</TableHead>
+                    <TableHead>Veículo</TableHead>
+                    <TableHead>Origem</TableHead>
+                    <TableHead>Etapa</TableHead>
+                    <TableHead>Data</TableHead>
+                    <TableHead className="w-12"></TableHead>
                   </TableRow>
-                ) : (
-                  filteredLeads.map((lead) => (
-                    <TableRow 
-                      key={lead.id} 
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => navigate(`/vendas/leads/${lead.id}`)}
-                    >
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-sm font-medium text-primary">
-                            {lead.nome.charAt(0)}
-                          </div>
-                          <div>
-                            <p className="font-medium">{lead.nome}</p>
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                              <Phone className="h-3 w-3" />
-                              {lead.telefone}
-                            </div>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {lead.veiculo_marca ? (
-                          <div className="flex items-center gap-2">
-                            <Car className="h-4 w-4 text-muted-foreground" />
-                            <div>
-                              <p className="text-sm">
-                                {lead.veiculo_marca} {lead.veiculo_modelo}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {lead.veiculo_ano} • {formatCurrency(lead.veiculo_fipe)}
-                              </p>
-                            </div>
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{ORIGEM_LABELS[lead.origem]}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={etapaColors[lead.etapa]}>
-                          {ETAPA_LABELS[lead.etapa]}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {formatDate(lead.created_at)}
-                      </TableCell>
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                            <Button variant="ghost" size="icon">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Ações</DropdownMenuLabel>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={(e) => {
-                              e.stopPropagation();
-                              navigate(`/vendas/leads/${lead.id}`);
-                            }}>
-                              Ver detalhes
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={(e) => {
-                              e.stopPropagation();
-                              handleCreateCotacao(lead.id);
-                            }}>
-                              Criar cotação
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem 
-                              className="text-destructive"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleMarkAsLost(lead.id);
-                              }}
-                            >
-                              Marcar como perdido
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                </TableHeader>
+                <TableBody>
+                  {leads.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                        Nenhum lead encontrado
                       </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+                  ) : (
+                    leads.map((lead) => (
+                      <TableRow 
+                        key={lead.id} 
+                        className="cursor-pointer hover:bg-muted/50"
+                        onClick={() => navigate(`/vendas/leads/${lead.id}`)}
+                      >
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-sm font-medium text-primary">
+                              {lead.nome.charAt(0)}
+                            </div>
+                            <div>
+                              <p className="font-medium">{lead.nome}</p>
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <Phone className="h-3 w-3" />
+                                {lead.telefone}
+                              </div>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {lead.veiculo_marca ? (
+                            <div className="flex items-center gap-2">
+                              <Car className="h-4 w-4 text-muted-foreground" />
+                              <div>
+                                <p className="text-sm">
+                                  {lead.veiculo_marca} {lead.veiculo_modelo}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  {lead.veiculo_ano} • {formatCurrency(lead.veiculo_fipe)}
+                                </p>
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{ORIGEM_LABELS[lead.origem]}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={etapaColors[lead.etapa]}>
+                            {ETAPA_LABELS[lead.etapa]}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {formatDate(lead.created_at)}
+                        </TableCell>
+                        <TableCell>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                              <Button variant="ghost" size="icon">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuLabel>Ações</DropdownMenuLabel>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/vendas/leads/${lead.id}`);
+                              }}>
+                                Ver detalhes
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingLead(lead);
+                              }}>
+                                <Edit className="mr-2 h-4 w-4" />
+                                Editar
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={(e) => {
+                                e.stopPropagation();
+                                handleCreateCotacao(lead.id);
+                              }}>
+                                Criar cotação
+                              </DropdownMenuItem>
+                              
+                              <DropdownMenuSub>
+                                <DropdownMenuSubTrigger onClick={(e) => e.stopPropagation()}>
+                                  <ArrowRight className="mr-2 h-4 w-4" />
+                                  Avançar etapa
+                                </DropdownMenuSubTrigger>
+                                <DropdownMenuSubContent>
+                                  {etapas.filter(e => e !== lead.etapa).map((etapa) => (
+                                    <DropdownMenuItem
+                                      key={etapa}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleAdvanceStage(lead.id, etapa);
+                                      }}
+                                    >
+                                      {ETAPA_LABELS[etapa]}
+                                    </DropdownMenuItem>
+                                  ))}
+                                </DropdownMenuSubContent>
+                              </DropdownMenuSub>
+
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem 
+                                className="text-destructive"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleMarkAsLost(lead.id);
+                                }}
+                              >
+                                <XCircle className="mr-2 h-4 w-4" />
+                                Marcar como perdido
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">
+                Mostrando {((page - 1) * 20) + 1} - {Math.min(page * 20, total)} de {total}
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="text-sm">
+                  Página {page} de {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* Kanban View */}
       {view === 'kanban' && (
-        <div className="grid auto-cols-[280px] grid-flow-col gap-4 overflow-x-auto pb-4">
-          {etapas.slice(0, 5).map((etapa) => {
-            const leadsInEtapa = filteredLeads.filter((l) => l.etapa === etapa);
-            return (
-              <div key={etapa} className="flex flex-col rounded-lg bg-muted/50 p-3">
-                <div className="mb-3 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Badge className={etapaColors[etapa]}>{ETAPA_LABELS[etapa]}</Badge>
-                    <span className="text-sm text-muted-foreground">
-                      {leadsInEtapa.length}
-                    </span>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        >
+          <div className="grid auto-cols-[280px] grid-flow-col gap-4 overflow-x-auto pb-4">
+            {etapas.map((etapa) => {
+              const leadsInEtapa = (allLeads || []).filter((l) => l.etapa === etapa);
+              return (
+                <div 
+                  key={etapa} 
+                  id={etapa}
+                  className="flex flex-col rounded-lg bg-muted/50 p-3 min-h-[400px]"
+                >
+                  <div className="mb-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Badge className={etapaColors[etapa]}>{ETAPA_LABELS[etapa]}</Badge>
+                      <span className="text-sm text-muted-foreground">
+                        {leadsInEtapa.length}
+                      </span>
+                    </div>
                   </div>
-                </div>
-                <div className="flex flex-col gap-2">
-                  {leadsInEtapa.map((lead) => (
-                    <Card
-                      key={lead.id}
-                      className="cursor-pointer transition-shadow hover:shadow-md"
-                      onClick={() => navigate(`/vendas/leads/${lead.id}`)}
+                  <SortableContext
+                    items={leadsInEtapa.map((l) => l.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div 
+                      className="flex flex-col gap-2 flex-1"
+                      data-etapa={etapa}
                     >
-                      <CardContent className="p-3">
-                        <div className="mb-2 flex items-center gap-2">
-                          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
-                            {lead.nome.charAt(0)}
-                          </div>
-                          <span className="font-medium">{lead.nome}</span>
-                        </div>
-                        <div className="space-y-1 text-xs text-muted-foreground">
-                          {lead.veiculo_marca && (
-                            <div className="flex items-center gap-1">
-                              <Car className="h-3 w-3" />
-                              {lead.veiculo_marca} {lead.veiculo_modelo}
-                            </div>
-                          )}
-                          <div className="flex items-center gap-1">
-                            <Phone className="h-3 w-3" />
-                            {lead.telefone}
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                      {leadsInEtapa.map((lead) => (
+                        <LeadKanbanCard
+                          key={lead.id}
+                          lead={lead}
+                          onClick={() => navigate(`/vendas/leads/${lead.id}`)}
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+          <DragOverlay>
+            {activeLead ? (
+              <Card className="shadow-lg">
+                <CardContent className="p-3">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
+                      {activeLead.nome.charAt(0)}
+                    </div>
+                    <span className="font-medium">{activeLead.nome}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : null}
+          </DragOverlay>
+        </DndContext>
       )}
 
       {/* Dialogs */}
       <LeadFormDialog open={showLeadForm} onOpenChange={setShowLeadForm} />
+      <LeadEditDialog 
+        open={!!editingLead} 
+        onOpenChange={(open) => !open && setEditingLead(null)} 
+        lead={editingLead}
+      />
       <CotacaoFormDialog 
         open={showCotacaoForm} 
         onOpenChange={setShowCotacaoForm} 
