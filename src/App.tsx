@@ -5,8 +5,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { AppLayout as AssociadoAppLayout } from "@/components/app/AppLayout";
 
-// Pages
+// Internal System Pages
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Leads from "./pages/vendas/Leads";
@@ -15,8 +16,25 @@ import Contratos from "./pages/vendas/Contratos";
 import Associados from "./pages/cadastro/Associados";
 import Veiculos from "./pages/cadastro/Veiculos";
 import Documentos from "./pages/cadastro/Documentos";
+import Instalacoes from "./pages/monitoramento/Instalacoes";
+import Rotas from "./pages/monitoramento/Rotas";
+import Estoque from "./pages/monitoramento/Estoque";
+import Rastreadores from "./pages/monitoramento/Rastreadores";
 import Configuracoes from "./pages/Configuracoes";
 import NotFound from "./pages/NotFound";
+
+// Associate App Pages
+import AppLogin from "./pages/app/AppLogin";
+import AppHome from "./pages/app/AppHome";
+import AppBoletos from "./pages/app/AppBoletos";
+import AppBoletoDetalhe from "./pages/app/AppBoletoDetalhe";
+import AppRastreamento from "./pages/app/AppRastreamento";
+import AppAssistencia from "./pages/app/AppAssistencia";
+import AppAssistenciaDetalhe from "./pages/app/AppAssistenciaDetalhe";
+import AppSinistros from "./pages/app/AppSinistros";
+import AppSinistroNovo from "./pages/app/AppSinistroNovo";
+import AppPerfil from "./pages/app/AppPerfil";
+import AppConfiguracoes from "./pages/app/AppConfiguracoes";
 
 const queryClient = new QueryClient();
 
@@ -34,7 +52,7 @@ const App = () => (
             {/* Redirect root to dashboard */}
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             
-            {/* Protected routes with layout */}
+            {/* Protected routes with internal layout */}
             <Route element={<AppLayout />}>
               <Route path="/dashboard" element={<Dashboard />} />
               
@@ -48,9 +66,31 @@ const App = () => (
               <Route path="/cadastro/veiculos" element={<Veiculos />} />
               <Route path="/cadastro/documentos" element={<Documentos />} />
               
+              {/* Monitoramento */}
+              <Route path="/monitoramento/instalacoes" element={<Instalacoes />} />
+              <Route path="/monitoramento/rotas" element={<Rotas />} />
+              <Route path="/monitoramento/estoque" element={<Estoque />} />
+              <Route path="/monitoramento/rastreadores" element={<Rastreadores />} />
+              
               {/* Config */}
               <Route path="/configuracoes" element={<Configuracoes />} />
             </Route>
+            
+            {/* Associate App Routes */}
+            <Route path="/app/login" element={<AppLogin />} />
+            <Route element={<AssociadoAppLayout />}>
+              <Route path="/app/home" element={<AppHome />} />
+              <Route path="/app/boletos" element={<AppBoletos />} />
+              <Route path="/app/boletos/:id" element={<AppBoletoDetalhe />} />
+              <Route path="/app/rastreamento" element={<AppRastreamento />} />
+              <Route path="/app/assistencia" element={<AppAssistencia />} />
+              <Route path="/app/assistencia/:id" element={<AppAssistenciaDetalhe />} />
+              <Route path="/app/sinistros" element={<AppSinistros />} />
+              <Route path="/app/sinistros/novo" element={<AppSinistroNovo />} />
+              <Route path="/app/perfil" element={<AppPerfil />} />
+              <Route path="/app/configuracoes" element={<AppConfiguracoes />} />
+            </Route>
+            <Route path="/app" element={<Navigate to="/app/home" replace />} />
             
             {/* 404 */}
             <Route path="*" element={<NotFound />} />

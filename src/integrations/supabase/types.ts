@@ -110,6 +110,121 @@ export type Database = {
           },
         ]
       }
+      chamados_assistencia: {
+        Row: {
+          associado_id: string
+          atendente_id: string | null
+          avaliacao_nota: number | null
+          canal: string
+          created_at: string
+          data_abertura: string
+          data_conclusao: string | null
+          descricao: string | null
+          destino_cep: string | null
+          destino_cidade: string | null
+          destino_lat: number | null
+          destino_lng: number | null
+          destino_logradouro: string | null
+          destino_uf: string | null
+          id: string
+          origem_cep: string | null
+          origem_cidade: string | null
+          origem_lat: number | null
+          origem_lng: number | null
+          origem_logradouro: string | null
+          origem_uf: string | null
+          prestador_nome: string | null
+          prestador_telefone: string | null
+          protocolo: string
+          status: Database["public"]["Enums"]["status_chamado"]
+          tipo_servico: string
+          updated_at: string
+          veiculo_id: string | null
+        }
+        Insert: {
+          associado_id: string
+          atendente_id?: string | null
+          avaliacao_nota?: number | null
+          canal?: string
+          created_at?: string
+          data_abertura?: string
+          data_conclusao?: string | null
+          descricao?: string | null
+          destino_cep?: string | null
+          destino_cidade?: string | null
+          destino_lat?: number | null
+          destino_lng?: number | null
+          destino_logradouro?: string | null
+          destino_uf?: string | null
+          id?: string
+          origem_cep?: string | null
+          origem_cidade?: string | null
+          origem_lat?: number | null
+          origem_lng?: number | null
+          origem_logradouro?: string | null
+          origem_uf?: string | null
+          prestador_nome?: string | null
+          prestador_telefone?: string | null
+          protocolo: string
+          status?: Database["public"]["Enums"]["status_chamado"]
+          tipo_servico: string
+          updated_at?: string
+          veiculo_id?: string | null
+        }
+        Update: {
+          associado_id?: string
+          atendente_id?: string | null
+          avaliacao_nota?: number | null
+          canal?: string
+          created_at?: string
+          data_abertura?: string
+          data_conclusao?: string | null
+          descricao?: string | null
+          destino_cep?: string | null
+          destino_cidade?: string | null
+          destino_lat?: number | null
+          destino_lng?: number | null
+          destino_logradouro?: string | null
+          destino_uf?: string | null
+          id?: string
+          origem_cep?: string | null
+          origem_cidade?: string | null
+          origem_lat?: number | null
+          origem_lng?: number | null
+          origem_logradouro?: string | null
+          origem_uf?: string | null
+          prestador_nome?: string | null
+          prestador_telefone?: string | null
+          protocolo?: string
+          status?: Database["public"]["Enums"]["status_chamado"]
+          tipo_servico?: string
+          updated_at?: string
+          veiculo_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chamados_assistencia_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chamados_assistencia_atendente_id_fkey"
+            columns: ["atendente_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chamados_assistencia_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "veiculos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contratos: {
         Row: {
           associado_id: string | null
@@ -309,6 +424,143 @@ export type Database = {
           },
         ]
       }
+      instalacao_fotos: {
+        Row: {
+          arquivo_url: string
+          created_at: string
+          id: string
+          instalacao_id: string
+          tipo: string
+        }
+        Insert: {
+          arquivo_url: string
+          created_at?: string
+          id?: string
+          instalacao_id: string
+          tipo: string
+        }
+        Update: {
+          arquivo_url?: string
+          created_at?: string
+          id?: string
+          instalacao_id?: string
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "instalacao_fotos_instalacao_id_fkey"
+            columns: ["instalacao_id"]
+            isOneToOne: false
+            referencedRelation: "instalacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      instalacoes: {
+        Row: {
+          assinatura_cliente_url: string | null
+          associado_id: string
+          bairro: string | null
+          cep: string | null
+          cidade: string | null
+          complemento: string | null
+          created_at: string
+          data_agendada: string
+          id: string
+          instalador_id: string | null
+          logradouro: string | null
+          numero: string | null
+          observacoes: string | null
+          periodo: Database["public"]["Enums"]["periodo_instalacao"]
+          rastreador_id: string | null
+          rota_id: string | null
+          status: Database["public"]["Enums"]["status_instalacao"]
+          uf: string | null
+          updated_at: string
+          veiculo_id: string
+        }
+        Insert: {
+          assinatura_cliente_url?: string | null
+          associado_id: string
+          bairro?: string | null
+          cep?: string | null
+          cidade?: string | null
+          complemento?: string | null
+          created_at?: string
+          data_agendada: string
+          id?: string
+          instalador_id?: string | null
+          logradouro?: string | null
+          numero?: string | null
+          observacoes?: string | null
+          periodo?: Database["public"]["Enums"]["periodo_instalacao"]
+          rastreador_id?: string | null
+          rota_id?: string | null
+          status?: Database["public"]["Enums"]["status_instalacao"]
+          uf?: string | null
+          updated_at?: string
+          veiculo_id: string
+        }
+        Update: {
+          assinatura_cliente_url?: string | null
+          associado_id?: string
+          bairro?: string | null
+          cep?: string | null
+          cidade?: string | null
+          complemento?: string | null
+          created_at?: string
+          data_agendada?: string
+          id?: string
+          instalador_id?: string | null
+          logradouro?: string | null
+          numero?: string | null
+          observacoes?: string | null
+          periodo?: Database["public"]["Enums"]["periodo_instalacao"]
+          rastreador_id?: string | null
+          rota_id?: string | null
+          status?: Database["public"]["Enums"]["status_instalacao"]
+          uf?: string | null
+          updated_at?: string
+          veiculo_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "instalacoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "instalacoes_instalador_id_fkey"
+            columns: ["instalador_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "instalacoes_rastreador_id_fkey"
+            columns: ["rastreador_id"]
+            isOneToOne: false
+            referencedRelation: "rastreadores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "instalacoes_rota_id_fkey"
+            columns: ["rota_id"]
+            isOneToOne: false
+            referencedRelation: "rotas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "instalacoes_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "veiculos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leads: {
         Row: {
           cpf: string | null
@@ -486,6 +738,207 @@ export type Database = {
         }
         Relationships: []
       }
+      rastreadores: {
+        Row: {
+          chip_iccid: string | null
+          codigo: string
+          created_at: string
+          id: string
+          id_plataforma: string | null
+          imei: string | null
+          numero_serie: string | null
+          plataforma: string
+          status: Database["public"]["Enums"]["status_rastreador"]
+          ultima_comunicacao: string | null
+          ultima_posicao_lat: number | null
+          ultima_posicao_lng: number | null
+          updated_at: string
+          veiculo_id: string | null
+        }
+        Insert: {
+          chip_iccid?: string | null
+          codigo: string
+          created_at?: string
+          id?: string
+          id_plataforma?: string | null
+          imei?: string | null
+          numero_serie?: string | null
+          plataforma?: string
+          status?: Database["public"]["Enums"]["status_rastreador"]
+          ultima_comunicacao?: string | null
+          ultima_posicao_lat?: number | null
+          ultima_posicao_lng?: number | null
+          updated_at?: string
+          veiculo_id?: string | null
+        }
+        Update: {
+          chip_iccid?: string | null
+          codigo?: string
+          created_at?: string
+          id?: string
+          id_plataforma?: string | null
+          imei?: string | null
+          numero_serie?: string | null
+          plataforma?: string
+          status?: Database["public"]["Enums"]["status_rastreador"]
+          ultima_comunicacao?: string | null
+          ultima_posicao_lat?: number | null
+          ultima_posicao_lng?: number | null
+          updated_at?: string
+          veiculo_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rastreadores_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "veiculos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rotas: {
+        Row: {
+          cidade: string | null
+          codigo: string
+          coordenador_id: string | null
+          created_at: string
+          data_rota: string
+          id: string
+          instalador_id: string | null
+          regiao: string | null
+          status: Database["public"]["Enums"]["status_rota"]
+          total_concluidos: number
+          total_servicos: number
+          updated_at: string
+        }
+        Insert: {
+          cidade?: string | null
+          codigo: string
+          coordenador_id?: string | null
+          created_at?: string
+          data_rota: string
+          id?: string
+          instalador_id?: string | null
+          regiao?: string | null
+          status?: Database["public"]["Enums"]["status_rota"]
+          total_concluidos?: number
+          total_servicos?: number
+          updated_at?: string
+        }
+        Update: {
+          cidade?: string | null
+          codigo?: string
+          coordenador_id?: string | null
+          created_at?: string
+          data_rota?: string
+          id?: string
+          instalador_id?: string | null
+          regiao?: string | null
+          status?: Database["public"]["Enums"]["status_rota"]
+          total_concluidos?: number
+          total_servicos?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rotas_coordenador_id_fkey"
+            columns: ["coordenador_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rotas_instalador_id_fkey"
+            columns: ["instalador_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sinistros: {
+        Row: {
+          analista_id: string | null
+          associado_id: string
+          bo_arquivo_url: string | null
+          bo_numero: string | null
+          canal: string
+          created_at: string
+          data_ocorrencia: string
+          descricao: string | null
+          id: string
+          local_descricao: string | null
+          protocolo: string
+          status: Database["public"]["Enums"]["status_sinistro"]
+          tipo: Database["public"]["Enums"]["tipo_sinistro"]
+          updated_at: string
+          valor_fipe: number | null
+          valor_indenizacao: number | null
+          veiculo_id: string
+        }
+        Insert: {
+          analista_id?: string | null
+          associado_id: string
+          bo_arquivo_url?: string | null
+          bo_numero?: string | null
+          canal?: string
+          created_at?: string
+          data_ocorrencia: string
+          descricao?: string | null
+          id?: string
+          local_descricao?: string | null
+          protocolo: string
+          status?: Database["public"]["Enums"]["status_sinistro"]
+          tipo: Database["public"]["Enums"]["tipo_sinistro"]
+          updated_at?: string
+          valor_fipe?: number | null
+          valor_indenizacao?: number | null
+          veiculo_id: string
+        }
+        Update: {
+          analista_id?: string | null
+          associado_id?: string
+          bo_arquivo_url?: string | null
+          bo_numero?: string | null
+          canal?: string
+          created_at?: string
+          data_ocorrencia?: string
+          descricao?: string | null
+          id?: string
+          local_descricao?: string | null
+          protocolo?: string
+          status?: Database["public"]["Enums"]["status_sinistro"]
+          tipo?: Database["public"]["Enums"]["tipo_sinistro"]
+          updated_at?: string
+          valor_fipe?: number | null
+          valor_indenizacao?: number | null
+          veiculo_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sinistros_analista_id_fkey"
+            columns: ["analista_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sinistros_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sinistros_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "veiculos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tabelas_preco: {
         Row: {
           ativo: boolean
@@ -493,10 +946,15 @@ export type Database = {
           fipe_ate: number
           fipe_de: number
           id: string
+          nome: string | null
           plano_id: string
           taxa_administrativa: number
+          tipo_uso: string | null
+          valor_assistencia: number | null
           valor_cota: number
           valor_rastreamento: number
+          vigencia_fim: string | null
+          vigencia_inicio: string | null
         }
         Insert: {
           ativo?: boolean
@@ -504,10 +962,15 @@ export type Database = {
           fipe_ate: number
           fipe_de: number
           id?: string
+          nome?: string | null
           plano_id: string
           taxa_administrativa?: number
+          tipo_uso?: string | null
+          valor_assistencia?: number | null
           valor_cota: number
           valor_rastreamento?: number
+          vigencia_fim?: string | null
+          vigencia_inicio?: string | null
         }
         Update: {
           ativo?: boolean
@@ -515,10 +978,15 @@ export type Database = {
           fipe_ate?: number
           fipe_de?: number
           id?: string
+          nome?: string | null
           plano_id?: string
           taxa_administrativa?: number
+          tipo_uso?: string | null
+          valor_assistencia?: number | null
           valor_cota?: number
           valor_rastreamento?: number
+          vigencia_fim?: string | null
+          vigencia_inicio?: string | null
         }
         Relationships: [
           {
@@ -616,6 +1084,109 @@ export type Database = {
           },
         ]
       }
+      vistoria_fotos: {
+        Row: {
+          arquivo_url: string
+          created_at: string
+          id: string
+          tipo: string
+          vistoria_id: string
+        }
+        Insert: {
+          arquivo_url: string
+          created_at?: string
+          id?: string
+          tipo: string
+          vistoria_id: string
+        }
+        Update: {
+          arquivo_url?: string
+          created_at?: string
+          id?: string
+          tipo?: string
+          vistoria_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vistoria_fotos_vistoria_id_fkey"
+            columns: ["vistoria_id"]
+            isOneToOne: false
+            referencedRelation: "vistorias"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vistorias: {
+        Row: {
+          associado_id: string
+          avarias: string | null
+          created_at: string
+          id: string
+          instalacao_id: string | null
+          km_atual: number | null
+          status: Database["public"]["Enums"]["status_vistoria"]
+          tipo: Database["public"]["Enums"]["tipo_vistoria"]
+          updated_at: string
+          veiculo_id: string
+          vistoriador_id: string | null
+        }
+        Insert: {
+          associado_id: string
+          avarias?: string | null
+          created_at?: string
+          id?: string
+          instalacao_id?: string | null
+          km_atual?: number | null
+          status?: Database["public"]["Enums"]["status_vistoria"]
+          tipo?: Database["public"]["Enums"]["tipo_vistoria"]
+          updated_at?: string
+          veiculo_id: string
+          vistoriador_id?: string | null
+        }
+        Update: {
+          associado_id?: string
+          avarias?: string | null
+          created_at?: string
+          id?: string
+          instalacao_id?: string | null
+          km_atual?: number | null
+          status?: Database["public"]["Enums"]["status_vistoria"]
+          tipo?: Database["public"]["Enums"]["tipo_vistoria"]
+          updated_at?: string
+          veiculo_id?: string
+          vistoriador_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vistorias_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vistorias_instalacao_id_fkey"
+            columns: ["instalacao_id"]
+            isOneToOne: false
+            referencedRelation: "instalacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vistorias_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "veiculos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vistorias_vistoriador_id_fkey"
+            columns: ["vistoriador_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -668,6 +1239,7 @@ export type Database = {
         | "presencial"
         | "parceiro"
         | "outro"
+      periodo_instalacao: "manha" | "tarde" | "noite"
       status_associado:
         | "em_analise"
         | "documentacao_pendente"
@@ -675,6 +1247,12 @@ export type Database = {
         | "ativo"
         | "inadimplente"
         | "suspenso"
+        | "cancelado"
+      status_chamado:
+        | "aberto"
+        | "em_atendimento"
+        | "em_deslocamento"
+        | "concluido"
         | "cancelado"
       status_contrato: "pendente" | "ativo" | "suspenso" | "cancelado"
       status_cotacao:
@@ -684,6 +1262,22 @@ export type Database = {
         | "recusada"
         | "expirada"
       status_documento: "pendente" | "em_analise" | "aprovado" | "reprovado"
+      status_instalacao:
+        | "agendada"
+        | "em_rota"
+        | "em_andamento"
+        | "concluida"
+        | "reagendada"
+        | "cancelada"
+      status_rastreador: "estoque" | "instalado" | "manutencao" | "baixado"
+      status_rota: "pendente" | "em_andamento" | "concluida" | "cancelada"
+      status_sinistro:
+        | "em_analise"
+        | "aprovado"
+        | "reprovado"
+        | "indenizado"
+        | "cancelado"
+      status_vistoria: "pendente" | "aprovada" | "reprovada" | "em_analise"
       tipo_documento:
         | "cnh"
         | "crlv"
@@ -695,7 +1289,15 @@ export type Database = {
         | "foto_painel"
         | "foto_hodometro"
         | "outro"
+      tipo_sinistro:
+        | "roubo"
+        | "furto"
+        | "colisao"
+        | "incendio"
+        | "alagamento"
+        | "outro"
       tipo_usuario: "funcionario" | "associado" | "prestador"
+      tipo_vistoria: "entrada" | "saida" | "sinistro"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -855,6 +1457,7 @@ export const Constants = {
         "parceiro",
         "outro",
       ],
+      periodo_instalacao: ["manha", "tarde", "noite"],
       status_associado: [
         "em_analise",
         "documentacao_pendente",
@@ -864,9 +1467,34 @@ export const Constants = {
         "suspenso",
         "cancelado",
       ],
+      status_chamado: [
+        "aberto",
+        "em_atendimento",
+        "em_deslocamento",
+        "concluido",
+        "cancelado",
+      ],
       status_contrato: ["pendente", "ativo", "suspenso", "cancelado"],
       status_cotacao: ["rascunho", "enviada", "aceita", "recusada", "expirada"],
       status_documento: ["pendente", "em_analise", "aprovado", "reprovado"],
+      status_instalacao: [
+        "agendada",
+        "em_rota",
+        "em_andamento",
+        "concluida",
+        "reagendada",
+        "cancelada",
+      ],
+      status_rastreador: ["estoque", "instalado", "manutencao", "baixado"],
+      status_rota: ["pendente", "em_andamento", "concluida", "cancelada"],
+      status_sinistro: [
+        "em_analise",
+        "aprovado",
+        "reprovado",
+        "indenizado",
+        "cancelado",
+      ],
+      status_vistoria: ["pendente", "aprovada", "reprovada", "em_analise"],
       tipo_documento: [
         "cnh",
         "crlv",
@@ -879,7 +1507,16 @@ export const Constants = {
         "foto_hodometro",
         "outro",
       ],
+      tipo_sinistro: [
+        "roubo",
+        "furto",
+        "colisao",
+        "incendio",
+        "alagamento",
+        "outro",
+      ],
       tipo_usuario: ["funcionario", "associado", "prestador"],
+      tipo_vistoria: ["entrada", "saida", "sinistro"],
     },
   },
 } as const
