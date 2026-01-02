@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Plus, Search, FileText, Calculator, Send, Check, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Plus, Search, FileText, Calculator, Send, Check, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -20,65 +21,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import type { StatusCotacao } from '@/types/database';
-
-const mockCotacoes = [
-  {
-    id: '1',
-    numero: 'COT-20240115-0001',
-    lead_nome: 'João Silva',
-    plano_nome: 'Proteção Total',
-    valor_fipe: 95000,
-    valor_cota: 285,
-    taxa_administrativa: 45,
-    valor_rastreamento: 35,
-    valor_adesao: 350,
-    valor_total_mensal: 365,
-    status: 'enviada' as StatusCotacao,
-    created_at: '2024-01-15T10:00:00',
-  },
-  {
-    id: '2',
-    numero: 'COT-20240114-0001',
-    lead_nome: 'Maria Santos',
-    plano_nome: 'Proteção Básica',
-    valor_fipe: 105000,
-    valor_cota: 315,
-    taxa_administrativa: 45,
-    valor_rastreamento: 35,
-    valor_adesao: 350,
-    valor_total_mensal: 395,
-    status: 'aceita' as StatusCotacao,
-    created_at: '2024-01-14T14:30:00',
-  },
-  {
-    id: '3',
-    numero: 'COT-20240113-0001',
-    lead_nome: 'Pedro Oliveira',
-    plano_nome: 'Proteção Total',
-    valor_fipe: 75000,
-    valor_cota: 225,
-    taxa_administrativa: 45,
-    valor_rastreamento: 35,
-    valor_adesao: 350,
-    valor_total_mensal: 305,
-    status: 'rascunho' as StatusCotacao,
-    created_at: '2024-01-13T08:00:00',
-  },
-  {
-    id: '4',
-    numero: 'COT-20240112-0001',
-    lead_nome: 'Ana Costa',
-    plano_nome: 'Proteção Premium',
-    valor_fipe: 68000,
-    valor_cota: 340,
-    taxa_administrativa: 50,
-    valor_rastreamento: 40,
-    valor_adesao: 400,
-    valor_total_mensal: 430,
-    status: 'recusada' as StatusCotacao,
-    created_at: '2024-01-12T16:00:00',
-  },
-];
+import { useCotacoes, useUpdateCotacao } from '@/hooks/useCotacoes';
+import { CotacaoFormDialog } from '@/components/cotacoes/CotacaoFormDialog';
+import { ContratoWizard } from '@/components/contratos/ContratoWizard';
+import { toast } from 'sonner';
 
 const statusConfig: Record<StatusCotacao, { label: string; color: string; icon: typeof FileText }> = {
   rascunho: { label: 'Rascunho', color: 'bg-muted text-muted-foreground', icon: FileText },
@@ -89,13 +35,20 @@ const statusConfig: Record<StatusCotacao, { label: string; color: string; icon: 
 };
 
 export default function Cotacoes() {
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [showCotacaoForm, setShowCotacaoForm] = useState(false);
+  const [showContratoWizard, setShowContratoWizard] = useState(false);
+  const [selectedCotacaoId, setSelectedCotacaoId] = useState<string>('');
 
-  const filteredCotacoes = mockCotacoes.filter((cotacao) => {
+  const { data: cotacoes, isLoading } = useCotacoes();
+  const updateCotacao = useUpdateCotacao();
+
+  const filteredCotacoes = (cotacoes || []).filter((cotacao) => {
     const matchesSearch =
       cotacao.numero.toLowerCase().includes(search.toLowerCase()) ||
-      cotacao.lead_nome.toLowerCase().includes(search.toLowerCase());
+      (cotacao.leads?.nome?.toLowerCase().includes(search.toLowerCase()) ?? false);
     const matchesStatus = statusFilter === 'all' || cotacao.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -115,17 +68,41 @@ export default function Cotacoes() {
     }).format(value);
   };
 
+  const handleMarkAsEnviada = async (id: string) => {
+    try {
+      await updateCotacao.mutateAsync({ id, status: 'enviada' });
+      toast.success('Cotação marcada como enviada');
+    } catch (error) {
+      toast.error('Erro ao atualizar cotação');
+    }
+  };
+
+  const handleOpenContratoWizard = (cotacaoId: string) => {
+    setSelectedCotacaoId(cotacaoId);
+    setShowContratoWizard(true);
+  };
+
   // Stats
   const stats = {
-    total: mockCotacoes.length,
-    enviadas: mockCotacoes.filter((c) => c.status === 'enviada').length,
-    aceitas: mockCotacoes.filter((c) => c.status === 'aceita').length,
-    taxa: Math.round(
-      (mockCotacoes.filter((c) => c.status === 'aceita').length /
-        mockCotacoes.filter((c) => c.status !== 'rascunho').length) *
-        100
-    ),
+    total: cotacoes?.length || 0,
+    enviadas: cotacoes?.filter((c) => c.status === 'enviada').length || 0,
+    aceitas: cotacoes?.filter((c) => c.status === 'aceita').length || 0,
+    taxa: cotacoes && cotacoes.length > 0
+      ? Math.round(
+          (cotacoes.filter((c) => c.status === 'aceita').length /
+            cotacoes.filter((c) => c.status !== 'rascunho').length) *
+            100
+        ) || 0
+      : 0,
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -137,7 +114,7 @@ export default function Cotacoes() {
             Gerencie cotações e acompanhe propostas enviadas
           </p>
         </div>
-        <Button className="gap-2">
+        <Button className="gap-2" onClick={() => setShowCotacaoForm(true)}>
           <Plus className="h-4 w-4" />
           Nova Cotação
         </Button>
@@ -238,45 +215,87 @@ export default function Cotacoes() {
                 <TableHead>Mensal</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Data</TableHead>
+                <TableHead className="w-32">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredCotacoes.map((cotacao) => {
-                const status = statusConfig[cotacao.status];
-                return (
-                  <TableRow key={cotacao.id} className="cursor-pointer hover:bg-muted/50">
-                    <TableCell className="font-mono text-sm">{cotacao.numero}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-sm font-medium text-primary">
-                          {cotacao.lead_nome.charAt(0)}
+              {filteredCotacoes.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                    Nenhuma cotação encontrada
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredCotacoes.map((cotacao) => {
+                  const status = statusConfig[cotacao.status];
+                  return (
+                    <TableRow 
+                      key={cotacao.id} 
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => navigate(`/vendas/cotacoes/${cotacao.id}`)}
+                    >
+                      <TableCell className="font-mono text-sm">{cotacao.numero}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-sm font-medium text-primary">
+                            {cotacao.leads?.nome?.charAt(0) || '?'}
+                          </div>
+                          <span>{cotacao.leads?.nome || 'Cliente não informado'}</span>
                         </div>
-                        <span>{cotacao.lead_nome}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>{cotacao.plano_nome}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {formatCurrency(cotacao.valor_fipe)}
-                    </TableCell>
-                    <TableCell className="font-medium">
-                      {formatCurrency(cotacao.valor_total_mensal)}
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={status.color}>
-                        <status.icon className="mr-1 h-3 w-3" />
-                        {status.label}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {formatDate(cotacao.created_at)}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
+                      </TableCell>
+                      <TableCell>{cotacao.planos?.nome || '-'}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {formatCurrency(cotacao.valor_fipe)}
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        {formatCurrency(cotacao.valor_total_mensal)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={status.color}>
+                          <status.icon className="mr-1 h-3 w-3" />
+                          {status.label}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {formatDate(cotacao.created_at)}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                          {cotacao.status === 'rascunho' && (
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={() => handleMarkAsEnviada(cotacao.id)}
+                            >
+                              Enviar
+                            </Button>
+                          )}
+                          {cotacao.status === 'enviada' && (
+                            <Button 
+                              size="sm"
+                              onClick={() => handleOpenContratoWizard(cotacao.id)}
+                            >
+                              Aceitar
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
+
+      {/* Dialogs */}
+      <CotacaoFormDialog open={showCotacaoForm} onOpenChange={setShowCotacaoForm} />
+      <ContratoWizard 
+        open={showContratoWizard} 
+        onOpenChange={setShowContratoWizard} 
+        cotacaoId={selectedCotacaoId}
+      />
     </div>
   );
 }
