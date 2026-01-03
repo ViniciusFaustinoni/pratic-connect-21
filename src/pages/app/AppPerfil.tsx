@@ -580,9 +580,19 @@ function ModalEditarDadosPessoais({
   );
   const [salvando, setSalvando] = useState(false);
 
+  const isValidEmail = (email: string) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
   const handleSalvar = async () => {
     if (!nome.trim() || !email.trim()) {
       toast.error('Nome e e-mail são obrigatórios');
+      return;
+    }
+
+    if (!isValidEmail(email.trim())) {
+      toast.error('E-mail inválido');
       return;
     }
 
