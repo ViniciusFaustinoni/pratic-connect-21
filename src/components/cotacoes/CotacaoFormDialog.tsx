@@ -34,6 +34,8 @@ import { useCreateCotacao } from '@/hooks/useCotacoes';
 import { usePlanos, useTabelaPrecoByFipe } from '@/hooks/usePlanos';
 import { useLead } from '@/hooks/useLeads';
 import { toast } from 'sonner';
+import { FipeSelector, type FipeSelectionData } from '@/components/fipe/FipeSelector';
+import { Separator } from '@/components/ui/separator';
 
 interface CotacaoFormDialogProps {
   open: boolean;
@@ -152,6 +154,16 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
                     </CardContent>
                   </Card>
                 )}
+
+                <FipeSelector 
+                  tipo="carros"
+                  showResult={false}
+                  onSelect={(data: FipeSelectionData) => {
+                    form.setValue('valor_fipe', data.valorFipe);
+                  }}
+                />
+
+                <Separator />
 
                 <FormField
                   control={form.control}

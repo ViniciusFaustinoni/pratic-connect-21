@@ -8,6 +8,32 @@ const corsHeaders = {
 
 const FIPE_API = 'https://parallelum.com.br/fipe/api/v1';
 
+// Função para normalizar texto para comparação
+function normalizeText(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]/g, "");
+}
+
+// Função para fazer fuzzy match
+function fuzzyMatch(search: string, target: string): boolean {
+  const normalizedSearch = normalizeText(search);
+  const normalizedTarget = normalizeText(target);
+  return normalizedTarget.includes(normalizedSearch) || normalizedSearch.includes(normalizedTarget);
+}
+
+// Função para converter valor string para número
+function parseValorFipe(valor: string): number {
+  return parseFloat(
+    valor
+      .replace("R$ ", "")
+      .replace(/\./g, "")
+      .replace(",", ".")
+  );
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -15,15 +41,30 @@ serve(async (req) => {
   }
 
   try {
-    const url = new URL(req.url);
-    const action = url.searchParams.get('action');
-    const tipo = url.searchParams.get('tipo') || 'carros';
+    // Support both GET (legacy) and POST
+    let action: string | null;
+    let tipo: string;
+    let params: Record<string, string> = {};
 
-    console.log(`FIPE Lookup - Action: ${action}, Tipo: ${tipo}`);
+    if (req.method === 'POST') {
+      const body = await req.json();
+      action = body.action;
+      tipo = body.tipo || 'carros';
+      params = body;
+    } else {
+      const url = new URL(req.url);
+      action = url.searchParams.get('action');
+      tipo = url.searchParams.get('tipo') || 'carros';
+      url.searchParams.forEach((value, key) => {
+        params[key] = value;
+      });
+    }
+
+    console.log(`FIPE Lookup - Action: ${action}, Tipo: ${tipo}, Params:`, JSON.stringify(params));
 
     if (!action) {
       return new Response(
-        JSON.stringify({ error: 'Parâmetro "action" é obrigatório' }),
+        JSON.stringify({ success: false, error: 'Parâmetro "action" é obrigatório' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -34,67 +75,86 @@ serve(async (req) => {
       case 'marcas': {
         const response = await fetch(`${FIPE_API}/${tipo}/marcas`);
         if (!response.ok) throw new Error('Erro ao buscar marcas');
-        result = await response.json();
+        const data = await response.json();
+        result = { success: true, data };
         break;
       }
 
       case 'modelos': {
-        const marca = url.searchParams.get('marca');
-        if (!marca) {
+        const marcaCodigo = params.marcaCodigo || params.marca;
+        if (!marcaCodigo) {
           return new Response(
-            JSON.stringify({ error: 'Parâmetro "marca" é obrigatório' }),
+            JSON.stringify({ success: false, error: 'Parâmetro "marcaCodigo" é obrigatório' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
-        const response = await fetch(`${FIPE_API}/${tipo}/marcas/${marca}/modelos`);
+        const response = await fetch(`${FIPE_API}/${tipo}/marcas/${marcaCodigo}/modelos`);
         if (!response.ok) throw new Error('Erro ao buscar modelos');
-        result = await response.json();
+        const data = await response.json();
+        result = { success: true, data };
         break;
       }
 
       case 'anos': {
-        const marca = url.searchParams.get('marca');
-        const modelo = url.searchParams.get('modelo');
-        if (!marca || !modelo) {
+        const marcaCodigo = params.marcaCodigo || params.marca;
+        const modeloCodigo = params.modeloCodigo || params.modelo;
+        if (!marcaCodigo || !modeloCodigo) {
           return new Response(
-            JSON.stringify({ error: 'Parâmetros "marca" e "modelo" são obrigatórios' }),
+            JSON.stringify({ success: false, error: 'Parâmetros "marcaCodigo" e "modeloCodigo" são obrigatórios' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
-        const response = await fetch(`${FIPE_API}/${tipo}/marcas/${marca}/modelos/${modelo}/anos`);
+        const response = await fetch(`${FIPE_API}/${tipo}/marcas/${marcaCodigo}/modelos/${modeloCodigo}/anos`);
         if (!response.ok) throw new Error('Erro ao buscar anos');
-        result = await response.json();
+        const data = await response.json();
+        result = { success: true, data };
         break;
       }
 
       case 'preco': {
-        const codigo = url.searchParams.get('codigo');
-        if (!codigo) {
+        const marcaCodigo = params.marcaCodigo || params.marca;
+        const modeloCodigo = params.modeloCodigo || params.modelo;
+        const anoCodigo = params.anoCodigo || params.ano;
+
+        if (!marcaCodigo || !modeloCodigo || !anoCodigo) {
           return new Response(
-            JSON.stringify({ error: 'Parâmetro "codigo" é obrigatório' }),
+            JSON.stringify({ success: false, error: 'Parâmetros "marcaCodigo", "modeloCodigo" e "anoCodigo" são obrigatórios' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
 
-        // A API Parallelum não suporta busca direta por código, então precisamos fazer o fallback
-        // Retornamos erro para indicar que deve usar buscar-por-nome
-        return new Response(
-          JSON.stringify({ 
-            error: 'Use action=buscar-por-nome para busca por nome da marca/modelo',
-            message: 'A busca direta por código não é suportada'
-          }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        const response = await fetch(
+          `${FIPE_API}/${tipo}/marcas/${marcaCodigo}/modelos/${modeloCodigo}/anos/${anoCodigo}`
         );
+        if (!response.ok) throw new Error('Erro ao buscar preço');
+        const data = await response.json();
+
+        result = {
+          success: true,
+          data: {
+            codigoFipe: data.CodigoFipe,
+            valor: data.Valor,
+            valorNumerico: parseValorFipe(data.Valor),
+            marca: data.Marca,
+            modelo: data.Modelo,
+            anoModelo: data.AnoModelo,
+            combustivel: data.Combustivel,
+            mesReferencia: data.MesReferencia,
+            tipoVeiculo: data.TipoVeiculo,
+            siglaCombustivel: data.SiglaCombustivel
+          }
+        };
+        break;
       }
 
       case 'buscar-por-nome': {
-        const marca = url.searchParams.get('marca');
-        const modelo = url.searchParams.get('modelo');
-        const ano = url.searchParams.get('ano');
+        const marca = params.marca;
+        const modelo = params.modelo;
+        const ano = params.ano;
 
         if (!marca || !modelo) {
           return new Response(
-            JSON.stringify({ error: 'Parâmetros "marca" e "modelo" são obrigatórios' }),
+            JSON.stringify({ success: false, error: 'Parâmetros "marca" e "modelo" são obrigatórios' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
@@ -107,15 +167,12 @@ serve(async (req) => {
         const marcas: Array<{ codigo: string; nome: string }> = await marcasResp.json();
 
         // Fuzzy match para marca
-        const marcaEncontrada = marcas.find((m) =>
-          m.nome.toLowerCase().includes(marca.toLowerCase()) ||
-          marca.toLowerCase().includes(m.nome.toLowerCase())
-        );
+        const marcaEncontrada = marcas.find((m) => fuzzyMatch(marca, m.nome));
 
         if (!marcaEncontrada) {
           console.log(`Marca não encontrada: ${marca}`);
           return new Response(
-            JSON.stringify({ found: false, error: 'Marca não encontrada' }),
+            JSON.stringify({ success: false, found: false, error: 'Marca não encontrada' }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
@@ -128,17 +185,12 @@ serve(async (req) => {
         const modelosData: { modelos: Array<{ codigo: number; nome: string }> } = await modelosResp.json();
 
         // Fuzzy match para modelo
-        const modeloNormalizado = modelo.toLowerCase().replace(/[^a-z0-9]/g, '');
-        const modeloEncontrado = modelosData.modelos.find((m) => {
-          const nomeNormalizado = m.nome.toLowerCase().replace(/[^a-z0-9]/g, '');
-          return nomeNormalizado.includes(modeloNormalizado) ||
-            modeloNormalizado.includes(nomeNormalizado.split(' ')[0]);
-        });
+        const modeloEncontrado = modelosData.modelos.find((m) => fuzzyMatch(modelo, m.nome));
 
         if (!modeloEncontrado) {
           console.log(`Modelo não encontrado: ${modelo}`);
           return new Response(
-            JSON.stringify({ found: false, error: 'Modelo não encontrado' }),
+            JSON.stringify({ success: false, found: false, error: 'Modelo não encontrado' }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
@@ -155,7 +207,7 @@ serve(async (req) => {
         // Match para ano (se fornecido)
         let anoEncontrado = anos[0]; // Default para o primeiro (mais recente)
         if (ano) {
-          const anoMatch = anos.find((a) => a.nome.includes(ano) || a.codigo.includes(ano));
+          const anoMatch = anos.find((a) => a.nome.includes(ano) || a.codigo.startsWith(ano));
           if (anoMatch) {
             anoEncontrado = anoMatch;
           }
@@ -168,40 +220,34 @@ serve(async (req) => {
           `${FIPE_API}/${tipo}/marcas/${marcaEncontrada.codigo}/modelos/${modeloEncontrado.codigo}/anos/${anoEncontrado.codigo}`
         );
         if (!precoResp.ok) throw new Error('Erro ao buscar preço');
-        const preco: {
-          Valor: string;
-          Marca: string;
-          Modelo: string;
-          AnoModelo: number;
-          Combustivel: string;
-          CodigoFipe: string;
-          MesReferencia: string;
-        } = await precoResp.json();
-
-        // Converter valor para número
-        const valorNumerico = parseFloat(
-          preco.Valor.replace('R$ ', '').replace('.', '').replace(',', '.')
-        );
+        const preco = await precoResp.json();
 
         console.log(`FIPE encontrado: ${preco.CodigoFipe} - ${preco.Valor}`);
 
         result = {
+          success: true,
           found: true,
-          codigo: preco.CodigoFipe,
-          valor: preco.Valor,
-          valorNumerico,
-          mesReferencia: preco.MesReferencia,
-          marca: preco.Marca,
-          modelo: preco.Modelo,
-          anoModelo: preco.AnoModelo,
-          combustivel: preco.Combustivel,
+          data: {
+            codigoFipe: preco.CodigoFipe,
+            valor: preco.Valor,
+            valorNumerico: parseValorFipe(preco.Valor),
+            marca: preco.Marca,
+            modelo: preco.Modelo,
+            anoModelo: preco.AnoModelo,
+            combustivel: preco.Combustivel,
+            mesReferencia: preco.MesReferencia,
+            // Códigos para referência
+            marcaCodigo: marcaEncontrada.codigo,
+            modeloCodigo: modeloEncontrado.codigo,
+            anoCodigo: anoEncontrado.codigo
+          }
         };
         break;
       }
 
       default:
         return new Response(
-          JSON.stringify({ error: `Action "${action}" não reconhecida` }),
+          JSON.stringify({ success: false, error: `Action "${action}" não reconhecida` }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
     }
@@ -213,7 +259,7 @@ serve(async (req) => {
     console.error('Erro no fipe-lookup:', error);
     const message = error instanceof Error ? error.message : 'Erro interno';
     return new Response(
-      JSON.stringify({ error: message }),
+      JSON.stringify({ success: false, error: message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
