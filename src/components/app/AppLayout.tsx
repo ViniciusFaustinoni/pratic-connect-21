@@ -49,9 +49,9 @@ export function AppLayout() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50">
+    <div className="flex min-h-screen flex-col bg-muted/30">
       <AppHeader />
-      <main className="flex-1 overflow-auto pb-[56px]">
+      <main className="flex-1 overflow-auto pb-[56px] md:pb-0">
         <div className="mx-auto max-w-lg">
           <Outlet />
         </div>
