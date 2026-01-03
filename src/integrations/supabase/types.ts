@@ -14,6 +14,178 @@ export type Database = {
   }
   public: {
     Tables: {
+      acordo_parcelas: {
+        Row: {
+          acordo_id: string
+          cobranca_id: string | null
+          created_at: string | null
+          data_pagamento: string | null
+          data_vencimento: string
+          id: string
+          numero_parcela: number
+          status: string | null
+          valor: number
+          valor_pago: number | null
+        }
+        Insert: {
+          acordo_id: string
+          cobranca_id?: string | null
+          created_at?: string | null
+          data_pagamento?: string | null
+          data_vencimento: string
+          id?: string
+          numero_parcela: number
+          status?: string | null
+          valor: number
+          valor_pago?: number | null
+        }
+        Update: {
+          acordo_id?: string
+          cobranca_id?: string | null
+          created_at?: string | null
+          data_pagamento?: string | null
+          data_vencimento?: string
+          id?: string
+          numero_parcela?: number
+          status?: string | null
+          valor?: number
+          valor_pago?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "acordo_parcelas_acordo_id_fkey"
+            columns: ["acordo_id"]
+            isOneToOne: false
+            referencedRelation: "acordos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "acordo_parcelas_cobranca_id_fkey"
+            columns: ["cobranca_id"]
+            isOneToOne: false
+            referencedRelation: "cobrancas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      acordos: {
+        Row: {
+          aprovado_em: string | null
+          aprovado_por: string | null
+          associado_id: string
+          cobrancas_ids: string[]
+          created_at: string | null
+          criado_por: string | null
+          dia_vencimento: number
+          entrada_data_pagamento: string | null
+          entrada_paga: boolean | null
+          id: string
+          motivo_quebra: string | null
+          numero: string | null
+          primeira_parcela_data: string
+          qtd_parcelas: number
+          status: string | null
+          updated_at: string | null
+          valor_acordo: number
+          valor_desconto: number | null
+          valor_entrada: number | null
+          valor_juros: number | null
+          valor_original: number
+          valor_parcela: number
+        }
+        Insert: {
+          aprovado_em?: string | null
+          aprovado_por?: string | null
+          associado_id: string
+          cobrancas_ids: string[]
+          created_at?: string | null
+          criado_por?: string | null
+          dia_vencimento: number
+          entrada_data_pagamento?: string | null
+          entrada_paga?: boolean | null
+          id?: string
+          motivo_quebra?: string | null
+          numero?: string | null
+          primeira_parcela_data: string
+          qtd_parcelas?: number
+          status?: string | null
+          updated_at?: string | null
+          valor_acordo: number
+          valor_desconto?: number | null
+          valor_entrada?: number | null
+          valor_juros?: number | null
+          valor_original: number
+          valor_parcela: number
+        }
+        Update: {
+          aprovado_em?: string | null
+          aprovado_por?: string | null
+          associado_id?: string
+          cobrancas_ids?: string[]
+          created_at?: string | null
+          criado_por?: string | null
+          dia_vencimento?: number
+          entrada_data_pagamento?: string | null
+          entrada_paga?: boolean | null
+          id?: string
+          motivo_quebra?: string | null
+          numero?: string | null
+          primeira_parcela_data?: string
+          qtd_parcelas?: number
+          status?: string | null
+          updated_at?: string | null
+          valor_acordo?: number
+          valor_desconto?: number | null
+          valor_entrada?: number | null
+          valor_juros?: number | null
+          valor_original?: number
+          valor_parcela?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "acordos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "acordos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "acordos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "acordos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "acordos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "acordos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+        ]
+      }
       api_keys: {
         Row: {
           ativa: boolean | null
@@ -138,6 +310,13 @@ export type Database = {
             columns: ["associado_id"]
             isOneToOne: false
             referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "asaas_clientes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
             referencedColumns: ["associado_id"]
           },
           {
@@ -313,6 +492,13 @@ export type Database = {
             foreignKeyName: "asaas_cobrancas_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "asaas_cobrancas_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["associado_id"]
           },
@@ -476,6 +662,13 @@ export type Database = {
             columns: ["associado_id"]
             isOneToOne: false
             referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "asaas_pagamentos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
             referencedColumns: ["associado_id"]
           },
           {
@@ -729,6 +922,13 @@ export type Database = {
             foreignKeyName: "associados_historico_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "associados_historico_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["associado_id"]
           },
@@ -933,6 +1133,13 @@ export type Database = {
             foreignKeyName: "chamados_assistencia_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "chamados_assistencia_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["associado_id"]
           },
@@ -1097,6 +1304,193 @@ export type Database = {
           },
         ]
       }
+      cobranca_contatos: {
+        Row: {
+          associado_id: string
+          atendente_id: string | null
+          cobranca_id: string | null
+          created_at: string | null
+          duracao_segundos: number | null
+          id: string
+          observacao: string | null
+          promessa_data: string | null
+          promessa_valor: number | null
+          resultado: string
+          tipo: string
+        }
+        Insert: {
+          associado_id: string
+          atendente_id?: string | null
+          cobranca_id?: string | null
+          created_at?: string | null
+          duracao_segundos?: number | null
+          id?: string
+          observacao?: string | null
+          promessa_data?: string | null
+          promessa_valor?: number | null
+          resultado: string
+          tipo: string
+        }
+        Update: {
+          associado_id?: string
+          atendente_id?: string | null
+          cobranca_id?: string | null
+          created_at?: string | null
+          duracao_segundos?: number | null
+          id?: string
+          observacao?: string | null
+          promessa_data?: string | null
+          promessa_valor?: number | null
+          resultado?: string
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cobranca_contatos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cobranca_contatos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "cobranca_contatos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "cobranca_contatos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "cobranca_contatos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "cobranca_contatos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "cobranca_contatos_cobranca_id_fkey"
+            columns: ["cobranca_id"]
+            isOneToOne: false
+            referencedRelation: "cobrancas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cobranca_fila: {
+        Row: {
+          associado_id: string
+          atribuido_para: string | null
+          cobranca_id: string | null
+          concluido_em: string | null
+          created_at: string | null
+          data_agendamento: string | null
+          id: string
+          motivo: string
+          prioridade: number | null
+          resultado: string | null
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          associado_id: string
+          atribuido_para?: string | null
+          cobranca_id?: string | null
+          concluido_em?: string | null
+          created_at?: string | null
+          data_agendamento?: string | null
+          id?: string
+          motivo: string
+          prioridade?: number | null
+          resultado?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          associado_id?: string
+          atribuido_para?: string | null
+          cobranca_id?: string | null
+          concluido_em?: string | null
+          created_at?: string | null
+          data_agendamento?: string | null
+          id?: string
+          motivo?: string
+          prioridade?: number | null
+          resultado?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cobranca_fila_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cobranca_fila_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "cobranca_fila_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "cobranca_fila_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "cobranca_fila_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "cobranca_fila_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "cobranca_fila_cobranca_id_fkey"
+            columns: ["cobranca_id"]
+            isOneToOne: false
+            referencedRelation: "cobrancas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cobrancas: {
         Row: {
           associado_id: string
@@ -1227,6 +1621,13 @@ export type Database = {
             columns: ["associado_id"]
             isOneToOne: false
             referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "cobrancas_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
             referencedColumns: ["associado_id"]
           },
           {
@@ -1505,6 +1906,13 @@ export type Database = {
             foreignKeyName: "fk_contratos_associado"
             columns: ["associado_id"]
             isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "fk_contratos_associado"
+            columns: ["associado_id"]
+            isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["associado_id"]
           },
@@ -1671,6 +2079,13 @@ export type Database = {
             columns: ["associado_id"]
             isOneToOne: false
             referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "documentos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
             referencedColumns: ["associado_id"]
           },
           {
@@ -2032,6 +2447,13 @@ export type Database = {
             foreignKeyName: "instalacoes_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "instalacoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["associado_id"]
           },
@@ -2253,6 +2675,13 @@ export type Database = {
             foreignKeyName: "leads_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "leads_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["associado_id"]
           },
@@ -2421,6 +2850,126 @@ export type Database = {
             columns: ["registrado_por"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      negativacoes: {
+        Row: {
+          acordo_id: string | null
+          associado_id: string
+          baixado_por: string | null
+          cobranca_id: string | null
+          created_at: string | null
+          data_baixa: string | null
+          data_divida: string
+          data_envio: string | null
+          data_negativacao: string | null
+          enviado_por: string | null
+          id: string
+          motivo_baixa: string | null
+          orgao: string
+          protocolo_baixa: string | null
+          protocolo_envio: string | null
+          status: string | null
+          updated_at: string | null
+          valor: number
+        }
+        Insert: {
+          acordo_id?: string | null
+          associado_id: string
+          baixado_por?: string | null
+          cobranca_id?: string | null
+          created_at?: string | null
+          data_baixa?: string | null
+          data_divida: string
+          data_envio?: string | null
+          data_negativacao?: string | null
+          enviado_por?: string | null
+          id?: string
+          motivo_baixa?: string | null
+          orgao: string
+          protocolo_baixa?: string | null
+          protocolo_envio?: string | null
+          status?: string | null
+          updated_at?: string | null
+          valor: number
+        }
+        Update: {
+          acordo_id?: string | null
+          associado_id?: string
+          baixado_por?: string | null
+          cobranca_id?: string | null
+          created_at?: string | null
+          data_baixa?: string | null
+          data_divida?: string
+          data_envio?: string | null
+          data_negativacao?: string | null
+          enviado_por?: string | null
+          id?: string
+          motivo_baixa?: string | null
+          orgao?: string
+          protocolo_baixa?: string | null
+          protocolo_envio?: string | null
+          status?: string | null
+          updated_at?: string | null
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "negativacoes_acordo_id_fkey"
+            columns: ["acordo_id"]
+            isOneToOne: false
+            referencedRelation: "acordos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "negativacoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "negativacoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "negativacoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "negativacoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "negativacoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "negativacoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "negativacoes_cobranca_id_fkey"
+            columns: ["cobranca_id"]
+            isOneToOne: false
+            referencedRelation: "cobrancas"
             referencedColumns: ["id"]
           },
         ]
@@ -2717,6 +3266,13 @@ export type Database = {
             columns: ["associado_id"]
             isOneToOne: false
             referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "ordens_servico_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
             referencedColumns: ["associado_id"]
           },
           {
@@ -3318,6 +3874,138 @@ export type Database = {
           },
         ]
       }
+      regua_execucoes: {
+        Row: {
+          acao: string
+          associado_id: string
+          cobranca_id: string
+          created_at: string | null
+          erro: string | null
+          etapa_dias: number
+          executado_em: string | null
+          id: string
+          regua_id: string
+          resultado: string | null
+          status: string | null
+          template: string | null
+        }
+        Insert: {
+          acao: string
+          associado_id: string
+          cobranca_id: string
+          created_at?: string | null
+          erro?: string | null
+          etapa_dias: number
+          executado_em?: string | null
+          id?: string
+          regua_id: string
+          resultado?: string | null
+          status?: string | null
+          template?: string | null
+        }
+        Update: {
+          acao?: string
+          associado_id?: string
+          cobranca_id?: string
+          created_at?: string | null
+          erro?: string | null
+          etapa_dias?: number
+          executado_em?: string | null
+          id?: string
+          regua_id?: string
+          resultado?: string | null
+          status?: string | null
+          template?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "regua_execucoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "regua_execucoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "regua_execucoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "regua_execucoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "regua_execucoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "regua_execucoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "regua_execucoes_cobranca_id_fkey"
+            columns: ["cobranca_id"]
+            isOneToOne: false
+            referencedRelation: "cobrancas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "regua_execucoes_regua_id_fkey"
+            columns: ["regua_id"]
+            isOneToOne: false
+            referencedRelation: "reguas_cobranca"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reguas_cobranca: {
+        Row: {
+          ativa: boolean | null
+          created_at: string | null
+          descricao: string | null
+          etapas: Json
+          id: string
+          nome: string
+          updated_at: string | null
+        }
+        Insert: {
+          ativa?: boolean | null
+          created_at?: string | null
+          descricao?: string | null
+          etapas?: Json
+          id?: string
+          nome: string
+          updated_at?: string | null
+        }
+        Update: {
+          ativa?: boolean | null
+          created_at?: string | null
+          descricao?: string | null
+          etapas?: Json
+          id?: string
+          nome?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       rotas: {
         Row: {
           cidade: string | null
@@ -3580,6 +4268,13 @@ export type Database = {
             foreignKeyName: "sinistros_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "sinistros_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["associado_id"]
           },
@@ -3790,6 +4485,13 @@ export type Database = {
             foreignKeyName: "veiculos_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "veiculos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["associado_id"]
           },
@@ -3912,6 +4614,13 @@ export type Database = {
             columns: ["associado_id"]
             isOneToOne: false
             referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "vistorias_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
             referencedColumns: ["associado_id"]
           },
           {
@@ -4069,6 +4778,28 @@ export type Database = {
           valor_pago: number | null
           valor_pendente: number | null
           valor_vencido: number | null
+        }
+        Relationships: []
+      }
+      view_inadimplentes: {
+        Row: {
+          associado_id: string | null
+          contatos_ultimos_30_dias: number | null
+          cpf: string | null
+          dias_atraso_maximo: number | null
+          email: string | null
+          faixa_atraso: string | null
+          nome: string | null
+          qtd_boletos_vencidos: number | null
+          status_associado:
+            | Database["public"]["Enums"]["status_associado"]
+            | null
+          telefone: string | null
+          ultimo_contato: string | null
+          valor_total_divida: number | null
+          vencimento_mais_antigo: string | null
+          vencimento_mais_recente: string | null
+          whatsapp: string | null
         }
         Relationships: []
       }
