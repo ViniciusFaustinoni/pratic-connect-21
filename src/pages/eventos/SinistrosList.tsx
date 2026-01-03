@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
+import { NovoSinistroModal } from '@/components/eventos/NovoSinistroModal';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -74,6 +75,7 @@ interface Filters {
 
 export default function SinistrosList() {
   const navigate = useNavigate();
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [filters, setFilters] = useState<Filters>({
     busca: '',
     status: 'todos',
@@ -147,11 +149,17 @@ export default function SinistrosList() {
           <h1 className="text-2xl font-bold text-foreground">Gestão de Sinistros</h1>
           <p className="text-muted-foreground">Gerencie todos os sinistros da associação</p>
         </div>
-        <Button onClick={() => navigate('/eventos/sinistros/novo')}>
+        <Button onClick={() => setIsModalOpen(true)}>
           <Plus className="mr-2 h-4 w-4" />
           Registrar Sinistro
         </Button>
       </div>
+
+      <NovoSinistroModal 
+        open={isModalOpen} 
+        onClose={() => setIsModalOpen(false)}
+        onSuccess={(sinistro) => navigate(`/eventos/sinistros/${sinistro.id}`)}
+      />
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
