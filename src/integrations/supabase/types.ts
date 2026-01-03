@@ -267,6 +267,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "chamados_assistencia_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
             foreignKeyName: "chamados_assistencia_atendente_id_fkey"
             columns: ["atendente_id"]
             isOneToOne: false
@@ -279,6 +286,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "veiculos"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chamados_assistencia_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["veiculo_id"]
           },
         ]
       }
@@ -356,6 +370,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "contratos_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["lead_id"]
+          },
+          {
             foreignKeyName: "contratos_plano_id_fkey"
             columns: ["plano_id"]
             isOneToOne: false
@@ -368,6 +389,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "associados"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_contratos_associado"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
           },
         ]
       }
@@ -447,6 +475,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "cotacoes_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["lead_id"]
+          },
+          {
             foreignKeyName: "cotacoes_plano_id_fkey"
             columns: ["plano_id"]
             isOneToOne: false
@@ -507,11 +542,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "documentos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
             foreignKeyName: "documentos_veiculo_id_fkey"
             columns: ["veiculo_id"]
             isOneToOne: false
             referencedRelation: "veiculos"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documentos_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["veiculo_id"]
           },
         ]
       }
@@ -544,6 +593,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "instalacoes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "instalacao_fotos_instalacao_id_fkey"
+            columns: ["instalacao_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["instalacao_id"]
           },
         ]
       }
@@ -623,6 +679,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "instalacoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
             foreignKeyName: "instalacoes_instalador_id_fkey"
             columns: ["instalador_id"]
             isOneToOne: false
@@ -649,6 +712,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "veiculos"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "instalacoes_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["veiculo_id"]
           },
         ]
       }
@@ -788,6 +858,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "leads_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
             foreignKeyName: "leads_fonte_id_fkey"
             columns: ["fonte_id"]
             isOneToOne: false
@@ -834,6 +911,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "leads"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_historico_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["lead_id"]
           },
         ]
       }
@@ -1020,6 +1104,13 @@ export type Database = {
             referencedRelation: "veiculos"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "rastreadores_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["veiculo_id"]
+          },
         ]
       }
       rotas: {
@@ -1156,11 +1247,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "sinistros_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
             foreignKeyName: "sinistros_veiculo_id_fkey"
             columns: ["veiculo_id"]
             isOneToOne: false
             referencedRelation: "veiculos"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sinistros_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["veiculo_id"]
           },
         ]
       }
@@ -1316,6 +1421,13 @@ export type Database = {
             referencedRelation: "associados"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "veiculos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
         ]
       }
       vistoria_fotos: {
@@ -1399,6 +1511,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "vistorias_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
             foreignKeyName: "vistorias_instalacao_id_fkey"
             columns: ["instalacao_id"]
             isOneToOne: false
@@ -1406,11 +1525,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "vistorias_instalacao_id_fkey"
+            columns: ["instalacao_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["instalacao_id"]
+          },
+          {
             foreignKeyName: "vistorias_veiculo_id_fkey"
             columns: ["veiculo_id"]
             isOneToOne: false
             referencedRelation: "veiculos"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vistorias_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["veiculo_id"]
           },
           {
             foreignKeyName: "vistorias_vistoriador_id_fkey"
@@ -1423,7 +1556,36 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      view_acompanhamento: {
+        Row: {
+          associado_id: string | null
+          associado_status:
+            | Database["public"]["Enums"]["status_associado"]
+            | null
+          cpf: string | null
+          docs_aprovados: number | null
+          docs_total: number | null
+          fase_acompanhamento: string | null
+          instalacao_data: string | null
+          instalacao_id: string | null
+          instalacao_status:
+            | Database["public"]["Enums"]["status_instalacao"]
+            | null
+          lead_id: string | null
+          nome: string | null
+          telefone: string | null
+          updated_at: string | null
+          veiculo_ano: number | null
+          veiculo_id: string | null
+          veiculo_marca: string | null
+          veiculo_modelo: string | null
+          veiculo_placa: string | null
+          veiculo_status: Database["public"]["Enums"]["status_veiculo"] | null
+          vendedor_id: string | null
+          vendedor_nome: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       can_access_api_settings: { Args: { _user_id: string }; Returns: boolean }
