@@ -44,7 +44,7 @@ const menuItems = {
   ],
   vendas: [
     { title: 'Leads', url: '/vendas/leads', icon: UserPlus },
-    { title: 'Kanban', url: '/vendas/kanban', icon: Kanban },
+    { title: 'Pipeline', url: '/vendas/pipeline', icon: Kanban },
     { title: 'Cotador', url: '/vendas/cotacoes', icon: Calculator },
     { title: 'Contratos', url: '/vendas/contratos', icon: FileText },
   ],
