@@ -3637,6 +3637,14 @@ export type Database = {
           visualizados: number
         }[]
       }
+      get_estatisticas_assistencia_dia: {
+        Args: { p_data?: string }
+        Returns: Json
+      }
+      get_estatisticas_prestador: {
+        Args: { p_prestador_id: string }
+        Returns: Json
+      }
       get_my_associado_id: { Args: { _user_id: string }; Returns: string }
       get_my_perfis: {
         Args: never
