@@ -1,0 +1,306 @@
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { 
+  Calendar, 
+  Clock, 
+  MapPin, 
+  Car, 
+  User, 
+  Phone, 
+  Navigation,
+  Loader2,
+  Edit,
+  PlayCircle,
+  CheckCircle,
+  XCircle,
+  RotateCcw,
+  Cpu
+} from 'lucide-react';
+import {
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+} from '@/components/ui/drawer';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { useToast } from '@/hooks/use-toast';
+import { useInstalacao, useUpdateInstalacaoStatus, Instalacao } from '@/hooks/useInstalacoes';
+import { STATUS_INSTALACAO_LABELS, STATUS_INSTALACAO_COLORS, PERIODO_LABELS } from '@/types/database';
+
+interface InstalacaoDetailDrawerProps {
+  instalacaoId: string | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onEdit?: () => void;
+}
+
+export function InstalacaoDetailDrawer({ 
+  instalacaoId, 
+  open, 
+  onOpenChange,
+  onEdit 
+}: InstalacaoDetailDrawerProps) {
+  const { toast } = useToast();
+  const { data: instalacao, isLoading } = useInstalacao(instalacaoId || undefined);
+  const updateStatus = useUpdateInstalacaoStatus();
+
+  const handleStatusChange = async (status: Instalacao['status']) => {
+    if (!instalacaoId) return;
+    
+    try {
+      await updateStatus.mutateAsync({ id: instalacaoId, status });
+      toast({ 
+        title: 'Status atualizado!',
+        description: `Instalação marcada como ${STATUS_INSTALACAO_LABELS[status]}`,
+      });
+    } catch (error) {
+      toast({
+        title: 'Erro ao atualizar status',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const openGoogleMaps = () => {
+    if (!instalacao) return;
+    const address = [
+      instalacao.logradouro,
+      instalacao.numero,
+      instalacao.bairro,
+      instalacao.cidade,
+      instalacao.uf,
+    ].filter(Boolean).join(', ');
+    
+    window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`, '_blank');
+  };
+
+  const openWhatsApp = () => {
+    if (!instalacao?.associados?.telefone) return;
+    const phone = instalacao.associados.telefone.replace(/\D/g, '');
+    const message = `Olá ${instalacao.associados.nome}! Somos da equipe de instalação de rastreadores.`;
+    window.open(`https://wa.me/55${phone}?text=${encodeURIComponent(message)}`, '_blank');
+  };
+
+  if (!instalacaoId) return null;
+
+  return (
+    <Drawer open={open} onOpenChange={onOpenChange}>
+      <DrawerContent className="max-h-[90vh]">
+        <DrawerHeader className="border-b pb-4">
+          <div className="flex items-center justify-between">
+            <DrawerTitle>Detalhes da Instalação</DrawerTitle>
+            {instalacao && (
+              <Badge className={STATUS_INSTALACAO_COLORS[instalacao.status]}>
+                {STATUS_INSTALACAO_LABELS[instalacao.status]}
+              </Badge>
+            )}
+          </div>
+        </DrawerHeader>
+
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : !instalacao ? (
+          <div className="flex items-center justify-center py-12 text-muted-foreground">
+            Instalação não encontrada
+          </div>
+        ) : (
+          <div className="overflow-y-auto p-4 space-y-6">
+            {/* Associado */}
+            <section>
+              <h3 className="text-sm font-medium text-muted-foreground mb-2">Associado</h3>
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                  <User className="h-5 w-5 text-primary" />
+                </div>
+                <div className="flex-1">
+                  <p className="font-medium">{instalacao.associados?.nome}</p>
+                  <p className="text-sm text-muted-foreground">{instalacao.associados?.telefone}</p>
+                </div>
+                <Button variant="outline" size="sm" onClick={openWhatsApp}>
+                  <Phone className="h-4 w-4 mr-1" />
+                  WhatsApp
+                </Button>
+              </div>
+            </section>
+
+            <Separator />
+
+            {/* Agendamento */}
+            <section>
+              <h3 className="text-sm font-medium text-muted-foreground mb-2">Agendamento</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm">
+                    {format(new Date(instalacao.data_agendada), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm">{PERIODO_LABELS[instalacao.periodo]}</span>
+                </div>
+              </div>
+
+              {instalacao.profiles && (
+                <div className="flex items-center gap-2 mt-2">
+                  <User className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm">
+                    Instalador: <strong>{instalacao.profiles.nome}</strong>
+                  </span>
+                </div>
+              )}
+
+              {instalacao.rastreadores && (
+                <div className="flex items-center gap-2 mt-2">
+                  <Cpu className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm">
+                    Rastreador: <strong>{instalacao.rastreadores.codigo}</strong>
+                  </span>
+                </div>
+              )}
+            </section>
+
+            <Separator />
+
+            {/* Veículo */}
+            <section>
+              <h3 className="text-sm font-medium text-muted-foreground mb-2">Veículo</h3>
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                  <Car className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <p className="font-medium">
+                    {instalacao.veiculos?.marca} {instalacao.veiculos?.modelo} {instalacao.veiculos?.ano_modelo}
+                  </p>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <span className="font-mono bg-muted px-1.5 py-0.5 rounded">
+                      {instalacao.veiculos?.placa}
+                    </span>
+                    {instalacao.veiculos?.cor && <span>• {instalacao.veiculos.cor}</span>}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <Separator />
+
+            {/* Endereço */}
+            <section>
+              <h3 className="text-sm font-medium text-muted-foreground mb-2">Endereço</h3>
+              <div className="flex items-start gap-3">
+                <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-sm">
+                    {instalacao.logradouro}
+                    {instalacao.numero && `, ${instalacao.numero}`}
+                    {instalacao.complemento && ` - ${instalacao.complemento}`}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {instalacao.bairro}
+                    {instalacao.cidade && ` - ${instalacao.cidade}`}
+                    {instalacao.uf && `/${instalacao.uf}`}
+                  </p>
+                  {instalacao.cep && (
+                    <p className="text-sm text-muted-foreground">CEP: {instalacao.cep}</p>
+                  )}
+                </div>
+                <Button variant="outline" size="sm" onClick={openGoogleMaps}>
+                  <Navigation className="h-4 w-4 mr-1" />
+                  Maps
+                </Button>
+              </div>
+            </section>
+
+            {instalacao.observacoes && (
+              <>
+                <Separator />
+                <section>
+                  <h3 className="text-sm font-medium text-muted-foreground mb-2">Observações</h3>
+                  <p className="text-sm">{instalacao.observacoes}</p>
+                </section>
+              </>
+            )}
+
+            <Separator />
+
+            {/* Ações */}
+            <section className="space-y-3">
+              <h3 className="text-sm font-medium text-muted-foreground">Ações</h3>
+              
+              <div className="flex flex-wrap gap-2">
+                {onEdit && (
+                  <Button variant="outline" size="sm" onClick={onEdit}>
+                    <Edit className="h-4 w-4 mr-1" />
+                    Editar
+                  </Button>
+                )}
+
+                {instalacao.status === 'agendada' && (
+                  <Button 
+                    size="sm" 
+                    onClick={() => handleStatusChange('em_rota')}
+                    disabled={updateStatus.isPending}
+                  >
+                    <PlayCircle className="h-4 w-4 mr-1" />
+                    Iniciar Rota
+                  </Button>
+                )}
+
+                {instalacao.status === 'em_rota' && (
+                  <Button 
+                    size="sm" 
+                    onClick={() => handleStatusChange('em_andamento')}
+                    disabled={updateStatus.isPending}
+                  >
+                    <PlayCircle className="h-4 w-4 mr-1" />
+                    Iniciar Instalação
+                  </Button>
+                )}
+
+                {instalacao.status === 'em_andamento' && (
+                  <Button 
+                    size="sm" 
+                    className="bg-green-600 hover:bg-green-700"
+                    onClick={() => handleStatusChange('concluida')}
+                    disabled={updateStatus.isPending}
+                  >
+                    <CheckCircle className="h-4 w-4 mr-1" />
+                    Concluir
+                  </Button>
+                )}
+
+                {['agendada', 'em_rota', 'em_andamento'].includes(instalacao.status) && (
+                  <>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => handleStatusChange('reagendada')}
+                      disabled={updateStatus.isPending}
+                    >
+                      <RotateCcw className="h-4 w-4 mr-1" />
+                      Reagendar
+                    </Button>
+                    <Button 
+                      variant="destructive" 
+                      size="sm"
+                      onClick={() => handleStatusChange('cancelada')}
+                      disabled={updateStatus.isPending}
+                    >
+                      <XCircle className="h-4 w-4 mr-1" />
+                      Cancelar
+                    </Button>
+                  </>
+                )}
+              </div>
+            </section>
+          </div>
+        )}
+      </DrawerContent>
+    </Drawer>
+  );
+}
