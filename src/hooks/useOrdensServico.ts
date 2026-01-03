@@ -21,9 +21,10 @@ export function useOrdensServico(filters?: OSFilters) {
         .from('ordens_servico')
         .select(`
           *,
-          oficina:oficinas(*),
-          veiculo:veiculos(*),
-          associado:associados(id, nome, telefone)
+          oficina:oficinas(id, nome_fantasia, razao_social, cidade),
+          veiculo:veiculos(id, placa, marca, modelo),
+          associado:associados(id, nome, telefone),
+          sinistro:sinistros(id, protocolo)
         `)
         .order('created_at', { ascending: false });
 
