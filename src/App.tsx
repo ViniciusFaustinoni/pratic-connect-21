@@ -56,6 +56,7 @@ import AppBoletos from "./pages/app/AppBoletos";
 import AppBoletoDetalhe from "./pages/app/AppBoletoDetalhe";
 import AppRastreamento from "./pages/app/AppRastreamento";
 import SolicitarAssistencia from "./pages/app/SolicitarAssistencia";
+import HistoricoChamados from "./pages/app/HistoricoChamados";
 
 import AppAssistenciaNova from "./pages/app/AppAssistenciaNova";
 import AppSinistros from "./pages/app/AppSinistros";
@@ -151,6 +152,7 @@ const App = () => (
               <Route path="/app/rastreamento" element={<AppRastreamento />} />
               <Route path="/app/assistencia" element={<SolicitarAssistencia />} />
               <Route path="/app/assistencia/nova" element={<AppAssistenciaNova />} />
+              <Route path="/app/assistencia/historico" element={<HistoricoChamados />} />
               <Route path="/app/assistencia/:id" element={<AcompanharChamado />} />
               <Route path="/app/sinistros" element={<AppSinistros />} />
               <Route path="/app/sinistros/novo" element={<AppSinistroNovo />} />
