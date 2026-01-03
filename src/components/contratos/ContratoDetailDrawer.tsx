@@ -1,6 +1,7 @@
 import { 
   FileText, CheckCircle, XCircle, Clock, Send, Pause, 
-  ExternalLink, Phone, Mail, MapPin, Car, User
+  ExternalLink, Phone, Mail, MapPin, Car, User, Link,
+  RefreshCw, Loader2, Eye, Copy
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -14,6 +15,7 @@ import {
 import { useContrato, useUpdateContrato } from '@/hooks/useContratos';
 import { useUpdateLead } from '@/hooks/useLeads';
 import { useCreateLeadHistorico } from '@/hooks/useLeadHistorico';
+import { useSendToAutentique, useAutentiqueStatus, getAutentiqueStatusLabel } from '@/hooks/useAutentique';
 import { toast } from 'sonner';
 import type { StatusContrato } from '@/types/database';
 
@@ -38,6 +40,12 @@ export function ContratoDetailDrawer({ contratoId, open, onClose }: ContratoDeta
   const updateContrato = useUpdateContrato();
   const updateLead = useUpdateLead();
   const createHistorico = useCreateLeadHistorico();
+  const sendToAutentique = useSendToAutentique();
+  
+  // Buscar status do Autentique se houver documento
+  const { data: autentiqueStatus, isLoading: isLoadingStatus } = useAutentiqueStatus(
+    contrato?.autentique_documento_id || undefined
+  );
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -50,32 +58,26 @@ export function ContratoDetailDrawer({ contratoId, open, onClose }: ContratoDeta
     return new Date(dateStr).toLocaleDateString('pt-BR');
   };
 
+  const formatDateTime = (dateStr: string) => {
+    return new Date(dateStr).toLocaleString('pt-BR');
+  };
+
   const handleEnviar = async () => {
     if (!contrato) return;
-    try {
-      await updateContrato.mutateAsync({
-        id: contrato.id,
-        status: 'enviado',
-      });
-
-      if (contrato.lead_id) {
-        await updateLead.mutateAsync({
-          id: contrato.lead_id,
-          etapa: 'contrato_enviado',
-        });
-        
-        await createHistorico.mutateAsync({
-          lead_id: contrato.lead_id,
-          acao: 'contrato_enviado',
-          descricao: `Contrato ${contrato.numero} enviado para assinatura`,
-          etapa_nova: 'contrato_enviado',
-        });
-      }
-
-      toast.success('Contrato enviado!');
-    } catch (error) {
-      toast.error('Erro ao enviar contrato');
+    
+    const client = contrato.associados || contrato.leads;
+    if (!client?.email) {
+      toast.error('Email do cliente não informado');
+      return;
     }
+
+    await sendToAutentique.mutateAsync({
+      contratoId: contrato.id,
+      clienteNome: client.nome || 'Cliente',
+      clienteEmail: client.email,
+      clienteCpf: 'cpf' in client ? client.cpf || undefined : undefined,
+      clienteTelefone: client.telefone || undefined,
+    });
   };
 
   const handleAtivar = async () => {
@@ -104,6 +106,13 @@ export function ContratoDetailDrawer({ contratoId, open, onClose }: ContratoDeta
       toast.success('Contrato ativado!');
     } catch (error) {
       toast.error('Erro ao ativar contrato');
+    }
+  };
+
+  const handleCopiarLink = () => {
+    if (contrato?.autentique_url) {
+      navigator.clipboard.writeText(contrato.autentique_url);
+      toast.success('Link copiado!');
     }
   };
 
@@ -235,20 +244,106 @@ export function ContratoDetailDrawer({ contratoId, open, onClose }: ContratoDeta
               )}
             </section>
 
-            {/* Documento Autentique */}
-            {contrato.autentique_url && (
+            {/* Status da Assinatura Autentique */}
+            {contrato.autentique_documento_id && (
               <>
                 <Separator />
                 <section>
-                  <h3 className="text-sm font-medium uppercase tracking-wide text-muted-foreground mb-3">
-                    Documento
+                  <h3 className="text-sm font-medium uppercase tracking-wide text-muted-foreground mb-3 flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Assinatura Eletrônica
                   </h3>
-                  <Button asChild variant="outline" className="w-full">
-                    <a href={contrato.autentique_url} target="_blank" rel="noopener noreferrer">
-                      <ExternalLink className="mr-2 h-4 w-4" />
-                      Abrir no Autentique
-                    </a>
-                  </Button>
+                  
+                  {isLoadingStatus ? (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Verificando status...
+                    </div>
+                  ) : autentiqueStatus?.success ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-muted-foreground">Status:</span>
+                        <Badge className={getAutentiqueStatusLabel(autentiqueStatus.document?.status || 'pending').color}>
+                          {getAutentiqueStatusLabel(autentiqueStatus.document?.status || 'pending').label}
+                        </Badge>
+                      </div>
+
+                      {/* Signatários */}
+                      {autentiqueStatus.signatures && autentiqueStatus.signatures.length > 0 && (
+                        <div className="space-y-2">
+                          <span className="text-sm text-muted-foreground">Signatários:</span>
+                          {autentiqueStatus.signatures.map((sig, idx) => (
+                            <div key={idx} className="flex items-center justify-between text-sm p-2 bg-muted/50 rounded">
+                              <div>
+                                <p className="font-medium">{sig.name}</p>
+                                <p className="text-xs text-muted-foreground">{sig.email}</p>
+                              </div>
+                              <div className="text-right">
+                                <Badge variant="outline" className={
+                                  sig.status === 'signed' ? 'border-green-500 text-green-700' :
+                                  sig.status === 'rejected' ? 'border-red-500 text-red-700' :
+                                  sig.status === 'viewed' ? 'border-blue-500 text-blue-700' :
+                                  'border-gray-400 text-gray-600'
+                                }>
+                                  {sig.status === 'signed' && <CheckCircle className="mr-1 h-3 w-3" />}
+                                  {sig.status === 'rejected' && <XCircle className="mr-1 h-3 w-3" />}
+                                  {sig.status === 'viewed' && <Eye className="mr-1 h-3 w-3" />}
+                                  {sig.status === 'pending' && <Clock className="mr-1 h-3 w-3" />}
+                                  {sig.status === 'signed' ? 'Assinado' :
+                                   sig.status === 'rejected' ? 'Rejeitado' :
+                                   sig.status === 'viewed' ? 'Visualizado' : 'Pendente'}
+                                </Badge>
+                                {sig.signed && (
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                    {formatDateTime(sig.signed)}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Link do documento */}
+                      <div className="flex gap-2">
+                        {contrato.autentique_url && (
+                          <>
+                            <Button variant="outline" size="sm" className="flex-1" asChild>
+                              <a href={contrato.autentique_url} target="_blank" rel="noopener noreferrer">
+                                <ExternalLink className="mr-2 h-3.5 w-3.5" />
+                                Abrir Documento
+                              </a>
+                            </Button>
+                            <Button variant="outline" size="sm" onClick={handleCopiarLink}>
+                              <Copy className="h-3.5 w-3.5" />
+                            </Button>
+                          </>
+                        )}
+                      </div>
+
+                      {/* Documento assinado */}
+                      {autentiqueStatus.document?.signedFileUrl && (
+                        <Button variant="default" size="sm" className="w-full" asChild>
+                          <a href={autentiqueStatus.document.signedFileUrl} target="_blank" rel="noopener noreferrer">
+                            <FileText className="mr-2 h-3.5 w-3.5" />
+                            Baixar Documento Assinado
+                          </a>
+                        </Button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-muted-foreground">
+                      <p>Não foi possível obter o status da assinatura.</p>
+                      {contrato.autentique_url && (
+                        <Button variant="outline" size="sm" className="mt-2" asChild>
+                          <a href={contrato.autentique_url} target="_blank" rel="noopener noreferrer">
+                            <ExternalLink className="mr-2 h-3.5 w-3.5" />
+                            Abrir no Autentique
+                          </a>
+                        </Button>
+                      )}
+                    </div>
+                  )}
                 </section>
               </>
             )}
@@ -262,9 +357,33 @@ export function ContratoDetailDrawer({ contratoId, open, onClose }: ContratoDeta
               </h3>
               
               {(contrato.status === 'rascunho' || contrato.status === 'pendente') && (
-                <Button onClick={handleEnviar} className="w-full">
-                  <Send className="mr-2 h-4 w-4" />
+                <Button 
+                  onClick={handleEnviar} 
+                  className="w-full"
+                  disabled={sendToAutentique.isPending}
+                >
+                  {sendToAutentique.isPending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="mr-2 h-4 w-4" />
+                  )}
                   Enviar para Assinatura
+                </Button>
+              )}
+
+              {contrato.status === 'enviado' && (
+                <Button 
+                  onClick={handleEnviar} 
+                  variant="outline"
+                  className="w-full"
+                  disabled={sendToAutentique.isPending}
+                >
+                  {sendToAutentique.isPending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                  )}
+                  Reenviar Contrato
                 </Button>
               )}
 
@@ -272,15 +391,6 @@ export function ContratoDetailDrawer({ contratoId, open, onClose }: ContratoDeta
                 <Button onClick={handleAtivar} className="w-full">
                   <CheckCircle className="mr-2 h-4 w-4" />
                   Ativar Contrato
-                </Button>
-              )}
-
-              {contrato.status === 'enviado' && contrato.autentique_url && (
-                <Button asChild variant="outline" className="w-full">
-                  <a href={contrato.autentique_url} target="_blank" rel="noopener noreferrer">
-                    <ExternalLink className="mr-2 h-4 w-4" />
-                    Ver Documento
-                  </a>
                 </Button>
               )}
             </section>
