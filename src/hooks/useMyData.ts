@@ -283,6 +283,44 @@ export function useUpdateAssociado() {
   });
 }
 
+// Helper para mapear status do ASAAS para o formato do app
+function mapAsaasStatus(status: string): Boleto['status'] {
+  const statusMap: Record<string, Boleto['status']> = {
+    'PENDING': 'pendente',
+    'RECEIVED': 'pago',
+    'CONFIRMED': 'pago',
+    'OVERDUE': 'vencido',
+    'CANCELED': 'cancelado',
+    'REFUNDED': 'cancelado',
+    'RECEIVED_IN_CASH': 'pago',
+    'REFUND_REQUESTED': 'processando',
+    'CHARGEBACK_REQUESTED': 'processando',
+    'CHARGEBACK_DISPUTE': 'processando',
+    'AWAITING_CHARGEBACK_REVERSAL': 'processando',
+    'DUNNING_REQUESTED': 'vencido',
+    'DUNNING_RECEIVED': 'pago',
+    'AWAITING_RISK_ANALYSIS': 'processando',
+  };
+  return statusMap[status] || 'pendente';
+}
+
+// Helper para formatar data dd/mm/yyyy
+function formatDateBR(dateStr: string | null): string {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  return date.toLocaleDateString('pt-BR');
+}
+
+// Helper para extrair mes/ano de competencia
+function parseCompetencia(competencia: string | null): { mes: number; ano: number } {
+  if (!competencia) return { mes: 0, ano: 0 };
+  const parts = competencia.split('/');
+  if (parts.length === 2) {
+    return { mes: parseInt(parts[0]) || 0, ano: parseInt(parts[1]) || 0 };
+  }
+  return { mes: 0, ano: 0 };
+}
+
 export function useMyBoletos() {
   const { data: associado } = useMyAssociado();
 
@@ -291,94 +329,41 @@ export function useMyBoletos() {
     queryFn: async (): Promise<Boleto[]> => {
       if (!associado?.id) return [];
 
-      // TODO: Substituir por chamada real ao Supabase quando tabela existir
-      // Mock data para desenvolvimento
-      const mockBoletos: Boleto[] = [
-        {
-          id: '1',
-          competencia: 'Janeiro/2026',
-          competenciaMes: 1,
-          competenciaAno: 2026,
-          dataVencimento: '10/01/2026',
-          valorOriginal: 189.90,
-          valorFinal: 189.90,
-          status: 'pendente',
-          pixCopiaCola: '00020126580014br.gov.bcb.pix0136123e4567-e89b-12d3-a456-426614174000',
-          linhaDigitavel: '23793.38128 60000.000003 00000.000400 1 84340000018990',
-          codigoBarras: '23791843400000189903381260000000003000000040',
-          nossoNumero: '00000000040',
-          numeroDocumento: '2026010001'
-        },
-        {
-          id: '2',
-          competencia: 'Dezembro/2025',
-          competenciaMes: 12,
-          competenciaAno: 2025,
-          dataVencimento: '10/12/2025',
-          dataPagamento: '08/12/2025',
-          dataCredito: '09/12/2025',
-          valorOriginal: 189.90,
-          valorFinal: 189.90,
-          valorPago: 189.90,
-          status: 'pago',
-          formaPagamento: 'PIX',
-          nossoNumero: '00000000039',
-          numeroDocumento: '2025120001',
-          urlComprovante: 'https://example.com/comprovante/2.pdf'
-        },
-        {
-          id: '3',
-          competencia: 'Novembro/2025',
-          competenciaMes: 11,
-          competenciaAno: 2025,
-          dataVencimento: '10/11/2025',
-          dataPagamento: '05/11/2025',
-          dataCredito: '05/11/2025',
-          valorOriginal: 189.90,
-          valorFinal: 189.90,
-          valorPago: 189.90,
-          status: 'pago',
-          formaPagamento: 'PIX',
-          nossoNumero: '00000000038',
-          numeroDocumento: '2025110001'
-        },
-        {
-          id: '4',
-          competencia: 'Outubro/2025',
-          competenciaMes: 10,
-          competenciaAno: 2025,
-          dataVencimento: '10/10/2025',
-          dataPagamento: '10/10/2025',
-          dataCredito: '11/10/2025',
-          valorOriginal: 189.90,
-          valorFinal: 189.90,
-          valorPago: 189.90,
-          status: 'pago',
-          formaPagamento: 'Boleto',
-          nossoNumero: '00000000037',
-          numeroDocumento: '2025100001'
-        },
-        {
-          id: '5',
-          competencia: 'Setembro/2025',
-          competenciaMes: 9,
-          competenciaAno: 2025,
-          dataVencimento: '10/09/2025',
-          dataPagamento: '12/09/2025',
-          dataCredito: '13/09/2025',
-          valorOriginal: 189.90,
-          valorFinal: 195.50,
-          valorPago: 195.50,
-          valorJuros: 3.80,
-          valorMulta: 1.80,
-          status: 'pago',
-          formaPagamento: 'Boleto',
-          nossoNumero: '00000000036',
-          numeroDocumento: '2025090001'
-        },
-      ];
+      const { data, error } = await supabase
+        .from('asaas_cobrancas')
+        .select('*')
+        .eq('associado_id', associado.id)
+        .order('data_vencimento', { ascending: false });
 
-      return mockBoletos;
+      if (error) throw error;
+
+      return (data || []).map(c => {
+        const { mes, ano } = parseCompetencia(c.competencia);
+        return {
+          id: c.id,
+          competencia: c.competencia || '',
+          competenciaMes: mes,
+          competenciaAno: ano,
+          dataVencimento: formatDateBR(c.data_vencimento),
+          dataPagamento: c.data_pagamento ? formatDateBR(c.data_pagamento) : undefined,
+          dataCredito: c.pagamento_data ? formatDateBR(c.pagamento_data) : undefined,
+          valorOriginal: Number(c.valor) || 0,
+          valorFinal: Number(c.valor_liquido) || Number(c.valor) || 0,
+          valorPago: c.pagamento_valor ? Number(c.pagamento_valor) : undefined,
+          valorDesconto: c.desconto ? Number(c.desconto) : undefined,
+          valorJuros: c.juros ? Number(c.juros) : undefined,
+          valorMulta: c.multa ? Number(c.multa) : undefined,
+          status: mapAsaasStatus(c.status),
+          pixCopiaCola: c.pix_copia_cola || undefined,
+          pixQrCode: c.pix_qrcode || undefined,
+          linhaDigitavel: undefined,
+          codigoBarras: c.boleto_codigo_barras || undefined,
+          urlBoleto: c.boleto_url || undefined,
+          formaPagamento: c.pagamento_forma || c.forma_pagamento || undefined,
+          nossoNumero: c.boleto_nosso_numero || undefined,
+          numeroDocumento: c.referencia || undefined,
+        };
+      });
     },
     enabled: !!associado?.id,
   });

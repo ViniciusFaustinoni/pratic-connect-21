@@ -157,8 +157,11 @@ export type Database = {
           boleto_codigo_barras: string | null
           boleto_nosso_numero: string | null
           boleto_url: string | null
+          cancelado_por: string | null
           competencia: string | null
+          contrato_id: string | null
           created_at: string | null
+          criado_por: string | null
           data_emissao: string
           data_pagamento: string | null
           data_vencimento: string
@@ -166,6 +169,9 @@ export type Database = {
           forma_pagamento: string | null
           id: string
           juros: number | null
+          lembrete_vencimento_enviado: boolean | null
+          linha_digitavel: string | null
+          motivo_cancelamento: string | null
           multa: number | null
           notificacao_data: string | null
           notificacao_enviada: boolean | null
@@ -183,6 +189,7 @@ export type Database = {
           updated_at: string | null
           valor: number
           valor_liquido: number | null
+          veiculo_id: string | null
         }
         Insert: {
           asaas_cliente_id?: string | null
@@ -191,8 +198,11 @@ export type Database = {
           boleto_codigo_barras?: string | null
           boleto_nosso_numero?: string | null
           boleto_url?: string | null
+          cancelado_por?: string | null
           competencia?: string | null
+          contrato_id?: string | null
           created_at?: string | null
+          criado_por?: string | null
           data_emissao: string
           data_pagamento?: string | null
           data_vencimento: string
@@ -200,6 +210,9 @@ export type Database = {
           forma_pagamento?: string | null
           id?: string
           juros?: number | null
+          lembrete_vencimento_enviado?: boolean | null
+          linha_digitavel?: string | null
+          motivo_cancelamento?: string | null
           multa?: number | null
           notificacao_data?: string | null
           notificacao_enviada?: boolean | null
@@ -217,6 +230,7 @@ export type Database = {
           updated_at?: string | null
           valor: number
           valor_liquido?: number | null
+          veiculo_id?: string | null
         }
         Update: {
           asaas_cliente_id?: string | null
@@ -225,8 +239,11 @@ export type Database = {
           boleto_codigo_barras?: string | null
           boleto_nosso_numero?: string | null
           boleto_url?: string | null
+          cancelado_por?: string | null
           competencia?: string | null
+          contrato_id?: string | null
           created_at?: string | null
+          criado_por?: string | null
           data_emissao?: string
           data_pagamento?: string | null
           data_vencimento?: string
@@ -234,6 +251,9 @@ export type Database = {
           forma_pagamento?: string | null
           id?: string
           juros?: number | null
+          lembrete_vencimento_enviado?: boolean | null
+          linha_digitavel?: string | null
+          motivo_cancelamento?: string | null
           multa?: number | null
           notificacao_data?: string | null
           notificacao_enviada?: boolean | null
@@ -251,6 +271,7 @@ export type Database = {
           updated_at?: string | null
           valor?: number
           valor_liquido?: number | null
+          veiculo_id?: string | null
         }
         Relationships: [
           {
@@ -294,6 +315,55 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "asaas_cobrancas_cancelado_por_fkey"
+            columns: ["cancelado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asaas_cobrancas_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "contratos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asaas_cobrancas_criado_por_fkey"
+            columns: ["criado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asaas_cobrancas_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "veiculos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asaas_cobrancas_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "asaas_cobrancas_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "asaas_cobrancas_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["veiculo_id"]
           },
         ]
       }
@@ -1027,6 +1097,105 @@ export type Database = {
           },
         ]
       }
+      contas_pagar: {
+        Row: {
+          agencia: string | null
+          aprovado_em: string | null
+          aprovado_por: string | null
+          banco: string | null
+          categoria: string
+          comprovante_url: string | null
+          conta: string | null
+          created_at: string | null
+          data_emissao: string
+          data_pagamento: string | null
+          data_vencimento: string
+          forma_pagamento: string | null
+          fornecedor_documento: string | null
+          fornecedor_nome: string
+          id: string
+          observacao: string | null
+          pago_por: string | null
+          pix_chave: string | null
+          referencia_id: string | null
+          referencia_tipo: string | null
+          status: string | null
+          subcategoria: string | null
+          updated_at: string | null
+          valor: number
+          valor_pago: number | null
+        }
+        Insert: {
+          agencia?: string | null
+          aprovado_em?: string | null
+          aprovado_por?: string | null
+          banco?: string | null
+          categoria: string
+          comprovante_url?: string | null
+          conta?: string | null
+          created_at?: string | null
+          data_emissao?: string
+          data_pagamento?: string | null
+          data_vencimento: string
+          forma_pagamento?: string | null
+          fornecedor_documento?: string | null
+          fornecedor_nome: string
+          id?: string
+          observacao?: string | null
+          pago_por?: string | null
+          pix_chave?: string | null
+          referencia_id?: string | null
+          referencia_tipo?: string | null
+          status?: string | null
+          subcategoria?: string | null
+          updated_at?: string | null
+          valor: number
+          valor_pago?: number | null
+        }
+        Update: {
+          agencia?: string | null
+          aprovado_em?: string | null
+          aprovado_por?: string | null
+          banco?: string | null
+          categoria?: string
+          comprovante_url?: string | null
+          conta?: string | null
+          created_at?: string | null
+          data_emissao?: string
+          data_pagamento?: string | null
+          data_vencimento?: string
+          forma_pagamento?: string | null
+          fornecedor_documento?: string | null
+          fornecedor_nome?: string
+          id?: string
+          observacao?: string | null
+          pago_por?: string | null
+          pix_chave?: string | null
+          referencia_id?: string | null
+          referencia_tipo?: string | null
+          status?: string | null
+          subcategoria?: string | null
+          updated_at?: string | null
+          valor?: number
+          valor_pago?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contas_pagar_aprovado_por_fkey"
+            columns: ["aprovado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contas_pagar_pago_por_fkey"
+            columns: ["pago_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contratos: {
         Row: {
           associado_id: string | null
@@ -1466,6 +1635,71 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["veiculo_id"]
+          },
+        ]
+      }
+      faturamentos: {
+        Row: {
+          created_at: string | null
+          data_envio: string | null
+          data_fechamento: string | null
+          data_geracao: string | null
+          data_vencimento: string | null
+          gerado_por: string | null
+          id: string
+          referencia_ano: number
+          referencia_mes: number
+          status: string | null
+          total_associados: number | null
+          total_cobrancas: number | null
+          updated_at: string | null
+          valor_pago: number | null
+          valor_pendente: number | null
+          valor_total: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          data_envio?: string | null
+          data_fechamento?: string | null
+          data_geracao?: string | null
+          data_vencimento?: string | null
+          gerado_por?: string | null
+          id?: string
+          referencia_ano: number
+          referencia_mes: number
+          status?: string | null
+          total_associados?: number | null
+          total_cobrancas?: number | null
+          updated_at?: string | null
+          valor_pago?: number | null
+          valor_pendente?: number | null
+          valor_total?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          data_envio?: string | null
+          data_fechamento?: string | null
+          data_geracao?: string | null
+          data_vencimento?: string | null
+          gerado_por?: string | null
+          id?: string
+          referencia_ano?: number
+          referencia_mes?: number
+          status?: string | null
+          total_associados?: number | null
+          total_cobrancas?: number | null
+          updated_at?: string | null
+          valor_pago?: number | null
+          valor_pendente?: number | null
+          valor_total?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "faturamentos_gerado_por_fkey"
+            columns: ["gerado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -1942,6 +2176,59 @@ export type Database = {
           {
             foreignKeyName: "metas_vendas_vendedor_id_fkey"
             columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      movimentacoes_financeiras: {
+        Row: {
+          categoria: string
+          created_at: string | null
+          data_competencia: string | null
+          data_movimentacao: string
+          descricao: string
+          id: string
+          observacao: string | null
+          referencia_id: string | null
+          referencia_tipo: string | null
+          registrado_por: string | null
+          tipo: string
+          valor: number
+        }
+        Insert: {
+          categoria: string
+          created_at?: string | null
+          data_competencia?: string | null
+          data_movimentacao: string
+          descricao: string
+          id?: string
+          observacao?: string | null
+          referencia_id?: string | null
+          referencia_tipo?: string | null
+          registrado_por?: string | null
+          tipo: string
+          valor: number
+        }
+        Update: {
+          categoria?: string
+          created_at?: string | null
+          data_competencia?: string | null
+          data_movimentacao?: string
+          descricao?: string
+          id?: string
+          observacao?: string | null
+          referencia_id?: string | null
+          referencia_tipo?: string | null
+          registrado_por?: string | null
+          tipo?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "movimentacoes_financeiras_registrado_por_fkey"
+            columns: ["registrado_por"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
