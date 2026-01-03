@@ -28,6 +28,7 @@ import Instalacoes from "./pages/monitoramento/Instalacoes";
 import Rotas from "./pages/monitoramento/Rotas";
 import Estoque from "./pages/monitoramento/Estoque";
 import Rastreadores from "./pages/monitoramento/Rastreadores";
+import Mapa from "./pages/monitoramento/Mapa";
 import Configuracoes from "./pages/Configuracoes";
 import NotFound from "./pages/NotFound";
 
@@ -96,6 +97,7 @@ const App = () => (
               <Route path="/monitoramento/instalacoes" element={<Instalacoes />} />
               <Route path="/monitoramento/rotas" element={<Rotas />} />
               <Route path="/monitoramento/estoque" element={<Estoque />} />
+              <Route path="/monitoramento/mapa" element={<Mapa />} />
               <Route path="/monitoramento/rastreadores" element={<Rastreadores />} />
               
               {/* Config */}

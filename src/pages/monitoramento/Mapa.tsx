@@ -1,0 +1,515 @@
+import { useState, useEffect, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
+import L from "leaflet";
+import { format, formatDistanceToNow } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  RefreshCw,
+  Search,
+  Car,
+  Phone,
+  Navigation,
+  Gauge,
+  Power,
+  Clock,
+  Locate,
+} from "lucide-react";
+import { toast } from "sonner";
+
+// =====================================================
+// FIX PARA ÍCONES DO LEAFLET
+// =====================================================
+
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+});
+
+// =====================================================
+// ÍCONES CUSTOMIZADOS POR STATUS
+// =====================================================
+
+const createCustomIcon = (color: string) => {
+  return new L.Icon({
+    iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${color}.png`,
+    shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowSize: [41, 41],
+  });
+};
+
+const markerIcons = {
+  online: createCustomIcon("green"),
+  atencao: createCustomIcon("yellow"),
+  offline: createCustomIcon("red"),
+  sem_dados: createCustomIcon("grey"),
+};
+
+// =====================================================
+// COMPONENTE PARA CENTRALIZAR MAPA
+// =====================================================
+
+interface FlyToProps {
+  position: [number, number] | null;
+  zoom?: number;
+}
+
+function FlyToPosition({ position, zoom = 15 }: FlyToProps) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (position) {
+      map.flyTo(position, zoom, { duration: 1 });
+    }
+  }, [position, zoom, map]);
+
+  return null;
+}
+
+// =====================================================
+// TIPOS
+// =====================================================
+
+interface Veiculo {
+  rastreador_id: string;
+  codigo: string;
+  plataforma: string;
+  status: string;
+  placa: string | null;
+  marca: string | null;
+  modelo: string | null;
+  associado_nome: string | null;
+  associado_telefone: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  velocidade: number | null;
+  ignicao: boolean | null;
+  ultima_comunicacao: string | null;
+  horas_sem_comunicacao: number;
+  status_comunicacao: string;
+}
+
+// =====================================================
+// COMPONENTE PRINCIPAL
+// =====================================================
+
+export default function Mapa() {
+  // Estados
+  const [filtroStatus, setFiltroStatus] = useState("todos");
+  const [filtroBusca, setFiltroBusca] = useState("");
+  const [posicaoSelecionada, setPosicaoSelecionada] = useState<[number, number] | null>(null);
+  const [veiculoSelecionado, setVeiculoSelecionado] = useState<string | null>(null);
+
+  // Query para buscar veículos com posição
+  const { data: veiculos, isLoading, refetch, isRefetching } = useQuery({
+    queryKey: ["mapa-veiculos"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("view_rastreadores_posicao")
+        .select("*")
+        .order("ultima_comunicacao", { ascending: false, nullsFirst: false });
+
+      if (error) throw error;
+      return (data || []) as Veiculo[];
+    },
+    refetchInterval: 30000, // Atualizar a cada 30 segundos
+  });
+
+  // Filtrar veículos
+  const veiculosFiltrados = useMemo(() => {
+    if (!veiculos) return [];
+
+    return veiculos.filter((v) => {
+      // Filtro de status
+      if (filtroStatus !== "todos" && v.status_comunicacao !== filtroStatus) {
+        return false;
+      }
+
+      // Filtro de busca
+      if (filtroBusca) {
+        const termo = filtroBusca.toLowerCase();
+        const placa = v.placa?.toLowerCase() || "";
+        const associado = v.associado_nome?.toLowerCase() || "";
+        const codigo = v.codigo?.toLowerCase() || "";
+
+        if (!placa.includes(termo) && !associado.includes(termo) && !codigo.includes(termo)) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [veiculos, filtroStatus, filtroBusca]);
+
+  // Contadores por status
+  const contadores = useMemo(() => {
+    if (!veiculos) return { online: 0, atencao: 0, offline: 0, sem_dados: 0 };
+
+    return veiculos.reduce(
+      (acc, v) => {
+        const status = v.status_comunicacao as keyof typeof acc;
+        if (acc[status] !== undefined) {
+          acc[status]++;
+        }
+        return acc;
+      },
+      { online: 0, atencao: 0, offline: 0, sem_dados: 0 }
+    );
+  }, [veiculos]);
+
+  // Centro inicial do mapa (Brasil)
+  const centroInicial: [number, number] = [-15.7801, -47.9292];
+
+  // Selecionar veículo
+  const selecionarVeiculo = (veiculo: Veiculo) => {
+    if (veiculo.latitude && veiculo.longitude) {
+      setPosicaoSelecionada([veiculo.latitude, veiculo.longitude]);
+      setVeiculoSelecionado(veiculo.rastreador_id);
+    } else {
+      toast.error("Veículo sem posição GPS");
+    }
+  };
+
+  // Abrir WhatsApp
+  const abrirWhatsApp = (telefone: string | null) => {
+    if (!telefone) {
+      toast.error("Telefone não cadastrado");
+      return;
+    }
+    const numero = telefone.replace(/\D/g, "");
+    window.open(`https://wa.me/55${numero}`, "_blank");
+  };
+
+  // Abrir Google Maps
+  const abrirGoogleMaps = (lat: number, lng: number) => {
+    window.open(`https://www.google.com/maps?q=${lat},${lng}`, "_blank");
+  };
+
+  const getStatusBadgeClass = (status: string) => {
+    switch (status) {
+      case "online":
+        return "bg-green-500/10 text-green-600 border-green-500/20";
+      case "atencao":
+        return "bg-yellow-500/10 text-yellow-600 border-yellow-500/20";
+      case "offline":
+        return "bg-red-500/10 text-red-600 border-red-500/20";
+      default:
+        return "bg-muted text-muted-foreground";
+    }
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case "online":
+        return "Online";
+      case "atencao":
+        return "Atenção";
+      case "offline":
+        return "Offline";
+      default:
+        return "Sem dados";
+    }
+  };
+
+  return (
+    <div className="flex h-[calc(100vh-4rem)] gap-4 p-4">
+      {/* ================================================= */}
+      {/* SIDEBAR - Lista de Veículos */}
+      {/* ================================================= */}
+      <Card className="w-80 flex-shrink-0 flex flex-col">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Car className="h-5 w-5 text-primary" />
+              <CardTitle className="text-base">Veículos</CardTitle>
+            </div>
+            <Badge variant="secondary">{veiculosFiltrados.length}</Badge>
+          </div>
+
+          {/* Contadores de Status */}
+          <div className="flex gap-2 mt-3">
+            <Badge className="bg-green-500/10 text-green-600 border-green-500/20 hover:bg-green-500/20">
+              {contadores.online} online
+            </Badge>
+            <Badge className="bg-yellow-500/10 text-yellow-600 border-yellow-500/20 hover:bg-yellow-500/20">
+              {contadores.atencao} atenção
+            </Badge>
+            <Badge className="bg-red-500/10 text-red-600 border-red-500/20 hover:bg-red-500/20">
+              {contadores.offline} offline
+            </Badge>
+          </div>
+
+          {/* Filtro de Status */}
+          <Select value={filtroStatus} onValueChange={setFiltroStatus}>
+            <SelectTrigger className="h-9 mt-3">
+              <SelectValue placeholder="Filtrar por status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos os status</SelectItem>
+              <SelectItem value="online">🟢 Online</SelectItem>
+              <SelectItem value="atencao">🟡 Atenção</SelectItem>
+              <SelectItem value="offline">🔴 Offline</SelectItem>
+              <SelectItem value="sem_dados">⚪ Sem dados</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* Campo de Busca */}
+          <div className="relative mt-2">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar placa ou associado..."
+              value={filtroBusca}
+              onChange={(e) => setFiltroBusca(e.target.value)}
+              className="pl-9 h-9"
+            />
+          </div>
+        </CardHeader>
+
+        <CardContent className="flex-1 overflow-hidden p-0">
+          <ScrollArea className="h-full px-4 pb-4">
+            {isLoading ? (
+              // Loading
+              <div className="space-y-3">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <div key={i} className="p-3 border rounded-lg">
+                    <Skeleton className="h-5 w-24 mb-2" />
+                    <div className="space-y-1">
+                      <Skeleton className="h-4 w-32" />
+                      <Skeleton className="h-4 w-28" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : veiculosFiltrados.length === 0 ? (
+              // Vazio
+              <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+                <Car className="h-12 w-12 mb-2 opacity-50" />
+                <p className="text-sm">Nenhum veículo encontrado</p>
+              </div>
+            ) : (
+              // Lista de Veículos
+              <div className="space-y-2">
+                {veiculosFiltrados.map((v) => (
+                  <div
+                    key={v.rastreador_id}
+                    className={`p-3 border rounded-lg cursor-pointer transition-colors hover:bg-muted/50 ${
+                      veiculoSelecionado === v.rastreador_id ? "border-primary bg-primary/5" : ""
+                    }`}
+                    onClick={() => selecionarVeiculo(v)}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        {/* Placa */}
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-semibold text-sm truncate">
+                            {v.placa || "Sem placa"}
+                          </span>
+                          <Badge className={`text-xs ${getStatusBadgeClass(v.status_comunicacao)}`}>
+                            {getStatusLabel(v.status_comunicacao)}
+                          </Badge>
+                        </div>
+
+                        {/* Veículo */}
+                        <p className="text-xs text-muted-foreground truncate">
+                          {v.marca} {v.modelo}
+                        </p>
+
+                        {/* Associado */}
+                        <p className="text-xs text-muted-foreground truncate">
+                          {v.associado_nome || "Sem associado"}
+                        </p>
+
+                        {/* Info de velocidade/ignição */}
+                        {v.latitude && (
+                          <div className="flex items-center gap-3 mt-2 text-xs">
+                            <span className="flex items-center gap-1">
+                              <Gauge className="h-3 w-3" />
+                              {v.velocidade || 0} km/h
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Power className="h-3 w-3" />
+                              {v.ignicao ? "Ligado" : "Desligado"}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Última comunicação */}
+                        {v.ultima_comunicacao && (
+                          <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            {formatDistanceToNow(new Date(v.ultima_comunicacao), {
+                              addSuffix: true,
+                              locale: ptBR,
+                            })}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Botão de localizar */}
+                      {v.latitude && v.longitude && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 flex-shrink-0"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            selecionarVeiculo(v);
+                          }}
+                        >
+                          <Locate className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </ScrollArea>
+        </CardContent>
+      </Card>
+
+      {/* ================================================= */}
+      {/* MAPA */}
+      {/* ================================================= */}
+      <Card className="flex-1 flex flex-col overflow-hidden">
+        <CardHeader className="pb-3 flex-row items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Navigation className="h-5 w-5 text-primary" />
+            <CardTitle className="text-base">Mapa em Tempo Real</CardTitle>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => refetch()}
+            disabled={isRefetching}
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${isRefetching ? "animate-spin" : ""}`} />
+            Atualizar
+          </Button>
+        </CardHeader>
+
+        <CardContent className="flex-1 p-0 relative">
+          <MapContainer
+            center={centroInicial}
+            zoom={4}
+            className="h-full w-full"
+            style={{ height: "100%", width: "100%" }}
+          >
+            <TileLayer
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+
+            <FlyToPosition position={posicaoSelecionada} />
+
+            {veiculosFiltrados.map((v) => {
+              if (!v.latitude || !v.longitude) return null;
+
+              const icon = markerIcons[v.status_comunicacao as keyof typeof markerIcons] || markerIcons.sem_dados;
+
+              return (
+                <Marker
+                  key={v.rastreador_id}
+                  position={[v.latitude, v.longitude]}
+                  icon={icon}
+                >
+                  <Popup>
+                    <div className="min-w-[200px]">
+                      {/* Header do Popup */}
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="font-bold text-sm">{v.placa || "Sem placa"}</h3>
+                        <span className="text-xs">
+                          {v.status_comunicacao === "online"
+                            ? "🟢 Online"
+                            : v.status_comunicacao === "atencao"
+                            ? "🟡 Atenção"
+                            : "🔴 Offline"}
+                        </span>
+                      </div>
+
+                      {/* Info do Veículo */}
+                      <div className="text-xs space-y-1 mb-2">
+                        <p>
+                          <strong>Veículo:</strong> {v.marca} {v.modelo}
+                        </p>
+                        <p>
+                          <strong>Associado:</strong> {v.associado_nome || "-"}
+                        </p>
+                      </div>
+
+                      {/* Status */}
+                      <div className="flex items-center gap-3 text-xs mb-2">
+                        <span className="flex items-center gap-1">
+                          <Gauge className="h-3 w-3" />
+                          {v.velocidade || 0} km/h
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Power className="h-3 w-3" />
+                          {v.ignicao ? "Ligado" : "Desligado"}
+                        </span>
+                      </div>
+
+                      {/* Última comunicação */}
+                      {v.ultima_comunicacao && (
+                        <p className="text-xs text-gray-500 mb-3">
+                          Última comunicação:{" "}
+                          {format(new Date(v.ultima_comunicacao), "dd/MM/yyyy HH:mm", {
+                            locale: ptBR,
+                          })}
+                        </p>
+                      )}
+
+                      {/* Botões de Ação */}
+                      <div className="flex gap-2">
+                        {v.associado_telefone && (
+                          <button
+                            onClick={() => abrirWhatsApp(v.associado_telefone)}
+                            className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white rounded text-xs hover:bg-green-700"
+                          >
+                            <Phone className="h-3 w-3" />
+                            WhatsApp
+                          </button>
+                        )}
+                        <button
+                          onClick={() => abrirGoogleMaps(v.latitude!, v.longitude!)}
+                          className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
+                        >
+                          <Navigation className="h-3 w-3" />
+                          Google Maps
+                        </button>
+                      </div>
+                    </div>
+                  </Popup>
+                </Marker>
+              );
+            })}
+          </MapContainer>
+
+          {/* Indicador de atualização automática */}
+          <div className="absolute bottom-4 left-4 bg-background/90 backdrop-blur-sm px-3 py-1.5 rounded-full text-xs text-muted-foreground border shadow-sm">
+            Atualização automática a cada 30s
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
