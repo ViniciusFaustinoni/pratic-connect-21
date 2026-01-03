@@ -11,3 +11,13 @@ export {
 export { CardAcessoRapido, BotaoAcessoRapido } from './CardAcessoRapido';
 export { CardAlerta, ListaAlertas, CardTudoEmDia } from './CardAlerta';
 export { CardPlano } from './CardPlano';
+
+// QR Code Pix component
+export { QRCodePix } from './QRCodePix';
+export type { 
+  QRCodePixProps, 
+  PixData, 
+  QRCodeVariant, 
+  QRCodeSize,
+  QRCodeStatus 
+} from './QRCodePix/types';
