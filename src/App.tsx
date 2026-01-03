@@ -25,6 +25,7 @@ import AssociadoDetalhe from "./pages/cadastro/AssociadoDetalhe";
 import Veiculos from "./pages/cadastro/Veiculos";
 import Documentos from "./pages/cadastro/Documentos";
 import SinistrosList from "./pages/eventos/SinistrosList";
+import SinistroDetalhe from "./pages/eventos/SinistroDetalhe";
 import Instalacoes from "./pages/monitoramento/Instalacoes";
 import Rotas from "./pages/monitoramento/Rotas";
 import Estoque from "./pages/monitoramento/Estoque";
@@ -96,6 +97,7 @@ const App = () => (
               
               {/* Eventos */}
               <Route path="/eventos/sinistros" element={<SinistrosList />} />
+              <Route path="/eventos/sinistros/:id" element={<SinistroDetalhe />} />
               
               {/* Monitoramento */}
               <Route path="/monitoramento/instalacoes" element={<Instalacoes />} />
