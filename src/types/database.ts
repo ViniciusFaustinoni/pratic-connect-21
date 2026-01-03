@@ -919,6 +919,21 @@ export const STATUS_PAGAMENTO_OFICINA_LABELS: Record<StatusPagamentoOficina, str
   cancelado: 'Cancelado',
 };
 
+export const STATUS_PAGAMENTO_OFICINA_COLORS: Record<StatusPagamentoOficina, string> = {
+  pendente: 'bg-yellow-100 text-yellow-800',
+  processando: 'bg-blue-100 text-blue-800',
+  pago: 'bg-green-100 text-green-800',
+  cancelado: 'bg-red-100 text-red-800',
+};
+
+export const PIX_TIPO_LABELS: Record<TipoPix, string> = {
+  cpf: 'CPF',
+  cnpj: 'CNPJ',
+  email: 'E-mail',
+  telefone: 'Telefone',
+  aleatoria: 'Chave Aleatória',
+};
+
 // Cores para badges
 export const STATUS_OFICINA_COLORS: Record<StatusOficina, string> = {
   ativo: 'bg-green-100 text-green-800',

@@ -26,7 +26,6 @@ import {
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
 import { OficinaFormDialog } from '@/components/oficinas/OficinaFormDialog';
-import { OficinaDetailDrawer } from '@/components/oficinas/OficinaDetailDrawer';
 import { 
   STATUS_OFICINA_LABELS, 
   STATUS_OFICINA_COLORS, 
@@ -51,8 +50,6 @@ export default function OficinasList() {
     status: 'todos',
   });
   const [formOpen, setFormOpen] = useState(false);
-  const [selectedOficina, setSelectedOficina] = useState<Oficina | null>(null);
-  const [drawerOpen, setDrawerOpen] = useState(false);
 
   // Buscar oficinas
   const { data: oficinas = [], isLoading } = useQuery({
@@ -108,10 +105,6 @@ export default function OficinasList() {
     return Array.from(set).sort();
   }, [oficinas]);
 
-  const handleViewDetails = (oficina: Oficina) => {
-    setSelectedOficina(oficina);
-    setDrawerOpen(true);
-  };
 
   const renderStars = (nota: number) => {
     const stars = [];
@@ -346,10 +339,12 @@ export default function OficinasList() {
                   variant="outline"
                   size="sm"
                   className="w-full"
-                  onClick={() => handleViewDetails(oficina)}
+                  asChild
                 >
-                  <Eye className="mr-2 h-4 w-4" />
-                  Ver detalhes
+                  <Link to={`/oficina/credenciadas/${oficina.id}`}>
+                    <Eye className="mr-2 h-4 w-4" />
+                    Ver detalhes
+                  </Link>
                 </Button>
               </CardContent>
             </Card>
@@ -359,11 +354,6 @@ export default function OficinasList() {
 
       {/* Dialogs */}
       <OficinaFormDialog open={formOpen} onOpenChange={setFormOpen} />
-      <OficinaDetailDrawer
-        oficina={selectedOficina}
-        open={drawerOpen}
-        onOpenChange={setDrawerOpen}
-      />
     </div>
   );
 }
