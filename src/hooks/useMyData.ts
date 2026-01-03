@@ -170,3 +170,25 @@ export function useChamado(id: string | undefined) {
     enabled: !!id,
   });
 }
+
+export function useMyPendingDocuments() {
+  const { data: associado } = useMyAssociado();
+
+  return useQuery({
+    queryKey: ['my-pending-docs', associado?.id],
+    queryFn: async () => {
+      if (!associado?.id) return [];
+
+      const { data, error } = await supabase
+        .from('documentos')
+        .select('*')
+        .eq('associado_id', associado.id)
+        .in('status', ['pendente', 'reprovado'])
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return data as Documento[];
+    },
+    enabled: !!associado?.id,
+  });
+}
