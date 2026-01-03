@@ -51,12 +51,12 @@ export function AppLayout() {
   return (
     <div className="flex min-h-screen flex-col bg-slate-50">
       <AppHeader />
-      <main className="flex-1 overflow-auto pb-20">
+      <main className="flex-1 overflow-auto pb-[56px]">
         <div className="mx-auto max-w-lg">
           <Outlet />
         </div>
       </main>
-      <AppBottomNav onLogout={handleLogout} />
+      <AppBottomNav />
     </div>
   );
 }
