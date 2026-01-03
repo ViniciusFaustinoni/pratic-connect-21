@@ -23,7 +23,7 @@ import {
   Breadcrumb, BreadcrumbItem, BreadcrumbLink,
   BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
-import { OSFormDialog } from '@/components/oficinas/OSFormDialog';
+import { NovaOSModal } from '@/components/oficina/NovaOSModal';
 import { useOficinas } from '@/hooks/useOficinas';
 import { 
   STATUS_ORDEM_SERVICO_LABELS, 
@@ -358,9 +358,9 @@ export default function OrdensServicoList() {
         </Table>
       </Card>
 
-      <OSFormDialog
+      <NovaOSModal
         open={formOpen}
-        onOpenChange={setFormOpen}
+        onClose={() => setFormOpen(false)}
       />
     </div>
   );
