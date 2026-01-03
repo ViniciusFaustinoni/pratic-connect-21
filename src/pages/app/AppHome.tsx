@@ -30,10 +30,12 @@ import {
 const mockBoleto = {
   id: '1',
   competencia: 'Janeiro/2026',
-  vencimento: '10/01/2026',
-  valor: 189.90,
+  dataVencimento: '10/01/2026',
+  valorOriginal: 189.90,
+  valorFinal: 189.90,
   status: 'pendente' as const,
-  pixCopiaCola: '00020126580014br.gov.bcb.pix0136123e4567-e89b-12d3-a456-426614174000'
+  pixCopiaCola: '00020126580014br.gov.bcb.pix0136123e4567-e89b-12d3-a456-426614174000',
+  linhaDigitavel: '23793.38128 60000.000003 00000.000400 1 84340000018990'
 };
 
 // Configuração dos acessos rápidos
@@ -145,7 +147,7 @@ export default function AppHome() {
       )}
 
       {/* Card do Próximo Boleto */}
-      <CardBoleto boleto={mockBoleto} />
+      <CardBoleto boleto={mockBoleto} variacao="expandido" destacar />
 
       {/* Acesso Rápido */}
       <div className="space-y-3">

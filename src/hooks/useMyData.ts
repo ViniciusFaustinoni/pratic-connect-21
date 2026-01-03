@@ -14,17 +14,23 @@ type Documento = Tables<'documentos'>;
 export interface Boleto {
   id: string;
   competencia: string;
-  competenciaMes: number;
-  competenciaAno: number;
+  competenciaMes?: number;
+  competenciaAno?: number;
   dataVencimento: string;
   dataPagamento?: string;
   valorOriginal: number;
   valorFinal: number;
   valorPago?: number;
-  status: 'pendente' | 'pago' | 'vencido' | 'cancelado';
+  valorDesconto?: number;
+  valorJuros?: number;
+  valorMulta?: number;
+  status: 'pendente' | 'pago' | 'vencido' | 'cancelado' | 'processando';
   pixCopiaCola?: string;
+  pixQrCode?: string;
   linhaDigitavel?: string;
+  codigoBarras?: string;
   urlBoleto?: string;
+  urlPdf?: string;
 }
 
 export interface ResumoFinanceiro {

@@ -1,17 +1,12 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  FileText, 
   CheckCircle, 
   Clock, 
   AlertTriangle,
-  ChevronRight, 
-  Copy, 
   Receipt
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Select,
@@ -20,8 +15,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { toast } from 'sonner';
-import { useMyBoletos, type Boleto, type ResumoFinanceiro } from '@/hooks/useMyData';
+import { useMyBoletos, type ResumoFinanceiro } from '@/hooks/useMyData';
+import { CardBoleto, CardBoletoSkeleton, formatarValor, type BoletoData } from '@/components/app';
 
 export default function AppBoletos() {
   const navigate = useNavigate();
@@ -30,17 +25,25 @@ export default function AppBoletos() {
   const [filtroAno, setFiltroAno] = useState<string>('todos');
   const [filtroStatus, setFiltroStatus] = useState<string>('todos');
 
+  // Converter boletos para BoletoData (compatibilidade de tipos)
+  const boletosData: BoletoData[] = useMemo(() => {
+    return boletos.map(b => ({
+      ...b,
+      status: b.status as BoletoData['status']
+    }));
+  }, [boletos]);
+
   // Anos disponíveis para filtro
   const anosDisponiveis = useMemo(() => {
-    const anos = new Set(boletos.map(b => b.competenciaAno));
+    const anos = new Set(boletosData.map(b => b.competenciaAno).filter(Boolean) as number[]);
     return Array.from(anos).sort((a, b) => b - a);
-  }, [boletos]);
+  }, [boletosData]);
 
   // Calcular resumo financeiro
   const resumo = useMemo<ResumoFinanceiro>(() => {
     const boletosAno = filtroAno === 'todos' 
-      ? boletos 
-      : boletos.filter(b => b.competenciaAno === parseInt(filtroAno));
+      ? boletosData 
+      : boletosData.filter(b => b.competenciaAno === parseInt(filtroAno));
     
     return {
       totalPago: boletosAno.filter(b => b.status === 'pago').reduce((acc, b) => acc + (b.valorPago || 0), 0),
@@ -50,11 +53,11 @@ export default function AppBoletos() {
       quantidadePendente: boletosAno.filter(b => b.status === 'pendente').length,
       quantidadeVencido: boletosAno.filter(b => b.status === 'vencido').length,
     };
-  }, [boletos, filtroAno]);
+  }, [boletosData, filtroAno]);
 
   // Filtrar boletos
   const boletosFiltrados = useMemo(() => {
-    let resultado = [...boletos];
+    let resultado = [...boletosData];
 
     if (filtroAno !== 'todos') {
       resultado = resultado.filter(b => b.competenciaAno === parseInt(filtroAno));
@@ -66,37 +69,22 @@ export default function AppBoletos() {
 
     // Ordenar: vencidos primeiro, depois pendentes, depois pagos
     resultado.sort((a, b) => {
-      const ordemStatus = { vencido: 0, pendente: 1, pago: 2, cancelado: 3 };
+      const ordemStatus: Record<string, number> = { vencido: 0, pendente: 1, processando: 2, pago: 3, cancelado: 4 };
       if (ordemStatus[a.status] !== ordemStatus[b.status]) {
         return ordemStatus[a.status] - ordemStatus[b.status];
       }
-      return (b.competenciaAno * 12 + b.competenciaMes) - (a.competenciaAno * 12 + a.competenciaMes);
+      const anoMesA = (a.competenciaAno || 0) * 12 + (a.competenciaMes || 0);
+      const anoMesB = (b.competenciaAno || 0) * 12 + (b.competenciaMes || 0);
+      return anoMesB - anoMesA;
     });
 
     return resultado;
-  }, [boletos, filtroAno, filtroStatus]);
+  }, [boletosData, filtroAno, filtroStatus]);
 
   // Separar por status
   const boletosVencidos = boletosFiltrados.filter(b => b.status === 'vencido');
   const boletosPendentes = boletosFiltrados.filter(b => b.status === 'pendente');
   const boletosPagos = boletosFiltrados.filter(b => b.status === 'pago');
-
-  const copiarPix = async (pix: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    try {
-      await navigator.clipboard.writeText(pix);
-      toast.success('Código Pix copiado!');
-    } catch {
-      toast.error('Erro ao copiar. Tente novamente.');
-    }
-  };
-
-  const formatarValor = (valor: number) => {
-    return valor.toLocaleString('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    });
-  };
 
   if (isLoading) {
     return <BoletosLoading />;
@@ -187,10 +175,10 @@ export default function AppBoletos() {
           </div>
           <div className="space-y-2">
             {boletosVencidos.map(boleto => (
-              <BoletoCard
+              <CardBoleto
                 key={boleto.id}
                 boleto={boleto}
-                onCopiarPix={copiarPix}
+                variacao="compacto"
                 onClick={() => navigate(`/app/boletos/${boleto.id}`)}
               />
             ))}
@@ -209,10 +197,10 @@ export default function AppBoletos() {
           </div>
           <div className="space-y-2">
             {boletosPendentes.map(boleto => (
-              <BoletoCard
+              <CardBoleto
                 key={boleto.id}
                 boleto={boleto}
-                onCopiarPix={copiarPix}
+                variacao="compacto"
                 onClick={() => navigate(`/app/boletos/${boleto.id}`)}
               />
             ))}
@@ -231,10 +219,10 @@ export default function AppBoletos() {
           </div>
           <div className="space-y-2">
             {boletosPagos.map(boleto => (
-              <BoletoCard
+              <CardBoleto
                 key={boleto.id}
                 boleto={boleto}
-                onCopiarPix={copiarPix}
+                variacao="compacto"
                 onClick={() => navigate(`/app/boletos/${boleto.id}`)}
               />
             ))}
@@ -255,123 +243,6 @@ export default function AppBoletos() {
         </Card>
       )}
     </div>
-  );
-}
-
-// Componente Card do Boleto
-interface BoletoCardProps {
-  boleto: Boleto;
-  onCopiarPix: (pix: string, e: React.MouseEvent) => void;
-  onClick: () => void;
-}
-
-function BoletoCard({ boleto, onCopiarPix, onClick }: BoletoCardProps) {
-  const statusConfig = {
-    pendente: {
-      badge: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
-      label: 'Pendente',
-      icon: Clock,
-      cardBorder: 'border-l-amber-500',
-      showPagar: true
-    },
-    vencido: {
-      badge: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-      label: 'Vencido',
-      icon: AlertTriangle,
-      cardBorder: 'border-l-red-500',
-      showPagar: true
-    },
-    pago: {
-      badge: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400',
-      label: 'Pago',
-      icon: CheckCircle,
-      cardBorder: 'border-l-emerald-500',
-      showPagar: false
-    },
-    cancelado: {
-      badge: 'bg-muted text-muted-foreground',
-      label: 'Cancelado',
-      icon: FileText,
-      cardBorder: 'border-l-muted',
-      showPagar: false
-    }
-  };
-
-  const config = statusConfig[boleto.status];
-
-  const formatarValor = (valor: number) => {
-    return valor.toLocaleString('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    });
-  };
-
-  return (
-    <Card 
-      className={`border-0 border-l-4 shadow-sm cursor-pointer hover:bg-accent/50 transition-colors ${config.cardBorder}`}
-      onClick={onClick}
-    >
-      <CardContent className="p-4">
-        <div className="flex items-start justify-between gap-3">
-          {/* Info do Boleto */}
-          <div className="flex-1 min-w-0 space-y-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="font-semibold text-foreground">{boleto.competencia}</h3>
-              <Badge variant="secondary" className={config.badge}>
-                {config.label}
-              </Badge>
-            </div>
-            
-            <p className="text-sm text-muted-foreground">
-              {boleto.status === 'pago' ? (
-                <>Pago em {boleto.dataPagamento}</>
-              ) : (
-                <>Vence em {boleto.dataVencimento}</>
-              )}
-            </p>
-
-            {/* Mostrar diferença se houver juros */}
-            {boleto.valorPago && boleto.valorPago !== boleto.valorOriginal && (
-              <p className="text-xs text-muted-foreground">
-                Original: {formatarValor(boleto.valorOriginal)}
-              </p>
-            )}
-          </div>
-
-          {/* Valor e Ações */}
-          <div className="flex flex-col items-end gap-2">
-            <p className="text-lg font-bold text-foreground">
-              {formatarValor(boleto.status === 'pago' ? (boleto.valorPago || boleto.valorFinal) : boleto.valorFinal)}
-            </p>
-            
-            {config.showPagar && boleto.pixCopiaCola && (
-              <Button 
-                size="sm" 
-                variant="outline"
-                className="h-8"
-                onClick={(e) => onCopiarPix(boleto.pixCopiaCola!, e)}
-              >
-                <Copy className="h-3 w-3 mr-1.5" />
-                Copiar Pix
-              </Button>
-            )}
-
-            {boleto.status === 'pago' && (
-              <ChevronRight className="h-5 w-5 text-muted-foreground" />
-            )}
-          </div>
-        </div>
-
-        {/* Alerta para vencidos */}
-        {boleto.status === 'vencido' && (
-          <div className="mt-3 p-2 bg-destructive/10 rounded-md">
-            <p className="text-xs text-destructive">
-              ⚠️ Este boleto está vencido. Podem haver juros e multa.
-            </p>
-          </div>
-        )}
-      </CardContent>
-    </Card>
   );
 }
 
@@ -408,20 +279,7 @@ function BoletosLoading() {
       <div className="space-y-2">
         <Skeleton className="h-4 w-32" />
         {[1, 2, 3, 4].map(i => (
-          <Card key={i} className="border-0 shadow-sm">
-            <CardContent className="p-4">
-              <div className="flex justify-between">
-                <div className="space-y-2">
-                  <Skeleton className="h-5 w-32" />
-                  <Skeleton className="h-4 w-40" />
-                </div>
-                <div className="space-y-2 flex flex-col items-end">
-                  <Skeleton className="h-6 w-20" />
-                  <Skeleton className="h-8 w-24" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <CardBoletoSkeleton key={i} variacao="compacto" />
         ))}
       </div>
     </div>
