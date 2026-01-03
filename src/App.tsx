@@ -36,6 +36,7 @@ import Oficinas from "./pages/oficinas/Oficinas";
 import OrdensServico from "./pages/oficinas/OrdensServico";
 import OrdemServicoDetalhe from "./pages/oficinas/OrdemServicoDetalhe";
 import OficinasList from "./pages/oficina/OficinasList";
+import OficinaDetalhe from "./pages/oficina/OficinaDetalhe";
 import Configuracoes from "./pages/Configuracoes";
 import NotFound from "./pages/NotFound";
 
@@ -115,6 +116,7 @@ const App = () => (
               {/* Oficinas */}
               <Route path="/oficinas" element={<Oficinas />} />
               <Route path="/oficina/credenciadas" element={<OficinasList />} />
+              <Route path="/oficina/credenciadas/:id" element={<OficinaDetalhe />} />
               <Route path="/ordens-servico" element={<OrdensServico />} />
               <Route path="/ordens-servico/:id" element={<OrdemServicoDetalhe />} />
               
