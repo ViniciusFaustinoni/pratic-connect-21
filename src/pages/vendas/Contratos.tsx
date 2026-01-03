@@ -29,6 +29,7 @@ import type { StatusContrato } from '@/types/database';
 import { useContratos, useUpdateContrato } from '@/hooks/useContratos';
 import { useUpdateLead } from '@/hooks/useLeads';
 import { useCreateLeadHistorico } from '@/hooks/useLeadHistorico';
+import { useSendToAutentique } from '@/hooks/useAutentique';
 import { ContratoFormDialog } from '@/components/contratos/ContratoFormDialog';
 import { ContratoDetailDrawer } from '@/components/contratos/ContratoDetailDrawer';
 import { toast } from 'sonner';
@@ -56,6 +57,7 @@ export default function Contratos() {
   const updateContrato = useUpdateContrato();
   const updateLead = useUpdateLead();
   const createHistorico = useCreateLeadHistorico();
+  const sendToAutentique = useSendToAutentique();
 
   const filteredContratos = (contratos || []).filter((contrato) => {
     const matchesSearch =
@@ -98,35 +100,24 @@ export default function Contratos() {
     { value: 'ativo', label: 'Ativos', count: stats.ativo },
   ];
 
-  // Ações
+  // Ação de enviar para Autentique
   const handleEnviar = async (contratoId: string) => {
-    try {
-      const contrato = contratos?.find(c => c.id === contratoId);
-      if (!contrato) return;
+    const contrato = contratos?.find(c => c.id === contratoId);
+    if (!contrato) return;
 
-      await updateContrato.mutateAsync({
-        id: contratoId,
-        status: 'enviado',
-      });
-
-      if (contrato.lead_id) {
-        await updateLead.mutateAsync({
-          id: contrato.lead_id,
-          etapa: 'contrato_enviado',
-        });
-        
-        await createHistorico.mutateAsync({
-          lead_id: contrato.lead_id,
-          acao: 'contrato_enviado',
-          descricao: `Contrato ${contrato.numero} enviado para assinatura`,
-          etapa_nova: 'contrato_enviado',
-        });
-      }
-
-      toast.success('Contrato enviado com sucesso!');
-    } catch (error) {
-      toast.error('Erro ao enviar contrato');
+    const client = contrato.associados || contrato.leads;
+    if (!client?.email) {
+      toast.error('Email do cliente não informado');
+      return;
     }
+
+    await sendToAutentique.mutateAsync({
+      contratoId,
+      clienteNome: client.nome || 'Cliente',
+      clienteEmail: client.email,
+      clienteCpf: 'cpf' in client ? client.cpf || undefined : undefined,
+      clienteTelefone: client.telefone || undefined,
+    });
   };
 
   const handleAtivar = async (contratoId: string) => {
@@ -361,8 +352,12 @@ export default function Contratos() {
                       <TableCell onClick={(e) => e.stopPropagation()}>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                              <MoreHorizontal className="h-4 w-4" />
+                            <Button variant="ghost" size="icon" disabled={sendToAutentique.isPending}>
+                              {sendToAutentique.isPending ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <MoreHorizontal className="h-4 w-4" />
+                              )}
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
@@ -373,7 +368,7 @@ export default function Contratos() {
                                   <Edit className="mr-2 h-4 w-4" /> Editar
                                 </DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => handleEnviar(contrato.id)}>
-                                  <Send className="mr-2 h-4 w-4" /> Enviar
+                                  <Send className="mr-2 h-4 w-4" /> Enviar para Assinatura
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem 
@@ -393,6 +388,13 @@ export default function Contratos() {
                                 <DropdownMenuItem onClick={() => handleCopiarLink(contrato)}>
                                   <Link className="mr-2 h-4 w-4" /> Copiar Link
                                 </DropdownMenuItem>
+                                {contrato.autentique_url && (
+                                  <DropdownMenuItem asChild>
+                                    <a href={contrato.autentique_url} target="_blank" rel="noopener noreferrer">
+                                      <ExternalLink className="mr-2 h-4 w-4" /> Ver Documento
+                                    </a>
+                                  </DropdownMenuItem>
+                                )}
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem 
                                   className="text-destructive"
@@ -462,12 +464,12 @@ export default function Contratos() {
         </CardContent>
       </Card>
 
-      {/* Dialogs */}
+      {/* Dialog e Drawer */}
       <ContratoFormDialog 
         open={formDialogOpen} 
         onOpenChange={setFormDialogOpen} 
       />
-      
+
       <ContratoDetailDrawer
         contratoId={drawerContratoId}
         open={!!drawerContratoId}
