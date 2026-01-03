@@ -17,18 +17,14 @@ import {
 import { 
   STATUS_ASSOCIADO_LABELS, 
   STATUS_VEICULO_LABELS,
-  STATUS_DOCUMENTO_LABELS,
-  TIPO_DOCUMENTO_LABELS,
   STATUS_CONTRATO_LABELS,
   type StatusAssociado,
   type StatusVeiculo,
-  type StatusDocumento,
-  type TipoDocumento,
 } from '@/types/database';
 import { useAssociado } from '@/hooks/useAssociados';
 import { useVeiculos } from '@/hooks/useVeiculos';
-import { useDocumentosByAssociado } from '@/hooks/useDocumentos';
-import { DocumentoAnaliseDialog } from '@/components/cadastro/DocumentoAnaliseDialog';
+import { useToast } from '@/hooks/use-toast';
+import { DocumentUploader } from '@/components/cadastro/DocumentUploader';
 
 const statusColors: Record<StatusAssociado, string> = {
   em_analise: 'bg-blue-500 text-white',
@@ -52,22 +48,13 @@ const veiculoStatusColors: Record<StatusVeiculo, string> = {
   sinistrado: 'bg-purple-100 text-purple-800',
 };
 
-const docStatusColors: Record<StatusDocumento, string> = {
-  pendente: 'bg-yellow-500 text-white',
-  em_analise: 'bg-blue-500 text-white',
-  aprovado: 'bg-green-500 text-white',
-  reprovado: 'bg-destructive text-destructive-foreground',
-  expirado: 'bg-gray-500 text-white',
-};
-
 export default function AssociadoDetalhe() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [analyzeDocId, setAnalyzeDocId] = useState<string | null>(null);
+  const { toast } = useToast();
 
   const { data: associado, isLoading } = useAssociado(id);
   const { data: veiculos } = useVeiculos(id);
-  const { data: documentos } = useDocumentosByAssociado(id);
 
   const formatDate = (dateStr: string | null | undefined) => {
     if (!dateStr) return '-';
@@ -158,7 +145,7 @@ export default function AssociadoDetalhe() {
           </TabsTrigger>
           <TabsTrigger value="documentos">
             <FileCheck className="mr-2 h-4 w-4" />
-            Documentos ({documentos?.length || 0})
+            Documentos
           </TabsTrigger>
           <TabsTrigger value="contrato">
             <FileText className="mr-2 h-4 w-4" />
@@ -377,70 +364,12 @@ export default function AssociadoDetalhe() {
 
         {/* Tab: Documentos */}
         <TabsContent value="documentos">
-          <Card>
-            <CardContent className="p-0">
-              {!documentos?.length ? (
-                <div className="flex flex-col items-center justify-center py-12">
-                  <FileCheck className="h-12 w-12 text-muted-foreground/50" />
-                  <h3 className="mt-4 font-semibold">Nenhum documento enviado</h3>
-                </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Tipo</TableHead>
-                      <TableHead>Arquivo</TableHead>
-                      <TableHead>Enviado em</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="w-24">Ações</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {documentos.map((doc) => (
-                      <TableRow key={doc.id}>
-                        <TableCell>
-                          <Badge variant="outline">
-                            {TIPO_DOCUMENTO_LABELS[doc.tipo as TipoDocumento]}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="font-mono text-sm">
-                          {doc.nome_arquivo}
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {formatDate(doc.created_at)}
-                        </TableCell>
-                        <TableCell>
-                          <Badge className={docStatusColors[doc.status as StatusDocumento]}>
-                            {STATUS_DOCUMENTO_LABELS[doc.status as StatusDocumento]}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex gap-1">
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              onClick={() => window.open(doc.arquivo_url, '_blank')}
-                            >
-                              Ver
-                            </Button>
-                            {(doc.status === 'pendente' || doc.status === 'em_analise') && (
-                              <Button 
-                                variant="ghost" 
-                                size="sm"
-                                onClick={() => setAnalyzeDocId(doc.id)}
-                              >
-                                Analisar
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
+          <DocumentUploader
+            associadoId={id!}
+            veiculoId={veiculos?.[0]?.id}
+            modo="completo"
+            onTodosEnviados={() => toast({ title: 'Todos os documentos obrigatórios enviados!' })}
+          />
         </TabsContent>
 
         {/* Tab: Contrato */}
@@ -508,14 +437,6 @@ export default function AssociadoDetalhe() {
         </TabsContent>
       </Tabs>
 
-      {/* Dialog de Análise */}
-      {analyzeDocId && (
-        <DocumentoAnaliseDialog
-          documentoId={analyzeDocId}
-          open={!!analyzeDocId}
-          onClose={() => setAnalyzeDocId(null)}
-        />
-      )}
     </div>
   );
 }
