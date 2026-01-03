@@ -12,6 +12,7 @@ import {
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { useAuth } from '@/contexts/AuthContext';
 import { ROLE_LABELS } from '@/types/database';
+import { UserAvatar } from '@/components/UserAvatar';
 
 const routeLabels: Record<string, string> = {
   '/dashboard': 'Dashboard',
@@ -83,9 +84,7 @@ export function AppHeader() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="gap-2 pl-2 pr-3">
-              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-xs font-medium text-primary-foreground">
-                {profile?.nome?.charAt(0).toUpperCase()}
-              </div>
+              <UserAvatar src={profile?.avatar_url} name={profile?.nome} size="sm" />
               <span className="hidden font-medium sm:inline-block">
                 {profile?.nome?.split(' ')[0]}
               </span>

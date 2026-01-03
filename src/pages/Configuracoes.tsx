@@ -1,14 +1,15 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/contexts/AuthContext';
-import { User, Lock, Bell, Building, Loader2 } from 'lucide-react';
+import { User, Lock, Bell, Building, Loader2, Camera, Trash2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { maskTelefone } from '@/lib/validations';
+import { UserAvatar } from '@/components/UserAvatar';
 
 export default function Configuracoes() {
   const { profile, user } = useAuth();
@@ -23,6 +24,108 @@ export default function Configuracoes() {
   const [novaSenha, setNovaSenha] = useState('');
   const [confirmarSenha, setConfirmarSenha] = useState('');
   const [savingPassword, setSavingPassword] = useState(false);
+
+  // Avatar state
+  const [avatarUrl, setAvatarUrl] = useState(profile?.avatar_url || null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [removingAvatar, setRemovingAvatar] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+  const MAX_SIZE_BYTES = 2 * 1024 * 1024; // 2MB
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      toast.error('Formato inválido. Use JPG, PNG ou WebP.');
+      return;
+    }
+
+    // Validate file size
+    if (file.size > MAX_SIZE_BYTES) {
+      toast.error('Arquivo muito grande. Máximo 2MB.');
+      return;
+    }
+
+    if (!user?.id) {
+      toast.error('Usuário não encontrado');
+      return;
+    }
+
+    setUploadingAvatar(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const filePath = `${user.id}/avatar.${fileExt}`;
+
+      // Upload file (upsert to replace existing)
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL with cache-busting
+      const { data: urlData } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(filePath);
+
+      const publicUrl = `${urlData.publicUrl}?t=${Date.now()}`;
+
+      // Update profile
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ avatar_url: publicUrl, updated_at: new Date().toISOString() })
+        .eq('user_id', user.id);
+
+      if (updateError) throw updateError;
+
+      setAvatarUrl(publicUrl);
+      toast.success('Foto atualizada com sucesso!');
+    } catch (error) {
+      console.error('Erro ao fazer upload:', error);
+      toast.error('Erro ao fazer upload da foto');
+    } finally {
+      setUploadingAvatar(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveAvatar = async () => {
+    if (!user?.id || !avatarUrl) return;
+
+    setRemovingAvatar(true);
+    try {
+      // List files in user folder
+      const { data: files } = await supabase.storage
+        .from('avatars')
+        .list(user.id);
+
+      // Delete all avatar files for this user
+      if (files && files.length > 0) {
+        const filePaths = files.map(f => `${user.id}/${f.name}`);
+        await supabase.storage.from('avatars').remove(filePaths);
+      }
+
+      // Update profile
+      const { error } = await supabase
+        .from('profiles')
+        .update({ avatar_url: null, updated_at: new Date().toISOString() })
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      setAvatarUrl(null);
+      toast.success('Foto removida com sucesso!');
+    } catch (error) {
+      console.error('Erro ao remover foto:', error);
+      toast.error('Erro ao remover foto');
+    } finally {
+      setRemovingAvatar(false);
+    }
+  };
 
   const handleSaveProfile = async () => {
     if (!nome.trim()) {
@@ -117,6 +220,56 @@ export default function Configuracoes() {
             <CardDescription>Suas informações pessoais</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            {/* Avatar Upload Section */}
+            <div className="flex flex-col items-center gap-4 rounded-lg border border-dashed p-4">
+              <UserAvatar src={avatarUrl} name={nome || profile?.nome} size="xl" />
+              <div className="flex flex-wrap justify-center gap-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={handleAvatarUpload}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadingAvatar || removingAvatar}
+                >
+                  {uploadingAvatar ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Camera className="mr-2 h-4 w-4" />
+                  )}
+                  {uploadingAvatar ? 'Enviando...' : 'Alterar foto'}
+                </Button>
+                {avatarUrl && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRemoveAvatar}
+                    disabled={uploadingAvatar || removingAvatar}
+                    className="text-destructive hover:text-destructive"
+                  >
+                    {removingAvatar ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="mr-2 h-4 w-4" />
+                    )}
+                    {removingAvatar ? 'Removendo...' : 'Remover'}
+                  </Button>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                JPG, PNG ou WebP. Máximo 2MB.
+              </p>
+            </div>
+
+            <Separator />
+
             <div className="space-y-2">
               <Label htmlFor="nome">Nome completo</Label>
               <Input
