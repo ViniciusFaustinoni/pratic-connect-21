@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Search, Filter, Eye, RotateCcw } from 'lucide-react';
+import { Plus, Eye, RotateCcw } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,6 +24,24 @@ import { EstornoDialog } from '@/components/contabilidade';
 import { useLancamentos } from '@/hooks/useContabilidade';
 import { format } from 'date-fns';
 
+const formatCurrency = (value: number) => {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(value);
+};
+
+const calcularTotais = (partidas: Array<{ tipo: string; valor: number }> | null) => {
+  if (!partidas) return { debito: 0, credito: 0 };
+  const debito = partidas
+    .filter((p) => p.tipo === 'debito')
+    .reduce((acc, p) => acc + Number(p.valor), 0);
+  const credito = partidas
+    .filter((p) => p.tipo === 'credito')
+    .reduce((acc, p) => acc + Number(p.valor), 0);
+  return { debito, credito };
+};
+
 export default function LancamentosList() {
   const [filtros, setFiltros] = useState({
     dataInicio: '',
@@ -44,6 +62,17 @@ export default function LancamentosList() {
     rascunho: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
     estornado: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
     fechado: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400',
+  };
+
+  const origemColors: Record<string, string> = {
+    manual: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300',
+    cobranca: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+    pagamento: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+    sinistro: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400',
+    oficina: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400',
+    acordo: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
+    folha: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-400',
+    fechamento: 'bg-slate-100 text-slate-800 dark:bg-slate-900/30 dark:text-slate-400',
   };
 
   const origemLabels: Record<string, string> = {
@@ -163,57 +192,68 @@ export default function LancamentosList() {
                     <TableHead>Número</TableHead>
                     <TableHead>Data</TableHead>
                     <TableHead>Histórico</TableHead>
+                    <TableHead className="text-right">Débito</TableHead>
+                    <TableHead className="text-right">Crédito</TableHead>
                     <TableHead>Origem</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {lancamentos?.map((lancamento) => (
-                    <TableRow key={lancamento.id}>
-                      <TableCell className="font-mono text-sm">
-                        {lancamento.numero}
-                      </TableCell>
-                      <TableCell>
-                        {format(new Date(lancamento.data_competencia), 'dd/MM/yyyy')}
-                      </TableCell>
-                      <TableCell className="max-w-[300px] truncate">
-                        {lancamento.historico}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">
-                          {origemLabels[lancamento.origem] || lancamento.origem}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={statusColors[lancamento.status]}>
-                          {lancamento.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button variant="ghost" size="icon" asChild>
-                            <Link to={`/contabilidade/lancamentos/${lancamento.id}`}>
-                              <Eye className="h-4 w-4" />
-                            </Link>
-                          </Button>
-                          {lancamento.status === 'ativo' && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => setEstornoDialog({
-                                open: true,
-                                id: lancamento.id,
-                                numero: lancamento.numero,
-                              })}
-                            >
-                              <RotateCcw className="h-4 w-4" />
+                  {lancamentos?.map((lancamento) => {
+                    const totais = calcularTotais(lancamento.partidas);
+                    return (
+                      <TableRow key={lancamento.id}>
+                        <TableCell className="font-mono text-sm">
+                          {lancamento.numero}
+                        </TableCell>
+                        <TableCell>
+                          {format(new Date(lancamento.data_competencia), 'dd/MM/yyyy')}
+                        </TableCell>
+                        <TableCell className="max-w-[200px] truncate">
+                          {lancamento.historico}
+                        </TableCell>
+                        <TableCell className="text-right font-medium">
+                          {formatCurrency(totais.debito)}
+                        </TableCell>
+                        <TableCell className="text-right font-medium">
+                          {formatCurrency(totais.credito)}
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={origemColors[lancamento.origem] || origemColors.manual}>
+                            {origemLabels[lancamento.origem] || lancamento.origem}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={statusColors[lancamento.status]}>
+                            {lancamento.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button variant="ghost" size="icon" asChild>
+                              <Link to={`/contabilidade/lancamentos/${lancamento.id}`}>
+                                <Eye className="h-4 w-4" />
+                              </Link>
                             </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                            {lancamento.status === 'ativo' && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setEstornoDialog({
+                                  open: true,
+                                  id: lancamento.id,
+                                  numero: lancamento.numero,
+                                })}
+                              >
+                                <RotateCcw className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
