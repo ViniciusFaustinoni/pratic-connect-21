@@ -34,7 +34,7 @@ import { cotacaoSchema, type CotacaoFormData } from '@/lib/validations';
 import { useCreateCotacao } from '@/hooks/useCotacoes';
 import { usePlanos, useTabelaPrecoByFipe } from '@/hooks/usePlanos';
 import { useLead } from '@/hooks/useLeads';
-import { useFipe, type PlacaResult } from '@/hooks/useFipe';
+import { useFipe, type PlateResult, type VehicleData, type FipeData } from '@/hooks/useFipe';
 import { toast } from 'sonner';
 import { FipeSelector, type FipeSelectionData } from '@/components/fipe/FipeSelector';
 import { Separator } from '@/components/ui/separator';
@@ -128,7 +128,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
   // Estados para busca por placa
   const [placa, setPlaca] = useState('');
   const [buscandoPlaca, setBuscandoPlaca] = useState(false);
-  const [veiculoEncontrado, setVeiculoEncontrado] = useState<PlacaResult | null>(null);
+  const [veiculoEncontrado, setVeiculoEncontrado] = useState<PlateResult | null>(null);
 
   // Estado para plano selecionado (com dados calculados)
   const [planoSelecionado, setPlanoSelecionado] = useState<PlanoType | null>(null);
@@ -175,33 +175,17 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
     try {
       const resultado = await getByPlaca(placa);
       
-      if (resultado) {
+      if (resultado.success && resultado.vehicleData) {
         setVeiculoEncontrado(resultado);
         
         // Preencher valor FIPE se encontrado
-        if (resultado.valorFipe) {
-          form.setValue('valor_fipe', resultado.valorFipe);
+        if (resultado.fipeData?.valor) {
+          form.setValue('valor_fipe', resultado.fipeData.valor);
         }
         
-        toast.success(`Veículo encontrado: ${resultado.marca} ${resultado.modelo}`);
+        toast.success(`Veículo encontrado: ${resultado.vehicleData.marca} ${resultado.vehicleData.modelo}`);
       } else {
-        // Fallback com dados mock para teste
-        const veiculoMock: PlacaResult = {
-          placa: placaLimpa.toUpperCase(),
-          marca: 'VOLKSWAGEN',
-          modelo: 'GOL 1.0 12V MPI TOTALFLEX',
-          anoFabricacao: 2020,
-          anoModelo: 2021,
-          cor: 'PRATA',
-          combustivel: 'FLEX',
-          valorFipe: 45890.00,
-          valorFipeFormatado: 'R$ 45.890,00',
-          fipeEncontrado: true
-        };
-        
-        setVeiculoEncontrado(veiculoMock);
-        form.setValue('valor_fipe', veiculoMock.valorFipe || 0);
-        toast.success(`Veículo encontrado: ${veiculoMock.marca} ${veiculoMock.modelo}`);
+        toast.error(resultado.error || 'Veículo não encontrado');
       }
     } catch (error) {
       console.error('Erro ao buscar placa:', error);
@@ -367,7 +351,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
               </p>
 
               {/* Veículo encontrado */}
-              {veiculoEncontrado && (
+              {veiculoEncontrado?.success && veiculoEncontrado.vehicleData && (
                 <div className="mt-3 p-3 bg-background rounded-lg border">
                   <div className="flex items-center gap-2 text-primary mb-2">
                     <CheckCircle2 className="h-4 w-4" />
@@ -376,24 +360,24 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
                   <div className="grid grid-cols-2 gap-2 text-sm">
                     <div>
                       <span className="text-muted-foreground">Marca/Modelo:</span>
-                      <p className="font-medium">{veiculoEncontrado.marca} {veiculoEncontrado.modelo}</p>
+                      <p className="font-medium">{veiculoEncontrado.vehicleData.marca} {veiculoEncontrado.vehicleData.modelo}</p>
                     </div>
                     <div>
                       <span className="text-muted-foreground">Ano:</span>
-                      <p className="font-medium">{veiculoEncontrado.anoFabricacao}/{veiculoEncontrado.anoModelo}</p>
+                      <p className="font-medium">{veiculoEncontrado.vehicleData.ano}</p>
                     </div>
                     <div>
                       <span className="text-muted-foreground">Cor:</span>
-                      <p className="font-medium">{veiculoEncontrado.cor}</p>
+                      <p className="font-medium">{veiculoEncontrado.vehicleData.cor}</p>
                     </div>
                     <div>
                       <span className="text-muted-foreground">Combustível:</span>
-                      <p className="font-medium">{veiculoEncontrado.combustivel}</p>
+                      <p className="font-medium">{veiculoEncontrado.vehicleData.combustivel}</p>
                     </div>
-                    {veiculoEncontrado.valorFipe && (
+                    {veiculoEncontrado.fipeData?.valor && (
                       <div className="col-span-2 pt-2 border-t mt-1">
                         <span className="text-muted-foreground">Valor FIPE:</span>
-                        <p className="font-bold text-primary">{veiculoEncontrado.valorFipeFormatado || formatCurrency(veiculoEncontrado.valorFipe)}</p>
+                        <p className="font-bold text-primary">{formatCurrency(veiculoEncontrado.fipeData.valor)}</p>
                       </div>
                     )}
                   </div>

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useFipe, PlacaResult } from '@/hooks/useFipe';
+import { useFipe, PlateResult } from '@/hooks/useFipe';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,14 +8,14 @@ import { Loader2, Search, Car, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface PlacaLookupProps {
-  onResult?: (data: PlacaResult) => void;
+  onResult?: (data: PlateResult) => void;
   onError?: (error: string) => void;
 }
 
 export function PlacaLookup({ onResult, onError }: PlacaLookupProps) {
   const { loading, error, getByPlaca, clearError } = useFipe();
   const [placa, setPlaca] = useState('');
-  const [resultado, setResultado] = useState<PlacaResult | null>(null);
+  const [resultado, setResultado] = useState<PlateResult | null>(null);
 
   // Formatar placa enquanto digita
   const handlePlacaChange = (value: string) => {
@@ -43,11 +43,11 @@ export function PlacaLookup({ onResult, onError }: PlacaLookupProps) {
 
     const result = await getByPlaca(placa);
     
-    if (result) {
+    if (result.success && result.vehicleData) {
       setResultado(result);
       onResult?.(result);
-    } else if (error) {
-      onError?.(error);
+    } else if (result.error) {
+      onError?.(result.error);
     }
   };
 
@@ -102,7 +102,7 @@ export function PlacaLookup({ onResult, onError }: PlacaLookupProps) {
       )}
 
       {/* Resultado */}
-      {resultado && (
+      {resultado?.success && resultado.vehicleData && (
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
@@ -111,7 +111,7 @@ export function PlacaLookup({ onResult, onError }: PlacaLookupProps) {
                 Veículo Encontrado
               </CardTitle>
               <Badge variant="outline" className="font-mono text-lg">
-                {resultado.placa}
+                {resultado.vehicleData.placa}
               </Badge>
             </div>
           </CardHeader>
@@ -120,64 +120,56 @@ export function PlacaLookup({ onResult, onError }: PlacaLookupProps) {
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               <div>
                 <p className="text-sm text-muted-foreground">Marca</p>
-                <p className="font-medium">{resultado.marca}</p>
+                <p className="font-medium">{resultado.vehicleData.marca}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Modelo</p>
-                <p className="font-medium">
-                  {resultado.modelo}
-                  {resultado.submodelo && ` ${resultado.submodelo}`}
-                </p>
+                <p className="font-medium">{resultado.vehicleData.modelo}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Ano</p>
-                <p className="font-medium">
-                  {resultado.anoFabricacao && resultado.anoModelo 
-                    ? `${resultado.anoFabricacao}/${resultado.anoModelo}`
-                    : resultado.anoModelo || resultado.anoFabricacao || '-'
-                  }
-                </p>
+                <p className="font-medium">{resultado.vehicleData.ano || '-'}</p>
               </div>
-              {resultado.cor && (
+              {resultado.vehicleData.cor && (
                 <div>
                   <p className="text-sm text-muted-foreground">Cor</p>
-                  <p className="font-medium">{resultado.cor}</p>
+                  <p className="font-medium">{resultado.vehicleData.cor}</p>
                 </div>
               )}
-              {resultado.combustivel && (
+              {resultado.vehicleData.combustivel && (
                 <div>
                   <p className="text-sm text-muted-foreground">Combustível</p>
-                  <p className="font-medium">{resultado.combustivel}</p>
+                  <p className="font-medium">{resultado.vehicleData.combustivel}</p>
                 </div>
               )}
-              {resultado.uf && (
+              {resultado.vehicleData.uf && (
                 <div>
                   <p className="text-sm text-muted-foreground">UF</p>
-                  <p className="font-medium">{resultado.uf}</p>
+                  <p className="font-medium">{resultado.vehicleData.uf}</p>
                 </div>
               )}
             </div>
 
             {/* Dados FIPE */}
-            {resultado.fipeEncontrado ? (
+            {resultado.fipeData ? (
               <div className="border-t pt-4 mt-4">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-muted-foreground">Valor FIPE</p>
                     <p className="text-2xl font-bold text-primary">
-                      {resultado.valorFipeFormatado || formatCurrency(resultado.valorFipe || 0)}
+                      {formatCurrency(resultado.fipeData.valor)}
                     </p>
-                    {resultado.mesReferencia && (
+                    {resultado.fipeData.mesReferencia && (
                       <p className="text-xs text-muted-foreground">
-                        Referência: {resultado.mesReferencia}
+                        Referência: {resultado.fipeData.mesReferencia}
                       </p>
                     )}
                   </div>
-                  {resultado.codigoFipe && (
+                  {resultado.fipeData.codigo && (
                     <div className="text-right">
                       <p className="text-sm text-muted-foreground">Código FIPE</p>
                       <Badge variant="secondary" className="font-mono">
-                        {resultado.codigoFipe}
+                        {resultado.fipeData.codigo}
                       </Badge>
                     </div>
                   )}

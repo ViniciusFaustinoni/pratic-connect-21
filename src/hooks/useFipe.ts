@@ -30,7 +30,44 @@ export interface FipeResult {
   anoCodigo?: string;
 }
 
-export interface PlacaResult {
+// New interfaces for plate-lookup
+export interface VehicleData {
+  placa: string;
+  chassi: string;
+  marca: string;
+  modelo: string;
+  marca_modelo: string;
+  ano: string;
+  cor: string;
+  combustivel: string;
+  municipio: string;
+  uf: string;
+  motor?: string;
+  potencia?: string;
+  cilindradas?: string;
+  tipo_de_veiculo?: string;
+  renavam?: string;
+  categoria?: string;
+  especie?: string;
+  procedencia?: string;
+}
+
+export interface FipeData {
+  codigo: string;
+  valor: number;
+  mesReferencia: string;
+}
+
+export interface PlateResult {
+  success: boolean;
+  extractedPlate?: string;
+  vehicleData?: VehicleData;
+  fipeData?: FipeData;
+  error?: string;
+}
+
+// Legacy interface for backward compatibility
+export interface PlacaResultLegacy {
   placa: string;
   marca: string;
   modelo: string;
@@ -188,27 +225,100 @@ export function useFipe() {
     }
   }, []);
 
-  const getByPlaca = useCallback(async (placa: string): Promise<PlacaResult | null> => {
+  // New plate lookup function with updated API
+  const getByPlaca = useCallback(async (placa: string): Promise<PlateResult> => {
     setLoading(true);
     setError(null);
     try {
       const { data, error: fnError } = await supabase.functions.invoke('plate-lookup', {
-        body: { placa }
+        body: { plate: placa }
       });
       
-      if (fnError) throw fnError;
-      if (!data.success) throw new Error(data.error);
+      if (fnError) {
+        console.error('plate-lookup function error:', fnError);
+        throw fnError;
+      }
       
-      return data.data;
+      if (!data.success) {
+        throw new Error(data.error || 'Veículo não encontrado');
+      }
+      
+      return data as PlateResult;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erro ao buscar por placa';
       setError(message);
       console.error('Erro getByPlaca:', err);
-      return null;
+      return { success: false, error: message };
     } finally {
       setLoading(false);
     }
   }, []);
+
+  // New plate lookup with image (OCR)
+  const getByPlateImage = useCallback(async (
+    imageBase64: string, 
+    mimeType: string = 'image/jpeg'
+  ): Promise<PlateResult> => {
+    setLoading(true);
+    setError(null);
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke('plate-lookup', {
+        body: { imageBase64, mimeType }
+      });
+      
+      if (fnError) {
+        console.error('plate-lookup OCR function error:', fnError);
+        throw fnError;
+      }
+      
+      if (!data.success) {
+        throw new Error(data.error || 'Não foi possível identificar a placa');
+      }
+      
+      return data as PlateResult;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Erro ao processar imagem da placa';
+      setError(message);
+      console.error('Erro getByPlateImage:', err);
+      return { success: false, error: message };
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Legacy function for backward compatibility
+  const getByPlacaLegacy = useCallback(async (placa: string): Promise<PlacaResultLegacy | null> => {
+    const result = await getByPlaca(placa);
+    
+    if (!result.success || !result.vehicleData) {
+      return null;
+    }
+
+    const { vehicleData, fipeData } = result;
+    
+    // Convert to legacy format
+    return {
+      placa: vehicleData.placa,
+      marca: vehicleData.marca,
+      modelo: vehicleData.modelo,
+      anoFabricacao: vehicleData.ano ? parseInt(vehicleData.ano) : null,
+      anoModelo: vehicleData.ano ? parseInt(vehicleData.ano) : null,
+      cor: vehicleData.cor,
+      combustivel: vehicleData.combustivel,
+      chassi: vehicleData.chassi,
+      municipio: vehicleData.municipio,
+      uf: vehicleData.uf,
+      codigoFipe: fipeData?.codigo,
+      valorFipe: fipeData?.valor,
+      valorFipeFormatado: fipeData?.valor 
+        ? fipeData.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+        : undefined,
+      mesReferencia: fipeData?.mesReferencia,
+      marcaFipe: vehicleData.marca,
+      modeloFipe: vehicleData.modelo,
+      fipeEncontrado: !!fipeData,
+    };
+  }, [getByPlaca]);
 
   const clearError = useCallback(() => {
     setError(null);
@@ -223,6 +333,8 @@ export function useFipe() {
     getPreco,
     buscarPorNome,
     getByPlaca,
+    getByPlateImage,
+    getByPlacaLegacy,
     clearError
   };
 }
