@@ -231,7 +231,7 @@ export function useFipe() {
     setError(null);
     try {
       const { data, error: fnError } = await supabase.functions.invoke('plate-lookup', {
-        body: { plate: placa }
+        body: { placa }
       });
       
       if (fnError) {
