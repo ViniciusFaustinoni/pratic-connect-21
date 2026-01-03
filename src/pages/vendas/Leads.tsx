@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, MoreHorizontal, Phone, Car, Loader2, ChevronLeft, ChevronRight, Edit, ArrowRight, XCircle } from 'lucide-react';
+import { Plus, MoreHorizontal, Loader2, ChevronLeft, ChevronRight, Edit, ArrowRight, XCircle, MessageCircle, Eye } from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -25,8 +27,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ETAPA_LABELS, ORIGEM_LABELS, type EtapaLead } from '@/types/database';
-import { etapaColors, ETAPAS_FUNIL, canTransition, getNextStages } from '@/lib/lead-transitions';
-import { useLeads, useAllLeads, type LeadFilters as LeadFiltersType } from '@/hooks/useLeads';
+import { etapaColors, origemColors, ETAPAS_FUNIL, canTransition, getNextStages } from '@/lib/lead-transitions';
+import { useLeads, useAllLeads, type LeadFilters as LeadFiltersType, type LeadWithVendedor } from '@/hooks/useLeads';
 import { useChangeLeadEtapa } from '@/hooks/useLeadHistorico';
 import { LeadFormDialog } from '@/components/leads/LeadFormDialog';
 import { LeadEditDialog } from '@/components/leads/LeadEditDialog';
@@ -34,7 +36,7 @@ import { LeadFilters } from '@/components/leads/LeadFilters';
 import { LeadKanbanCard } from '@/components/leads/LeadKanbanCard';
 import { LeadLossDialog } from '@/components/leads/LeadLossDialog';
 import { LeadMetricsCards } from '@/components/leads/LeadMetricsCards';
-
+import { LeadDetailDrawer } from '@/components/leads/LeadDetailDrawer';
 import { CotacaoFormDialog } from '@/components/cotacoes/CotacaoFormDialog';
 import { toast } from 'sonner';
 import {
@@ -63,6 +65,7 @@ export default function Leads() {
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [lossDialogLead, setLossDialogLead] = useState<Lead | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [drawerLeadId, setDrawerLeadId] = useState<string | null>(null);
 
   // Para tabela com paginação
   const { data: leadsData, isLoading } = useLeads({ filters, page, perPage: 20 });
@@ -78,19 +81,13 @@ export default function Leads() {
     })
   );
 
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: '2-digit',
-    });
-  };
-
   const formatCurrency = (value: number | null) => {
-    if (!value) return '-';
+    if (!value) return '—';
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
       currency: 'BRL',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
     }).format(value);
   };
 
@@ -104,7 +101,6 @@ export default function Leads() {
   };
 
   const handleAdvanceStage = async (lead: Lead, newEtapa: EtapaLead) => {
-    // Se for perdido, abrir modal
     if (newEtapa === 'perdido') {
       setLossDialogLead(lead);
       return;
@@ -139,13 +135,11 @@ export default function Leads() {
     const lead = allLeads?.find((l) => l.id === leadId);
     if (!lead || lead.etapa === targetEtapa) return;
 
-    // Verificar se transição é permitida
     if (!canTransition(lead.etapa as EtapaLead, targetEtapa)) {
       toast.error('Transição não permitida');
       return;
     }
 
-    // Se for perdido, abrir modal
     if (targetEtapa === 'perdido') {
       setLossDialogLead(lead);
       return;
@@ -215,72 +209,104 @@ export default function Leads() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Lead</TableHead>
+                    <TableHead>Nome</TableHead>
+                    <TableHead>Telefone</TableHead>
                     <TableHead>Veículo</TableHead>
+                    <TableHead>FIPE</TableHead>
                     <TableHead>Origem</TableHead>
                     <TableHead>Etapa</TableHead>
-                    <TableHead>Data</TableHead>
+                    <TableHead>Vendedor</TableHead>
+                    <TableHead>Criado</TableHead>
                     <TableHead className="w-12"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {leads.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                         Nenhum lead encontrado
                       </TableCell>
                     </TableRow>
                   ) : (
                     leads.map((lead) => {
                       const nextStages = getNextStages(lead.etapa as EtapaLead);
+                      const vendedorNome = (lead as LeadWithVendedor).vendedor?.nome;
                       return (
                         <TableRow 
                           key={lead.id} 
                           className="cursor-pointer hover:bg-muted/50"
                           onClick={() => navigate(`/vendas/leads/${lead.id}`)}
                         >
+                          {/* Nome - link clicável para drawer */}
                           <TableCell>
-                            <div className="flex items-center gap-3">
-                              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-sm font-medium text-primary">
-                                {lead.nome.charAt(0)}
-                              </div>
-                              <div>
-                                <p className="font-medium">{lead.nome}</p>
-                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                  <Phone className="h-3 w-3" />
-                                  {lead.telefone}
-                                </div>
-                              </div>
+                            <button 
+                              className="text-primary hover:underline font-medium text-left"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDrawerLeadId(lead.id);
+                              }}
+                            >
+                              {lead.nome}
+                            </button>
+                          </TableCell>
+
+                          {/* Telefone com WhatsApp */}
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm">{lead.telefone}</span>
+                              <a
+                                href={`https://wa.me/55${lead.telefone.replace(/\D/g, '')}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="text-green-600 hover:text-green-700"
+                                title="Abrir WhatsApp"
+                              >
+                                <MessageCircle className="h-4 w-4" />
+                              </a>
                             </div>
                           </TableCell>
+
+                          {/* Veículo */}
                           <TableCell>
-                            {lead.veiculo_marca ? (
-                              <div className="flex items-center gap-2">
-                                <Car className="h-4 w-4 text-muted-foreground" />
-                                <div>
-                                  <p className="text-sm">
-                                    {lead.veiculo_marca} {lead.veiculo_modelo}
-                                  </p>
-                                  <p className="text-xs text-muted-foreground">
-                                    {lead.veiculo_ano} • {formatCurrency(lead.veiculo_fipe)}
-                                  </p>
-                                </div>
-                              </div>
-                            ) : (
-                              <span className="text-muted-foreground">-</span>
-                            )}
+                            {lead.veiculo_marca 
+                              ? `${lead.veiculo_marca} ${lead.veiculo_modelo || ''} ${lead.veiculo_ano || ''}`.trim()
+                              : '—'}
                           </TableCell>
+
+                          {/* FIPE */}
+                          <TableCell className="text-sm">
+                            {formatCurrency(lead.veiculo_fipe)}
+                          </TableCell>
+
+                          {/* Origem */}
                           <TableCell>
-                            <Badge variant="outline">{ORIGEM_LABELS[lead.origem]}</Badge>
+                            <Badge className={origemColors[lead.origem] || 'bg-gray-100 text-gray-800'}>
+                              {ORIGEM_LABELS[lead.origem]}
+                            </Badge>
                           </TableCell>
+
+                          {/* Etapa */}
                           <TableCell>
                             <Badge className={etapaColors[lead.etapa as EtapaLead]}>
                               {ETAPA_LABELS[lead.etapa as EtapaLead]}
                             </Badge>
                           </TableCell>
-                          <TableCell className="text-sm text-muted-foreground">
-                            {formatDate(lead.created_at)}
+
+                          {/* Vendedor */}
+                          <TableCell className="text-sm">
+                            {vendedorNome || '—'}
                           </TableCell>
+
+                          {/* Criado - tempo relativo */}
+                          <TableCell className="text-sm text-muted-foreground">
+                            {formatDistanceToNow(new Date(lead.created_at), { 
+                              addSuffix: true, 
+                              locale: ptBR 
+                            })}
+                          </TableCell>
+
+                          {/* Ações */}
                           <TableCell>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
@@ -295,7 +321,8 @@ export default function Leads() {
                                   e.stopPropagation();
                                   navigate(`/vendas/leads/${lead.id}`);
                                 }}>
-                                  Ver detalhes
+                                  <Eye className="mr-2 h-4 w-4" />
+                                  Ver
                                 </DropdownMenuItem>
                                 <DropdownMenuItem onClick={(e) => {
                                   e.stopPropagation();
@@ -308,7 +335,7 @@ export default function Leads() {
                                   e.stopPropagation();
                                   handleCreateCotacao(lead.id);
                                 }}>
-                                  Criar cotação
+                                  Cotação
                                 </DropdownMenuItem>
                                 
                                 {nextStages.length > 0 && (
@@ -344,7 +371,7 @@ export default function Leads() {
                                       }}
                                     >
                                       <XCircle className="mr-2 h-4 w-4" />
-                                      Marcar como perdido
+                                      Perdido
                                     </DropdownMenuItem>
                                   </>
                                 )}
@@ -364,7 +391,7 @@ export default function Leads() {
           {totalPages > 1 && (
             <div className="flex items-center justify-between">
               <p className="text-sm text-muted-foreground">
-                Mostrando {((page - 1) * 20) + 1} - {Math.min(page * 20, total)} de {total}
+                Exibindo {((page - 1) * 20) + 1}-{Math.min(page * 20, total)} de {total} leads
               </p>
               <div className="flex items-center gap-2">
                 <Button
@@ -374,6 +401,7 @@ export default function Leads() {
                   disabled={page === 1}
                 >
                   <ChevronLeft className="h-4 w-4" />
+                  Anterior
                 </Button>
                 <span className="text-sm">
                   Página {page} de {totalPages}
@@ -384,6 +412,7 @@ export default function Leads() {
                   onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                   disabled={page === totalPages}
                 >
+                  Próximo
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
@@ -443,10 +472,13 @@ export default function Leads() {
               <Card className="shadow-lg">
                 <CardContent className="p-3">
                   <div className="flex items-center gap-2">
-                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-sm font-medium text-primary">
                       {activeLead.nome.charAt(0)}
                     </div>
-                    <span className="font-medium">{activeLead.nome}</span>
+                    <div>
+                      <p className="font-medium text-sm">{activeLead.nome}</p>
+                      <p className="text-xs text-muted-foreground">{activeLead.telefone}</p>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -457,25 +489,37 @@ export default function Leads() {
 
       {/* Dialogs */}
       <LeadFormDialog open={showLeadForm} onOpenChange={setShowLeadForm} />
-      <LeadEditDialog 
-        open={!!editingLead} 
-        onOpenChange={(open) => !open && setEditingLead(null)} 
-        lead={editingLead}
-      />
-      <CotacaoFormDialog 
-        open={showCotacaoForm} 
-        onOpenChange={setShowCotacaoForm} 
-        leadId={selectedLeadId}
-      />
+      
+      {editingLead && (
+        <LeadEditDialog
+          lead={editingLead}
+          open={!!editingLead}
+          onOpenChange={(open) => !open && setEditingLead(null)}
+        />
+      )}
+
       {lossDialogLead && (
         <LeadLossDialog
-          open={!!lossDialogLead}
-          onOpenChange={(open) => !open && setLossDialogLead(null)}
           leadId={lossDialogLead.id}
           leadNome={lossDialogLead.nome}
           etapaAtual={lossDialogLead.etapa as EtapaLead}
+          open={!!lossDialogLead}
+          onOpenChange={(open) => !open && setLossDialogLead(null)}
         />
       )}
+
+      <CotacaoFormDialog
+        open={showCotacaoForm}
+        onOpenChange={setShowCotacaoForm}
+        leadId={selectedLeadId}
+      />
+
+      {/* Lead Detail Drawer */}
+      <LeadDetailDrawer
+        leadId={drawerLeadId}
+        open={!!drawerLeadId}
+        onClose={() => setDrawerLeadId(null)}
+      />
     </div>
   );
 }

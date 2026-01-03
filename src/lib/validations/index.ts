@@ -109,7 +109,7 @@ export const leadSchema = z.object({
   veiculo_ano: z.number().min(1900).max(new Date().getFullYear() + 1).optional().nullable(),
   veiculo_placa: z.string().optional(),
   veiculo_fipe: z.number().min(0).optional().nullable(),
-  origem: z.enum(['indicacao', 'site', 'facebook', 'instagram', 'google', 'telefone', 'presencial', 'parceiro', 'outro', 'api']),
+  origem: z.enum(['indicacao', 'site', 'whatsapp', 'facebook', 'instagram', 'google', 'telefone', 'presencial', 'parceiro', 'outro', 'api']),
   observacoes: z.string().optional(),
 });
 

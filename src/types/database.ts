@@ -41,6 +41,7 @@ export type EtapaLead =
 export type OrigemLead =
   | 'indicacao'
   | 'site'
+  | 'whatsapp'
   | 'facebook'
   | 'instagram'
   | 'google'
@@ -506,6 +507,7 @@ export const MOTIVO_PERDA_LABELS: Record<MotivoPerda, string> = {
 export const ORIGEM_LABELS: Record<OrigemLead, string> = {
   indicacao: 'Indicação',
   site: 'Site',
+  whatsapp: 'WhatsApp',
   facebook: 'Facebook',
   instagram: 'Instagram',
   google: 'Google',
