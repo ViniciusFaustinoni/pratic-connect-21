@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.fipe-lookup]
 verify_jwt = false
+
+[functions.plate-lookup]
+verify_jwt = false

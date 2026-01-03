@@ -30,6 +30,29 @@ export interface FipeResult {
   anoCodigo?: string;
 }
 
+export interface PlacaResult {
+  placa: string;
+  marca: string;
+  modelo: string;
+  submodelo?: string;
+  anoFabricacao: number | null;
+  anoModelo: number | null;
+  cor: string;
+  combustivel: string;
+  chassi?: string;
+  municipio?: string;
+  uf?: string;
+  situacao?: string;
+  origem?: string;
+  codigoFipe?: string;
+  valorFipe?: number;
+  valorFipeFormatado?: string;
+  mesReferencia?: string;
+  marcaFipe?: string;
+  modeloFipe?: string;
+  fipeEncontrado?: boolean;
+}
+
 export type TipoVeiculo = 'carros' | 'motos' | 'caminhoes';
 
 export function useFipe() {
@@ -165,6 +188,28 @@ export function useFipe() {
     }
   }, []);
 
+  const getByPlaca = useCallback(async (placa: string): Promise<PlacaResult | null> => {
+    setLoading(true);
+    setError(null);
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke('plate-lookup', {
+        body: { placa }
+      });
+      
+      if (fnError) throw fnError;
+      if (!data.success) throw new Error(data.error);
+      
+      return data.data;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Erro ao buscar por placa';
+      setError(message);
+      console.error('Erro getByPlaca:', err);
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   const clearError = useCallback(() => {
     setError(null);
   }, []);
@@ -177,6 +222,7 @@ export function useFipe() {
     getAnos,
     getPreco,
     buscarPorNome,
+    getByPlaca,
     clearError
   };
 }
