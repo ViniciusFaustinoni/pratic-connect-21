@@ -50,6 +50,419 @@ export type Database = {
         }
         Relationships: []
       }
+      asaas_clientes: {
+        Row: {
+          asaas_id: string
+          associado_id: string
+          ativo: boolean | null
+          bairro: string | null
+          cep: string | null
+          cidade: string | null
+          complemento: string | null
+          cpf_cnpj: string | null
+          created_at: string | null
+          email: string | null
+          id: string
+          logradouro: string | null
+          nome: string | null
+          numero: string | null
+          sincronizado_em: string | null
+          telefone: string | null
+          uf: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          asaas_id: string
+          associado_id: string
+          ativo?: boolean | null
+          bairro?: string | null
+          cep?: string | null
+          cidade?: string | null
+          complemento?: string | null
+          cpf_cnpj?: string | null
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          logradouro?: string | null
+          nome?: string | null
+          numero?: string | null
+          sincronizado_em?: string | null
+          telefone?: string | null
+          uf?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          asaas_id?: string
+          associado_id?: string
+          ativo?: boolean | null
+          bairro?: string | null
+          cep?: string | null
+          cidade?: string | null
+          complemento?: string | null
+          cpf_cnpj?: string | null
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          logradouro?: string | null
+          nome?: string | null
+          numero?: string | null
+          sincronizado_em?: string | null
+          telefone?: string | null
+          uf?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asaas_clientes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asaas_clientes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "asaas_clientes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "asaas_clientes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "asaas_clientes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+        ]
+      }
+      asaas_cobrancas: {
+        Row: {
+          asaas_cliente_id: string | null
+          asaas_id: string
+          associado_id: string
+          boleto_codigo_barras: string | null
+          boleto_nosso_numero: string | null
+          boleto_url: string | null
+          competencia: string | null
+          created_at: string | null
+          data_emissao: string
+          data_pagamento: string | null
+          data_vencimento: string
+          desconto: number | null
+          forma_pagamento: string | null
+          id: string
+          juros: number | null
+          multa: number | null
+          notificacao_data: string | null
+          notificacao_enviada: boolean | null
+          pagamento_data: string | null
+          pagamento_forma: string | null
+          pagamento_transacao_id: string | null
+          pagamento_valor: number | null
+          pix_copia_cola: string | null
+          pix_expiracao: string | null
+          pix_qrcode: string | null
+          referencia: string | null
+          sincronizado_em: string | null
+          status: string
+          tipo: string
+          updated_at: string | null
+          valor: number
+          valor_liquido: number | null
+        }
+        Insert: {
+          asaas_cliente_id?: string | null
+          asaas_id: string
+          associado_id: string
+          boleto_codigo_barras?: string | null
+          boleto_nosso_numero?: string | null
+          boleto_url?: string | null
+          competencia?: string | null
+          created_at?: string | null
+          data_emissao: string
+          data_pagamento?: string | null
+          data_vencimento: string
+          desconto?: number | null
+          forma_pagamento?: string | null
+          id?: string
+          juros?: number | null
+          multa?: number | null
+          notificacao_data?: string | null
+          notificacao_enviada?: boolean | null
+          pagamento_data?: string | null
+          pagamento_forma?: string | null
+          pagamento_transacao_id?: string | null
+          pagamento_valor?: number | null
+          pix_copia_cola?: string | null
+          pix_expiracao?: string | null
+          pix_qrcode?: string | null
+          referencia?: string | null
+          sincronizado_em?: string | null
+          status: string
+          tipo: string
+          updated_at?: string | null
+          valor: number
+          valor_liquido?: number | null
+        }
+        Update: {
+          asaas_cliente_id?: string | null
+          asaas_id?: string
+          associado_id?: string
+          boleto_codigo_barras?: string | null
+          boleto_nosso_numero?: string | null
+          boleto_url?: string | null
+          competencia?: string | null
+          created_at?: string | null
+          data_emissao?: string
+          data_pagamento?: string | null
+          data_vencimento?: string
+          desconto?: number | null
+          forma_pagamento?: string | null
+          id?: string
+          juros?: number | null
+          multa?: number | null
+          notificacao_data?: string | null
+          notificacao_enviada?: boolean | null
+          pagamento_data?: string | null
+          pagamento_forma?: string | null
+          pagamento_transacao_id?: string | null
+          pagamento_valor?: number | null
+          pix_copia_cola?: string | null
+          pix_expiracao?: string | null
+          pix_qrcode?: string | null
+          referencia?: string | null
+          sincronizado_em?: string | null
+          status?: string
+          tipo?: string
+          updated_at?: string | null
+          valor?: number
+          valor_liquido?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asaas_cobrancas_asaas_cliente_id_fkey"
+            columns: ["asaas_cliente_id"]
+            isOneToOne: false
+            referencedRelation: "asaas_clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asaas_cobrancas_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asaas_cobrancas_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "asaas_cobrancas_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "asaas_cobrancas_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "asaas_cobrancas_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+        ]
+      }
+      asaas_config: {
+        Row: {
+          chave: string
+          created_at: string | null
+          descricao: string | null
+          id: string
+          tipo: string | null
+          updated_at: string | null
+          valor: string | null
+        }
+        Insert: {
+          chave: string
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          tipo?: string | null
+          updated_at?: string | null
+          valor?: string | null
+        }
+        Update: {
+          chave?: string
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          tipo?: string | null
+          updated_at?: string | null
+          valor?: string | null
+        }
+        Relationships: []
+      }
+      asaas_pagamentos: {
+        Row: {
+          asaas_cobranca_id: string | null
+          asaas_id: string
+          associado_id: string
+          cobranca_id: string | null
+          comprovante_url: string | null
+          created_at: string | null
+          data_credito: string | null
+          data_pagamento: string
+          forma_pagamento: string
+          id: string
+          status: string
+          taxa: number | null
+          transacao_id: string | null
+          valor: number
+          valor_liquido: number | null
+        }
+        Insert: {
+          asaas_cobranca_id?: string | null
+          asaas_id: string
+          associado_id: string
+          cobranca_id?: string | null
+          comprovante_url?: string | null
+          created_at?: string | null
+          data_credito?: string | null
+          data_pagamento: string
+          forma_pagamento: string
+          id?: string
+          status: string
+          taxa?: number | null
+          transacao_id?: string | null
+          valor: number
+          valor_liquido?: number | null
+        }
+        Update: {
+          asaas_cobranca_id?: string | null
+          asaas_id?: string
+          associado_id?: string
+          cobranca_id?: string | null
+          comprovante_url?: string | null
+          created_at?: string | null
+          data_credito?: string | null
+          data_pagamento?: string
+          forma_pagamento?: string
+          id?: string
+          status?: string
+          taxa?: number | null
+          transacao_id?: string | null
+          valor?: number
+          valor_liquido?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asaas_pagamentos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asaas_pagamentos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "asaas_pagamentos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "asaas_pagamentos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "asaas_pagamentos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "asaas_pagamentos_cobranca_id_fkey"
+            columns: ["cobranca_id"]
+            isOneToOne: false
+            referencedRelation: "asaas_cobrancas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      asaas_webhooks_log: {
+        Row: {
+          asaas_cliente_id: string | null
+          asaas_cobranca_id: string | null
+          asaas_pagamento_id: string | null
+          created_at: string | null
+          erro: string | null
+          evento: string
+          id: string
+          payload: Json
+          processado: boolean | null
+          processado_em: string | null
+        }
+        Insert: {
+          asaas_cliente_id?: string | null
+          asaas_cobranca_id?: string | null
+          asaas_pagamento_id?: string | null
+          created_at?: string | null
+          erro?: string | null
+          evento: string
+          id?: string
+          payload: Json
+          processado?: boolean | null
+          processado_em?: string | null
+        }
+        Update: {
+          asaas_cliente_id?: string | null
+          asaas_cobranca_id?: string | null
+          asaas_pagamento_id?: string | null
+          created_at?: string | null
+          erro?: string | null
+          evento?: string
+          id?: string
+          payload?: Json
+          processado?: boolean | null
+          processado_em?: string | null
+        }
+        Relationships: []
+      }
       associados: {
         Row: {
           avatar_url: string | null
@@ -233,6 +646,13 @@ export type Database = {
             columns: ["associado_id"]
             isOneToOne: false
             referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "associados_historico_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
             referencedColumns: ["associado_id"]
           },
           {
@@ -424,6 +844,13 @@ export type Database = {
             foreignKeyName: "chamados_assistencia_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "chamados_assistencia_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["associado_id"]
           },
@@ -570,6 +997,13 @@ export type Database = {
             columns: ["associado_id"]
             isOneToOne: false
             referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "fk_contratos_associado"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
             referencedColumns: ["associado_id"]
           },
           {
@@ -735,6 +1169,13 @@ export type Database = {
             columns: ["associado_id"]
             isOneToOne: false
             referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "documentos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
             referencedColumns: ["associado_id"]
           },
           {
@@ -1024,6 +1465,13 @@ export type Database = {
             foreignKeyName: "instalacoes_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "instalacoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["associado_id"]
           },
@@ -1232,6 +1680,13 @@ export type Database = {
             columns: ["associado_id"]
             isOneToOne: false
             referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "leads_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
             referencedColumns: ["associado_id"]
           },
           {
@@ -1853,6 +2308,13 @@ export type Database = {
             foreignKeyName: "sinistros_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "sinistros_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["associado_id"]
           },
@@ -2056,6 +2518,13 @@ export type Database = {
             foreignKeyName: "veiculos_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "veiculos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["associado_id"]
           },
@@ -2153,6 +2622,13 @@ export type Database = {
             columns: ["associado_id"]
             isOneToOne: false
             referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "vistorias_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
             referencedColumns: ["associado_id"]
           },
           {
@@ -2285,6 +2761,26 @@ export type Database = {
             referencedColumns: ["rastreador_id"]
           },
         ]
+      }
+      view_associado_financeiro: {
+        Row: {
+          associado_id: string | null
+          associado_status:
+            | Database["public"]["Enums"]["status_associado"]
+            | null
+          cobrancas_pagas: number | null
+          cobrancas_pendentes: number | null
+          cobrancas_vencidas: number | null
+          cpf: string | null
+          dias_maior_atraso: number | null
+          nome: string | null
+          proximo_vencimento: string | null
+          total_cobrancas: number | null
+          valor_pago: number | null
+          valor_pendente: number | null
+          valor_vencido: number | null
+        }
+        Relationships: []
       }
       view_rastreadores_posicao: {
         Row: {
