@@ -3400,6 +3400,7 @@ export type Database = {
       }
     }
     Functions: {
+      atualizar_valor_os: { Args: { os_id: string }; Returns: undefined }
       can_access_api_settings: { Args: { _user_id: string }; Returns: boolean }
       get_alertas_contagem: {
         Args: never
