@@ -15,7 +15,7 @@ interface VendasMetricas {
   rankingVendedores: { id: string; nome: string; contratos: number; valor: number }[];
 }
 
-const ETAPA_CORES: Record<string, string> = {
+export const ETAPA_CORES: Record<string, string> = {
   novo: '#3b82f6',
   contato_inicial: '#8b5cf6',
   contato: '#8b5cf6',
@@ -31,7 +31,7 @@ const ETAPA_CORES: Record<string, string> = {
   perdido: '#ef4444',
 };
 
-const ORIGEM_CORES: Record<string, string> = {
+export const ORIGEM_CORES: Record<string, string> = {
   indicacao: '#3b82f6',
   site: '#22c55e',
   telefone: '#f59e0b',
@@ -44,7 +44,7 @@ const ORIGEM_CORES: Record<string, string> = {
   outro: '#6b7280',
 };
 
-const ORIGEM_LABELS: Record<string, string> = {
+export const ORIGEM_LABELS: Record<string, string> = {
   indicacao: 'Indicação',
   site: 'Site',
   telefone: 'Telefone',
@@ -57,7 +57,7 @@ const ORIGEM_LABELS: Record<string, string> = {
   outro: 'Outros',
 };
 
-const ETAPA_LABELS: Record<string, string> = {
+export const ETAPA_LABELS: Record<string, string> = {
   novo: 'Novos',
   contato_inicial: 'Contato Inicial',
   contato: 'Contato',

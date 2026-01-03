@@ -17,6 +17,7 @@ import {
   Kanban,
   TrendingUp,
   BarChart3,
+  ClipboardList,
   LucideIcon,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
@@ -80,6 +81,7 @@ const menuConfig: {
         { title: 'Acompanhamento', url: '/vendas/acompanhamento', icon: Kanban },
         { title: 'Cotador', url: '/vendas/cotacoes', icon: Calculator },
         { title: 'Contratos', url: '/vendas/contratos', icon: FileText },
+        { title: 'Relatórios', url: '/vendas/relatorios', icon: ClipboardList },
       ],
     },
     {

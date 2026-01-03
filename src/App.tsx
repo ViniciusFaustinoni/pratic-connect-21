@@ -18,6 +18,7 @@ import Acompanhamento from "./pages/vendas/Acompanhamento";
 import Cotacoes from "./pages/vendas/Cotacoes";
 import Contratos from "./pages/vendas/Contratos";
 import DashboardVendas from "./pages/vendas/DashboardVendas";
+import RelatoriosVendas from "./pages/vendas/RelatoriosVendas";
 import Associados from "./pages/cadastro/Associados";
 import AssociadoDetalhe from "./pages/cadastro/AssociadoDetalhe";
 import Veiculos from "./pages/cadastro/Veiculos";
@@ -81,6 +82,7 @@ const App = () => (
               <Route path="/vendas/acompanhamento" element={<Acompanhamento />} />
               <Route path="/vendas/cotacoes" element={<Cotacoes />} />
               <Route path="/vendas/contratos" element={<Contratos />} />
+              <Route path="/vendas/relatorios" element={<RelatoriosVendas />} />
               
               {/* Cadastro */}
               <Route path="/cadastro/associados" element={<Associados />} />
