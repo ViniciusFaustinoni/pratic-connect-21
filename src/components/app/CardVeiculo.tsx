@@ -8,13 +8,31 @@ import {
   XCircle,
   AlertTriangle,
   Wifi,
-  WifiOff
+  WifiOff,
+  Navigation,
+  Lock,
+  Gauge,
+  Radio
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
+import { useState } from 'react';
 
 interface VeiculoData {
   id: string;
@@ -37,6 +55,7 @@ interface CardVeiculoProps {
   rastreador?: RastreadorData | null;
   compacto?: boolean;
   mostrarMapa?: boolean;
+  mostrarAcoes?: boolean;
   onClick?: () => void;
 }
 
@@ -96,16 +115,21 @@ const statusConfig: Record<string, {
   },
 };
 
+// Mock speed data (would come from real tracker)
+const mockSpeed = 45;
+
 export function CardVeiculo({ 
   veiculo, 
   rastreador,
   compacto = false,
   mostrarMapa = true,
+  mostrarAcoes = false,
   onClick
 }: CardVeiculoProps) {
   const navigate = useNavigate();
   const config = statusConfig[veiculo.status || 'ativo'] || statusConfig.ativo;
   const StatusIcon = config.icone;
+  const [bloqueando, setBloqueando] = useState(false);
 
   const formatarUltimaComunicacao = (data: string | null | undefined) => {
     if (!data) return null;
@@ -120,6 +144,20 @@ export function CardVeiculo({
   const isOnline = rastreador?.ultima_comunicacao 
     ? (Date.now() - new Date(rastreador.ultima_comunicacao).getTime()) < 1000 * 60 * 30 // 30 min
     : false;
+
+  const emMovimento = isOnline && mockSpeed > 0;
+
+  const handleLocalizar = () => {
+    navigate('/app/rastreamento');
+  };
+
+  const handleBloquear = async () => {
+    setBloqueando(true);
+    // Simulate API call
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    setBloqueando(false);
+    toast.success('Solicitação de bloqueio enviada');
+  };
 
   // Versão compacta (para listas)
   if (compacto) {
@@ -165,11 +203,18 @@ export function CardVeiculo({
             <span className="text-sm font-medium">Seu Veículo</span>
           </div>
           {rastreador?.ultima_comunicacao && (
-            <div className={`flex items-center gap-1 text-xs ${isOnline ? 'text-green-600' : 'text-muted-foreground'}`}>
+            <div className={cn(
+              "flex items-center gap-1 text-xs",
+              isOnline ? 'text-green-600' : 'text-muted-foreground'
+            )}>
               {isOnline ? (
                 <>
-                  <Wifi className="h-3 w-3" />
-                  Online
+                  {emMovimento ? (
+                    <Radio className="h-3 w-3 animate-pulse" />
+                  ) : (
+                    <Wifi className="h-3 w-3" />
+                  )}
+                  {emMovimento ? 'Ao vivo' : 'Online'}
                 </>
               ) : (
                 <>
@@ -198,8 +243,23 @@ export function CardVeiculo({
             </Badge>
           </div>
 
+          {/* Speed indicator when moving */}
+          {isOnline && emMovimento && veiculo.status === 'ativo' && (
+            <div className="flex items-center gap-3 rounded-lg bg-green-50 p-3">
+              <div className="flex items-center gap-2">
+                <Gauge className="h-5 w-5 text-green-600" />
+                <span className="text-2xl font-bold text-green-700">{mockSpeed}</span>
+                <span className="text-sm text-green-600">km/h</span>
+              </div>
+              <Badge className="bg-red-500 text-white animate-pulse border-0">
+                <Radio className="h-3 w-3 mr-1" />
+                AO VIVO
+              </Badge>
+            </div>
+          )}
+
           {/* Última posição */}
-          {rastreador?.ultima_comunicacao && veiculo.status === 'ativo' && (
+          {rastreador?.ultima_comunicacao && veiculo.status === 'ativo' && !emMovimento && (
             <div className="rounded-lg bg-muted/50 p-3">
               <div className="flex items-start gap-2">
                 <MapPin className="h-4 w-4 text-primary mt-0.5" />
@@ -236,8 +296,52 @@ export function CardVeiculo({
             </p>
           )}
 
-          {/* Botão ver no mapa */}
-          {mostrarMapa && (
+          {/* Action Buttons */}
+          {mostrarAcoes && veiculo.status === 'ativo' && (
+            <div className="flex gap-2">
+              <Button 
+                variant="default" 
+                className="flex-1"
+                onClick={handleLocalizar}
+              >
+                <Navigation className="h-4 w-4 mr-2" />
+                Localizar Agora
+              </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    size="icon"
+                    className="shrink-0"
+                  >
+                    <Lock className="h-4 w-4" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Bloquear Veículo?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      O veículo {veiculo.placa} será bloqueado remotamente. 
+                      Esta ação enviará uma solicitação à central de monitoramento.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleBloquear}
+                      disabled={bloqueando}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      {bloqueando ? 'Enviando...' : 'Confirmar Bloqueio'}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          )}
+
+          {/* Botão ver no mapa (padrão) */}
+          {mostrarMapa && !mostrarAcoes && (
             <Button 
               variant="outline" 
               className="w-full justify-between"

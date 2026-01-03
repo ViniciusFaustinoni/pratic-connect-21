@@ -13,8 +13,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Shield, Eye, EyeOff, Loader2, AlertCircle, Lock, MessageCircle, CheckCircle } from 'lucide-react';
+import { Shield, Eye, EyeOff, Loader2, AlertCircle, Lock, MessageCircle, CheckCircle, FlaskConical, Copy, Check } from 'lucide-react';
 import { z } from 'zod';
+import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 import {
   isLocked,
   recordFailedAttempt,
@@ -38,6 +40,9 @@ function unformatCPF(value: string): string {
 
 const cpfSchema = z.string().length(11, 'CPF deve ter 11 dígitos');
 
+// Check if we're in development mode
+const isDev = import.meta.env.DEV;
+
 export default function AppLogin() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -57,6 +62,12 @@ export default function AppLogin() {
   const [cpfRecuperacao, setCpfRecuperacao] = useState('');
   const [recuperacaoEnviada, setRecuperacaoEnviada] = useState(false);
   const [loadingRecuperacao, setLoadingRecuperacao] = useState(false);
+
+  // Test user modal
+  const [modalContaTeste, setModalContaTeste] = useState(false);
+  const [loadingContaTeste, setLoadingContaTeste] = useState(false);
+  const [testCredentials, setTestCredentials] = useState<{ cpf: string; password: string } | null>(null);
+  const [copiedField, setCopiedField] = useState<'cpf' | 'password' | null>(null);
 
   const cpfKey = unformatCPF(cpf);
 
@@ -176,6 +187,53 @@ export default function AppLogin() {
     setModalRecuperarSenha(false);
     setCpfRecuperacao('');
     setRecuperacaoEnviada(false);
+  };
+
+  // Handle creating test account
+  const handleCriarContaTeste = async () => {
+    setLoadingContaTeste(true);
+    setTestCredentials(null);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('create-test-user');
+
+      if (error) throw error;
+
+      if (data?.cpf && data?.password) {
+        setTestCredentials({
+          cpf: data.cpf,
+          password: data.password,
+        });
+        toast.success('Conta de teste criada com sucesso!');
+      } else {
+        throw new Error('Resposta inválida do servidor');
+      }
+    } catch (err: any) {
+      console.error('Erro ao criar conta teste:', err);
+      toast.error(err.message || 'Erro ao criar conta de teste');
+    } finally {
+      setLoadingContaTeste(false);
+    }
+  };
+
+  const copyToClipboard = async (text: string, field: 'cpf' | 'password') => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedField(field);
+      toast.success(`${field === 'cpf' ? 'CPF' : 'Senha'} copiado!`);
+      setTimeout(() => setCopiedField(null), 2000);
+    } catch {
+      toast.error('Erro ao copiar');
+    }
+  };
+
+  const useTestCredentials = () => {
+    if (testCredentials) {
+      setCpf(formatCPF(testCredentials.cpf));
+      setPassword(testCredentials.password);
+      setModalContaTeste(false);
+      toast.success('Credenciais preenchidas! Clique em Entrar.');
+    }
   };
 
   if (authLoading) {
@@ -326,9 +384,22 @@ export default function AppLogin() {
             Primeiro acesso
           </Button>
 
+          {/* Botão Conta de Teste - Apenas em desenvolvimento */}
+          {isDev && (
+            <Button
+              type="button"
+              variant="ghost"
+              className="mt-3 h-10 w-full text-sm text-muted-foreground hover:text-foreground"
+              onClick={() => setModalContaTeste(true)}
+            >
+              <FlaskConical className="mr-2 h-4 w-4" />
+              Criar Conta de Teste
+            </Button>
+          )}
+
           {/* Versão */}
           <p className="mt-6 text-center text-xs text-muted-foreground">
-            Versão 1.0.0
+            Versão 1.0.0 {isDev && <span className="text-orange-500">(DEV)</span>}
           </p>
         </div>
       </div>
@@ -471,6 +542,124 @@ export default function AppLogin() {
               variant="outline"
               className="w-full"
               onClick={() => setModalPrimeiroAcesso(false)}
+            >
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Conta de Teste */}
+      <Dialog open={modalContaTeste} onOpenChange={setModalContaTeste}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FlaskConical className="h-5 w-5 text-orange-500" />
+              Conta de Teste
+            </DialogTitle>
+            <DialogDescription>
+              Crie uma conta de teste para desenvolvimento. Esta funcionalidade está disponível apenas em ambiente de desenvolvimento.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4">
+            {!testCredentials ? (
+              <div className="flex flex-col items-center gap-4">
+                <div className="rounded-lg bg-orange-50 p-4 text-center">
+                  <p className="text-sm text-orange-700">
+                    Será criado um usuário associado fictício com dados de teste para você poder explorar todas as funcionalidades do app.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  className="w-full"
+                  onClick={handleCriarContaTeste}
+                  disabled={loadingContaTeste}
+                >
+                  {loadingContaTeste ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Criando conta...
+                    </>
+                  ) : (
+                    <>
+                      <FlaskConical className="mr-2 h-4 w-4" />
+                      Criar Conta de Teste
+                    </>
+                  )}
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex h-16 w-16 mx-auto items-center justify-center rounded-full bg-green-100">
+                  <CheckCircle className="h-8 w-8 text-green-600" />
+                </div>
+                <p className="text-center text-sm font-medium text-foreground">
+                  Conta criada com sucesso!
+                </p>
+
+                <div className="space-y-3">
+                  <div className="rounded-lg bg-muted p-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs text-muted-foreground">CPF</p>
+                        <p className="font-mono font-medium">{formatCPF(testCredentials.cpf)}</p>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => copyToClipboard(testCredentials.cpf, 'cpf')}
+                      >
+                        {copiedField === 'cpf' ? (
+                          <Check className="h-4 w-4 text-green-600" />
+                        ) : (
+                          <Copy className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg bg-muted p-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Senha</p>
+                        <p className="font-mono font-medium">{testCredentials.password}</p>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => copyToClipboard(testCredentials.password, 'password')}
+                      >
+                        {copiedField === 'password' ? (
+                          <Check className="h-4 w-4 text-green-600" />
+                        ) : (
+                          <Copy className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                <Button
+                  type="button"
+                  className="w-full"
+                  onClick={useTestCredentials}
+                >
+                  Usar estas credenciais
+                </Button>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={() => {
+                setModalContaTeste(false);
+                setTestCredentials(null);
+              }}
             >
               Fechar
             </Button>
