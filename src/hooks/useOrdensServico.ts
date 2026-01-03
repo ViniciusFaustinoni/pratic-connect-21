@@ -68,12 +68,19 @@ export function useOrdemServico(id: string | undefined) {
           *,
           oficina:oficinas(*),
           veiculo:veiculos(*),
-          associado:associados(id, nome, telefone, email)
+          associado:associados(id, nome, telefone, email),
+          sinistro:sinistros(id, protocolo, tipo, status),
+          criado_por_profile:profiles!ordens_servico_criado_por_fkey(nome),
+          aprovado_por_profile:profiles!ordens_servico_aprovado_por_fkey(nome)
         `)
         .eq('id', id)
-        .single();
+        .maybeSingle();
       if (error) throw error;
-      return data as OrdemServico;
+      return data as OrdemServico & {
+        sinistro?: { id: string; protocolo: string; tipo: string; status: string };
+        criado_por_profile?: { nome: string };
+        aprovado_por_profile?: { nome: string };
+      };
     },
     enabled: !!id,
   });
