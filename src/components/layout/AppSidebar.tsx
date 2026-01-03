@@ -29,6 +29,8 @@ import {
   Receipt,
   CreditCard,
   List,
+  Handshake,
+  UserX,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
@@ -171,6 +173,20 @@ const menuConfig: {
         { title: 'Contas a Pagar', url: '/financeiro/contas-pagar', icon: CreditCard },
         { title: 'Faturamento', url: '/financeiro/faturamento', icon: FileText },
         { title: 'Extrato', url: '/financeiro/extrato', icon: List },
+      ],
+    },
+    {
+      id: 'cobranca',
+      label: 'Cobrança',
+      icon: UserX,
+      permission: 'isGerencia',
+      items: [
+        { title: 'Dashboard', url: '/cobranca', icon: BarChart3 },
+        { title: 'Inadimplentes', url: '/cobranca/inadimplentes', icon: UserX },
+        { title: 'Fila de Trabalho', url: '/cobranca/fila', icon: ClipboardList },
+        { title: 'Acordos', url: '/cobranca/acordos', icon: Handshake },
+        { title: 'Negativação', url: '/cobranca/negativacao', icon: AlertTriangle },
+        { title: 'Régua', url: '/cobranca/regua', icon: List },
       ],
     },
   ],
