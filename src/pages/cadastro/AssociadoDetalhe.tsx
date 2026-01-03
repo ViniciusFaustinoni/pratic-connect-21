@@ -51,12 +51,13 @@ import {
 } from '@/types/database';
 import { useAssociado, useUpdateAssociadoStatus } from '@/hooks/useAssociados';
 import { useVeiculos } from '@/hooks/useVeiculos';
-import { useAssociadoHistorico } from '@/hooks/useAssociadoHistorico';
+import { useAssociadoHistoricoCompleto } from '@/hooks/useAssociadoHistoricoCompleto';
 import { useToast } from '@/hooks/use-toast';
 import { DocumentUploader } from '@/components/cadastro/DocumentUploader';
 import { ConfirmacaoAcaoDialog } from '@/components/associados/ConfirmacaoAcaoDialog';
 import { AssociadoEditDialog } from '@/components/associados/AssociadoEditDialog';
 import { TimelineHistorico } from '@/components/cadastro/TimelineHistorico';
+import { AdicionarObservacao } from '@/components/cadastro/AdicionarObservacao';
 
 const statusColors: Record<StatusAssociado, string> = {
   em_analise: 'bg-blue-500 text-white',
@@ -99,7 +100,7 @@ export default function AssociadoDetalhe() {
 
   const { data: associado, isLoading, refetch } = useAssociado(id);
   const { data: veiculos } = useVeiculos(id);
-  const { data: historico, isLoading: historicoLoading } = useAssociadoHistorico(id);
+  const { data: historico, isLoading: historicoLoading } = useAssociadoHistoricoCompleto(id);
   const updateStatus = useUpdateAssociadoStatus();
 
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -755,6 +756,7 @@ export default function AssociadoDetalhe() {
         <TabsContent value="historico">
           <Card>
             <CardContent className="p-6">
+              <AdicionarObservacao associadoId={id!} />
               <TimelineHistorico
                 eventos={historico || []}
                 isLoading={historicoLoading}
