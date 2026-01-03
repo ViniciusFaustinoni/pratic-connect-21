@@ -26,6 +26,7 @@ import Veiculos from "./pages/cadastro/Veiculos";
 import Documentos from "./pages/cadastro/Documentos";
 import SinistrosList from "./pages/eventos/SinistrosList";
 import SinistroDetalhe from "./pages/eventos/SinistroDetalhe";
+import SinistrosDashboard from "./pages/eventos/SinistrosDashboard";
 import Instalacoes from "./pages/monitoramento/Instalacoes";
 import Rotas from "./pages/monitoramento/Rotas";
 import Estoque from "./pages/monitoramento/Estoque";
@@ -96,6 +97,7 @@ const App = () => (
               <Route path="/cadastro/documentos" element={<Documentos />} />
               
               {/* Eventos */}
+              <Route path="/eventos/dashboard" element={<SinistrosDashboard />} />
               <Route path="/eventos/sinistros" element={<SinistrosList />} />
               <Route path="/eventos/sinistros/:id" element={<SinistroDetalhe />} />
               
