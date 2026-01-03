@@ -1,4 +1,5 @@
 import { Toaster } from "@/components/ui/toaster";
+import AcompanharChamado from "./pages/app/AcompanharChamado";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -55,7 +56,7 @@ import AppBoletos from "./pages/app/AppBoletos";
 import AppBoletoDetalhe from "./pages/app/AppBoletoDetalhe";
 import AppRastreamento from "./pages/app/AppRastreamento";
 import SolicitarAssistencia from "./pages/app/SolicitarAssistencia";
-import AppAssistenciaDetalhe from "./pages/app/AppAssistenciaDetalhe";
+
 import AppAssistenciaNova from "./pages/app/AppAssistenciaNova";
 import AppSinistros from "./pages/app/AppSinistros";
 import AppSinistroNovo from "./pages/app/AppSinistroNovo";
@@ -150,7 +151,7 @@ const App = () => (
               <Route path="/app/rastreamento" element={<AppRastreamento />} />
               <Route path="/app/assistencia" element={<SolicitarAssistencia />} />
               <Route path="/app/assistencia/nova" element={<AppAssistenciaNova />} />
-              <Route path="/app/assistencia/:id" element={<AppAssistenciaDetalhe />} />
+              <Route path="/app/assistencia/:id" element={<AcompanharChamado />} />
               <Route path="/app/sinistros" element={<AppSinistros />} />
               <Route path="/app/sinistros/novo" element={<AppSinistroNovo />} />
               <Route path="/app/sinistros/:id" element={<AppSinistroDetalhe />} />
