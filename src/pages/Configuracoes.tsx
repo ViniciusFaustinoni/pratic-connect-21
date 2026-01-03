@@ -1,16 +1,18 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/contexts/AuthContext';
-import { User, Lock, Bell, Building, Loader2, Camera, Trash2 } from 'lucide-react';
+import { User, Lock, Bell, Building, Loader2, Camera, Trash2, Check } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { maskTelefone } from '@/lib/validations';
 import { UserAvatar } from '@/components/UserAvatar';
 import { AvatarCropDialog } from '@/components/AvatarCropDialog';
+
+type NotifType = 'notif_novos_leads' | 'notif_documentos_pendentes' | 'notif_resumo_diario';
 
 export default function Configuracoes() {
   const { profile, user } = useAuth();
@@ -33,6 +35,49 @@ export default function Configuracoes() {
   const [cropDialogOpen, setCropDialogOpen] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Notification preferences state
+  const [notifNovosLeads, setNotifNovosLeads] = useState(false);
+  const [notifDocumentos, setNotifDocumentos] = useState(false);
+  const [notifResumoDiario, setNotifResumoDiario] = useState(false);
+  const [savingNotif, setSavingNotif] = useState<NotifType | null>(null);
+
+  // Load notification preferences from profile
+  useEffect(() => {
+    if (profile) {
+      setNotifNovosLeads((profile as any).notif_novos_leads ?? false);
+      setNotifDocumentos((profile as any).notif_documentos_pendentes ?? false);
+      setNotifResumoDiario((profile as any).notif_resumo_diario ?? false);
+    }
+  }, [profile]);
+
+  const toggleNotificacao = async (
+    tipo: NotifType,
+    valorAtual: boolean,
+    setValor: (v: boolean) => void
+  ) => {
+    if (!user?.id) return;
+    
+    setSavingNotif(tipo);
+    const novoValor = !valorAtual;
+    
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ [tipo]: novoValor, updated_at: new Date().toISOString() })
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+      
+      setValor(novoValor);
+      toast.success(novoValor ? 'Notificação ativada' : 'Notificação desativada');
+    } catch (error) {
+      console.error('Erro ao salvar preferência:', error);
+      toast.error('Erro ao salvar preferência');
+    } finally {
+      setSavingNotif(null);
+    }
+  };
 
   const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
   const MAX_SIZE_BYTES = 2 * 1024 * 1024; // 2MB
@@ -399,7 +444,24 @@ export default function Configuracoes() {
                     Receber notificação quando um novo lead for atribuído
                   </p>
                 </div>
-                <Button variant="outline" size="sm">Ativar</Button>
+                <Button 
+                  variant={notifNovosLeads ? "default" : "outline"}
+                  size="sm"
+                  disabled={savingNotif === 'notif_novos_leads'}
+                  onClick={() => toggleNotificacao('notif_novos_leads', notifNovosLeads, setNotifNovosLeads)}
+                  className={notifNovosLeads ? "bg-green-600 hover:bg-green-700" : ""}
+                >
+                  {savingNotif === 'notif_novos_leads' ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : notifNovosLeads ? (
+                    <>
+                      <Check className="mr-1 h-4 w-4" />
+                      Desativar
+                    </>
+                  ) : (
+                    'Ativar'
+                  )}
+                </Button>
               </div>
               <Separator />
               <div className="flex items-center justify-between">
@@ -409,7 +471,24 @@ export default function Configuracoes() {
                     Alerta quando houver documentos para análise
                   </p>
                 </div>
-                <Button variant="outline" size="sm">Ativar</Button>
+                <Button 
+                  variant={notifDocumentos ? "default" : "outline"}
+                  size="sm"
+                  disabled={savingNotif === 'notif_documentos_pendentes'}
+                  onClick={() => toggleNotificacao('notif_documentos_pendentes', notifDocumentos, setNotifDocumentos)}
+                  className={notifDocumentos ? "bg-green-600 hover:bg-green-700" : ""}
+                >
+                  {savingNotif === 'notif_documentos_pendentes' ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : notifDocumentos ? (
+                    <>
+                      <Check className="mr-1 h-4 w-4" />
+                      Desativar
+                    </>
+                  ) : (
+                    'Ativar'
+                  )}
+                </Button>
               </div>
               <Separator />
               <div className="flex items-center justify-between">
@@ -419,7 +498,24 @@ export default function Configuracoes() {
                     Receber resumo das atividades por email
                   </p>
                 </div>
-                <Button variant="outline" size="sm">Ativar</Button>
+                <Button 
+                  variant={notifResumoDiario ? "default" : "outline"}
+                  size="sm"
+                  disabled={savingNotif === 'notif_resumo_diario'}
+                  onClick={() => toggleNotificacao('notif_resumo_diario', notifResumoDiario, setNotifResumoDiario)}
+                  className={notifResumoDiario ? "bg-green-600 hover:bg-green-700" : ""}
+                >
+                  {savingNotif === 'notif_resumo_diario' ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : notifResumoDiario ? (
+                    <>
+                      <Check className="mr-1 h-4 w-4" />
+                      Desativar
+                    </>
+                  ) : (
+                    'Ativar'
+                  )}
+                </Button>
               </div>
             </div>
           </CardContent>
