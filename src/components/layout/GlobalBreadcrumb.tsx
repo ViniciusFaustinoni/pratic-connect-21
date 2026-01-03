@@ -12,6 +12,7 @@ interface RouteConfig {
 const ROUTE_CONFIG: Record<string, RouteConfig> = {
   '/dashboard': { label: 'Dashboard' },
   '/vendas': { label: 'Vendas' },
+  '/vendas/dashboard': { label: 'Dashboard de Vendas' },
   '/vendas/leads': { label: 'Leads' },
   '/vendas/acompanhamento': { label: 'Acompanhamento' },
   '/vendas/cotacoes': { label: 'Cotador' },

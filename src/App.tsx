@@ -17,6 +17,7 @@ import LeadDetalhe from "./pages/vendas/LeadDetalhe";
 import Acompanhamento from "./pages/vendas/Acompanhamento";
 import Cotacoes from "./pages/vendas/Cotacoes";
 import Contratos from "./pages/vendas/Contratos";
+import DashboardVendas from "./pages/vendas/DashboardVendas";
 import Associados from "./pages/cadastro/Associados";
 import AssociadoDetalhe from "./pages/cadastro/AssociadoDetalhe";
 import Veiculos from "./pages/cadastro/Veiculos";
@@ -74,6 +75,7 @@ const App = () => (
               <Route path="/dashboard" element={<Dashboard />} />
               
               {/* Vendas */}
+              <Route path="/vendas/dashboard" element={<DashboardVendas />} />
               <Route path="/vendas/leads" element={<Leads />} />
               <Route path="/vendas/leads/:id" element={<LeadDetalhe />} />
               <Route path="/vendas/acompanhamento" element={<Acompanhamento />} />
