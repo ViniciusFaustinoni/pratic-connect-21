@@ -56,6 +56,8 @@ import CobrancaDashboard from "./pages/cobranca/CobrancaDashboard";
 import InadimplentesList from "./pages/cobranca/InadimplentesList";
 import InadimplenteDetalhe from "./pages/cobranca/InadimplenteDetalhe";
 import FilaTrabalho from "./pages/cobranca/FilaTrabalho";
+import ReguaCobranca from "./pages/cobranca/ReguaCobranca";
+import Negativacao from "./pages/cobranca/Negativacao";
 import CobrancasList from "./pages/financeiro/CobrancasList";
 import CobrancaDetalhe from "./pages/financeiro/CobrancaDetalhe";
 import FaturamentoMensal from "./pages/financeiro/FaturamentoMensal";
@@ -150,6 +152,8 @@ const App = () => (
               <Route path="/cobranca/fila" element={<FilaTrabalho />} />
               <Route path="/cobranca/inadimplentes/:id" element={<InadimplenteDetalhe />} />
               <Route path="/cobranca/inadimplentes" element={<InadimplentesList />} />
+              <Route path="/cobranca/regua" element={<ReguaCobranca />} />
+              <Route path="/cobranca/negativacao" element={<Negativacao />} />
               
               <Route path="/monitoramento/instalacoes" element={<Instalacoes />} />
               <Route path="/monitoramento/rotas" element={<Rotas />} />
