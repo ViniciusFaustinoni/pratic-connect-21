@@ -610,6 +610,22 @@ export const STATUS_INSTALACAO_LABELS: Record<StatusInstalacao, string> = {
   cancelada: 'Cancelada',
 };
 
+export const STATUS_INSTALACAO_COLORS: Record<StatusInstalacao, string> = {
+  agendada: 'bg-blue-100 text-blue-800',
+  em_rota: 'bg-purple-100 text-purple-800',
+  em_andamento: 'bg-amber-100 text-amber-800',
+  concluida: 'bg-green-100 text-green-800',
+  reagendada: 'bg-orange-100 text-orange-800',
+  cancelada: 'bg-red-100 text-red-800',
+};
+
+// Alias for PERIODO_INSTALACAO_LABELS
+export const PERIODO_LABELS = {
+  manha: 'Manhã (08h - 12h)',
+  tarde: 'Tarde (13h - 17h)',
+  noite: 'Noite (18h - 21h)',
+} as const;
+
 export const STATUS_VISTORIA_LABELS: Record<StatusVistoria, string> = {
   pendente: 'Pendente',
   aprovada: 'Aprovada',
