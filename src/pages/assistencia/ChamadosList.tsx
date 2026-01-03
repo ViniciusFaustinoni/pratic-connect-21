@@ -40,6 +40,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { NovoChamadoModal } from '@/components/assistencia/NovoChamadoModal';
 
 const statusOptions = [
   { value: 'todos', label: 'Todos os status' },
@@ -91,6 +92,7 @@ const STATUS_CANCELADOS: StatusChamado[] = ['cancelado_associado', 'cancelado_si
 export default function ChamadosList() {
   const navigate = useNavigate();
   const perPage = 20;
+  const [modalNovoChamado, setModalNovoChamado] = useState(false);
 
   const [filters, setFilters] = useState({
     status: 'todos',
@@ -207,11 +209,18 @@ export default function ChamadosList() {
             {chamados?.count || 0} chamados encontrados
           </p>
         </div>
-        <Button onClick={() => navigate('/assistencia/novo')}>
+        <Button onClick={() => setModalNovoChamado(true)}>
           <Plus className="h-4 w-4 mr-2" />
           Novo Chamado
         </Button>
       </div>
+
+      {/* Modal Novo Chamado */}
+      <NovoChamadoModal
+        open={modalNovoChamado}
+        onClose={() => setModalNovoChamado(false)}
+        onSuccess={(chamado) => navigate(`/assistencia/chamados/${chamado.id}`)}
+      />
 
       {/* Filtros */}
       <Card>
