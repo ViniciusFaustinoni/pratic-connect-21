@@ -731,6 +731,7 @@ export type Database = {
         Row: {
           associado_id: string
           atendente_id: string | null
+          avaliacao_comentario: string | null
           avaliacao_nota: number | null
           canal: string
           created_at: string
@@ -739,6 +740,7 @@ export type Database = {
           descricao: string | null
           destino_cep: string | null
           destino_cidade: string | null
+          destino_endereco: string | null
           destino_lat: number | null
           destino_lng: number | null
           destino_logradouro: string | null
@@ -746,6 +748,7 @@ export type Database = {
           id: string
           origem_cep: string | null
           origem_cidade: string | null
+          origem_endereco: string | null
           origem_lat: number | null
           origem_lng: number | null
           origem_logradouro: string | null
@@ -761,6 +764,7 @@ export type Database = {
         Insert: {
           associado_id: string
           atendente_id?: string | null
+          avaliacao_comentario?: string | null
           avaliacao_nota?: number | null
           canal?: string
           created_at?: string
@@ -769,6 +773,7 @@ export type Database = {
           descricao?: string | null
           destino_cep?: string | null
           destino_cidade?: string | null
+          destino_endereco?: string | null
           destino_lat?: number | null
           destino_lng?: number | null
           destino_logradouro?: string | null
@@ -776,6 +781,7 @@ export type Database = {
           id?: string
           origem_cep?: string | null
           origem_cidade?: string | null
+          origem_endereco?: string | null
           origem_lat?: number | null
           origem_lng?: number | null
           origem_logradouro?: string | null
@@ -791,6 +797,7 @@ export type Database = {
         Update: {
           associado_id?: string
           atendente_id?: string | null
+          avaliacao_comentario?: string | null
           avaliacao_nota?: number | null
           canal?: string
           created_at?: string
@@ -799,6 +806,7 @@ export type Database = {
           descricao?: string | null
           destino_cep?: string | null
           destino_cidade?: string | null
+          destino_endereco?: string | null
           destino_lat?: number | null
           destino_lng?: number | null
           destino_logradouro?: string | null
@@ -806,6 +814,7 @@ export type Database = {
           id?: string
           origem_cep?: string | null
           origem_cidade?: string | null
+          origem_endereco?: string | null
           origem_lat?: number | null
           origem_lng?: number | null
           origem_logradouro?: string | null
@@ -3033,6 +3042,11 @@ export type Database = {
         | "em_deslocamento"
         | "concluido"
         | "cancelado"
+        | "aguardando_prestador"
+        | "prestador_despachado"
+        | "prestador_a_caminho"
+        | "cancelado_associado"
+        | "cancelado_sistema"
       status_contrato:
         | "rascunho"
         | "pendente"
@@ -3304,6 +3318,11 @@ export const Constants = {
         "em_deslocamento",
         "concluido",
         "cancelado",
+        "aguardando_prestador",
+        "prestador_despachado",
+        "prestador_a_caminho",
+        "cancelado_associado",
+        "cancelado_sistema",
       ],
       status_contrato: [
         "rascunho",
