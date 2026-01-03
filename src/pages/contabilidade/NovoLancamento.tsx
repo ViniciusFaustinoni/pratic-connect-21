@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save, FileText } from 'lucide-react';
+import { ArrowLeft, Save, FileText, Check, X } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,6 +15,14 @@ import {
 } from '@/components/ui/select';
 import { PartidasEditor, Partida } from '@/components/contabilidade';
 import { useCriarLancamento } from '@/hooks/useContabilidade';
+import { cn } from '@/lib/utils';
+
+const formatCurrency = (value: number) => {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(value);
+};
 
 export default function NovoLancamento() {
   const navigate = useNavigate();
@@ -34,6 +42,16 @@ export default function NovoLancamento() {
     { id: crypto.randomUUID(), conta_id: '', tipo: 'credito', valor: 0 },
   ]);
 
+  // Cálculos de totais
+  const totalDebito = partidas
+    .filter((p) => p.tipo === 'debito' && p.valor > 0)
+    .reduce((sum, p) => sum + p.valor, 0);
+  const totalCredito = partidas
+    .filter((p) => p.tipo === 'credito' && p.valor > 0)
+    .reduce((sum, p) => sum + p.valor, 0);
+  const diferenca = totalDebito - totalCredito;
+  const balanceado = Math.abs(diferenca) < 0.01;
+
   const handleSubmit = async (status: 'rascunho' | 'ativo') => {
     // Validações
     if (!formData.historico.trim()) {
@@ -44,19 +62,12 @@ export default function NovoLancamento() {
       return;
     }
 
-    const partidasValidas = partidas.filter(p => p.conta_id && p.valor > 0);
+    const partidasValidas = partidas.filter((p) => p.conta_id && p.valor > 0);
     if (partidasValidas.length < 2) {
       return;
     }
 
-    const totalDebito = partidasValidas
-      .filter(p => p.tipo === 'debito')
-      .reduce((sum, p) => sum + p.valor, 0);
-    const totalCredito = partidasValidas
-      .filter(p => p.tipo === 'credito')
-      .reduce((sum, p) => sum + p.valor, 0);
-
-    if (status === 'ativo' && Math.abs(totalDebito - totalCredito) > 0.01) {
+    if (status === 'ativo' && !balanceado) {
       return;
     }
 
@@ -64,7 +75,7 @@ export default function NovoLancamento() {
       await criarLancamento.mutateAsync({
         ...formData,
         status,
-        partidas: partidasValidas.map(p => ({
+        partidas: partidasValidas.map((p) => ({
           conta_id: p.conta_id,
           tipo: p.tipo,
           valor: p.valor,
@@ -155,6 +166,41 @@ export default function NovoLancamento() {
               <PartidasEditor partidas={partidas} onChange={setPartidas} />
             </CardContent>
           </Card>
+
+          {/* Resumo de Balanceamento */}
+          <Card className="border-2 border-dashed">
+            <CardContent className="py-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="flex flex-wrap gap-6">
+                  <div>
+                    <span className="text-sm text-muted-foreground">Total Débito</span>
+                    <p className="text-xl font-bold">{formatCurrency(totalDebito)}</p>
+                  </div>
+                  <div>
+                    <span className="text-sm text-muted-foreground">Total Crédito</span>
+                    <p className="text-xl font-bold">{formatCurrency(totalCredito)}</p>
+                  </div>
+                  <div>
+                    <span className="text-sm text-muted-foreground">Diferença</span>
+                    <p className={cn('text-xl font-bold', diferenca !== 0 && 'text-destructive')}>
+                      {formatCurrency(Math.abs(diferenca))}
+                    </p>
+                  </div>
+                </div>
+                <div
+                  className={cn(
+                    'flex items-center gap-2 px-4 py-2 rounded-lg font-medium',
+                    balanceado
+                      ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                      : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                  )}
+                >
+                  {balanceado ? <Check className="h-5 w-5" /> : <X className="h-5 w-5" />}
+                  {balanceado ? 'Balanceado' : 'Não Balanceado'}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Sidebar */}
@@ -205,7 +251,7 @@ export default function NovoLancamento() {
               <Button
                 className="w-full"
                 onClick={() => handleSubmit('ativo')}
-                disabled={criarLancamento.isPending}
+                disabled={criarLancamento.isPending || !balanceado}
               >
                 <Save className="h-4 w-4 mr-2" />
                 {criarLancamento.isPending ? 'Salvando...' : 'Confirmar Lançamento'}
