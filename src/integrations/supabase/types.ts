@@ -1854,6 +1854,455 @@ export type Database = {
         }
         Relationships: []
       }
+      oficinas: {
+        Row: {
+          agencia: string | null
+          bairro: string | null
+          banco: string | null
+          cep: string | null
+          cidade: string
+          cnpj: string
+          complemento: string | null
+          conta: string | null
+          created_at: string | null
+          email: string | null
+          especialidades: string[] | null
+          estado: string
+          id: string
+          inscricao_estadual: string | null
+          logradouro: string | null
+          nome_fantasia: string | null
+          nota_media: number | null
+          numero: string | null
+          pix_chave: string | null
+          pix_tipo: Database["public"]["Enums"]["tipo_pix"] | null
+          razao_social: string
+          status: Database["public"]["Enums"]["status_oficina"] | null
+          telefone: string | null
+          total_avaliacoes: number | null
+          updated_at: string | null
+          whatsapp: string | null
+        }
+        Insert: {
+          agencia?: string | null
+          bairro?: string | null
+          banco?: string | null
+          cep?: string | null
+          cidade: string
+          cnpj: string
+          complemento?: string | null
+          conta?: string | null
+          created_at?: string | null
+          email?: string | null
+          especialidades?: string[] | null
+          estado: string
+          id?: string
+          inscricao_estadual?: string | null
+          logradouro?: string | null
+          nome_fantasia?: string | null
+          nota_media?: number | null
+          numero?: string | null
+          pix_chave?: string | null
+          pix_tipo?: Database["public"]["Enums"]["tipo_pix"] | null
+          razao_social: string
+          status?: Database["public"]["Enums"]["status_oficina"] | null
+          telefone?: string | null
+          total_avaliacoes?: number | null
+          updated_at?: string | null
+          whatsapp?: string | null
+        }
+        Update: {
+          agencia?: string | null
+          bairro?: string | null
+          banco?: string | null
+          cep?: string | null
+          cidade?: string
+          cnpj?: string
+          complemento?: string | null
+          conta?: string | null
+          created_at?: string | null
+          email?: string | null
+          especialidades?: string[] | null
+          estado?: string
+          id?: string
+          inscricao_estadual?: string | null
+          logradouro?: string | null
+          nome_fantasia?: string | null
+          nota_media?: number | null
+          numero?: string | null
+          pix_chave?: string | null
+          pix_tipo?: Database["public"]["Enums"]["tipo_pix"] | null
+          razao_social?: string
+          status?: Database["public"]["Enums"]["status_oficina"] | null
+          telefone?: string | null
+          total_avaliacoes?: number | null
+          updated_at?: string | null
+          whatsapp?: string | null
+        }
+        Relationships: []
+      }
+      oficinas_pagamentos: {
+        Row: {
+          comprovante_url: string | null
+          created_at: string | null
+          data_pagamento: string | null
+          forma_pagamento:
+            | Database["public"]["Enums"]["forma_pagamento_oficina"]
+            | null
+          id: string
+          observacao: string | null
+          oficina_id: string
+          ordem_servico_id: string | null
+          pago_por: string | null
+          status: Database["public"]["Enums"]["status_pagamento_oficina"] | null
+          valor: number
+        }
+        Insert: {
+          comprovante_url?: string | null
+          created_at?: string | null
+          data_pagamento?: string | null
+          forma_pagamento?:
+            | Database["public"]["Enums"]["forma_pagamento_oficina"]
+            | null
+          id?: string
+          observacao?: string | null
+          oficina_id: string
+          ordem_servico_id?: string | null
+          pago_por?: string | null
+          status?:
+            | Database["public"]["Enums"]["status_pagamento_oficina"]
+            | null
+          valor: number
+        }
+        Update: {
+          comprovante_url?: string | null
+          created_at?: string | null
+          data_pagamento?: string | null
+          forma_pagamento?:
+            | Database["public"]["Enums"]["forma_pagamento_oficina"]
+            | null
+          id?: string
+          observacao?: string | null
+          oficina_id?: string
+          ordem_servico_id?: string | null
+          pago_por?: string | null
+          status?:
+            | Database["public"]["Enums"]["status_pagamento_oficina"]
+            | null
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "oficinas_pagamentos_oficina_id_fkey"
+            columns: ["oficina_id"]
+            isOneToOne: false
+            referencedRelation: "oficinas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "oficinas_pagamentos_ordem_servico_id_fkey"
+            columns: ["ordem_servico_id"]
+            isOneToOne: false
+            referencedRelation: "ordens_servico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "oficinas_pagamentos_pago_por_fkey"
+            columns: ["pago_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ordens_servico: {
+        Row: {
+          aprovado_por: string | null
+          associado_id: string
+          created_at: string | null
+          criado_por: string | null
+          data_conclusao: string | null
+          data_entrada: string | null
+          data_previsao: string | null
+          id: string
+          numero: string
+          observacoes: string | null
+          observacoes_internas: string | null
+          oficina_id: string
+          sinistro_id: string | null
+          status: Database["public"]["Enums"]["status_ordem_servico"] | null
+          updated_at: string | null
+          valor_aprovado: number | null
+          valor_orcamento: number | null
+          valor_pago: number | null
+          veiculo_id: string
+        }
+        Insert: {
+          aprovado_por?: string | null
+          associado_id: string
+          created_at?: string | null
+          criado_por?: string | null
+          data_conclusao?: string | null
+          data_entrada?: string | null
+          data_previsao?: string | null
+          id?: string
+          numero: string
+          observacoes?: string | null
+          observacoes_internas?: string | null
+          oficina_id: string
+          sinistro_id?: string | null
+          status?: Database["public"]["Enums"]["status_ordem_servico"] | null
+          updated_at?: string | null
+          valor_aprovado?: number | null
+          valor_orcamento?: number | null
+          valor_pago?: number | null
+          veiculo_id: string
+        }
+        Update: {
+          aprovado_por?: string | null
+          associado_id?: string
+          created_at?: string | null
+          criado_por?: string | null
+          data_conclusao?: string | null
+          data_entrada?: string | null
+          data_previsao?: string | null
+          id?: string
+          numero?: string
+          observacoes?: string | null
+          observacoes_internas?: string | null
+          oficina_id?: string
+          sinistro_id?: string | null
+          status?: Database["public"]["Enums"]["status_ordem_servico"] | null
+          updated_at?: string | null
+          valor_aprovado?: number | null
+          valor_orcamento?: number | null
+          valor_pago?: number | null
+          veiculo_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ordens_servico_aprovado_por_fkey"
+            columns: ["aprovado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ordens_servico_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ordens_servico_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "ordens_servico_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "ordens_servico_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "ordens_servico_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "ordens_servico_criado_por_fkey"
+            columns: ["criado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ordens_servico_oficina_id_fkey"
+            columns: ["oficina_id"]
+            isOneToOne: false
+            referencedRelation: "oficinas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ordens_servico_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "sinistros"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ordens_servico_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "veiculos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ordens_servico_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "ordens_servico_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "ordens_servico_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["veiculo_id"]
+          },
+        ]
+      }
+      ordens_servico_fotos: {
+        Row: {
+          arquivo_url: string
+          created_at: string | null
+          descricao: string | null
+          id: string
+          ordem_servico_id: string
+          tipo: Database["public"]["Enums"]["tipo_foto_os"]
+        }
+        Insert: {
+          arquivo_url: string
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          ordem_servico_id: string
+          tipo: Database["public"]["Enums"]["tipo_foto_os"]
+        }
+        Update: {
+          arquivo_url?: string
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          ordem_servico_id?: string
+          tipo?: Database["public"]["Enums"]["tipo_foto_os"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ordens_servico_fotos_ordem_servico_id_fkey"
+            columns: ["ordem_servico_id"]
+            isOneToOne: false
+            referencedRelation: "ordens_servico"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ordens_servico_historico: {
+        Row: {
+          created_at: string | null
+          id: string
+          observacao: string | null
+          ordem_servico_id: string
+          status_anterior: string | null
+          status_novo: string
+          usuario_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          observacao?: string | null
+          ordem_servico_id: string
+          status_anterior?: string | null
+          status_novo: string
+          usuario_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          observacao?: string | null
+          ordem_servico_id?: string
+          status_anterior?: string | null
+          status_novo?: string
+          usuario_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ordens_servico_historico_ordem_servico_id_fkey"
+            columns: ["ordem_servico_id"]
+            isOneToOne: false
+            referencedRelation: "ordens_servico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ordens_servico_historico_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ordens_servico_itens: {
+        Row: {
+          aprovado: boolean | null
+          created_at: string | null
+          descricao: string
+          id: string
+          marca: string | null
+          numero_peca: string | null
+          ordem_servico_id: string
+          quantidade: number | null
+          tipo: Database["public"]["Enums"]["tipo_item_os"]
+          valor_total: number
+          valor_unitario: number
+        }
+        Insert: {
+          aprovado?: boolean | null
+          created_at?: string | null
+          descricao: string
+          id?: string
+          marca?: string | null
+          numero_peca?: string | null
+          ordem_servico_id: string
+          quantidade?: number | null
+          tipo: Database["public"]["Enums"]["tipo_item_os"]
+          valor_total: number
+          valor_unitario: number
+        }
+        Update: {
+          aprovado?: boolean | null
+          created_at?: string | null
+          descricao?: string
+          id?: string
+          marca?: string | null
+          numero_peca?: string | null
+          ordem_servico_id?: string
+          quantidade?: number | null
+          tipo?: Database["public"]["Enums"]["tipo_item_os"]
+          valor_total?: number
+          valor_unitario?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ordens_servico_itens_ordem_servico_id_fkey"
+            columns: ["ordem_servico_id"]
+            isOneToOne: false
+            referencedRelation: "ordens_servico"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       planos: {
         Row: {
           ativo: boolean
@@ -3031,6 +3480,7 @@ export type Database = {
         | "perdido"
         | "contato"
         | "qualificado"
+      forma_pagamento_oficina: "pix" | "transferencia" | "boleto" | "cheque"
       motivo_perda:
         | "preco"
         | "concorrencia"
@@ -3099,6 +3549,24 @@ export type Database = {
         | "concluida"
         | "reagendada"
         | "cancelada"
+      status_oficina: "ativo" | "inativo" | "suspenso" | "bloqueado"
+      status_ordem_servico:
+        | "rascunho"
+        | "aguardando_orcamento"
+        | "orcamento_enviado"
+        | "aguardando_aprovacao"
+        | "aprovado"
+        | "em_execucao"
+        | "aguardando_peca"
+        | "concluido"
+        | "aguardando_pagamento"
+        | "pago"
+        | "cancelado"
+      status_pagamento_oficina:
+        | "pendente"
+        | "processando"
+        | "pago"
+        | "cancelado"
       status_rastreador: "estoque" | "instalado" | "manutencao" | "baixado"
       status_rota: "pendente" | "em_andamento" | "concluida" | "cancelada"
       status_sinistro:
@@ -3142,6 +3610,9 @@ export type Database = {
         | "foto_painel"
         | "foto_hodometro"
         | "outro"
+      tipo_foto_os: "entrada" | "execucao" | "conclusao"
+      tipo_item_os: "peca" | "mao_de_obra" | "servico_terceiro"
+      tipo_pix: "cpf" | "cnpj" | "email" | "telefone" | "aleatoria"
       tipo_sinistro:
         | "roubo"
         | "furto"
@@ -3309,6 +3780,7 @@ export const Constants = {
         "contato",
         "qualificado",
       ],
+      forma_pagamento_oficina: ["pix", "transferencia", "boleto", "cheque"],
       motivo_perda: [
         "preco",
         "concorrencia",
@@ -3379,6 +3851,26 @@ export const Constants = {
         "reagendada",
         "cancelada",
       ],
+      status_oficina: ["ativo", "inativo", "suspenso", "bloqueado"],
+      status_ordem_servico: [
+        "rascunho",
+        "aguardando_orcamento",
+        "orcamento_enviado",
+        "aguardando_aprovacao",
+        "aprovado",
+        "em_execucao",
+        "aguardando_peca",
+        "concluido",
+        "aguardando_pagamento",
+        "pago",
+        "cancelado",
+      ],
+      status_pagamento_oficina: [
+        "pendente",
+        "processando",
+        "pago",
+        "cancelado",
+      ],
       status_rastreador: ["estoque", "instalado", "manutencao", "baixado"],
       status_rota: ["pendente", "em_andamento", "concluida", "cancelada"],
       status_sinistro: [
@@ -3426,6 +3918,9 @@ export const Constants = {
         "foto_hodometro",
         "outro",
       ],
+      tipo_foto_os: ["entrada", "execucao", "conclusao"],
+      tipo_item_os: ["peca", "mao_de_obra", "servico_terceiro"],
+      tipo_pix: ["cpf", "cnpj", "email", "telefone", "aleatoria"],
       tipo_sinistro: [
         "roubo",
         "furto",

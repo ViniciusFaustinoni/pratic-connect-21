@@ -32,6 +32,9 @@ import Rotas from "./pages/monitoramento/Rotas";
 import Estoque from "./pages/monitoramento/Estoque";
 import Rastreadores from "./pages/monitoramento/Rastreadores";
 import Mapa from "./pages/monitoramento/Mapa";
+import Oficinas from "./pages/oficinas/Oficinas";
+import OrdensServico from "./pages/oficinas/OrdensServico";
+import OrdemServicoDetalhe from "./pages/oficinas/OrdemServicoDetalhe";
 import Configuracoes from "./pages/Configuracoes";
 import NotFound from "./pages/NotFound";
 
@@ -107,6 +110,11 @@ const App = () => (
               <Route path="/monitoramento/estoque" element={<Estoque />} />
               <Route path="/monitoramento/mapa" element={<Mapa />} />
               <Route path="/monitoramento/rastreadores" element={<Rastreadores />} />
+              
+              {/* Oficinas */}
+              <Route path="/oficinas" element={<Oficinas />} />
+              <Route path="/ordens-servico" element={<OrdensServico />} />
+              <Route path="/ordens-servico/:id" element={<OrdemServicoDetalhe />} />
               
               {/* Config */}
               <Route path="/configuracoes" element={<Configuracoes />} />
