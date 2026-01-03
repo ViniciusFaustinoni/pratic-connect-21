@@ -21,6 +21,7 @@ import {
   CardVeiculo, 
   CardBoleto, 
   CardAcessoRapido,
+  CardPlano,
   ListaAlertas,
   CardTudoEmDia
 } from '@/components/app';
@@ -102,6 +103,8 @@ export default function AppHome() {
     return <HomeLoading />;
   }
 
+  const navigate = useNavigate();
+
   return (
     <div className="flex flex-col gap-4 p-4 pb-24">
       {/* Saudação */}
@@ -109,9 +112,6 @@ export default function AppHome() {
         <h1 className="text-2xl font-bold text-foreground">
           Olá, {profile?.nome ? getPrimeiroNome(profile.nome) : 'Associado'}! 👋
         </h1>
-        <p className="text-sm text-muted-foreground">
-          Plano: {associado?.planos?.nome || 'Carregando...'}
-        </p>
       </div>
 
       {/* Card do Veículo */}
@@ -132,6 +132,16 @@ export default function AppHome() {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* Card do Plano */}
+      {associado?.planos && (
+        <CardPlano 
+          plano={associado.planos}
+          dataAdesao={associado.created_at}
+          compacto
+          onClick={() => navigate('/app/perfil')}
+        />
       )}
 
       {/* Card do Próximo Boleto */}
@@ -179,6 +189,17 @@ function HomeLoading() {
           </div>
           <Skeleton className="h-16 w-full rounded-lg" />
           <Skeleton className="h-10 w-full" />
+        </CardContent>
+      </Card>
+
+      {/* Card plano */}
+      <Card className="border-0 shadow-sm">
+        <CardContent className="flex items-center gap-3 p-4">
+          <Skeleton className="h-10 w-10 rounded-full" />
+          <div className="space-y-2">
+            <Skeleton className="h-5 w-32" />
+            <Skeleton className="h-4 w-24" />
+          </div>
         </CardContent>
       </Card>
 
