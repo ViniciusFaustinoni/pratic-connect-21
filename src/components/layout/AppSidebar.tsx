@@ -15,6 +15,7 @@ import {
   Package,
   Radio,
   Kanban,
+  TrendingUp,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
@@ -44,7 +45,7 @@ const menuItems = {
   vendas: [
     { title: 'Leads', url: '/vendas/leads', icon: UserPlus },
     { title: 'Kanban', url: '/vendas/kanban', icon: Kanban },
-    { title: 'Cotações', url: '/vendas/cotacoes', icon: Calculator },
+    { title: 'Cotador', url: '/vendas/cotacoes', icon: Calculator },
     { title: 'Contratos', url: '/vendas/contratos', icon: FileText },
   ],
   cadastro: [
@@ -117,6 +118,7 @@ export function AppSidebar() {
           <Collapsible defaultOpen={isGroupActive(menuItems.vendas)}>
             <CollapsibleTrigger asChild>
               <SidebarGroupLabel className="cursor-pointer hover:bg-sidebar-accent/50">
+                <TrendingUp className="h-4 w-4" />
                 <span>Vendas</span>
                 <ChevronDown className="ml-auto h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
               </SidebarGroupLabel>
@@ -149,6 +151,7 @@ export function AppSidebar() {
           <Collapsible defaultOpen={isGroupActive(menuItems.cadastro)}>
             <CollapsibleTrigger asChild>
               <SidebarGroupLabel className="cursor-pointer hover:bg-sidebar-accent/50">
+                <FileText className="h-4 w-4" />
                 <span>Cadastro</span>
                 <ChevronDown className="ml-auto h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
               </SidebarGroupLabel>
@@ -181,6 +184,7 @@ export function AppSidebar() {
           <Collapsible defaultOpen={isGroupActive(menuItems.monitoramento)}>
             <CollapsibleTrigger asChild>
               <SidebarGroupLabel className="cursor-pointer hover:bg-sidebar-accent/50">
+                <MapPin className="h-4 w-4" />
                 <span>Monitoramento</span>
                 <ChevronDown className="ml-auto h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
               </SidebarGroupLabel>

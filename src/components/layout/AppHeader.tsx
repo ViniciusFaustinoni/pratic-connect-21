@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Bell, LogOut, Menu, ChevronRight } from 'lucide-react';
+import { Bell, LogOut, ChevronRight, User, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -15,12 +15,20 @@ import { ROLE_LABELS } from '@/types/database';
 
 const routeLabels: Record<string, string> = {
   '/dashboard': 'Dashboard',
+  '/vendas': 'Vendas',
   '/vendas/leads': 'Leads',
-  '/vendas/cotacoes': 'Cotações',
+  '/vendas/kanban': 'Kanban',
+  '/vendas/cotacoes': 'Cotador',
   '/vendas/contratos': 'Contratos',
+  '/cadastro': 'Cadastro',
   '/cadastro/associados': 'Associados',
   '/cadastro/veiculos': 'Veículos',
   '/cadastro/documentos': 'Documentos',
+  '/monitoramento': 'Monitoramento',
+  '/monitoramento/instalacoes': 'Instalações',
+  '/monitoramento/rotas': 'Rotas',
+  '/monitoramento/estoque': 'Estoque',
+  '/monitoramento/rastreadores': 'Rastreadores',
   '/configuracoes': 'Configurações',
 };
 
@@ -101,6 +109,15 @@ export function AppHeader() {
                 <DropdownMenuSeparator />
               </>
             )}
+            <DropdownMenuItem onClick={() => navigate('/configuracoes')}>
+              <User className="mr-2 h-4 w-4" />
+              Perfil
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => navigate('/configuracoes')}>
+              <Settings className="mr-2 h-4 w-4" />
+              Configurações
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleSignOut} className="text-destructive">
               <LogOut className="mr-2 h-4 w-4" />
               Sair
