@@ -676,6 +676,103 @@ export type Database = {
           },
         ]
       }
+      estoque_movimentacoes: {
+        Row: {
+          created_at: string | null
+          fornecedor: string | null
+          id: string
+          instalacao_id: string | null
+          motivo: string | null
+          nota_fiscal: string | null
+          observacoes: string | null
+          quantidade: number
+          rastreador_id: string | null
+          status_anterior: string | null
+          status_novo: string | null
+          tipo: string
+          updated_at: string | null
+          usuario_id: string | null
+          veiculo_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          fornecedor?: string | null
+          id?: string
+          instalacao_id?: string | null
+          motivo?: string | null
+          nota_fiscal?: string | null
+          observacoes?: string | null
+          quantidade?: number
+          rastreador_id?: string | null
+          status_anterior?: string | null
+          status_novo?: string | null
+          tipo: string
+          updated_at?: string | null
+          usuario_id?: string | null
+          veiculo_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          fornecedor?: string | null
+          id?: string
+          instalacao_id?: string | null
+          motivo?: string | null
+          nota_fiscal?: string | null
+          observacoes?: string | null
+          quantidade?: number
+          rastreador_id?: string | null
+          status_anterior?: string | null
+          status_novo?: string | null
+          tipo?: string
+          updated_at?: string | null
+          usuario_id?: string | null
+          veiculo_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "estoque_movimentacoes_instalacao_id_fkey"
+            columns: ["instalacao_id"]
+            isOneToOne: false
+            referencedRelation: "instalacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estoque_movimentacoes_instalacao_id_fkey"
+            columns: ["instalacao_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["instalacao_id"]
+          },
+          {
+            foreignKeyName: "estoque_movimentacoes_rastreador_id_fkey"
+            columns: ["rastreador_id"]
+            isOneToOne: false
+            referencedRelation: "rastreadores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estoque_movimentacoes_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estoque_movimentacoes_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "veiculos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estoque_movimentacoes_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["veiculo_id"]
+          },
+        ]
+      }
       instalacao_fotos: {
         Row: {
           arquivo_url: string
