@@ -44,6 +44,8 @@ import NotFound from "./pages/NotFound";
 import AssistenciaDashboard from "./pages/assistencia/AssistenciaDashboard";
 import ChamadosList from "./pages/assistencia/ChamadosList";
 import ChamadoDetalhe from "./pages/assistencia/ChamadoDetalhe";
+import PrestadoresList from "./pages/assistencia/PrestadoresList";
+import PrestadorDetalhe from "./pages/assistencia/PrestadorDetalhe";
 
 // Associate App Pages
 import AppLogin from "./pages/app/AppLogin";
@@ -115,6 +117,8 @@ const App = () => (
               <Route path="/assistencia" element={<AssistenciaDashboard />} />
               <Route path="/assistencia/chamados" element={<ChamadosList />} />
               <Route path="/assistencia/chamados/:id" element={<ChamadoDetalhe />} />
+              <Route path="/assistencia/prestadores" element={<PrestadoresList />} />
+              <Route path="/assistencia/prestadores/:id" element={<PrestadorDetalhe />} />
               
               {/* Monitoramento */}
               <Route path="/monitoramento/instalacoes" element={<Instalacoes />} />
