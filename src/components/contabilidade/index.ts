@@ -5,3 +5,4 @@ export { NovaContaModal } from './NovaContaModal';
 export { PartidasEditor } from './PartidasEditor';
 export type { Partida } from './PartidasEditor';
 export { PlanoContasTree } from './PlanoContasTree';
+export { SeletorConta } from './SeletorConta';
