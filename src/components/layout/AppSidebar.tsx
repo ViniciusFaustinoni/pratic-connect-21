@@ -22,6 +22,8 @@ import {
   Map,
   Building2,
   LucideIcon,
+  Phone,
+  AlertTriangle,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
@@ -120,6 +122,16 @@ const menuConfig: {
           icon: Map,
           permission: 'canManageRastreadores',
         },
+      ],
+    },
+    {
+      id: 'eventos',
+      label: 'Eventos',
+      icon: AlertTriangle,
+      permission: 'canManageSinistros',
+      items: [
+        { title: 'Sinistros', url: '/eventos/sinistros', icon: AlertTriangle },
+        { title: 'Assistência 24h', url: '/assistencia', icon: Phone },
       ],
     },
     {

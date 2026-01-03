@@ -41,6 +41,7 @@ import OrdensServicoList from "./pages/oficina/OrdensServicoList";
 import OrdemServicoDetalhePage from "./pages/oficina/OrdemServicoDetalhe";
 import Configuracoes from "./pages/Configuracoes";
 import NotFound from "./pages/NotFound";
+import AssistenciaDashboard from "./pages/assistencia/AssistenciaDashboard";
 
 // Associate App Pages
 import AppLogin from "./pages/app/AppLogin";
@@ -107,6 +108,9 @@ const App = () => (
               <Route path="/eventos/dashboard" element={<SinistrosDashboard />} />
               <Route path="/eventos/sinistros" element={<SinistrosList />} />
               <Route path="/eventos/sinistros/:id" element={<SinistroDetalhe />} />
+              
+              {/* Assistência 24h */}
+              <Route path="/assistencia" element={<AssistenciaDashboard />} />
               
               {/* Monitoramento */}
               <Route path="/monitoramento/instalacoes" element={<Instalacoes />} />

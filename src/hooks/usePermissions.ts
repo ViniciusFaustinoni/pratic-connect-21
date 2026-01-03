@@ -28,6 +28,7 @@ export type PermissionKey =
   | 'canAccessApp'
   | 'canManageCadastro'
   | 'canManageOficinas'
+  | 'canManageSinistros'
   | 'canApproveOS';
 
 /**
@@ -71,6 +72,7 @@ export function usePermissions() {
     canAccessApp: profile?.tipo === 'associado',
     canManageCadastro: hasRole('analista_cadastro') || isGerencia(),
     canManageOficinas: hasRole('analista_cadastro') || isGerencia(),
+    canManageSinistros: hasRole('analista_cadastro') || isGerencia(),
     canApproveOS: isGerencia(),
   };
 
