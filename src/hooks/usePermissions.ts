@@ -16,6 +16,7 @@ export function usePermissions() {
     isDiretor: hasRole('diretor'),
     isGerente: hasRole('gerente_comercial'),
     isSupervisor: hasRole('supervisor_vendas'),
+    isGerenciaOrSupervisor: isGerencia() || hasRole('supervisor_vendas'),
     isVendedorClt: hasRole('vendedor_clt'),
     isVendedorExterno: hasRole('vendedor_externo'),
     isAnalistaCadastro: hasRole('analista_cadastro'),

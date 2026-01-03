@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 
 interface LeadTimelineProps {
   leadId: string;
+  limit?: number;
 }
 
 const acaoIcons: Record<string, React.ReactNode> = {
@@ -27,8 +28,11 @@ const acaoLabels: Record<string, string> = {
   criou_lead: 'Lead criado',
 };
 
-export function LeadTimeline({ leadId }: LeadTimelineProps) {
+export function LeadTimeline({ leadId, limit }: LeadTimelineProps) {
   const { data: historico, isLoading } = useLeadHistorico(leadId);
+  
+  // Aplicar limite se especificado
+  const displayedHistorico = limit && historico ? historico.slice(0, limit) : historico;
 
   if (isLoading) {
     return (
@@ -45,7 +49,7 @@ export function LeadTimeline({ leadId }: LeadTimelineProps) {
     );
   }
 
-  if (!historico || historico.length === 0) {
+  if (!displayedHistorico || displayedHistorico.length === 0) {
     return (
       <Card>
         <CardHeader>
@@ -72,7 +76,7 @@ export function LeadTimeline({ leadId }: LeadTimelineProps) {
           <div className="absolute left-4 top-0 bottom-0 w-px bg-border" />
 
           <div className="space-y-6">
-            {historico.map((item, index) => (
+            {displayedHistorico.map((item, index) => (
               <div key={item.id} className="relative flex gap-4 pl-10">
                 {/* Círculo */}
                 <div

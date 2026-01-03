@@ -84,7 +84,7 @@ export function LeadFormDialog({ open, onOpenChange }: LeadFormDialogProps) {
         veiculo_ano: data.veiculo_ano || null,
         veiculo_placa: data.veiculo_placa || null,
         veiculo_fipe: data.veiculo_fipe || null,
-        origem: data.origem,
+        origem: data.origem as 'site', // Cast for Supabase compatibility
         observacoes: data.observacoes || null,
         etapa: 'novo',
       });

@@ -7,6 +7,13 @@ type Lead = Tables<'leads'>;
 type LeadInsert = TablesInsert<'leads'>;
 type LeadUpdate = TablesUpdate<'leads'>;
 
+// Tipo para lead com vendedor
+export interface LeadWithVendedor extends Lead {
+  vendedor?: {
+    nome: string;
+  } | null;
+}
+
 export interface LeadFilters {
   etapa?: EtapaLead | 'all';
   origem?: OrigemLead | 'all';
@@ -23,7 +30,7 @@ export interface UseLeadsOptions {
 }
 
 export interface LeadsResult {
-  leads: Lead[];
+  leads: LeadWithVendedor[];
   total: number;
   totalPages: number;
 }
@@ -34,7 +41,10 @@ export function useLeads(options?: UseLeadsOptions) {
   return useQuery({
     queryKey: ['leads', filters, page, perPage],
     queryFn: async (): Promise<LeadsResult> => {
-      let query = supabase.from('leads').select('*', { count: 'exact' });
+      // Buscar leads - note que vendedor_id aponta para profiles.user_id, não profiles.id
+      let query = supabase
+        .from('leads')
+        .select(`*`, { count: 'exact' });
 
       // Apply filters - cast etapa to the type expected by Supabase
       if (filters?.etapa && filters.etapa !== 'all') {
@@ -42,7 +52,8 @@ export function useLeads(options?: UseLeadsOptions) {
       }
 
       if (filters?.origem && filters.origem !== 'all') {
-        query = query.eq('origem', filters.origem);
+        // Usar filtro como unknown para evitar problemas com enum
+        query = query.eq('origem', filters.origem as unknown as 'site');
       }
 
       if (filters?.vendedor_id && filters.vendedor_id !== 'all') {
@@ -75,7 +86,7 @@ export function useLeads(options?: UseLeadsOptions) {
       if (error) throw error;
 
       return {
-        leads: data as Lead[],
+        leads: (data || []) as LeadWithVendedor[],
         total: count || 0,
         totalPages: Math.ceil((count || 0) / perPage),
       };

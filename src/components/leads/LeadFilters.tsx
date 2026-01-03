@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { Search, Calendar, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -16,6 +17,7 @@ import {
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { ETAPA_LABELS, ORIGEM_LABELS, type EtapaLead, type OrigemLead } from '@/types/database';
 import { useVendedores } from '@/hooks/useVendedores';
+import { usePermissions } from '@/hooks/usePermissions';
 import type { LeadFilters as LeadFiltersType } from '@/hooks/useLeads';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -27,28 +29,51 @@ interface LeadFiltersProps {
 
 const etapas: EtapaLead[] = [
   'novo',
-  'contato_inicial',
-  'apresentacao',
+  'contato',
+  'qualificado',
   'cotacao_enviada',
   'negociacao',
+  'vistoria_agendada',
+  'contrato_enviado',
+  'contrato_assinado',
+  'instalacao_agendada',
   'ganho',
   'perdido',
 ];
 
 const origens: OrigemLead[] = [
-  'indicacao',
   'site',
+  'whatsapp',
+  'indicacao',
   'facebook',
   'instagram',
   'google',
   'telefone',
   'presencial',
-  'parceiro',
   'outro',
 ];
 
 export function LeadFilters({ filters, onFiltersChange }: LeadFiltersProps) {
   const { data: vendedores } = useVendedores();
+  const { isGerencia, isSupervisor } = usePermissions();
+  
+  // Estado local para debounce da busca
+  const [searchInput, setSearchInput] = useState(filters.search || '');
+
+  // Debounce 300ms
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchInput !== filters.search) {
+        onFiltersChange({ ...filters, search: searchInput });
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  // Sincronizar estado local quando filtros externos mudam
+  useEffect(() => {
+    setSearchInput(filters.search || '');
+  }, [filters.search]);
 
   const hasActiveFilters =
     (filters.etapa && filters.etapa !== 'all') ||
@@ -59,6 +84,7 @@ export function LeadFilters({ filters, onFiltersChange }: LeadFiltersProps) {
     filters.search;
 
   const clearFilters = () => {
+    setSearchInput('');
     onFiltersChange({
       etapa: 'all',
       origem: 'all',
@@ -69,16 +95,18 @@ export function LeadFilters({ filters, onFiltersChange }: LeadFiltersProps) {
     });
   };
 
+  const showVendedorFilter = isGerencia || isSupervisor;
+
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:flex-wrap">
-      {/* Busca */}
+      {/* Busca com debounce */}
       <div className="relative flex-1 min-w-[200px]">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
-          placeholder="Buscar nome, telefone, placa, CPF..."
+          placeholder="Buscar nome, telefone, placa..."
           className="pl-9"
-          value={filters.search || ''}
-          onChange={(e) => onFiltersChange({ ...filters, search: e.target.value })}
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
         />
       </div>
 
@@ -118,23 +146,25 @@ export function LeadFilters({ filters, onFiltersChange }: LeadFiltersProps) {
         </SelectContent>
       </Select>
 
-      {/* Vendedor */}
-      <Select
-        value={filters.vendedor_id || 'all'}
-        onValueChange={(value) => onFiltersChange({ ...filters, vendedor_id: value })}
-      >
-        <SelectTrigger className="w-full sm:w-44">
-          <SelectValue placeholder="Vendedor" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">Todos vendedores</SelectItem>
-          {vendedores?.map((vendedor) => (
-            <SelectItem key={vendedor.user_id} value={vendedor.user_id}>
-              {vendedor.nome}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      {/* Vendedor - apenas para gerência/supervisor */}
+      {showVendedorFilter && (
+        <Select
+          value={filters.vendedor_id || 'all'}
+          onValueChange={(value) => onFiltersChange({ ...filters, vendedor_id: value })}
+        >
+          <SelectTrigger className="w-full sm:w-44">
+            <SelectValue placeholder="Vendedor" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos vendedores</SelectItem>
+            {vendedores?.map((vendedor) => (
+              <SelectItem key={vendedor.user_id} value={vendedor.user_id}>
+                {vendedor.nome}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
 
       {/* Data De */}
       <Popover>
@@ -188,7 +218,7 @@ export function LeadFilters({ filters, onFiltersChange }: LeadFiltersProps) {
       {hasActiveFilters && (
         <Button variant="ghost" size="sm" onClick={clearFilters} className="gap-1">
           <X className="h-4 w-4" />
-          Limpar
+          Limpar filtros
         </Button>
       )}
     </div>

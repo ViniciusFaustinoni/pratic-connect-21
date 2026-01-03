@@ -31,7 +31,7 @@ import {
 import { CpfInput, TelefoneInput, PlacaInput, CurrencyInput } from '@/components/inputs/MaskedInputs';
 import { leadSchema, type LeadFormData } from '@/lib/validations';
 import { useUpdateLead } from '@/hooks/useLeads';
-import { ORIGEM_LABELS, ETAPA_LABELS, type Lead, type EtapaLead } from '@/types/database';
+import { ORIGEM_LABELS, ETAPA_LABELS, type Lead, type EtapaLead, type OrigemLead } from '@/types/database';
 import { toast } from 'sonner';
 
 interface LeadEditDialogProps {
@@ -77,7 +77,7 @@ export function LeadEditDialog({ open, onOpenChange, lead }: LeadEditDialogProps
         veiculo_ano: lead.veiculo_ano || null,
         veiculo_placa: lead.veiculo_placa || '',
         veiculo_fipe: lead.veiculo_fipe || null,
-        origem: lead.origem,
+        origem: lead.origem as OrigemLead,
         observacoes: lead.observacoes || '',
         etapa: lead.etapa,
         motivo_perda: lead.motivo_perda || '',
@@ -100,7 +100,7 @@ export function LeadEditDialog({ open, onOpenChange, lead }: LeadEditDialogProps
         veiculo_ano: data.veiculo_ano || null,
         veiculo_placa: data.veiculo_placa || null,
         veiculo_fipe: data.veiculo_fipe || null,
-        origem: data.origem,
+        origem: data.origem as 'site', // Cast for Supabase compatibility
         observacoes: data.observacoes || null,
         etapa: data.etapa as 'novo', // Cast for Supabase compatibility
         motivo_perda: data.motivo_perda || null,
