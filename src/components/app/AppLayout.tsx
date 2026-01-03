@@ -1,12 +1,15 @@
-import { Outlet, Navigate, useLocation } from 'react-router-dom';
+import { Outlet, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { AppHeader } from './AppHeader';
 import { AppBottomNav } from './AppBottomNav';
 import { useAuth } from '@/contexts/AuthContext';
+import { useUnreadCount } from '@/hooks/useMyNotificacoes';
 import { Loader2 } from 'lucide-react';
 
 export function AppLayout() {
   const { user, profile, loading, signOut } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
+  const { data: unreadCount = 0 } = useUnreadCount();
 
   if (loading) {
     return (
@@ -48,9 +51,16 @@ export function AppLayout() {
     await signOut();
   };
 
+  const handleNotificationClick = () => {
+    navigate('/app/notificacoes');
+  };
+
   return (
     <div className="flex min-h-screen flex-col bg-muted/30">
-      <AppHeader />
+      <AppHeader 
+        notificationCount={unreadCount} 
+        onNotificationClick={handleNotificationClick} 
+      />
       <main className="flex-1 overflow-auto pb-[56px] md:pb-0">
         <div className="mx-auto max-w-lg">
           <Outlet />
