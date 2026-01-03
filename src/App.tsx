@@ -70,7 +70,7 @@ const App = () => (
               {/* Vendas */}
               <Route path="/vendas/leads" element={<Leads />} />
               <Route path="/vendas/leads/:id" element={<LeadDetalhe />} />
-              <Route path="/vendas/kanban" element={<LeadKanban />} />
+              <Route path="/vendas/pipeline" element={<LeadKanban />} />
               <Route path="/vendas/cotacoes" element={<Cotacoes />} />
               <Route path="/vendas/contratos" element={<Contratos />} />
               

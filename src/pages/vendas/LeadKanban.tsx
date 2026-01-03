@@ -178,7 +178,7 @@ export default function LeadKanban() {
         <div>
           <h1 className="text-2xl font-bold">Pipeline de Vendas</h1>
           <p className="text-muted-foreground">
-            Gerencie seus leads pelo funil de vendas
+            Acompanhe o funil de conversão
           </p>
         </div>
         <Button className="gap-2" onClick={() => setShowLeadForm(true)}>
