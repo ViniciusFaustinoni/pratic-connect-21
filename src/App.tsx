@@ -50,6 +50,9 @@ import PrestadorDetalhe from "./pages/assistencia/PrestadorDetalhe";
 
 // Financeiro
 import FinanceiroDashboard from "./pages/financeiro/FinanceiroDashboard";
+
+// Cobrança
+import CobrancaDashboard from "./pages/cobranca/CobrancaDashboard";
 import CobrancasList from "./pages/financeiro/CobrancasList";
 import CobrancaDetalhe from "./pages/financeiro/CobrancaDetalhe";
 import FaturamentoMensal from "./pages/financeiro/FaturamentoMensal";
@@ -139,6 +142,9 @@ const App = () => (
               <Route path="/financeiro/extrato" element={<Extrato />} />
               
               {/* Monitoramento */}
+              {/* Cobrança */}
+              <Route path="/cobranca" element={<CobrancaDashboard />} />
+              
               <Route path="/monitoramento/instalacoes" element={<Instalacoes />} />
               <Route path="/monitoramento/rotas" element={<Rotas />} />
               <Route path="/monitoramento/estoque" element={<Estoque />} />
