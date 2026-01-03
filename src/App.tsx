@@ -38,6 +38,7 @@ import AppAssistenciaDetalhe from "./pages/app/AppAssistenciaDetalhe";
 import AppAssistenciaNova from "./pages/app/AppAssistenciaNova";
 import AppSinistros from "./pages/app/AppSinistros";
 import AppSinistroNovo from "./pages/app/AppSinistroNovo";
+import AppSinistroDetalhe from "./pages/app/AppSinistroDetalhe";
 import AppPerfil from "./pages/app/AppPerfil";
 import AppConfiguracoes from "./pages/app/AppConfiguracoes";
 import AppDocumentos from "./pages/app/AppDocumentos";
@@ -100,6 +101,7 @@ const App = () => (
               <Route path="/app/assistencia/:id" element={<AppAssistenciaDetalhe />} />
               <Route path="/app/sinistros" element={<AppSinistros />} />
               <Route path="/app/sinistros/novo" element={<AppSinistroNovo />} />
+              <Route path="/app/sinistros/:id" element={<AppSinistroDetalhe />} />
               <Route path="/app/perfil" element={<AppPerfil />} />
               <Route path="/app/plano" element={<AppPlano />} />
               <Route path="/app/configuracoes" element={<AppConfiguracoes />} />
