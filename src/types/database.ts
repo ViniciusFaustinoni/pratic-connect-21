@@ -940,3 +940,28 @@ export const STATUS_ORDEM_SERVICO_COLORS: Record<StatusOrdemServico, string> = {
   pago: 'bg-emerald-100 text-emerald-800',
   cancelado: 'bg-red-100 text-red-800',
 };
+
+// Especialidades de oficinas
+export const ESPECIALIDADES_OFICINA = [
+  'funilaria',
+  'pintura',
+  'mecanica',
+  'eletrica',
+  'vidros',
+  'ar_condicionado',
+  'suspensao',
+  'freios',
+] as const;
+
+export type EspecialidadeOficina = typeof ESPECIALIDADES_OFICINA[number];
+
+export const ESPECIALIDADE_LABELS: Record<EspecialidadeOficina, string> = {
+  funilaria: 'Funilaria',
+  pintura: 'Pintura',
+  mecanica: 'Mecânica',
+  eletrica: 'Elétrica',
+  vidros: 'Vidros',
+  ar_condicionado: 'Ar Condicionado',
+  suspensao: 'Suspensão',
+  freios: 'Freios',
+};

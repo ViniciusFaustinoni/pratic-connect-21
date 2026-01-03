@@ -8,6 +8,7 @@ export interface OficinaFilters {
   cidade?: string;
   estado?: string;
   search?: string;
+  especialidade?: string;
 }
 
 export function useOficinas(filters?: OficinaFilters) {
@@ -30,6 +31,9 @@ export function useOficinas(filters?: OficinaFilters) {
       }
       if (filters?.search) {
         query = query.or(`razao_social.ilike.%${filters.search}%,nome_fantasia.ilike.%${filters.search}%,cnpj.ilike.%${filters.search}%`);
+      }
+      if (filters?.especialidade) {
+        query = query.contains('especialidades', [filters.especialidade]);
       }
 
       const { data, error } = await query;
