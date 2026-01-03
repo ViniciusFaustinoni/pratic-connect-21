@@ -135,27 +135,29 @@ export default function AppSinistros() {
       ) : (
         <div className="space-y-3">
           {sinistros.map((sinistro) => (
-            <Card key={sinistro.id} className="border-0 shadow-sm">
-              <CardContent className="flex items-center gap-4 p-4">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-destructive/10">
-                  <AlertTriangle className="h-5 w-5 text-destructive" />
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between">
-                    <p className="font-semibold text-foreground">
-                      #{sinistro.protocolo}
-                    </p>
-                    {getStatusBadge(sinistro.status)}
+            <Link key={sinistro.id} to={`/app/sinistros/${sinistro.id}`}>
+              <Card className="border-0 shadow-sm hover:shadow-md transition-shadow">
+                <CardContent className="flex items-center gap-4 p-4">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-destructive/10">
+                    <AlertTriangle className="h-5 w-5 text-destructive" />
                   </div>
-                  <div className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
-                    <span>{TIPO_LABELS[sinistro.tipo] || sinistro.tipo}</span>
-                    <span>•</span>
-                    <span>{formatDate(sinistro.data_ocorrencia)}</span>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <p className="font-semibold text-foreground">
+                        #{sinistro.protocolo}
+                      </p>
+                      {getStatusBadge(sinistro.status)}
+                    </div>
+                    <div className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
+                      <span>{TIPO_LABELS[sinistro.tipo] || sinistro.tipo}</span>
+                      <span>•</span>
+                      <span>{formatDate(sinistro.data_ocorrencia)}</span>
+                    </div>
                   </div>
-                </div>
-                <ChevronRight className="h-5 w-5 text-muted-foreground" />
-              </CardContent>
-            </Card>
+                  <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                </CardContent>
+              </Card>
+            </Link>
           ))}
         </div>
       )}
