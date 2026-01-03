@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
+import { Calendar as CalendarComponent } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { 
   User, 
   Mail, 
@@ -9,7 +12,7 @@ import {
   MapPin, 
   Car,
   Shield,
-  Calendar,
+  CalendarDays,
   Lock,
   LogOut,
   ChevronRight,
@@ -570,6 +573,11 @@ function ModalEditarDadosPessoais({
   const [email, setEmail] = useState(associado.email);
   const [telefone, setTelefone] = useState(associado.telefone || '');
   const [whatsapp, setWhatsapp] = useState(associado.whatsapp || '');
+  const [dataNascimento, setDataNascimento] = useState<Date | undefined>(
+    associado.data_nascimento 
+      ? new Date(associado.data_nascimento) 
+      : undefined
+  );
   const [salvando, setSalvando] = useState(false);
 
   const handleSalvar = async () => {
@@ -580,7 +588,15 @@ function ModalEditarDadosPessoais({
 
     setSalvando(true);
     try {
-      await onSave({ nome, email, telefone, whatsapp });
+      await onSave({ 
+        nome, 
+        email, 
+        telefone, 
+        whatsapp,
+        data_nascimento: dataNascimento 
+          ? format(dataNascimento, 'yyyy-MM-dd') 
+          : null
+      });
       toast.success('Dados atualizados com sucesso!');
       onOpenChange(false);
     } catch (error) {
@@ -634,6 +650,38 @@ function ModalEditarDadosPessoais({
               onChange={(e) => setWhatsapp(e.target.value)}
               placeholder="(11) 99999-9999"
             />
+          </div>
+          <div className="space-y-2">
+            <Label>Data de Nascimento</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-full justify-start text-left font-normal",
+                    !dataNascimento && "text-muted-foreground"
+                  )}
+                >
+                  <Cake className="mr-2 h-4 w-4" />
+                  {dataNascimento 
+                    ? format(dataNascimento, "dd/MM/yyyy") 
+                    : "Selecione uma data"
+                  }
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <CalendarComponent
+                  mode="single"
+                  selected={dataNascimento}
+                  onSelect={setDataNascimento}
+                  disabled={(date) =>
+                    date > new Date() || date < new Date("1900-01-01")
+                  }
+                  initialFocus
+                  className="pointer-events-auto"
+                />
+              </PopoverContent>
+            </Popover>
           </div>
         </div>
         <DialogFooter>
