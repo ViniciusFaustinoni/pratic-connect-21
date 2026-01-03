@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Package, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { EstoqueMetricas } from '@/components/monitoramento/estoque/EstoqueMetricas';
 import { EntradaEstoqueDialog } from '@/components/monitoramento/estoque/EntradaEstoqueDialog';
+import { HistoricoMovimentacoes } from '@/components/monitoramento/estoque/HistoricoMovimentacoes';
 
 export default function Estoque() {
   const [modalEntradaAberto, setModalEntradaAberto] = useState(false);
@@ -25,25 +25,7 @@ export default function Estoque() {
 
       <EstoqueMetricas />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Inventário</CardTitle>
-          <CardDescription>
-            Lista completa de equipamentos
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex h-[300px] items-center justify-center rounded-lg border border-dashed">
-            <div className="text-center">
-              <Package className="mx-auto h-12 w-12 text-muted-foreground/50" />
-              <h3 className="mt-4 text-lg font-semibold">Estoque vazio</h3>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Cadastre rastreadores para começar
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <HistoricoMovimentacoes />
 
       <EntradaEstoqueDialog
         open={modalEntradaAberto}
