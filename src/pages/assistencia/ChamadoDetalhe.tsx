@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import { AtribuirPrestadorModal } from '@/components/assistencia/AtribuirPrestadorModal';
 import { supabase } from '@/integrations/supabase/client';
 import { format, differenceInMinutes } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -86,6 +88,7 @@ const getTempoEspera = (dataAbertura: string) => {
 export default function ChamadoDetalhe() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [modalPrestador, setModalPrestador] = useState(false);
 
   // Query: Dados do Chamado
   const { data: chamado, isLoading } = useQuery({
@@ -230,7 +233,7 @@ export default function ChamadoDetalhe() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setModalPrestador(true)}>
               <UserPlus className="h-4 w-4 mr-2" />
               Atribuir Prestador
             </DropdownMenuItem>
@@ -596,6 +599,13 @@ export default function ChamadoDetalhe() {
           </Card>
         </div>
       </div>
+
+      {/* Modal Atribuir Prestador */}
+      <AtribuirPrestadorModal
+        open={modalPrestador}
+        onClose={() => setModalPrestador(false)}
+        chamado={chamado}
+      />
     </div>
   );
 }
