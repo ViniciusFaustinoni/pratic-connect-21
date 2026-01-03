@@ -52,6 +52,7 @@ import PrestadorDetalhe from "./pages/assistencia/PrestadorDetalhe";
 import FinanceiroDashboard from "./pages/financeiro/FinanceiroDashboard";
 import CobrancasList from "./pages/financeiro/CobrancasList";
 import CobrancaDetalhe from "./pages/financeiro/CobrancaDetalhe";
+import FaturamentoMensal from "./pages/financeiro/FaturamentoMensal";
 
 // Associate App Pages
 import AppLogin from "./pages/app/AppLogin";
@@ -131,6 +132,7 @@ const App = () => (
               <Route path="/financeiro" element={<FinanceiroDashboard />} />
               <Route path="/financeiro/cobrancas" element={<CobrancasList />} />
               <Route path="/financeiro/cobrancas/:id" element={<CobrancaDetalhe />} />
+              <Route path="/financeiro/faturamento" element={<FaturamentoMensal />} />
               
               {/* Monitoramento */}
               <Route path="/monitoramento/instalacoes" element={<Instalacoes />} />
