@@ -19,6 +19,7 @@ import {
   BarChart3,
   ClipboardList,
   Target,
+  Map,
   LucideIcon,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
@@ -110,6 +111,12 @@ const menuConfig: {
           title: 'Rastreadores', 
           url: '/monitoramento/rastreadores', 
           icon: Radio,
+          permission: 'canManageRastreadores',
+        },
+        { 
+          title: 'Mapa', 
+          url: '/monitoramento/mapa', 
+          icon: Map,
           permission: 'canManageRastreadores',
         },
       ],
