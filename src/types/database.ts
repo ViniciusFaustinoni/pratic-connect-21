@@ -594,6 +594,22 @@ export const STATUS_RASTREADOR_LABELS: Record<StatusRastreador, string> = {
   baixado: 'Baixado',
 };
 
+export const STATUS_RASTREADOR_COLORS: Record<StatusRastreador, string> = {
+  estoque: 'bg-gray-100 text-gray-800',
+  instalado: 'bg-green-100 text-green-800',
+  manutencao: 'bg-yellow-100 text-yellow-800',
+  baixado: 'bg-red-100 text-red-800',
+};
+
+export const PLATAFORMA_RASTREADOR_LABELS: Record<string, string> = {
+  rede_veiculos: 'Rede Veículos',
+  soft_truck: 'Soft Truck',
+  autotrac: 'Autotrac',
+  sascar: 'Sascar',
+  omnilink: 'Omnilink',
+  outra: 'Outra',
+};
+
 export const STATUS_ROTA_LABELS: Record<StatusRota, string> = {
   pendente: 'Pendente',
   em_andamento: 'Em Andamento',
