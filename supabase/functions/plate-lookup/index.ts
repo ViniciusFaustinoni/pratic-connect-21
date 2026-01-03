@@ -35,7 +35,8 @@ serve(async (req) => {
   }
 
   try {
-    const { placa } = await req.json();
+    const body = await req.json();
+    const placa = body.placa || body.plate;
     
     if (!placa) {
       throw new Error("Placa é obrigatória");
@@ -147,11 +148,24 @@ serve(async (req) => {
 
     const result = {
       success: true,
-      data: {
-        ...vehicleData,
-        ...(fipeData || {}),
-        fipeEncontrado: !!fipeData,
-      }
+      extractedPlate: formatarPlaca(placaNormalizada),
+      vehicleData: {
+        placa: formatarPlaca(placaNormalizada),
+        chassi: vehicleData.chassi || '',
+        marca: vehicleData.marca,
+        modelo: vehicleData.modelo,
+        marca_modelo: `${vehicleData.marca} ${vehicleData.modelo}`.trim(),
+        ano: vehicleData.anoModelo?.toString() || vehicleData.anoFabricacao?.toString() || '',
+        cor: vehicleData.cor,
+        combustivel: vehicleData.combustivel,
+        municipio: vehicleData.municipio,
+        uf: vehicleData.uf,
+      },
+      fipeData: fipeData ? {
+        codigo: fipeData.codigoFipe,
+        valor: fipeData.valorFipe,
+        mesReferencia: fipeData.mesReferencia,
+      } : null
     };
 
     console.log(`[plate-lookup] Retornando resultado:`, JSON.stringify(result));
