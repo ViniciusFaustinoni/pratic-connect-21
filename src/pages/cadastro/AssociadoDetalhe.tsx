@@ -1,11 +1,31 @@
 import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Phone, Mail, MessageCircle, MapPin, Calendar, User, Car, FileCheck, FileText, Clock, Edit, Ban, AlertTriangle, Loader2 } from 'lucide-react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { 
+  ArrowLeft, Phone, Mail, MessageCircle, MapPin, Calendar, User, Car, 
+  FileCheck, FileText, Clock, Edit, Ban, AlertTriangle, Loader2,
+  Receipt, MoreHorizontal, CheckCircle, XCircle, Pause, Play, Lock, Unlock,
+  CreditCard
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { 
   Table, 
   TableBody, 
@@ -14,6 +34,14 @@ import {
   TableHeader, 
   TableRow 
 } from '@/components/ui/table';
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from '@/components/ui/breadcrumb';
 import { 
   STATUS_ASSOCIADO_LABELS, 
   STATUS_VEICULO_LABELS,
@@ -21,10 +49,14 @@ import {
   type StatusAssociado,
   type StatusVeiculo,
 } from '@/types/database';
-import { useAssociado } from '@/hooks/useAssociados';
+import { useAssociado, useUpdateAssociadoStatus } from '@/hooks/useAssociados';
 import { useVeiculos } from '@/hooks/useVeiculos';
+import { useAssociadoHistorico } from '@/hooks/useAssociadoHistorico';
 import { useToast } from '@/hooks/use-toast';
 import { DocumentUploader } from '@/components/cadastro/DocumentUploader';
+import { ConfirmacaoAcaoDialog } from '@/components/associados/ConfirmacaoAcaoDialog';
+import { AssociadoEditDialog } from '@/components/associados/AssociadoEditDialog';
+import { AssociadoTimeline } from '@/components/associados/AssociadoTimeline';
 
 const statusColors: Record<StatusAssociado, string> = {
   em_analise: 'bg-blue-500 text-white',
@@ -36,6 +68,18 @@ const statusColors: Record<StatusAssociado, string> = {
   suspenso: 'bg-gray-500 text-white',
   cancelado: 'bg-destructive text-destructive-foreground',
   bloqueado: 'bg-red-700 text-white',
+};
+
+const avatarColors: Record<StatusAssociado, string> = {
+  em_analise: 'bg-blue-500',
+  aprovado: 'bg-green-500',
+  documentacao_pendente: 'bg-yellow-500',
+  aguardando_instalacao: 'bg-purple-500',
+  ativo: 'bg-green-600',
+  inadimplente: 'bg-orange-500',
+  suspenso: 'bg-gray-500',
+  cancelado: 'bg-red-600',
+  bloqueado: 'bg-red-700',
 };
 
 const veiculoStatusColors: Record<StatusVeiculo, string> = {
@@ -53,8 +97,17 @@ export default function AssociadoDetalhe() {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const { data: associado, isLoading } = useAssociado(id);
+  const { data: associado, isLoading, refetch } = useAssociado(id);
   const { data: veiculos } = useVeiculos(id);
+  const { data: historico, isLoading: historicoLoading } = useAssociadoHistorico(id);
+  const updateStatus = useUpdateAssociadoStatus();
+
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    action: 'bloquear' | 'suspender' | 'cancelar';
+  }>({ open: false, action: 'bloquear' });
+  const [selectedVeiculoId, setSelectedVeiculoId] = useState<string | undefined>(undefined);
 
   const formatDate = (dateStr: string | null | undefined) => {
     if (!dateStr) return '-';
@@ -69,12 +122,75 @@ export default function AssociadoDetalhe() {
     }).format(value);
   };
 
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map((n) => n[0])
+      .slice(0, 2)
+      .join('')
+      .toUpperCase();
+  };
+
   const handleWhatsApp = () => {
     if (associado?.telefone) {
       const phone = associado.telefone.replace(/\D/g, '');
       window.open(`https://wa.me/55${phone}`, '_blank');
     }
   };
+
+  const handleStatusAction = (action: 'bloquear' | 'suspender' | 'cancelar') => {
+    setConfirmDialog({ open: true, action });
+  };
+
+  const handleConfirmAction = async (motivo: string) => {
+    if (!confirmDialog.action || !associado) return;
+    
+    const statusMap = {
+      bloquear: 'bloqueado' as const,
+      suspender: 'suspenso' as const,
+      cancelar: 'cancelado' as const,
+    };
+
+    try {
+      await updateStatus.mutateAsync({
+        id: associado.id,
+        status: statusMap[confirmDialog.action],
+        motivo,
+      });
+      toast({ title: 'Status atualizado', description: `Associado ${confirmDialog.action === 'bloquear' ? 'bloqueado' : confirmDialog.action === 'suspender' ? 'suspenso' : 'cancelado'} com sucesso.` });
+      refetch();
+    } catch {
+      toast({ title: 'Erro', description: 'Não foi possível atualizar o status.', variant: 'destructive' });
+    }
+    setConfirmDialog({ open: false, action: 'bloquear' });
+  };
+
+  const handleReativar = async () => {
+    if (!associado) return;
+    try {
+      await updateStatus.mutateAsync({ id: associado.id, status: 'ativo' });
+      toast({ title: 'Associado reativado', description: 'O associado foi reativado com sucesso.' });
+      refetch();
+    } catch {
+      toast({ title: 'Erro', description: 'Não foi possível reativar o associado.', variant: 'destructive' });
+    }
+  };
+
+  const handleDesbloquear = async () => {
+    if (!associado) return;
+    try {
+      await updateStatus.mutateAsync({ id: associado.id, status: 'ativo' });
+      toast({ title: 'Associado desbloqueado', description: 'O associado foi desbloqueado com sucesso.' });
+      refetch();
+    } catch {
+      toast({ title: 'Erro', description: 'Não foi possível desbloquear o associado.', variant: 'destructive' });
+    }
+  };
+
+  // Set default vehicle when data loads
+  if (veiculos?.length && !selectedVeiculoId) {
+    setSelectedVeiculoId(veiculos[0].id);
+  }
 
   if (isLoading) {
     return (
@@ -96,45 +212,212 @@ export default function AssociadoDetalhe() {
     );
   }
 
+  const status = associado.status as StatusAssociado;
+
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/cadastro/associados')}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold">{associado.nome}</h1>
-              <Badge className={statusColors[associado.status as StatusAssociado]}>
-                {STATUS_ASSOCIADO_LABELS[associado.status as StatusAssociado]}
-              </Badge>
-              {associado.bloqueado && (
-                <Badge className="bg-red-700 text-white">
-                  <Ban className="mr-1 h-3 w-3" />
-                  Bloqueado
-                </Badge>
-              )}
+      {/* Breadcrumb */}
+      <Breadcrumb>
+        <BreadcrumbList>
+          <BreadcrumbItem>
+            <BreadcrumbLink asChild>
+              <Link to="/cadastro/associados">Cadastro</Link>
+            </BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            <BreadcrumbLink asChild>
+              <Link to="/cadastro/associados">Associados</Link>
+            </BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            <BreadcrumbPage>{associado.nome}</BreadcrumbPage>
+          </BreadcrumbItem>
+        </BreadcrumbList>
+      </Breadcrumb>
+
+      {/* Header Card */}
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex flex-col lg:flex-row gap-6">
+            {/* Left: Avatar + Name */}
+            <div className="flex items-start gap-4">
+              <Avatar className={`h-16 w-16 ${avatarColors[status]} text-white`}>
+                <AvatarFallback className="bg-transparent text-xl font-bold">
+                  {getInitials(associado.nome)}
+                </AvatarFallback>
+              </Avatar>
+              <div>
+                <h1 className="text-2xl font-bold">{associado.nome}</h1>
+                <p className="text-muted-foreground">CPF: {associado.cpf}</p>
+                <div className="flex items-center gap-2 mt-2">
+                  <Badge className={statusColors[status]}>
+                    {STATUS_ASSOCIADO_LABELS[status]}
+                  </Badge>
+                  {associado.bloqueado && (
+                    <Badge className="bg-red-700 text-white">
+                      <Ban className="mr-1 h-3 w-3" />
+                      Bloqueado
+                    </Badge>
+                  )}
+                </div>
+              </div>
             </div>
-            <p className="text-muted-foreground">CPF: {associado.cpf}</p>
+
+            {/* Center: Contact Info */}
+            <div className="flex-1 grid grid-cols-2 gap-3 text-sm">
+              <div className="flex items-center gap-2">
+                <Phone className="h-4 w-4 text-muted-foreground" />
+                <span>{associado.telefone}</span>
+              </div>
+              <div className="flex items-center gap-2 cursor-pointer text-green-600 hover:underline" onClick={handleWhatsApp}>
+                <MessageCircle className="h-4 w-4" />
+                <span>WhatsApp</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Mail className="h-4 w-4 text-muted-foreground" />
+                <span className="truncate">{associado.email}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-muted-foreground" />
+                <span>{associado.cidade ? `${associado.cidade}/${associado.uf}` : '-'}</span>
+              </div>
+            </div>
+
+            {/* Right: Mini Cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="bg-muted/50 rounded-lg p-3 text-center">
+                <p className="text-xs text-muted-foreground">Plano</p>
+                <p className="font-semibold text-sm truncate">{associado.planos?.nome || '-'}</p>
+              </div>
+              <div className="bg-muted/50 rounded-lg p-3 text-center">
+                <p className="text-xs text-muted-foreground">Desde</p>
+                <p className="font-semibold text-sm">{formatDate(associado.data_adesao)}</p>
+              </div>
+              <div className="bg-muted/50 rounded-lg p-3 text-center">
+                <p className="text-xs text-muted-foreground">Dia Venc.</p>
+                <p className="font-semibold text-sm">
+                  {associado.dia_vencimento ? `Dia ${associado.dia_vencimento}` : '-'}
+                </p>
+              </div>
+              <div className="bg-muted/50 rounded-lg p-3 text-center">
+                <p className="text-xs text-muted-foreground">Veículos</p>
+                <p className="font-semibold text-sm">{veiculos?.length || 0}</p>
+              </div>
+            </div>
           </div>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={handleWhatsApp}>
-            <MessageCircle className="mr-2 h-4 w-4" />
-            WhatsApp
-          </Button>
-          <Button variant="outline" size="sm">
+        </CardContent>
+      </Card>
+
+      {/* Action Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Button variant="ghost" onClick={() => navigate('/cadastro/associados')}>
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Voltar
+        </Button>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" onClick={() => setEditDialogOpen(true)}>
             <Edit className="mr-2 h-4 w-4" />
-            Editar
+            Editar Dados
           </Button>
+          <Button variant="outline" onClick={handleWhatsApp}>
+            <MessageCircle className="mr-2 h-4 w-4" />
+            Enviar Mensagem
+          </Button>
+          <Button variant="outline" onClick={() => toast({ title: 'Em desenvolvimento', description: 'Módulo financeiro em implementação.' })}>
+            <Receipt className="mr-2 h-4 w-4" />
+            Gerar Boleto
+          </Button>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline">
+                <MoreHorizontal className="mr-2 h-4 w-4" />
+                Alterar Status
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="bg-popover">
+              {status === 'ativo' && (
+                <>
+                  <DropdownMenuItem onClick={() => handleStatusAction('suspender')}>
+                    <Pause className="mr-2 h-4 w-4" />
+                    Suspender
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleStatusAction('bloquear')}>
+                    <Lock className="mr-2 h-4 w-4" />
+                    Bloquear
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => handleStatusAction('cancelar')} className="text-destructive">
+                    <XCircle className="mr-2 h-4 w-4" />
+                    Cancelar
+                  </DropdownMenuItem>
+                </>
+              )}
+              {status === 'suspenso' && (
+                <>
+                  <DropdownMenuItem onClick={handleReativar}>
+                    <Play className="mr-2 h-4 w-4" />
+                    Reativar
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleStatusAction('bloquear')}>
+                    <Lock className="mr-2 h-4 w-4" />
+                    Bloquear
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => handleStatusAction('cancelar')} className="text-destructive">
+                    <XCircle className="mr-2 h-4 w-4" />
+                    Cancelar
+                  </DropdownMenuItem>
+                </>
+              )}
+              {status === 'bloqueado' && (
+                <>
+                  <DropdownMenuItem onClick={handleDesbloquear}>
+                    <Unlock className="mr-2 h-4 w-4" />
+                    Desbloquear
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => handleStatusAction('cancelar')} className="text-destructive">
+                    <XCircle className="mr-2 h-4 w-4" />
+                    Cancelar
+                  </DropdownMenuItem>
+                </>
+              )}
+              {status === 'inadimplente' && (
+                <>
+                  <DropdownMenuItem onClick={() => handleStatusAction('suspender')}>
+                    <Pause className="mr-2 h-4 w-4" />
+                    Suspender
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleStatusAction('bloquear')}>
+                    <Lock className="mr-2 h-4 w-4" />
+                    Bloquear
+                  </DropdownMenuItem>
+                </>
+              )}
+              {status === 'em_analise' && (
+                <>
+                  <DropdownMenuItem onClick={handleReativar}>
+                    <CheckCircle className="mr-2 h-4 w-4" />
+                    Aprovar
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleStatusAction('cancelar')} className="text-destructive">
+                    <XCircle className="mr-2 h-4 w-4" />
+                    Reprovar
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
       {/* Tabs */}
       <Tabs defaultValue="dados" className="space-y-4">
-        <TabsList>
+        <TabsList className="flex-wrap">
           <TabsTrigger value="dados">
             <User className="mr-2 h-4 w-4" />
             Dados
@@ -150,6 +433,10 @@ export default function AssociadoDetalhe() {
           <TabsTrigger value="contrato">
             <FileText className="mr-2 h-4 w-4" />
             Contrato
+          </TabsTrigger>
+          <TabsTrigger value="boletos">
+            <CreditCard className="mr-2 h-4 w-4" />
+            Boletos
           </TabsTrigger>
           <TabsTrigger value="historico">
             <Clock className="mr-2 h-4 w-4" />
@@ -272,8 +559,8 @@ export default function AssociadoDetalhe() {
                   </div>
                   <div>
                     <p className="text-muted-foreground">Status</p>
-                    <Badge className={statusColors[associado.status as StatusAssociado]}>
-                      {STATUS_ASSOCIADO_LABELS[associado.status as StatusAssociado]}
+                    <Badge className={statusColors[status]}>
+                      {STATUS_ASSOCIADO_LABELS[status]}
                     </Badge>
                   </div>
                   <div>
@@ -363,10 +650,27 @@ export default function AssociadoDetalhe() {
         </TabsContent>
 
         {/* Tab: Documentos */}
-        <TabsContent value="documentos">
+        <TabsContent value="documentos" className="space-y-4">
+          {veiculos && veiculos.length > 1 && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Veículo:</span>
+              <Select value={selectedVeiculoId} onValueChange={setSelectedVeiculoId}>
+                <SelectTrigger className="w-64">
+                  <SelectValue placeholder="Selecione o veículo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {veiculos.map((v) => (
+                    <SelectItem key={v.id} value={v.id}>
+                      {v.placa} - {v.modelo}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <DocumentUploader
             associadoId={id!}
-            veiculoId={veiculos?.[0]?.id}
+            veiculoId={selectedVeiculoId || veiculos?.[0]?.id}
             modo="completo"
             onTodosEnviados={() => toast({ title: 'Todos os documentos obrigatórios enviados!' })}
           />
@@ -404,16 +708,16 @@ export default function AssociadoDetalhe() {
                     </div>
                   </div>
                   {associado.contratos.autentique_url && (
-                    <Separator />
-                  )}
-                  {associado.contratos.autentique_url && (
-                    <Button 
-                      variant="outline"
-                      onClick={() => window.open(associado.contratos?.autentique_url || '', '_blank')}
-                    >
-                      <FileText className="mr-2 h-4 w-4" />
-                      Ver Contrato no Autentique
-                    </Button>
+                    <>
+                      <Separator />
+                      <Button 
+                        variant="outline"
+                        onClick={() => window.open(associado.contratos?.autentique_url || '', '_blank')}
+                      >
+                        <FileText className="mr-2 h-4 w-4" />
+                        Ver Contrato no Autentique
+                      </Button>
+                    </>
                   )}
                 </div>
               )}
@@ -421,22 +725,60 @@ export default function AssociadoDetalhe() {
           </Card>
         </TabsContent>
 
-        {/* Tab: Histórico */}
-        <TabsContent value="historico">
+        {/* Tab: Boletos */}
+        <TabsContent value="boletos">
           <Card>
-            <CardContent className="p-6">
-              <div className="flex flex-col items-center justify-center py-8">
-                <Clock className="h-12 w-12 text-muted-foreground/50" />
-                <h3 className="mt-4 font-semibold">Em desenvolvimento</h3>
-                <p className="text-sm text-muted-foreground">
-                  O histórico de atividades será exibido aqui
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-base">Boletos</CardTitle>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => toast({ title: 'Em desenvolvimento', description: 'Módulo financeiro em implementação.' })}
+              >
+                <Receipt className="mr-2 h-4 w-4" />
+                Gerar Novo Boleto
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col items-center justify-center py-12">
+                <CreditCard className="h-12 w-12 text-muted-foreground/50" />
+                <h3 className="mt-4 font-semibold">Módulo financeiro em desenvolvimento</h3>
+                <p className="text-sm text-muted-foreground text-center mt-1">
+                  Em breve você poderá visualizar e gerenciar os boletos do associado aqui.
                 </p>
               </div>
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Tab: Histórico */}
+        <TabsContent value="historico">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Histórico de Atividades</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <AssociadoTimeline items={historico || []} isLoading={historicoLoading} />
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
 
+      {/* Dialogs */}
+      <ConfirmacaoAcaoDialog
+        open={confirmDialog.open}
+        onOpenChange={(open) => setConfirmDialog({ ...confirmDialog, open })}
+        acao={confirmDialog.action}
+        nomeAssociado={associado.nome}
+        onConfirm={handleConfirmAction}
+      />
+
+      <AssociadoEditDialog
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        associado={associado}
+        onSuccess={() => refetch()}
+      />
     </div>
   );
 }
