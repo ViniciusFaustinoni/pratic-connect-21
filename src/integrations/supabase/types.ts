@@ -921,6 +921,65 @@ export type Database = {
           },
         ]
       }
+      metas_vendas: {
+        Row: {
+          ano: number
+          created_at: string | null
+          id: string
+          mes: number
+          meta_contratos: number | null
+          meta_cotacoes: number | null
+          meta_leads: number | null
+          meta_valor: number | null
+          realizado_contratos: number | null
+          realizado_cotacoes: number | null
+          realizado_leads: number | null
+          realizado_valor: number | null
+          updated_at: string | null
+          vendedor_id: string
+        }
+        Insert: {
+          ano: number
+          created_at?: string | null
+          id?: string
+          mes: number
+          meta_contratos?: number | null
+          meta_cotacoes?: number | null
+          meta_leads?: number | null
+          meta_valor?: number | null
+          realizado_contratos?: number | null
+          realizado_cotacoes?: number | null
+          realizado_leads?: number | null
+          realizado_valor?: number | null
+          updated_at?: string | null
+          vendedor_id: string
+        }
+        Update: {
+          ano?: number
+          created_at?: string | null
+          id?: string
+          mes?: number
+          meta_contratos?: number | null
+          meta_cotacoes?: number | null
+          meta_leads?: number | null
+          meta_valor?: number | null
+          realizado_contratos?: number | null
+          realizado_cotacoes?: number | null
+          realizado_leads?: number | null
+          realizado_valor?: number | null
+          updated_at?: string | null
+          vendedor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "metas_vendas_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notificacoes: {
         Row: {
           created_at: string
