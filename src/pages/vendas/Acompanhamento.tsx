@@ -1,11 +1,13 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Phone, Car, FileCheck, Calendar, User, Clock, MessageCircle } from "lucide-react";
+import { Phone, Car, FileCheck, Calendar, User, Clock, MessageCircle, AlertCircle } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useAcompanhamento } from "@/hooks/useAcompanhamento";
 
-interface AcompanhamentoItem {
+interface TransformedItem {
   id: string;
   nome: string;
   telefone: string;
@@ -18,113 +20,6 @@ interface AcompanhamentoItem {
   vendedor: string;
   atualizadoEm: string;
 }
-
-const mockAcompanhamento: AcompanhamentoItem[] = [
-  {
-    id: "1",
-    nome: "João Silva",
-    telefone: "(21) 99999-1111",
-    veiculo: "Corolla 2020",
-    placa: "ABC-1234",
-    fase: "documentacao",
-    docsAprovados: 2,
-    docsTotal: 5,
-    instalacaoData: null,
-    vendedor: "Maria",
-    atualizadoEm: "2024-01-08"
-  },
-  {
-    id: "2",
-    nome: "Maria Santos",
-    telefone: "(21) 99999-2222",
-    veiculo: "HB20 2021",
-    placa: "DEF-5678",
-    fase: "analise_cadastro",
-    docsAprovados: 5,
-    docsTotal: 5,
-    instalacaoData: null,
-    vendedor: "Carlos",
-    atualizadoEm: "2024-01-09"
-  },
-  {
-    id: "3",
-    nome: "Pedro Oliveira",
-    telefone: "(21) 99999-3333",
-    veiculo: "Onix 2022",
-    placa: "GHI-9012",
-    fase: "aprovado",
-    docsAprovados: 5,
-    docsTotal: 5,
-    instalacaoData: null,
-    vendedor: "Maria",
-    atualizadoEm: "2024-01-07"
-  },
-  {
-    id: "4",
-    nome: "Ana Costa",
-    telefone: "(21) 99999-4444",
-    veiculo: "Gol 2019",
-    placa: "JKL-3456",
-    fase: "instalacao_agendada",
-    docsAprovados: 5,
-    docsTotal: 5,
-    instalacaoData: "2024-01-15",
-    vendedor: "Carlos",
-    atualizadoEm: "2024-01-10"
-  },
-  {
-    id: "5",
-    nome: "Lucas Ferreira",
-    telefone: "(21) 99999-5555",
-    veiculo: "Civic 2021",
-    placa: "MNO-7890",
-    fase: "instalacao_concluida",
-    docsAprovados: 5,
-    docsTotal: 5,
-    instalacaoData: "2024-01-10",
-    vendedor: "Maria",
-    atualizadoEm: "2024-01-10"
-  },
-  {
-    id: "6",
-    nome: "Roberto Lima",
-    telefone: "(21) 99999-6666",
-    veiculo: "Kicks 2022",
-    placa: "PQR-1234",
-    fase: "ativacao_pendente",
-    docsAprovados: 5,
-    docsTotal: 5,
-    instalacaoData: "2024-01-08",
-    vendedor: "Carlos",
-    atualizadoEm: "2024-01-11"
-  },
-  {
-    id: "7",
-    nome: "Carla Souza",
-    telefone: "(21) 99999-7777",
-    veiculo: "Polo 2023",
-    placa: "STU-5678",
-    fase: "ativo",
-    docsAprovados: 5,
-    docsTotal: 5,
-    instalacaoData: "2024-01-05",
-    vendedor: "Maria",
-    atualizadoEm: "2024-01-08"
-  },
-  {
-    id: "8",
-    nome: "Fernando Alves",
-    telefone: "(21) 99999-8888",
-    veiculo: "T-Cross 2022",
-    placa: "VWX-9012",
-    fase: "ativo",
-    docsAprovados: 5,
-    docsTotal: 5,
-    instalacaoData: "2024-01-03",
-    vendedor: "Carlos",
-    atualizadoEm: "2024-01-06"
-  }
-];
 
 const fases = [
   { id: "documentacao", label: "Documentação", cor: "gray" },
@@ -157,7 +52,7 @@ const formatRelativeTime = (dateStr: string) => {
   }
 };
 
-const AcompanhamentoCard = ({ item }: { item: AcompanhamentoItem }) => {
+const AcompanhamentoCard = ({ item }: { item: TransformedItem }) => {
   const whatsappNumber = item.telefone.replace(/\D/g, "");
   
   return (
@@ -193,16 +88,18 @@ const AcompanhamentoCard = ({ item }: { item: AcompanhamentoItem }) => {
         <div className="flex items-center gap-1 text-xs text-muted-foreground">
           <Car className="h-3 w-3 flex-shrink-0" />
           <span className="truncate">{item.veiculo}</span>
-          <Badge variant="outline" className="text-[10px] px-1 py-0 ml-auto">
-            {item.placa}
-          </Badge>
+          {item.placa && item.placa !== '-' && (
+            <Badge variant="outline" className="text-[10px] px-1 py-0 ml-auto">
+              {item.placa}
+            </Badge>
+          )}
         </div>
 
         <div className="border-t pt-2 space-y-1.5">
           {/* Documentos */}
           <div className="flex items-center gap-1 text-xs">
             <FileCheck className="h-3 w-3 text-muted-foreground" />
-            <span className={item.docsAprovados === item.docsTotal ? "text-green-600" : "text-amber-600"}>
+            <span className={item.docsAprovados === item.docsTotal && item.docsTotal > 0 ? "text-green-600" : "text-amber-600"}>
               {item.docsAprovados}/{item.docsTotal} docs aprovados
             </span>
           </div>
@@ -232,7 +129,7 @@ const AcompanhamentoCard = ({ item }: { item: AcompanhamentoItem }) => {
   );
 };
 
-const KanbanColumn = ({ fase, items }: { fase: typeof fases[0]; items: AcompanhamentoItem[] }) => {
+const KanbanColumn = ({ fase, items }: { fase: typeof fases[0]; items: TransformedItem[] }) => {
   const style = getColumnStyle(fase.cor);
   
   return (
@@ -265,11 +162,58 @@ const KanbanColumn = ({ fase, items }: { fase: typeof fases[0]; items: Acompanha
   );
 };
 
+const KanbanColumnSkeleton = () => (
+  <div className="flex-shrink-0 w-[280px] rounded-lg border bg-muted/30">
+    <div className="p-3 border-b">
+      <Skeleton className="h-5 w-32" />
+    </div>
+    <div className="p-2 space-y-2">
+      {[1, 2, 3].map((i) => (
+        <Skeleton key={i} className="h-32 w-full" />
+      ))}
+    </div>
+  </div>
+);
+
 export default function Acompanhamento() {
+  const { data: items, isLoading, error } = useAcompanhamento();
+
+  // Transformar dados da VIEW para o formato do card
+  const transformedItems: TransformedItem[] = items?.map(item => ({
+    id: item.lead_id,
+    nome: item.nome,
+    telefone: item.telefone,
+    veiculo: [item.veiculo_marca, item.veiculo_modelo, item.veiculo_ano].filter(Boolean).join(' ') || 'Sem veículo',
+    placa: item.veiculo_placa || '-',
+    fase: item.fase_acompanhamento,
+    docsAprovados: item.docs_aprovados,
+    docsTotal: item.docs_total,
+    instalacaoData: item.instalacao_data,
+    vendedor: item.vendedor_nome || 'Não atribuído',
+    atualizadoEm: item.updated_at,
+  })) || [];
+
   const itemsPorFase = fases.reduce((acc, fase) => {
-    acc[fase.id] = mockAcompanhamento.filter((item) => item.fase === fase.id);
+    acc[fase.id] = transformedItems.filter((item) => item.fase === fase.id);
     return acc;
-  }, {} as Record<string, AcompanhamentoItem[]>);
+  }, {} as Record<string, TransformedItem[]>);
+
+  if (error) {
+    return (
+      <div className="p-6 space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold">Acompanhamento</h1>
+          <p className="text-muted-foreground">
+            Acompanhe o progresso dos leads após fecharem contrato
+          </p>
+        </div>
+        <div className="flex items-center gap-2 text-destructive">
+          <AlertCircle className="h-5 w-5" />
+          <span>Erro ao carregar dados. Tente novamente mais tarde.</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -284,13 +228,19 @@ export default function Acompanhamento() {
       {/* Kanban */}
       <div className="overflow-x-auto pb-4 -mx-6 px-6">
         <div className="flex gap-4" style={{ minWidth: "max-content" }}>
-          {fases.map((fase) => (
-            <KanbanColumn 
-              key={fase.id} 
-              fase={fase} 
-              items={itemsPorFase[fase.id] || []} 
-            />
-          ))}
+          {isLoading ? (
+            fases.map((fase) => (
+              <KanbanColumnSkeleton key={fase.id} />
+            ))
+          ) : (
+            fases.map((fase) => (
+              <KanbanColumn 
+                key={fase.id} 
+                fase={fase} 
+                items={itemsPorFase[fase.id] || []} 
+              />
+            ))
+          )}
         </div>
       </div>
     </div>
