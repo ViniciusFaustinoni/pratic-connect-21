@@ -16,6 +16,7 @@ import LeadKanban from "./pages/vendas/LeadKanban";
 import Cotacoes from "./pages/vendas/Cotacoes";
 import Contratos from "./pages/vendas/Contratos";
 import Associados from "./pages/cadastro/Associados";
+import AssociadoDetalhe from "./pages/cadastro/AssociadoDetalhe";
 import Veiculos from "./pages/cadastro/Veiculos";
 import Documentos from "./pages/cadastro/Documentos";
 import Instalacoes from "./pages/monitoramento/Instalacoes";
@@ -69,6 +70,7 @@ const App = () => (
               
               {/* Cadastro */}
               <Route path="/cadastro/associados" element={<Associados />} />
+              <Route path="/cadastro/associados/:id" element={<AssociadoDetalhe />} />
               <Route path="/cadastro/veiculos" element={<Veiculos />} />
               <Route path="/cadastro/documentos" element={<Documentos />} />
               

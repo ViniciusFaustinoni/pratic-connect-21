@@ -62,14 +62,26 @@ export type MotivoPerda =
 
 export type StatusAssociado =
   | 'em_analise'
+  | 'aprovado'
   | 'documentacao_pendente'
   | 'aguardando_instalacao'
   | 'ativo'
   | 'inadimplente'
   | 'suspenso'
-  | 'cancelado';
+  | 'cancelado'
+  | 'bloqueado';
 
-export type StatusDocumento = 'pendente' | 'em_analise' | 'aprovado' | 'reprovado';
+export type StatusDocumento = 'pendente' | 'em_analise' | 'aprovado' | 'reprovado' | 'expirado';
+
+// Status do veículo
+export type StatusVeiculo =
+  | 'em_analise'
+  | 'aprovado'
+  | 'instalacao_pendente'
+  | 'ativo'
+  | 'suspenso'
+  | 'cancelado'
+  | 'sinistrado';
 
 export type TipoDocumento =
   | 'cnh'
@@ -520,12 +532,14 @@ export const ORIGEM_LABELS: Record<OrigemLead, string> = {
 
 export const STATUS_ASSOCIADO_LABELS: Record<StatusAssociado, string> = {
   em_analise: 'Em Análise',
+  aprovado: 'Aprovado',
   documentacao_pendente: 'Doc. Pendente',
   aguardando_instalacao: 'Aguard. Instalação',
   ativo: 'Ativo',
   inadimplente: 'Inadimplente',
   suspenso: 'Suspenso',
   cancelado: 'Cancelado',
+  bloqueado: 'Bloqueado',
 };
 
 export const STATUS_DOCUMENTO_LABELS: Record<StatusDocumento, string> = {
@@ -533,6 +547,17 @@ export const STATUS_DOCUMENTO_LABELS: Record<StatusDocumento, string> = {
   em_analise: 'Em Análise',
   aprovado: 'Aprovado',
   reprovado: 'Reprovado',
+  expirado: 'Expirado',
+};
+
+export const STATUS_VEICULO_LABELS: Record<StatusVeiculo, string> = {
+  em_analise: 'Em Análise',
+  aprovado: 'Aprovado',
+  instalacao_pendente: 'Instalação Pendente',
+  ativo: 'Ativo',
+  suspenso: 'Suspenso',
+  cancelado: 'Cancelado',
+  sinistrado: 'Sinistrado',
 };
 
 export const TIPO_DOCUMENTO_LABELS: Record<TipoDocumento, string> = {

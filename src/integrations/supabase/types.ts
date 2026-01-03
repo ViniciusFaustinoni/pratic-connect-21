@@ -53,17 +53,22 @@ export type Database = {
       associados: {
         Row: {
           bairro: string | null
+          bloqueado: boolean | null
           cep: string | null
           cidade: string | null
           complemento: string | null
           contrato_id: string | null
           cpf: string
           created_at: string
+          data_adesao: string | null
+          data_bloqueio: string | null
           data_nascimento: string | null
+          dia_vencimento: number | null
           email: string
           estado_civil: string | null
           id: string
           logradouro: string | null
+          motivo_bloqueio: string | null
           nome: string
           numero: string | null
           plano_id: string | null
@@ -76,20 +81,26 @@ export type Database = {
           uf: string | null
           updated_at: string
           user_id: string | null
+          whatsapp: string | null
         }
         Insert: {
           bairro?: string | null
+          bloqueado?: boolean | null
           cep?: string | null
           cidade?: string | null
           complemento?: string | null
           contrato_id?: string | null
           cpf: string
           created_at?: string
+          data_adesao?: string | null
+          data_bloqueio?: string | null
           data_nascimento?: string | null
+          dia_vencimento?: number | null
           email: string
           estado_civil?: string | null
           id?: string
           logradouro?: string | null
+          motivo_bloqueio?: string | null
           nome: string
           numero?: string | null
           plano_id?: string | null
@@ -102,20 +113,26 @@ export type Database = {
           uf?: string | null
           updated_at?: string
           user_id?: string | null
+          whatsapp?: string | null
         }
         Update: {
           bairro?: string | null
+          bloqueado?: boolean | null
           cep?: string | null
           cidade?: string | null
           complemento?: string | null
           contrato_id?: string | null
           cpf?: string
           created_at?: string
+          data_adesao?: string | null
+          data_bloqueio?: string | null
           data_nascimento?: string | null
+          dia_vencimento?: number | null
           email?: string
           estado_civil?: string | null
           id?: string
           logradouro?: string | null
+          motivo_bloqueio?: string | null
           nome?: string
           numero?: string | null
           plano_id?: string | null
@@ -128,6 +145,7 @@ export type Database = {
           uf?: string | null
           updated_at?: string
           user_id?: string | null
+          whatsapp?: string | null
         }
         Relationships: [
           {
@@ -1229,8 +1247,11 @@ export type Database = {
           marca: string
           modelo: string
           placa: string
+          plataforma_app: string | null
           renavam: string | null
+          status: Database["public"]["Enums"]["status_veiculo"] | null
           updated_at: string
+          uso_aplicativo: boolean | null
           valor_fipe: number | null
         }
         Insert: {
@@ -1247,8 +1268,11 @@ export type Database = {
           marca: string
           modelo: string
           placa: string
+          plataforma_app?: string | null
           renavam?: string | null
+          status?: Database["public"]["Enums"]["status_veiculo"] | null
           updated_at?: string
+          uso_aplicativo?: boolean | null
           valor_fipe?: number | null
         }
         Update: {
@@ -1265,8 +1289,11 @@ export type Database = {
           marca?: string
           modelo?: string
           placa?: string
+          plataforma_app?: string | null
           renavam?: string | null
+          status?: Database["public"]["Enums"]["status_veiculo"] | null
           updated_at?: string
+          uso_aplicativo?: boolean | null
           valor_fipe?: number | null
         }
         Relationships: [
@@ -1463,12 +1490,14 @@ export type Database = {
       periodo_instalacao: "manha" | "tarde" | "noite"
       status_associado:
         | "em_analise"
+        | "aprovado"
         | "documentacao_pendente"
         | "aguardando_instalacao"
         | "ativo"
         | "inadimplente"
         | "suspenso"
         | "cancelado"
+        | "bloqueado"
       status_chamado:
         | "aberto"
         | "em_atendimento"
@@ -1489,7 +1518,12 @@ export type Database = {
         | "aceita"
         | "recusada"
         | "expirada"
-      status_documento: "pendente" | "em_analise" | "aprovado" | "reprovado"
+      status_documento:
+        | "pendente"
+        | "em_analise"
+        | "aprovado"
+        | "reprovado"
+        | "expirado"
       status_instalacao:
         | "agendada"
         | "em_rota"
@@ -1505,6 +1539,14 @@ export type Database = {
         | "reprovado"
         | "indenizado"
         | "cancelado"
+      status_veiculo:
+        | "em_analise"
+        | "aprovado"
+        | "instalacao_pendente"
+        | "ativo"
+        | "suspenso"
+        | "cancelado"
+        | "sinistrado"
       status_vistoria: "pendente" | "aprovada" | "reprovada" | "em_analise"
       tipo_documento:
         | "cnh"
@@ -1705,12 +1747,14 @@ export const Constants = {
       periodo_instalacao: ["manha", "tarde", "noite"],
       status_associado: [
         "em_analise",
+        "aprovado",
         "documentacao_pendente",
         "aguardando_instalacao",
         "ativo",
         "inadimplente",
         "suspenso",
         "cancelado",
+        "bloqueado",
       ],
       status_chamado: [
         "aberto",
@@ -1729,7 +1773,13 @@ export const Constants = {
         "cancelado",
       ],
       status_cotacao: ["rascunho", "enviada", "aceita", "recusada", "expirada"],
-      status_documento: ["pendente", "em_analise", "aprovado", "reprovado"],
+      status_documento: [
+        "pendente",
+        "em_analise",
+        "aprovado",
+        "reprovado",
+        "expirado",
+      ],
       status_instalacao: [
         "agendada",
         "em_rota",
@@ -1746,6 +1796,15 @@ export const Constants = {
         "reprovado",
         "indenizado",
         "cancelado",
+      ],
+      status_veiculo: [
+        "em_analise",
+        "aprovado",
+        "instalacao_pendente",
+        "ativo",
+        "suspenso",
+        "cancelado",
+        "sinistrado",
       ],
       status_vistoria: ["pendente", "aprovada", "reprovada", "em_analise"],
       tipo_documento: [
