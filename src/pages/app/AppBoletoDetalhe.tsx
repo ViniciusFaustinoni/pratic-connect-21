@@ -28,8 +28,11 @@ import {
   Eye,
   CreditCard,
   History,
-  Receipt
+  Receipt,
+  Info,
+  Wallet
 } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -240,8 +243,10 @@ export default function AppBoletoDetalhe() {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
-            <h1 className="text-xl font-bold text-foreground">Boleto</h1>
-            <p className="text-sm text-muted-foreground">{boleto.competencia}</p>
+            <h1 className="text-xl font-bold text-foreground">{boleto.competencia}</h1>
+            <p className="text-sm text-muted-foreground">
+              {boleto.numeroDocumento ? `Boleto #${boleto.numeroDocumento}` : 'Boleto'}
+            </p>
           </div>
         </div>
         <Badge className={cn(config.corFundo, config.cor, 'border-0')}>
@@ -294,6 +299,66 @@ export default function AppBoletoDetalhe() {
           )}
         </CardContent>
       </Card>
+
+      {/* Card Comprovante - apenas para boletos pagos */}
+      {boleto.status === 'pago' && (
+        <Card className="border-0 shadow-sm bg-green-50/50">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base text-green-800">
+              <CheckCircle className="h-5 w-5" />
+              Comprovante de Pagamento
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Competência</span>
+                <span className="font-medium">{boleto.competencia}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Vencimento</span>
+                <span>{boleto.dataVencimento}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Data pagamento</span>
+                <span className="font-medium text-green-700">{boleto.dataPagamento}</span>
+              </div>
+              {boleto.dataCredito && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Data crédito</span>
+                  <span>{boleto.dataCredito}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Valor pago</span>
+                <span className="font-semibold text-green-700">{formatarValor(boleto.valorPago || boleto.valorFinal)}</span>
+              </div>
+              {boleto.formaPagamento && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Forma de pagamento</span>
+                  <span>{boleto.formaPagamento}</span>
+                </div>
+              )}
+            </div>
+            
+            {boleto.urlComprovante && (
+              <Button 
+                variant="default" 
+                className="w-full bg-green-600 hover:bg-green-700"
+                onClick={() => window.open(boleto.urlComprovante, '_blank')}
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Baixar Comprovante
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Separador - Pague com Pix */}
+      {podeAcoes && boleto.pixCopiaCola && (
+        <SectionSeparator label="Pague com Pix" />
+      )}
 
       {/* Card Pix - apenas se pendente/vencido */}
       {podeAcoes && boleto.pixCopiaCola && (
@@ -360,6 +425,11 @@ export default function AppBoletoDetalhe() {
         </Card>
       )}
 
+      {/* Separador - Ou pague com boleto */}
+      {podeAcoes && boleto.linhaDigitavel && (
+        <SectionSeparator label="Ou pague com boleto" />
+      )}
+
       {/* Card Código de Barras - apenas se pendente/vencido */}
       {podeAcoes && boleto.linhaDigitavel && (
         <Card className="border-0 shadow-sm">
@@ -416,6 +486,9 @@ export default function AppBoletoDetalhe() {
         </Card>
       )}
 
+      {/* Separador - Detalhes */}
+      <SectionSeparator label="Detalhes do boleto" />
+
       {/* Card Ver/Baixar Boleto */}
       <Card className="border-0 shadow-sm">
         <CardHeader className="pb-3">
@@ -457,42 +530,58 @@ export default function AppBoletoDetalhe() {
         </CardContent>
       </Card>
 
-      {/* Card Detalhes do Valor - se houver diferenças */}
-      {(boleto.valorDesconto || boleto.valorJuros || boleto.valorMulta || boleto.valorOriginal !== boleto.valorFinal) && (
-        <Card className="border-0 shadow-sm">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Detalhes do Valor</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
+      {/* Card Detalhes do Valor */}
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Wallet className="h-5 w-5 text-primary" />
+            Detalhes do Valor
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Competência</span>
+            <span>{boleto.competencia}</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Vencimento</span>
+            <span>{boleto.dataVencimento}</span>
+          </div>
+          {boleto.nossoNumero && (
             <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Valor original</span>
-              <span>{formatarValor(boleto.valorOriginal)}</span>
+              <span className="text-muted-foreground">Nosso número</span>
+              <span className="font-mono text-xs">{boleto.nossoNumero}</span>
             </div>
-            {boleto.valorDesconto && (
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Desconto</span>
-                <span className="text-green-600">-{formatarValor(boleto.valorDesconto)}</span>
-              </div>
-            )}
-            {boleto.valorJuros && (
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Juros</span>
-                <span className="text-red-600">+{formatarValor(boleto.valorJuros)}</span>
-              </div>
-            )}
-            {boleto.valorMulta && (
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Multa</span>
-                <span className="text-red-600">+{formatarValor(boleto.valorMulta)}</span>
-              </div>
-            )}
-            <div className="flex justify-between text-sm font-semibold pt-2 border-t">
-              <span>Total</span>
-              <span>{formatarValor(boleto.valorFinal)}</span>
+          )}
+          <div className="my-2 border-t" />
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Valor original</span>
+            <span>{formatarValor(boleto.valorOriginal)}</span>
+          </div>
+          {boleto.valorDesconto && boleto.valorDesconto > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Desconto</span>
+              <span className="text-green-600">- {formatarValor(boleto.valorDesconto)}</span>
             </div>
-          </CardContent>
-        </Card>
-      )}
+          )}
+          {boleto.valorJuros && boleto.valorJuros > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Juros</span>
+              <span className="text-red-600">+ {formatarValor(boleto.valorJuros)}</span>
+            </div>
+          )}
+          {boleto.valorMulta && boleto.valorMulta > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Multa</span>
+              <span className="text-red-600">+ {formatarValor(boleto.valorMulta)}</span>
+            </div>
+          )}
+          <div className="flex justify-between text-sm font-semibold pt-2 border-t">
+            <span>Valor a pagar</span>
+            <span className="text-primary">{formatarValor(boleto.valorFinal)}</span>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Card Histórico */}
       {historico.length > 0 && (
@@ -540,6 +629,48 @@ export default function AppBoletoDetalhe() {
           </CardContent>
         </Card>
       )}
+
+      {/* Botão Compartilhar em Destaque */}
+      <Button 
+        variant="outline" 
+        className="w-full"
+        onClick={compartilhar}
+        disabled={compartilhando}
+      >
+        {compartilhando ? (
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        ) : (
+          <Share2 className="mr-2 h-4 w-4" />
+        )}
+        Compartilhar Boleto
+      </Button>
+
+      {/* Alert de Ajuda - apenas para pendentes/vencidos */}
+      {podeAcoes && (
+        <Alert className="border-blue-200 bg-blue-50">
+          <Info className="h-4 w-4 text-blue-600" />
+          <AlertDescription className="text-sm text-blue-800">
+            Após o pagamento via Pix, a confirmação é automática em alguns minutos. 
+            Para boleto bancário, pode levar até 3 dias úteis.
+          </AlertDescription>
+        </Alert>
+      )}
+    </div>
+  );
+}
+
+// ============================================
+// COMPONENTE DE SEPARADOR
+// ============================================
+
+function SectionSeparator({ label }: { label: string }) {
+  return (
+    <div className="flex items-center gap-4 py-2">
+      <div className="h-px flex-1 bg-border" />
+      <span className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
+        {label}
+      </span>
+      <div className="h-px flex-1 bg-border" />
     </div>
   );
 }

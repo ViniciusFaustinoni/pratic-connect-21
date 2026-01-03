@@ -18,6 +18,7 @@ export interface Boleto {
   competenciaAno: number;
   dataVencimento: string;
   dataPagamento?: string;
+  dataCredito?: string;
   valorOriginal: number;
   valorFinal: number;
   valorPago?: number;
@@ -31,6 +32,10 @@ export interface Boleto {
   codigoBarras?: string;
   urlBoleto?: string;
   urlPdf?: string;
+  urlComprovante?: string;
+  formaPagamento?: string;
+  nossoNumero?: string;
+  numeroDocumento?: string;
 }
 
 export interface BoletoHistorico {
@@ -299,7 +304,10 @@ export function useMyBoletos() {
           valorFinal: 189.90,
           status: 'pendente',
           pixCopiaCola: '00020126580014br.gov.bcb.pix0136123e4567-e89b-12d3-a456-426614174000',
-          linhaDigitavel: '23793.38128 60000.000003 00000.000400 1 84340000018990'
+          linhaDigitavel: '23793.38128 60000.000003 00000.000400 1 84340000018990',
+          codigoBarras: '23791843400000189903381260000000003000000040',
+          nossoNumero: '00000000040',
+          numeroDocumento: '2026010001'
         },
         {
           id: '2',
@@ -308,10 +316,15 @@ export function useMyBoletos() {
           competenciaAno: 2025,
           dataVencimento: '10/12/2025',
           dataPagamento: '08/12/2025',
+          dataCredito: '09/12/2025',
           valorOriginal: 189.90,
           valorFinal: 189.90,
           valorPago: 189.90,
-          status: 'pago'
+          status: 'pago',
+          formaPagamento: 'PIX',
+          nossoNumero: '00000000039',
+          numeroDocumento: '2025120001',
+          urlComprovante: 'https://example.com/comprovante/2.pdf'
         },
         {
           id: '3',
@@ -320,10 +333,14 @@ export function useMyBoletos() {
           competenciaAno: 2025,
           dataVencimento: '10/11/2025',
           dataPagamento: '05/11/2025',
+          dataCredito: '05/11/2025',
           valorOriginal: 189.90,
           valorFinal: 189.90,
           valorPago: 189.90,
-          status: 'pago'
+          status: 'pago',
+          formaPagamento: 'PIX',
+          nossoNumero: '00000000038',
+          numeroDocumento: '2025110001'
         },
         {
           id: '4',
@@ -332,10 +349,14 @@ export function useMyBoletos() {
           competenciaAno: 2025,
           dataVencimento: '10/10/2025',
           dataPagamento: '10/10/2025',
+          dataCredito: '11/10/2025',
           valorOriginal: 189.90,
           valorFinal: 189.90,
           valorPago: 189.90,
-          status: 'pago'
+          status: 'pago',
+          formaPagamento: 'Boleto',
+          nossoNumero: '00000000037',
+          numeroDocumento: '2025100001'
         },
         {
           id: '5',
@@ -344,10 +365,16 @@ export function useMyBoletos() {
           competenciaAno: 2025,
           dataVencimento: '10/09/2025',
           dataPagamento: '12/09/2025',
+          dataCredito: '13/09/2025',
           valorOriginal: 189.90,
           valorFinal: 195.50,
           valorPago: 195.50,
-          status: 'pago'
+          valorJuros: 3.80,
+          valorMulta: 1.80,
+          status: 'pago',
+          formaPagamento: 'Boleto',
+          nossoNumero: '00000000036',
+          numeroDocumento: '2025090001'
         },
       ];
 
