@@ -53,6 +53,7 @@ import FinanceiroDashboard from "./pages/financeiro/FinanceiroDashboard";
 
 // Cobrança
 import CobrancaDashboard from "./pages/cobranca/CobrancaDashboard";
+import InadimplentesList from "./pages/cobranca/InadimplentesList";
 import CobrancasList from "./pages/financeiro/CobrancasList";
 import CobrancaDetalhe from "./pages/financeiro/CobrancaDetalhe";
 import FaturamentoMensal from "./pages/financeiro/FaturamentoMensal";
@@ -144,6 +145,7 @@ const App = () => (
               {/* Monitoramento */}
               {/* Cobrança */}
               <Route path="/cobranca" element={<CobrancaDashboard />} />
+              <Route path="/cobranca/inadimplentes" element={<InadimplentesList />} />
               
               <Route path="/monitoramento/instalacoes" element={<Instalacoes />} />
               <Route path="/monitoramento/rotas" element={<Rotas />} />
