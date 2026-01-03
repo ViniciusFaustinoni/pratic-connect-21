@@ -10,6 +10,32 @@ type Chamado = Tables<'chamados_assistencia'>;
 type Rastreador = Tables<'rastreadores'>;
 type Documento = Tables<'documentos'>;
 
+// Tipos para Boletos
+export interface Boleto {
+  id: string;
+  competencia: string;
+  competenciaMes: number;
+  competenciaAno: number;
+  dataVencimento: string;
+  dataPagamento?: string;
+  valorOriginal: number;
+  valorFinal: number;
+  valorPago?: number;
+  status: 'pendente' | 'pago' | 'vencido' | 'cancelado';
+  pixCopiaCola?: string;
+  linhaDigitavel?: string;
+  urlBoleto?: string;
+}
+
+export interface ResumoFinanceiro {
+  totalPago: number;
+  totalPendente: number;
+  totalVencido: number;
+  quantidadePago: number;
+  quantidadePendente: number;
+  quantidadeVencido: number;
+}
+
 export interface AssociadoWithRelations extends Associado {
   planos?: {
     id: string;
@@ -236,5 +262,84 @@ export function useUpdateAssociado() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-associado'] });
     },
+  });
+}
+
+export function useMyBoletos() {
+  const { data: associado } = useMyAssociado();
+
+  return useQuery({
+    queryKey: ['my-boletos', associado?.id],
+    queryFn: async (): Promise<Boleto[]> => {
+      if (!associado?.id) return [];
+
+      // TODO: Substituir por chamada real ao Supabase quando tabela existir
+      // Mock data para desenvolvimento
+      const mockBoletos: Boleto[] = [
+        {
+          id: '1',
+          competencia: 'Janeiro/2026',
+          competenciaMes: 1,
+          competenciaAno: 2026,
+          dataVencimento: '10/01/2026',
+          valorOriginal: 189.90,
+          valorFinal: 189.90,
+          status: 'pendente',
+          pixCopiaCola: '00020126580014br.gov.bcb.pix0136123e4567-e89b-12d3-a456-426614174000',
+          linhaDigitavel: '23793.38128 60000.000003 00000.000400 1 84340000018990'
+        },
+        {
+          id: '2',
+          competencia: 'Dezembro/2025',
+          competenciaMes: 12,
+          competenciaAno: 2025,
+          dataVencimento: '10/12/2025',
+          dataPagamento: '08/12/2025',
+          valorOriginal: 189.90,
+          valorFinal: 189.90,
+          valorPago: 189.90,
+          status: 'pago'
+        },
+        {
+          id: '3',
+          competencia: 'Novembro/2025',
+          competenciaMes: 11,
+          competenciaAno: 2025,
+          dataVencimento: '10/11/2025',
+          dataPagamento: '05/11/2025',
+          valorOriginal: 189.90,
+          valorFinal: 189.90,
+          valorPago: 189.90,
+          status: 'pago'
+        },
+        {
+          id: '4',
+          competencia: 'Outubro/2025',
+          competenciaMes: 10,
+          competenciaAno: 2025,
+          dataVencimento: '10/10/2025',
+          dataPagamento: '10/10/2025',
+          valorOriginal: 189.90,
+          valorFinal: 189.90,
+          valorPago: 189.90,
+          status: 'pago'
+        },
+        {
+          id: '5',
+          competencia: 'Setembro/2025',
+          competenciaMes: 9,
+          competenciaAno: 2025,
+          dataVencimento: '10/09/2025',
+          dataPagamento: '12/09/2025',
+          valorOriginal: 189.90,
+          valorFinal: 195.50,
+          valorPago: 195.50,
+          status: 'pago'
+        },
+      ];
+
+      return mockBoletos;
+    },
+    enabled: !!associado?.id,
   });
 }
