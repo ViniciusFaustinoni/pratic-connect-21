@@ -18,12 +18,13 @@ import {
   Eye,
   EyeOff,
   MessageCircle,
-  Cake
+  Cake,
+  Camera
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -51,6 +52,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useMyAssociado, useMyVehicles, useUpdateAssociado } from '@/hooks/useMyData';
 import { supabase } from '@/integrations/supabase/client';
 import { CardPlano } from '@/components/app';
+import { AvatarCropDialog } from '@/components/AvatarCropDialog';
+import { useUploadAvatar } from '@/hooks/useUploadAvatar';
 
 const STATUS_VEICULO: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
   ativo: { label: 'Ativo', variant: 'default' },
@@ -70,9 +73,53 @@ export default function AppPerfil() {
   const [modalEndereco, setModalEndereco] = useState(false);
   const [modalSenha, setModalSenha] = useState(false);
   const [modalLogout, setModalLogout] = useState(false);
+  
+  // Estados para upload de avatar
+  const [cropDialogOpen, setCropDialogOpen] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const uploadAvatar = useUploadAvatar();
 
   const isLoading = associadoLoading || vehiclesLoading;
   const vehicle = vehicles?.[0];
+
+  // Handler para seleção de arquivo
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Selecione uma imagem válida');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Imagem deve ter no máximo 5MB');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setSelectedImage(reader.result as string);
+      setCropDialogOpen(true);
+    };
+    reader.readAsDataURL(file);
+    
+    // Limpar input para permitir reselecionar mesmo arquivo
+    e.target.value = '';
+  };
+
+  // Handler após crop
+  const handleCropComplete = async (croppedBlob: Blob) => {
+    try {
+      await uploadAvatar.mutateAsync(croppedBlob);
+      toast.success('Foto atualizada com sucesso!');
+      setCropDialogOpen(false);
+      setSelectedImage(null);
+    } catch (error) {
+      console.error('Erro ao enviar foto:', error);
+      toast.error('Erro ao atualizar foto');
+    }
+  };
 
   const getIniciais = (nome: string) => {
     const partes = nome.split(' ');
@@ -128,11 +175,42 @@ export default function AppPerfil() {
       <Card className="border-0 shadow-sm overflow-hidden">
         <div className="bg-gradient-to-r from-primary/10 to-primary/5 p-6">
           <div className="flex items-center gap-4">
-            <Avatar className="h-20 w-20 border-4 border-background shadow-lg">
-              <AvatarFallback className="bg-primary text-primary-foreground text-xl font-bold">
-                {getIniciais(associado.nome)}
-              </AvatarFallback>
-            </Avatar>
+            <div className="relative">
+              <Avatar className="h-20 w-20 border-4 border-background shadow-lg">
+                {associado.avatar_url && (
+                  <AvatarImage 
+                    src={associado.avatar_url} 
+                    alt={associado.nome}
+                    className="object-cover"
+                  />
+                )}
+                <AvatarFallback className="bg-primary text-primary-foreground text-xl font-bold">
+                  {getIniciais(associado.nome)}
+                </AvatarFallback>
+              </Avatar>
+              
+              {/* Botão de upload sobreposto */}
+              <label 
+                htmlFor="avatar-upload"
+                className="absolute -bottom-1 -right-1 p-1.5 bg-primary rounded-full 
+                           text-primary-foreground cursor-pointer shadow-md
+                           hover:bg-primary/90 transition-colors"
+              >
+                {uploadAvatar.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Camera className="h-4 w-4" />
+                )}
+                <input
+                  id="avatar-upload"
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleFileSelect}
+                  disabled={uploadAvatar.isPending}
+                />
+              </label>
+            </div>
             <div className="flex-1 min-w-0">
               <h2 className="text-xl font-bold text-foreground truncate">
                 {associado.nome.split(' ').slice(0, 2).join(' ')}
@@ -368,6 +446,17 @@ export default function AppPerfil() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Modal de Crop do Avatar */}
+      <AvatarCropDialog
+        open={cropDialogOpen}
+        imageSrc={selectedImage}
+        onClose={() => {
+          setCropDialogOpen(false);
+          setSelectedImage(null);
+        }}
+        onCropComplete={handleCropComplete}
+      />
     </div>
   );
 }
