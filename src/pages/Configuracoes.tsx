@@ -10,6 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { maskTelefone } from '@/lib/validations';
 import { UserAvatar } from '@/components/UserAvatar';
+import { AvatarCropDialog } from '@/components/AvatarCropDialog';
 
 export default function Configuracoes() {
   const { profile, user } = useAuth();
@@ -29,26 +30,44 @@ export default function Configuracoes() {
   const [avatarUrl, setAvatarUrl] = useState(profile?.avatar_url || null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [removingAvatar, setRemovingAvatar] = useState(false);
+  const [cropDialogOpen, setCropDialogOpen] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
   const MAX_SIZE_BYTES = 2 * 1024 * 1024; // 2MB
 
-  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     // Validate file type
     if (!ALLOWED_TYPES.includes(file.type)) {
       toast.error('Formato inválido. Use JPG, PNG ou WebP.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
 
     // Validate file size
     if (file.size > MAX_SIZE_BYTES) {
       toast.error('Arquivo muito grande. Máximo 2MB.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
+
+    // Convert to base64 and open crop dialog
+    const reader = new FileReader();
+    reader.onload = () => {
+      setSelectedImage(reader.result as string);
+      setCropDialogOpen(true);
+    };
+    reader.readAsDataURL(file);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleCropComplete = async (croppedBlob: Blob) => {
+    setCropDialogOpen(false);
+    setSelectedImage(null);
 
     if (!user?.id) {
       toast.error('Usuário não encontrado');
@@ -57,13 +76,15 @@ export default function Configuracoes() {
 
     setUploadingAvatar(true);
     try {
-      const fileExt = file.name.split('.').pop();
-      const filePath = `${user.id}/avatar.${fileExt}`;
+      const filePath = `${user.id}/avatar.jpg`;
 
-      // Upload file (upsert to replace existing)
+      // Upload cropped file (upsert to replace existing)
       const { error: uploadError } = await supabase.storage
         .from('avatars')
-        .upload(filePath, file, { upsert: true });
+        .upload(filePath, croppedBlob, { 
+          upsert: true,
+          contentType: 'image/jpeg'
+        });
 
       if (uploadError) throw uploadError;
 
@@ -89,8 +110,12 @@ export default function Configuracoes() {
       toast.error('Erro ao fazer upload da foto');
     } finally {
       setUploadingAvatar(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
     }
+  };
+
+  const handleCropDialogClose = () => {
+    setCropDialogOpen(false);
+    setSelectedImage(null);
   };
 
   const handleRemoveAvatar = async () => {
@@ -229,7 +254,7 @@ export default function Configuracoes() {
                   type="file"
                   accept="image/jpeg,image/png,image/webp"
                   className="hidden"
-                  onChange={handleAvatarUpload}
+                  onChange={handleFileSelect}
                 />
                 <Button
                   type="button"
@@ -425,6 +450,14 @@ export default function Configuracoes() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Avatar Crop Dialog */}
+      <AvatarCropDialog
+        open={cropDialogOpen}
+        imageSrc={selectedImage}
+        onClose={handleCropDialogClose}
+        onCropComplete={handleCropComplete}
+      />
     </div>
   );
 }
