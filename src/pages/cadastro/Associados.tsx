@@ -1,11 +1,12 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Search, Plus, MoreVertical, Loader2, 
   UserCheck, Clock, AlertTriangle, UserX,
   Eye, Edit, FileText, Receipt, Lock, Unlock, Pause, XCircle,
-  MessageCircle, X, ChevronLeft, ChevronRight, Users
+  MessageCircle, X, ChevronLeft, ChevronRight, Users, Download
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -183,6 +184,38 @@ export default function Associados() {
     });
   };
 
+  const exportToExcel = useCallback((format: 'xlsx' | 'csv') => {
+    const dataToExport = filteredAssociados.map((a) => ({
+      'Nome': a.nome,
+      'CPF': formatCpf(a.cpf),
+      'Telefone': formatTelefone(a.telefone),
+      'Email': a.email || '',
+      'Veículo': a.veiculos?.[0] ? `${a.veiculos[0].placa} - ${a.veiculos[0].modelo}` : '',
+      'Plano': a.planos?.nome || '',
+      'Status': STATUS_ASSOCIADO_LABELS[a.status],
+      'Data Adesão': formatDate(a.data_adesao),
+      'Cidade': a.cidade || '',
+      'UF': a.uf || '',
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(dataToExport);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Associados');
+
+    const fileName = `associados_${new Date().toISOString().slice(0, 10)}.${format}`;
+    
+    if (format === 'csv') {
+      XLSX.writeFile(wb, fileName, { bookType: 'csv' });
+    } else {
+      XLSX.writeFile(wb, fileName);
+    }
+
+    toast({
+      title: 'Exportação concluída',
+      description: `${filteredAssociados.length} associados exportados para ${format.toUpperCase()}.`,
+    });
+  }, [filteredAssociados, toast]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -201,10 +234,30 @@ export default function Associados() {
             Gerencie os associados e suas informações
           </p>
         </div>
-        <Button onClick={() => setFormDialogOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Novo Associado
-        </Button>
+        <div className="flex gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline">
+                <Download className="mr-2 h-4 w-4" />
+                Exportar
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem onClick={() => exportToExcel('xlsx')}>
+                <FileText className="mr-2 h-4 w-4" />
+                Excel (.xlsx)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => exportToExcel('csv')}>
+                <FileText className="mr-2 h-4 w-4" />
+                CSV (.csv)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button onClick={() => setFormDialogOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Novo Associado
+          </Button>
+        </div>
       </div>
 
       {/* Metrics Cards */}
