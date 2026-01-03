@@ -1476,6 +1476,7 @@ export type Database = {
         | "concluido"
         | "cancelado"
       status_contrato:
+        | "rascunho"
         | "pendente"
         | "enviado"
         | "assinado"
@@ -1719,6 +1720,7 @@ export const Constants = {
         "cancelado",
       ],
       status_contrato: [
+        "rascunho",
         "pendente",
         "enviado",
         "assinado",
