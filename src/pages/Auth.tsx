@@ -35,9 +35,9 @@ const signupSchema = z.object({
 });
 
 export default function Auth() {
-  const { user, signIn, signUp, signInWithMagicLink, signInWithGoogle, loading: authLoading } = useAuth();
+  const { user, profile, signIn, signUp, signInWithMagicLink, signInWithGoogle, loading: authLoading, getRedirectUrl } = useAuth();
   const location = useLocation();
-  const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/dashboard';
+  const stateFrom = (location.state as { from?: { pathname: string } })?.from?.pathname;
   
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -107,8 +107,10 @@ export default function Auth() {
     );
   }
 
-  if (user) {
-    return <Navigate to={from} replace />;
+  if (user && profile) {
+    // Usa a URL de origem se existir, senão usa o redirect por tipo de usuário
+    const redirectTo = stateFrom || getRedirectUrl();
+    return <Navigate to={redirectTo} replace />;
   }
 
   const handleMagicLink = async (e: React.FormEvent) => {

@@ -1,6 +1,12 @@
 // Tipos manuais para o SGA PRATIC 2.0
 // Complementam os tipos gerados automaticamente pelo Supabase
 
+// ============================================================
+// ALIASES PARA COMPATIBILIDADE COM PRD
+// profiles === usuarios (do PRD)
+// user_roles === perfis_acesso (do PRD)
+// ============================================================
+
 export type AppRole = 
   | 'diretor' 
   | 'gerente_comercial' 
@@ -120,6 +126,16 @@ export interface UserRole {
   role: AppRole;
   created_at: string;
 }
+
+// ============================================================
+// ALIASES PARA COMPATIBILIDADE COM PRD
+// ============================================================
+
+/** Alias: profiles === usuarios (nomenclatura do PRD) */
+export type Usuario = Profile;
+
+/** Alias: user_roles === perfis_acesso (nomenclatura do PRD) */
+export type PerfilAcesso = UserRole;
 
 export interface Lead {
   id: string;

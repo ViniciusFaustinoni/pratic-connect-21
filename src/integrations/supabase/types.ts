@@ -1352,6 +1352,15 @@ export type Database = {
     Functions: {
       can_access_api_settings: { Args: { _user_id: string }; Returns: boolean }
       get_my_associado_id: { Args: { _user_id: string }; Returns: string }
+      get_my_perfis: {
+        Args: never
+        Returns: Database["public"]["Enums"]["app_role"][]
+      }
+      get_my_profile_id: { Args: never; Returns: string }
+      get_user_perfis: {
+        Args: { _user_id: string }
+        Returns: Database["public"]["Enums"]["app_role"][]
+      }
       get_user_tipo: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["tipo_usuario"]
