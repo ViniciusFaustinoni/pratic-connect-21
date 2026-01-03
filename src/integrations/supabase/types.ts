@@ -2680,9 +2680,15 @@ export type Database = {
           associado_id: string
           avarias: string | null
           created_at: string
+          data_agendada: string | null
+          endereco_cidade: string | null
+          endereco_estado: string | null
+          endereco_logradouro: string | null
           id: string
           instalacao_id: string | null
           km_atual: number | null
+          observacoes: string | null
+          sinistro_id: string | null
           status: Database["public"]["Enums"]["status_vistoria"]
           tipo: Database["public"]["Enums"]["tipo_vistoria"]
           updated_at: string
@@ -2693,9 +2699,15 @@ export type Database = {
           associado_id: string
           avarias?: string | null
           created_at?: string
+          data_agendada?: string | null
+          endereco_cidade?: string | null
+          endereco_estado?: string | null
+          endereco_logradouro?: string | null
           id?: string
           instalacao_id?: string | null
           km_atual?: number | null
+          observacoes?: string | null
+          sinistro_id?: string | null
           status?: Database["public"]["Enums"]["status_vistoria"]
           tipo?: Database["public"]["Enums"]["tipo_vistoria"]
           updated_at?: string
@@ -2706,9 +2718,15 @@ export type Database = {
           associado_id?: string
           avarias?: string | null
           created_at?: string
+          data_agendada?: string | null
+          endereco_cidade?: string | null
+          endereco_estado?: string | null
+          endereco_logradouro?: string | null
           id?: string
           instalacao_id?: string | null
           km_atual?: number | null
+          observacoes?: string | null
+          sinistro_id?: string | null
           status?: Database["public"]["Enums"]["status_vistoria"]
           tipo?: Database["public"]["Enums"]["tipo_vistoria"]
           updated_at?: string
@@ -2764,6 +2782,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_acompanhamento"
             referencedColumns: ["instalacao_id"]
+          },
+          {
+            foreignKeyName: "vistorias_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "sinistros"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "vistorias_veiculo_id_fkey"
@@ -3100,7 +3125,12 @@ export type Database = {
         | "suspenso"
         | "cancelado"
         | "sinistrado"
-      status_vistoria: "pendente" | "aprovada" | "reprovada" | "em_analise"
+      status_vistoria:
+        | "pendente"
+        | "aprovada"
+        | "reprovada"
+        | "em_analise"
+        | "agendada"
       tipo_documento:
         | "cnh"
         | "crlv"
@@ -3377,7 +3407,13 @@ export const Constants = {
         "cancelado",
         "sinistrado",
       ],
-      status_vistoria: ["pendente", "aprovada", "reprovada", "em_analise"],
+      status_vistoria: [
+        "pendente",
+        "aprovada",
+        "reprovada",
+        "em_analise",
+        "agendada",
+      ],
       tipo_documento: [
         "cnh",
         "crlv",
