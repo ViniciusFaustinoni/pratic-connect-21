@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Download, Printer } from 'lucide-react';
+import React, { useState } from 'react';
+import { Download, Printer, Check, X } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -56,14 +56,22 @@ export default function Balancete() {
 
   const tipoOrdem = ['ativo', 'passivo', 'patrimonio_liquido', 'receita', 'despesa'];
 
-  // Calcular totais gerais
+  // Calcular totais gerais com saldo devedor/credor separados
   const totais = balancete?.reduce(
-    (acc, conta) => ({
-      debitos: acc.debitos + conta.debitos,
-      creditos: acc.creditos + conta.creditos,
-    }),
-    { debitos: 0, creditos: 0 }
-  ) || { debitos: 0, creditos: 0 };
+    (acc, conta) => {
+      const saldoLiquido = conta.debitos - conta.creditos;
+      return {
+        debitos: acc.debitos + conta.debitos,
+        creditos: acc.creditos + conta.creditos,
+        saldoDevedor: acc.saldoDevedor + (saldoLiquido > 0 ? saldoLiquido : 0),
+        saldoCredor: acc.saldoCredor + (saldoLiquido < 0 ? Math.abs(saldoLiquido) : 0),
+      };
+    },
+    { debitos: 0, creditos: 0, saldoDevedor: 0, saldoCredor: 0 }
+  ) || { debitos: 0, creditos: 0, saldoDevedor: 0, saldoCredor: 0 };
+
+  const debitosEqualsCreditos = Math.abs(totais.debitos - totais.creditos) < 0.01;
+  const saldosBalanceados = Math.abs(totais.saldoDevedor - totais.saldoCredor) < 0.01;
 
   return (
     <div className="space-y-6">
@@ -112,6 +120,34 @@ export default function Balancete() {
         </div>
       </div>
 
+      {/* Cards KPI */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="pt-4">
+            <p className="text-sm text-muted-foreground">Total Débitos</p>
+            <p className="text-2xl font-bold text-blue-600">{formatCurrency(totais.debitos)}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <p className="text-sm text-muted-foreground">Total Créditos</p>
+            <p className="text-2xl font-bold text-blue-600">{formatCurrency(totais.creditos)}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <p className="text-sm text-muted-foreground">Total Saldo Devedor</p>
+            <p className="text-2xl font-bold text-green-600">{formatCurrency(totais.saldoDevedor)}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <p className="text-sm text-muted-foreground">Total Saldo Credor</p>
+            <p className="text-2xl font-bold text-red-600">{formatCurrency(totais.saldoCredor)}</p>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Balancete */}
       <Card>
         <CardHeader>
@@ -139,9 +175,10 @@ export default function Balancete() {
                   <TableRow>
                     <TableHead className="w-[100px]">Código</TableHead>
                     <TableHead>Descrição</TableHead>
-                    <TableHead className="text-right w-[150px]">Débitos</TableHead>
-                    <TableHead className="text-right w-[150px]">Créditos</TableHead>
-                    <TableHead className="text-right w-[150px]">Saldo</TableHead>
+                    <TableHead className="text-right w-[130px]">Débitos</TableHead>
+                    <TableHead className="text-right w-[130px]">Créditos</TableHead>
+                    <TableHead className="text-right w-[130px]">Saldo Devedor</TableHead>
+                    <TableHead className="text-right w-[130px]">Saldo Credor</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -153,50 +190,59 @@ export default function Balancete() {
                     if (contasComMovimento.length === 0) return null;
 
                     const totalTipo = contasComMovimento.reduce(
-                      (acc, c) => ({
-                        debitos: acc.debitos + c.debitos,
-                        creditos: acc.creditos + c.creditos,
-                        saldo: acc.saldo + c.saldo,
-                      }),
-                      { debitos: 0, creditos: 0, saldo: 0 }
+                      (acc, c) => {
+                        const saldoLiquido = c.debitos - c.creditos;
+                        return {
+                          debitos: acc.debitos + c.debitos,
+                          creditos: acc.creditos + c.creditos,
+                          saldoDevedor: acc.saldoDevedor + (saldoLiquido > 0 ? saldoLiquido : 0),
+                          saldoCredor: acc.saldoCredor + (saldoLiquido < 0 ? Math.abs(saldoLiquido) : 0),
+                        };
+                      },
+                      { debitos: 0, creditos: 0, saldoDevedor: 0, saldoCredor: 0 }
                     );
 
                     return (
                       <React.Fragment key={tipo}>
                         {/* Grupo Header */}
                         <TableRow className="bg-muted/50">
-                          <TableCell colSpan={5} className="font-semibold">
+                          <TableCell colSpan={6} className="font-semibold">
                             {tipoLabels[tipo]}
                           </TableCell>
                         </TableRow>
                         
                         {/* Contas */}
-                        {contasComMovimento.map((conta) => (
-                          <TableRow key={conta.id}>
-                            <TableCell className="font-mono text-sm">
-                              {conta.codigo}
-                            </TableCell>
-                            <TableCell
-                              style={{ paddingLeft: `${conta.nivel * 16 + 16}px` }}
-                              className={cn(conta.sintetica && 'font-medium')}
-                            >
-                              {conta.descricao}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {conta.debitos > 0 ? formatCurrency(conta.debitos) : '-'}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {conta.creditos > 0 ? formatCurrency(conta.creditos) : '-'}
-                            </TableCell>
-                            <TableCell className={cn(
-                              'text-right font-medium',
-                              conta.saldo > 0 ? 'text-blue-600' : conta.saldo < 0 ? 'text-red-600' : ''
-                            )}>
-                              {formatCurrency(Math.abs(conta.saldo))}
-                              {conta.saldo !== 0 && (conta.saldo > 0 ? ' D' : ' C')}
-                            </TableCell>
-                          </TableRow>
-                        ))}
+                        {contasComMovimento.map((conta) => {
+                          const saldoLiquido = conta.debitos - conta.creditos;
+                          const saldoDevedor = saldoLiquido > 0 ? saldoLiquido : 0;
+                          const saldoCredor = saldoLiquido < 0 ? Math.abs(saldoLiquido) : 0;
+
+                          return (
+                            <TableRow key={conta.id}>
+                              <TableCell className="font-mono text-sm">
+                                {conta.codigo}
+                              </TableCell>
+                              <TableCell
+                                style={{ paddingLeft: `${conta.nivel * 16 + 16}px` }}
+                                className={cn(conta.sintetica && 'font-medium')}
+                              >
+                                {conta.descricao}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {conta.debitos > 0 ? formatCurrency(conta.debitos) : '-'}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {conta.creditos > 0 ? formatCurrency(conta.creditos) : '-'}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {saldoDevedor > 0 ? formatCurrency(saldoDevedor) : '-'}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {saldoCredor > 0 ? formatCurrency(saldoCredor) : '-'}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
 
                         {/* Subtotal do grupo */}
                         <TableRow className="bg-muted/30">
@@ -210,7 +256,10 @@ export default function Balancete() {
                             {formatCurrency(totalTipo.creditos)}
                           </TableCell>
                           <TableCell className="text-right font-semibold">
-                            {formatCurrency(Math.abs(totalTipo.saldo))}
+                            {formatCurrency(totalTipo.saldoDevedor)}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold">
+                            {formatCurrency(totalTipo.saldoCredor)}
                           </TableCell>
                         </TableRow>
                       </React.Fragment>
@@ -229,13 +278,10 @@ export default function Balancete() {
                       {formatCurrency(totais.creditos)}
                     </TableCell>
                     <TableCell className="text-right font-bold">
-                      {Math.abs(totais.debitos - totais.creditos) < 0.01 ? (
-                        <span className="text-green-600">✓ Balanceado</span>
-                      ) : (
-                        <span className="text-red-600">
-                          {formatCurrency(Math.abs(totais.debitos - totais.creditos))}
-                        </span>
-                      )}
+                      {formatCurrency(totais.saldoDevedor)}
+                    </TableCell>
+                    <TableCell className="text-right font-bold">
+                      {formatCurrency(totais.saldoCredor)}
                     </TableCell>
                   </TableRow>
                 </TableFooter>
@@ -244,8 +290,43 @@ export default function Balancete() {
           )}
         </CardContent>
       </Card>
+
+      {/* Card de Conferência */}
+      <Card>
+        <CardContent className="py-4">
+          <div className="flex items-center justify-center gap-8">
+            <div className="flex items-center gap-2">
+              {debitosEqualsCreditos ? (
+                <div className="flex items-center gap-2 text-green-600">
+                  <Check className="h-5 w-5" />
+                  <span className="font-medium">Débitos = Créditos</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-red-600">
+                  <X className="h-5 w-5" />
+                  <span className="font-medium">Débitos ≠ Créditos</span>
+                </div>
+              )}
+            </div>
+            
+            <div className="h-6 w-px bg-border" />
+            
+            <div className="flex items-center gap-2">
+              {saldosBalanceados ? (
+                <div className="flex items-center gap-2 text-green-600">
+                  <Check className="h-5 w-5" />
+                  <span className="font-medium">Saldo Devedor = Saldo Credor</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-red-600">
+                  <X className="h-5 w-5" />
+                  <span className="font-medium">Saldo Devedor ≠ Saldo Credor</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
-
-import React from 'react';
