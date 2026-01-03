@@ -81,11 +81,15 @@ serve(async (req) => {
       case 'marcas': {
         // GET /carros?{apiKey} - Lista marcas
         const response = await fetch(`${FIPE_API}/${tipo}?${apiKey}`);
-        if (!response.ok) {
-          console.error('Erro ao buscar marcas:', response.status);
-          throw new Error('Erro ao buscar marcas');
-        }
         const data = await response.json();
+        console.log('Resposta marcas:', JSON.stringify(data).substring(0, 200));
+        
+        // Verificar se API retornou erro
+        if (!response.ok || data.error || !Array.isArray(data)) {
+          console.error('Erro ao buscar marcas:', response.status, data);
+          throw new Error(data.message || data.error || 'Erro ao buscar marcas na API FIPE');
+        }
+        
         // Mapear para formato esperado: { codigo, nome }
         const marcas = data.map((m: { id: string; name: string }) => ({
           codigo: m.id,
@@ -105,11 +109,13 @@ serve(async (req) => {
         }
         // GET /carros/{id_marca}?{apiKey} - Lista modelos
         const response = await fetch(`${FIPE_API}/${tipo}/${marcaCodigo}?${apiKey}`);
-        if (!response.ok) {
-          console.error('Erro ao buscar modelos:', response.status);
-          throw new Error('Erro ao buscar modelos');
-        }
         const data = await response.json();
+        
+        if (!response.ok || data.error || !Array.isArray(data)) {
+          console.error('Erro ao buscar modelos:', response.status, data);
+          throw new Error(data.message || data.error || 'Erro ao buscar modelos na API FIPE');
+        }
+        
         // Mapear para formato esperado
         const modelos = data.map((m: { id_modelo: string; name: string }) => ({
           codigo: m.id_modelo,
@@ -130,11 +136,13 @@ serve(async (req) => {
         }
         // GET /carros/{id_marca}/{id_modelo}?{apiKey} - Lista anos
         const response = await fetch(`${FIPE_API}/${tipo}/${marcaCodigo}/${modeloCodigo}?${apiKey}`);
-        if (!response.ok) {
-          console.error('Erro ao buscar anos:', response.status);
-          throw new Error('Erro ao buscar anos');
-        }
         const data = await response.json();
+        
+        if (!response.ok || data.error || !Array.isArray(data)) {
+          console.error('Erro ao buscar anos:', response.status, data);
+          throw new Error(data.message || data.error || 'Erro ao buscar anos na API FIPE');
+        }
+        
         // Mapear para formato esperado
         const anos = data.map((a: { id: string; name: string; id_modelo_ano: string }) => ({
           codigo: a.id || a.id_modelo_ano,
