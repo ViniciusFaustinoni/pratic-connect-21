@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { CardPlano } from '@/components/app';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMyAssociado, useMyVehicles } from '@/hooks/useMyData';
 import { 
@@ -182,33 +183,26 @@ export default function AppPerfil() {
       </Card>
 
       {/* Plan Info */}
-      <Card className="border-0 shadow-sm">
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <FileText className="h-4 w-4 text-primary" />
-            Meu Plano
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <Skeleton className="h-12 w-full" />
-          ) : (
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-semibold text-foreground">
-                  {associado?.planos?.nome || 'Plano não definido'}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Associado desde {associado?.created_at 
-                    ? new Date(associado.created_at).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
-                    : '-'}
-                </p>
-              </div>
-              <ChevronRight className="h-5 w-5 text-muted-foreground" />
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {isLoading ? (
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-4">
+            <Skeleton className="h-48 w-full" />
+          </CardContent>
+        </Card>
+      ) : associado?.planos ? (
+        <CardPlano 
+          plano={associado.planos}
+          dataAdesao={associado.created_at}
+          mostrarBeneficios
+          mostrarCoberturas
+        />
+      ) : (
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-4 text-center text-muted-foreground">
+            Plano não definido
+          </CardContent>
+        </Card>
+      )}
 
       {/* Documents */}
       <Link to="/app/documentos">
