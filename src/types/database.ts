@@ -663,3 +663,46 @@ export const PERIODO_INSTALACAO_LABELS: Record<PeriodoInstalacao, string> = {
   tarde: 'Tarde',
   noite: 'Noite',
 };
+
+// Motivos de reprovação de documento
+export type MotivoReprovacaoDocumento =
+  | 'documento_ilegivel'
+  | 'documento_vencido'
+  | 'dados_nao_conferem'
+  | 'foto_ma_qualidade'
+  | 'documento_incompleto'
+  | 'documento_terceiro'
+  | 'outro';
+
+export const MOTIVO_REPROVACAO_DOCUMENTO_LABELS: Record<MotivoReprovacaoDocumento, string> = {
+  documento_ilegivel: 'Documento ilegível',
+  documento_vencido: 'Documento vencido',
+  dados_nao_conferem: 'Dados não conferem com cadastro',
+  foto_ma_qualidade: 'Foto de má qualidade',
+  documento_incompleto: 'Documento incompleto / cortado',
+  documento_terceiro: 'Documento de terceiro',
+  outro: 'Outro',
+};
+
+// Cores dos badges por tipo de documento
+export const TIPO_DOCUMENTO_COLORS: Record<TipoDocumento, string> = {
+  cnh: 'bg-blue-100 text-blue-800',
+  crlv: 'bg-green-100 text-green-800',
+  comprovante_residencia: 'bg-purple-100 text-purple-800',
+  foto_frontal_veiculo: 'bg-orange-100 text-orange-800',
+  foto_traseira_veiculo: 'bg-orange-100 text-orange-800',
+  foto_lateral_esquerda: 'bg-orange-100 text-orange-800',
+  foto_lateral_direita: 'bg-orange-100 text-orange-800',
+  foto_painel: 'bg-orange-100 text-orange-800',
+  foto_hodometro: 'bg-yellow-100 text-yellow-800',
+  outro: 'bg-gray-100 text-gray-800',
+};
+
+// Cores dos badges por status de documento
+export const STATUS_DOCUMENTO_COLORS: Record<StatusDocumento, string> = {
+  pendente: 'bg-gray-100 text-gray-800',
+  em_analise: 'bg-yellow-100 text-yellow-800',
+  aprovado: 'bg-green-100 text-green-800',
+  reprovado: 'bg-red-100 text-red-800',
+  expirado: 'bg-gray-100 text-gray-600',
+};

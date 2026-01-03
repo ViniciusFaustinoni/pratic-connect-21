@@ -1,18 +1,20 @@
-import { useState } from 'react';
-import { Search, FileCheck, Clock, CheckCircle, XCircle, Eye, AlertCircle } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { 
+  Search, 
+  FileCheck, 
+  Clock, 
+  CheckCircle, 
+  XCircle, 
+  Eye, 
+  AlertTriangle,
+  FileText
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Select,
   SelectContent,
@@ -20,65 +22,84 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { STATUS_DOCUMENTO_LABELS, TIPO_DOCUMENTO_LABELS, type StatusDocumento, type TipoDocumento } from '@/types/database';
-import { useDocumentos } from '@/hooks/useDocumentos';
-import { DocumentoAnaliseDialog } from '@/components/cadastro/DocumentoAnaliseDialog';
-
-const statusConfig: Record<StatusDocumento, { color: string; icon: typeof FileCheck }> = {
-  pendente: { color: 'bg-yellow-500 text-white', icon: Clock },
-  em_analise: { color: 'bg-blue-500 text-white', icon: Eye },
-  aprovado: { color: 'bg-green-500 text-white', icon: CheckCircle },
-  reprovado: { color: 'bg-destructive text-destructive-foreground', icon: XCircle },
-  expirado: { color: 'bg-gray-500 text-white', icon: AlertCircle },
-};
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { TIPO_DOCUMENTO_LABELS, type StatusDocumento, type TipoDocumento } from '@/types/database';
+import { useDocumentosQueue, useDocumentosStats } from '@/hooks/useDocumentosQueue';
+import { DocumentoCard } from '@/components/cadastro/DocumentoCard';
+import { DocumentoAnaliseFullscreen } from '@/components/cadastro/DocumentoAnaliseFullscreen';
 
 export default function Documentos() {
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<StatusDocumento | 'all'>('pendente');
   const [tipoFilter, setTipoFilter] = useState<string>('all');
-  const [analyzeDocId, setAnalyzeDocId] = useState<string | null>(null);
+  const [orderBy, setOrderBy] = useState<'oldest' | 'newest'>('oldest');
+  const [analyzeIndex, setAnalyzeIndex] = useState<number | null>(null);
   
-  const { data: documentos, isLoading } = useDocumentos();
+  const { data: stats, isLoading: statsLoading } = useDocumentosStats();
+  const { data: documentos, isLoading, refetch } = useDocumentosQueue({
+    status: statusFilter,
+    orderBy,
+    search,
+    tipo: tipoFilter,
+  });
 
-  const filteredDocumentos = documentos?.filter((doc) => {
-    const associadoNome = doc.associados?.nome || '';
-    const matchesSearch =
-      associadoNome.toLowerCase().includes(search.toLowerCase()) ||
-      doc.nome_arquivo.toLowerCase().includes(search.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || doc.status === statusFilter;
-    const matchesTipo = tipoFilter === 'all' || doc.tipo === tipoFilter;
-    return matchesSearch && matchesStatus && matchesTipo;
-  }) || [];
+  const documentoIds = useMemo(() => documentos?.map(d => d.id) || [], [documentos]);
 
-  const formatDateTime = (dateStr: string) => {
-    return new Date(dateStr).toLocaleString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+  const handleAnalyze = (id: string) => {
+    const index = documentoIds.indexOf(id);
+    if (index !== -1) {
+      setAnalyzeIndex(index);
+    }
   };
 
-  // Stats
-  const stats = {
-    total: documentos?.length || 0,
-    pendentes: documentos?.filter((d) => d.status === 'pendente').length || 0,
-    emAnalise: documentos?.filter((d) => d.status === 'em_analise').length || 0,
-    aprovados: documentos?.filter((d) => d.status === 'aprovado').length || 0,
+  const handleSkip = (id: string) => {
+    const index = documentoIds.indexOf(id);
+    if (index !== -1 && index < documentoIds.length - 1) {
+      // Move to next document
+      setAnalyzeIndex(index + 1);
+    }
   };
+
+  const handleNavigate = (index: number) => {
+    setAnalyzeIndex(index);
+  };
+
+  const handleCloseAnalise = () => {
+    setAnalyzeIndex(null);
+  };
+
+  const handleAnalyzed = () => {
+    refetch();
+  };
+
+  const currentDocumentoId = analyzeIndex !== null ? documentoIds[analyzeIndex] : null;
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold">Documentos</h1>
+        <h1 className="text-2xl font-bold">Documentos Pendentes</h1>
         <p className="text-muted-foreground">
-          Analise e gerencie documentos enviados pelos associados
+          {statsLoading ? (
+            <Skeleton className="h-4 w-48 inline-block" />
+          ) : (
+            `${stats?.pendentes || 0} documentos aguardando análise`
+          )}
         </p>
       </div>
 
-      {/* Stats */}
+      {/* Alerta de documentos antigos */}
+      {!statsLoading && stats && stats.pendentesAntigos > 0 && (
+        <Alert variant="destructive" className="border-yellow-500 bg-yellow-50 text-yellow-800">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Atenção</AlertTitle>
+          <AlertDescription>
+            {stats.pendentesAntigos} documento{stats.pendentesAntigos > 1 ? 's' : ''} aguardando análise há mais de 24h
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Stats Cards */}
       <div className="grid gap-4 sm:grid-cols-4">
         <Card>
           <CardContent className="p-4">
@@ -87,10 +108,10 @@ export default function Documentos() {
                 <FileCheck className="h-5 w-5 text-primary" />
               </div>
               <div>
-                {isLoading ? (
+                {statsLoading ? (
                   <Skeleton className="h-8 w-12" />
                 ) : (
-                  <p className="text-2xl font-bold">{stats.total}</p>
+                  <p className="text-2xl font-bold">{stats?.total || 0}</p>
                 )}
                 <p className="text-xs text-muted-foreground">Total</p>
               </div>
@@ -104,10 +125,10 @@ export default function Documentos() {
                 <Clock className="h-5 w-5 text-yellow-500" />
               </div>
               <div>
-                {isLoading ? (
+                {statsLoading ? (
                   <Skeleton className="h-8 w-12" />
                 ) : (
-                  <p className="text-2xl font-bold">{stats.pendentes}</p>
+                  <p className="text-2xl font-bold">{stats?.pendentes || 0}</p>
                 )}
                 <p className="text-xs text-muted-foreground">Pendentes</p>
               </div>
@@ -121,10 +142,10 @@ export default function Documentos() {
                 <Eye className="h-5 w-5 text-blue-500" />
               </div>
               <div>
-                {isLoading ? (
+                {statsLoading ? (
                   <Skeleton className="h-8 w-12" />
                 ) : (
-                  <p className="text-2xl font-bold">{stats.emAnalise}</p>
+                  <p className="text-2xl font-bold">{stats?.emAnalise || 0}</p>
                 )}
                 <p className="text-xs text-muted-foreground">Em Análise</p>
               </div>
@@ -138,10 +159,10 @@ export default function Documentos() {
                 <CheckCircle className="h-5 w-5 text-green-500" />
               </div>
               <div>
-                {isLoading ? (
+                {statsLoading ? (
                   <Skeleton className="h-8 w-12" />
                 ) : (
-                  <p className="text-2xl font-bold">{stats.aprovados}</p>
+                  <p className="text-2xl font-bold">{stats?.aprovados || 0}</p>
                 )}
                 <p className="text-xs text-muted-foreground">Aprovados</p>
               </div>
@@ -150,20 +171,37 @@ export default function Documentos() {
         </Card>
       </div>
 
+      {/* Tabs de Status */}
+      <Tabs value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusDocumento | 'all')}>
+        <TabsList className="w-full sm:w-auto grid grid-cols-5 sm:flex">
+          <TabsTrigger value="pendente" className="gap-2">
+            Pendentes
+            {!statsLoading && <Badge variant="secondary" className="ml-1">{stats?.pendentes || 0}</Badge>}
+          </TabsTrigger>
+          <TabsTrigger value="em_analise" className="gap-2">
+            Em Análise
+            {!statsLoading && <Badge variant="secondary" className="ml-1">{stats?.emAnalise || 0}</Badge>}
+          </TabsTrigger>
+          <TabsTrigger value="aprovado">Aprovados</TabsTrigger>
+          <TabsTrigger value="reprovado">Reprovados</TabsTrigger>
+          <TabsTrigger value="all">Todos</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
       {/* Filters */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Buscar por associado ou arquivo..."
+            placeholder="Buscar por nome do associado ou placa..."
             className="pl-9"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
         <Select value={tipoFilter} onValueChange={setTipoFilter}>
-          <SelectTrigger className="w-full sm:w-48">
-            <SelectValue placeholder="Tipo de documento" />
+          <SelectTrigger className="w-full sm:w-52">
+            <SelectValue placeholder="Tipo de Documento" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos os tipos</SelectItem>
@@ -174,115 +212,86 @@ export default function Documentos() {
             ))}
           </SelectContent>
         </Select>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
+        <Select value={orderBy} onValueChange={(v) => setOrderBy(v as 'oldest' | 'newest')}>
           <SelectTrigger className="w-full sm:w-48">
-            <SelectValue placeholder="Status" />
+            <SelectValue placeholder="Ordenar por" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Todos os status</SelectItem>
-            {Object.entries(STATUS_DOCUMENTO_LABELS).map(([key, label]) => (
-              <SelectItem key={key} value={key}>
-                {label}
-              </SelectItem>
-            ))}
+            <SelectItem value="oldest">Mais antigo primeiro</SelectItem>
+            <SelectItem value="newest">Mais recente primeiro</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
-      {/* Table */}
-      <Card>
-        <CardContent className="p-0">
-          {isLoading ? (
-            <div className="p-6 space-y-4">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <Skeleton key={i} className="h-16 w-full" />
-              ))}
-            </div>
-          ) : filteredDocumentos.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12">
-              <FileCheck className="h-12 w-12 text-muted-foreground/50" />
+      {/* Grid de Documentos */}
+      {isLoading ? (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <Card key={i}>
+              <CardContent className="p-0">
+                <Skeleton className="aspect-video w-full" />
+                <div className="p-4 space-y-3">
+                  <Skeleton className="h-8 w-full" />
+                  <Skeleton className="h-4 w-2/3" />
+                  <Skeleton className="h-10 w-full" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : !documentos || documentos.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16">
+          {statusFilter === 'pendente' ? (
+            <>
+              <div className="rounded-full bg-green-100 p-4 mb-4">
+                <CheckCircle className="h-12 w-12 text-green-600" />
+              </div>
+              <h3 className="text-xl font-semibold text-foreground">Tudo em dia!</h3>
+              <p className="mt-2 text-muted-foreground text-center max-w-sm">
+                Não há documentos pendentes de análise.
+                {stats && (
+                  <span className="block mt-2">
+                    {stats.aprovados} documento{stats.aprovados !== 1 ? 's' : ''} aprovado{stats.aprovados !== 1 ? 's' : ''} • 
+                    {stats.reprovados} reprovado{stats.reprovados !== 1 ? 's' : ''}
+                  </span>
+                )}
+              </p>
+            </>
+          ) : (
+            <>
+              <FileText className="h-12 w-12 text-muted-foreground/50" />
               <h3 className="mt-4 font-semibold text-foreground">Nenhum documento encontrado</h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                {search || statusFilter !== 'all' || tipoFilter !== 'all' 
+                {search || tipoFilter !== 'all' 
                   ? 'Tente ajustar os filtros' 
-                  : 'Nenhum documento enviado ainda'}
+                  : 'Nenhum documento com esse status'}
               </p>
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Documento</TableHead>
-                  <TableHead>Associado</TableHead>
-                  <TableHead>Arquivo</TableHead>
-                  <TableHead>Enviado em</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="w-32">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredDocumentos.map((doc) => {
-                  const status = statusConfig[doc.status as StatusDocumento];
-                  return (
-                    <TableRow key={doc.id}>
-                      <TableCell>
-                        <Badge variant="outline">{TIPO_DOCUMENTO_LABELS[doc.tipo as TipoDocumento]}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
-                            {doc.associados?.nome?.charAt(0) || '?'}
-                          </div>
-                          <span>{doc.associados?.nome || 'Desconhecido'}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="font-mono text-sm text-muted-foreground">
-                        {doc.nome_arquivo}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {formatDateTime(doc.created_at)}
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={status.color}>
-                          <status.icon className="mr-1 h-3 w-3" />
-                          {STATUS_DOCUMENTO_LABELS[doc.status as StatusDocumento]}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-1">
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            onClick={() => window.open(doc.arquivo_url, '_blank')}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          {(doc.status === 'pendente' || doc.status === 'em_analise') && (
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              onClick={() => setAnalyzeDocId(doc.id)}
-                            >
-                              Analisar
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+            </>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {documentos.map((doc) => (
+            <DocumentoCard
+              key={doc.id}
+              documento={doc}
+              onAnalyze={handleAnalyze}
+              onSkip={statusFilter === 'pendente' ? handleSkip : undefined}
+            />
+          ))}
+        </div>
+      )}
 
-      {/* Dialog de Análise */}
-      {analyzeDocId && (
-        <DocumentoAnaliseDialog
-          documentoId={analyzeDocId}
-          open={!!analyzeDocId}
-          onClose={() => setAnalyzeDocId(null)}
+      {/* Modal de Análise Fullscreen */}
+      {currentDocumentoId && (
+        <DocumentoAnaliseFullscreen
+          documentoId={currentDocumentoId}
+          documentoIds={documentoIds}
+          currentIndex={analyzeIndex!}
+          open={analyzeIndex !== null}
+          onClose={handleCloseAnalise}
+          onNavigate={handleNavigate}
+          onAnalyzed={handleAnalyzed}
         />
       )}
     </div>
