@@ -105,7 +105,7 @@ export default function AppRastreamento() {
   // Loading State
   if (isLoading) {
     return (
-      <div className="flex min-h-screen flex-col bg-background pb-20">
+      <div className="flex min-h-screen flex-col bg-background pb-24">
         {/* Header Skeleton */}
         <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b bg-background px-4">
           <Skeleton className="h-8 w-8 rounded-full" />
@@ -129,7 +129,7 @@ export default function AppRastreamento() {
   // Empty State - No vehicle or tracker
   if (!vehicle || !tracker) {
     return (
-      <div className="flex min-h-screen flex-col bg-background pb-20">
+      <div className="flex min-h-screen flex-col bg-background pb-24">
         {/* Header */}
         <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b bg-background px-4">
           <Button 
@@ -168,7 +168,7 @@ export default function AppRastreamento() {
   const emMovimento = dadosMock.velocidade > 0;
 
   return (
-    <div className="flex min-h-screen flex-col bg-background pb-20">
+    <div className="flex min-h-screen flex-col bg-background pb-24">
       {/* Header */}
       <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b bg-background px-4">
         <Button 
