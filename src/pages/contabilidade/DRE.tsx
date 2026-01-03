@@ -9,7 +9,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useBalancete } from '@/hooks/useContabilidade';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -19,7 +20,75 @@ export default function DRE() {
   const [mes, setMes] = useState(now.getMonth() + 1);
   const [ano, setAno] = useState(now.getFullYear());
 
-  const { data: balancete, isLoading } = useBalancete(mes, ano);
+  const { data: dre, isLoading } = useQuery({
+    queryKey: ['dre', mes, ano],
+    queryFn: async () => {
+      const dataInicio = `${ano}-${String(mes).padStart(2, '0')}-01`;
+      const dataFim = mes === 12 
+        ? `${ano + 1}-01-01`
+        : `${ano}-${String(mes + 1).padStart(2, '0')}-01`;
+      
+      // Buscar receitas com join no lancamento
+      const { data: receitas } = await supabase
+        .from('lancamentos_partidas')
+        .select(`
+          valor,
+          lancamento:lancamentos_contabeis!inner(data_competencia, status),
+          conta:plano_contas!inner(codigo, descricao, tipo)
+        `)
+        .eq('tipo', 'credito')
+        .eq('conta.tipo', 'receita')
+        .eq('lancamento.status', 'ativo')
+        .gte('lancamento.data_competencia', dataInicio)
+        .lt('lancamento.data_competencia', dataFim);
+      
+      // Buscar despesas
+      const { data: despesas } = await supabase
+        .from('lancamentos_partidas')
+        .select(`
+          valor,
+          lancamento:lancamentos_contabeis!inner(data_competencia, status),
+          conta:plano_contas!inner(codigo, descricao, tipo)
+        `)
+        .eq('tipo', 'debito')
+        .eq('conta.tipo', 'despesa')
+        .eq('lancamento.status', 'ativo')
+        .gte('lancamento.data_competencia', dataInicio)
+        .lt('lancamento.data_competencia', dataFim);
+      
+      // Agrupar receitas por conta
+      const receitasPorConta = new Map<string, { codigo: string; descricao: string; valor: number }>();
+      receitas?.forEach((r: any) => {
+        const key = r.conta.codigo;
+        receitasPorConta.set(key, {
+          codigo: r.conta.codigo,
+          descricao: r.conta.descricao,
+          valor: (receitasPorConta.get(key)?.valor || 0) + Number(r.valor)
+        });
+      });
+      
+      // Agrupar despesas por conta
+      const despesasPorConta = new Map<string, { codigo: string; descricao: string; valor: number }>();
+      despesas?.forEach((d: any) => {
+        const key = d.conta.codigo;
+        despesasPorConta.set(key, {
+          codigo: d.conta.codigo,
+          descricao: d.conta.descricao,
+          valor: (despesasPorConta.get(key)?.valor || 0) + Number(d.valor)
+        });
+      });
+      
+      const receitasArray = Array.from(receitasPorConta.values()).sort((a, b) => a.codigo.localeCompare(b.codigo));
+      const despesasArray = Array.from(despesasPorConta.values()).sort((a, b) => a.codigo.localeCompare(b.codigo));
+      
+      return {
+        receitas: receitasArray,
+        despesas: despesasArray,
+        totalReceitas: receitasArray.reduce((acc, r) => acc + r.valor, 0),
+        totalDespesas: despesasArray.reduce((acc, d) => acc + d.valor, 0),
+      };
+    }
+  });
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -28,28 +97,12 @@ export default function DRE() {
     }).format(value);
   };
 
-  // Calcular valores da DRE
-  const receitas = balancete
-    ?.filter(c => c.tipo === 'receita')
-    .reduce((sum, c) => sum + c.creditos, 0) || 0;
-
-  const despesas = balancete
-    ?.filter(c => c.tipo === 'despesa')
-    .reduce((sum, c) => sum + c.debitos, 0) || 0;
-
-  // Agrupar despesas por subcategoria (nível 3)
-  const despesasPorCategoria = balancete
-    ?.filter(c => c.tipo === 'despesa' && c.nivel === 3 && c.debitos > 0)
-    .sort((a, b) => b.debitos - a.debitos) || [];
-
-  // Agrupar receitas por subcategoria (nível 3)
-  const receitasPorCategoria = balancete
-    ?.filter(c => c.tipo === 'receita' && c.nivel === 3 && c.creditos > 0)
-    .sort((a, b) => b.creditos - a.creditos) || [];
-
+  const receitas = dre?.totalReceitas || 0;
+  const despesas = dre?.totalDespesas || 0;
   const resultado = receitas - despesas;
 
   interface LinhaItem {
+    codigo?: string;
     descricao: string;
     valor: number;
     destaque?: boolean;
@@ -59,23 +112,25 @@ export default function DRE() {
   }
 
   const linhas: LinhaItem[] = [
-    { descricao: 'RECEITAS', valor: 0, destaque: true },
-    ...receitasPorCategoria.map(c => ({
-      descricao: c.descricao,
-      valor: c.creditos,
+    { descricao: 'RECEITAS OPERACIONAIS', valor: 0, destaque: true },
+    ...(dre?.receitas || []).map(r => ({
+      codigo: r.codigo,
+      descricao: r.descricao,
+      valor: r.valor,
       nivel: 1,
     })),
     { descricao: 'TOTAL DE RECEITAS', valor: receitas, subtotal: true },
     { descricao: '', valor: 0 },
-    { descricao: 'DESPESAS', valor: 0, destaque: true },
-    ...despesasPorCategoria.map(c => ({
-      descricao: c.descricao,
-      valor: -c.debitos,
+    { descricao: 'DESPESAS OPERACIONAIS', valor: 0, destaque: true },
+    ...(dre?.despesas || []).map(d => ({
+      codigo: d.codigo,
+      descricao: d.descricao,
+      valor: -d.valor,
       nivel: 1,
     })),
     { descricao: 'TOTAL DE DESPESAS', valor: -despesas, subtotal: true },
     { descricao: '', valor: 0 },
-    { descricao: 'RESULTADO DO PERÍODO', valor: resultado, total: true },
+    { descricao: 'RESULTADO OPERACIONAL', valor: resultado, total: true },
   ];
 
   return (
@@ -160,7 +215,14 @@ export default function DRE() {
                       )}
                       style={linha.nivel ? { paddingLeft: `${linha.nivel * 24 + 16}px` } : undefined}
                     >
-                      <span>{linha.descricao}</span>
+                      <span className="flex items-center gap-2">
+                        {linha.codigo && (
+                          <span className="font-mono text-sm text-muted-foreground">
+                            {linha.codigo}
+                          </span>
+                        )}
+                        <span>{linha.descricao}</span>
+                      </span>
                       {linha.valor !== 0 && (
                         <span className={cn(
                           linha.valor < 0 ? 'text-red-600' : 'text-green-600',
