@@ -27,9 +27,10 @@ import {
   AlertTriangle,
   User
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 import {
   Dialog,
   DialogContent,
@@ -45,13 +46,27 @@ export default function AppConfiguracoes() {
   const navigate = useNavigate();
   const { data: associado } = useMyAssociado();
   
-  // Notificações
+  // Notificações - carregar do profile
   const [notificacoes, setNotificacoes] = useState({
     push: true,
     email: true,
     whatsapp: true,
     sms: false,
   });
+
+  // Carregar preferências de notificação do profile
+  useEffect(() => {
+    if (profile) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const profileData = profile as any;
+      setNotificacoes({
+        push: profileData.notif_novos_leads ?? true,
+        email: profileData.notif_documentos_pendentes ?? true,
+        whatsapp: profileData.notif_resumo_diario ?? true,
+        sms: false,
+      });
+    }
+  }, [profile]);
 
   // Segurança
   const [biometriaEnabled, setBiometriaEnabled] = useState(false);
@@ -204,7 +219,13 @@ export default function AppConfiguracoes() {
                 </div>
                 <Switch
                   checked={notificacoes.email}
-                  onCheckedChange={(checked) => setNotificacoes({ ...notificacoes, email: checked })}
+                  onCheckedChange={async (checked) => {
+                    setNotificacoes({ ...notificacoes, email: checked });
+                    if (profile?.id) {
+                      await supabase.from('profiles').update({ notif_documentos_pendentes: checked }).eq('id', profile.id);
+                      toast.success(checked ? 'E-mail ativado' : 'E-mail desativado');
+                    }
+                  }}
                 />
               </div>
               {/* WhatsApp */}
@@ -220,7 +241,13 @@ export default function AppConfiguracoes() {
                 </div>
                 <Switch
                   checked={notificacoes.whatsapp}
-                  onCheckedChange={(checked) => setNotificacoes({ ...notificacoes, whatsapp: checked })}
+                  onCheckedChange={async (checked) => {
+                    setNotificacoes({ ...notificacoes, whatsapp: checked });
+                    if (profile?.id) {
+                      await supabase.from('profiles').update({ notif_resumo_diario: checked }).eq('id', profile.id);
+                      toast.success(checked ? 'WhatsApp ativado' : 'WhatsApp desativado');
+                    }
+                  }}
                 />
               </div>
               {/* SMS */}
@@ -236,7 +263,10 @@ export default function AppConfiguracoes() {
                 </div>
                 <Switch
                   checked={notificacoes.sms}
-                  onCheckedChange={(checked) => setNotificacoes({ ...notificacoes, sms: checked })}
+                  onCheckedChange={(checked) => {
+                    setNotificacoes({ ...notificacoes, sms: checked });
+                    toast.info('SMS será implementado em breve');
+                  }}
                 />
               </div>
             </CardContent>

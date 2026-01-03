@@ -1,5 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Bell, LogOut, ChevronRight, Settings } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -73,12 +74,41 @@ export function AppHeader() {
 
       <div className="ml-auto flex items-center gap-2">
         {/* Notifications */}
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="h-5 w-5" />
-          <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] font-medium text-destructive-foreground">
-            3
-          </span>
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="relative">
+              <Bell className="h-5 w-5" />
+              <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] font-medium text-destructive-foreground">
+                3
+              </span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-80">
+            <DropdownMenuLabel>Notificações</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <div className="max-h-64 overflow-y-auto">
+              <DropdownMenuItem className="flex flex-col items-start gap-1 cursor-pointer">
+                <span className="text-sm font-medium">Novo lead cadastrado</span>
+                <span className="text-xs text-muted-foreground">Há 5 minutos</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem className="flex flex-col items-start gap-1 cursor-pointer">
+                <span className="text-sm font-medium">Documento aprovado</span>
+                <span className="text-xs text-muted-foreground">Há 1 hora</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem className="flex flex-col items-start gap-1 cursor-pointer">
+                <span className="text-sm font-medium">Cotação enviada</span>
+                <span className="text-xs text-muted-foreground">Há 2 horas</span>
+              </DropdownMenuItem>
+            </div>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem 
+              className="justify-center text-primary cursor-pointer"
+              onClick={() => toast.info('Página de notificações em breve')}
+            >
+              Ver todas as notificações
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         {/* User Menu */}
         <DropdownMenu>
