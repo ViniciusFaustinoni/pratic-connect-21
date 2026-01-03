@@ -42,6 +42,7 @@ import AppPerfil from "./pages/app/AppPerfil";
 import AppConfiguracoes from "./pages/app/AppConfiguracoes";
 import AppDocumentos from "./pages/app/AppDocumentos";
 import AppNotificacoes from "./pages/app/AppNotificacoes";
+import AppPlano from "./pages/app/AppPlano";
 
 const queryClient = new QueryClient();
 
@@ -100,6 +101,7 @@ const App = () => (
               <Route path="/app/sinistros" element={<AppSinistros />} />
               <Route path="/app/sinistros/novo" element={<AppSinistroNovo />} />
               <Route path="/app/perfil" element={<AppPerfil />} />
+              <Route path="/app/plano" element={<AppPlano />} />
               <Route path="/app/configuracoes" element={<AppConfiguracoes />} />
               <Route path="/app/documentos" element={<AppDocumentos />} />
               <Route path="/app/notificacoes" element={<AppNotificacoes />} />

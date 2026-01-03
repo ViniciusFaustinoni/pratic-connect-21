@@ -138,9 +138,9 @@ export default function AppHome() {
       {associado?.planos && (
         <CardPlano 
           plano={associado.planos}
-          dataAdesao={associado.created_at}
+          dataAdesao={associado.data_adesao || associado.created_at}
           compacto
-          onClick={() => navigate('/app/perfil')}
+          onClick={() => navigate('/app/plano')}
         />
       )}
 
