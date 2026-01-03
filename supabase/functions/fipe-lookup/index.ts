@@ -6,7 +6,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const FIPE_API = 'https://parallelum.com.br/fipe/api/v1';
+const FIPE_API = 'http://api.fipeapi.com.br/v1';
 
 // Função para normalizar texto para comparação
 function normalizeText(text: string): string {
@@ -41,6 +41,12 @@ serve(async (req) => {
   }
 
   try {
+    const apiKey = Deno.env.get('FIPE_API_KEY');
+    if (!apiKey) {
+      console.error('FIPE_API_KEY não configurada');
+      throw new Error('API Key não configurada');
+    }
+
     // Support both GET (legacy) and POST
     let action: string | null;
     let tipo: string;
@@ -73,10 +79,19 @@ serve(async (req) => {
 
     switch (action) {
       case 'marcas': {
-        const response = await fetch(`${FIPE_API}/${tipo}/marcas`);
-        if (!response.ok) throw new Error('Erro ao buscar marcas');
+        // GET /carros?{apiKey} - Lista marcas
+        const response = await fetch(`${FIPE_API}/${tipo}?${apiKey}`);
+        if (!response.ok) {
+          console.error('Erro ao buscar marcas:', response.status);
+          throw new Error('Erro ao buscar marcas');
+        }
         const data = await response.json();
-        result = { success: true, data };
+        // Mapear para formato esperado: { codigo, nome }
+        const marcas = data.map((m: { id: string; name: string }) => ({
+          codigo: m.id,
+          nome: m.name
+        }));
+        result = { success: true, data: marcas };
         break;
       }
 
@@ -88,10 +103,19 @@ serve(async (req) => {
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
-        const response = await fetch(`${FIPE_API}/${tipo}/marcas/${marcaCodigo}/modelos`);
-        if (!response.ok) throw new Error('Erro ao buscar modelos');
+        // GET /carros/{id_marca}?{apiKey} - Lista modelos
+        const response = await fetch(`${FIPE_API}/${tipo}/${marcaCodigo}?${apiKey}`);
+        if (!response.ok) {
+          console.error('Erro ao buscar modelos:', response.status);
+          throw new Error('Erro ao buscar modelos');
+        }
         const data = await response.json();
-        result = { success: true, data };
+        // Mapear para formato esperado
+        const modelos = data.map((m: { id_modelo: string; name: string }) => ({
+          codigo: m.id_modelo,
+          nome: m.name
+        }));
+        result = { success: true, data: { modelos } };
         break;
       }
 
@@ -104,10 +128,19 @@ serve(async (req) => {
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
-        const response = await fetch(`${FIPE_API}/${tipo}/marcas/${marcaCodigo}/modelos/${modeloCodigo}/anos`);
-        if (!response.ok) throw new Error('Erro ao buscar anos');
+        // GET /carros/{id_marca}/{id_modelo}?{apiKey} - Lista anos
+        const response = await fetch(`${FIPE_API}/${tipo}/${marcaCodigo}/${modeloCodigo}?${apiKey}`);
+        if (!response.ok) {
+          console.error('Erro ao buscar anos:', response.status);
+          throw new Error('Erro ao buscar anos');
+        }
         const data = await response.json();
-        result = { success: true, data };
+        // Mapear para formato esperado
+        const anos = data.map((a: { id: string; name: string; id_modelo_ano: string }) => ({
+          codigo: a.id || a.id_modelo_ano,
+          nome: a.name
+        }));
+        result = { success: true, data: anos };
         break;
       }
 
@@ -123,26 +156,64 @@ serve(async (req) => {
           );
         }
 
+        // GET /carros/{id_marca}/{id_modelo}/{id_ano}?{apiKey} - Busca preço
         const response = await fetch(
-          `${FIPE_API}/${tipo}/marcas/${marcaCodigo}/modelos/${modeloCodigo}/anos/${anoCodigo}`
+          `${FIPE_API}/${tipo}/${marcaCodigo}/${modeloCodigo}/${anoCodigo}?${apiKey}`
         );
-        if (!response.ok) throw new Error('Erro ao buscar preço');
+        if (!response.ok) {
+          console.error('Erro ao buscar preço:', response.status);
+          throw new Error('Erro ao buscar preço');
+        }
         const data = await response.json();
 
         result = {
           success: true,
           data: {
-            codigoFipe: data.CodigoFipe,
-            valor: data.Valor,
-            valorNumerico: parseValorFipe(data.Valor),
-            marca: data.Marca,
-            modelo: data.Modelo,
-            anoModelo: data.AnoModelo,
-            combustivel: data.Combustivel,
-            mesReferencia: data.MesReferencia,
-            tipoVeiculo: data.TipoVeiculo,
-            siglaCombustivel: data.SiglaCombustivel
+            codigoFipe: data.fipe_codigo,
+            valor: data.preco,
+            valorNumerico: parseValorFipe(data.preco),
+            marca: data.marca,
+            modelo: data.modelo,
+            anoModelo: parseInt(data.ano) || data.ano_modelo,
+            combustivel: data.combustivel,
+            mesReferencia: data.ano_modelo || data.ano
           }
+        };
+        break;
+      }
+
+      case 'buscar-por-fipe': {
+        const codigoFipe = params.codigoFipe || params.codigo;
+        if (!codigoFipe) {
+          return new Response(
+            JSON.stringify({ success: false, error: 'Parâmetro "codigoFipe" é obrigatório' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // GET /fipe/{codigo-fipe}?{apiKey} - Busca por código FIPE
+        const response = await fetch(`${FIPE_API}/fipe/${codigoFipe}?${apiKey}`);
+        if (!response.ok) {
+          console.error('Erro ao buscar por código FIPE:', response.status);
+          throw new Error('Erro ao buscar por código FIPE');
+        }
+        const data = await response.json();
+        
+        // Retorna array, pegar primeiro item
+        const veiculo = Array.isArray(data) ? data[0] : data;
+        
+        result = {
+          success: true,
+          found: !!veiculo,
+          data: veiculo ? {
+            codigoFipe: veiculo.fipe_codigo,
+            valor: veiculo.preco,
+            valorNumerico: parseValorFipe(veiculo.preco),
+            marca: veiculo.marca,
+            modelo: veiculo.modelo,
+            anoModelo: parseInt(veiculo.ano),
+            combustivel: veiculo.combustivel
+          } : null
         };
         break;
       }
@@ -162,9 +233,10 @@ serve(async (req) => {
         console.log(`Buscando FIPE: ${marca} ${modelo} ${ano || ''}`);
 
         // 1. Buscar marcas
-        const marcasResp = await fetch(`${FIPE_API}/${tipo}/marcas`);
+        const marcasResp = await fetch(`${FIPE_API}/${tipo}?${apiKey}`);
         if (!marcasResp.ok) throw new Error('Erro ao buscar marcas');
-        const marcas: Array<{ codigo: string; nome: string }> = await marcasResp.json();
+        const marcasData: Array<{ id: string; name: string }> = await marcasResp.json();
+        const marcas = marcasData.map(m => ({ codigo: m.id, nome: m.name }));
 
         // Fuzzy match para marca
         const marcaEncontrada = marcas.find((m) => fuzzyMatch(marca, m.nome));
@@ -180,12 +252,13 @@ serve(async (req) => {
         console.log(`Marca encontrada: ${marcaEncontrada.nome} (${marcaEncontrada.codigo})`);
 
         // 2. Buscar modelos
-        const modelosResp = await fetch(`${FIPE_API}/${tipo}/marcas/${marcaEncontrada.codigo}/modelos`);
+        const modelosResp = await fetch(`${FIPE_API}/${tipo}/${marcaEncontrada.codigo}?${apiKey}`);
         if (!modelosResp.ok) throw new Error('Erro ao buscar modelos');
-        const modelosData: { modelos: Array<{ codigo: number; nome: string }> } = await modelosResp.json();
+        const modelosData: Array<{ id_modelo: string; name: string }> = await modelosResp.json();
+        const modelos = modelosData.map(m => ({ codigo: m.id_modelo, nome: m.name }));
 
         // Fuzzy match para modelo
-        const modeloEncontrado = modelosData.modelos.find((m) => fuzzyMatch(modelo, m.nome));
+        const modeloEncontrado = modelos.find((m) => fuzzyMatch(modelo, m.nome));
 
         if (!modeloEncontrado) {
           console.log(`Modelo não encontrado: ${modelo}`);
@@ -199,10 +272,11 @@ serve(async (req) => {
 
         // 3. Buscar anos
         const anosResp = await fetch(
-          `${FIPE_API}/${tipo}/marcas/${marcaEncontrada.codigo}/modelos/${modeloEncontrado.codigo}/anos`
+          `${FIPE_API}/${tipo}/${marcaEncontrada.codigo}/${modeloEncontrado.codigo}?${apiKey}`
         );
         if (!anosResp.ok) throw new Error('Erro ao buscar anos');
-        const anos: Array<{ codigo: string; nome: string }> = await anosResp.json();
+        const anosData: Array<{ id: string; name: string; id_modelo_ano: string }> = await anosResp.json();
+        const anos = anosData.map(a => ({ codigo: a.id || a.id_modelo_ano, nome: a.name }));
 
         // Match para ano (se fornecido)
         let anoEncontrado = anos[0]; // Default para o primeiro (mais recente)
@@ -217,25 +291,25 @@ serve(async (req) => {
 
         // 4. Buscar preço
         const precoResp = await fetch(
-          `${FIPE_API}/${tipo}/marcas/${marcaEncontrada.codigo}/modelos/${modeloEncontrado.codigo}/anos/${anoEncontrado.codigo}`
+          `${FIPE_API}/${tipo}/${marcaEncontrada.codigo}/${modeloEncontrado.codigo}/${anoEncontrado.codigo}?${apiKey}`
         );
         if (!precoResp.ok) throw new Error('Erro ao buscar preço');
         const preco = await precoResp.json();
 
-        console.log(`FIPE encontrado: ${preco.CodigoFipe} - ${preco.Valor}`);
+        console.log(`FIPE encontrado: ${preco.fipe_codigo} - ${preco.preco}`);
 
         result = {
           success: true,
           found: true,
           data: {
-            codigoFipe: preco.CodigoFipe,
-            valor: preco.Valor,
-            valorNumerico: parseValorFipe(preco.Valor),
-            marca: preco.Marca,
-            modelo: preco.Modelo,
-            anoModelo: preco.AnoModelo,
-            combustivel: preco.Combustivel,
-            mesReferencia: preco.MesReferencia,
+            codigoFipe: preco.fipe_codigo,
+            valor: preco.preco,
+            valorNumerico: parseValorFipe(preco.preco),
+            marca: preco.marca,
+            modelo: preco.modelo,
+            anoModelo: parseInt(preco.ano) || preco.ano_modelo,
+            combustivel: preco.combustivel,
+            mesReferencia: preco.ano_modelo || preco.ano,
             // Códigos para referência
             marcaCodigo: marcaEncontrada.codigo,
             modeloCodigo: modeloEncontrado.codigo,
