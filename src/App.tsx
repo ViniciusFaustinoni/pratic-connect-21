@@ -60,8 +60,8 @@ import Extrato from "./pages/financeiro/Extrato";
 import AppLogin from "./pages/app/AppLogin";
 import AppRedefinirSenha from "./pages/app/AppRedefinirSenha";
 import AppHome from "./pages/app/AppHome";
-import AppBoletos from "./pages/app/AppBoletos";
-import AppBoletoDetalhe from "./pages/app/AppBoletoDetalhe";
+import MeusBoletos from "./pages/app/MeusBoletos";
+import BoletoDetalhe from "./pages/app/BoletoDetalhe";
 import AppRastreamento from "./pages/app/AppRastreamento";
 import SolicitarAssistencia from "./pages/app/SolicitarAssistencia";
 import HistoricoChamados from "./pages/app/HistoricoChamados";
@@ -163,8 +163,8 @@ const App = () => (
             <Route path="/app/redefinir-senha" element={<AppRedefinirSenha />} />
             <Route element={<AssociadoAppLayout />}>
               <Route path="/app/home" element={<AppHome />} />
-              <Route path="/app/boletos" element={<AppBoletos />} />
-              <Route path="/app/boletos/:id" element={<AppBoletoDetalhe />} />
+              <Route path="/app/boletos" element={<MeusBoletos />} />
+              <Route path="/app/boletos/:id" element={<BoletoDetalhe />} />
               <Route path="/app/rastreamento" element={<AppRastreamento />} />
               <Route path="/app/assistencia" element={<SolicitarAssistencia />} />
               <Route path="/app/assistencia/nova" element={<AppAssistenciaNova />} />
