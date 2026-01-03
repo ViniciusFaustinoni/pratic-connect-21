@@ -1,9 +1,13 @@
+import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Package, Plus } from 'lucide-react';
 import { EstoqueMetricas } from '@/components/monitoramento/estoque/EstoqueMetricas';
+import { EntradaEstoqueDialog } from '@/components/monitoramento/estoque/EntradaEstoqueDialog';
 
 export default function Estoque() {
+  const [modalEntradaAberto, setModalEntradaAberto] = useState(false);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -13,7 +17,7 @@ export default function Estoque() {
             Controle o estoque de rastreadores e equipamentos
           </p>
         </div>
-        <Button>
+        <Button onClick={() => setModalEntradaAberto(true)}>
           <Plus className="mr-2 h-4 w-4" />
           Entrada de Estoque
         </Button>
@@ -40,6 +44,11 @@ export default function Estoque() {
           </div>
         </CardContent>
       </Card>
+
+      <EntradaEstoqueDialog
+        open={modalEntradaAberto}
+        onOpenChange={setModalEntradaAberto}
+      />
     </div>
   );
 }
