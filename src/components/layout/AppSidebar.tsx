@@ -25,6 +25,10 @@ import {
   Phone,
   AlertTriangle,
   Truck,
+  DollarSign,
+  Receipt,
+  CreditCard,
+  List,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
@@ -154,6 +158,19 @@ const menuConfig: {
       items: [
         { title: 'Oficinas', url: '/oficinas', icon: Building2 },
         { title: 'Ordens de Serviço', url: '/ordens-servico', icon: ClipboardList },
+      ],
+    },
+    {
+      id: 'financeiro',
+      label: 'Financeiro',
+      icon: DollarSign,
+      permission: 'isGerencia',
+      items: [
+        { title: 'Dashboard', url: '/financeiro', icon: BarChart3 },
+        { title: 'Cobranças', url: '/financeiro/cobrancas', icon: Receipt },
+        { title: 'Contas a Pagar', url: '/financeiro/contas-pagar', icon: CreditCard },
+        { title: 'Faturamento', url: '/financeiro/faturamento', icon: FileText },
+        { title: 'Extrato', url: '/financeiro/extrato', icon: List },
       ],
     },
   ],
