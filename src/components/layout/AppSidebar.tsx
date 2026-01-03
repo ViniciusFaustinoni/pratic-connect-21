@@ -24,6 +24,7 @@ import {
   LucideIcon,
   Phone,
   AlertTriangle,
+  Truck,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
@@ -132,6 +133,7 @@ const menuConfig: {
       items: [
         { title: 'Sinistros', url: '/eventos/sinistros', icon: AlertTriangle },
         { title: 'Assistência 24h', url: '/assistencia', icon: Phone },
+        { title: 'Prestadores', url: '/assistencia/prestadores', icon: Truck },
       ],
     },
     {
