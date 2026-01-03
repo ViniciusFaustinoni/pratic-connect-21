@@ -33,10 +33,12 @@ import AppBoletoDetalhe from "./pages/app/AppBoletoDetalhe";
 import AppRastreamento from "./pages/app/AppRastreamento";
 import AppAssistencia from "./pages/app/AppAssistencia";
 import AppAssistenciaDetalhe from "./pages/app/AppAssistenciaDetalhe";
+import AppAssistenciaNova from "./pages/app/AppAssistenciaNova";
 import AppSinistros from "./pages/app/AppSinistros";
 import AppSinistroNovo from "./pages/app/AppSinistroNovo";
 import AppPerfil from "./pages/app/AppPerfil";
 import AppConfiguracoes from "./pages/app/AppConfiguracoes";
+import AppDocumentos from "./pages/app/AppDocumentos";
 
 const queryClient = new QueryClient();
 
@@ -88,11 +90,13 @@ const App = () => (
               <Route path="/app/boletos/:id" element={<AppBoletoDetalhe />} />
               <Route path="/app/rastreamento" element={<AppRastreamento />} />
               <Route path="/app/assistencia" element={<AppAssistencia />} />
+              <Route path="/app/assistencia/nova" element={<AppAssistenciaNova />} />
               <Route path="/app/assistencia/:id" element={<AppAssistenciaDetalhe />} />
               <Route path="/app/sinistros" element={<AppSinistros />} />
               <Route path="/app/sinistros/novo" element={<AppSinistroNovo />} />
               <Route path="/app/perfil" element={<AppPerfil />} />
               <Route path="/app/configuracoes" element={<AppConfiguracoes />} />
+              <Route path="/app/documentos" element={<AppDocumentos />} />
             </Route>
             <Route path="/app" element={<Navigate to="/app/home" replace />} />
             

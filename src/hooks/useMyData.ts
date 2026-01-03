@@ -8,6 +8,7 @@ type Veiculo = Tables<'veiculos'>;
 type Sinistro = Tables<'sinistros'>;
 type Chamado = Tables<'chamados_assistencia'>;
 type Rastreador = Tables<'rastreadores'>;
+type Documento = Tables<'documentos'>;
 
 export interface AssociadoWithRelations extends Associado {
   planos?: { nome: string } | null;
@@ -85,6 +86,27 @@ export function useMyVehicleWithTracker() {
       return data as Rastreador | null;
     },
     enabled: !!vehicleId,
+  });
+}
+
+export function useMyDocumentos() {
+  const { data: associado } = useMyAssociado();
+
+  return useQuery({
+    queryKey: ['my-documentos', associado?.id],
+    queryFn: async () => {
+      if (!associado?.id) return [];
+
+      const { data, error } = await supabase
+        .from('documentos')
+        .select('*')
+        .eq('associado_id', associado.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return data as Documento[];
+    },
+    enabled: !!associado?.id,
   });
 }
 

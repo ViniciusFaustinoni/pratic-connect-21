@@ -9,7 +9,11 @@ interface AppHeaderProps {
 
 export function AppHeader({ notificationCount = 0, onNotificationClick }: AppHeaderProps) {
   return (
-    <header className="sticky top-0 z-50 flex h-14 items-center justify-between border-b bg-white px-4">
+    <header className="sticky top-0 z-50 flex h-[60px] items-center justify-between bg-white px-4 shadow-sm">
+      {/* Spacer for balance */}
+      <div className="w-10" />
+      
+      {/* Centered Logo */}
       <div className="flex items-center gap-2">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
           <Shield className="h-4 w-4 text-primary-foreground" />
@@ -17,10 +21,11 @@ export function AppHeader({ notificationCount = 0, onNotificationClick }: AppHea
         <span className="text-lg font-bold text-foreground">PRATIC</span>
       </div>
 
+      {/* Notifications */}
       <Button
         variant="ghost"
         size="icon"
-        className="relative"
+        className="relative min-h-[44px] min-w-[44px]"
         onClick={onNotificationClick}
       >
         <Bell className="h-5 w-5" />

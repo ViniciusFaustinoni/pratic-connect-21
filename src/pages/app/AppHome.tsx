@@ -1,27 +1,37 @@
 import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/contexts/AuthContext';
-import { useMyVehicles, useMyVehicleWithTracker } from '@/hooks/useMyData';
-import { 
-  Car, 
-  ReceiptText, 
-  MapPin, 
-  Phone,
-  Wifi,
-  WifiOff,
-  ChevronRight
-} from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { useMyAssociado, useMyVehicles, useMyVehicleWithTracker } from '@/hooks/useMyData';
+import { Car, Wifi, WifiOff, Calendar, CreditCard } from 'lucide-react';
+
+const statusConfig: Record<string, { label: string; className: string }> = {
+  ativo: { label: 'Ativo', className: 'bg-green-100 text-green-800 border-green-200' },
+  inadimplente: { label: 'Inadimplente', className: 'bg-red-100 text-red-800 border-red-200' },
+  suspenso: { label: 'Suspenso', className: 'bg-yellow-100 text-yellow-800 border-yellow-200' },
+  em_analise: { label: 'Em Análise', className: 'bg-blue-100 text-blue-800 border-blue-200' },
+  documentacao_pendente: { label: 'Documentação Pendente', className: 'bg-orange-100 text-orange-800 border-orange-200' },
+  aguardando_instalacao: { label: 'Aguardando Instalação', className: 'bg-purple-100 text-purple-800 border-purple-200' },
+  cancelado: { label: 'Cancelado', className: 'bg-gray-100 text-gray-800 border-gray-200' },
+};
 
 export default function AppHome() {
   const { profile } = useAuth();
+  const { data: associado, isLoading: associadoLoading } = useMyAssociado();
   const { data: vehicles, isLoading: vehiclesLoading } = useMyVehicles();
   const { data: tracker, isLoading: trackerLoading } = useMyVehicleWithTracker();
   
   const firstName = profile?.nome?.split(' ')[0] || 'Associado';
   const vehicle = vehicles?.[0];
   const isOnline = tracker?.status === 'instalado' && tracker?.ultima_comunicacao;
+  const status = associado?.status || 'em_analise';
+  const statusInfo = statusConfig[status] || statusConfig.em_analise;
+
+  // Mock data for next payment (would come from boletos table)
+  const nextPayment = {
+    value: 189.90,
+    dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
+  };
 
   return (
     <div className="space-y-4 p-4">
@@ -31,7 +41,44 @@ export default function AppHome() {
         <h1 className="text-xl font-bold text-foreground">Olá, {firstName}!</h1>
       </div>
 
-      {/* Vehicle Card */}
+      {/* Card 1: Situação */}
+      <Card className="border-0 shadow-sm">
+        <CardContent className="p-4">
+          <p className="text-sm text-muted-foreground">Situação</p>
+          {associadoLoading ? (
+            <Skeleton className="mt-2 h-6 w-24" />
+          ) : (
+            <div className="mt-2">
+              <Badge variant="outline" className={statusInfo.className}>
+                {statusInfo.label}
+              </Badge>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Card 2: Próximo Vencimento */}
+      <Card className="border-0 shadow-sm">
+        <CardContent className="p-4">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-sm text-muted-foreground">Próximo Vencimento</p>
+              <p className="mt-1 text-2xl font-bold text-foreground">
+                {nextPayment.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              </p>
+              <div className="mt-1 flex items-center gap-1 text-sm text-muted-foreground">
+                <Calendar className="h-3.5 w-3.5" />
+                <span>Vence em {nextPayment.dueDate.toLocaleDateString('pt-BR')}</span>
+              </div>
+            </div>
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+              <CreditCard className="h-5 w-5 text-primary" />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Card 3: Meu Veículo */}
       <Card className="border-0 shadow-sm">
         <CardContent className="flex items-center gap-4 p-4">
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
@@ -44,7 +91,8 @@ export default function AppHome() {
             </div>
           ) : vehicle ? (
             <div className="flex-1">
-              <p className="text-2xl font-bold tracking-wider text-foreground">
+              <p className="text-sm text-muted-foreground">Meu Veículo</p>
+              <p className="text-xl font-bold tracking-wider text-foreground">
                 {vehicle.placa}
               </p>
               <p className="text-sm text-muted-foreground">
@@ -53,17 +101,17 @@ export default function AppHome() {
             </div>
           ) : (
             <div className="flex-1">
+              <p className="text-sm text-muted-foreground">Meu Veículo</p>
               <p className="font-medium text-foreground">Nenhum veículo</p>
               <p className="text-sm text-muted-foreground">
                 Veículo não cadastrado
               </p>
             </div>
           )}
-          <ChevronRight className="h-5 w-5 text-muted-foreground" />
         </CardContent>
       </Card>
 
-      {/* Tracker Status Card */}
+      {/* Card 4: Rastreador */}
       <Card className="border-0 shadow-sm">
         <CardContent className="flex items-center justify-between p-4">
           <div className="flex items-center gap-3">
@@ -77,15 +125,7 @@ export default function AppHome() {
               </>
             ) : tracker ? (
               <>
-                {isOnline ? (
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100">
-                    <Wifi className="h-5 w-5 text-green-600" />
-                  </div>
-                ) : (
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100">
-                    <WifiOff className="h-5 w-5 text-red-600" />
-                  </div>
-                )}
+                <div className={`h-3 w-3 rounded-full ${isOnline ? 'animate-pulse bg-green-500' : 'bg-red-500'}`} />
                 <div>
                   <p className="text-sm text-muted-foreground">Rastreador</p>
                   <p className={`font-semibold ${isOnline ? 'text-green-600' : 'text-red-600'}`}>
@@ -95,9 +135,7 @@ export default function AppHome() {
               </>
             ) : (
               <>
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
-                  <WifiOff className="h-5 w-5 text-muted-foreground" />
-                </div>
+                <div className="h-3 w-3 rounded-full bg-muted" />
                 <div>
                   <p className="text-sm text-muted-foreground">Rastreador</p>
                   <p className="font-semibold text-muted-foreground">Não instalado</p>
@@ -106,67 +144,14 @@ export default function AppHome() {
             )}
           </div>
           {tracker && (
-            <div className="flex items-center gap-2">
-              <span className={`h-3 w-3 rounded-full ${isOnline ? 'animate-pulse bg-green-500' : 'bg-red-500'}`} />
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/50">
+              {isOnline ? (
+                <Wifi className="h-5 w-5 text-green-600" />
+              ) : (
+                <WifiOff className="h-5 w-5 text-red-600" />
+              )}
             </div>
           )}
-        </CardContent>
-      </Card>
-
-      {/* Quick Actions */}
-      <div className="grid grid-cols-3 gap-3">
-        <Link to="/app/boletos">
-          <Card className="border-0 shadow-sm transition-shadow hover:shadow-md">
-            <CardContent className="flex flex-col items-center gap-2 p-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-                <ReceiptText className="h-6 w-6 text-primary" />
-              </div>
-              <span className="text-center text-xs font-medium text-foreground">
-                Boletos
-              </span>
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link to="/app/rastreamento">
-          <Card className="border-0 shadow-sm transition-shadow hover:shadow-md">
-            <CardContent className="flex flex-col items-center gap-2 p-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-                <MapPin className="h-6 w-6 text-primary" />
-              </div>
-              <span className="text-center text-xs font-medium text-foreground">
-                Rastrear
-              </span>
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link to="/app/assistencia">
-          <Card className="border-0 shadow-sm transition-shadow hover:shadow-md">
-            <CardContent className="flex flex-col items-center gap-2 p-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10">
-                <Phone className="h-6 w-6 text-destructive" />
-              </div>
-              <span className="text-center text-xs font-medium text-foreground">
-                Assistência
-              </span>
-            </CardContent>
-          </Card>
-        </Link>
-      </div>
-
-      {/* Emergency Button */}
-      <Card className="border-0 bg-destructive/5 shadow-sm">
-        <CardContent className="p-4">
-          <Button asChild variant="destructive" className="w-full">
-            <Link to="/app/assistencia">
-              <Phone className="mr-2 h-4 w-4" />
-              Assistência 24h
-            </Link>
-          </Button>
-          <p className="mt-2 text-center text-xs text-muted-foreground">
-            Guincho, chaveiro, pane seca e mais
-          </p>
         </CardContent>
       </Card>
     </div>
