@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useTheme } from 'next-themes';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,7 +38,14 @@ const abas: Tab[] = [
 
 export default function Configuracoes() {
   const { profile, user } = useAuth();
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
   const [abaAtiva, setAbaAtiva] = useState('perfil');
+
+  // Avoid hydration mismatch
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Profile form state
   const [nome, setNome] = useState(profile?.nome || '');
@@ -817,20 +825,55 @@ export default function Configuracoes() {
                   <CardTitle className="text-base">Aparência</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    <button className="flex flex-col items-center gap-2 p-4 rounded-lg border-2 border-primary bg-primary/5 transition-all">
-                      <Sun className="h-6 w-6" />
-                      <span className="text-sm font-medium">Claro</span>
-                    </button>
-                    <button className="flex flex-col items-center gap-2 p-4 rounded-lg border hover:border-primary/50 transition-all">
-                      <Moon className="h-6 w-6 text-muted-foreground" />
-                      <span className="text-sm text-muted-foreground">Escuro</span>
-                    </button>
-                    <button className="flex flex-col items-center gap-2 p-4 rounded-lg border hover:border-primary/50 transition-all">
-                      <Monitor className="h-6 w-6 text-muted-foreground" />
-                      <span className="text-sm text-muted-foreground">Sistema</span>
-                    </button>
-                  </div>
+                  {!mounted ? (
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      {[1, 2, 3].map(i => (
+                        <div key={i} className="h-20 rounded-lg bg-muted animate-pulse" />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <button 
+                        onClick={() => setTheme('light')}
+                        className={`flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all ${
+                          theme === 'light' 
+                            ? 'border-primary bg-primary/5' 
+                            : 'border-transparent hover:border-primary/30'
+                        }`}
+                      >
+                        <Sun className={`h-6 w-6 ${theme === 'light' ? 'text-primary' : 'text-muted-foreground'}`} />
+                        <span className={`text-sm font-medium ${theme === 'light' ? '' : 'text-muted-foreground'}`}>
+                          Claro
+                        </span>
+                      </button>
+                      <button 
+                        onClick={() => setTheme('dark')}
+                        className={`flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all ${
+                          theme === 'dark' 
+                            ? 'border-primary bg-primary/5' 
+                            : 'border-transparent hover:border-primary/30'
+                        }`}
+                      >
+                        <Moon className={`h-6 w-6 ${theme === 'dark' ? 'text-primary' : 'text-muted-foreground'}`} />
+                        <span className={`text-sm font-medium ${theme === 'dark' ? '' : 'text-muted-foreground'}`}>
+                          Escuro
+                        </span>
+                      </button>
+                      <button 
+                        onClick={() => setTheme('system')}
+                        className={`flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all ${
+                          theme === 'system' 
+                            ? 'border-primary bg-primary/5' 
+                            : 'border-transparent hover:border-primary/30'
+                        }`}
+                      >
+                        <Monitor className={`h-6 w-6 ${theme === 'system' ? 'text-primary' : 'text-muted-foreground'}`} />
+                        <span className={`text-sm font-medium ${theme === 'system' ? '' : 'text-muted-foreground'}`}>
+                          Sistema
+                        </span>
+                      </button>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
