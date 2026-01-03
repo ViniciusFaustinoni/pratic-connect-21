@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.autentique-status]
 verify_jwt = true
+
+[functions.document-ocr]
+verify_jwt = true

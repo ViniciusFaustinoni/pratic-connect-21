@@ -1,5 +1,5 @@
-import { useLocation, useNavigate } from 'react-router-dom';
-import { Bell, LogOut, ChevronRight, Settings } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Bell, LogOut, Settings } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
@@ -14,36 +14,11 @@ import { SidebarTrigger } from '@/components/ui/sidebar';
 import { useAuth } from '@/contexts/AuthContext';
 import { ROLE_LABELS } from '@/types/database';
 import { UserAvatar } from '@/components/UserAvatar';
-
-const routeLabels: Record<string, string> = {
-  '/dashboard': 'Dashboard',
-  '/vendas': 'Vendas',
-  '/vendas/leads': 'Leads',
-  '/vendas/kanban': 'Kanban',
-  '/vendas/cotacoes': 'Cotador',
-  '/vendas/contratos': 'Contratos',
-  '/cadastro': 'Cadastro',
-  '/cadastro/associados': 'Associados',
-  '/cadastro/veiculos': 'Veículos',
-  '/cadastro/documentos': 'Documentos',
-  '/monitoramento': 'Monitoramento',
-  '/monitoramento/instalacoes': 'Instalações',
-  '/monitoramento/rotas': 'Rotas',
-  '/monitoramento/estoque': 'Estoque',
-  '/monitoramento/rastreadores': 'Rastreadores',
-  '/configuracoes': 'Configurações',
-};
+import { GlobalBreadcrumb } from '@/components/layout/GlobalBreadcrumb';
 
 export function AppHeader() {
-  const location = useLocation();
   const navigate = useNavigate();
   const { profile, roles, signOut } = useAuth();
-
-  const pathParts = location.pathname.split('/').filter(Boolean);
-  const breadcrumbs = pathParts.map((_, index) => {
-    const path = '/' + pathParts.slice(0, index + 1).join('/');
-    return { path, label: routeLabels[path] || pathParts[index] };
-  });
 
   const handleSignOut = async () => {
     await signOut();
@@ -55,22 +30,7 @@ export function AppHeader() {
       <SidebarTrigger className="-ml-2" />
 
       {/* Breadcrumb */}
-      <nav className="flex items-center gap-1 text-sm">
-        {breadcrumbs.map((crumb, index) => (
-          <div key={crumb.path} className="flex items-center gap-1">
-            {index > 0 && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-            <span
-              className={
-                index === breadcrumbs.length - 1
-                  ? 'font-medium text-foreground'
-                  : 'text-muted-foreground'
-              }
-            >
-              {crumb.label}
-            </span>
-          </div>
-        ))}
-      </nav>
+      <GlobalBreadcrumb />
 
       <div className="ml-auto flex items-center gap-2">
         {/* Notifications */}
