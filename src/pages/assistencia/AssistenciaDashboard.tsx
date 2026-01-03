@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -23,6 +24,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
+import { NovoChamadoModal } from '@/components/assistencia/NovoChamadoModal';
 
 const tiposServico: Record<string, { icon: LucideIcon; label: string }> = {
   reboque: { icon: Truck, label: 'Reboque/Guincho' },
@@ -59,6 +61,7 @@ const getPrioridadeBadge = (dataAbertura: string) => {
 
 export default function AssistenciaDashboard() {
   const navigate = useNavigate();
+  const [modalNovoChamado, setModalNovoChamado] = useState(false);
 
   // Estatísticas do dia
   const { data: estatisticas, dataUpdatedAt } = useQuery({
@@ -154,12 +157,19 @@ export default function AssistenciaDashboard() {
             <RefreshCw className="h-3 w-3" />
             Atualizado: {dataUpdatedAt ? format(new Date(dataUpdatedAt), 'HH:mm:ss') : '--:--:--'}
           </Badge>
-          <Button onClick={() => navigate('/assistencia/novo')}>
+          <Button onClick={() => setModalNovoChamado(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Novo Chamado
           </Button>
         </div>
       </div>
+
+      {/* Modal Novo Chamado */}
+      <NovoChamadoModal
+        open={modalNovoChamado}
+        onClose={() => setModalNovoChamado(false)}
+        onSuccess={(chamado) => navigate(`/assistencia/chamados/${chamado.id}`)}
+      />
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
