@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import type { TipoEvento, EventoHistorico } from '@/components/cadastro/TimelineHistorico';
 
+// Legacy interface for backward compatibility
 export interface HistoricoItem {
   id: string;
   tipo: 'documento' | 'veiculo' | 'instalacao' | 'sinistro' | 'assistencia' | 'cadastro' | 'status';
@@ -14,10 +16,10 @@ export interface HistoricoItem {
 export function useAssociadoHistorico(associadoId: string | undefined) {
   return useQuery({
     queryKey: ['associado-historico', associadoId],
-    queryFn: async (): Promise<HistoricoItem[]> => {
+    queryFn: async (): Promise<EventoHistorico[]> => {
       if (!associadoId) return [];
 
-      const items: HistoricoItem[] = [];
+      const items: EventoHistorico[] = [];
 
       // Fetch documents
       const { data: documentos } = await supabase
@@ -31,23 +33,19 @@ export function useAssociadoHistorico(associadoId: string | undefined) {
           // Document uploaded
           items.push({
             id: `doc-upload-${doc.id}`,
-            tipo: 'documento',
-            titulo: `Documento ${doc.tipo.toUpperCase()} enviado`,
-            descricao: doc.nome_arquivo,
+            tipo: 'documento_enviado',
+            descricao: `Documento ${doc.tipo.toUpperCase()} enviado: ${doc.nome_arquivo}`,
             data: doc.created_at,
-            icone: 'file',
-            cor: 'blue',
           });
 
           // Document analyzed
           if (doc.data_analise) {
+            const tipoEvento: TipoEvento = doc.status === 'aprovado' ? 'documento_aprovado' : 'documento_reprovado';
             items.push({
               id: `doc-analise-${doc.id}`,
-              tipo: 'documento',
-              titulo: `Documento ${doc.tipo.toUpperCase()} ${doc.status === 'aprovado' ? 'aprovado' : 'reprovado'}`,
+              tipo: tipoEvento,
+              descricao: `Documento ${doc.tipo.toUpperCase()} ${doc.status === 'aprovado' ? 'aprovado' : 'reprovado'}`,
               data: doc.data_analise,
-              icone: doc.status === 'aprovado' ? 'check' : 'x',
-              cor: doc.status === 'aprovado' ? 'green' : 'red',
             });
           }
         });
@@ -64,12 +62,9 @@ export function useAssociadoHistorico(associadoId: string | undefined) {
         veiculos.forEach((v) => {
           items.push({
             id: `veiculo-${v.id}`,
-            tipo: 'veiculo',
-            titulo: `Veículo cadastrado`,
-            descricao: `${v.placa} - ${v.modelo}`,
+            tipo: 'veiculo_adicionado',
+            descricao: `Veículo cadastrado: ${v.placa} - ${v.modelo}`,
             data: v.created_at,
-            icone: 'car',
-            cor: 'purple',
           });
         });
       }
@@ -83,14 +78,13 @@ export function useAssociadoHistorico(associadoId: string | undefined) {
 
       if (instalacoes) {
         instalacoes.forEach((inst) => {
+          const tipoEvento: TipoEvento = inst.status === 'concluida' ? 'instalacao_concluida' : 
+            inst.status === 'cancelada' ? 'instalacao_cancelada' : 'instalacao_agendada';
           items.push({
             id: `instalacao-${inst.id}`,
-            tipo: 'instalacao',
-            titulo: `Instalação ${inst.status === 'concluida' ? 'concluída' : 'agendada'}`,
-            descricao: `Para ${new Date(inst.data_agendada).toLocaleDateString('pt-BR')}`,
+            tipo: tipoEvento,
+            descricao: `Instalação ${inst.status === 'concluida' ? 'concluída' : inst.status === 'cancelada' ? 'cancelada' : 'agendada'} para ${new Date(inst.data_agendada).toLocaleDateString('pt-BR')}`,
             data: inst.created_at,
-            icone: 'wrench',
-            cor: inst.status === 'concluida' ? 'green' : 'yellow',
           });
         });
       }
@@ -106,12 +100,9 @@ export function useAssociadoHistorico(associadoId: string | undefined) {
         sinistros.forEach((sin) => {
           items.push({
             id: `sinistro-${sin.id}`,
-            tipo: 'sinistro',
-            titulo: `Sinistro aberto - ${sin.tipo}`,
-            descricao: `Protocolo: ${sin.protocolo}`,
+            tipo: 'sinistro_aberto',
+            descricao: `Sinistro aberto - ${sin.tipo}. Protocolo: ${sin.protocolo}`,
             data: sin.created_at,
-            icone: 'alert',
-            cor: 'red',
           });
         });
       }
@@ -125,14 +116,12 @@ export function useAssociadoHistorico(associadoId: string | undefined) {
 
       if (chamados) {
         chamados.forEach((ch) => {
+          const tipoEvento: TipoEvento = ch.status === 'concluido' ? 'chamado_concluido' : 'chamado_aberto';
           items.push({
             id: `chamado-${ch.id}`,
-            tipo: 'assistencia',
-            titulo: `Chamado de assistência - ${ch.tipo_servico}`,
-            descricao: `Protocolo: ${ch.protocolo} - ${ch.status}`,
+            tipo: tipoEvento,
+            descricao: `Chamado de assistência - ${ch.tipo_servico}. Protocolo: ${ch.protocolo}`,
             data: ch.created_at,
-            icone: 'phone',
-            cor: ch.status === 'concluido' ? 'green' : 'yellow',
           });
         });
       }

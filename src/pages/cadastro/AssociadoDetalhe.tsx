@@ -56,7 +56,7 @@ import { useToast } from '@/hooks/use-toast';
 import { DocumentUploader } from '@/components/cadastro/DocumentUploader';
 import { ConfirmacaoAcaoDialog } from '@/components/associados/ConfirmacaoAcaoDialog';
 import { AssociadoEditDialog } from '@/components/associados/AssociadoEditDialog';
-import { AssociadoTimeline } from '@/components/associados/AssociadoTimeline';
+import { TimelineHistorico } from '@/components/cadastro/TimelineHistorico';
 
 const statusColors: Record<StatusAssociado, string> = {
   em_analise: 'bg-blue-500 text-white',
@@ -754,11 +754,13 @@ export default function AssociadoDetalhe() {
         {/* Tab: Histórico */}
         <TabsContent value="historico">
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Histórico de Atividades</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <AssociadoTimeline items={historico || []} isLoading={historicoLoading} />
+            <CardContent className="p-6">
+              <TimelineHistorico
+                eventos={historico || []}
+                isLoading={historicoLoading}
+                showFilters={true}
+                maxItems={50}
+              />
             </CardContent>
           </Card>
         </TabsContent>
