@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Plus, Loader2 } from 'lucide-react';
+import { Plus, Loader2, Calendar, X } from 'lucide-react';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -12,7 +13,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import { ETAPA_LABELS, type EtapaLead } from '@/types/database';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { Calendar as CalendarComponent } from '@/components/ui/calendar';
+import { ETAPA_LABELS, ORIGEM_LABELS, type EtapaLead, type OrigemLead } from '@/types/database';
 import { etapaColors, ETAPAS_FUNIL, canTransition } from '@/lib/lead-transitions';
 import { useAllLeads, type LeadFilters } from '@/hooks/useLeads';
 import { useChangeLeadEtapa } from '@/hooks/useLeadHistorico';
@@ -21,7 +28,13 @@ import { LeadFormDialog } from '@/components/leads/LeadFormDialog';
 import { LeadLossDialog } from '@/components/leads/LeadLossDialog';
 import { LeadKanbanCard } from '@/components/leads/LeadKanbanCard';
 import { LeadMetricsCards } from '@/components/leads/LeadMetricsCards';
+import { LeadDetailDrawer } from '@/components/leads/LeadDetailDrawer';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
+
+const ORIGENS: OrigemLead[] = [
+  'site', 'indicacao', 'facebook', 'instagram', 'google', 'telefone', 'presencial', 'parceiro', 'outro', 'api'
+];
 import {
   DndContext,
   DragEndEvent,
@@ -66,15 +79,38 @@ function DroppableColumn({ etapa, children, count }: DroppableColumnProps) {
 }
 
 export default function LeadKanban() {
-  const navigate = useNavigate();
   const [filters, setFilters] = useState<LeadFilters>({});
   const [showLeadForm, setShowLeadForm] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [lossDialogLead, setLossDialogLead] = useState<Lead | null>(null);
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+  const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({});
 
   const { data: leads, isLoading } = useAllLeads(filters);
   const { data: vendedores } = useVendedores();
   const changeEtapa = useChangeLeadEtapa();
+
+  const handleDateRangeChange = (range: { from?: Date; to?: Date }) => {
+    setDateRange(range);
+    setFilters((f) => ({
+      ...f,
+      data_de: range.from ? format(range.from, 'yyyy-MM-dd') : undefined,
+      data_ate: range.to ? format(range.to, 'yyyy-MM-dd') : undefined,
+    }));
+  };
+
+  const clearFilters = () => {
+    setFilters({});
+    setDateRange({});
+  };
+
+  const hasActiveFilters = !!(
+    filters.search ||
+    (filters.vendedor_id && filters.vendedor_id !== 'all') ||
+    (filters.origem && filters.origem !== 'all') ||
+    filters.data_de ||
+    filters.data_ate
+  );
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -140,9 +176,9 @@ export default function LeadKanban() {
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Kanban de Leads</h1>
+          <h1 className="text-2xl font-bold">Pipeline de Vendas</h1>
           <p className="text-muted-foreground">
-            Arraste os cards para mover leads entre as etapas
+            Gerencie seus leads pelo funil de vendas
           </p>
         </div>
         <Button className="gap-2" onClick={() => setShowLeadForm(true)}>
@@ -155,10 +191,10 @@ export default function LeadKanban() {
       <LeadMetricsCards leads={leads || []} />
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-4">
+      <div className="flex flex-wrap gap-3 items-center">
         <Input
           placeholder="Buscar leads..."
-          className="w-full sm:w-64"
+          className="w-full sm:w-56"
           value={filters.search || ''}
           onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
         />
@@ -166,8 +202,8 @@ export default function LeadKanban() {
           value={filters.vendedor_id || 'all'}
           onValueChange={(value) => setFilters((f) => ({ ...f, vendedor_id: value }))}
         >
-          <SelectTrigger className="w-full sm:w-48">
-            <SelectValue placeholder="Todos vendedores" />
+          <SelectTrigger className="w-full sm:w-44">
+            <SelectValue placeholder="Vendedor" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos vendedores</SelectItem>
@@ -178,6 +214,61 @@ export default function LeadKanban() {
             ))}
           </SelectContent>
         </Select>
+
+        <Select
+          value={filters.origem || 'all'}
+          onValueChange={(value) => setFilters((f) => ({ ...f, origem: value as OrigemLead | 'all' }))}
+        >
+          <SelectTrigger className="w-full sm:w-40">
+            <SelectValue placeholder="Origem" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas origens</SelectItem>
+            {ORIGENS.map((origem) => (
+              <SelectItem key={origem} value={origem}>
+                {ORIGEM_LABELS[origem]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className={cn(
+              "w-full sm:w-auto gap-2",
+              dateRange.from && "text-foreground"
+            )}>
+              <Calendar className="h-4 w-4" />
+              {dateRange.from ? (
+                dateRange.to ? (
+                  `${format(dateRange.from, 'dd/MM', { locale: ptBR })} - ${format(dateRange.to, 'dd/MM', { locale: ptBR })}`
+                ) : (
+                  format(dateRange.from, 'dd/MM/yyyy', { locale: ptBR })
+                )
+              ) : (
+                "Período"
+              )}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <CalendarComponent
+              initialFocus
+              mode="range"
+              defaultMonth={dateRange.from}
+              selected={{ from: dateRange.from, to: dateRange.to }}
+              onSelect={(range) => handleDateRangeChange(range || {})}
+              numberOfMonths={2}
+              className="pointer-events-auto"
+            />
+          </PopoverContent>
+        </Popover>
+
+        {hasActiveFilters && (
+          <Button variant="ghost" size="sm" onClick={clearFilters} className="gap-1">
+            <X className="h-4 w-4" />
+            Limpar
+          </Button>
+        )}
       </div>
 
       {/* Kanban Board */}
@@ -201,7 +292,7 @@ export default function LeadKanban() {
                       <LeadKanbanCard
                         key={lead.id}
                         lead={lead}
-                        onClick={() => navigate(`/vendas/leads/${lead.id}`)}
+                        onClick={() => setSelectedLeadId(lead.id)}
                       />
                     ))}
                     {leadsInEtapa.length === 0 && (
@@ -243,6 +334,12 @@ export default function LeadKanban() {
           etapaAtual={lossDialogLead.etapa as EtapaLead}
         />
       )}
+
+      <LeadDetailDrawer
+        leadId={selectedLeadId}
+        open={!!selectedLeadId}
+        onClose={() => setSelectedLeadId(null)}
+      />
     </div>
   );
 }

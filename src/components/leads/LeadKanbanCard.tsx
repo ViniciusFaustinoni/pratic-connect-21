@@ -1,10 +1,13 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Phone, Car, Clock } from 'lucide-react';
+import { Phone, Car, Clock, MessageCircle, AlertCircle } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import type { Tables } from '@/integrations/supabase/types';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { ORIGEM_LABELS } from '@/types/database';
+import { origemColors } from '@/lib/lead-transitions';
 
 type Lead = Tables<'leads'>;
 
@@ -49,17 +52,29 @@ export function LeadKanbanCard({ lead, onClick }: LeadKanbanCardProps) {
   );
   const isStale = daysSinceUpdate > 7 && lead.etapa !== 'ganho' && lead.etapa !== 'perdido';
 
+  // Verificar se a data_proxima_acao está atrasada
+  const isOverdue = lead.data_proxima_acao 
+    && new Date(lead.data_proxima_acao) < new Date()
+    && lead.etapa !== 'ganho' 
+    && lead.etapa !== 'perdido';
+
   return (
     <Card
       ref={setNodeRef}
       style={style}
       {...attributes}
       {...listeners}
-      className={`cursor-grab active:cursor-grabbing transition-shadow hover:shadow-md ${
+      className={`cursor-grab active:cursor-grabbing transition-shadow hover:shadow-md relative ${
         isStale ? 'border-destructive/50' : ''
       }`}
       onClick={onClick}
     >
+      {isOverdue && (
+        <div 
+          className="absolute top-2 right-2 h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse" 
+          title="Ação atrasada"
+        />
+      )}
       <CardContent className="p-3">
         <div className="mb-2 flex items-center gap-2">
           <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
@@ -73,24 +88,39 @@ export function LeadKanbanCard({ lead, onClick }: LeadKanbanCardProps) {
             <div className="flex items-center gap-1.5">
               <Car className="h-3 w-3 flex-shrink-0" />
               <span className="truncate">
-                {lead.veiculo_marca} {lead.veiculo_modelo}
-                {lead.veiculo_fipe && (
-                  <span className="ml-1 text-foreground font-medium">
-                    {formatCurrency(lead.veiculo_fipe)}
-                  </span>
-                )}
+                {lead.veiculo_marca} {lead.veiculo_modelo} {lead.veiculo_ano || ''}
               </span>
+            </div>
+          )}
+
+          {lead.veiculo_fipe && (
+            <div className="text-foreground font-medium">
+              {formatCurrency(lead.veiculo_fipe)}
             </div>
           )}
 
           <div className="flex items-center gap-1.5">
             <Phone className="h-3 w-3 flex-shrink-0" />
             <span>{lead.telefone}</span>
+            <a
+              href={`https://wa.me/55${lead.telefone.replace(/\D/g, '')}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="text-green-600 hover:text-green-700 ml-1"
+              title="Abrir WhatsApp"
+            >
+              <MessageCircle className="h-3 w-3" />
+            </a>
           </div>
 
-          <div className={`flex items-center gap-1.5 ${isStale ? 'text-destructive' : ''}`}>
-            <Clock className="h-3 w-3 flex-shrink-0" />
-            <span>{daysInStage} nesta etapa</span>
+          <div className="flex items-center justify-between">
+            <Badge className={`text-[10px] px-1.5 py-0 ${origemColors[lead.origem] || 'bg-gray-100 text-gray-800'}`}>
+              {ORIGEM_LABELS[lead.origem]}
+            </Badge>
+            <span className={`text-[10px] ${isStale ? 'text-destructive' : ''}`}>
+              {daysInStage}
+            </span>
           </div>
         </div>
       </CardContent>

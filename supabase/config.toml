@@ -2,3 +2,6 @@ project_id = "iyxdgmukrrdkffraptsx"
 
 [functions.leads-webhook]
 verify_jwt = false
+
+[functions.fipe-lookup]
+verify_jwt = false
