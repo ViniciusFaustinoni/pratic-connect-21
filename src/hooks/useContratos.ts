@@ -100,3 +100,26 @@ export function useUpdateContrato() {
     },
   });
 }
+
+// Hook para buscar contrato de um lead específico
+export function useContratoByLead(leadId: string | undefined) {
+  return useQuery({
+    queryKey: ['contratos', 'lead', leadId],
+    queryFn: async () => {
+      if (!leadId) return null;
+
+      const { data, error } = await supabase
+        .from('contratos')
+        .select(`
+          *,
+          planos (*)
+        `)
+        .eq('lead_id', leadId)
+        .maybeSingle();
+
+      if (error) throw error;
+      return data as ContratoWithRelations | null;
+    },
+    enabled: !!leadId,
+  });
+}

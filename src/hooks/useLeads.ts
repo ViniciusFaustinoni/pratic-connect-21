@@ -105,6 +105,18 @@ export function useAllLeads(filters?: LeadFilters) {
         query = query.eq('vendedor_id', filters.vendedor_id);
       }
 
+      if (filters?.origem && filters.origem !== 'all') {
+        query = query.eq('origem', filters.origem as unknown as 'site');
+      }
+
+      if (filters?.data_de) {
+        query = query.gte('created_at', filters.data_de);
+      }
+
+      if (filters?.data_ate) {
+        query = query.lte('created_at', filters.data_ate + 'T23:59:59');
+      }
+
       if (filters?.search) {
         const searchTerm = `%${filters.search}%`;
         query = query.or(
