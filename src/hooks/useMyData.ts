@@ -14,8 +14,8 @@ type Documento = Tables<'documentos'>;
 export interface Boleto {
   id: string;
   competencia: string;
-  competenciaMes?: number;
-  competenciaAno?: number;
+  competenciaMes: number;
+  competenciaAno: number;
   dataVencimento: string;
   dataPagamento?: string;
   valorOriginal: number;
@@ -31,6 +31,13 @@ export interface Boleto {
   codigoBarras?: string;
   urlBoleto?: string;
   urlPdf?: string;
+}
+
+export interface BoletoHistorico {
+  id: string;
+  data: string;
+  tipo: 'geracao' | 'envio' | 'visualizacao' | 'tentativa' | 'pagamento' | 'cancelamento';
+  descricao: string;
 }
 
 export interface ResumoFinanceiro {
@@ -348,4 +355,30 @@ export function useMyBoletos() {
     },
     enabled: !!associado?.id,
   });
+}
+
+export function useMyBoleto(id: string | undefined) {
+  const { data: boletos, isLoading } = useMyBoletos();
+  
+  const boleto = boletos?.find(b => b.id === id);
+  
+  // Mock de histórico para desenvolvimento
+  const historico: BoletoHistorico[] = boleto ? [
+    { id: '1', data: '02/01/2026 10:30', tipo: 'geracao', descricao: 'Boleto gerado automaticamente' },
+    { id: '2', data: '02/01/2026 10:31', tipo: 'envio', descricao: 'Enviado por e-mail' },
+    { id: '3', data: '03/01/2026 14:22', tipo: 'visualizacao', descricao: 'Boleto visualizado' },
+    ...(boleto.status === 'pago' ? [
+      { id: '4', data: boleto.dataPagamento || '', tipo: 'pagamento' as const, descricao: 'Pagamento confirmado via PIX' }
+    ] : []),
+    ...(boleto.status === 'cancelado' ? [
+      { id: '5', data: '05/01/2026 09:00', tipo: 'cancelamento' as const, descricao: 'Boleto cancelado' }
+    ] : [])
+  ] : [];
+  
+  return {
+    boleto,
+    historico,
+    isLoading,
+    notFound: !isLoading && !boleto
+  };
 }
