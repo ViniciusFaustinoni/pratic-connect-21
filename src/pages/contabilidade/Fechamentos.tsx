@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Lock, Unlock, CheckCircle, Clock, AlertCircle } from 'lucide-react';
+import { Lock, Unlock, CheckCircle, Clock, AlertCircle, Check, X } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -20,7 +20,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useFechamentos, useCriarFechamento } from '@/hooks/useContabilidade';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -37,6 +40,52 @@ export default function Fechamentos() {
 
   const { data: fechamentos, isLoading } = useFechamentos(ano);
   const criarFechamento = useCriarFechamento();
+
+  // Query de verificação do período selecionado
+  const { data: verificacao, isLoading: isLoadingVerificacao } = useQuery({
+    queryKey: ['verificacao-fechamento', confirmDialog?.mes, ano],
+    queryFn: async () => {
+      if (!confirmDialog?.mes) return null;
+      
+      const mes = confirmDialog.mes;
+      const dataInicio = `${ano}-${String(mes).padStart(2, '0')}-01`;
+      const dataFim = mes === 12 
+        ? `${ano + 1}-01-01`
+        : `${ano}-${String(mes + 1).padStart(2, '0')}-01`;
+      
+      // Contar lançamentos
+      const { count } = await supabase
+        .from('lancamentos_contabeis')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'ativo')
+        .gte('data_competencia', dataInicio)
+        .lt('data_competencia', dataFim);
+      
+      // Buscar partidas para verificar balanço
+      const { data: partidas } = await supabase
+        .from('lancamentos_partidas')
+        .select(`
+          tipo, valor,
+          lancamento:lancamentos_contabeis!inner(data_competencia, status)
+        `)
+        .eq('lancamento.status', 'ativo')
+        .gte('lancamento.data_competencia', dataInicio)
+        .lt('lancamento.data_competencia', dataFim);
+      
+      const totalDebito = partidas?.filter((p: any) => p.tipo === 'debito')
+        .reduce((acc: number, p: any) => acc + Number(p.valor), 0) || 0;
+      const totalCredito = partidas?.filter((p: any) => p.tipo === 'credito')
+        .reduce((acc: number, p: any) => acc + Number(p.valor), 0) || 0;
+      
+      return {
+        qtdLancamentos: count || 0,
+        totalDebito,
+        totalCredito,
+        balanceado: Math.abs(totalDebito - totalCredito) < 0.01
+      };
+    },
+    enabled: !!confirmDialog?.mes && confirmDialog.open
+  });
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -218,29 +267,83 @@ export default function Fechamentos() {
         </CardContent>
       </Card>
 
-      {/* Confirm Dialog */}
+      {/* Confirm Dialog with Verification Checklist */}
       <AlertDialog
         open={confirmDialog?.open}
         onOpenChange={(open) => !open && setConfirmDialog(null)}
       >
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-lg">
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar Fechamento</AlertDialogTitle>
-            <AlertDialogDescription>
-              Você está prestes a fechar o período de{' '}
-              <strong>
-                {confirmDialog && meses[confirmDialog.mes - 1]} de {ano}
-              </strong>.
-              <br /><br />
-              Após o fechamento, novos lançamentos não poderão ser feitos neste período.
-              Esta ação pode ser revertida posteriormente.
+            <AlertDialogTitle>Verificação do Período</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-4 text-left">
+                <p>
+                  Período: <strong>
+                    {confirmDialog && meses[confirmDialog.mes - 1]} de {ano}
+                  </strong>
+                </p>
+                
+                {isLoadingVerificacao ? (
+                  <p className="text-muted-foreground">Verificando período...</p>
+                ) : verificacao && (
+                  <div className="space-y-3 p-4 bg-muted rounded-lg">
+                    {/* Checklist de Verificação */}
+                    <div className="flex items-center gap-2">
+                      {verificacao.qtdLancamentos > 0 ? (
+                        <Check className="h-5 w-5 text-green-600" />
+                      ) : (
+                        <X className="h-5 w-5 text-red-600" />
+                      )}
+                      <span>Lançamentos encontrados: <strong>{verificacao.qtdLancamentos}</strong></span>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <Check className="h-5 w-5 text-green-600" />
+                      <span>Débitos: <strong>{formatCurrency(verificacao.totalDebito)}</strong></span>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <Check className="h-5 w-5 text-green-600" />
+                      <span>Créditos: <strong>{formatCurrency(verificacao.totalCredito)}</strong></span>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      {verificacao.balanceado ? (
+                        <Check className="h-5 w-5 text-green-600" />
+                      ) : (
+                        <X className="h-5 w-5 text-red-600" />
+                      )}
+                      <span>
+                        Balanceamento: <strong className={verificacao.balanceado ? 'text-green-600' : 'text-red-600'}>
+                          {verificacao.balanceado ? 'OK' : 'Desbalanceado'}
+                        </strong>
+                      </span>
+                    </div>
+                  </div>
+                )}
+                
+                {verificacao && !verificacao.balanceado && (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      O período está desbalanceado e não pode ser fechado. Verifique os lançamentos.
+                    </AlertDescription>
+                  </Alert>
+                )}
+                
+                {verificacao && verificacao.balanceado && (
+                  <p className="text-sm text-muted-foreground">
+                    Após o fechamento, novos lançamentos não poderão ser feitos neste período.
+                  </p>
+                )}
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => confirmDialog && handleFechar(confirmDialog.mes)}
-              disabled={criarFechamento.isPending}
+              disabled={criarFechamento.isPending || !verificacao?.balanceado}
             >
               {criarFechamento.isPending ? 'Fechando...' : 'Confirmar Fechamento'}
             </AlertDialogAction>
