@@ -29,7 +29,8 @@ export type PermissionKey =
   | 'canManageCadastro'
   | 'canManageOficinas'
   | 'canManageSinistros'
-  | 'canApproveOS';
+  | 'canApproveOS'
+  | 'canManageContabilidade';
 
 /**
  * Hook centralizado de permissões para verificar acessos de forma declarativa
@@ -74,6 +75,7 @@ export function usePermissions() {
     canManageOficinas: hasRole('analista_cadastro') || isGerencia(),
     canManageSinistros: hasRole('analista_cadastro') || isGerencia(),
     canApproveOS: isGerencia(),
+    canManageContabilidade: hasRole('diretor') || hasRole('gerente_comercial'),
   };
 
   return {

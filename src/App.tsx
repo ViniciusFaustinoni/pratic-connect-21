@@ -67,6 +67,17 @@ import FaturamentoMensal from "./pages/financeiro/FaturamentoMensal";
 import ContasPagar from "./pages/financeiro/ContasPagar";
 import Extrato from "./pages/financeiro/Extrato";
 
+// Contabilidade
+import ContabilidadeDashboard from "./pages/contabilidade/ContabilidadeDashboard";
+import PlanoContas from "./pages/contabilidade/PlanoContas";
+import LancamentosList from "./pages/contabilidade/LancamentosList";
+import NovoLancamento from "./pages/contabilidade/NovoLancamento";
+import LancamentoDetalhe from "./pages/contabilidade/LancamentoDetalhe";
+import Balancete from "./pages/contabilidade/Balancete";
+import DRE from "./pages/contabilidade/DRE";
+import Fechamentos from "./pages/contabilidade/Fechamentos";
+import RazaoConta from "./pages/contabilidade/RazaoConta";
+
 // Associate App Pages
 import AppLogin from "./pages/app/AppLogin";
 import AppRedefinirSenha from "./pages/app/AppRedefinirSenha";
@@ -159,6 +170,17 @@ const App = () => (
               <Route path="/cobranca/acordos" element={<AcordosList />} />
               <Route path="/cobranca/acordos/novo" element={<NovoAcordo />} />
               <Route path="/cobranca/acordos/:id" element={<AcordoDetalhe />} />
+              
+              {/* Contabilidade */}
+              <Route path="/contabilidade" element={<ContabilidadeDashboard />} />
+              <Route path="/contabilidade/plano-contas" element={<PlanoContas />} />
+              <Route path="/contabilidade/lancamentos" element={<LancamentosList />} />
+              <Route path="/contabilidade/lancamentos/novo" element={<NovoLancamento />} />
+              <Route path="/contabilidade/lancamentos/:id" element={<LancamentoDetalhe />} />
+              <Route path="/contabilidade/balancete" element={<Balancete />} />
+              <Route path="/contabilidade/dre" element={<DRE />} />
+              <Route path="/contabilidade/fechamento" element={<Fechamentos />} />
+              <Route path="/contabilidade/razao/:contaId" element={<RazaoConta />} />
               
               {/* Monitoramento */}
               <Route path="/monitoramento/instalacoes" element={<Instalacoes />} />

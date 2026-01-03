@@ -31,6 +31,8 @@ import {
   List,
   Handshake,
   UserX,
+  BookOpen,
+  Lock,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
@@ -187,6 +189,20 @@ const menuConfig: {
         { title: 'Acordos', url: '/cobranca/acordos', icon: Handshake },
         { title: 'Negativação', url: '/cobranca/negativacao', icon: AlertTriangle },
         { title: 'Régua', url: '/cobranca/regua', icon: List },
+      ],
+    },
+    {
+      id: 'contabilidade',
+      label: 'Contabilidade',
+      icon: BookOpen,
+      permission: 'canManageContabilidade',
+      items: [
+        { title: 'Dashboard', url: '/contabilidade', icon: BarChart3 },
+        { title: 'Plano de Contas', url: '/contabilidade/plano-contas', icon: List },
+        { title: 'Lançamentos', url: '/contabilidade/lancamentos', icon: FileText },
+        { title: 'Balancete', url: '/contabilidade/balancete', icon: ClipboardList },
+        { title: 'DRE', url: '/contabilidade/dre', icon: TrendingUp },
+        { title: 'Fechamento', url: '/contabilidade/fechamento', icon: Lock },
       ],
     },
   ],
