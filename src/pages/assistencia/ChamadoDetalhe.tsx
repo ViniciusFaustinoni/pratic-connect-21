@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { AtribuirPrestadorModal } from '@/components/assistencia/AtribuirPrestadorModal';
+import { AtualizarStatusChamadoModal } from '@/components/assistencia/AtualizarStatusChamadoModal';
 import { supabase } from '@/integrations/supabase/client';
 import { format, differenceInMinutes } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -89,6 +90,7 @@ export default function ChamadoDetalhe() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [modalPrestador, setModalPrestador] = useState(false);
+  const [modalStatus, setModalStatus] = useState(false);
 
   // Query: Dados do Chamado
   const { data: chamado, isLoading } = useQuery({
@@ -237,7 +239,7 @@ export default function ChamadoDetalhe() {
               <UserPlus className="h-4 w-4 mr-2" />
               Atribuir Prestador
             </DropdownMenuItem>
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setModalStatus(true)}>
               <RefreshCw className="h-4 w-4 mr-2" />
               Atualizar Status
             </DropdownMenuItem>
@@ -604,6 +606,13 @@ export default function ChamadoDetalhe() {
       <AtribuirPrestadorModal
         open={modalPrestador}
         onClose={() => setModalPrestador(false)}
+        chamado={chamado}
+      />
+
+      {/* Modal Atualizar Status */}
+      <AtualizarStatusChamadoModal
+        open={modalStatus}
+        onClose={() => setModalStatus(false)}
         chamado={chamado}
       />
     </div>
