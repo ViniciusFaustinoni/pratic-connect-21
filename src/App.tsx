@@ -54,6 +54,7 @@ import CobrancasList from "./pages/financeiro/CobrancasList";
 import CobrancaDetalhe from "./pages/financeiro/CobrancaDetalhe";
 import FaturamentoMensal from "./pages/financeiro/FaturamentoMensal";
 import ContasPagar from "./pages/financeiro/ContasPagar";
+import Extrato from "./pages/financeiro/Extrato";
 
 // Associate App Pages
 import AppLogin from "./pages/app/AppLogin";
@@ -135,6 +136,7 @@ const App = () => (
               <Route path="/financeiro/cobrancas/:id" element={<CobrancaDetalhe />} />
               <Route path="/financeiro/faturamento" element={<FaturamentoMensal />} />
               <Route path="/financeiro/contas-pagar" element={<ContasPagar />} />
+              <Route path="/financeiro/extrato" element={<Extrato />} />
               
               {/* Monitoramento */}
               <Route path="/monitoramento/instalacoes" element={<Instalacoes />} />
