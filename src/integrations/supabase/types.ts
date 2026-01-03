@@ -753,6 +753,7 @@ export type Database = {
           origem_lng: number | null
           origem_logradouro: string | null
           origem_uf: string | null
+          prestador_id: string | null
           prestador_nome: string | null
           prestador_telefone: string | null
           protocolo: string
@@ -786,6 +787,7 @@ export type Database = {
           origem_lng?: number | null
           origem_logradouro?: string | null
           origem_uf?: string | null
+          prestador_id?: string | null
           prestador_nome?: string | null
           prestador_telefone?: string | null
           protocolo: string
@@ -819,6 +821,7 @@ export type Database = {
           origem_lng?: number | null
           origem_logradouro?: string | null
           origem_uf?: string | null
+          prestador_id?: string | null
           prestador_nome?: string | null
           prestador_telefone?: string | null
           protocolo?: string
@@ -871,6 +874,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "chamados_assistencia_prestador_id_fkey"
+            columns: ["prestador_id"]
+            isOneToOne: false
+            referencedRelation: "prestadores_assistencia"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "chamados_assistencia_veiculo_id_fkey"
             columns: ["veiculo_id"]
             isOneToOne: false
@@ -897,6 +907,123 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["veiculo_id"]
+          },
+        ]
+      }
+      chamados_assistencia_atendimentos: {
+        Row: {
+          chamado_id: string
+          created_at: string | null
+          hora_aceite: string | null
+          hora_acionamento: string | null
+          hora_chegada: string | null
+          hora_conclusao: string | null
+          id: string
+          km_extra: number | null
+          km_origem_destino: number | null
+          motivo_recusa: string | null
+          observacao: string | null
+          prestador_id: string | null
+          status: string | null
+          valor_km_extra: number | null
+          valor_servico: number | null
+          valor_total: number | null
+        }
+        Insert: {
+          chamado_id: string
+          created_at?: string | null
+          hora_aceite?: string | null
+          hora_acionamento?: string | null
+          hora_chegada?: string | null
+          hora_conclusao?: string | null
+          id?: string
+          km_extra?: number | null
+          km_origem_destino?: number | null
+          motivo_recusa?: string | null
+          observacao?: string | null
+          prestador_id?: string | null
+          status?: string | null
+          valor_km_extra?: number | null
+          valor_servico?: number | null
+          valor_total?: number | null
+        }
+        Update: {
+          chamado_id?: string
+          created_at?: string | null
+          hora_aceite?: string | null
+          hora_acionamento?: string | null
+          hora_chegada?: string | null
+          hora_conclusao?: string | null
+          id?: string
+          km_extra?: number | null
+          km_origem_destino?: number | null
+          motivo_recusa?: string | null
+          observacao?: string | null
+          prestador_id?: string | null
+          status?: string | null
+          valor_km_extra?: number | null
+          valor_servico?: number | null
+          valor_total?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chamados_assistencia_atendimentos_chamado_id_fkey"
+            columns: ["chamado_id"]
+            isOneToOne: false
+            referencedRelation: "chamados_assistencia"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chamados_assistencia_atendimentos_prestador_id_fkey"
+            columns: ["prestador_id"]
+            isOneToOne: false
+            referencedRelation: "prestadores_assistencia"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chamados_assistencia_historico: {
+        Row: {
+          chamado_id: string
+          created_at: string | null
+          id: string
+          observacao: string | null
+          status_anterior: string | null
+          status_novo: string
+          usuario_id: string | null
+        }
+        Insert: {
+          chamado_id: string
+          created_at?: string | null
+          id?: string
+          observacao?: string | null
+          status_anterior?: string | null
+          status_novo: string
+          usuario_id?: string | null
+        }
+        Update: {
+          chamado_id?: string
+          created_at?: string | null
+          id?: string
+          observacao?: string | null
+          status_anterior?: string | null
+          status_novo?: string
+          usuario_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chamados_assistencia_historico_chamado_id_fkey"
+            columns: ["chamado_id"]
+            isOneToOne: false
+            referencedRelation: "chamados_assistencia"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chamados_assistencia_historico_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -2342,6 +2469,105 @@ export type Database = {
           tipo_uso?: string
           updated_at?: string
           valor_adesao?: number
+        }
+        Relationships: []
+      }
+      prestadores_assistencia: {
+        Row: {
+          agencia: string | null
+          bairro: string | null
+          banco: string | null
+          cep: string | null
+          cidade: string
+          cidades_atendidas: string[] | null
+          cnpj: string | null
+          conta: string | null
+          cpf: string | null
+          created_at: string | null
+          disponivel: boolean | null
+          email: string | null
+          estado: string
+          id: string
+          logradouro: string | null
+          nome_fantasia: string | null
+          nota_media: number | null
+          numero: string | null
+          pix_chave: string | null
+          pix_tipo: string | null
+          raio_atendimento_km: number | null
+          razao_social: string
+          status: string | null
+          telefone: string
+          tipo_pessoa: string | null
+          tipos_servico: string[] | null
+          total_atendimentos: number | null
+          total_avaliacoes: number | null
+          updated_at: string | null
+          whatsapp: string | null
+        }
+        Insert: {
+          agencia?: string | null
+          bairro?: string | null
+          banco?: string | null
+          cep?: string | null
+          cidade: string
+          cidades_atendidas?: string[] | null
+          cnpj?: string | null
+          conta?: string | null
+          cpf?: string | null
+          created_at?: string | null
+          disponivel?: boolean | null
+          email?: string | null
+          estado: string
+          id?: string
+          logradouro?: string | null
+          nome_fantasia?: string | null
+          nota_media?: number | null
+          numero?: string | null
+          pix_chave?: string | null
+          pix_tipo?: string | null
+          raio_atendimento_km?: number | null
+          razao_social: string
+          status?: string | null
+          telefone: string
+          tipo_pessoa?: string | null
+          tipos_servico?: string[] | null
+          total_atendimentos?: number | null
+          total_avaliacoes?: number | null
+          updated_at?: string | null
+          whatsapp?: string | null
+        }
+        Update: {
+          agencia?: string | null
+          bairro?: string | null
+          banco?: string | null
+          cep?: string | null
+          cidade?: string
+          cidades_atendidas?: string[] | null
+          cnpj?: string | null
+          conta?: string | null
+          cpf?: string | null
+          created_at?: string | null
+          disponivel?: boolean | null
+          email?: string | null
+          estado?: string
+          id?: string
+          logradouro?: string | null
+          nome_fantasia?: string | null
+          nota_media?: number | null
+          numero?: string | null
+          pix_chave?: string | null
+          pix_tipo?: string | null
+          raio_atendimento_km?: number | null
+          razao_social?: string
+          status?: string | null
+          telefone?: string
+          tipo_pessoa?: string | null
+          tipos_servico?: string[] | null
+          total_atendimentos?: number | null
+          total_avaliacoes?: number | null
+          updated_at?: string | null
+          whatsapp?: string | null
         }
         Relationships: []
       }
