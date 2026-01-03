@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useMyAssociado } from '@/hooks/useMyData';
 import {
   ArrowLeft, Truck, Key, Circle, Fuel, Battery,
-  HelpCircle, Phone, ChevronRight, AlertCircle,
+  HelpCircle, Phone, ChevronRight, AlertCircle, History,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -166,6 +166,16 @@ export default function SolicitarAssistencia() {
             </CardContent>
           </Card>
         </a>
+
+        {/* Histórico */}
+        <Button
+          variant="ghost"
+          className="w-full text-muted-foreground"
+          onClick={() => navigate('/app/assistencia/historico')}
+        >
+          <History className="h-4 w-4 mr-2" />
+          Ver histórico de chamados
+        </Button>
 
         {/* Aviso */}
         <p className="text-xs text-muted-foreground text-center">

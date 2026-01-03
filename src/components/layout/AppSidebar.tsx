@@ -131,8 +131,18 @@ const menuConfig: {
       icon: AlertTriangle,
       permission: 'canManageSinistros',
       items: [
+        { title: 'Dashboard', url: '/eventos/dashboard', icon: BarChart3 },
         { title: 'Sinistros', url: '/eventos/sinistros', icon: AlertTriangle },
-        { title: 'Assistência 24h', url: '/assistencia', icon: Phone },
+      ],
+    },
+    {
+      id: 'assistencia',
+      label: 'Assistência 24h',
+      icon: Phone,
+      permission: 'canManageSinistros',
+      items: [
+        { title: 'Dashboard', url: '/assistencia', icon: BarChart3 },
+        { title: 'Fila de Chamados', url: '/assistencia/chamados', icon: ClipboardList },
         { title: 'Prestadores', url: '/assistencia/prestadores', icon: Truck },
       ],
     },
