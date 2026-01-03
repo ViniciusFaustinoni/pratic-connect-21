@@ -43,6 +43,7 @@ import Configuracoes from "./pages/Configuracoes";
 import NotFound from "./pages/NotFound";
 import AssistenciaDashboard from "./pages/assistencia/AssistenciaDashboard";
 import ChamadosList from "./pages/assistencia/ChamadosList";
+import ChamadoDetalhe from "./pages/assistencia/ChamadoDetalhe";
 
 // Associate App Pages
 import AppLogin from "./pages/app/AppLogin";
@@ -113,6 +114,7 @@ const App = () => (
               {/* Assistência 24h */}
               <Route path="/assistencia" element={<AssistenciaDashboard />} />
               <Route path="/assistencia/chamados" element={<ChamadosList />} />
+              <Route path="/assistencia/chamados/:id" element={<ChamadoDetalhe />} />
               
               {/* Monitoramento */}
               <Route path="/monitoramento/instalacoes" element={<Instalacoes />} />
