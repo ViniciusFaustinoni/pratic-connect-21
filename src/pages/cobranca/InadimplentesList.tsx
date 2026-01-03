@@ -385,7 +385,7 @@ const InadimplentesList = () => {
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => navigate(`/cadastro/associados/${inadimplente.id}`)}
+                          onClick={() => navigate(`/cobranca/inadimplentes/${inadimplente.id}`)}
                           title="Ver detalhes"
                         >
                           <Eye className="h-4 w-4" />
