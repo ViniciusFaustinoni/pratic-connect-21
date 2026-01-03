@@ -29,3 +29,6 @@ verify_jwt = false
 
 [functions.check-alertas]
 verify_jwt = false
+
+[functions.notificar-sinistro]
+verify_jwt = false
