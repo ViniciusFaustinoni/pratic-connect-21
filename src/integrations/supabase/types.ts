@@ -2217,6 +2217,92 @@ export type Database = {
           },
         ]
       }
+      sinistro_documentos: {
+        Row: {
+          arquivo_url: string
+          created_at: string | null
+          id: string
+          motivo_reprovacao: string | null
+          nome_arquivo: string | null
+          sinistro_id: string
+          status: string | null
+          tipo: string
+        }
+        Insert: {
+          arquivo_url: string
+          created_at?: string | null
+          id?: string
+          motivo_reprovacao?: string | null
+          nome_arquivo?: string | null
+          sinistro_id: string
+          status?: string | null
+          tipo: string
+        }
+        Update: {
+          arquivo_url?: string
+          created_at?: string | null
+          id?: string
+          motivo_reprovacao?: string | null
+          nome_arquivo?: string | null
+          sinistro_id?: string
+          status?: string | null
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sinistro_documentos_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "sinistros"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sinistro_historico: {
+        Row: {
+          created_at: string | null
+          id: string
+          observacao: string | null
+          sinistro_id: string
+          status_anterior: string | null
+          status_novo: string
+          usuario_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          observacao?: string | null
+          sinistro_id: string
+          status_anterior?: string | null
+          status_novo: string
+          usuario_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          observacao?: string | null
+          sinistro_id?: string
+          status_anterior?: string | null
+          status_novo?: string
+          usuario_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sinistro_historico_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "sinistros"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sinistro_historico_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
       sinistros: {
         Row: {
           analista_id: string | null
@@ -2224,17 +2310,23 @@ export type Database = {
           bo_arquivo_url: string | null
           bo_numero: string | null
           canal: string
+          cidade_ocorrencia: string | null
           created_at: string
           data_ocorrencia: string
+          data_parecer: string | null
           descricao: string | null
+          estado_ocorrencia: string | null
           id: string
           local_descricao: string | null
+          local_ocorrencia: string | null
+          parecer: string | null
           protocolo: string
           status: Database["public"]["Enums"]["status_sinistro"]
           tipo: Database["public"]["Enums"]["tipo_sinistro"]
           updated_at: string
           valor_fipe: number | null
           valor_indenizacao: number | null
+          valor_pago: number | null
           veiculo_id: string
         }
         Insert: {
@@ -2243,17 +2335,23 @@ export type Database = {
           bo_arquivo_url?: string | null
           bo_numero?: string | null
           canal?: string
+          cidade_ocorrencia?: string | null
           created_at?: string
           data_ocorrencia: string
+          data_parecer?: string | null
           descricao?: string | null
+          estado_ocorrencia?: string | null
           id?: string
           local_descricao?: string | null
+          local_ocorrencia?: string | null
+          parecer?: string | null
           protocolo: string
           status?: Database["public"]["Enums"]["status_sinistro"]
           tipo: Database["public"]["Enums"]["tipo_sinistro"]
           updated_at?: string
           valor_fipe?: number | null
           valor_indenizacao?: number | null
+          valor_pago?: number | null
           veiculo_id: string
         }
         Update: {
@@ -2262,17 +2360,23 @@ export type Database = {
           bo_arquivo_url?: string | null
           bo_numero?: string | null
           canal?: string
+          cidade_ocorrencia?: string | null
           created_at?: string
           data_ocorrencia?: string
+          data_parecer?: string | null
           descricao?: string | null
+          estado_ocorrencia?: string | null
           id?: string
           local_descricao?: string | null
+          local_ocorrencia?: string | null
+          parecer?: string | null
           protocolo?: string
           status?: Database["public"]["Enums"]["status_sinistro"]
           tipo?: Database["public"]["Enums"]["tipo_sinistro"]
           updated_at?: string
           valor_fipe?: number | null
           valor_indenizacao?: number | null
+          valor_pago?: number | null
           veiculo_id?: string
         }
         Relationships: [
@@ -2964,6 +3068,16 @@ export type Database = {
         | "reprovado"
         | "indenizado"
         | "cancelado"
+        | "comunicado"
+        | "documentacao_pendente"
+        | "aguardando_vistoria"
+        | "em_vistoria"
+        | "aguardando_parecer"
+        | "negado"
+        | "em_regulacao"
+        | "em_reparo"
+        | "pago"
+        | "encerrado"
       status_veiculo:
         | "em_analise"
         | "aprovado"
@@ -2991,6 +3105,9 @@ export type Database = {
         | "incendio"
         | "alagamento"
         | "outro"
+        | "fenomeno_natural"
+        | "vidros"
+        | "terceiros"
       tipo_usuario: "funcionario" | "associado" | "prestador"
       tipo_vistoria: "entrada" | "saida" | "sinistro"
     }
@@ -3221,6 +3338,16 @@ export const Constants = {
         "reprovado",
         "indenizado",
         "cancelado",
+        "comunicado",
+        "documentacao_pendente",
+        "aguardando_vistoria",
+        "em_vistoria",
+        "aguardando_parecer",
+        "negado",
+        "em_regulacao",
+        "em_reparo",
+        "pago",
+        "encerrado",
       ],
       status_veiculo: [
         "em_analise",
@@ -3251,6 +3378,9 @@ export const Constants = {
         "incendio",
         "alagamento",
         "outro",
+        "fenomeno_natural",
+        "vidros",
+        "terceiros",
       ],
       tipo_usuario: ["funcionario", "associado", "prestador"],
       tipo_vistoria: ["entrada", "saida", "sinistro"],
