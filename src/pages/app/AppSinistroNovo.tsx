@@ -48,7 +48,7 @@ import {
   LucideIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { AppBottomNav } from '@/components/app/AppBottomNav';
+// Bottom nav is provided by the layout - do not import here
 
 // Tipos de sinistro
 interface TipoSinistro {
@@ -770,8 +770,6 @@ export default function AppSinistroNovo() {
         </DialogContent>
       </Dialog>
 
-      {/* Bottom Navigation */}
-      <AppBottomNav />
     </div>
   );
 }

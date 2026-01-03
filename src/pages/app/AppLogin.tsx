@@ -399,7 +399,7 @@ export default function AppLogin() {
 
           {/* Versão */}
           <p className="mt-6 text-center text-xs text-muted-foreground">
-            Versão 1.0.0 {isDev && <span className="text-orange-500">(DEV)</span>}
+            Versão 2.0.1 {isDev && <span className="text-orange-500">(DEV)</span>}
           </p>
         </div>
       </div>
