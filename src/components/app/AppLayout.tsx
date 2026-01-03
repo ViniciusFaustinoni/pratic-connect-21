@@ -3,6 +3,7 @@ import { AppHeader } from './AppHeader';
 import { AppBottomNav } from './AppBottomNav';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUnreadCount } from '@/hooks/useMyNotificacoes';
+import { useNotificacoesRealtime } from '@/hooks/useNotificacoesRealtime';
 import { Loader2 } from 'lucide-react';
 
 export function AppLayout() {
@@ -10,6 +11,9 @@ export function AppLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { data: unreadCount = 0 } = useUnreadCount();
+  
+  // Ativar realtime para notificações
+  useNotificacoesRealtime();
 
   if (loading) {
     return (
