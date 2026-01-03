@@ -17,6 +17,7 @@ const ROUTE_CONFIG: Record<string, RouteConfig> = {
   '/vendas/acompanhamento': { label: 'Acompanhamento' },
   '/vendas/cotacoes': { label: 'Cotador' },
   '/vendas/contratos': { label: 'Contratos' },
+  '/vendas/relatorios': { label: 'Relatórios' },
   '/cadastro': { label: 'Cadastro' },
   '/cadastro/associados': { label: 'Associados' },
   '/cadastro/veiculos': { label: 'Veículos' },
