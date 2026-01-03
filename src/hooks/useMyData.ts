@@ -11,8 +11,23 @@ type Rastreador = Tables<'rastreadores'>;
 type Documento = Tables<'documentos'>;
 
 export interface AssociadoWithRelations extends Associado {
-  planos?: { nome: string } | null;
-  contratos?: { numero: string; status: string } | null;
+  planos?: {
+    id: string;
+    codigo: string;
+    nome: string;
+    descricao?: string | null;
+    tipo_uso: string;
+    valor_adesao: number;
+  } | null;
+  contratos?: {
+    id: string;
+    numero: string;
+    status: string;
+    valor_mensal: number;
+    valor_adesao: number;
+    data_inicio: string;
+    dia_vencimento?: number | null;
+  } | null;
 }
 
 export function useMyAssociado() {
@@ -28,11 +43,21 @@ export function useMyAssociado() {
         .select(`
           *,
           planos (
-            nome
+            id,
+            codigo,
+            nome,
+            descricao,
+            tipo_uso,
+            valor_adesao
           ),
           contratos (
+            id,
             numero,
-            status
+            status,
+            valor_mensal,
+            valor_adesao,
+            data_inicio,
+            dia_vencimento
           )
         `)
         .eq('user_id', user.id)
