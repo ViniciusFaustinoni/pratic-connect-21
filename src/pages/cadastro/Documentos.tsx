@@ -7,7 +7,8 @@ import {
   XCircle, 
   Eye, 
   AlertTriangle,
-  FileText
+  FileText,
+  Upload
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,6 +28,7 @@ import { TIPO_DOCUMENTO_LABELS, type StatusDocumento, type TipoDocumento } from 
 import { useDocumentosQueue, useDocumentosStats } from '@/hooks/useDocumentosQueue';
 import { DocumentoCard } from '@/components/cadastro/DocumentoCard';
 import { DocumentoAnaliseFullscreen } from '@/components/cadastro/DocumentoAnaliseFullscreen';
+import { DocumentoUploadDialog } from '@/components/cadastro/DocumentoUploadDialog';
 
 export default function Documentos() {
   const [search, setSearch] = useState('');
@@ -34,6 +36,7 @@ export default function Documentos() {
   const [tipoFilter, setTipoFilter] = useState<string>('all');
   const [orderBy, setOrderBy] = useState<'oldest' | 'newest'>('oldest');
   const [analyzeIndex, setAnalyzeIndex] = useState<number | null>(null);
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   
   const { data: stats, isLoading: statsLoading } = useDocumentosStats();
   const { data: documentos, isLoading, refetch } = useDocumentosQueue({
@@ -77,15 +80,21 @@ export default function Documentos() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold">Documentos Pendentes</h1>
-        <p className="text-muted-foreground">
-          {statsLoading ? (
-            <Skeleton className="h-4 w-48 inline-block" />
-          ) : (
-            `${stats?.pendentes || 0} documentos aguardando análise`
-          )}
-        </p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Documentos Pendentes</h1>
+          <p className="text-muted-foreground">
+            {statsLoading ? (
+              <Skeleton className="h-4 w-48 inline-block" />
+            ) : (
+              `${stats?.pendentes || 0} documentos aguardando análise`
+            )}
+          </p>
+        </div>
+        <Button onClick={() => setUploadDialogOpen(true)}>
+          <Upload className="h-4 w-4 mr-2" />
+          Novo Documento
+        </Button>
       </div>
 
       {/* Alerta de documentos antigos */}
@@ -294,6 +303,12 @@ export default function Documentos() {
           onAnalyzed={handleAnalyzed}
         />
       )}
+
+      {/* Dialog de Upload */}
+      <DocumentoUploadDialog
+        open={uploadDialogOpen}
+        onOpenChange={setUploadDialogOpen}
+      />
     </div>
   );
 }
