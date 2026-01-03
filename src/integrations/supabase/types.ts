@@ -4834,7 +4834,17 @@ export type Database = {
       }
     }
     Functions: {
+      adicionar_fila_cobranca: {
+        Args: {
+          p_associado_id: string
+          p_cobranca_id: string
+          p_motivo: string
+          p_prioridade?: number
+        }
+        Returns: string
+      }
       atualizar_cobrancas_vencidas: { Args: never; Returns: number }
+      atualizar_parcelas_vencidas: { Args: never; Returns: number }
       atualizar_valor_os: { Args: { os_id: string }; Returns: undefined }
       can_access_api_settings: { Args: { _user_id: string }; Returns: boolean }
       get_alertas_contagem: {
@@ -4900,6 +4910,7 @@ export type Database = {
       is_funcionario: { Args: { _user_id: string }; Returns: boolean }
       is_gerencia: { Args: { _user_id: string }; Returns: boolean }
       is_vendedor: { Args: { _user_id: string }; Returns: boolean }
+      verificar_acordos_quebrados: { Args: never; Returns: number }
     }
     Enums: {
       app_role:

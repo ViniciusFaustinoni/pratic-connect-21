@@ -58,6 +58,9 @@ import InadimplenteDetalhe from "./pages/cobranca/InadimplenteDetalhe";
 import FilaTrabalho from "./pages/cobranca/FilaTrabalho";
 import ReguaCobranca from "./pages/cobranca/ReguaCobranca";
 import Negativacao from "./pages/cobranca/Negativacao";
+import AcordosList from "./pages/cobranca/AcordosList";
+import NovoAcordo from "./pages/cobranca/NovoAcordo";
+import AcordoDetalhe from "./pages/cobranca/AcordoDetalhe";
 import CobrancasList from "./pages/financeiro/CobrancasList";
 import CobrancaDetalhe from "./pages/financeiro/CobrancaDetalhe";
 import FaturamentoMensal from "./pages/financeiro/FaturamentoMensal";
@@ -146,7 +149,6 @@ const App = () => (
               <Route path="/financeiro/contas-pagar" element={<ContasPagar />} />
               <Route path="/financeiro/extrato" element={<Extrato />} />
               
-              {/* Monitoramento */}
               {/* Cobrança */}
               <Route path="/cobranca" element={<CobrancaDashboard />} />
               <Route path="/cobranca/fila" element={<FilaTrabalho />} />
@@ -154,7 +156,11 @@ const App = () => (
               <Route path="/cobranca/inadimplentes" element={<InadimplentesList />} />
               <Route path="/cobranca/regua" element={<ReguaCobranca />} />
               <Route path="/cobranca/negativacao" element={<Negativacao />} />
+              <Route path="/cobranca/acordos" element={<AcordosList />} />
+              <Route path="/cobranca/acordos/novo" element={<NovoAcordo />} />
+              <Route path="/cobranca/acordos/:id" element={<AcordoDetalhe />} />
               
+              {/* Monitoramento */}
               <Route path="/monitoramento/instalacoes" element={<Instalacoes />} />
               <Route path="/monitoramento/rotas" element={<Rotas />} />
               <Route path="/monitoramento/estoque" element={<Estoque />} />
