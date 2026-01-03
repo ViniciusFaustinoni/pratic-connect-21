@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Tables } from '@/integrations/supabase/types';
@@ -215,5 +215,26 @@ export function useMyPendingDocuments() {
       return data as Documento[];
     },
     enabled: !!associado?.id,
+  });
+}
+
+export function useUpdateAssociado() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation({
+    mutationFn: async (data: Partial<Associado>) => {
+      if (!user?.id) throw new Error('Não autenticado');
+
+      const { error } = await supabase
+        .from('associados')
+        .update(data)
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my-associado'] });
+    },
   });
 }
