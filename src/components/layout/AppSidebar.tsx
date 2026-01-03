@@ -20,6 +20,7 @@ import {
   ClipboardList,
   Target,
   Map,
+  Building2,
   LucideIcon,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
@@ -119,6 +120,16 @@ const menuConfig: {
           icon: Map,
           permission: 'canManageRastreadores',
         },
+      ],
+    },
+    {
+      id: 'oficinas',
+      label: 'Oficinas',
+      icon: Wrench,
+      permission: 'canManageOficinas',
+      items: [
+        { title: 'Oficinas', url: '/oficinas', icon: Building2 },
+        { title: 'Ordens de Serviço', url: '/ordens-servico', icon: ClipboardList },
       ],
     },
   ],

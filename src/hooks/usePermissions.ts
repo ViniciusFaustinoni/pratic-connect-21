@@ -26,7 +26,9 @@ export type PermissionKey =
   | 'canManageRastreadores'
   | 'canViewDashboard'
   | 'canAccessApp'
-  | 'canManageCadastro';
+  | 'canManageCadastro'
+  | 'canManageOficinas'
+  | 'canApproveOS';
 
 /**
  * Hook centralizado de permissões para verificar acessos de forma declarativa
@@ -68,6 +70,8 @@ export function usePermissions() {
     canViewDashboard: isFuncionario(),
     canAccessApp: profile?.tipo === 'associado',
     canManageCadastro: hasRole('analista_cadastro') || isGerencia(),
+    canManageOficinas: hasRole('analista_cadastro') || isGerencia(),
+    canApproveOS: isGerencia(),
   };
 
   return {

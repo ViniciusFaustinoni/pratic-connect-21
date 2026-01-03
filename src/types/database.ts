@@ -738,3 +738,205 @@ export const STATUS_DOCUMENTO_COLORS: Record<StatusDocumento, string> = {
   reprovado: 'bg-red-100 text-red-800',
   expirado: 'bg-gray-100 text-gray-600',
 };
+
+// ============================================================
+// MÓDULO OFICINAS
+// ============================================================
+
+export type StatusOficina = 'ativo' | 'inativo' | 'suspenso' | 'bloqueado';
+
+export type StatusOrdemServico =
+  | 'rascunho'
+  | 'aguardando_orcamento'
+  | 'orcamento_enviado'
+  | 'aguardando_aprovacao'
+  | 'aprovado'
+  | 'em_execucao'
+  | 'aguardando_peca'
+  | 'concluido'
+  | 'aguardando_pagamento'
+  | 'pago'
+  | 'cancelado';
+
+export type TipoItemOS = 'peca' | 'mao_de_obra' | 'servico_terceiro';
+
+export type TipoFotoOS = 'entrada' | 'execucao' | 'conclusao';
+
+export type TipoPix = 'cpf' | 'cnpj' | 'email' | 'telefone' | 'aleatoria';
+
+export type StatusPagamentoOficina = 'pendente' | 'processando' | 'pago' | 'cancelado';
+
+export type FormaPagamentoOficina = 'pix' | 'transferencia' | 'boleto' | 'cheque';
+
+export interface Oficina {
+  id: string;
+  razao_social: string;
+  nome_fantasia?: string;
+  cnpj: string;
+  inscricao_estadual?: string;
+  telefone?: string;
+  whatsapp?: string;
+  email?: string;
+  cep?: string;
+  logradouro?: string;
+  numero?: string;
+  complemento?: string;
+  bairro?: string;
+  cidade: string;
+  estado: string;
+  banco?: string;
+  agencia?: string;
+  conta?: string;
+  pix_chave?: string;
+  pix_tipo?: TipoPix;
+  especialidades: string[];
+  nota_media: number;
+  total_avaliacoes: number;
+  status: StatusOficina;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OrdemServico {
+  id: string;
+  numero: string;
+  sinistro_id?: string;
+  oficina_id: string;
+  veiculo_id: string;
+  associado_id: string;
+  criado_por?: string;
+  aprovado_por?: string;
+  data_entrada?: string;
+  data_previsao?: string;
+  data_conclusao?: string;
+  valor_orcamento: number;
+  valor_aprovado?: number;
+  valor_pago?: number;
+  status: StatusOrdemServico;
+  observacoes?: string;
+  observacoes_internas?: string;
+  created_at: string;
+  updated_at: string;
+  // Joins (partial for select queries)
+  oficina?: Partial<Oficina>;
+  veiculo?: Partial<Veiculo>;
+  associado?: { id: string; nome: string; telefone?: string; email?: string };
+}
+
+export interface OrdemServicoItem {
+  id: string;
+  ordem_servico_id: string;
+  tipo: TipoItemOS;
+  descricao: string;
+  quantidade: number;
+  valor_unitario: number;
+  valor_total: number;
+  aprovado: boolean;
+  marca?: string;
+  numero_peca?: string;
+  created_at: string;
+}
+
+export interface OrdemServicoHistorico {
+  id: string;
+  ordem_servico_id: string;
+  status_anterior?: string;
+  status_novo: string;
+  usuario_id?: string;
+  observacao?: string;
+  created_at: string;
+  usuario?: { nome: string };
+}
+
+export interface OrdemServicoFoto {
+  id: string;
+  ordem_servico_id: string;
+  tipo: TipoFotoOS;
+  descricao?: string;
+  arquivo_url: string;
+  created_at: string;
+}
+
+export interface OficinaPagamento {
+  id: string;
+  oficina_id: string;
+  ordem_servico_id?: string;
+  valor: number;
+  forma_pagamento?: FormaPagamentoOficina;
+  comprovante_url?: string;
+  status: StatusPagamentoOficina;
+  data_pagamento?: string;
+  pago_por?: string;
+  observacao?: string;
+  created_at: string;
+}
+
+// Labels para enums de Oficinas
+export const STATUS_OFICINA_LABELS: Record<StatusOficina, string> = {
+  ativo: 'Ativo',
+  inativo: 'Inativo',
+  suspenso: 'Suspenso',
+  bloqueado: 'Bloqueado',
+};
+
+export const STATUS_ORDEM_SERVICO_LABELS: Record<StatusOrdemServico, string> = {
+  rascunho: 'Rascunho',
+  aguardando_orcamento: 'Aguardando Orçamento',
+  orcamento_enviado: 'Orçamento Enviado',
+  aguardando_aprovacao: 'Aguardando Aprovação',
+  aprovado: 'Aprovado',
+  em_execucao: 'Em Execução',
+  aguardando_peca: 'Aguardando Peça',
+  concluido: 'Concluído',
+  aguardando_pagamento: 'Aguardando Pagamento',
+  pago: 'Pago',
+  cancelado: 'Cancelado',
+};
+
+export const TIPO_ITEM_OS_LABELS: Record<TipoItemOS, string> = {
+  peca: 'Peça',
+  mao_de_obra: 'Mão de Obra',
+  servico_terceiro: 'Serviço Terceiro',
+};
+
+export const TIPO_FOTO_OS_LABELS: Record<TipoFotoOS, string> = {
+  entrada: 'Entrada',
+  execucao: 'Execução',
+  conclusao: 'Conclusão',
+};
+
+export const FORMA_PAGAMENTO_OFICINA_LABELS: Record<FormaPagamentoOficina, string> = {
+  pix: 'PIX',
+  transferencia: 'Transferência',
+  boleto: 'Boleto',
+  cheque: 'Cheque',
+};
+
+export const STATUS_PAGAMENTO_OFICINA_LABELS: Record<StatusPagamentoOficina, string> = {
+  pendente: 'Pendente',
+  processando: 'Processando',
+  pago: 'Pago',
+  cancelado: 'Cancelado',
+};
+
+// Cores para badges
+export const STATUS_OFICINA_COLORS: Record<StatusOficina, string> = {
+  ativo: 'bg-green-100 text-green-800',
+  inativo: 'bg-gray-100 text-gray-800',
+  suspenso: 'bg-yellow-100 text-yellow-800',
+  bloqueado: 'bg-red-100 text-red-800',
+};
+
+export const STATUS_ORDEM_SERVICO_COLORS: Record<StatusOrdemServico, string> = {
+  rascunho: 'bg-gray-100 text-gray-800',
+  aguardando_orcamento: 'bg-yellow-100 text-yellow-800',
+  orcamento_enviado: 'bg-blue-100 text-blue-800',
+  aguardando_aprovacao: 'bg-orange-100 text-orange-800',
+  aprovado: 'bg-green-100 text-green-800',
+  em_execucao: 'bg-purple-100 text-purple-800',
+  aguardando_peca: 'bg-amber-100 text-amber-800',
+  concluido: 'bg-teal-100 text-teal-800',
+  aguardando_pagamento: 'bg-indigo-100 text-indigo-800',
+  pago: 'bg-emerald-100 text-emerald-800',
+  cancelado: 'bg-red-100 text-red-800',
+};
