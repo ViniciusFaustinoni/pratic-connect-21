@@ -7,6 +7,7 @@ import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { AppLayout as AssociadoAppLayout } from "@/components/app/AppLayout";
+import { InstaladorLayout } from "@/components/instalador/InstaladorLayout";
 
 // Internal System Pages
 import Auth from "./pages/Auth";
@@ -45,6 +46,11 @@ import AppConfiguracoes from "./pages/app/AppConfiguracoes";
 import AppDocumentos from "./pages/app/AppDocumentos";
 import AppNotificacoes from "./pages/app/AppNotificacoes";
 import AppPlano from "./pages/app/AppPlano";
+
+// Installer App Pages
+import InstaladorLogin from "./pages/instalador/InstaladorLogin";
+import InstaladorHome from "./pages/instalador/InstaladorHome";
+import InstaladorChecklist from "./pages/instalador/InstaladorChecklist";
 
 const queryClient = new QueryClient();
 
@@ -111,6 +117,13 @@ const App = () => (
               <Route path="/app/notificacoes" element={<AppNotificacoes />} />
             </Route>
             <Route path="/app" element={<Navigate to="/app/home" replace />} />
+            
+            {/* Installer App Routes */}
+            <Route path="/instalador/login" element={<InstaladorLogin />} />
+            <Route element={<InstaladorLayout />}>
+              <Route path="/instalador" element={<InstaladorHome />} />
+              <Route path="/instalador/instalacao/:id" element={<InstaladorChecklist />} />
+            </Route>
             
             {/* 404 */}
             <Route path="*" element={<NotFound />} />

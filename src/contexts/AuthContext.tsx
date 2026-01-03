@@ -19,6 +19,7 @@ interface AuthContextType {
   isVendedor: () => boolean;
   isFuncionario: () => boolean;
   isAssociado: () => boolean;
+  isInstalador: () => boolean;
   canAccessApiSettings: () => boolean;
   getRedirectUrl: () => string;
 }
@@ -156,17 +157,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const isAssociado = () => profile?.tipo === 'associado';
 
-  const canAccessApiSettings = () => 
+  const isInstalador = () => hasRole('instalador_vistoriador');
+
+  const canAccessApiSettings = () =>
     hasRole('diretor') || hasRole('analista_marketing');
 
   /**
    * Retorna a URL de redirect baseada no tipo de usuário
    * - funcionario/prestador → /dashboard
    * - associado → /app/home
+   * - instalador → /instalador
    */
   const getRedirectUrl = () => {
     if (profile?.tipo === 'associado') {
       return '/app/home';
+    }
+    if (isInstalador()) {
+      return '/instalador';
     }
     return '/dashboard';
   };
@@ -189,6 +196,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isVendedor,
         isFuncionario,
         isAssociado,
+        isInstalador,
         canAccessApiSettings,
         getRedirectUrl,
       }}
