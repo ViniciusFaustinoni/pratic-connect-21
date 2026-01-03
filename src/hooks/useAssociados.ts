@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
+import type { StatusAssociado } from '@/types/database';
 
 type Associado = Tables<'associados'>;
 type AssociadoInsert = TablesInsert<'associados'>;
@@ -21,13 +22,59 @@ export function useAssociados() {
         .select(`
           *,
           planos (*),
-          contratos (*)
+          contratos (*),
+          veiculos (id, placa, marca, modelo)
         `)
         .order('created_at', { ascending: false });
       
       if (error) throw error;
       return data as AssociadoWithRelations[];
     },
+  });
+}
+
+export function useAssociadosMetricas() {
+  return useQuery({
+    queryKey: ['associados', 'metricas'],
+    queryFn: async () => {
+      const inicioMes = new Date();
+      inicioMes.setDate(1);
+      inicioMes.setHours(0, 0, 0, 0);
+
+      const [ativos, emAnalise, inadimplentes, canceladosMes] = await Promise.all([
+        supabase.from('associados').select('*', { count: 'exact', head: true }).eq('status', 'ativo'),
+        supabase.from('associados').select('*', { count: 'exact', head: true }).eq('status', 'em_analise'),
+        supabase.from('associados').select('*', { count: 'exact', head: true }).eq('status', 'inadimplente'),
+        supabase.from('associados')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'cancelado')
+          .gte('updated_at', inicioMes.toISOString())
+      ]);
+
+      return {
+        ativos: ativos.count || 0,
+        emAnalise: emAnalise.count || 0,
+        inadimplentes: inadimplentes.count || 0,
+        canceladosMes: canceladosMes.count || 0
+      };
+    }
+  });
+}
+
+export function useAssociadosCidades() {
+  return useQuery({
+    queryKey: ['associados', 'cidades'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('associados')
+        .select('cidade')
+        .not('cidade', 'is', null);
+      
+      if (error) throw error;
+      
+      const cidades = [...new Set(data.map(a => a.cidade).filter(Boolean))] as string[];
+      return cidades.sort();
+    }
   });
 }
 
@@ -86,6 +133,46 @@ export function useUpdateAssociado() {
   
   return useMutation({
     mutationFn: async ({ id, ...updates }: AssociadoUpdate & { id: string }) => {
+      const { data, error } = await supabase
+        .from('associados')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data as Associado;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['associados'] });
+      queryClient.invalidateQueries({ queryKey: ['associados', data.id] });
+    },
+  });
+}
+
+export function useUpdateAssociadoStatus() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async ({ 
+      id, 
+      status, 
+      motivo 
+    }: { 
+      id: string; 
+      status: StatusAssociado; 
+      motivo?: string;
+    }) => {
+      const updates: Partial<Associado> = {
+        status,
+        updated_at: new Date().toISOString(),
+      };
+      
+      if (status === 'bloqueado' || status === 'suspenso' || status === 'cancelado') {
+        updates.motivo_bloqueio = motivo;
+        updates.data_bloqueio = new Date().toISOString();
+      }
+      
       const { data, error } = await supabase
         .from('associados')
         .update(updates)
