@@ -44,3 +44,32 @@ export function useUploadAvatar() {
     },
   });
 }
+
+export function useRemoveAvatar() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation({
+    mutationFn: async () => {
+      if (!user?.id) throw new Error('Não autenticado');
+
+      const fileName = `${user.id}/avatar.jpg`;
+      
+      // Remover arquivo do storage (ignora erro se não existir)
+      await supabase.storage
+        .from('avatars')
+        .remove([fileName]);
+
+      // Limpar o campo avatar_url no associado
+      const { error: updateError } = await supabase
+        .from('associados')
+        .update({ avatar_url: null })
+        .eq('user_id', user.id);
+
+      if (updateError) throw updateError;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my-associado'] });
+    },
+  });
+}

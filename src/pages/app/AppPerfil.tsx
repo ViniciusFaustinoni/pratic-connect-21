@@ -19,7 +19,8 @@ import {
   EyeOff,
   MessageCircle,
   Cake,
-  Camera
+  Camera,
+  Trash2
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -47,13 +48,19 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMyAssociado, useMyVehicles, useUpdateAssociado } from '@/hooks/useMyData';
 import { supabase } from '@/integrations/supabase/client';
 import { CardPlano } from '@/components/app';
 import { AvatarCropDialog } from '@/components/AvatarCropDialog';
-import { useUploadAvatar } from '@/hooks/useUploadAvatar';
+import { useUploadAvatar, useRemoveAvatar } from '@/hooks/useUploadAvatar';
 
 const STATUS_VEICULO: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
   ativo: { label: 'Ativo', variant: 'default' },
@@ -77,7 +84,9 @@ export default function AppPerfil() {
   // Estados para upload de avatar
   const [cropDialogOpen, setCropDialogOpen] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [confirmRemoveAvatar, setConfirmRemoveAvatar] = useState(false);
   const uploadAvatar = useUploadAvatar();
+  const removeAvatar = useRemoveAvatar();
 
   const isLoading = associadoLoading || vehiclesLoading;
   const vehicle = vehicles?.[0];
@@ -118,6 +127,18 @@ export default function AppPerfil() {
     } catch (error) {
       console.error('Erro ao enviar foto:', error);
       toast.error('Erro ao atualizar foto');
+    }
+  };
+
+  // Handler para remover avatar
+  const handleRemoveAvatar = async () => {
+    try {
+      await removeAvatar.mutateAsync();
+      toast.success('Foto removida com sucesso!');
+      setConfirmRemoveAvatar(false);
+    } catch (error) {
+      console.error('Erro ao remover foto:', error);
+      toast.error('Erro ao remover foto');
     }
   };
 
@@ -189,27 +210,50 @@ export default function AppPerfil() {
                 </AvatarFallback>
               </Avatar>
               
-              {/* Botão de upload sobreposto */}
-              <label 
-                htmlFor="avatar-upload"
-                className="absolute -bottom-1 -right-1 p-1.5 bg-primary rounded-full 
-                           text-primary-foreground cursor-pointer shadow-md
-                           hover:bg-primary/90 transition-colors"
-              >
-                {uploadAvatar.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Camera className="h-4 w-4" />
-                )}
-                <input
-                  id="avatar-upload"
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleFileSelect}
-                  disabled={uploadAvatar.isPending}
-                />
-              </label>
+              {/* Menu dropdown para avatar */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button 
+                    className="absolute -bottom-1 -right-1 p-1.5 bg-primary rounded-full 
+                               text-primary-foreground cursor-pointer shadow-md
+                               hover:bg-primary/90 transition-colors"
+                    disabled={uploadAvatar.isPending || removeAvatar.isPending}
+                  >
+                    {(uploadAvatar.isPending || removeAvatar.isPending) ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Camera className="h-4 w-4" />
+                    )}
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem asChild>
+                    <label htmlFor="avatar-upload" className="cursor-pointer flex items-center">
+                      <Camera className="h-4 w-4 mr-2" />
+                      Alterar foto
+                    </label>
+                  </DropdownMenuItem>
+                  {associado.avatar_url && (
+                    <DropdownMenuItem 
+                      onClick={() => setConfirmRemoveAvatar(true)}
+                      className="text-destructive focus:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Remover foto
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              
+              {/* Input file oculto */}
+              <input
+                id="avatar-upload"
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleFileSelect}
+                disabled={uploadAvatar.isPending}
+              />
             </div>
             <div className="flex-1 min-w-0">
               <h2 className="text-xl font-bold text-foreground truncate">
@@ -457,6 +501,34 @@ export default function AppPerfil() {
         }}
         onCropComplete={handleCropComplete}
       />
+
+      {/* Dialog Confirmar Remoção de Avatar */}
+      <AlertDialog open={confirmRemoveAvatar} onOpenChange={setConfirmRemoveAvatar}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover foto de perfil?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Sua foto será removida e as iniciais do seu nome serão exibidas.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleRemoveAvatar}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              {removeAvatar.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Removendo...
+                </>
+              ) : (
+                'Remover'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
