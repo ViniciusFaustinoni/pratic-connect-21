@@ -13,7 +13,7 @@ import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Leads from "./pages/vendas/Leads";
 import LeadDetalhe from "./pages/vendas/LeadDetalhe";
-import LeadKanban from "./pages/vendas/LeadKanban";
+import Acompanhamento from "./pages/vendas/Acompanhamento";
 import Cotacoes from "./pages/vendas/Cotacoes";
 import Contratos from "./pages/vendas/Contratos";
 import Associados from "./pages/cadastro/Associados";
@@ -70,7 +70,7 @@ const App = () => (
               {/* Vendas */}
               <Route path="/vendas/leads" element={<Leads />} />
               <Route path="/vendas/leads/:id" element={<LeadDetalhe />} />
-              <Route path="/vendas/kanban" element={<LeadKanban />} />
+              <Route path="/vendas/acompanhamento" element={<Acompanhamento />} />
               <Route path="/vendas/cotacoes" element={<Cotacoes />} />
               <Route path="/vendas/contratos" element={<Contratos />} />
               
