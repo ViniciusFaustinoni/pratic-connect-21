@@ -1097,6 +1097,196 @@ export type Database = {
           },
         ]
       }
+      cobrancas: {
+        Row: {
+          associado_id: string
+          boleto_url: string | null
+          cancelado_por: string | null
+          codigo_barras: string | null
+          comprovante_url: string | null
+          contrato_id: string | null
+          created_at: string
+          criado_por: string | null
+          data_emissao: string
+          data_pagamento: string | null
+          data_vencimento: string
+          desconto: number | null
+          descricao: string | null
+          forma_pagamento: string | null
+          id: string
+          juros: number | null
+          linha_digitavel: string | null
+          motivo_cancelamento: string | null
+          multa: number | null
+          nosso_numero: string | null
+          pix_copia_cola: string | null
+          pix_expiracao: string | null
+          pix_qrcode: string | null
+          referencia_ano: number | null
+          referencia_mes: number | null
+          status: string
+          tipo: string
+          updated_at: string
+          valor: number
+          valor_final: number
+          valor_pago: number | null
+          veiculo_id: string | null
+        }
+        Insert: {
+          associado_id: string
+          boleto_url?: string | null
+          cancelado_por?: string | null
+          codigo_barras?: string | null
+          comprovante_url?: string | null
+          contrato_id?: string | null
+          created_at?: string
+          criado_por?: string | null
+          data_emissao?: string
+          data_pagamento?: string | null
+          data_vencimento: string
+          desconto?: number | null
+          descricao?: string | null
+          forma_pagamento?: string | null
+          id?: string
+          juros?: number | null
+          linha_digitavel?: string | null
+          motivo_cancelamento?: string | null
+          multa?: number | null
+          nosso_numero?: string | null
+          pix_copia_cola?: string | null
+          pix_expiracao?: string | null
+          pix_qrcode?: string | null
+          referencia_ano?: number | null
+          referencia_mes?: number | null
+          status?: string
+          tipo: string
+          updated_at?: string
+          valor: number
+          valor_final: number
+          valor_pago?: number | null
+          veiculo_id?: string | null
+        }
+        Update: {
+          associado_id?: string
+          boleto_url?: string | null
+          cancelado_por?: string | null
+          codigo_barras?: string | null
+          comprovante_url?: string | null
+          contrato_id?: string | null
+          created_at?: string
+          criado_por?: string | null
+          data_emissao?: string
+          data_pagamento?: string | null
+          data_vencimento?: string
+          desconto?: number | null
+          descricao?: string | null
+          forma_pagamento?: string | null
+          id?: string
+          juros?: number | null
+          linha_digitavel?: string | null
+          motivo_cancelamento?: string | null
+          multa?: number | null
+          nosso_numero?: string | null
+          pix_copia_cola?: string | null
+          pix_expiracao?: string | null
+          pix_qrcode?: string | null
+          referencia_ano?: number | null
+          referencia_mes?: number | null
+          status?: string
+          tipo?: string
+          updated_at?: string
+          valor?: number
+          valor_final?: number
+          valor_pago?: number | null
+          veiculo_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cobrancas_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cobrancas_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "cobrancas_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "cobrancas_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "cobrancas_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "cobrancas_cancelado_por_fkey"
+            columns: ["cancelado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cobrancas_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "contratos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cobrancas_criado_por_fkey"
+            columns: ["criado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cobrancas_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "veiculos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cobrancas_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "cobrancas_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "cobrancas_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["veiculo_id"]
+          },
+        ]
+      }
       contas_pagar: {
         Row: {
           agencia: string | null
@@ -3913,6 +4103,7 @@ export type Database = {
       }
     }
     Functions: {
+      atualizar_cobrancas_vencidas: { Args: never; Returns: number }
       atualizar_valor_os: { Args: { os_id: string }; Returns: undefined }
       can_access_api_settings: { Args: { _user_id: string }; Returns: boolean }
       get_alertas_contagem: {
@@ -3926,6 +4117,10 @@ export type Database = {
       }
       get_estatisticas_assistencia_dia: {
         Args: { p_data?: string }
+        Returns: Json
+      }
+      get_estatisticas_cobrancas_mes: {
+        Args: { p_ano: number; p_mes: number }
         Returns: Json
       }
       get_estatisticas_prestador: {
