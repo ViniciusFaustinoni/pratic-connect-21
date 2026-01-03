@@ -52,6 +52,7 @@ export type Database = {
       }
       associados: {
         Row: {
+          avatar_url: string | null
           bairro: string | null
           bloqueado: boolean | null
           cep: string | null
@@ -84,6 +85,7 @@ export type Database = {
           whatsapp: string | null
         }
         Insert: {
+          avatar_url?: string | null
           bairro?: string | null
           bloqueado?: boolean | null
           cep?: string | null
@@ -116,6 +118,7 @@ export type Database = {
           whatsapp?: string | null
         }
         Update: {
+          avatar_url?: string | null
           bairro?: string | null
           bloqueado?: boolean | null
           cep?: string | null
