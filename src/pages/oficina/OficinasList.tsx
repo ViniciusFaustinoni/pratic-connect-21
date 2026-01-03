@@ -25,7 +25,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
-import { OficinaFormDialog } from '@/components/oficinas/OficinaFormDialog';
+import { NovaOficinaModal } from '@/components/oficina/NovaOficinaModal';
 import { 
   STATUS_OFICINA_LABELS, 
   STATUS_OFICINA_COLORS, 
@@ -352,8 +352,11 @@ export default function OficinasList() {
         </div>
       )}
 
-      {/* Dialogs */}
-      <OficinaFormDialog open={formOpen} onOpenChange={setFormOpen} />
+      {/* Modal Nova Oficina */}
+      <NovaOficinaModal
+        open={formOpen}
+        onClose={() => setFormOpen(false)}
+      />
     </div>
   );
 }
