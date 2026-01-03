@@ -16,6 +16,7 @@ import {
   Radio,
   Kanban,
   TrendingUp,
+  BarChart3,
   LucideIcon,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
@@ -74,6 +75,7 @@ const menuConfig: {
       icon: TrendingUp,
       permission: 'canManageLeads',
       items: [
+        { title: 'Dashboard', url: '/vendas/dashboard', icon: BarChart3 },
         { title: 'Leads', url: '/vendas/leads', icon: UserPlus },
         { title: 'Acompanhamento', url: '/vendas/acompanhamento', icon: Kanban },
         { title: 'Cotador', url: '/vendas/cotacoes', icon: Calculator },
