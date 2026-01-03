@@ -1,20 +1,18 @@
 import { useState } from 'react';
-import { AlertTriangle, Check, X, Download, Clock, DollarSign, Search } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { AlertTriangle, Check, Download, Clock, DollarSign, Search } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format, differenceInDays } from 'date-fns';
+import { BaixarNegativacaoModal } from '@/components/cobranca/BaixarNegativacaoModal';
 import { ptBR } from 'date-fns/locale';
 
 interface Negativacao {
@@ -72,8 +70,6 @@ export default function Negativacao() {
   const [selectedCandidatos, setSelectedCandidatos] = useState<string[]>([]);
   const [baixaModalOpen, setBaixaModalOpen] = useState(false);
   const [negativacaoSelecionada, setNegativacaoSelecionada] = useState<Negativacao | null>(null);
-  const [motivoBaixa, setMotivoBaixa] = useState('');
-  const [protocoloBaixa, setProtocoloBaixa] = useState('');
   const [orgaoLote, setOrgaoLote] = useState('SPC');
 
   // Query: Negativações
@@ -182,42 +178,14 @@ export default function Negativacao() {
     }
   });
 
-  // Mutation: Baixar Negativação
-  const baixarNegativacao = useMutation({
-    mutationFn: async () => {
-      if (!negativacaoSelecionada) return;
-      
-      const user = await supabase.auth.getUser();
-      
-      const { error } = await supabase
-        .from('negativacoes')
-        .update({
-          status: 'baixado',
-          data_baixa: new Date().toISOString(),
-          protocolo_baixa: protocoloBaixa || null,
-          motivo_baixa: motivoBaixa,
-          baixado_por: user.data.user?.id
-        })
-        .eq('id', negativacaoSelecionada.id);
-      
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast.success('Negativação baixada com sucesso');
-      setBaixaModalOpen(false);
-      setNegativacaoSelecionada(null);
-      setMotivoBaixa('');
-      setProtocoloBaixa('');
-      queryClient.invalidateQueries({ queryKey: ['negativacoes'] });
-    },
-    onError: () => {
-      toast.error('Erro ao baixar negativação');
-    }
-  });
-
   const handleOpenBaixa = (neg: Negativacao) => {
     setNegativacaoSelecionada(neg);
     setBaixaModalOpen(true);
+  };
+
+  const handleCloseBaixa = () => {
+    setBaixaModalOpen(false);
+    setNegativacaoSelecionada(null);
   };
 
   const toggleCandidato = (id: string) => {
@@ -580,60 +548,11 @@ export default function Negativacao() {
       </Tabs>
 
       {/* Modal Baixar Negativação */}
-      <Dialog open={baixaModalOpen} onOpenChange={setBaixaModalOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Baixar Negativação</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            {negativacaoSelecionada && (
-              <div className="p-3 rounded-lg bg-muted">
-                <p className="font-medium">{negativacaoSelecionada.associado?.nome}</p>
-                <p className="text-sm text-muted-foreground">
-                  CPF: {formatCPF(negativacaoSelecionada.associado?.cpf)} | 
-                  Valor: {formatCurrency(negativacaoSelecionada.valor)}
-                </p>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <Label>Motivo da Baixa</Label>
-              <Select value={motivoBaixa} onValueChange={setMotivoBaixa}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o motivo" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pagamento">Pagamento Efetuado</SelectItem>
-                  <SelectItem value="acordo">Acordo Realizado</SelectItem>
-                  <SelectItem value="cancelamento">Cancelamento do Contrato</SelectItem>
-                  <SelectItem value="erro">Erro de Cadastro</SelectItem>
-                  <SelectItem value="outro">Outro</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Protocolo de Baixa (opcional)</Label>
-              <Input
-                value={protocoloBaixa}
-                onChange={(e) => setProtocoloBaixa(e.target.value)}
-                placeholder="Número do protocolo"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setBaixaModalOpen(false)}>
-              Cancelar
-            </Button>
-            <Button 
-              onClick={() => baixarNegativacao.mutate()}
-              disabled={!motivoBaixa || baixarNegativacao.isPending}
-            >
-              Confirmar Baixa
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <BaixarNegativacaoModal
+        open={baixaModalOpen}
+        onClose={handleCloseBaixa}
+        negativacao={negativacaoSelecionada}
+      />
     </div>
   );
 }
