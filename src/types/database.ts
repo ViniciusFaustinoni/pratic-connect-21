@@ -1001,3 +1001,126 @@ export const UFS_BRASIL = [
   'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 
   'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'
 ] as const;
+
+// ============================================================
+// MÓDULO FINANCEIRO
+// ============================================================
+
+// Status Faturamento
+export type StatusFaturamento = 'rascunho' | 'processando' | 'gerado' | 'enviado' | 'fechado' | 'cancelado';
+
+// Status Conta a Pagar
+export type StatusContaPagar = 'pendente' | 'aprovado' | 'pago' | 'cancelado' | 'vencido';
+
+// Categoria Conta a Pagar
+export type CategoriaContaPagar = 
+  | 'prestador_assistencia' 
+  | 'oficina' 
+  | 'fornecedor' 
+  | 'folha_pagamento' 
+  | 'impostos' 
+  | 'aluguel' 
+  | 'servicos' 
+  | 'marketing' 
+  | 'outros';
+
+// Tipo Movimentação Financeira
+export type TipoMovimentacao = 'entrada' | 'saida';
+
+// Labels
+export const STATUS_FATURAMENTO_LABELS: Record<StatusFaturamento, string> = {
+  rascunho: 'Rascunho',
+  processando: 'Processando',
+  gerado: 'Gerado',
+  enviado: 'Enviado',
+  fechado: 'Fechado',
+  cancelado: 'Cancelado',
+};
+
+export const STATUS_CONTA_PAGAR_LABELS: Record<StatusContaPagar, string> = {
+  pendente: 'Pendente',
+  aprovado: 'Aprovado',
+  pago: 'Pago',
+  cancelado: 'Cancelado',
+  vencido: 'Vencido',
+};
+
+export const CATEGORIA_CONTA_PAGAR_LABELS: Record<CategoriaContaPagar, string> = {
+  prestador_assistencia: 'Prestador Assistência',
+  oficina: 'Oficina',
+  fornecedor: 'Fornecedor',
+  folha_pagamento: 'Folha de Pagamento',
+  impostos: 'Impostos',
+  aluguel: 'Aluguel',
+  servicos: 'Serviços',
+  marketing: 'Marketing',
+  outros: 'Outros',
+};
+
+export const TIPO_MOVIMENTACAO_LABELS: Record<TipoMovimentacao, string> = {
+  entrada: 'Entrada',
+  saida: 'Saída',
+};
+
+// Interfaces
+export interface Faturamento {
+  id: string;
+  referencia_mes: number;
+  referencia_ano: number;
+  total_associados: number;
+  total_cobrancas: number;
+  valor_total: number;
+  valor_pago: number;
+  valor_pendente: number;
+  status: StatusFaturamento;
+  data_vencimento?: string;
+  data_geracao?: string;
+  data_envio?: string;
+  data_fechamento?: string;
+  gerado_por?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ContaPagar {
+  id: string;
+  fornecedor_nome: string;
+  fornecedor_documento?: string;
+  categoria: CategoriaContaPagar;
+  subcategoria?: string;
+  referencia_id?: string;
+  referencia_tipo?: string;
+  valor: number;
+  valor_pago: number;
+  data_emissao: string;
+  data_vencimento: string;
+  data_pagamento?: string;
+  forma_pagamento?: string;
+  banco?: string;
+  agencia?: string;
+  conta?: string;
+  pix_chave?: string;
+  comprovante_url?: string;
+  status: StatusContaPagar;
+  aprovado_por?: string;
+  aprovado_em?: string;
+  pago_por?: string;
+  observacao?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MovimentacaoFinanceira {
+  id: string;
+  tipo: TipoMovimentacao;
+  categoria: string;
+  referencia_tipo?: string;
+  referencia_id?: string;
+  valor: number;
+  data_movimentacao: string;
+  data_competencia?: string;
+  descricao: string;
+  observacao?: string;
+  registrado_por?: string;
+  created_at: string;
+}
