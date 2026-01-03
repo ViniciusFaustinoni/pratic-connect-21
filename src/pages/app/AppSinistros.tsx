@@ -33,35 +33,35 @@ export default function AppSinistros() {
     switch (status) {
       case 'em_analise':
         return (
-          <Badge variant="outline" className="bg-yellow-50 text-yellow-700">
+          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
             <Clock className="mr-1 h-3 w-3" />
             Em Análise
           </Badge>
         );
       case 'aprovado':
         return (
-          <Badge variant="outline" className="bg-green-50 text-green-700">
+          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
             <CheckCircle className="mr-1 h-3 w-3" />
             Aprovado
           </Badge>
         );
       case 'reprovado':
         return (
-          <Badge variant="outline" className="bg-red-50 text-red-700">
+          <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
             <XCircle className="mr-1 h-3 w-3" />
             Reprovado
           </Badge>
         );
       case 'indenizado':
         return (
-          <Badge variant="outline" className="bg-blue-50 text-blue-700">
+          <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
             <DollarSign className="mr-1 h-3 w-3" />
             Indenizado
           </Badge>
         );
       case 'cancelado':
         return (
-          <Badge variant="outline" className="bg-gray-50 text-gray-700">
+          <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200">
             <XCircle className="mr-1 h-3 w-3" />
             Cancelado
           </Badge>
@@ -78,7 +78,7 @@ export default function AppSinistros() {
   };
 
   return (
-    <div className="space-y-4 p-4">
+    <div className="space-y-4 p-4 pb-24">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-foreground">Sinistros</h1>

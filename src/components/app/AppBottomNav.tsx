@@ -1,12 +1,11 @@
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Home, Receipt, MapPin, Phone, User } from 'lucide-react';
+import { Home, Receipt, MapPin, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
   { icon: Home, label: 'Home', path: '/app/home' },
   { icon: Receipt, label: 'Boletos', path: '/app/boletos' },
-  { icon: MapPin, label: 'Mapa', path: '/app/rastreamento' },
-  { icon: Phone, label: 'Assistência', path: '/app/assistencia' },
+  { icon: MapPin, label: 'Rastreio', path: '/app/rastreamento' },
   { icon: User, label: 'Perfil', path: '/app/perfil' },
 ];
 
@@ -25,7 +24,7 @@ export function AppBottomNav() {
             key={item.path}
             onClick={() => navigate(item.path)}
             className={cn(
-              'flex min-h-[44px] min-w-[44px] flex-col items-center justify-center gap-0.5 px-3 transition-colors',
+              'flex min-h-[44px] min-w-[56px] flex-col items-center justify-center gap-0.5 px-4 transition-colors',
               isActive ? 'text-primary' : 'text-muted-foreground'
             )}
           >
