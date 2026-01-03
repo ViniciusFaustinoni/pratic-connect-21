@@ -71,6 +71,7 @@ const acessosRapidos = [
 ];
 
 export default function AppHome() {
+  const navigate = useNavigate();
   const { profile } = useAuth();
   const { data: associado, isLoading: loadingAssociado } = useMyAssociado();
   const { data: veiculos, isLoading: loadingVeiculos } = useMyVehicles();
@@ -104,8 +105,6 @@ export default function AppHome() {
   if (isLoading) {
     return <HomeLoading />;
   }
-
-  const navigate = useNavigate();
 
   return (
     <div className="flex flex-col gap-4 p-4 pb-24">
