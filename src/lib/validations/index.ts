@@ -63,6 +63,50 @@ export const maskCEP = (value: string): string => {
     .slice(0, 9);
 };
 
+// CNPJ
+export const maskCNPJ = (value: string): string => {
+  return value
+    .replace(/\D/g, '')
+    .replace(/(\d{2})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1/$2')
+    .replace(/(\d{4})(\d{1,2})/, '$1-$2')
+    .slice(0, 18);
+};
+
+export const validateCNPJ = (cnpj: string): boolean => {
+  const cleaned = cnpj.replace(/\D/g, '');
+  if (cleaned.length !== 14) return false;
+  if (/^(\d)\1+$/.test(cleaned)) return false;
+  
+  let size = cleaned.length - 2;
+  let numbers = cleaned.substring(0, size);
+  const digits = cleaned.substring(size);
+  let sum = 0;
+  let pos = size - 7;
+  
+  for (let i = size; i >= 1; i--) {
+    sum += parseInt(numbers.charAt(size - i)) * pos--;
+    if (pos < 2) pos = 9;
+  }
+  
+  let result = sum % 11 < 2 ? 0 : 11 - (sum % 11);
+  if (result !== parseInt(digits.charAt(0))) return false;
+  
+  size = size + 1;
+  numbers = cleaned.substring(0, size);
+  sum = 0;
+  pos = size - 7;
+  
+  for (let i = size; i >= 1; i--) {
+    sum += parseInt(numbers.charAt(size - i)) * pos--;
+    if (pos < 2) pos = 9;
+  }
+  
+  result = sum % 11 < 2 ? 0 : 11 - (sum % 11);
+  return result === parseInt(digits.charAt(1));
+};
+
 export const maskCurrency = (value: string): string => {
   const numbers = value.replace(/\D/g, '');
   const amount = parseInt(numbers || '0', 10) / 100;

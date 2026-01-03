@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { Input } from '@/components/ui/input';
-import { maskCPF, maskTelefone, maskPlaca, maskCEP, maskCurrency, parseCurrency } from '@/lib/validations';
+import { maskCPF, maskTelefone, maskPlaca, maskCEP, maskCNPJ, maskCurrency, parseCurrency } from '@/lib/validations';
 import { cn } from '@/lib/utils';
 
 interface MaskedInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange'> {
@@ -82,6 +82,23 @@ export function CepInput({ value, onChange, className, onCepComplete, ...props }
       onBlur={handleBlur}
       placeholder="00000-000"
       maxLength={9}
+      className={cn(className)}
+    />
+  );
+}
+
+export function CnpjInput({ value, onChange, className, ...props }: MaskedInputProps) {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    onChange(maskCNPJ(e.target.value));
+  };
+
+  return (
+    <Input
+      {...props}
+      value={value}
+      onChange={handleChange}
+      placeholder="00.000.000/0000-00"
+      maxLength={18}
       className={cn(className)}
     />
   );

@@ -980,3 +980,24 @@ export const ESPECIALIDADE_LABELS: Record<EspecialidadeOficina, string> = {
   suspensao: 'Suspensão',
   freios: 'Freios',
 };
+
+// Bancos brasileiros principais
+export const BANCOS_BRASIL = [
+  { codigo: '001', nome: 'Banco do Brasil' },
+  { codigo: '033', nome: 'Santander' },
+  { codigo: '104', nome: 'Caixa Econômica' },
+  { codigo: '237', nome: 'Bradesco' },
+  { codigo: '341', nome: 'Itaú' },
+  { codigo: '756', nome: 'Sicoob' },
+  { codigo: '748', nome: 'Sicredi' },
+  { codigo: '077', nome: 'Inter' },
+  { codigo: '260', nome: 'Nubank' },
+  { codigo: '336', nome: 'C6 Bank' },
+] as const;
+
+// UFs brasileiras
+export const UFS_BRASIL = [
+  'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 
+  'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 
+  'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'
+] as const;
