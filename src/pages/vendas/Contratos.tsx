@@ -26,9 +26,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import type { StatusContrato } from '@/types/database';
-import { useContratos, useUpdateContrato } from '@/hooks/useContratos';
-import { useUpdateLead } from '@/hooks/useLeads';
-import { useCreateLeadHistorico } from '@/hooks/useLeadHistorico';
+import { useContratos, useUpdateContrato, useAtivarContrato } from '@/hooks/useContratos';
 import { useSendToAutentique } from '@/hooks/useAutentique';
 import { ContratoFormDialog } from '@/components/contratos/ContratoFormDialog';
 import { ContratoDetailDrawer } from '@/components/contratos/ContratoDetailDrawer';
@@ -55,8 +53,7 @@ export default function Contratos() {
 
   const { data: contratos, isLoading } = useContratos();
   const updateContrato = useUpdateContrato();
-  const updateLead = useUpdateLead();
-  const createHistorico = useCreateLeadHistorico();
+  const ativarContrato = useAtivarContrato();
   const sendToAutentique = useSendToAutentique();
 
   const filteredContratos = (contratos || []).filter((contrato) => {
@@ -123,31 +120,17 @@ export default function Contratos() {
   const handleAtivar = async (contratoId: string) => {
     try {
       const contrato = contratos?.find(c => c.id === contratoId);
-      if (!contrato) return;
-
-      await updateContrato.mutateAsync({
-        id: contratoId,
-        status: 'ativo',
-      });
-
-      if (contrato.lead_id) {
-        await updateLead.mutateAsync({
-          id: contrato.lead_id,
-          etapa: 'ganho',
-          data_conversao: new Date().toISOString(),
-        });
-        
-        await createHistorico.mutateAsync({
-          lead_id: contrato.lead_id,
-          acao: 'ganho',
-          descricao: `Contrato ${contrato.numero} ativado`,
-          etapa_nova: 'ganho',
-        });
+      const hadAssociado = !!contrato?.associado_id;
+      
+      await ativarContrato.mutateAsync(contratoId);
+      
+      if (!hadAssociado) {
+        toast.success('Contrato ativado! Associado e veículo criados automaticamente.');
+      } else {
+        toast.success('Contrato ativado com sucesso!');
       }
-
-      toast.success('Contrato ativado com sucesso!');
-    } catch (error) {
-      toast.error('Erro ao ativar contrato');
+    } catch (error: any) {
+      toast.error(error?.message || 'Erro ao ativar contrato');
     }
   };
 
