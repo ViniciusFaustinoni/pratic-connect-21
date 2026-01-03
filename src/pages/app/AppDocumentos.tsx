@@ -1,6 +1,10 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, FileText, Upload, CheckCircle, Clock, XCircle, AlertCircle, Eye, RefreshCw, Camera, File, X, Loader2 } from 'lucide-react';
+import { 
+  ArrowLeft, Shield, QrCode, Share2, Download, FileText, Award, BookOpen, 
+  ChevronRight, Car, CreditCard, Camera, CheckCircle, Clock, XCircle,
+  Receipt, Eye
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -8,455 +12,515 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { toast } from 'sonner';
-import { useMyDocumentos } from '@/hooks/useMyData';
+import { useMyAssociado, useMyVehicles, useMyDocumentos, useMyBoletos } from '@/hooks/useMyData';
 import { cn } from '@/lib/utils';
 
-const statusConfig: Record<string, { label: string; icon: typeof CheckCircle; className: string; bgColor: string }> = {
-  aprovado: { label: 'Aprovado', icon: CheckCircle, className: 'bg-green-100 text-green-800', bgColor: 'bg-green-50' },
-  pendente: { label: 'Pendente', icon: Clock, className: 'bg-yellow-100 text-yellow-800', bgColor: 'bg-yellow-50' },
-  em_analise: { label: 'Em Análise', icon: Clock, className: 'bg-blue-100 text-blue-800', bgColor: 'bg-blue-50' },
-  reprovado: { label: 'Reprovado', icon: XCircle, className: 'bg-red-100 text-red-800', bgColor: 'bg-red-50' },
+// Types
+interface DocumentoContratual {
+  id: string;
+  tipo: string;
+  nome: string;
+  subtitulo: string;
+  formato: string;
+  icon: React.ComponentType<{ className?: string }>;
+  cor: string;
+}
+
+interface DocumentoItem {
+  id: string;
+  nome: string;
+  subtitulo: string;
+  tipo: string;
+  status?: string;
+  url?: string;
+}
+
+// Status configuration
+const statusDocConfig: Record<string, { label: string; icon: typeof CheckCircle; className: string }> = {
+  aprovado: { label: 'Aprovado', icon: CheckCircle, className: 'bg-green-100 text-green-700' },
+  pendente: { label: 'Pendente', icon: Clock, className: 'bg-yellow-100 text-yellow-700' },
+  em_analise: { label: 'Em análise', icon: Clock, className: 'bg-blue-100 text-blue-700' },
+  reprovado: { label: 'Reprovado', icon: XCircle, className: 'bg-red-100 text-red-700' },
 };
 
-type TipoDocumento = 'cnh' | 'crlv' | 'comprovante_residencia' | 'foto_frontal_veiculo' | 'foto_traseira_veiculo' | 'foto_lateral_esquerda' | 'foto_lateral_direita' | 'foto_painel' | 'foto_hodometro' | 'outro';
+// Mock data for contractual documents
+const documentosContratuaisMock: DocumentoContratual[] = [
+  { id: '1', tipo: 'contrato', nome: 'Contrato de Adesão', subtitulo: 'Assinado em 15/01/2024', formato: 'PDF', icon: FileText, cor: 'blue' },
+  { id: '2', tipo: 'certificado', nome: 'Certificado de Adesão', subtitulo: 'Emitido em 20/01/2024', formato: 'PDF', icon: Award, cor: 'green' },
+  { id: '3', tipo: 'regulamento', nome: 'Regulamento Geral', subtitulo: 'Versão 2024.1', formato: 'PDF', icon: BookOpen, cor: 'purple' },
+  { id: '4', tipo: 'cobertura', nome: 'Tabela de Coberturas', subtitulo: 'Plano Proteção Total', formato: 'PDF', icon: Shield, cor: 'amber' },
+];
 
-const tipoLabels: Record<TipoDocumento, string> = {
+// Mock data for payment receipts
+const comprovantesMock = [
+  { id: '1', mes: 'Janeiro/2024', dataPagamento: '10/01/2024' },
+  { id: '2', mes: 'Dezembro/2023', dataPagamento: '08/12/2023' },
+];
+
+// Tipo labels for vehicle documents
+const tipoLabels: Record<string, string> = {
   cnh: 'CNH',
-  crlv: 'CRLV',
+  crlv: 'CRLV Digital',
   comprovante_residencia: 'Comprovante de Residência',
-  foto_frontal_veiculo: 'Foto Frontal do Veículo',
-  foto_traseira_veiculo: 'Foto Traseira do Veículo',
+  foto_frontal_veiculo: 'Foto Frontal',
+  foto_traseira_veiculo: 'Foto Traseira',
   foto_lateral_esquerda: 'Foto Lateral Esquerda',
   foto_lateral_direita: 'Foto Lateral Direita',
   foto_painel: 'Foto do Painel',
   foto_hodometro: 'Foto do Hodômetro',
-  outro: 'Outro',
 };
 
-const tipoOptions = [
-  { value: 'cnh', label: 'CNH', obrigatorio: true },
-  { value: 'crlv', label: 'CRLV', obrigatorio: true },
-  { value: 'comprovante_residencia', label: 'Comprovante de Residência', obrigatorio: true },
-  { value: 'foto_frontal_veiculo', label: 'Foto Frontal do Veículo', obrigatorio: false },
-  { value: 'foto_traseira_veiculo', label: 'Foto Traseira do Veículo', obrigatorio: false },
-  { value: 'foto_lateral_esquerda', label: 'Foto Lateral Esquerda', obrigatorio: false },
-  { value: 'foto_lateral_direita', label: 'Foto Lateral Direita', obrigatorio: false },
-  { value: 'foto_painel', label: 'Foto do Painel', obrigatorio: false },
-  { value: 'foto_hodometro', label: 'Foto do Hodômetro', obrigatorio: false },
-  { value: 'outro', label: 'Outro Documento', obrigatorio: false },
-];
+// Color classes for icons
+const iconColorClasses: Record<string, { bg: string; text: string }> = {
+  blue: { bg: 'bg-blue-100', text: 'text-blue-600' },
+  green: { bg: 'bg-green-100', text: 'text-green-600' },
+  purple: { bg: 'bg-purple-100', text: 'text-purple-600' },
+  amber: { bg: 'bg-amber-100', text: 'text-amber-600' },
+  gray: { bg: 'bg-gray-100', text: 'text-gray-600' },
+  emerald: { bg: 'bg-emerald-100', text: 'text-emerald-600' },
+};
 
 export default function AppDocumentos() {
   const navigate = useNavigate();
-  const { data: documentos, isLoading, refetch } = useMyDocumentos();
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { data: associado, isLoading: loadingAssociado } = useMyAssociado();
+  const { data: veiculos, isLoading: loadingVeiculos } = useMyVehicles();
+  const { data: documentos, isLoading: loadingDocumentos } = useMyDocumentos();
+  const { data: boletos } = useMyBoletos();
 
-  // Modal states
-  const [modalUpload, setModalUpload] = useState(false);
-  const [modalPreview, setModalPreview] = useState(false);
-  const [selectedTipo, setSelectedTipo] = useState<string>('');
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string>('');
-  const [uploading, setUploading] = useState(false);
-  const [previewDoc, setPreviewDoc] = useState<{ url: string; tipo: string } | null>(null);
+  const [documentoAberto, setDocumentoAberto] = useState<DocumentoItem | null>(null);
 
-  // Get list of already uploaded document types
-  const uploadedTypes = (documentos?.map(d => d.tipo) || []) as TipoDocumento[];
+  const veiculo = veiculos?.[0];
+  const isLoading = loadingAssociado || loadingVeiculos || loadingDocumentos;
 
-  // Check which required documents are missing
-  const documentosObrigatorios = tipoOptions.filter(t => t.obrigatorio);
-  const documentosFaltando = documentosObrigatorios.filter(t => !uploadedTypes.includes(t.value as TipoDocumento));
-  const documentosReprovados = documentos?.filter(d => d.status === 'reprovado') || [];
+  // Mock data for membership card
+  const carteirinhaData = {
+    nome: associado?.nome || 'João da Silva',
+    cpf: associado?.cpf || '123.456.789-00',
+    matricula: associado?.id?.slice(0, 8).toUpperCase() || '00012345',
+    veiculo: {
+      modelo: veiculo?.marca && veiculo?.modelo ? `${veiculo.marca} ${veiculo.modelo}` : 'Gol G5 1.0',
+      placa: veiculo?.placa || 'ABC-1234',
+    },
+    status: associado?.status || 'ativo',
+    validadeCarteirinha: '12/2024',
+    codigoVerificacao: `PRTC-2024-${(associado?.id?.slice(0, 8) || '00012345').toUpperCase()}`,
+  };
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      // Validate file type
-      if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
-        toast.error('Formato inválido. Envie imagem ou PDF.');
-        return;
+  // Group vehicle documents (fotos)
+  const fotosVistoria = documentos?.filter(d => d.tipo.startsWith('foto_')) || [];
+  const docsCNH = documentos?.find(d => d.tipo === 'cnh');
+  const docsCRLV = documentos?.find(d => d.tipo === 'crlv');
+
+  // Handlers
+  const handleCompartilhar = async () => {
+    const shareData = {
+      title: 'Minha Carteirinha PRATIC',
+      text: `Associado: ${carteirinhaData.nome}\nMatrícula: ${carteirinhaData.matricula}\nVeículo: ${carteirinhaData.veiculo.modelo} - ${carteirinhaData.veiculo.placa}`,
+    };
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+      } catch (err) {
+        // User cancelled or error
+        navigator.clipboard.writeText(carteirinhaData.codigoVerificacao);
+        toast.success('Código de verificação copiado!');
       }
-      // Validate file size (max 10MB)
-      if (file.size > 10 * 1024 * 1024) {
-        toast.error('Arquivo muito grande. Máximo 10MB.');
-        return;
-      }
-
-      setSelectedFile(file);
-      if (file.type.startsWith('image/')) {
-        setPreviewUrl(URL.createObjectURL(file));
-      } else {
-        setPreviewUrl('');
-      }
+    } else {
+      navigator.clipboard.writeText(carteirinhaData.codigoVerificacao);
+      toast.success('Código de verificação copiado!');
     }
   };
 
-  const handleUpload = async () => {
-    if (!selectedFile || !selectedTipo) {
-      toast.error('Selecione o tipo e o arquivo');
-      return;
+  const handleBaixarCarteirinha = () => {
+    toast.success('Download da carteirinha iniciado');
+  };
+
+  const handleAbrirDocumento = (documento: DocumentoItem) => {
+    setDocumentoAberto(documento);
+  };
+
+  const handleBaixarDocumento = (nome: string) => {
+    toast.success(`Download de ${nome} iniciado`);
+    setDocumentoAberto(null);
+  };
+
+  const handleVisualizarDocumento = (url?: string) => {
+    if (url) {
+      window.open(url, '_blank');
+    } else {
+      toast.info('Pré-visualização não disponível');
     }
-
-    setUploading(true);
-    
-    // Simulate upload (replace with actual upload logic)
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    toast.success('Documento enviado com sucesso!');
-    setUploading(false);
-    setModalUpload(false);
-    setSelectedFile(null);
-    setSelectedTipo('');
-    setPreviewUrl('');
-    refetch();
+    setDocumentoAberto(null);
   };
 
-  const handleOpenUpload = () => {
-    setSelectedFile(null);
-    setSelectedTipo('');
-    setPreviewUrl('');
-    setModalUpload(true);
-  };
-
-  const handleReenviar = (tipo: string) => {
-    setSelectedTipo(tipo);
-    setSelectedFile(null);
-    setPreviewUrl('');
-    setModalUpload(true);
-  };
-
-  const handlePreview = (url: string, tipo: string) => {
-    setPreviewDoc({ url, tipo });
-    setModalPreview(true);
+  const getStatusBadge = (status: string) => {
+    const config = statusDocConfig[status] || statusDocConfig.pendente;
+    const Icon = config.icon;
+    return (
+      <Badge className={cn('text-xs border-0', config.className)}>
+        <Icon className="h-3 w-3 mr-1" />
+        {config.label}
+      </Badge>
+    );
   };
 
   return (
-    <div className="p-4 pb-24">
+    <div className="min-h-screen bg-background pb-24">
       {/* Header */}
-      <div className="mb-6 flex items-center gap-3">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="min-h-[44px] min-w-[44px]"
-          onClick={() => navigate(-1)}
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <h1 className="text-xl font-bold text-foreground">Meus Documentos</h1>
-      </div>
+      <header className="sticky top-0 z-50 bg-background border-b">
+        <div className="flex items-center justify-between px-4 py-3">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="min-h-[44px] min-w-[44px]"
+            onClick={() => navigate(-1)}
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <span className="font-semibold text-foreground">Meus Documentos</span>
+          <div className="w-10" />
+        </div>
+      </header>
 
-      {/* Alert for missing documents */}
-      {documentosFaltando.length > 0 && !isLoading && (
-        <Card className="mb-4 border-0 shadow-sm bg-yellow-50">
-          <CardContent className="flex items-start gap-3 p-4">
-            <AlertCircle className="h-5 w-5 text-yellow-600 shrink-0 mt-0.5" />
-            <div>
-              <p className="font-medium text-yellow-800">Documentos pendentes</p>
-              <p className="text-sm text-yellow-700">
-                Envie: {documentosFaltando.map(d => d.label).join(', ')}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* Carteirinha Digital - Hero */}
+      <div className="mx-4 mt-4">
+        {isLoading ? (
+          <Skeleton className="h-72 w-full rounded-2xl" />
+        ) : (
+          <>
+            <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-blue-900 rounded-2xl p-5 text-white shadow-xl">
+              {/* Header da carteirinha */}
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Shield className="h-6 w-6" />
+                  <span className="font-bold text-lg">PRATIC</span>
+                </div>
+                <Badge className="bg-white/20 text-white border-0 uppercase text-xs">
+                  {carteirinhaData.status === 'ativo' ? 'Ativo' : carteirinhaData.status}
+                </Badge>
+              </div>
 
-      {/* Alert for rejected documents */}
-      {documentosReprovados.length > 0 && !isLoading && (
-        <Card className="mb-4 border-0 shadow-sm bg-red-50">
-          <CardContent className="flex items-start gap-3 p-4">
-            <XCircle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <p className="font-medium text-red-800">Documentos reprovados</p>
-              <p className="text-sm text-red-700 mb-2">
-                Reenvie os documentos abaixo para continuar
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {documentosReprovados.map((doc) => (
-                  <Button
-                    key={doc.id}
-                    variant="outline"
-                    size="sm"
-                    className="bg-white text-red-700 border-red-200 hover:bg-red-100"
-                    onClick={() => handleReenviar(doc.tipo)}
-                  >
-                    <RefreshCw className="h-3 w-3 mr-1" />
-                    {tipoLabels[doc.tipo]}
-                  </Button>
-                ))}
+              {/* Dados do associado */}
+              <div className="space-y-1">
+                <div className="text-xl font-bold">{carteirinhaData.nome}</div>
+                <div className="text-blue-200 text-sm">CPF: {carteirinhaData.cpf}</div>
+              </div>
+
+              {/* Dados do veículo */}
+              <div className="mt-4 pt-4 border-t border-white/20">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <div className="text-xs text-blue-200">Veículo</div>
+                    <div className="font-semibold">{carteirinhaData.veiculo.modelo}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-blue-200">Placa</div>
+                    <div className="font-semibold font-mono">{carteirinhaData.veiculo.placa}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-blue-200">Matrícula</div>
+                    <div className="font-semibold font-mono">{carteirinhaData.matricula}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-blue-200">Validade</div>
+                    <div className="font-semibold">{carteirinhaData.validadeCarteirinha}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* QR Code / Código de verificação */}
+              <div className="mt-4 pt-4 border-t border-white/20 flex items-center justify-between">
+                <div>
+                  <div className="text-xs text-blue-200">Código de verificação</div>
+                  <div className="font-mono font-bold text-sm">{carteirinhaData.codigoVerificacao}</div>
+                </div>
+                <div className="w-16 h-16 bg-white rounded-lg flex items-center justify-center">
+                  <QrCode className="h-12 w-12 text-blue-900" />
+                </div>
               </div>
             </div>
-          </CardContent>
-        </Card>
-      )}
 
-      <div className="space-y-3">
-        {isLoading ? (
-          Array.from({ length: 4 }).map((_, i) => (
-            <Card key={i} className="border-0 shadow-sm">
-              <CardContent className="flex items-center gap-4 p-4">
-                <Skeleton className="h-10 w-10 rounded-lg" />
-                <div className="flex-1 space-y-2">
-                  <Skeleton className="h-4 w-32" />
-                  <Skeleton className="h-3 w-20" />
-                </div>
-              </CardContent>
-            </Card>
-          ))
-        ) : documentos && documentos.length > 0 ? (
-          documentos.map((doc) => {
-            const status = statusConfig[doc.status] || statusConfig.pendente;
-            const StatusIcon = status.icon;
-            
-            return (
-              <Card 
-                key={doc.id} 
-                className={cn(
-                  "border-0 shadow-sm transition-colors",
-                  doc.status === 'reprovado' && "ring-1 ring-red-200"
-                )}
+            {/* Botões da carteirinha */}
+            <div className="flex gap-3 mt-3">
+              <Button 
+                variant="outline" 
+                className="flex-1 gap-2 min-h-[44px]" 
+                onClick={handleCompartilhar}
               >
-                <CardContent className="flex items-center gap-4 p-4">
-                  <div className={cn(
-                    "flex h-10 w-10 items-center justify-center rounded-lg",
-                    doc.status === 'reprovado' ? 'bg-red-100' : 'bg-primary/10'
-                  )}>
-                    <FileText className={cn(
-                      "h-5 w-5",
-                      doc.status === 'reprovado' ? 'text-red-600' : 'text-primary'
-                    )} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-foreground truncate">
-                      {tipoLabels[doc.tipo] || doc.tipo}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Enviado em {new Date(doc.created_at).toLocaleDateString('pt-BR')}
-                    </p>
-                    {doc.status === 'reprovado' && doc.motivo_reprovacao && (
-                      <p className="text-xs text-red-600 mt-1">
-                        Motivo: {doc.motivo_reprovacao}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {doc.status === 'reprovado' ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8 text-xs"
-                        onClick={() => handleReenviar(doc.tipo)}
-                      >
-                        <RefreshCw className="h-3 w-3 mr-1" />
-                        Reenviar
-                      </Button>
-                    ) : (
-                      <>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => handlePreview(doc.arquivo_url, doc.tipo)}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Badge variant="outline" className={status.className}>
-                          <StatusIcon className="mr-1 h-3 w-3" />
-                          {status.label}
-                        </Badge>
-                      </>
-                    )}
+                <Share2 className="h-4 w-4" />
+                Compartilhar
+              </Button>
+              <Button 
+                variant="outline" 
+                className="flex-1 gap-2 min-h-[44px]" 
+                onClick={handleBaixarCarteirinha}
+              >
+                <Download className="h-4 w-4" />
+                Baixar PDF
+              </Button>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Seção: Documentos Contratuais */}
+      <div className="mx-4 mt-6">
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+          Documentos Contratuais
+        </h2>
+
+        <div className="space-y-2">
+          {isLoading ? (
+            Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-20 w-full rounded-xl" />
+            ))
+          ) : (
+            documentosContratuaisMock.map((doc) => {
+              const IconComponent = doc.icon;
+              const colors = iconColorClasses[doc.cor];
+              
+              return (
+                <Card 
+                  key={doc.id}
+                  className="cursor-pointer hover:bg-muted/50 transition-colors border-0 shadow-sm"
+                  onClick={() => handleAbrirDocumento({ 
+                    id: doc.id, 
+                    nome: doc.nome, 
+                    subtitulo: doc.subtitulo,
+                    tipo: doc.tipo 
+                  })}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-4">
+                      <div className={cn('p-3 rounded-xl', colors.bg)}>
+                        <IconComponent className={cn('h-6 w-6', colors.text)} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-foreground">{doc.nome}</div>
+                        <div className="text-sm text-muted-foreground">{doc.subtitulo}</div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-xs">{doc.formato}</Badge>
+                        <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })
+          )}
+        </div>
+      </div>
+
+      {/* Seção: Documentos do Veículo */}
+      <div className="mx-4 mt-6">
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+          Documentos do Veículo
+        </h2>
+
+        <div className="space-y-2">
+          {isLoading ? (
+            Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} className="h-20 w-full rounded-xl" />
+            ))
+          ) : (
+            <>
+              {/* CRLV */}
+              <Card 
+                className="cursor-pointer hover:bg-muted/50 transition-colors border-0 shadow-sm"
+                onClick={() => handleAbrirDocumento({ 
+                  id: docsCRLV?.id || 'crlv',
+                  nome: 'CRLV Digital', 
+                  subtitulo: docsCRLV ? `Enviado em ${new Date(docsCRLV.created_at).toLocaleDateString('pt-BR')}` : 'Não enviado',
+                  tipo: 'crlv',
+                  status: docsCRLV?.status,
+                  url: docsCRLV?.arquivo_url
+                })}
+              >
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-4">
+                    <div className={cn('p-3 rounded-xl', iconColorClasses.gray.bg)}>
+                      <Car className={cn('h-6 w-6', iconColorClasses.gray.text)} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-foreground">CRLV Digital</div>
+                      <div className="text-sm text-muted-foreground">
+                        {docsCRLV ? `Enviado em ${new Date(docsCRLV.created_at).toLocaleDateString('pt-BR')}` : 'Documento não enviado'}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {docsCRLV && getStatusBadge(docsCRLV.status)}
+                      <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                    </div>
                   </div>
                 </CardContent>
               </Card>
-            );
-          })
-        ) : (
-          <Card className="border-0 shadow-sm">
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <div className="rounded-full bg-muted p-4 mb-4">
-                <FileText className="h-10 w-10 text-muted-foreground" />
-              </div>
-              <p className="font-medium text-foreground mb-1">Nenhum documento enviado</p>
-              <p className="text-sm text-muted-foreground text-center mb-4">
-                Envie seus documentos para completar seu cadastro
-              </p>
-              <Button onClick={handleOpenUpload}>
-                <Upload className="mr-2 h-4 w-4" />
-                Enviar primeiro documento
-              </Button>
-            </CardContent>
-          </Card>
-        )}
 
-        {/* Upload Button */}
-        {documentos && documentos.length > 0 && (
-          <Button 
-            variant="outline" 
-            className="w-full min-h-[44px]"
-            onClick={handleOpenUpload}
-          >
-            <Upload className="mr-2 h-4 w-4" />
-            Enviar Documento
-          </Button>
-        )}
+              {/* CNH */}
+              <Card 
+                className="cursor-pointer hover:bg-muted/50 transition-colors border-0 shadow-sm"
+                onClick={() => handleAbrirDocumento({ 
+                  id: docsCNH?.id || 'cnh',
+                  nome: 'CNH', 
+                  subtitulo: docsCNH ? `Enviado em ${new Date(docsCNH.created_at).toLocaleDateString('pt-BR')}` : 'Não enviado',
+                  tipo: 'cnh',
+                  status: docsCNH?.status,
+                  url: docsCNH?.arquivo_url
+                })}
+              >
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-4">
+                    <div className={cn('p-3 rounded-xl', iconColorClasses.gray.bg)}>
+                      <CreditCard className={cn('h-6 w-6', iconColorClasses.gray.text)} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-foreground">CNH</div>
+                      <div className="text-sm text-muted-foreground">
+                        {docsCNH ? `Enviado em ${new Date(docsCNH.created_at).toLocaleDateString('pt-BR')}` : 'Documento não enviado'}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {docsCNH && getStatusBadge(docsCNH.status)}
+                      <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Fotos da Vistoria */}
+              <Card 
+                className="cursor-pointer hover:bg-muted/50 transition-colors border-0 shadow-sm"
+                onClick={() => handleAbrirDocumento({ 
+                  id: 'fotos',
+                  nome: 'Fotos da Vistoria', 
+                  subtitulo: fotosVistoria.length > 0 
+                    ? `${fotosVistoria.length} fotos • ${new Date(fotosVistoria[0].created_at).toLocaleDateString('pt-BR')}`
+                    : 'Nenhuma foto enviada',
+                  tipo: 'fotos',
+                  status: fotosVistoria.length > 0 ? 'aprovado' : undefined
+                })}
+              >
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-4">
+                    <div className={cn('p-3 rounded-xl', iconColorClasses.gray.bg)}>
+                      <Camera className={cn('h-6 w-6', iconColorClasses.gray.text)} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-foreground">Fotos da Vistoria</div>
+                      <div className="text-sm text-muted-foreground">
+                        {fotosVistoria.length > 0 
+                          ? `${fotosVistoria.length} fotos • ${new Date(fotosVistoria[0].created_at).toLocaleDateString('pt-BR')}`
+                          : 'Nenhuma foto enviada'}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {fotosVistoria.length > 0 && getStatusBadge('aprovado')}
+                      <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
+        </div>
       </div>
 
-      {/* Modal Upload */}
-      <Dialog open={modalUpload} onOpenChange={setModalUpload}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Enviar Documento</DialogTitle>
-            <DialogDescription>
-              Selecione o tipo de documento e faça o upload do arquivo.
-            </DialogDescription>
-          </DialogHeader>
+      {/* Seção: Comprovantes */}
+      <div className="mx-4 mt-6 mb-8">
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+          Comprovantes
+        </h2>
 
-          <div className="space-y-4 py-4">
-            {/* Tipo de Documento */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Tipo de Documento</label>
-              <Select value={selectedTipo} onValueChange={setSelectedTipo}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o tipo" />
-                </SelectTrigger>
-                <SelectContent>
-                  {tipoOptions.map((tipo) => (
-                    <SelectItem key={tipo.value} value={tipo.value}>
-                      <span className="flex items-center gap-2">
-                        {tipo.label}
-                        {tipo.obrigatorio && (
-                          <span className="text-xs text-red-500">*</span>
-                        )}
-                        {uploadedTypes.includes(tipo.value as TipoDocumento) && (
-                          <CheckCircle className="h-3 w-3 text-green-500" />
-                        )}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* File Upload Area */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Arquivo</label>
-              {!selectedFile ? (
-                <div
-                  className="border-2 border-dashed rounded-lg p-6 text-center cursor-pointer hover:bg-muted/50 transition-colors"
-                  onClick={() => fileInputRef.current?.click()}
+        <div className="space-y-2">
+          {isLoading ? (
+            Array.from({ length: 2 }).map((_, i) => (
+              <Skeleton key={i} className="h-20 w-full rounded-xl" />
+            ))
+          ) : (
+            <>
+              {comprovantesMock.map((comp) => (
+                <Card 
+                  key={comp.id}
+                  className="cursor-pointer hover:bg-muted/50 transition-colors border-0 shadow-sm"
+                  onClick={() => handleAbrirDocumento({ 
+                    id: comp.id, 
+                    nome: `Comprovante ${comp.mes}`, 
+                    subtitulo: `Pago em ${comp.dataPagamento}`,
+                    tipo: 'comprovante'
+                  })}
                 >
-                  <div className="flex flex-col items-center gap-2">
-                    <div className="rounded-full bg-primary/10 p-3">
-                      <Camera className="h-6 w-6 text-primary" />
-                    </div>
-                    <p className="text-sm font-medium">Toque para selecionar</p>
-                    <p className="text-xs text-muted-foreground">
-                      Imagem ou PDF (máx. 10MB)
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div className="border rounded-lg p-4">
-                  <div className="flex items-center gap-3">
-                    {previewUrl ? (
-                      <img 
-                        src={previewUrl} 
-                        alt="Preview" 
-                        className="h-16 w-16 object-cover rounded-lg"
-                      />
-                    ) : (
-                      <div className="h-16 w-16 rounded-lg bg-muted flex items-center justify-center">
-                        <File className="h-8 w-8 text-muted-foreground" />
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-4">
+                      <div className={cn('p-3 rounded-xl', iconColorClasses.emerald.bg)}>
+                        <Receipt className={cn('h-6 w-6', iconColorClasses.emerald.text)} />
                       </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">{selectedFile.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
-                      </p>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-foreground">Comprovante {comp.mes}</div>
+                        <div className="text-sm text-muted-foreground">Pago em {comp.dataPagamento}</div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-xs">PDF</Badge>
+                        <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                      </div>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => {
-                        setSelectedFile(null);
-                        setPreviewUrl('');
-                      }}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              )}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*,application/pdf"
-                className="hidden"
-                onChange={handleFileSelect}
-              />
-            </div>
-          </div>
+                  </CardContent>
+                </Card>
+              ))}
 
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button
-              variant="outline"
-              onClick={() => setModalUpload(false)}
-              disabled={uploading}
-            >
-              Cancelar
-            </Button>
-            <Button
-              onClick={handleUpload}
-              disabled={!selectedFile || !selectedTipo || uploading}
-            >
-              {uploading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Enviando...
-                </>
-              ) : (
-                <>
-                  <Upload className="mr-2 h-4 w-4" />
-                  Enviar
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+              {/* Ver todos */}
+              <Button 
+                variant="ghost" 
+                className="w-full text-primary justify-center"
+                onClick={() => navigate('/app/boletos')}
+              >
+                Ver todos os comprovantes
+                <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
 
-      {/* Modal Preview */}
-      <Dialog open={modalPreview} onOpenChange={setModalPreview}>
+      {/* Modal Visualizar Documento */}
+      <Dialog open={documentoAberto !== null} onOpenChange={() => setDocumentoAberto(null)}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>{previewDoc ? tipoLabels[previewDoc.tipo] : 'Documento'}</DialogTitle>
+            <DialogTitle>{documentoAberto?.nome}</DialogTitle>
           </DialogHeader>
-          <div className="py-4">
-            {previewDoc?.url && (
-              <img 
-                src={previewDoc.url} 
-                alt="Documento" 
-                className="w-full rounded-lg"
-              />
-            )}
+
+          {/* Preview do documento (placeholder) */}
+          <div className="bg-muted rounded-lg h-64 flex items-center justify-center">
+            <div className="text-center text-muted-foreground">
+              <FileText className="h-16 w-16 mx-auto mb-2 opacity-50" />
+              <p className="text-sm">Pré-visualização do documento</p>
+              {documentoAberto?.subtitulo && (
+                <p className="text-xs mt-1">{documentoAberto.subtitulo}</p>
+              )}
+            </div>
           </div>
-          <DialogFooter>
-            <Button onClick={() => setModalPreview(false)}>Fechar</Button>
-          </DialogFooter>
+
+          <div className="flex gap-3">
+            <Button 
+              variant="outline" 
+              className="flex-1 gap-2"
+              onClick={() => handleVisualizarDocumento(documentoAberto?.url)}
+            >
+              <Eye className="h-4 w-4" />
+              Visualizar
+            </Button>
+            <Button 
+              className="flex-1 gap-2"
+              onClick={() => handleBaixarDocumento(documentoAberto?.nome || 'Documento')}
+            >
+              <Download className="h-4 w-4" />
+              Baixar PDF
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
