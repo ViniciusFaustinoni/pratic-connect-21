@@ -264,11 +264,15 @@ export type Database = {
       contratos: {
         Row: {
           associado_id: string | null
+          autentique_documento_id: string | null
+          autentique_url: string | null
           cotacao_id: string | null
           created_at: string
           data_fim: string | null
           data_inicio: string
+          dia_vencimento: number | null
           id: string
+          lead_id: string | null
           numero: string
           plano_id: string
           status: Database["public"]["Enums"]["status_contrato"]
@@ -279,11 +283,15 @@ export type Database = {
         }
         Insert: {
           associado_id?: string | null
+          autentique_documento_id?: string | null
+          autentique_url?: string | null
           cotacao_id?: string | null
           created_at?: string
           data_fim?: string | null
           data_inicio?: string
+          dia_vencimento?: number | null
           id?: string
+          lead_id?: string | null
           numero: string
           plano_id: string
           status?: Database["public"]["Enums"]["status_contrato"]
@@ -294,11 +302,15 @@ export type Database = {
         }
         Update: {
           associado_id?: string | null
+          autentique_documento_id?: string | null
+          autentique_url?: string | null
           cotacao_id?: string | null
           created_at?: string
           data_fim?: string | null
           data_inicio?: string
+          dia_vencimento?: number | null
           id?: string
+          lead_id?: string | null
           numero?: string
           plano_id?: string
           status?: Database["public"]["Enums"]["status_contrato"]
@@ -313,6 +325,13 @@ export type Database = {
             columns: ["cotacao_id"]
             isOneToOne: false
             referencedRelation: "cotacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contratos_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
             referencedColumns: ["id"]
           },
           {
@@ -333,6 +352,7 @@ export type Database = {
       }
       cotacoes: {
         Row: {
+          codigo_fipe: string | null
           created_at: string
           id: string
           lead_id: string | null
@@ -343,13 +363,18 @@ export type Database = {
           updated_at: string
           validade_dias: number
           valor_adesao: number
+          valor_assistencia: number | null
           valor_cota: number
           valor_fipe: number
           valor_rastreamento: number
           valor_total_mensal: number
+          veiculo_ano: number | null
+          veiculo_marca: string | null
+          veiculo_modelo: string | null
           vendedor_id: string | null
         }
         Insert: {
+          codigo_fipe?: string | null
           created_at?: string
           id?: string
           lead_id?: string | null
@@ -360,13 +385,18 @@ export type Database = {
           updated_at?: string
           validade_dias?: number
           valor_adesao: number
+          valor_assistencia?: number | null
           valor_cota: number
           valor_fipe: number
           valor_rastreamento?: number
           valor_total_mensal: number
+          veiculo_ano?: number | null
+          veiculo_marca?: string | null
+          veiculo_modelo?: string | null
           vendedor_id?: string | null
         }
         Update: {
+          codigo_fipe?: string | null
           created_at?: string
           id?: string
           lead_id?: string | null
@@ -377,10 +407,14 @@ export type Database = {
           updated_at?: string
           validade_dias?: number
           valor_adesao?: number
+          valor_assistencia?: number | null
           valor_cota?: number
           valor_fipe?: number
           valor_rastreamento?: number
           valor_total_mensal?: number
+          veiculo_ano?: number | null
+          veiculo_marca?: string | null
+          veiculo_modelo?: string | null
           vendedor_id?: string | null
         }
         Relationships: [
@@ -639,6 +673,7 @@ export type Database = {
       leads: {
         Row: {
           associado_id: string | null
+          codigo_fipe: string | null
           cpf: string | null
           created_at: string
           data_conversao: string | null
@@ -667,6 +702,7 @@ export type Database = {
         }
         Insert: {
           associado_id?: string | null
+          codigo_fipe?: string | null
           cpf?: string | null
           created_at?: string
           data_conversao?: string | null
@@ -695,6 +731,7 @@ export type Database = {
         }
         Update: {
           associado_id?: string | null
+          codigo_fipe?: string | null
           cpf?: string | null
           created_at?: string
           data_conversao?: string | null
@@ -1402,6 +1439,8 @@ export type Database = {
         | "instalacao_agendada"
         | "ganho"
         | "perdido"
+        | "contato"
+        | "qualificado"
       motivo_perda:
         | "preco"
         | "concorrencia"
@@ -1638,6 +1677,8 @@ export const Constants = {
         "instalacao_agendada",
         "ganho",
         "perdido",
+        "contato",
+        "qualificado",
       ],
       motivo_perda: [
         "preco",
