@@ -1,0 +1,44 @@
+// IDs das contas padrão do plano de contas
+export const CONTAS_PADRAO = {
+  // Ativo
+  CAIXA_GERAL: '6b6318e4-5f80-4ce0-bd67-5a4f8c3833f6', // 1.1.01.001
+  BANCO_CONTA_MOVIMENTO: '2966718d-1a14-42a6-bf16-e7ece3737ace', // 1.1.01.002
+  
+  // Receitas
+  MENSALIDADES_RECEBIDAS: '46fe9dc1-0c18-406b-b944-677372216091', // 4.1.01.001
+  TAXAS_ADESAO: 'bf18c180-64f4-44ae-b92f-f00369cf3fff', // 4.1.02.001
+  MULTAS_JUROS_RECEBIDOS: '53ea3ccc-d70c-4bb1-b30a-3285f2a51e80', // 4.1.03.001
+  
+  // Despesas
+  INDENIZACOES_PAGAS: '36e503c4-2990-4641-8a5b-f1c9b7e96ee5', // 5.1.01.001
+  REPAROS_OFICINAS: '733e1e9b-2e08-43d2-9b50-a89c72826222', // 5.1.01.002
+  GUINCHO_REBOQUE: '1d54d279-2309-4a58-90a6-6fd1a842cfeb', // 5.1.02.001
+  SALARIOS_ORDENADOS: '52579586-60b2-44bf-a29a-822f9028ff43', // 5.1.03.001
+  ENCARGOS_SOCIAIS: '123adc2b-7c12-48ad-852d-e6ce6dd2548f', // 5.1.03.002
+  ALUGUEL: 'ad2b9f5d-d189-42ed-b420-3b237363fef7', // 5.1.04.001
+  TARIFAS_BANCARIAS: 'a6347733-4e0a-40c0-a9ee-c8f773a766b8', // 5.1.05.001
+};
+
+// Mapeamento tipo de cobrança -> conta de receita
+export const RECEITA_POR_TIPO: Record<string, string> = {
+  mensalidade: CONTAS_PADRAO.MENSALIDADES_RECEBIDAS,
+  adesao: CONTAS_PADRAO.TAXAS_ADESAO,
+  taxa_instalacao: CONTAS_PADRAO.TAXAS_ADESAO,
+  taxa_vistoria: CONTAS_PADRAO.TAXAS_ADESAO,
+  participacao_sinistro: CONTAS_PADRAO.MENSALIDADES_RECEBIDAS,
+  avulso: CONTAS_PADRAO.MENSALIDADES_RECEBIDAS,
+  outros: CONTAS_PADRAO.MENSALIDADES_RECEBIDAS,
+};
+
+// Mapeamento categoria de despesa -> conta de despesa
+export const DESPESA_POR_CATEGORIA: Record<string, string> = {
+  prestador_assistencia: CONTAS_PADRAO.GUINCHO_REBOQUE,
+  oficina: CONTAS_PADRAO.REPAROS_OFICINAS,
+  fornecedor: CONTAS_PADRAO.INDENIZACOES_PAGAS,
+  folha_pagamento: CONTAS_PADRAO.SALARIOS_ORDENADOS,
+  impostos: CONTAS_PADRAO.ENCARGOS_SOCIAIS,
+  aluguel: CONTAS_PADRAO.ALUGUEL,
+  servicos: CONTAS_PADRAO.TARIFAS_BANCARIAS,
+  marketing: CONTAS_PADRAO.TARIFAS_BANCARIAS,
+  outros: CONTAS_PADRAO.TARIFAS_BANCARIAS,
+};

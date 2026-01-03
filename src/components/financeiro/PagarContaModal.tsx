@@ -12,6 +12,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useLancamentosContabeis } from '@/hooks/useLancamentosContabeis';
+import { CONTAS_PADRAO, DESPESA_POR_CATEGORIA } from '@/lib/contabilidade-config';
 
 interface Conta {
   id: string;
@@ -51,6 +53,7 @@ const categoriaLabels: Record<string, string> = {
 
 export function PagarContaModal({ open, onClose, conta }: PagarContaModalProps) {
   const queryClient = useQueryClient();
+  const { criarLancamentoAutomatico } = useLancamentosContabeis();
   
   const [formData, setFormData] = useState({
     valor_pago: '',
@@ -134,6 +137,8 @@ export function PagarContaModal({ open, onClose, conta }: PagarContaModalProps) 
       if (errorConta) throw errorConta;
       
       // 2. Registrar movimentação financeira de saída
+      const valorPagoNum = parseFloat(parseValor(data.valor_pago));
+      
       const { error: errorMov } = await supabase
         .from('movimentacoes_financeiras')
         .insert({
@@ -141,18 +146,36 @@ export function PagarContaModal({ open, onClose, conta }: PagarContaModalProps) 
           categoria: conta!.categoria,
           referencia_tipo: 'conta_pagar',
           referencia_id: conta!.id,
-          valor: parseFloat(parseValor(data.valor_pago)),
+          valor: valorPagoNum,
           data_movimentacao: data.data_pagamento,
           descricao: `Pagamento ${conta!.categoria} - ${conta!.fornecedor_nome}`,
           registrado_por: user?.id
         });
       
       if (errorMov) throw errorMov;
+
+      // 3. Criar lançamento contábil
+      try {
+        const contaDespesaId = DESPESA_POR_CATEGORIA[conta!.categoria] || CONTAS_PADRAO.TARIFAS_BANCARIAS;
+        
+        await criarLancamentoAutomatico({
+          origem: 'pagamento',
+          origem_id: conta!.id,
+          data_competencia: data.data_pagamento,
+          historico: `Pagamento ${categoriaLabels[conta!.categoria] || conta!.categoria} - ${conta!.fornecedor_nome}`,
+          conta_debito_id: contaDespesaId,
+          conta_credito_id: CONTAS_PADRAO.BANCO_CONTA_MOVIMENTO,
+          valor: valorPagoNum
+        });
+      } catch (errContabil) {
+        console.error('Erro ao criar lançamento contábil:', errContabil);
+      }
     },
     onSuccess: () => {
       toast.success('Pagamento registrado com sucesso!');
       queryClient.invalidateQueries({ queryKey: ['contas-pagar'] });
       queryClient.invalidateQueries({ queryKey: ['contas-pagar-kpis'] });
+      queryClient.invalidateQueries({ queryKey: ['lancamentos-contabeis'] });
       handleClose();
     },
     onError: () => {

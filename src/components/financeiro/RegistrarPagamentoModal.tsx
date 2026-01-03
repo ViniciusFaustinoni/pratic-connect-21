@@ -12,6 +12,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useLancamentosContabeis } from '@/hooks/useLancamentosContabeis';
+import { CONTAS_PADRAO, RECEITA_POR_TIPO } from '@/lib/contabilidade-config';
 
 interface Cobranca {
   id: string;
@@ -55,6 +57,7 @@ const tipoLabels: Record<string, string> = {
 
 export function RegistrarPagamentoModal({ open, onClose, cobranca }: RegistrarPagamentoModalProps) {
   const queryClient = useQueryClient();
+  const { criarLancamentoAutomatico } = useLancamentosContabeis();
   
   const valorAPagar = cobranca?.valor_liquido ?? cobranca?.valor ?? 0;
   
@@ -123,7 +126,23 @@ export function RegistrarPagamentoModal({ open, onClose, cobranca }: RegistrarPa
       
       if (errorMov) {
         console.error('Erro ao registrar movimentação:', errorMov);
-        // Não lança erro para não impedir o fluxo principal
+      }
+
+      // 3. Criar lançamento contábil
+      try {
+        const contaReceitaId = RECEITA_POR_TIPO[cobranca.tipo] || CONTAS_PADRAO.MENSALIDADES_RECEBIDAS;
+        
+        await criarLancamentoAutomatico({
+          origem: 'cobranca',
+          origem_id: cobranca.id,
+          data_competencia: formData.data_pagamento,
+          historico: `Recebimento ${tipoLabels[cobranca.tipo] || cobranca.tipo} - ${cobranca.associado?.nome || 'Associado'}`,
+          conta_debito_id: CONTAS_PADRAO.BANCO_CONTA_MOVIMENTO,
+          conta_credito_id: contaReceitaId,
+          valor: valorPago
+        });
+      } catch (errContabil) {
+        console.error('Erro ao criar lançamento contábil:', errContabil);
       }
     },
     onSuccess: () => {
@@ -132,6 +151,7 @@ export function RegistrarPagamentoModal({ open, onClose, cobranca }: RegistrarPa
       queryClient.invalidateQueries({ queryKey: ['cobrancas'] });
       queryClient.invalidateQueries({ queryKey: ['cobrancas-lista'] });
       queryClient.invalidateQueries({ queryKey: ['movimentacoes'] });
+      queryClient.invalidateQueries({ queryKey: ['lancamentos-contabeis'] });
       handleClose();
     },
     onError: (error: Error) => {
