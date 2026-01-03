@@ -1,12 +1,40 @@
 import { useAuth } from '@/contexts/AuthContext';
 
+export type PermissionKey = 
+  | 'isFuncionario'
+  | 'isAssociado'
+  | 'isPrestador'
+  | 'isDiretor'
+  | 'isGerente'
+  | 'isSupervisor'
+  | 'isGerenciaOrSupervisor'
+  | 'isVendedorClt'
+  | 'isVendedorExterno'
+  | 'isAnalistaCadastro'
+  | 'isCoordenadorMonitoramento'
+  | 'isAnalistaPlataforma'
+  | 'isInstaladorVistoriador'
+  | 'isAnalistaMarketing'
+  | 'isVendedor'
+  | 'isGerencia'
+  | 'canManageUsers'
+  | 'canManageLeads'
+  | 'canManagePlanos'
+  | 'canManageContratos'
+  | 'canManageApiSettings'
+  | 'canManageInstalacoes'
+  | 'canManageRastreadores'
+  | 'canViewDashboard'
+  | 'canAccessApp'
+  | 'canManageCadastro';
+
 /**
  * Hook centralizado de permissões para verificar acessos de forma declarativa
  */
 export function usePermissions() {
   const { profile, roles, hasRole, isGerencia, isVendedor, isFuncionario } = useAuth();
 
-  return {
+  const permissions = {
     // Verificações de tipo de usuário
     isFuncionario: profile?.tipo === 'funcionario',
     isAssociado: profile?.tipo === 'associado',
@@ -39,8 +67,14 @@ export function usePermissions() {
     canManageRastreadores: hasRole('analista_plataforma') || hasRole('coordenador_monitoramento') || isGerencia(),
     canViewDashboard: isFuncionario(),
     canAccessApp: profile?.tipo === 'associado',
+    canManageCadastro: hasRole('analista_cadastro') || isGerencia(),
+  };
 
+  return {
+    ...permissions,
     // Lista de roles do usuário
     roles,
+    // Função para verificar permissão por chave
+    hasPermission: (key: PermissionKey) => permissions[key] ?? false,
   };
 }

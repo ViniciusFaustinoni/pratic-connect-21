@@ -7,6 +7,7 @@ type Documento = Tables<'documentos'>;
 export interface DocumentoWithRelations extends Documento {
   associados?: {
     nome: string;
+    cpf: string;
   } | null;
 }
 
@@ -19,7 +20,8 @@ export function useDocumentos() {
         .select(`
           *,
           associados (
-            nome
+            nome,
+            cpf
           )
         `)
         .order('created_at', { ascending: false });
@@ -39,7 +41,8 @@ export function usePendingDocumentos() {
         .select(`
           *,
           associados (
-            nome
+            nome,
+            cpf
           )
         `)
         .in('status', ['pendente', 'em_analise'])
@@ -63,7 +66,8 @@ export function useDocumento(id: string | undefined) {
         .select(`
           *,
           associados (
-            nome
+            nome,
+            cpf
           )
         `)
         .eq('id', id)
