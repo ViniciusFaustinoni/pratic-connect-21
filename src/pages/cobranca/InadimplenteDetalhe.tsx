@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { ArrowLeft, Phone, MessageSquare, Mail, Handshake, AlertCircle, User, Car, Clock, DollarSign, MoreVertical, MapPin, AlertTriangle, Ban, Save, FileText, Calendar } from 'lucide-react';
+import { ArrowLeft, Phone, MessageSquare, Mail, Handshake, AlertCircle, User, Car, Clock, DollarSign, MoreVertical, MapPin, AlertTriangle, Ban, Save, FileText, Calendar, Plus } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -16,6 +16,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { format, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
+import { RegistrarContatoModal } from '@/components/cobranca/RegistrarContatoModal';
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -82,6 +83,7 @@ const InadimplenteDetalhe = () => {
   const navigate = useNavigate();
   const [selectedBoletos, setSelectedBoletos] = useState<string[]>([]);
   const [anotacao, setAnotacao] = useState('');
+  const [contatoModalOpen, setContatoModalOpen] = useState(false);
 
   // Dados do associado
   const { data: associado, isLoading: loadingAssociado } = useQuery({
@@ -488,7 +490,8 @@ const InadimplenteDetalhe = () => {
                 <Clock className="h-4 w-4" />
                 Histórico de Contatos
               </CardTitle>
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" onClick={() => setContatoModalOpen(true)}>
+                <Plus className="h-4 w-4 mr-1" />
                 Registrar Contato
               </Button>
             </CardHeader>
@@ -639,6 +642,13 @@ const InadimplenteDetalhe = () => {
           </Card>
         </div>
       </div>
+
+      {/* Modal Registrar Contato */}
+      <RegistrarContatoModal
+        open={contatoModalOpen}
+        onClose={() => setContatoModalOpen(false)}
+        associadoId={id || ''}
+      />
     </div>
   );
 };
