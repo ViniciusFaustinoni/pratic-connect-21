@@ -28,6 +28,7 @@ import NotFound from "./pages/NotFound";
 
 // Associate App Pages
 import AppLogin from "./pages/app/AppLogin";
+import AppRedefinirSenha from "./pages/app/AppRedefinirSenha";
 import AppHome from "./pages/app/AppHome";
 import AppBoletos from "./pages/app/AppBoletos";
 import AppBoletoDetalhe from "./pages/app/AppBoletoDetalhe";
@@ -87,6 +88,7 @@ const App = () => (
             
             {/* Associate App Routes */}
             <Route path="/app/login" element={<AppLogin />} />
+            <Route path="/app/redefinir-senha" element={<AppRedefinirSenha />} />
             <Route element={<AssociadoAppLayout />}>
               <Route path="/app/home" element={<AppHome />} />
               <Route path="/app/boletos" element={<AppBoletos />} />
