@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, FileText, Calculator, Send, Check, X, Loader2 } from 'lucide-react';
+import { Plus, Search, FileText, Calculator, Send, Check, X, Loader2, MessageCircle, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -20,8 +20,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import type { StatusCotacao } from '@/types/database';
-import { useCotacoes, useUpdateCotacao } from '@/hooks/useCotacoes';
+import { useCotacoes, useUpdateCotacao, type CotacaoWithRelations } from '@/hooks/useCotacoes';
 import { CotacaoFormDialog } from '@/components/cotacoes/CotacaoFormDialog';
 import { ContratoWizard } from '@/components/contratos/ContratoWizard';
 import { toast } from 'sonner';
@@ -80,6 +86,36 @@ export default function Cotacoes() {
   const handleOpenContratoWizard = (cotacaoId: string) => {
     setSelectedCotacaoId(cotacaoId);
     setShowContratoWizard(true);
+  };
+
+  const enviarWhatsApp = (cotacao: CotacaoWithRelations) => {
+    const telefone = cotacao.leads?.telefone?.replace(/\D/g, '');
+    if (!telefone) {
+      toast.error('Lead sem telefone cadastrado');
+      return;
+    }
+
+    const mensagem = encodeURIComponent(
+      `Olá ${cotacao.leads?.nome || 'Cliente'}! 🚗\n\n` +
+      `Segue sua cotação de proteção veicular:\n\n` +
+      `📋 *Cotação Nº:* ${cotacao.numero}\n` +
+      `📦 *Plano:* ${cotacao.planos?.nome || 'Proteção Veicular'}\n` +
+      `💰 *Valor FIPE:* R$ ${cotacao.valor_fipe?.toLocaleString('pt-BR')}\n\n` +
+      `*Valores Mensais:*\n` +
+      `• Cota: R$ ${cotacao.valor_cota?.toFixed(2)}\n` +
+      `• Taxa Adm: R$ ${cotacao.taxa_administrativa?.toFixed(2)}\n` +
+      `• Rastreamento: R$ ${cotacao.valor_rastreamento?.toFixed(2)}\n` +
+      `• Assistência: R$ ${(cotacao.valor_assistencia || 0)?.toFixed(2)}\n\n` +
+      `💵 *TOTAL MENSAL: R$ ${cotacao.valor_total_mensal?.toFixed(2)}*\n\n` +
+      `📝 Taxa de Adesão: R$ ${cotacao.valor_adesao?.toFixed(2)}\n\n` +
+      `⏰ Cotação válida por ${cotacao.validade_dias || 7} dias.\n\n` +
+      `Posso te ajudar com mais alguma informação?`
+    );
+
+    window.open(`https://wa.me/55${telefone}?text=${mensagem}`, '_blank');
+    
+    // Marca como enviada após abrir WhatsApp
+    handleMarkAsEnviada(cotacao.id);
   };
 
   // Stats
@@ -262,13 +298,21 @@ export default function Cotacoes() {
                       <TableCell>
                         <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
                           {cotacao.status === 'rascunho' && (
-                            <Button 
-                              size="sm" 
-                              variant="outline"
-                              onClick={() => handleMarkAsEnviada(cotacao.id)}
-                            >
-                              Enviar
-                            </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button size="sm" variant="outline" className="gap-1">
+                                  <Send className="h-3 w-3" />
+                                  Enviar
+                                  <ChevronDown className="h-3 w-3" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => enviarWhatsApp(cotacao)}>
+                                  <MessageCircle className="h-4 w-4 mr-2 text-green-600" />
+                                  WhatsApp
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           )}
                           {cotacao.status === 'enviada' && (
                             <Button 
