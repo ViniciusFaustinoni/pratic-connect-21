@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Upload, X, FileText, Image as ImageIcon, AlertCircle } from 'lucide-react';
+import { Upload, X, FileText, AlertCircle, Check, Loader2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -16,10 +16,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { AssociadoCombobox } from './AssociadoCombobox';
 import { useVeiculos } from '@/hooks/useVeiculos';
-import { useUploadDocumento, validateFile } from '@/hooks/useUploadDocumento';
+import { useUploadMultipleDocumentos, validateFile, FileEntry } from '@/hooks/useUploadDocumento';
 import { TIPO_DOCUMENTO_LABELS } from '@/types/database';
 import type { Database } from '@/integrations/supabase/types';
 
@@ -31,53 +32,72 @@ interface DocumentoUploadDialogProps {
 }
 
 const ACCEPTED_TYPES = '.jpg,.jpeg,.png,.webp,.pdf';
+const MAX_FILES = 10;
 
 export function DocumentoUploadDialog({ open, onOpenChange }: DocumentoUploadDialogProps) {
   const { toast } = useToast();
-  const uploadMutation = useUploadDocumento();
+  const uploadMutation = useUploadMultipleDocumentos();
   
   const [associadoId, setAssociadoId] = useState<string>('');
   const [veiculoId, setVeiculoId] = useState<string>('');
-  const [tipo, setTipo] = useState<TipoDocumento | ''>('');
-  const [file, setFile] = useState<File | null>(null);
-  const [fileError, setFileError] = useState<string>('');
+  const [files, setFiles] = useState<FileEntry[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
+  const [isComplete, setIsComplete] = useState(false);
 
   const { data: veiculos } = useVeiculos(associadoId || undefined);
 
   const resetForm = useCallback(() => {
     setAssociadoId('');
     setVeiculoId('');
-    setTipo('');
-    setFile(null);
-    setFileError('');
+    setFiles([]);
+    setUploadProgress({ current: 0, total: 0 });
+    setIsComplete(false);
   }, []);
 
   const handleClose = useCallback(() => {
-    resetForm();
-    onOpenChange(false);
-  }, [resetForm, onOpenChange]);
-
-  const handleFileSelect = useCallback((selectedFile: File) => {
-    const validation = validateFile(selectedFile);
-    if (!validation.valid) {
-      setFileError(validation.error || 'Arquivo inválido');
-      setFile(null);
-      return;
+    if (!uploadMutation.isPending) {
+      resetForm();
+      onOpenChange(false);
     }
-    setFileError('');
-    setFile(selectedFile);
-  }, []);
+  }, [resetForm, onOpenChange, uploadMutation.isPending]);
+
+  const addFiles = useCallback((newFiles: FileList | File[]) => {
+    const filesToAdd = Array.from(newFiles).slice(0, MAX_FILES - files.length);
+    
+    const newEntries: FileEntry[] = filesToAdd.map((file) => {
+      const validation = validateFile(file);
+      return {
+        id: crypto.randomUUID(),
+        file,
+        tipo: detectTipoFromName(file.name),
+        status: validation.valid ? 'pending' : 'error',
+        error: validation.valid ? undefined : validation.error,
+      };
+    });
+    
+    setFiles(prev => [...prev, ...newEntries].slice(0, MAX_FILES));
+  }, [files.length]);
+
+  const detectTipoFromName = (name: string): TipoDocumento | null => {
+    const lower = name.toLowerCase();
+    if (lower.includes('cnh')) return 'cnh';
+    if (lower.includes('crlv')) return 'crlv';
+    if (lower.includes('frontal') || lower.includes('frente')) return 'foto_frontal_veiculo';
+    if (lower.includes('traseira') || lower.includes('tras')) return 'foto_traseira_veiculo';
+    if (lower.includes('esquerda')) return 'foto_lateral_esquerda';
+    if (lower.includes('direita')) return 'foto_lateral_direita';
+    if (lower.includes('painel')) return 'foto_painel';
+    if (lower.includes('hodometro') || lower.includes('km')) return 'foto_hodometro';
+    if (lower.includes('comprovante') || lower.includes('residencia')) return 'comprovante_residencia';
+    return null;
+  };
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    
-    const droppedFile = e.dataTransfer.files[0];
-    if (droppedFile) {
-      handleFileSelect(droppedFile);
-    }
-  }, [handleFileSelect]);
+    addFiles(e.dataTransfer.files);
+  }, [addFiles]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -90,29 +110,60 @@ export function DocumentoUploadDialog({ open, onOpenChange }: DocumentoUploadDia
   }, []);
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (selectedFile) {
-      handleFileSelect(selectedFile);
+    if (e.target.files) {
+      addFiles(e.target.files);
     }
-  }, [handleFileSelect]);
+    e.target.value = '';
+  }, [addFiles]);
+
+  const removeFile = useCallback((id: string) => {
+    setFiles(prev => prev.filter(f => f.id !== id));
+  }, []);
+
+  const updateFileTipo = useCallback((id: string, tipo: TipoDocumento) => {
+    setFiles(prev => prev.map(f => f.id === id ? { ...f, tipo } : f));
+  }, []);
+
+  const handleProgress = useCallback((current: number, total: number, fileId: string, status: 'uploading' | 'success' | 'error', error?: string) => {
+    setUploadProgress({ current, total });
+    setFiles(prev => prev.map(f => f.id === fileId ? { ...f, status, error } : f));
+  }, []);
 
   const handleSubmit = async () => {
-    if (!associadoId || !tipo || !file) return;
+    if (!associadoId || files.length === 0) return;
+
+    const validFiles = files.filter(f => f.status !== 'error' && f.tipo);
+    if (validFiles.length === 0) {
+      toast({
+        title: 'Erro',
+        description: 'Nenhum arquivo válido para enviar.',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     try {
-      await uploadMutation.mutateAsync({
+      const result = await uploadMutation.mutateAsync({
         associado_id: associadoId,
         veiculo_id: veiculoId || undefined,
-        tipo: tipo as TipoDocumento,
-        file,
+        files: validFiles,
+        onProgress: handleProgress,
       });
 
-      toast({
-        title: 'Documento enviado',
-        description: 'O documento foi enviado com sucesso e está aguardando análise.',
-      });
+      setIsComplete(true);
 
-      handleClose();
+      if (result.failed === 0) {
+        toast({
+          title: 'Upload concluído',
+          description: `${result.success} documento(s) enviado(s) com sucesso.`,
+        });
+      } else {
+        toast({
+          title: 'Upload parcialmente concluído',
+          description: `${result.success} enviado(s), ${result.failed} falhou(falharam).`,
+          variant: 'destructive',
+        });
+      }
     } catch (error) {
       toast({
         title: 'Erro ao enviar',
@@ -122,185 +173,291 @@ export function DocumentoUploadDialog({ open, onOpenChange }: DocumentoUploadDia
     }
   };
 
+  const retryFailed = useCallback(() => {
+    setFiles(prev => prev.map(f => 
+      f.status === 'error' && f.tipo ? { ...f, status: 'pending', error: undefined } : f
+    ));
+    setIsComplete(false);
+    setUploadProgress({ current: 0, total: 0 });
+  }, []);
+
   const formatFileSize = (bytes: number): string => {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const isFormValid = associadoId && tipo && file && !fileError;
-  const isVehicleDocument = tipo && ['crlv', 'foto_frontal_veiculo', 'foto_traseira_veiculo', 'foto_lateral_esquerda', 'foto_lateral_direita', 'foto_painel', 'foto_hodometro'].includes(tipo);
+  const validFilesCount = files.filter(f => f.status !== 'error' && f.tipo).length;
+  const filesWithoutTipo = files.filter(f => f.status !== 'error' && !f.tipo).length;
+  const isFormValid = associadoId && validFilesCount > 0 && filesWithoutTipo === 0;
+  const successCount = files.filter(f => f.status === 'success').length;
+  const failedCount = files.filter(f => f.status === 'error').length;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Upload className="h-5 w-5" />
-            Enviar Documento
+            {isComplete ? 'Upload Concluído' : 'Enviar Documentos'}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
-          {/* Associado */}
-          <div className="space-y-2">
-            <Label htmlFor="associado">Associado *</Label>
-            <AssociadoCombobox
-              value={associadoId}
-              onSelect={(id) => {
-                setAssociadoId(id);
-                setVeiculoId(''); // Reset veículo when associado changes
-              }}
-            />
+        {/* Progress during upload */}
+        {uploadMutation.isPending && (
+          <div className="space-y-2 py-4">
+            <div className="flex justify-between text-sm">
+              <span>Enviando documentos...</span>
+              <span>{uploadProgress.current} de {uploadProgress.total}</span>
+            </div>
+            <Progress value={(uploadProgress.current / uploadProgress.total) * 100} />
+            <p className="text-xs text-muted-foreground flex items-center gap-1">
+              <AlertCircle className="h-3 w-3" />
+              Não feche esta janela durante o envio
+            </p>
           </div>
+        )}
 
-          {/* Veículo */}
-          <div className="space-y-2">
-            <Label htmlFor="veiculo">Veículo (opcional)</Label>
-            <Select
-              value={veiculoId}
-              onValueChange={setVeiculoId}
-              disabled={!associadoId || !veiculos?.length}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder={
-                  !associadoId 
-                    ? 'Selecione um associado primeiro' 
-                    : !veiculos?.length 
-                      ? 'Nenhum veículo cadastrado'
-                      : 'Selecione um veículo...'
-                } />
-              </SelectTrigger>
-              <SelectContent>
-                {veiculos?.map((veiculo) => (
-                  <SelectItem key={veiculo.id} value={veiculo.id}>
-                    {veiculo.placa} - {veiculo.marca} {veiculo.modelo}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {isVehicleDocument && !veiculoId && (
-              <p className="text-xs text-amber-600 flex items-center gap-1">
-                <AlertCircle className="h-3 w-3" />
-                Recomendado selecionar um veículo para este tipo de documento
-              </p>
-            )}
+        {/* Result after completion */}
+        {isComplete && (
+          <div className="space-y-4 py-4">
+            <div className="flex gap-4 text-sm">
+              {successCount > 0 && (
+                <span className="text-green-600 flex items-center gap-1">
+                  <Check className="h-4 w-4" />
+                  {successCount} enviado(s)
+                </span>
+              )}
+              {failedCount > 0 && (
+                <span className="text-destructive flex items-center gap-1">
+                  <X className="h-4 w-4" />
+                  {failedCount} falhou(falharam)
+                </span>
+              )}
+            </div>
           </div>
+        )}
 
-          {/* Tipo de Documento */}
-          <div className="space-y-2">
-            <Label htmlFor="tipo">Tipo de Documento *</Label>
-            <Select value={tipo} onValueChange={(value) => setTipo(value as TipoDocumento)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione o tipo..." />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(TIPO_DOCUMENTO_LABELS).map(([value, label]) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Dropzone */}
-          <div className="space-y-2">
-            <Label>Arquivo *</Label>
-            <div
-              onDrop={handleDrop}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              className={`
-                relative border-2 border-dashed rounded-lg p-6 text-center cursor-pointer
-                transition-colors duration-200
-                ${isDragging 
-                  ? 'border-primary bg-primary/5' 
-                  : 'border-muted-foreground/25 hover:border-primary/50'
-                }
-                ${fileError ? 'border-destructive' : ''}
-              `}
-            >
-              <input
-                type="file"
-                accept={ACCEPTED_TYPES}
-                onChange={handleInputChange}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+        {/* Form - hidden during upload */}
+        {!uploadMutation.isPending && !isComplete && (
+          <div className="space-y-4 py-4">
+            {/* Associado */}
+            <div className="space-y-2">
+              <Label htmlFor="associado">Associado *</Label>
+              <AssociadoCombobox
+                value={associadoId}
+                onSelect={(id) => {
+                  setAssociadoId(id);
+                  setVeiculoId('');
+                }}
               />
-              
-              {!file ? (
+            </div>
+
+            {/* Veículo */}
+            <div className="space-y-2">
+              <Label htmlFor="veiculo">Veículo (opcional)</Label>
+              <Select
+                value={veiculoId}
+                onValueChange={setVeiculoId}
+                disabled={!associadoId || !veiculos?.length}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={
+                    !associadoId 
+                      ? 'Selecione um associado primeiro' 
+                      : !veiculos?.length 
+                        ? 'Nenhum veículo cadastrado'
+                        : 'Selecione um veículo...'
+                  } />
+                </SelectTrigger>
+                <SelectContent>
+                  {veiculos?.map((veiculo) => (
+                    <SelectItem key={veiculo.id} value={veiculo.id}>
+                      {veiculo.placa} - {veiculo.marca} {veiculo.modelo}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Dropzone */}
+            <div className="space-y-2">
+              <Label>Arquivos * <span className="text-muted-foreground font-normal">(máx {MAX_FILES})</span></Label>
+              <div
+                onDrop={handleDrop}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                className={`
+                  relative border-2 border-dashed rounded-lg p-6 text-center cursor-pointer
+                  transition-colors duration-200
+                  ${isDragging 
+                    ? 'border-primary bg-primary/5' 
+                    : 'border-muted-foreground/25 hover:border-primary/50'
+                  }
+                  ${files.length >= MAX_FILES ? 'opacity-50 pointer-events-none' : ''}
+                `}
+              >
+                <input
+                  type="file"
+                  accept={ACCEPTED_TYPES}
+                  multiple
+                  onChange={handleInputChange}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  disabled={files.length >= MAX_FILES}
+                />
                 <div className="space-y-2">
                   <Upload className="h-10 w-10 mx-auto text-muted-foreground" />
                   <div>
                     <p className="text-sm font-medium">
-                      Clique para selecionar ou arraste um arquivo
+                      Clique para selecionar ou arraste arquivos
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Formatos: JPG, PNG, PDF (máx 10MB)
+                      Formatos: JPG, PNG, PDF (máx 10MB cada)
                     </p>
                   </div>
                 </div>
-              ) : (
-                <div className="flex items-center gap-3">
-                  {file.type.startsWith('image/') ? (
-                    <div className="h-16 w-16 rounded border bg-muted flex items-center justify-center overflow-hidden">
-                      <img
-                        src={URL.createObjectURL(file)}
-                        alt="Preview"
-                        className="h-full w-full object-cover"
-                      />
-                    </div>
-                  ) : (
-                    <div className="h-16 w-16 rounded border bg-muted flex items-center justify-center">
-                      <FileText className="h-8 w-8 text-muted-foreground" />
-                    </div>
-                  )}
-                  <div className="flex-1 text-left">
-                    <p className="text-sm font-medium truncate">{file.name}</p>
-                    <p className="text-xs text-muted-foreground">{formatFileSize(file.size)}</p>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setFile(null);
-                      setFileError('');
-                    }}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              )}
+              </div>
             </div>
-            
-            {fileError && (
-              <p className="text-xs text-destructive flex items-center gap-1">
-                <AlertCircle className="h-3 w-3" />
-                {fileError}
-              </p>
+
+            {/* Files list */}
+            {files.length > 0 && (
+              <div className="space-y-2">
+                <Label>Arquivos selecionados ({files.length})</Label>
+                <div className="border rounded-lg divide-y max-h-[300px] overflow-y-auto">
+                  {files.map((entry) => (
+                    <div key={entry.id} className="p-3 flex items-center gap-3">
+                      {/* Preview */}
+                      {entry.file.type.startsWith('image/') ? (
+                        <div className="h-10 w-10 rounded border bg-muted flex-shrink-0 overflow-hidden">
+                          <img
+                            src={URL.createObjectURL(entry.file)}
+                            alt="Preview"
+                            className="h-full w-full object-cover"
+                          />
+                        </div>
+                      ) : (
+                        <div className="h-10 w-10 rounded border bg-muted flex-shrink-0 flex items-center justify-center">
+                          <FileText className="h-5 w-5 text-muted-foreground" />
+                        </div>
+                      )}
+                      
+                      {/* File info */}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{entry.file.name}</p>
+                        <p className="text-xs text-muted-foreground">{formatFileSize(entry.file.size)}</p>
+                      </div>
+                      
+                      {/* Status icon or select */}
+                      {entry.status === 'success' ? (
+                        <Check className="h-5 w-5 text-green-600 flex-shrink-0" />
+                      ) : entry.status === 'uploading' ? (
+                        <Loader2 className="h-5 w-5 animate-spin text-primary flex-shrink-0" />
+                      ) : entry.status === 'error' && entry.error ? (
+                        <span className="text-xs text-destructive max-w-[120px] truncate" title={entry.error}>
+                          {entry.error}
+                        </span>
+                      ) : (
+                        <Select
+                          value={entry.tipo || ''}
+                          onValueChange={(value) => updateFileTipo(entry.id, value as TipoDocumento)}
+                        >
+                          <SelectTrigger className="w-[160px]">
+                            <SelectValue placeholder="Tipo..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Object.entries(TIPO_DOCUMENTO_LABELS).map(([value, label]) => (
+                              <SelectItem key={value} value={value}>
+                                {label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                      
+                      {/* Remove button */}
+                      {entry.status !== 'uploading' && entry.status !== 'success' && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="flex-shrink-0"
+                          onClick={() => removeFile(entry.id)}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                
+                {filesWithoutTipo > 0 && (
+                  <p className="text-xs text-amber-600 flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" />
+                    {filesWithoutTipo} arquivo(s) ainda precisa(m) de tipo definido
+                  </p>
+                )}
+              </div>
             )}
           </div>
-        </div>
+        )}
+
+        {/* Result file list */}
+        {isComplete && (
+          <div className="border rounded-lg divide-y max-h-[300px] overflow-y-auto">
+            {files.map((entry) => (
+              <div key={entry.id} className="p-3 flex items-center gap-3">
+                {entry.status === 'success' ? (
+                  <Check className="h-5 w-5 text-green-600 flex-shrink-0" />
+                ) : (
+                  <X className="h-5 w-5 text-destructive flex-shrink-0" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{entry.file.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {entry.tipo ? TIPO_DOCUMENTO_LABELS[entry.tipo] : 'Sem tipo'}
+                  </p>
+                </div>
+                {entry.status === 'error' && entry.error && (
+                  <span className="text-xs text-destructive">{entry.error}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
 
         <DialogFooter>
-          <Button variant="outline" onClick={handleClose}>
-            Cancelar
-          </Button>
-          <Button
-            onClick={handleSubmit}
-            disabled={!isFormValid || uploadMutation.isPending}
-          >
-            {uploadMutation.isPending ? (
-              <>Enviando...</>
-            ) : (
-              <>
-                <Upload className="h-4 w-4 mr-2" />
-                Enviar Documento
-              </>
-            )}
-          </Button>
+          {isComplete ? (
+            <>
+              {failedCount > 0 && (
+                <Button variant="outline" onClick={retryFailed}>
+                  Tentar novamente
+                </Button>
+              )}
+              <Button onClick={handleClose}>Fechar</Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" onClick={handleClose} disabled={uploadMutation.isPending}>
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleSubmit}
+                disabled={!isFormValid || uploadMutation.isPending}
+              >
+                {uploadMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Enviando...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-4 w-4 mr-2" />
+                    Enviar {validFilesCount > 0 ? `${validFilesCount} Documento(s)` : 'Documentos'}
+                  </>
+                )}
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
