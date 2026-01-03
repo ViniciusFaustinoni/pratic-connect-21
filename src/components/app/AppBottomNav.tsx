@@ -15,7 +15,7 @@ export function AppBottomNav() {
   const navigate = useNavigate();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 flex h-[56px] items-center justify-around border-t bg-white">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 flex h-[56px] items-center justify-around border-t bg-background pb-safe md:hidden">
       {navItems.map((item) => {
         const isActive = location.pathname === item.path || 
           (item.path !== '/app/home' && location.pathname.startsWith(item.path));
