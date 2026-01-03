@@ -10,6 +10,7 @@ export interface ContratoWithRelations extends Contrato {
   planos?: Tables<'planos'> | null;
   cotacoes?: Tables<'cotacoes'> | null;
   associados?: Tables<'associados'> | null;
+  leads?: Tables<'leads'> | null;
 }
 
 export function useContratos() {
@@ -22,7 +23,8 @@ export function useContratos() {
           *,
           planos (*),
           cotacoes (*),
-          associados (*)
+          associados (*),
+          leads (*)
         `)
         .order('created_at', { ascending: false });
       
@@ -44,7 +46,8 @@ export function useContrato(id: string | undefined) {
           *,
           planos (*),
           cotacoes (*),
-          associados (*)
+          associados (*),
+          leads (*)
         `)
         .eq('id', id)
         .single();

@@ -1,9 +1,15 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, FileText, CheckCircle, XCircle, Clock, Loader2 } from 'lucide-react';
+import { 
+  Search, FileText, CheckCircle, XCircle, Clock, Loader2, 
+  Send, MoreHorizontal, Edit, Trash, RefreshCw, Link, 
+  ExternalLink, Pause, Eye, PlayCircle, Plus 
+} from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Table,
   TableBody,
@@ -13,38 +19,52 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import type { StatusContrato } from '@/types/database';
-import { useContratos } from '@/hooks/useContratos';
+import { useContratos, useUpdateContrato } from '@/hooks/useContratos';
+import { useUpdateLead } from '@/hooks/useLeads';
+import { useCreateLeadHistorico } from '@/hooks/useLeadHistorico';
+import { ContratoFormDialog } from '@/components/contratos/ContratoFormDialog';
+import { ContratoDetailDrawer } from '@/components/contratos/ContratoDetailDrawer';
+import { toast } from 'sonner';
 
 const statusConfig: Record<StatusContrato, { label: string; color: string; icon: typeof FileText }> = {
-  pendente: { label: 'Pendente', color: 'bg-yellow-500 text-white', icon: Clock },
-  enviado: { label: 'Enviado', color: 'bg-blue-500 text-white', icon: FileText },
-  assinado: { label: 'Assinado', color: 'bg-indigo-500 text-white', icon: CheckCircle },
-  ativo: { label: 'Ativo', color: 'bg-green-500 text-white', icon: CheckCircle },
-  suspenso: { label: 'Suspenso', color: 'bg-orange-500 text-white', icon: Clock },
-  cancelado: { label: 'Cancelado', color: 'bg-destructive text-destructive-foreground', icon: XCircle },
+  rascunho: { label: 'Rascunho', color: 'bg-gray-100 text-gray-800', icon: FileText },
+  pendente: { label: 'Pendente', color: 'bg-gray-100 text-gray-800', icon: Clock },
+  enviado: { label: 'Enviado', color: 'bg-yellow-100 text-yellow-800', icon: Send },
+  assinado: { label: 'Assinado', color: 'bg-green-100 text-green-800', icon: CheckCircle },
+  ativo: { label: 'Ativo', color: 'bg-blue-100 text-blue-800', icon: CheckCircle },
+  suspenso: { label: 'Suspenso', color: 'bg-orange-100 text-orange-800', icon: Pause },
+  cancelado: { label: 'Cancelado', color: 'bg-red-100 text-red-800', icon: XCircle },
 };
+
+type TabValue = 'all' | StatusContrato;
 
 export default function Contratos() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [activeTab, setActiveTab] = useState<TabValue>('all');
+  const [formDialogOpen, setFormDialogOpen] = useState(false);
+  const [drawerContratoId, setDrawerContratoId] = useState<string | null>(null);
 
   const { data: contratos, isLoading } = useContratos();
+  const updateContrato = useUpdateContrato();
+  const updateLead = useUpdateLead();
+  const createHistorico = useCreateLeadHistorico();
 
   const filteredContratos = (contratos || []).filter((contrato) => {
     const matchesSearch =
       contrato.numero.toLowerCase().includes(search.toLowerCase()) ||
       (contrato.associados?.nome?.toLowerCase().includes(search.toLowerCase()) ?? false) ||
+      (contrato.leads?.nome?.toLowerCase().includes(search.toLowerCase()) ?? false) ||
       (contrato.associados?.cpf?.includes(search) ?? false);
-    const matchesStatus = statusFilter === 'all' || contrato.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    const matchesTab = activeTab === 'all' || contrato.status === activeTab;
+    return matchesSearch && matchesTab;
   });
 
   const formatDate = (dateStr: string) => {
@@ -58,14 +78,119 @@ export default function Contratos() {
     }).format(value);
   };
 
-  // Stats
+  // Stats por status
   const stats = {
     total: contratos?.length || 0,
-    ativos: contratos?.filter((c) => c.status === 'ativo').length || 0,
-    pendentes: contratos?.filter((c) => c.status === 'pendente').length || 0,
+    rascunho: contratos?.filter((c) => c.status === 'rascunho').length || 0,
+    enviado: contratos?.filter((c) => c.status === 'enviado').length || 0,
+    assinado: contratos?.filter((c) => c.status === 'assinado').length || 0,
+    ativo: contratos?.filter((c) => c.status === 'ativo').length || 0,
     valorTotal: contratos
       ?.filter((c) => c.status === 'ativo')
       .reduce((acc, c) => acc + c.valor_mensal, 0) || 0,
+  };
+
+  const tabs: { value: TabValue; label: string; count: number }[] = [
+    { value: 'all', label: 'Todos', count: stats.total },
+    { value: 'rascunho', label: 'Rascunho', count: stats.rascunho },
+    { value: 'enviado', label: 'Enviados', count: stats.enviado },
+    { value: 'assinado', label: 'Assinados', count: stats.assinado },
+    { value: 'ativo', label: 'Ativos', count: stats.ativo },
+  ];
+
+  // Ações
+  const handleEnviar = async (contratoId: string) => {
+    try {
+      const contrato = contratos?.find(c => c.id === contratoId);
+      if (!contrato) return;
+
+      await updateContrato.mutateAsync({
+        id: contratoId,
+        status: 'enviado',
+      });
+
+      if (contrato.lead_id) {
+        await updateLead.mutateAsync({
+          id: contrato.lead_id,
+          etapa: 'contrato_enviado',
+        });
+        
+        await createHistorico.mutateAsync({
+          lead_id: contrato.lead_id,
+          acao: 'contrato_enviado',
+          descricao: `Contrato ${contrato.numero} enviado para assinatura`,
+          etapa_nova: 'contrato_enviado',
+        });
+      }
+
+      toast.success('Contrato enviado com sucesso!');
+    } catch (error) {
+      toast.error('Erro ao enviar contrato');
+    }
+  };
+
+  const handleAtivar = async (contratoId: string) => {
+    try {
+      const contrato = contratos?.find(c => c.id === contratoId);
+      if (!contrato) return;
+
+      await updateContrato.mutateAsync({
+        id: contratoId,
+        status: 'ativo',
+      });
+
+      if (contrato.lead_id) {
+        await updateLead.mutateAsync({
+          id: contrato.lead_id,
+          etapa: 'ganho',
+          data_conversao: new Date().toISOString(),
+        });
+        
+        await createHistorico.mutateAsync({
+          lead_id: contrato.lead_id,
+          acao: 'ganho',
+          descricao: `Contrato ${contrato.numero} ativado`,
+          etapa_nova: 'ganho',
+        });
+      }
+
+      toast.success('Contrato ativado com sucesso!');
+    } catch (error) {
+      toast.error('Erro ao ativar contrato');
+    }
+  };
+
+  const handleSuspender = async (contratoId: string) => {
+    try {
+      await updateContrato.mutateAsync({
+        id: contratoId,
+        status: 'suspenso',
+      });
+      toast.success('Contrato suspenso');
+    } catch (error) {
+      toast.error('Erro ao suspender contrato');
+    }
+  };
+
+  const handleCancelar = async (contratoId: string) => {
+    try {
+      await updateContrato.mutateAsync({
+        id: contratoId,
+        status: 'cancelado',
+      });
+      toast.success('Contrato cancelado');
+    } catch (error) {
+      toast.error('Erro ao cancelar contrato');
+    }
+  };
+
+  const handleCopiarLink = (contrato: typeof contratos[0]) => {
+    if (contrato.autentique_url) {
+      navigator.clipboard.writeText(contrato.autentique_url);
+      toast.success('Link copiado!');
+    } else {
+      toast.error('Nenhum link disponível');
+    }
   };
 
   if (isLoading) {
@@ -86,6 +211,10 @@ export default function Contratos() {
             Visualize e gerencie contratos de adesão
           </p>
         </div>
+        <Button onClick={() => setFormDialogOpen(true)}>
+          <Plus className="mr-2 h-4 w-4" />
+          Novo Contrato
+        </Button>
       </div>
 
       {/* Stats */}
@@ -110,7 +239,7 @@ export default function Contratos() {
                 <CheckCircle className="h-5 w-5 text-green-500" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{stats.ativos}</p>
+                <p className="text-2xl font-bold">{stats.ativo}</p>
                 <p className="text-xs text-muted-foreground">Ativos</p>
               </div>
             </div>
@@ -120,11 +249,11 @@ export default function Contratos() {
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="rounded-lg bg-yellow-500/10 p-2">
-                <Clock className="h-5 w-5 text-yellow-500" />
+                <Send className="h-5 w-5 text-yellow-500" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{stats.pendentes}</p>
-                <p className="text-xs text-muted-foreground">Pendentes</p>
+                <p className="text-2xl font-bold">{stats.enviado}</p>
+                <p className="text-xs text-muted-foreground">Aguardando Assinatura</p>
               </div>
             </div>
           </CardContent>
@@ -133,7 +262,7 @@ export default function Contratos() {
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="rounded-lg bg-accent/10 p-2">
-                <FileText className="h-5 w-5 text-accent" />
+                <FileText className="h-5 w-5 text-accent-foreground" />
               </div>
               <div>
                 <p className="text-2xl font-bold">{formatCurrency(stats.valorTotal)}</p>
@@ -144,30 +273,26 @@ export default function Contratos() {
         </Card>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Buscar por número, nome ou CPF..."
-            className="pl-9"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-full sm:w-48">
-            <SelectValue placeholder="Filtrar por status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos os status</SelectItem>
-            {Object.entries(statusConfig).map(([key, value]) => (
-              <SelectItem key={key} value={key}>
-                {value.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabValue)}>
+        <TabsList>
+          {tabs.map((tab) => (
+            <TabsTrigger key={tab.value} value={tab.value}>
+              {tab.label} ({tab.count})
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
+
+      {/* Search */}
+      <div className="relative max-w-md">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          placeholder="Buscar por número, nome ou CPF..."
+          className="pl-9"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
       </div>
 
       {/* Table */}
@@ -176,38 +301,47 @@ export default function Contratos() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Número</TableHead>
-                <TableHead>Associado</TableHead>
+                <TableHead>Nº Contrato</TableHead>
+                <TableHead>Lead/Associado</TableHead>
+                <TableHead>Veículo</TableHead>
                 <TableHead>Plano</TableHead>
                 <TableHead>Adesão</TableHead>
                 <TableHead>Mensal</TableHead>
-                <TableHead>Data Início</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Data</TableHead>
+                <TableHead className="w-12"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredContratos.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                     Nenhum contrato encontrado
                   </TableCell>
                 </TableRow>
               ) : (
                 filteredContratos.map((contrato) => {
                   const status = statusConfig[contrato.status];
+                  const clientName = contrato.associados?.nome || contrato.leads?.nome || '-';
+                  const clientPhone = contrato.associados?.telefone || contrato.leads?.telefone;
+                  const veiculo = contrato.leads?.veiculo_marca 
+                    ? `${contrato.leads.veiculo_marca} ${contrato.leads.veiculo_modelo || ''} ${contrato.leads.veiculo_ano || ''}`
+                    : '-';
+                  
                   return (
                     <TableRow 
                       key={contrato.id} 
                       className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => navigate(`/vendas/contratos/${contrato.id}`)}
+                      onClick={() => setDrawerContratoId(contrato.id)}
                     >
                       <TableCell className="font-mono text-sm">{contrato.numero}</TableCell>
                       <TableCell>
                         <div>
-                          <p className="font-medium">{contrato.associados?.nome || '-'}</p>
-                          <p className="text-xs text-muted-foreground">{contrato.associados?.cpf}</p>
+                          <p className="font-medium">{clientName}</p>
+                          <p className="text-xs text-muted-foreground">{clientPhone}</p>
                         </div>
                       </TableCell>
+                      <TableCell className="text-sm">{veiculo}</TableCell>
                       <TableCell>{contrato.planos?.nome || '-'}</TableCell>
                       <TableCell className="text-muted-foreground">
                         {formatCurrency(contrato.valor_adesao)}
@@ -215,14 +349,109 @@ export default function Contratos() {
                       <TableCell className="font-medium">
                         {formatCurrency(contrato.valor_mensal)}
                       </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {formatDate(contrato.data_inicio)}
-                      </TableCell>
                       <TableCell>
                         <Badge className={status.color}>
                           <status.icon className="mr-1 h-3 w-3" />
                           {status.label}
                         </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {formatDate(contrato.created_at)}
+                      </TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            {/* Rascunho */}
+                            {(contrato.status === 'rascunho' || contrato.status === 'pendente') && (
+                              <>
+                                <DropdownMenuItem onClick={() => setDrawerContratoId(contrato.id)}>
+                                  <Edit className="mr-2 h-4 w-4" /> Editar
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleEnviar(contrato.id)}>
+                                  <Send className="mr-2 h-4 w-4" /> Enviar
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem 
+                                  className="text-destructive"
+                                  onClick={() => handleCancelar(contrato.id)}
+                                >
+                                  <Trash className="mr-2 h-4 w-4" /> Excluir
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                            {/* Enviado */}
+                            {contrato.status === 'enviado' && (
+                              <>
+                                <DropdownMenuItem onClick={() => handleEnviar(contrato.id)}>
+                                  <RefreshCw className="mr-2 h-4 w-4" /> Reenviar
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleCopiarLink(contrato)}>
+                                  <Link className="mr-2 h-4 w-4" /> Copiar Link
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem 
+                                  className="text-destructive"
+                                  onClick={() => handleCancelar(contrato.id)}
+                                >
+                                  <XCircle className="mr-2 h-4 w-4" /> Cancelar
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                            {/* Assinado */}
+                            {contrato.status === 'assinado' && (
+                              <>
+                                <DropdownMenuItem onClick={() => handleAtivar(contrato.id)}>
+                                  <CheckCircle className="mr-2 h-4 w-4" /> Ativar
+                                </DropdownMenuItem>
+                                {contrato.autentique_url && (
+                                  <DropdownMenuItem asChild>
+                                    <a href={contrato.autentique_url} target="_blank" rel="noopener noreferrer">
+                                      <ExternalLink className="mr-2 h-4 w-4" /> Ver Documento
+                                    </a>
+                                  </DropdownMenuItem>
+                                )}
+                              </>
+                            )}
+                            {/* Ativo */}
+                            {contrato.status === 'ativo' && (
+                              <>
+                                <DropdownMenuItem onClick={() => setDrawerContratoId(contrato.id)}>
+                                  <Eye className="mr-2 h-4 w-4" /> Ver
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleSuspender(contrato.id)}>
+                                  <Pause className="mr-2 h-4 w-4" /> Suspender
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem 
+                                  className="text-destructive"
+                                  onClick={() => handleCancelar(contrato.id)}
+                                >
+                                  <XCircle className="mr-2 h-4 w-4" /> Cancelar
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                            {/* Suspenso */}
+                            {contrato.status === 'suspenso' && (
+                              <>
+                                <DropdownMenuItem onClick={() => handleAtivar(contrato.id)}>
+                                  <PlayCircle className="mr-2 h-4 w-4" /> Reativar
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem 
+                                  className="text-destructive"
+                                  onClick={() => handleCancelar(contrato.id)}
+                                >
+                                  <XCircle className="mr-2 h-4 w-4" /> Cancelar
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   );
@@ -232,6 +461,18 @@ export default function Contratos() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Dialogs */}
+      <ContratoFormDialog 
+        open={formDialogOpen} 
+        onOpenChange={setFormDialogOpen} 
+      />
+      
+      <ContratoDetailDrawer
+        contratoId={drawerContratoId}
+        open={!!drawerContratoId}
+        onClose={() => setDrawerContratoId(null)}
+      />
     </div>
   );
 }
