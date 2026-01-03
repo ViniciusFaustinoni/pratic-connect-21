@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Search, FileCheck, Clock, CheckCircle, XCircle, Eye } from 'lucide-react';
+import { Search, FileCheck, Clock, CheckCircle, XCircle, Eye, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -22,18 +22,21 @@ import {
 } from '@/components/ui/select';
 import { STATUS_DOCUMENTO_LABELS, TIPO_DOCUMENTO_LABELS, type StatusDocumento, type TipoDocumento } from '@/types/database';
 import { useDocumentos } from '@/hooks/useDocumentos';
+import { DocumentoAnaliseDialog } from '@/components/cadastro/DocumentoAnaliseDialog';
 
 const statusConfig: Record<StatusDocumento, { color: string; icon: typeof FileCheck }> = {
   pendente: { color: 'bg-yellow-500 text-white', icon: Clock },
   em_analise: { color: 'bg-blue-500 text-white', icon: Eye },
   aprovado: { color: 'bg-green-500 text-white', icon: CheckCircle },
   reprovado: { color: 'bg-destructive text-destructive-foreground', icon: XCircle },
+  expirado: { color: 'bg-gray-500 text-white', icon: AlertCircle },
 };
 
 export default function Documentos() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [tipoFilter, setTipoFilter] = useState<string>('all');
+  const [analyzeDocId, setAnalyzeDocId] = useState<string | null>(null);
   
   const { data: documentos, isLoading } = useDocumentos();
 
@@ -214,12 +217,12 @@ export default function Documentos() {
                   <TableHead>Arquivo</TableHead>
                   <TableHead>Enviado em</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="w-24">Ações</TableHead>
+                  <TableHead className="w-32">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredDocumentos.map((doc) => {
-                  const status = statusConfig[doc.status];
+                  const status = statusConfig[doc.status as StatusDocumento];
                   return (
                     <TableRow key={doc.id}>
                       <TableCell>
@@ -242,23 +245,26 @@ export default function Documentos() {
                       <TableCell>
                         <Badge className={status.color}>
                           <status.icon className="mr-1 h-3 w-3" />
-                          {STATUS_DOCUMENTO_LABELS[doc.status]}
+                          {STATUS_DOCUMENTO_LABELS[doc.status as StatusDocumento]}
                         </Badge>
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-1">
-                          <Button variant="ghost" size="sm">
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => window.open(doc.arquivo_url, '_blank')}
+                          >
                             <Eye className="h-4 w-4" />
                           </Button>
                           {(doc.status === 'pendente' || doc.status === 'em_analise') && (
-                            <>
-                              <Button variant="ghost" size="sm" className="text-green-600">
-                                <CheckCircle className="h-4 w-4" />
-                              </Button>
-                              <Button variant="ghost" size="sm" className="text-destructive">
-                                <XCircle className="h-4 w-4" />
-                              </Button>
-                            </>
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={() => setAnalyzeDocId(doc.id)}
+                            >
+                              Analisar
+                            </Button>
                           )}
                         </div>
                       </TableCell>
@@ -270,6 +276,15 @@ export default function Documentos() {
           )}
         </CardContent>
       </Card>
+
+      {/* Dialog de Análise */}
+      {analyzeDocId && (
+        <DocumentoAnaliseDialog
+          documentoId={analyzeDocId}
+          open={!!analyzeDocId}
+          onClose={() => setAnalyzeDocId(null)}
+        />
+      )}
     </div>
   );
 }

@@ -24,12 +24,14 @@ import { useAssociados } from '@/hooks/useAssociados';
 
 const statusColors: Record<StatusAssociado, string> = {
   em_analise: 'bg-blue-500 text-white',
+  aprovado: 'bg-green-100 text-green-800',
   documentacao_pendente: 'bg-yellow-500 text-white',
   aguardando_instalacao: 'bg-purple-500 text-white',
   ativo: 'bg-green-500 text-white',
   inadimplente: 'bg-orange-500 text-white',
   suspenso: 'bg-gray-500 text-white',
   cancelado: 'bg-destructive text-destructive-foreground',
+  bloqueado: 'bg-red-700 text-white',
 };
 
 export default function Associados() {

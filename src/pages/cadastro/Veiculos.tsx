@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Search, Car, User } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Search, Car, User, Smartphone } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -12,11 +13,31 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useVeiculos } from '@/hooks/useVeiculos';
 import { useAssociados } from '@/hooks/useAssociados';
+import { STATUS_VEICULO_LABELS, type StatusVeiculo } from '@/types/database';
+
+const statusColors: Record<StatusVeiculo, string> = {
+  em_analise: 'bg-blue-100 text-blue-800',
+  aprovado: 'bg-green-100 text-green-800',
+  instalacao_pendente: 'bg-yellow-100 text-yellow-800',
+  ativo: 'bg-green-500 text-white',
+  suspenso: 'bg-orange-100 text-orange-800',
+  cancelado: 'bg-red-100 text-red-800',
+  sinistrado: 'bg-purple-100 text-purple-800',
+};
 
 export default function Veiculos() {
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
   const { data: veiculos, isLoading } = useVeiculos();
   const { data: associados } = useAssociados();
 
@@ -27,12 +48,16 @@ export default function Veiculos() {
 
   const filteredVeiculos = veiculos?.filter((veiculo) => {
     const associadoNome = associadoMap.get(veiculo.associado_id) || '';
-    return (
+    const matchesSearch =
       veiculo.placa.toLowerCase().includes(search.toLowerCase()) ||
       veiculo.marca.toLowerCase().includes(search.toLowerCase()) ||
       veiculo.modelo.toLowerCase().includes(search.toLowerCase()) ||
-      associadoNome.toLowerCase().includes(search.toLowerCase())
-    );
+      associadoNome.toLowerCase().includes(search.toLowerCase());
+    
+    const veiculoStatus = (veiculo.status as StatusVeiculo) || (veiculo.ativo ? 'ativo' : 'cancelado');
+    const matchesStatus = statusFilter === 'all' || veiculoStatus === statusFilter;
+    
+    return matchesSearch && matchesStatus;
   }) || [];
 
   const formatCurrency = (value: number | null) => {
@@ -46,8 +71,8 @@ export default function Veiculos() {
   // Stats
   const stats = {
     total: veiculos?.length || 0,
-    ativos: veiculos?.filter((v) => v.ativo).length || 0,
-    valorTotal: veiculos?.filter((v) => v.ativo).reduce((acc, v) => acc + (v.valor_fipe || 0), 0) || 0,
+    ativos: veiculos?.filter((v) => (v.status as StatusVeiculo) === 'ativo' || (!v.status && v.ativo)).length || 0,
+    valorTotal: veiculos?.filter((v) => (v.status as StatusVeiculo) === 'ativo' || (!v.status && v.ativo)).reduce((acc, v) => acc + (v.valor_fipe || 0), 0) || 0,
   };
 
   return (
@@ -126,6 +151,19 @@ export default function Veiculos() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-full sm:w-48">
+            <SelectValue placeholder="Filtrar por status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os status</SelectItem>
+            {Object.entries(STATUS_VEICULO_LABELS).map(([key, label]) => (
+              <SelectItem key={key} value={key}>
+                {label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Table */}
@@ -142,7 +180,7 @@ export default function Veiculos() {
               <Car className="h-12 w-12 text-muted-foreground/50" />
               <h3 className="mt-4 font-semibold text-foreground">Nenhum veículo encontrado</h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                {search ? 'Tente uma busca diferente' : 'Nenhum veículo cadastrado ainda'}
+                {search || statusFilter !== 'all' ? 'Tente ajustar os filtros' : 'Nenhum veículo cadastrado ainda'}
               </p>
             </div>
           ) : (
@@ -154,43 +192,68 @@ export default function Veiculos() {
                   <TableHead>Ano</TableHead>
                   <TableHead>Cor</TableHead>
                   <TableHead>Valor FIPE</TableHead>
+                  <TableHead>Uso App</TableHead>
                   <TableHead>Associado</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredVeiculos.map((veiculo) => (
-                  <TableRow key={veiculo.id} className="cursor-pointer hover:bg-muted/50">
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <div className="rounded-lg bg-primary/10 p-2">
-                          <Car className="h-4 w-4 text-primary" />
+                {filteredVeiculos.map((veiculo) => {
+                  const veiculoStatus = (veiculo.status as StatusVeiculo) || (veiculo.ativo ? 'ativo' : 'cancelado');
+                  return (
+                    <TableRow 
+                      key={veiculo.id} 
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => {
+                        const associado = associados?.find(a => a.id === veiculo.associado_id);
+                        if (associado) {
+                          navigate(`/cadastro/associados/${associado.id}`);
+                        }
+                      }}
+                    >
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <div className="rounded-lg bg-primary/10 p-2">
+                            <Car className="h-4 w-4 text-primary" />
+                          </div>
+                          <div>
+                            <p className="font-medium">{veiculo.marca}</p>
+                            <p className="text-sm text-muted-foreground">{veiculo.modelo}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-medium">{veiculo.marca}</p>
-                          <p className="text-sm text-muted-foreground">{veiculo.modelo}</p>
+                      </TableCell>
+                      <TableCell className="font-mono">{veiculo.placa}</TableCell>
+                      <TableCell>
+                        {veiculo.ano_fabricacao}/{veiculo.ano_modelo}
+                      </TableCell>
+                      <TableCell>{veiculo.cor || '-'}</TableCell>
+                      <TableCell>{formatCurrency(veiculo.valor_fipe)}</TableCell>
+                      <TableCell>
+                        {veiculo.uso_aplicativo ? (
+                          <div className="flex items-center gap-1">
+                            <Smartphone className="h-3 w-3 text-muted-foreground" />
+                            <Badge variant="outline" className="text-xs">
+                              {veiculo.plataforma_app || 'Sim'}
+                            </Badge>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <User className="h-3 w-3 text-muted-foreground" />
+                          {associadoMap.get(veiculo.associado_id) || 'Desconhecido'}
                         </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-mono">{veiculo.placa}</TableCell>
-                    <TableCell>
-                      {veiculo.ano_fabricacao}/{veiculo.ano_modelo}
-                    </TableCell>
-                    <TableCell>{veiculo.cor || '-'}</TableCell>
-                    <TableCell>{formatCurrency(veiculo.valor_fipe)}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <User className="h-3 w-3 text-muted-foreground" />
-                        {associadoMap.get(veiculo.associado_id) || 'Desconhecido'}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={veiculo.ativo ? 'bg-green-500 text-white' : 'bg-muted text-muted-foreground'}>
-                        {veiculo.ativo ? 'Ativo' : 'Inativo'}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={statusColors[veiculoStatus]}>
+                          {STATUS_VEICULO_LABELS[veiculoStatus]}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}
