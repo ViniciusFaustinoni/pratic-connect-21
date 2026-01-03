@@ -167,6 +167,118 @@ export type Database = {
           },
         ]
       }
+      associados_historico: {
+        Row: {
+          associado_id: string
+          contrato_id: string | null
+          created_at: string | null
+          dados_anteriores: Json | null
+          dados_novos: Json | null
+          descricao: string
+          documento_id: string | null
+          id: string
+          instalacao_id: string | null
+          metadata: Json | null
+          tipo: string
+          usuario_id: string | null
+          veiculo_id: string | null
+        }
+        Insert: {
+          associado_id: string
+          contrato_id?: string | null
+          created_at?: string | null
+          dados_anteriores?: Json | null
+          dados_novos?: Json | null
+          descricao: string
+          documento_id?: string | null
+          id?: string
+          instalacao_id?: string | null
+          metadata?: Json | null
+          tipo: string
+          usuario_id?: string | null
+          veiculo_id?: string | null
+        }
+        Update: {
+          associado_id?: string
+          contrato_id?: string | null
+          created_at?: string | null
+          dados_anteriores?: Json | null
+          dados_novos?: Json | null
+          descricao?: string
+          documento_id?: string | null
+          id?: string
+          instalacao_id?: string | null
+          metadata?: Json | null
+          tipo?: string
+          usuario_id?: string | null
+          veiculo_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "associados_historico_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "associados_historico_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "associados_historico_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "contratos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "associados_historico_documento_id_fkey"
+            columns: ["documento_id"]
+            isOneToOne: false
+            referencedRelation: "documentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "associados_historico_instalacao_id_fkey"
+            columns: ["instalacao_id"]
+            isOneToOne: false
+            referencedRelation: "instalacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "associados_historico_instalacao_id_fkey"
+            columns: ["instalacao_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["instalacao_id"]
+          },
+          {
+            foreignKeyName: "associados_historico_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "associados_historico_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "veiculos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "associados_historico_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["veiculo_id"]
+          },
+        ]
+      }
       chamados_assistencia: {
         Row: {
           associado_id: string
