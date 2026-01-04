@@ -112,6 +112,61 @@ export function useCheckAutentiqueStatus() {
   });
 }
 
+// Reenviar email de assinatura
+export function useResendAutentique() {
+  return useMutation({
+    mutationFn: async (documentId: string): Promise<{ success: boolean; message?: string; error?: string }> => {
+      const { data, error } = await supabase.functions.invoke('autentique-resend', {
+        body: { documentId },
+      });
+
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error || 'Erro ao reenviar email');
+      
+      return data;
+    },
+    onSuccess: () => {
+      toast.success('Email reenviado com sucesso!', {
+        description: 'O cliente receberá um novo email com o link para assinar.',
+      });
+    },
+    onError: (error: any) => {
+      toast.error('Erro ao reenviar email', {
+        description: error.message,
+      });
+    },
+  });
+}
+
+// Cancelar documento
+export function useCancelAutentique() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (params: { documentId: string; contratoId: string }): Promise<{ success: boolean; message?: string; error?: string }> => {
+      const { data, error } = await supabase.functions.invoke('autentique-cancel', {
+        body: params,
+      });
+
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error || 'Erro ao cancelar documento');
+      
+      return data;
+    },
+    onSuccess: () => {
+      toast.success('Documento cancelado!', {
+        description: 'O contrato foi cancelado e o cliente não poderá mais assinar.',
+      });
+      queryClient.invalidateQueries({ queryKey: ['contratos'] });
+    },
+    onError: (error: any) => {
+      toast.error('Erro ao cancelar documento', {
+        description: error.message,
+      });
+    },
+  });
+}
+
 // Helper function to get status label
 export function getAutentiqueStatusLabel(status: string): { label: string; color: string } {
   switch (status) {
@@ -125,4 +180,15 @@ export function getAutentiqueStatusLabel(status: string): { label: string; color
     default:
       return { label: 'Aguardando', color: 'bg-yellow-100 text-yellow-800' };
   }
+}
+
+// Helper para enviar link via WhatsApp
+export function getWhatsAppLink(phone: string, url: string, clientName?: string): string {
+  const cleanPhone = phone.replace(/\D/g, '');
+  const formattedPhone = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
+  const greeting = clientName ? `Olá ${clientName}! ` : 'Olá! ';
+  const message = encodeURIComponent(
+    `${greeting}Segue o link para assinar seu contrato de adesão: ${url}`
+  );
+  return `https://wa.me/${formattedPhone}?text=${message}`;
 }

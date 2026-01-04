@@ -27,7 +27,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import type { StatusContrato } from '@/types/database';
 import { useContratos, useUpdateContrato, useAtivarContrato } from '@/hooks/useContratos';
-import { useSendToAutentique } from '@/hooks/useAutentique';
+import { useSendToAutentique, useResendAutentique, useCancelAutentique, getWhatsAppLink } from '@/hooks/useAutentique';
 import { ContratoFormDialog } from '@/components/contratos/ContratoFormDialog';
 import { ContratoDetailDrawer } from '@/components/contratos/ContratoDetailDrawer';
 import { toast } from 'sonner';
@@ -55,6 +55,8 @@ export default function Contratos() {
   const updateContrato = useUpdateContrato();
   const ativarContrato = useAtivarContrato();
   const sendToAutentique = useSendToAutentique();
+  const resendAutentique = useResendAutentique();
+  const cancelAutentique = useCancelAutentique();
 
   const filteredContratos = (contratos || []).filter((contrato) => {
     const matchesSearch =
@@ -165,6 +167,36 @@ export default function Contratos() {
     } else {
       toast.error('Nenhum link disponível');
     }
+  };
+
+  const handleReenviarEmail = async (contrato: typeof contratos[0]) => {
+    if (!contrato.autentique_documento_id) {
+      toast.error('Documento não encontrado');
+      return;
+    }
+    await resendAutentique.mutateAsync(contrato.autentique_documento_id);
+  };
+
+  const handleCancelarDocumento = async (contrato: typeof contratos[0]) => {
+    if (!contrato.autentique_documento_id) {
+      toast.error('Documento não encontrado');
+      return;
+    }
+    await cancelAutentique.mutateAsync({
+      documentId: contrato.autentique_documento_id,
+      contratoId: contrato.id,
+    });
+  };
+
+  const handleEnviarWhatsApp = (contrato: typeof contratos[0]) => {
+    const client = contrato.associados || contrato.leads;
+    const phone = client?.telefone;
+    if (!phone || !contrato.autentique_url) {
+      toast.error('Telefone ou link não disponível');
+      return;
+    }
+    const url = getWhatsAppLink(phone, contrato.autentique_url, client?.nome);
+    window.open(url, '_blank');
   };
 
   if (isLoading) {

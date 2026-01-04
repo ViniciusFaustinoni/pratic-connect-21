@@ -1,7 +1,7 @@
 import { 
   FileText, CheckCircle, XCircle, Clock, Send, Pause, 
   ExternalLink, Phone, Mail, MapPin, Car, User, Link,
-  RefreshCw, Loader2, Eye, Copy
+  RefreshCw, Loader2, Eye, Copy, MessageCircle
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,10 +12,28 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { useContrato, useUpdateContrato } from '@/hooks/useContratos';
 import { useUpdateLead } from '@/hooks/useLeads';
 import { useCreateLeadHistorico } from '@/hooks/useLeadHistorico';
-import { useSendToAutentique, useAutentiqueStatus, getAutentiqueStatusLabel } from '@/hooks/useAutentique';
+import { 
+  useSendToAutentique, 
+  useAutentiqueStatus, 
+  useResendAutentique,
+  useCancelAutentique,
+  getAutentiqueStatusLabel,
+  getWhatsAppLink 
+} from '@/hooks/useAutentique';
 import { toast } from 'sonner';
 import type { StatusContrato } from '@/types/database';
 
@@ -41,6 +59,8 @@ export function ContratoDetailDrawer({ contratoId, open, onClose }: ContratoDeta
   const updateLead = useUpdateLead();
   const createHistorico = useCreateLeadHistorico();
   const sendToAutentique = useSendToAutentique();
+  const resendAutentique = useResendAutentique();
+  const cancelAutentique = useCancelAutentique();
   
   // Buscar status do Autentique se houver documento
   const { data: autentiqueStatus, isLoading: isLoadingStatus } = useAutentiqueStatus(
@@ -114,6 +134,31 @@ export function ContratoDetailDrawer({ contratoId, open, onClose }: ContratoDeta
       navigator.clipboard.writeText(contrato.autentique_url);
       toast.success('Link copiado!');
     }
+  };
+
+  const handleReenviarEmail = async () => {
+    if (!contrato?.autentique_documento_id) return;
+    await resendAutentique.mutateAsync(contrato.autentique_documento_id);
+  };
+
+  const handleCancelarDocumento = async () => {
+    if (!contrato?.autentique_documento_id) return;
+    await cancelAutentique.mutateAsync({
+      documentId: contrato.autentique_documento_id,
+      contratoId: contrato.id,
+    });
+    onClose();
+  };
+
+  const handleEnviarWhatsApp = () => {
+    const client = contrato?.associados || contrato?.leads;
+    const phone = client?.telefone || ('whatsapp' in (client || {}) ? (client as any)?.whatsapp : undefined);
+    if (!phone || !contrato?.autentique_url) {
+      toast.error('Telefone ou link não disponível');
+      return;
+    }
+    const url = getWhatsAppLink(phone, contrato.autentique_url, client?.nome);
+    window.open(url, '_blank');
   };
 
   if (!contratoId) return null;
@@ -320,6 +365,66 @@ export function ContratoDetailDrawer({ contratoId, open, onClose }: ContratoDeta
                           </>
                         )}
                       </div>
+
+                      {/* Ações para documentos pendentes */}
+                      {(autentiqueStatus.document?.status === 'pending' || autentiqueStatus.document?.status === 'in_progress') && (
+                        <div className="flex flex-col gap-2">
+                          <div className="flex gap-2">
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="flex-1"
+                              onClick={handleReenviarEmail}
+                              disabled={resendAutentique.isPending}
+                            >
+                              {resendAutentique.isPending ? (
+                                <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Mail className="mr-2 h-3.5 w-3.5" />
+                              )}
+                              Reenviar Email
+                            </Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="flex-1"
+                              onClick={handleEnviarWhatsApp}
+                            >
+                              <MessageCircle className="mr-2 h-3.5 w-3.5" />
+                              WhatsApp
+                            </Button>
+                          </div>
+
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="destructive" size="sm" className="w-full">
+                                <XCircle className="mr-2 h-3.5 w-3.5" />
+                                Cancelar Documento
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Cancelar Documento?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Esta ação cancelará o documento no Autentique. O cliente não poderá mais assinar este contrato.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Voltar</AlertDialogCancel>
+                                <AlertDialogAction 
+                                  onClick={handleCancelarDocumento}
+                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                >
+                                  {cancelAutentique.isPending ? (
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                  ) : null}
+                                  Confirmar Cancelamento
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      )}
 
                       {/* Documento assinado */}
                       {autentiqueStatus.document?.signedFileUrl && (
