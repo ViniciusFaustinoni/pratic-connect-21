@@ -99,6 +99,14 @@ import Organograma from "./pages/rh/Organograma";
 import DepartamentosCargos from "./pages/rh/DepartamentosCargos";
 import Beneficios from "./pages/rh/Beneficios";
 
+// Marketing
+import MarketingDashboard from "./pages/marketing/MarketingDashboard";
+import Campanhas from "./pages/marketing/Campanhas";
+import CampanhaDetalhe from "./pages/marketing/CampanhaDetalhe";
+import Canais from "./pages/marketing/Canais";
+import Indicacoes from "./pages/marketing/Indicacoes";
+import UTMs from "./pages/marketing/UTMs";
+
 // Associate App Pages
 import AppLogin from "./pages/app/AppLogin";
 import AppRedefinirSenha from "./pages/app/AppRedefinirSenha";
@@ -232,6 +240,14 @@ const App = () => (
               <Route path="/monitoramento/estoque" element={<Estoque />} />
               <Route path="/monitoramento/mapa" element={<Mapa />} />
               <Route path="/monitoramento/rastreadores" element={<Rastreadores />} />
+              
+              {/* Marketing */}
+              <Route path="/marketing" element={<MarketingDashboard />} />
+              <Route path="/marketing/campanhas" element={<Campanhas />} />
+              <Route path="/marketing/campanhas/:id" element={<CampanhaDetalhe />} />
+              <Route path="/marketing/canais" element={<Canais />} />
+              <Route path="/marketing/indicacoes" element={<Indicacoes />} />
+              <Route path="/marketing/utms" element={<UTMs />} />
               
               {/* Oficinas */}
               <Route path="/oficinas" element={<Oficinas />} />

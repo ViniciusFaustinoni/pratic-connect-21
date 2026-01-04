@@ -1386,6 +1386,220 @@ export type Database = {
         }
         Relationships: []
       }
+      campanhas: {
+        Row: {
+          canal_id: string | null
+          codigo: string | null
+          created_at: string | null
+          criado_por: string | null
+          data_fim: string | null
+          data_inicio: string
+          id: string
+          meta_conversoes: number | null
+          meta_cpl: number | null
+          meta_leads: number | null
+          nome: string
+          observacoes: string | null
+          orcamento_diario: number | null
+          orcamento_total: number | null
+          publico_alvo: string | null
+          regioes: string[] | null
+          responsavel_id: string | null
+          status: string | null
+          tipo: string
+          updated_at: string | null
+          utm_campaign: string | null
+          utm_content: string | null
+          utm_medium: string | null
+          utm_source: string | null
+          utm_term: string | null
+          valor_gasto: number | null
+        }
+        Insert: {
+          canal_id?: string | null
+          codigo?: string | null
+          created_at?: string | null
+          criado_por?: string | null
+          data_fim?: string | null
+          data_inicio: string
+          id?: string
+          meta_conversoes?: number | null
+          meta_cpl?: number | null
+          meta_leads?: number | null
+          nome: string
+          observacoes?: string | null
+          orcamento_diario?: number | null
+          orcamento_total?: number | null
+          publico_alvo?: string | null
+          regioes?: string[] | null
+          responsavel_id?: string | null
+          status?: string | null
+          tipo: string
+          updated_at?: string | null
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
+          valor_gasto?: number | null
+        }
+        Update: {
+          canal_id?: string | null
+          codigo?: string | null
+          created_at?: string | null
+          criado_por?: string | null
+          data_fim?: string | null
+          data_inicio?: string
+          id?: string
+          meta_conversoes?: number | null
+          meta_cpl?: number | null
+          meta_leads?: number | null
+          nome?: string
+          observacoes?: string | null
+          orcamento_diario?: number | null
+          orcamento_total?: number | null
+          publico_alvo?: string | null
+          regioes?: string[] | null
+          responsavel_id?: string | null
+          status?: string | null
+          tipo?: string
+          updated_at?: string | null
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
+          valor_gasto?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campanhas_canal_id_fkey"
+            columns: ["canal_id"]
+            isOneToOne: false
+            referencedRelation: "canais_marketing"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campanhas_canal_id_fkey"
+            columns: ["canal_id"]
+            isOneToOne: false
+            referencedRelation: "view_performance_canais"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campanhas_criado_por_fkey"
+            columns: ["criado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campanhas_responsavel_id_fkey"
+            columns: ["responsavel_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      campanhas_metricas: {
+        Row: {
+          campanha_id: string
+          cliques: number | null
+          conversoes: number | null
+          cpa: number | null
+          cpl: number | null
+          created_at: string | null
+          ctr: number | null
+          data: string
+          id: string
+          impressoes: number | null
+          leads: number | null
+          taxa_conversao: number | null
+          valor_gasto: number | null
+        }
+        Insert: {
+          campanha_id: string
+          cliques?: number | null
+          conversoes?: number | null
+          cpa?: number | null
+          cpl?: number | null
+          created_at?: string | null
+          ctr?: number | null
+          data: string
+          id?: string
+          impressoes?: number | null
+          leads?: number | null
+          taxa_conversao?: number | null
+          valor_gasto?: number | null
+        }
+        Update: {
+          campanha_id?: string
+          cliques?: number | null
+          conversoes?: number | null
+          cpa?: number | null
+          cpl?: number | null
+          created_at?: string | null
+          ctr?: number | null
+          data?: string
+          id?: string
+          impressoes?: number | null
+          leads?: number | null
+          taxa_conversao?: number | null
+          valor_gasto?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campanhas_metricas_campanha_id_fkey"
+            columns: ["campanha_id"]
+            isOneToOne: false
+            referencedRelation: "campanhas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      canais_marketing: {
+        Row: {
+          api_key: string | null
+          ativo: boolean | null
+          created_at: string | null
+          custo_por_lead: number | null
+          descricao: string | null
+          id: string
+          meta_leads_mes: number | null
+          nome: string
+          tipo: string
+          updated_at: string | null
+          webhook_url: string | null
+        }
+        Insert: {
+          api_key?: string | null
+          ativo?: boolean | null
+          created_at?: string | null
+          custo_por_lead?: number | null
+          descricao?: string | null
+          id?: string
+          meta_leads_mes?: number | null
+          nome: string
+          tipo: string
+          updated_at?: string | null
+          webhook_url?: string | null
+        }
+        Update: {
+          api_key?: string | null
+          ativo?: boolean | null
+          created_at?: string | null
+          custo_por_lead?: number | null
+          descricao?: string | null
+          id?: string
+          meta_leads_mes?: number | null
+          nome?: string
+          tipo?: string
+          updated_at?: string | null
+          webhook_url?: string | null
+        }
+        Relationships: []
+      }
       cargos: {
         Row: {
           ativo: boolean | null
@@ -2653,6 +2867,98 @@ export type Database = {
           },
         ]
       }
+      distribuicao_leads_config: {
+        Row: {
+          ativo: boolean | null
+          created_at: string | null
+          id: string
+          proximo_vendedor: number | null
+          regras_canal: Json | null
+          regras_regiao: Json | null
+          tipo: string
+          updated_at: string | null
+          vendedores_ordem: string[] | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          created_at?: string | null
+          id?: string
+          proximo_vendedor?: number | null
+          regras_canal?: Json | null
+          regras_regiao?: Json | null
+          tipo: string
+          updated_at?: string | null
+          vendedores_ordem?: string[] | null
+        }
+        Update: {
+          ativo?: boolean | null
+          created_at?: string | null
+          id?: string
+          proximo_vendedor?: number | null
+          regras_canal?: Json | null
+          regras_regiao?: Json | null
+          tipo?: string
+          updated_at?: string | null
+          vendedores_ordem?: string[] | null
+        }
+        Relationships: []
+      }
+      distribuicao_leads_vendedores: {
+        Row: {
+          canais: string[] | null
+          created_at: string | null
+          id: string
+          leads_recebidos_hoje: number | null
+          leads_recebidos_mes: number | null
+          max_leads_dia: number | null
+          max_leads_mes: number | null
+          recebendo_leads: boolean | null
+          regioes: string[] | null
+          taxa_conversao: number | null
+          ticket_medio: number | null
+          updated_at: string | null
+          vendedor_id: string
+        }
+        Insert: {
+          canais?: string[] | null
+          created_at?: string | null
+          id?: string
+          leads_recebidos_hoje?: number | null
+          leads_recebidos_mes?: number | null
+          max_leads_dia?: number | null
+          max_leads_mes?: number | null
+          recebendo_leads?: boolean | null
+          regioes?: string[] | null
+          taxa_conversao?: number | null
+          ticket_medio?: number | null
+          updated_at?: string | null
+          vendedor_id: string
+        }
+        Update: {
+          canais?: string[] | null
+          created_at?: string | null
+          id?: string
+          leads_recebidos_hoje?: number | null
+          leads_recebidos_mes?: number | null
+          max_leads_dia?: number | null
+          max_leads_mes?: number | null
+          recebendo_leads?: boolean | null
+          regioes?: string[] | null
+          taxa_conversao?: number | null
+          ticket_medio?: number | null
+          updated_at?: string | null
+          vendedor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "distribuicao_leads_vendedores_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       documentos: {
         Row: {
           analista_id: string | null
@@ -3688,6 +3994,184 @@ export type Database = {
           },
         ]
       }
+      indicacoes: {
+        Row: {
+          associado_id: string | null
+          codigo: string | null
+          created_at: string | null
+          data_contato: string | null
+          data_conversao: string | null
+          data_indicacao: string | null
+          data_recompensa: string | null
+          id: string
+          indicado_email: string | null
+          indicado_nome: string
+          indicado_telefone: string
+          indicador_id: string | null
+          indicador_nome: string | null
+          indicador_telefone: string | null
+          lead_id: string | null
+          observacoes: string | null
+          programa_id: string | null
+          recompensa_paga: boolean | null
+          status: string | null
+          updated_at: string | null
+          valor_recompensa: number | null
+        }
+        Insert: {
+          associado_id?: string | null
+          codigo?: string | null
+          created_at?: string | null
+          data_contato?: string | null
+          data_conversao?: string | null
+          data_indicacao?: string | null
+          data_recompensa?: string | null
+          id?: string
+          indicado_email?: string | null
+          indicado_nome: string
+          indicado_telefone: string
+          indicador_id?: string | null
+          indicador_nome?: string | null
+          indicador_telefone?: string | null
+          lead_id?: string | null
+          observacoes?: string | null
+          programa_id?: string | null
+          recompensa_paga?: boolean | null
+          status?: string | null
+          updated_at?: string | null
+          valor_recompensa?: number | null
+        }
+        Update: {
+          associado_id?: string | null
+          codigo?: string | null
+          created_at?: string | null
+          data_contato?: string | null
+          data_conversao?: string | null
+          data_indicacao?: string | null
+          data_recompensa?: string | null
+          id?: string
+          indicado_email?: string | null
+          indicado_nome?: string
+          indicado_telefone?: string
+          indicador_id?: string | null
+          indicador_nome?: string | null
+          indicador_telefone?: string | null
+          lead_id?: string | null
+          observacoes?: string | null
+          programa_id?: string | null
+          recompensa_paga?: boolean | null
+          status?: string | null
+          updated_at?: string | null
+          valor_recompensa?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "indicacoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "indicacoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "indicacoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "indicacoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "indicacoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "indicacoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "indicacoes_indicador_id_fkey"
+            columns: ["indicador_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "indicacoes_indicador_id_fkey"
+            columns: ["indicador_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "indicacoes_indicador_id_fkey"
+            columns: ["indicador_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "indicacoes_indicador_id_fkey"
+            columns: ["indicador_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "indicacoes_indicador_id_fkey"
+            columns: ["indicador_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "indicacoes_indicador_id_fkey"
+            columns: ["indicador_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "indicacoes_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "indicacoes_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["lead_id"]
+          },
+          {
+            foreignKeyName: "indicacoes_programa_id_fkey"
+            columns: ["programa_id"]
+            isOneToOne: false
+            referencedRelation: "programa_indicacao"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       instalacao_fotos: {
         Row: {
           arquivo_url: string
@@ -4028,6 +4512,69 @@ export type Database = {
           },
         ]
       }
+      landing_pages: {
+        Row: {
+          campanha_id: string | null
+          conversoes: number | null
+          created_at: string | null
+          criado_por: string | null
+          id: string
+          nome: string
+          slug: string
+          status: string | null
+          taxa_conversao: number | null
+          updated_at: string | null
+          url: string | null
+          url_preview: string | null
+          visitas: number | null
+        }
+        Insert: {
+          campanha_id?: string | null
+          conversoes?: number | null
+          created_at?: string | null
+          criado_por?: string | null
+          id?: string
+          nome: string
+          slug: string
+          status?: string | null
+          taxa_conversao?: number | null
+          updated_at?: string | null
+          url?: string | null
+          url_preview?: string | null
+          visitas?: number | null
+        }
+        Update: {
+          campanha_id?: string | null
+          conversoes?: number | null
+          created_at?: string | null
+          criado_por?: string | null
+          id?: string
+          nome?: string
+          slug?: string
+          status?: string | null
+          taxa_conversao?: number | null
+          updated_at?: string | null
+          url?: string | null
+          url_preview?: string | null
+          visitas?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "landing_pages_campanha_id_fkey"
+            columns: ["campanha_id"]
+            isOneToOne: false
+            referencedRelation: "campanhas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "landing_pages_criado_por_fkey"
+            columns: ["criado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lead_fontes: {
         Row: {
           ativa: boolean | null
@@ -4070,6 +4617,7 @@ export type Database = {
       leads: {
         Row: {
           associado_id: string | null
+          campanha_id: string | null
           codigo_fipe: string | null
           cpf: string | null
           created_at: string
@@ -4090,6 +4638,11 @@ export type Database = {
           origem: Database["public"]["Enums"]["origem_lead"]
           telefone: string
           updated_at: string
+          utm_campaign: string | null
+          utm_content: string | null
+          utm_medium: string | null
+          utm_source: string | null
+          utm_term: string | null
           veiculo_ano: number | null
           veiculo_fipe: number | null
           veiculo_marca: string | null
@@ -4099,6 +4652,7 @@ export type Database = {
         }
         Insert: {
           associado_id?: string | null
+          campanha_id?: string | null
           codigo_fipe?: string | null
           cpf?: string | null
           created_at?: string
@@ -4119,6 +4673,11 @@ export type Database = {
           origem?: Database["public"]["Enums"]["origem_lead"]
           telefone: string
           updated_at?: string
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
           veiculo_ano?: number | null
           veiculo_fipe?: number | null
           veiculo_marca?: string | null
@@ -4128,6 +4687,7 @@ export type Database = {
         }
         Update: {
           associado_id?: string | null
+          campanha_id?: string | null
           codigo_fipe?: string | null
           cpf?: string | null
           created_at?: string
@@ -4148,6 +4708,11 @@ export type Database = {
           origem?: Database["public"]["Enums"]["origem_lead"]
           telefone?: string
           updated_at?: string
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
           veiculo_ano?: number | null
           veiculo_fipe?: number | null
           veiculo_marca?: string | null
@@ -4197,6 +4762,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "leads_campanha_id_fkey"
+            columns: ["campanha_id"]
+            isOneToOne: false
+            referencedRelation: "campanhas"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "leads_fonte_id_fkey"
@@ -4252,6 +4824,69 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_acompanhamento"
             referencedColumns: ["lead_id"]
+          },
+        ]
+      }
+      materiais_marketing: {
+        Row: {
+          altura: number | null
+          arquivo_url: string | null
+          campanha_id: string | null
+          created_at: string | null
+          criado_por: string | null
+          downloads: number | null
+          formato: string | null
+          id: string
+          largura: number | null
+          nome: string
+          status: string | null
+          thumbnail_url: string | null
+          tipo: string
+        }
+        Insert: {
+          altura?: number | null
+          arquivo_url?: string | null
+          campanha_id?: string | null
+          created_at?: string | null
+          criado_por?: string | null
+          downloads?: number | null
+          formato?: string | null
+          id?: string
+          largura?: number | null
+          nome: string
+          status?: string | null
+          thumbnail_url?: string | null
+          tipo: string
+        }
+        Update: {
+          altura?: number | null
+          arquivo_url?: string | null
+          campanha_id?: string | null
+          created_at?: string | null
+          criado_por?: string | null
+          downloads?: number | null
+          formato?: string | null
+          id?: string
+          largura?: number | null
+          nome?: string
+          status?: string | null
+          thumbnail_url?: string | null
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "materiais_marketing_campanha_id_fkey"
+            columns: ["campanha_id"]
+            isOneToOne: false
+            referencedRelation: "campanhas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "materiais_marketing_criado_por_fkey"
+            columns: ["criado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -5839,6 +6474,57 @@ export type Database = {
         }
         Relationships: []
       }
+      programa_indicacao: {
+        Row: {
+          ativo: boolean | null
+          condicao_pagamento: string | null
+          created_at: string | null
+          data_fim: string | null
+          data_inicio: string | null
+          descricao: string | null
+          id: string
+          limite_indicacoes_mes: number | null
+          nome: string
+          prazo_validade_dias: number | null
+          tipo_recompensa: string | null
+          updated_at: string | null
+          valor_indicado: number | null
+          valor_indicador: number
+        }
+        Insert: {
+          ativo?: boolean | null
+          condicao_pagamento?: string | null
+          created_at?: string | null
+          data_fim?: string | null
+          data_inicio?: string | null
+          descricao?: string | null
+          id?: string
+          limite_indicacoes_mes?: number | null
+          nome: string
+          prazo_validade_dias?: number | null
+          tipo_recompensa?: string | null
+          updated_at?: string | null
+          valor_indicado?: number | null
+          valor_indicador: number
+        }
+        Update: {
+          ativo?: boolean | null
+          condicao_pagamento?: string | null
+          created_at?: string | null
+          data_fim?: string | null
+          data_inicio?: string | null
+          descricao?: string | null
+          id?: string
+          limite_indicacoes_mes?: number | null
+          nome?: string
+          prazo_validade_dias?: number | null
+          tipo_recompensa?: string | null
+          updated_at?: string | null
+          valor_indicado?: number | null
+          valor_indicador?: number
+        }
+        Relationships: []
+      }
       rastreador_alertas: {
         Row: {
           created_at: string | null
@@ -6670,6 +7356,75 @@ export type Database = {
         }
         Relationships: []
       }
+      utms: {
+        Row: {
+          ativo: boolean | null
+          campanha_id: string | null
+          cliques: number | null
+          created_at: string | null
+          criado_por: string | null
+          id: string
+          leads_gerados: number | null
+          url_completa: string | null
+          url_curta: string | null
+          url_destino: string
+          utm_campaign: string | null
+          utm_content: string | null
+          utm_medium: string | null
+          utm_source: string
+          utm_term: string | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          campanha_id?: string | null
+          cliques?: number | null
+          created_at?: string | null
+          criado_por?: string | null
+          id?: string
+          leads_gerados?: number | null
+          url_completa?: string | null
+          url_curta?: string | null
+          url_destino: string
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source: string
+          utm_term?: string | null
+        }
+        Update: {
+          ativo?: boolean | null
+          campanha_id?: string | null
+          cliques?: number | null
+          created_at?: string | null
+          criado_por?: string | null
+          id?: string
+          leads_gerados?: number | null
+          url_completa?: string | null
+          url_curta?: string | null
+          url_destino?: string
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string
+          utm_term?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "utms_campanha_id_fkey"
+            columns: ["campanha_id"]
+            isOneToOne: false
+            referencedRelation: "campanhas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "utms_criado_por_fkey"
+            columns: ["criado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       veiculos: {
         Row: {
           ano_fabricacao: number
@@ -7205,6 +7960,155 @@ export type Database = {
         }
         Relationships: []
       }
+      view_indicacoes_pendentes: {
+        Row: {
+          associado_id: string | null
+          codigo: string | null
+          created_at: string | null
+          data_contato: string | null
+          data_conversao: string | null
+          data_indicacao: string | null
+          data_recompensa: string | null
+          id: string | null
+          indicado_email: string | null
+          indicado_nome: string | null
+          indicado_telefone: string | null
+          indicador_id: string | null
+          indicador_nome: string | null
+          indicador_nome_completo: string | null
+          indicador_telefone: string | null
+          indicador_telefone_completo: string | null
+          lead_id: string | null
+          observacoes: string | null
+          programa_id: string | null
+          programa_nome: string | null
+          recompensa_paga: boolean | null
+          status: string | null
+          updated_at: string | null
+          valor_indicador: number | null
+          valor_recompensa: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "indicacoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "indicacoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "indicacoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "indicacoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "indicacoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "indicacoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "indicacoes_indicador_id_fkey"
+            columns: ["indicador_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "indicacoes_indicador_id_fkey"
+            columns: ["indicador_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "indicacoes_indicador_id_fkey"
+            columns: ["indicador_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "indicacoes_indicador_id_fkey"
+            columns: ["indicador_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "indicacoes_indicador_id_fkey"
+            columns: ["indicador_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "indicacoes_indicador_id_fkey"
+            columns: ["indicador_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "indicacoes_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "indicacoes_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["lead_id"]
+          },
+          {
+            foreignKeyName: "indicacoes_programa_id_fkey"
+            columns: ["programa_id"]
+            isOneToOne: false
+            referencedRelation: "programa_indicacao"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      view_performance_canais: {
+        Row: {
+          conversoes: number | null
+          cpl_medio: number | null
+          id: string | null
+          investimento_total: number | null
+          nome: string | null
+          taxa_conversao: number | null
+          tipo: string | null
+          total_leads: number | null
+        }
+        Relationships: []
+      }
       view_prazos_proximos: {
         Row: {
           data_fim: string | null
@@ -7275,6 +8179,7 @@ export type Database = {
       atualizar_valor_os: { Args: { os_id: string }; Returns: undefined }
       can_access_api_settings: { Args: { _user_id: string }; Returns: boolean }
       can_manage_juridico: { Args: { _user_id: string }; Returns: boolean }
+      can_manage_marketing: { Args: { _user_id: string }; Returns: boolean }
       get_alertas_contagem: {
         Args: never
         Returns: {

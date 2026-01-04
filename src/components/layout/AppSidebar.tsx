@@ -41,6 +41,8 @@ import {
   UserCheck,
   GitBranch,
   Gift,
+  Megaphone,
+  Link,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
@@ -240,6 +242,19 @@ const menuConfig: {
         { title: 'Organograma', url: '/rh/organograma', icon: GitBranch },
         { title: 'Departamentos', url: '/rh/departamentos', icon: Building2 },
         { title: 'Benefícios', url: '/rh/beneficios', icon: Gift },
+      ],
+    },
+    {
+      id: 'marketing',
+      label: 'Marketing',
+      icon: Megaphone,
+      permission: 'canManageMarketing',
+      items: [
+        { title: 'Dashboard', url: '/marketing', icon: BarChart3 },
+        { title: 'Campanhas', url: '/marketing/campanhas', icon: Target },
+        { title: 'Canais', url: '/marketing/canais', icon: Radio },
+        { title: 'Indicações', url: '/marketing/indicacoes', icon: Gift },
+        { title: 'UTMs', url: '/marketing/utms', icon: Link },
       ],
     },
   ],
