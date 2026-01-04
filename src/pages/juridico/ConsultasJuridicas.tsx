@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  HelpCircle, MessageSquare, Clock, Check, Archive, 
+  HelpCircle, MessageSquare, Clock, Check,
   Plus, Search, Eye, Reply, Calendar, User, Building2
 } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
@@ -23,10 +23,23 @@ import {
   StatusConsultaJuridica,
   PrioridadePrazo
 } from '@/types/juridico';
+import { ResponderConsultaModal } from '@/components/juridico/ResponderConsultaModal';
 
 interface ConsultasFilters {
   busca: string;
   status: 'todos' | StatusConsultaJuridica;
+}
+
+interface ConsultaSelecionada {
+  id: string;
+  numero?: string | null;
+  assunto: string;
+  descricao: string;
+  departamento?: string | null;
+  prioridade?: string | null;
+  parecer?: string | null;
+  created_at?: string | null;
+  solicitante?: { id: string; nome: string } | null;
 }
 
 export default function ConsultasJuridicas() {
@@ -35,6 +48,7 @@ export default function ConsultasJuridicas() {
     busca: '',
     status: 'todos',
   });
+  const [consultaSelecionada, setConsultaSelecionada] = useState<ConsultaSelecionada | null>(null);
 
   const { consultas, isLoading } = useConsultasJuridicas({
     status: filters.status !== 'todos' ? filters.status : undefined,
@@ -271,7 +285,17 @@ export default function ConsultasJuridicas() {
                   {(consulta.status === 'pendente' || consulta.status === 'em_analise') && (
                     <Button
                       size="sm"
-                      onClick={() => navigate(`/juridico/consultas/${consulta.id}/responder`)}
+                      onClick={() => setConsultaSelecionada({
+                        id: consulta.id,
+                        numero: consulta.numero,
+                        assunto: consulta.assunto,
+                        descricao: consulta.descricao,
+                        departamento: consulta.departamento,
+                        prioridade: consulta.prioridade,
+                        parecer: consulta.parecer,
+                        created_at: consulta.created_at,
+                        solicitante: consulta.solicitante as any,
+                      })}
                     >
                       <Reply className="h-4 w-4 mr-2" />
                       Responder
@@ -282,6 +306,15 @@ export default function ConsultasJuridicas() {
             </Card>
           ))}
         </div>
+      )}
+
+      {/* Modal Responder */}
+      {consultaSelecionada && (
+        <ResponderConsultaModal
+          open={!!consultaSelecionada}
+          onClose={() => setConsultaSelecionada(null)}
+          consulta={consultaSelecionada}
+        />
       )}
     </div>
   );
