@@ -83,6 +83,7 @@ import JuridicoDashboard from "./pages/juridico/JuridicoDashboard";
 import ProcessosList from "./pages/juridico/ProcessosList";
 import ProcessoDetalhe from "./pages/juridico/ProcessoDetalhe";
 import ProcessoForm from "./pages/juridico/ProcessoForm";
+import PrazosControl from "./pages/juridico/PrazosControl";
 
 // Associate App Pages
 import AppLogin from "./pages/app/AppLogin";
@@ -194,6 +195,7 @@ const App = () => (
               <Route path="/juridico/processos/novo" element={<ProcessoForm />} />
               <Route path="/juridico/processos/:id" element={<ProcessoDetalhe />} />
               <Route path="/juridico/processos/:id/editar" element={<ProcessoForm />} />
+              <Route path="/juridico/prazos" element={<PrazosControl />} />
               
               {/* Monitoramento */}
               <Route path="/monitoramento/instalacoes" element={<Instalacoes />} />
