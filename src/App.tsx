@@ -115,6 +115,8 @@ import DiretoriaDashboard from "./pages/diretoria/DiretoriaDashboard";
 import ProdutosGestao from "./pages/diretoria/ProdutosGestao";
 import ProdutoDetalhe from "./pages/diretoria/ProdutoDetalhe";
 import TabelaPrecos from "./pages/diretoria/TabelaPrecos";
+import RateioSinistros from "./pages/diretoria/RateioSinistros";
+import IndicadoresAtuariais from "./pages/diretoria/IndicadoresAtuariais";
 
 // Associate App Pages
 import AppLogin from "./pages/app/AppLogin";
@@ -263,10 +265,12 @@ const App = () => (
               <Route path="/marketing/relatorios" element={<RelatoriosMarketing />} />
               
               {/* Diretoria */}
-            <Route path="/diretoria" element={<DiretoriaDashboard />} />
-            <Route path="/diretoria/produtos" element={<ProdutosGestao />} />
-            <Route path="/diretoria/produtos/:id" element={<ProdutoDetalhe />} />
-            <Route path="/diretoria/precos" element={<TabelaPrecos />} />
+              <Route path="/diretoria" element={<DiretoriaDashboard />} />
+              <Route path="/diretoria/produtos" element={<ProdutosGestao />} />
+              <Route path="/diretoria/produtos/:id" element={<ProdutoDetalhe />} />
+              <Route path="/diretoria/precos" element={<TabelaPrecos />} />
+              <Route path="/diretoria/rateios" element={<RateioSinistros />} />
+              <Route path="/diretoria/indicadores" element={<IndicadoresAtuariais />} />
               
               {/* Oficinas */}
               <Route path="/oficinas" element={<Oficinas />} />
