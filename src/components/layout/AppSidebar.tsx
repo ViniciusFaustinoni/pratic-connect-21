@@ -267,6 +267,8 @@ const menuConfig: {
       permission: 'isGerencia',
       items: [
         { title: 'Dashboard', url: '/diretoria', icon: BarChart3 },
+        { title: 'Produtos', url: '/diretoria/produtos', icon: Package },
+        { title: 'Preços', url: '/diretoria/precos', icon: DollarSign },
         { title: 'Indicadores', url: '/diretoria/indicadores', icon: TrendingUp },
         { title: 'Rateios', url: '/diretoria/rateios', icon: PieChart },
         { title: 'Configurações', url: '/configuracoes', icon: Settings },
