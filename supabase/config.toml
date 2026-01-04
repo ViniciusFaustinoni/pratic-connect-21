@@ -32,3 +32,12 @@ verify_jwt = false
 
 [functions.notificar-sinistro]
 verify_jwt = false
+
+[functions.asaas-clientes]
+verify_jwt = true
+
+[functions.asaas-cobrancas]
+verify_jwt = true
+
+[functions.asaas-webhook]
+verify_jwt = false
