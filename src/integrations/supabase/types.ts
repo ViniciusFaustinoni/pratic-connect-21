@@ -5432,6 +5432,59 @@ export type Database = {
           },
         ]
       }
+      notificacoes_sistema: {
+        Row: {
+          ativo: boolean | null
+          created_at: string | null
+          criado_por: string | null
+          destino: string
+          destino_id: string | null
+          destino_role: Database["public"]["Enums"]["app_role"] | null
+          expira_em: string | null
+          id: string
+          link: string | null
+          mensagem: string
+          tipo: string | null
+          titulo: string
+        }
+        Insert: {
+          ativo?: boolean | null
+          created_at?: string | null
+          criado_por?: string | null
+          destino: string
+          destino_id?: string | null
+          destino_role?: Database["public"]["Enums"]["app_role"] | null
+          expira_em?: string | null
+          id?: string
+          link?: string | null
+          mensagem: string
+          tipo?: string | null
+          titulo: string
+        }
+        Update: {
+          ativo?: boolean | null
+          created_at?: string | null
+          criado_por?: string | null
+          destino?: string
+          destino_id?: string | null
+          destino_role?: Database["public"]["Enums"]["app_role"] | null
+          expira_em?: string | null
+          id?: string
+          link?: string | null
+          mensagem?: string
+          tipo?: string | null
+          titulo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notificacoes_sistema_criado_por_fkey"
+            columns: ["criado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       oficinas: {
         Row: {
           agencia: string | null
@@ -7690,6 +7743,56 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["veiculo_id"]
+          },
+        ]
+      }
+      tabela_precos: {
+        Row: {
+          ativo: boolean | null
+          created_at: string | null
+          faixa_valor_max: number
+          faixa_valor_min: number
+          id: string
+          plano_id: string
+          updated_at: string | null
+          valor_adesao: number | null
+          valor_mensalidade: number
+          vigencia_fim: string | null
+          vigencia_inicio: string
+        }
+        Insert: {
+          ativo?: boolean | null
+          created_at?: string | null
+          faixa_valor_max: number
+          faixa_valor_min: number
+          id?: string
+          plano_id: string
+          updated_at?: string | null
+          valor_adesao?: number | null
+          valor_mensalidade: number
+          vigencia_fim?: string | null
+          vigencia_inicio?: string
+        }
+        Update: {
+          ativo?: boolean | null
+          created_at?: string | null
+          faixa_valor_max?: number
+          faixa_valor_min?: number
+          id?: string
+          plano_id?: string
+          updated_at?: string | null
+          valor_adesao?: number | null
+          valor_mensalidade?: number
+          vigencia_fim?: string | null
+          vigencia_inicio?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tabela_precos_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "planos"
+            referencedColumns: ["id"]
           },
         ]
       }
