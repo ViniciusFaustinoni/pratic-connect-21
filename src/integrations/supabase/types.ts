@@ -279,6 +279,83 @@ export type Database = {
         }
         Relationships: []
       }
+      afastamentos: {
+        Row: {
+          cid: string | null
+          created_at: string | null
+          data_fim: string | null
+          data_inicio: string
+          dias_afastamento: number | null
+          documento_url: string | null
+          funcionario_id: string
+          id: string
+          motivo: string
+          registrado_por: string | null
+          status: string | null
+          tipo: string
+          updated_at: string | null
+        }
+        Insert: {
+          cid?: string | null
+          created_at?: string | null
+          data_fim?: string | null
+          data_inicio: string
+          dias_afastamento?: number | null
+          documento_url?: string | null
+          funcionario_id: string
+          id?: string
+          motivo: string
+          registrado_por?: string | null
+          status?: string | null
+          tipo: string
+          updated_at?: string | null
+        }
+        Update: {
+          cid?: string | null
+          created_at?: string | null
+          data_fim?: string | null
+          data_inicio?: string
+          dias_afastamento?: number | null
+          documento_url?: string | null
+          funcionario_id?: string
+          id?: string
+          motivo?: string
+          registrado_por?: string | null
+          status?: string | null
+          tipo?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "afastamentos_funcionario_id_fkey"
+            columns: ["funcionario_id"]
+            isOneToOne: false
+            referencedRelation: "funcionarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "afastamentos_funcionario_id_fkey"
+            columns: ["funcionario_id"]
+            isOneToOne: false
+            referencedRelation: "view_aniversariantes_mes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "afastamentos_funcionario_id_fkey"
+            columns: ["funcionario_id"]
+            isOneToOne: false
+            referencedRelation: "view_funcionarios_ativos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "afastamentos_registrado_por_fkey"
+            columns: ["registrado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       api_keys: {
         Row: {
           ativa: boolean | null
@@ -1087,6 +1164,269 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["veiculo_id"]
+          },
+        ]
+      }
+      avaliacoes: {
+        Row: {
+          avaliador_id: string
+          created_at: string | null
+          feedback_funcionario: string | null
+          funcionario_id: string
+          id: string
+          nota_competencias: number | null
+          nota_comportamento: number | null
+          nota_final: number | null
+          nota_resultados: number | null
+          periodo_fim: string
+          periodo_inicio: string
+          plano_desenvolvimento: string | null
+          pontos_fortes: string | null
+          pontos_melhoria: string | null
+          status: string | null
+          tipo: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          avaliador_id: string
+          created_at?: string | null
+          feedback_funcionario?: string | null
+          funcionario_id: string
+          id?: string
+          nota_competencias?: number | null
+          nota_comportamento?: number | null
+          nota_final?: number | null
+          nota_resultados?: number | null
+          periodo_fim: string
+          periodo_inicio: string
+          plano_desenvolvimento?: string | null
+          pontos_fortes?: string | null
+          pontos_melhoria?: string | null
+          status?: string | null
+          tipo?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          avaliador_id?: string
+          created_at?: string | null
+          feedback_funcionario?: string | null
+          funcionario_id?: string
+          id?: string
+          nota_competencias?: number | null
+          nota_comportamento?: number | null
+          nota_final?: number | null
+          nota_resultados?: number | null
+          periodo_fim?: string
+          periodo_inicio?: string
+          plano_desenvolvimento?: string | null
+          pontos_fortes?: string | null
+          pontos_melhoria?: string | null
+          status?: string | null
+          tipo?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "avaliacoes_avaliador_id_fkey"
+            columns: ["avaliador_id"]
+            isOneToOne: false
+            referencedRelation: "funcionarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "avaliacoes_avaliador_id_fkey"
+            columns: ["avaliador_id"]
+            isOneToOne: false
+            referencedRelation: "view_aniversariantes_mes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "avaliacoes_avaliador_id_fkey"
+            columns: ["avaliador_id"]
+            isOneToOne: false
+            referencedRelation: "view_funcionarios_ativos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "avaliacoes_funcionario_id_fkey"
+            columns: ["funcionario_id"]
+            isOneToOne: false
+            referencedRelation: "funcionarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "avaliacoes_funcionario_id_fkey"
+            columns: ["funcionario_id"]
+            isOneToOne: false
+            referencedRelation: "view_aniversariantes_mes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "avaliacoes_funcionario_id_fkey"
+            columns: ["funcionario_id"]
+            isOneToOne: false
+            referencedRelation: "view_funcionarios_ativos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      banco_horas: {
+        Row: {
+          ano: number
+          created_at: string | null
+          fechado: boolean | null
+          fechado_em: string | null
+          fechado_por: string | null
+          funcionario_id: string
+          horas_compensadas: unknown
+          horas_extras: unknown
+          id: string
+          mes: number
+          saldo_anterior: unknown
+          saldo_atual: unknown
+          updated_at: string | null
+        }
+        Insert: {
+          ano: number
+          created_at?: string | null
+          fechado?: boolean | null
+          fechado_em?: string | null
+          fechado_por?: string | null
+          funcionario_id: string
+          horas_compensadas?: unknown
+          horas_extras?: unknown
+          id?: string
+          mes: number
+          saldo_anterior?: unknown
+          saldo_atual?: unknown
+          updated_at?: string | null
+        }
+        Update: {
+          ano?: number
+          created_at?: string | null
+          fechado?: boolean | null
+          fechado_em?: string | null
+          fechado_por?: string | null
+          funcionario_id?: string
+          horas_compensadas?: unknown
+          horas_extras?: unknown
+          id?: string
+          mes?: number
+          saldo_anterior?: unknown
+          saldo_atual?: unknown
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "banco_horas_fechado_por_fkey"
+            columns: ["fechado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "banco_horas_funcionario_id_fkey"
+            columns: ["funcionario_id"]
+            isOneToOne: false
+            referencedRelation: "funcionarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "banco_horas_funcionario_id_fkey"
+            columns: ["funcionario_id"]
+            isOneToOne: false
+            referencedRelation: "view_aniversariantes_mes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "banco_horas_funcionario_id_fkey"
+            columns: ["funcionario_id"]
+            isOneToOne: false
+            referencedRelation: "view_funcionarios_ativos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      beneficios: {
+        Row: {
+          ativo: boolean | null
+          created_at: string | null
+          descricao: string | null
+          fornecedor: string | null
+          id: string
+          nome: string
+          percentual_desconto: number | null
+          tipo: string
+          valor_empresa: number | null
+          valor_funcionario: number | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          created_at?: string | null
+          descricao?: string | null
+          fornecedor?: string | null
+          id?: string
+          nome: string
+          percentual_desconto?: number | null
+          tipo: string
+          valor_empresa?: number | null
+          valor_funcionario?: number | null
+        }
+        Update: {
+          ativo?: boolean | null
+          created_at?: string | null
+          descricao?: string | null
+          fornecedor?: string | null
+          id?: string
+          nome?: string
+          percentual_desconto?: number | null
+          tipo?: string
+          valor_empresa?: number | null
+          valor_funcionario?: number | null
+        }
+        Relationships: []
+      }
+      cargos: {
+        Row: {
+          ativo: boolean | null
+          cbo: string | null
+          created_at: string | null
+          departamento_id: string | null
+          descricao: string | null
+          id: string
+          nivel: number | null
+          nome: string
+          salario_base: number | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          cbo?: string | null
+          created_at?: string | null
+          departamento_id?: string | null
+          descricao?: string | null
+          id?: string
+          nivel?: number | null
+          nome: string
+          salario_base?: number | null
+        }
+        Update: {
+          ativo?: boolean | null
+          cbo?: string | null
+          created_at?: string | null
+          departamento_id?: string | null
+          descricao?: string | null
+          id?: string
+          nivel?: number | null
+          nome?: string
+          salario_base?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cargos_departamento_id_fkey"
+            columns: ["departamento_id"]
+            isOneToOne: false
+            referencedRelation: "departamentos"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -2265,6 +2605,54 @@ export type Database = {
           },
         ]
       }
+      departamentos: {
+        Row: {
+          ativo: boolean | null
+          created_at: string | null
+          departamento_pai_id: string | null
+          descricao: string | null
+          id: string
+          nome: string
+          responsavel_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          created_at?: string | null
+          departamento_pai_id?: string | null
+          descricao?: string | null
+          id?: string
+          nome: string
+          responsavel_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          ativo?: boolean | null
+          created_at?: string | null
+          departamento_pai_id?: string | null
+          descricao?: string | null
+          id?: string
+          nome?: string
+          responsavel_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "departamentos_departamento_pai_id_fkey"
+            columns: ["departamento_pai_id"]
+            isOneToOne: false
+            referencedRelation: "departamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "departamentos_responsavel_id_fkey"
+            columns: ["responsavel_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       documentos: {
         Row: {
           analista_id: string | null
@@ -2629,6 +3017,673 @@ export type Database = {
             columns: ["reaberto_por"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ferias: {
+        Row: {
+          adiantamento_13: boolean | null
+          aprovado_em: string | null
+          aprovado_por: string | null
+          created_at: string | null
+          data_fim: string
+          data_inicio: string
+          dias_abono: number | null
+          dias_gozados: number
+          funcionario_id: string
+          id: string
+          observacoes: string | null
+          periodo_aquisitivo_fim: string
+          periodo_aquisitivo_inicio: string
+          status: string | null
+          updated_at: string | null
+          valor_abono: number | null
+        }
+        Insert: {
+          adiantamento_13?: boolean | null
+          aprovado_em?: string | null
+          aprovado_por?: string | null
+          created_at?: string | null
+          data_fim: string
+          data_inicio: string
+          dias_abono?: number | null
+          dias_gozados: number
+          funcionario_id: string
+          id?: string
+          observacoes?: string | null
+          periodo_aquisitivo_fim: string
+          periodo_aquisitivo_inicio: string
+          status?: string | null
+          updated_at?: string | null
+          valor_abono?: number | null
+        }
+        Update: {
+          adiantamento_13?: boolean | null
+          aprovado_em?: string | null
+          aprovado_por?: string | null
+          created_at?: string | null
+          data_fim?: string
+          data_inicio?: string
+          dias_abono?: number | null
+          dias_gozados?: number
+          funcionario_id?: string
+          id?: string
+          observacoes?: string | null
+          periodo_aquisitivo_fim?: string
+          periodo_aquisitivo_inicio?: string
+          status?: string | null
+          updated_at?: string | null
+          valor_abono?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ferias_aprovado_por_fkey"
+            columns: ["aprovado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ferias_funcionario_id_fkey"
+            columns: ["funcionario_id"]
+            isOneToOne: false
+            referencedRelation: "funcionarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ferias_funcionario_id_fkey"
+            columns: ["funcionario_id"]
+            isOneToOne: false
+            referencedRelation: "view_aniversariantes_mes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ferias_funcionario_id_fkey"
+            columns: ["funcionario_id"]
+            isOneToOne: false
+            referencedRelation: "view_funcionarios_ativos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      funcionarios: {
+        Row: {
+          agencia: string | null
+          bairro: string | null
+          banco: string | null
+          carga_horaria_semanal: number | null
+          cargo_id: string | null
+          celular: string | null
+          cep: string | null
+          certificado_reservista: string | null
+          cidade: string | null
+          cnh: string | null
+          cnh_categoria: string | null
+          cnh_validade: string | null
+          complemento: string | null
+          conta: string | null
+          cpf: string
+          created_at: string | null
+          ctps_numero: string | null
+          ctps_serie: string | null
+          ctps_uf: string | null
+          data_admissao: string
+          data_demissao: string | null
+          data_nascimento: string | null
+          departamento_id: string | null
+          email_pessoal: string | null
+          estado: string | null
+          estado_civil: string | null
+          foto_url: string | null
+          gestor_id: string | null
+          horario_entrada: string | null
+          horario_saida: string | null
+          id: string
+          intervalo_minutos: number | null
+          logradouro: string | null
+          matricula: string | null
+          motivo_demissao: string | null
+          nacionalidade: string | null
+          naturalidade: string | null
+          nome_completo: string
+          numero: string | null
+          pis: string | null
+          pix_chave: string | null
+          pix_tipo: string | null
+          rg: string | null
+          rg_orgao: string | null
+          salario_atual: number | null
+          secao_eleitoral: string | null
+          sexo: string | null
+          status: string | null
+          telefone: string | null
+          tipo_conta: string | null
+          tipo_contrato: string | null
+          titulo_eleitor: string | null
+          updated_at: string | null
+          usuario_id: string | null
+          zona_eleitoral: string | null
+        }
+        Insert: {
+          agencia?: string | null
+          bairro?: string | null
+          banco?: string | null
+          carga_horaria_semanal?: number | null
+          cargo_id?: string | null
+          celular?: string | null
+          cep?: string | null
+          certificado_reservista?: string | null
+          cidade?: string | null
+          cnh?: string | null
+          cnh_categoria?: string | null
+          cnh_validade?: string | null
+          complemento?: string | null
+          conta?: string | null
+          cpf: string
+          created_at?: string | null
+          ctps_numero?: string | null
+          ctps_serie?: string | null
+          ctps_uf?: string | null
+          data_admissao: string
+          data_demissao?: string | null
+          data_nascimento?: string | null
+          departamento_id?: string | null
+          email_pessoal?: string | null
+          estado?: string | null
+          estado_civil?: string | null
+          foto_url?: string | null
+          gestor_id?: string | null
+          horario_entrada?: string | null
+          horario_saida?: string | null
+          id?: string
+          intervalo_minutos?: number | null
+          logradouro?: string | null
+          matricula?: string | null
+          motivo_demissao?: string | null
+          nacionalidade?: string | null
+          naturalidade?: string | null
+          nome_completo: string
+          numero?: string | null
+          pis?: string | null
+          pix_chave?: string | null
+          pix_tipo?: string | null
+          rg?: string | null
+          rg_orgao?: string | null
+          salario_atual?: number | null
+          secao_eleitoral?: string | null
+          sexo?: string | null
+          status?: string | null
+          telefone?: string | null
+          tipo_conta?: string | null
+          tipo_contrato?: string | null
+          titulo_eleitor?: string | null
+          updated_at?: string | null
+          usuario_id?: string | null
+          zona_eleitoral?: string | null
+        }
+        Update: {
+          agencia?: string | null
+          bairro?: string | null
+          banco?: string | null
+          carga_horaria_semanal?: number | null
+          cargo_id?: string | null
+          celular?: string | null
+          cep?: string | null
+          certificado_reservista?: string | null
+          cidade?: string | null
+          cnh?: string | null
+          cnh_categoria?: string | null
+          cnh_validade?: string | null
+          complemento?: string | null
+          conta?: string | null
+          cpf?: string
+          created_at?: string | null
+          ctps_numero?: string | null
+          ctps_serie?: string | null
+          ctps_uf?: string | null
+          data_admissao?: string
+          data_demissao?: string | null
+          data_nascimento?: string | null
+          departamento_id?: string | null
+          email_pessoal?: string | null
+          estado?: string | null
+          estado_civil?: string | null
+          foto_url?: string | null
+          gestor_id?: string | null
+          horario_entrada?: string | null
+          horario_saida?: string | null
+          id?: string
+          intervalo_minutos?: number | null
+          logradouro?: string | null
+          matricula?: string | null
+          motivo_demissao?: string | null
+          nacionalidade?: string | null
+          naturalidade?: string | null
+          nome_completo?: string
+          numero?: string | null
+          pis?: string | null
+          pix_chave?: string | null
+          pix_tipo?: string | null
+          rg?: string | null
+          rg_orgao?: string | null
+          salario_atual?: number | null
+          secao_eleitoral?: string | null
+          sexo?: string | null
+          status?: string | null
+          telefone?: string | null
+          tipo_conta?: string | null
+          tipo_contrato?: string | null
+          titulo_eleitor?: string | null
+          updated_at?: string | null
+          usuario_id?: string | null
+          zona_eleitoral?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "funcionarios_cargo_id_fkey"
+            columns: ["cargo_id"]
+            isOneToOne: false
+            referencedRelation: "cargos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funcionarios_departamento_id_fkey"
+            columns: ["departamento_id"]
+            isOneToOne: false
+            referencedRelation: "departamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funcionarios_gestor_id_fkey"
+            columns: ["gestor_id"]
+            isOneToOne: false
+            referencedRelation: "funcionarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funcionarios_gestor_id_fkey"
+            columns: ["gestor_id"]
+            isOneToOne: false
+            referencedRelation: "view_aniversariantes_mes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funcionarios_gestor_id_fkey"
+            columns: ["gestor_id"]
+            isOneToOne: false
+            referencedRelation: "view_funcionarios_ativos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funcionarios_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      funcionarios_beneficios: {
+        Row: {
+          ativo: boolean | null
+          beneficio_id: string
+          created_at: string | null
+          dados_adicionais: Json | null
+          data_fim: string | null
+          data_inicio: string
+          funcionario_id: string
+          id: string
+          valor_empresa: number | null
+          valor_funcionario: number | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          beneficio_id: string
+          created_at?: string | null
+          dados_adicionais?: Json | null
+          data_fim?: string | null
+          data_inicio: string
+          funcionario_id: string
+          id?: string
+          valor_empresa?: number | null
+          valor_funcionario?: number | null
+        }
+        Update: {
+          ativo?: boolean | null
+          beneficio_id?: string
+          created_at?: string | null
+          dados_adicionais?: Json | null
+          data_fim?: string | null
+          data_inicio?: string
+          funcionario_id?: string
+          id?: string
+          valor_empresa?: number | null
+          valor_funcionario?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "funcionarios_beneficios_beneficio_id_fkey"
+            columns: ["beneficio_id"]
+            isOneToOne: false
+            referencedRelation: "beneficios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funcionarios_beneficios_funcionario_id_fkey"
+            columns: ["funcionario_id"]
+            isOneToOne: false
+            referencedRelation: "funcionarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funcionarios_beneficios_funcionario_id_fkey"
+            columns: ["funcionario_id"]
+            isOneToOne: false
+            referencedRelation: "view_aniversariantes_mes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funcionarios_beneficios_funcionario_id_fkey"
+            columns: ["funcionario_id"]
+            isOneToOne: false
+            referencedRelation: "view_funcionarios_ativos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      funcionarios_dependentes: {
+        Row: {
+          cpf: string | null
+          created_at: string | null
+          data_nascimento: string | null
+          funcionario_id: string
+          id: string
+          inclui_ir: boolean | null
+          inclui_plano_saude: boolean | null
+          nome: string
+          parentesco: string | null
+        }
+        Insert: {
+          cpf?: string | null
+          created_at?: string | null
+          data_nascimento?: string | null
+          funcionario_id: string
+          id?: string
+          inclui_ir?: boolean | null
+          inclui_plano_saude?: boolean | null
+          nome: string
+          parentesco?: string | null
+        }
+        Update: {
+          cpf?: string | null
+          created_at?: string | null
+          data_nascimento?: string | null
+          funcionario_id?: string
+          id?: string
+          inclui_ir?: boolean | null
+          inclui_plano_saude?: boolean | null
+          nome?: string
+          parentesco?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "funcionarios_dependentes_funcionario_id_fkey"
+            columns: ["funcionario_id"]
+            isOneToOne: false
+            referencedRelation: "funcionarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funcionarios_dependentes_funcionario_id_fkey"
+            columns: ["funcionario_id"]
+            isOneToOne: false
+            referencedRelation: "view_aniversariantes_mes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funcionarios_dependentes_funcionario_id_fkey"
+            columns: ["funcionario_id"]
+            isOneToOne: false
+            referencedRelation: "view_funcionarios_ativos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      funcionarios_documentos: {
+        Row: {
+          arquivo_url: string
+          created_at: string | null
+          data_validade: string | null
+          enviado_por: string | null
+          funcionario_id: string
+          id: string
+          nome: string
+          observacoes: string | null
+          tipo: string
+        }
+        Insert: {
+          arquivo_url: string
+          created_at?: string | null
+          data_validade?: string | null
+          enviado_por?: string | null
+          funcionario_id: string
+          id?: string
+          nome: string
+          observacoes?: string | null
+          tipo: string
+        }
+        Update: {
+          arquivo_url?: string
+          created_at?: string | null
+          data_validade?: string | null
+          enviado_por?: string | null
+          funcionario_id?: string
+          id?: string
+          nome?: string
+          observacoes?: string | null
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "funcionarios_documentos_enviado_por_fkey"
+            columns: ["enviado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funcionarios_documentos_funcionario_id_fkey"
+            columns: ["funcionario_id"]
+            isOneToOne: false
+            referencedRelation: "funcionarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funcionarios_documentos_funcionario_id_fkey"
+            columns: ["funcionario_id"]
+            isOneToOne: false
+            referencedRelation: "view_aniversariantes_mes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funcionarios_documentos_funcionario_id_fkey"
+            columns: ["funcionario_id"]
+            isOneToOne: false
+            referencedRelation: "view_funcionarios_ativos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      funcionarios_historico: {
+        Row: {
+          cargo_anterior_id: string | null
+          cargo_novo_id: string | null
+          created_at: string | null
+          data_vigencia: string
+          departamento_anterior_id: string | null
+          departamento_novo_id: string | null
+          funcionario_id: string
+          id: string
+          motivo: string | null
+          registrado_por: string | null
+          salario_anterior: number | null
+          salario_novo: number | null
+          tipo: string
+        }
+        Insert: {
+          cargo_anterior_id?: string | null
+          cargo_novo_id?: string | null
+          created_at?: string | null
+          data_vigencia: string
+          departamento_anterior_id?: string | null
+          departamento_novo_id?: string | null
+          funcionario_id: string
+          id?: string
+          motivo?: string | null
+          registrado_por?: string | null
+          salario_anterior?: number | null
+          salario_novo?: number | null
+          tipo: string
+        }
+        Update: {
+          cargo_anterior_id?: string | null
+          cargo_novo_id?: string | null
+          created_at?: string | null
+          data_vigencia?: string
+          departamento_anterior_id?: string | null
+          departamento_novo_id?: string | null
+          funcionario_id?: string
+          id?: string
+          motivo?: string | null
+          registrado_por?: string | null
+          salario_anterior?: number | null
+          salario_novo?: number | null
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "funcionarios_historico_cargo_anterior_id_fkey"
+            columns: ["cargo_anterior_id"]
+            isOneToOne: false
+            referencedRelation: "cargos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funcionarios_historico_cargo_novo_id_fkey"
+            columns: ["cargo_novo_id"]
+            isOneToOne: false
+            referencedRelation: "cargos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funcionarios_historico_departamento_anterior_id_fkey"
+            columns: ["departamento_anterior_id"]
+            isOneToOne: false
+            referencedRelation: "departamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funcionarios_historico_departamento_novo_id_fkey"
+            columns: ["departamento_novo_id"]
+            isOneToOne: false
+            referencedRelation: "departamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funcionarios_historico_funcionario_id_fkey"
+            columns: ["funcionario_id"]
+            isOneToOne: false
+            referencedRelation: "funcionarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funcionarios_historico_funcionario_id_fkey"
+            columns: ["funcionario_id"]
+            isOneToOne: false
+            referencedRelation: "view_aniversariantes_mes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funcionarios_historico_funcionario_id_fkey"
+            columns: ["funcionario_id"]
+            isOneToOne: false
+            referencedRelation: "view_funcionarios_ativos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funcionarios_historico_registrado_por_fkey"
+            columns: ["registrado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      funcionarios_treinamentos: {
+        Row: {
+          certificado_url: string | null
+          created_at: string | null
+          data_conclusao: string | null
+          data_inscricao: string | null
+          funcionario_id: string
+          id: string
+          nota: number | null
+          observacoes: string | null
+          status: string | null
+          treinamento_id: string
+        }
+        Insert: {
+          certificado_url?: string | null
+          created_at?: string | null
+          data_conclusao?: string | null
+          data_inscricao?: string | null
+          funcionario_id: string
+          id?: string
+          nota?: number | null
+          observacoes?: string | null
+          status?: string | null
+          treinamento_id: string
+        }
+        Update: {
+          certificado_url?: string | null
+          created_at?: string | null
+          data_conclusao?: string | null
+          data_inscricao?: string | null
+          funcionario_id?: string
+          id?: string
+          nota?: number | null
+          observacoes?: string | null
+          status?: string | null
+          treinamento_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "funcionarios_treinamentos_funcionario_id_fkey"
+            columns: ["funcionario_id"]
+            isOneToOne: false
+            referencedRelation: "funcionarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funcionarios_treinamentos_funcionario_id_fkey"
+            columns: ["funcionario_id"]
+            isOneToOne: false
+            referencedRelation: "view_aniversariantes_mes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funcionarios_treinamentos_funcionario_id_fkey"
+            columns: ["funcionario_id"]
+            isOneToOne: false
+            referencedRelation: "view_funcionarios_ativos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funcionarios_treinamentos_treinamento_id_fkey"
+            columns: ["treinamento_id"]
+            isOneToOne: false
+            referencedRelation: "treinamentos"
             referencedColumns: ["id"]
           },
         ]
@@ -4021,6 +5076,104 @@ export type Database = {
           valor_adesao?: number
         }
         Relationships: []
+      }
+      ponto_registros: {
+        Row: {
+          aprovado_em: string | null
+          aprovado_por: string | null
+          created_at: string | null
+          data: string
+          documento_url: string | null
+          entrada_1: string | null
+          entrada_2: string | null
+          entrada_3: string | null
+          funcionario_id: string
+          horas_extras: unknown
+          horas_faltantes: unknown
+          horas_trabalhadas: unknown
+          id: string
+          justificativa: string | null
+          saida_1: string | null
+          saida_2: string | null
+          saida_3: string | null
+          status: string | null
+          tipo_dia: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          aprovado_em?: string | null
+          aprovado_por?: string | null
+          created_at?: string | null
+          data: string
+          documento_url?: string | null
+          entrada_1?: string | null
+          entrada_2?: string | null
+          entrada_3?: string | null
+          funcionario_id: string
+          horas_extras?: unknown
+          horas_faltantes?: unknown
+          horas_trabalhadas?: unknown
+          id?: string
+          justificativa?: string | null
+          saida_1?: string | null
+          saida_2?: string | null
+          saida_3?: string | null
+          status?: string | null
+          tipo_dia?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          aprovado_em?: string | null
+          aprovado_por?: string | null
+          created_at?: string | null
+          data?: string
+          documento_url?: string | null
+          entrada_1?: string | null
+          entrada_2?: string | null
+          entrada_3?: string | null
+          funcionario_id?: string
+          horas_extras?: unknown
+          horas_faltantes?: unknown
+          horas_trabalhadas?: unknown
+          id?: string
+          justificativa?: string | null
+          saida_1?: string | null
+          saida_2?: string | null
+          saida_3?: string | null
+          status?: string | null
+          tipo_dia?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ponto_registros_aprovado_por_fkey"
+            columns: ["aprovado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ponto_registros_funcionario_id_fkey"
+            columns: ["funcionario_id"]
+            isOneToOne: false
+            referencedRelation: "funcionarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ponto_registros_funcionario_id_fkey"
+            columns: ["funcionario_id"]
+            isOneToOne: false
+            referencedRelation: "view_aniversariantes_mes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ponto_registros_funcionario_id_fkey"
+            columns: ["funcionario_id"]
+            isOneToOne: false
+            referencedRelation: "view_funcionarios_ativos"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       prestadores_assistencia: {
         Row: {
@@ -5445,6 +6598,57 @@ export type Database = {
           },
         ]
       }
+      treinamentos: {
+        Row: {
+          ativo: boolean | null
+          carga_horaria: number | null
+          created_at: string | null
+          custo_por_pessoa: number | null
+          data_fim: string | null
+          data_inicio: string | null
+          descricao: string | null
+          id: string
+          instituicao: string | null
+          instrutor: string | null
+          modalidade: string | null
+          nome: string
+          tipo: string | null
+          vagas: number | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          carga_horaria?: number | null
+          created_at?: string | null
+          custo_por_pessoa?: number | null
+          data_fim?: string | null
+          data_inicio?: string | null
+          descricao?: string | null
+          id?: string
+          instituicao?: string | null
+          instrutor?: string | null
+          modalidade?: string | null
+          nome: string
+          tipo?: string | null
+          vagas?: number | null
+        }
+        Update: {
+          ativo?: boolean | null
+          carga_horaria?: number | null
+          created_at?: string | null
+          custo_por_pessoa?: number | null
+          data_fim?: string | null
+          data_inicio?: string | null
+          descricao?: string | null
+          id?: string
+          instituicao?: string | null
+          instrutor?: string | null
+          modalidade?: string | null
+          nome?: string
+          tipo?: string | null
+          vagas?: number | null
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -5839,6 +7043,18 @@ export type Database = {
           },
         ]
       }
+      view_aniversariantes_mes: {
+        Row: {
+          cargo_nome: string | null
+          data_nascimento: string | null
+          departamento_nome: string | null
+          dia: number | null
+          foto_url: string | null
+          id: string | null
+          nome_completo: string | null
+        }
+        Relationships: []
+      }
       view_associado_financeiro: {
         Row: {
           associado_id: string | null
@@ -5858,6 +7074,114 @@ export type Database = {
           valor_vencido: number | null
         }
         Relationships: []
+      }
+      view_funcionarios_ativos: {
+        Row: {
+          agencia: string | null
+          bairro: string | null
+          banco: string | null
+          carga_horaria_semanal: number | null
+          cargo_id: string | null
+          cargo_nivel: number | null
+          cargo_nome: string | null
+          celular: string | null
+          cep: string | null
+          certificado_reservista: string | null
+          cidade: string | null
+          cnh: string | null
+          cnh_categoria: string | null
+          cnh_validade: string | null
+          complemento: string | null
+          conta: string | null
+          cpf: string | null
+          created_at: string | null
+          ctps_numero: string | null
+          ctps_serie: string | null
+          ctps_uf: string | null
+          data_admissao: string | null
+          data_demissao: string | null
+          data_nascimento: string | null
+          departamento_id: string | null
+          departamento_nome: string | null
+          email_corporativo: string | null
+          email_pessoal: string | null
+          estado: string | null
+          estado_civil: string | null
+          foto_url: string | null
+          gestor_id: string | null
+          gestor_nome: string | null
+          horario_entrada: string | null
+          horario_saida: string | null
+          id: string | null
+          intervalo_minutos: number | null
+          logradouro: string | null
+          matricula: string | null
+          motivo_demissao: string | null
+          nacionalidade: string | null
+          naturalidade: string | null
+          nome_completo: string | null
+          numero: string | null
+          pis: string | null
+          pix_chave: string | null
+          pix_tipo: string | null
+          rg: string | null
+          rg_orgao: string | null
+          salario_atual: number | null
+          secao_eleitoral: string | null
+          sexo: string | null
+          status: string | null
+          telefone: string | null
+          tipo_conta: string | null
+          tipo_contrato: string | null
+          titulo_eleitor: string | null
+          updated_at: string | null
+          usuario_id: string | null
+          zona_eleitoral: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "funcionarios_cargo_id_fkey"
+            columns: ["cargo_id"]
+            isOneToOne: false
+            referencedRelation: "cargos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funcionarios_departamento_id_fkey"
+            columns: ["departamento_id"]
+            isOneToOne: false
+            referencedRelation: "departamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funcionarios_gestor_id_fkey"
+            columns: ["gestor_id"]
+            isOneToOne: false
+            referencedRelation: "funcionarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funcionarios_gestor_id_fkey"
+            columns: ["gestor_id"]
+            isOneToOne: false
+            referencedRelation: "view_aniversariantes_mes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funcionarios_gestor_id_fkey"
+            columns: ["gestor_id"]
+            isOneToOne: false
+            referencedRelation: "view_funcionarios_ativos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funcionarios_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       view_inadimplentes: {
         Row: {
