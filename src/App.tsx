@@ -92,6 +92,8 @@ import ConsultasJuridicas from "./pages/juridico/ConsultasJuridicas";
 import RHDashboard from "./pages/rh/RHDashboard";
 import FuncionariosList from "./pages/rh/FuncionariosList";
 import FuncionarioDetalhe from "./pages/rh/FuncionarioDetalhe";
+import FuncionarioForm from "./pages/rh/FuncionarioForm";
+import ControlePonto from "./pages/rh/ControlePonto";
 
 // Associate App Pages
 import AppLogin from "./pages/app/AppLogin";
@@ -211,7 +213,10 @@ const App = () => (
               {/* RH */}
               <Route path="/rh" element={<RHDashboard />} />
               <Route path="/rh/funcionarios" element={<FuncionariosList />} />
+              <Route path="/rh/funcionarios/novo" element={<FuncionarioForm />} />
               <Route path="/rh/funcionarios/:id" element={<FuncionarioDetalhe />} />
+              <Route path="/rh/funcionarios/:id/editar" element={<FuncionarioForm />} />
+              <Route path="/rh/ponto" element={<ControlePonto />} />
               
               {/* Monitoramento */}
               <Route path="/monitoramento/instalacoes" element={<Instalacoes />} />
