@@ -66,10 +66,13 @@ const getDiasRestantes = (dataFim: string) => {
   return { label: `${dias} dias`, class: 'bg-muted text-muted-foreground' };
 };
 
+import { NovoAndamentoModal } from '@/components/juridico/NovoAndamentoModal';
+
 export default function ProcessoDetalhe() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('resumo');
+  const [novoAndamentoOpen, setNovoAndamentoOpen] = useState(false);
 
   const { processo, andamentos, audiencias, documentos, custas, isLoading } = useProcesso(id);
   const { prazos, cumprirPrazo, cancelarPrazo, isCumprindo } = useProcessosPrazos({ processo_id: id });
@@ -390,7 +393,7 @@ export default function ProcessoDetalhe() {
         <TabsContent value="andamentos" className="space-y-4">
           <div className="flex justify-between items-center">
             <h3 className="text-lg font-semibold">Andamentos Processuais</h3>
-            <Button onClick={handleNotImplemented}>
+            <Button onClick={() => setNovoAndamentoOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Novo Andamento
             </Button>
@@ -707,6 +710,13 @@ export default function ProcessoDetalhe() {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Modals */}
+      <NovoAndamentoModal
+        open={novoAndamentoOpen}
+        onClose={() => setNovoAndamentoOpen(false)}
+        processoId={id!}
+      />
     </div>
   );
 }
