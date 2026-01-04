@@ -1,24 +1,110 @@
+import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { 
-  Target, TrendingUp, Users, DollarSign, 
-  BarChart3, ArrowUpRight, ArrowDownRight,
-  Megaphone, Gift, Link2, Plus
-} from 'lucide-react';
-import { useMarketingStats, useCampanhas, useIndicacoes } from '@/hooks/useMarketing';
-import { useNavigate } from 'react-router-dom';
+import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { 
+  Users, TrendingUp, Target, DollarSign, Calculator, UserPlus,
+  Plus, Link, BarChart3, ChevronRight, Megaphone
+} from 'lucide-react';
+import { useMarketingStats, useCampanhas } from '@/hooks/useMarketing';
+import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
+import { CampanhaFormDialog } from '@/components/marketing/CampanhaFormDialog';
+import { IndicacaoFormDialog } from '@/components/marketing/IndicacaoFormDialog';
 
 export default function MarketingDashboard() {
   const navigate = useNavigate();
+  const [showCampanhaModal, setShowCampanhaModal] = useState(false);
+  const [showIndicacaoModal, setShowIndicacaoModal] = useState(false);
+  
   const { data: stats, isLoading: loadingStats } = useMarketingStats();
-  const { data: campanhas, isLoading: loadingCampanhas } = useCampanhas({ status: 'ativa' });
-  const { data: indicacoes, isLoading: loadingIndicacoes } = useIndicacoes({ status: 'convertido' });
 
-  const indicacoesPendentes = indicacoes?.filter(i => !i.recompensa_paga) || [];
+  // Query: Leads por origem (do mês)
+  const { data: leadsPorOrigem, isLoading: loadingOrigem } = useQuery({
+    queryKey: ['leads-por-origem'],
+    queryFn: async () => {
+      const inicioMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+      const { data } = await supabase
+        .from('leads')
+        .select('origem')
+        .gte('created_at', inicioMes.toISOString());
+      
+      const contagem = new Map<string, number>();
+      data?.forEach(l => {
+        const origem = l.origem || 'nao_identificado';
+        contagem.set(origem, (contagem.get(origem) || 0) + 1);
+      });
+      
+      return Array.from(contagem.entries())
+        .map(([origem, total]) => ({ origem, total }))
+        .sort((a, b) => b.total - a.total);
+    }
+  });
+
+  // Query: Top campanhas ativas com métricas
+  const { data: topCampanhas, isLoading: loadingCampanhas } = useQuery({
+    queryKey: ['top-campanhas'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('campanhas')
+        .select(`
+          id, codigo, nome, status,
+          metricas:campanhas_metricas(leads, conversoes, valor_gasto)
+        `)
+        .eq('status', 'ativa')
+        .limit(5);
+      
+      return data?.map(c => ({
+        ...c,
+        totalLeads: c.metricas?.reduce((sum, m) => sum + (m.leads || 0), 0) || 0,
+        totalConversoes: c.metricas?.reduce((sum, m) => sum + (m.conversoes || 0), 0) || 0,
+        totalGasto: c.metricas?.reduce((sum, m) => sum + (m.valor_gasto || 0), 0) || 0
+      })) || [];
+    }
+  });
+
+  // Query: Indicações recentes (últimas 5)
+  const { data: indicacoesRecentes } = useQuery({
+    queryKey: ['indicacoes-recentes'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('indicacoes')
+        .select('id, codigo, indicado_nome, status, data_indicacao')
+        .order('data_indicacao', { ascending: false })
+        .limit(5);
+      if (error) throw error;
+      return data;
+    }
+  });
+
+  const origemLabels: Record<string, string> = {
+    'site': 'Site',
+    'indicacao': 'Indicação',
+    'google_ads': 'Google Ads',
+    'facebook': 'Facebook',
+    'instagram': 'Instagram',
+    'whatsapp': 'WhatsApp',
+    'telefone': 'Telefone',
+    'presencial': 'Presencial',
+    'outro': 'Outro',
+    'nao_identificado': 'Não identificado'
+  };
+
+  const statusLabels: Record<string, string> = {
+    'pendente': 'Pendente',
+    'contatado': 'Contatado',
+    'convertido': 'Convertido',
+    'recompensado': 'Recompensado',
+    'expirado': 'Expirado',
+    'cancelado': 'Cancelado'
+  };
 
   return (
     <div className="space-y-6 p-6">
@@ -30,274 +116,355 @@ export default function MarketingDashboard() {
             Gerencie campanhas, canais e indicações
           </p>
         </div>
-        <Button onClick={() => navigate('/marketing/campanhas')}>
-          <Plus className="mr-2 h-4 w-4" />
-          Nova Campanha
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => navigate('/marketing/utms')}>
+            <Link className="mr-2 h-4 w-4" />
+            Novo UTM
+          </Button>
+          <Button onClick={() => setShowCampanhaModal(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Nova Campanha
+          </Button>
+        </div>
       </div>
 
-      {/* KPIs */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Leads do Mês</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
+      {/* KPIs - 6 colunas */}
+      <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+        {/* Card 1: Leads do Mês */}
+        <Card className="bg-blue-50 border-blue-200 dark:bg-blue-950/30 dark:border-blue-800">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-medium text-blue-700 dark:text-blue-300">Leads</CardTitle>
+              <Users className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+            </div>
           </CardHeader>
           <CardContent>
             {loadingStats ? (
-              <Skeleton className="h-8 w-20" />
+              <Skeleton className="h-8 w-16" />
             ) : (
               <>
-                <div className="text-2xl font-bold">{stats?.leadsMes || 0}</div>
-                <p className="text-xs text-muted-foreground">
-                  <span className="text-green-600 flex items-center gap-0.5">
-                    <ArrowUpRight className="h-3 w-3" /> +12% vs mês anterior
-                  </span>
-                </p>
+                <div className="text-2xl font-bold text-blue-900 dark:text-blue-100">{stats?.leadsMes || 0}</div>
+                <p className="text-xs text-blue-600 dark:text-blue-400">Este mês</p>
               </>
             )}
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">CPL Médio</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
+        {/* Card 2: Conversões */}
+        <Card className="bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-800">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-medium text-green-700 dark:text-green-300">Conversões</CardTitle>
+              <TrendingUp className="h-4 w-4 text-green-600 dark:text-green-400" />
+            </div>
           </CardHeader>
           <CardContent>
             {loadingStats ? (
-              <Skeleton className="h-8 w-20" />
+              <Skeleton className="h-8 w-16" />
             ) : (
               <>
-                <div className="text-2xl font-bold">
+                <div className="text-2xl font-bold text-green-900 dark:text-green-100">{stats?.conversoesMes || 0}</div>
+                <p className="text-xs text-green-600 dark:text-green-400">Este mês</p>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Card 3: Taxa Conversão */}
+        <Card className="bg-purple-50 border-purple-200 dark:bg-purple-950/30 dark:border-purple-800">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-medium text-purple-700 dark:text-purple-300">Taxa Conversão</CardTitle>
+              <Target className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            {loadingStats ? (
+              <Skeleton className="h-8 w-16" />
+            ) : (
+              <>
+                <div className="text-2xl font-bold text-purple-900 dark:text-purple-100">{(stats?.taxaConversao || 0).toFixed(1)}%</div>
+                <p className="text-xs text-purple-600 dark:text-purple-400">Leads para vendas</p>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Card 4: Investimento */}
+        <Card className="bg-yellow-50 border-yellow-200 dark:bg-yellow-950/30 dark:border-yellow-800">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-medium text-yellow-700 dark:text-yellow-300">Investimento</CardTitle>
+              <DollarSign className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            {loadingStats ? (
+              <Skeleton className="h-8 w-16" />
+            ) : (
+              <>
+                <div className="text-2xl font-bold text-yellow-900 dark:text-yellow-100">
+                  R$ {(stats?.investimentoMes || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}
+                </div>
+                <p className="text-xs text-yellow-600 dark:text-yellow-400">Este mês</p>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Card 5: CPL Médio */}
+        <Card className="bg-orange-50 border-orange-200 dark:bg-orange-950/30 dark:border-orange-800">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-medium text-orange-700 dark:text-orange-300">CPL Médio</CardTitle>
+              <Calculator className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            {loadingStats ? (
+              <Skeleton className="h-8 w-16" />
+            ) : (
+              <>
+                <div className="text-2xl font-bold text-orange-900 dark:text-orange-100">
                   R$ {(stats?.cplMedio || 0).toFixed(2)}
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Custo por lead
-                </p>
+                <p className="text-xs text-orange-600 dark:text-orange-400">Custo por lead</p>
               </>
             )}
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Taxa de Conversão</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+        {/* Card 6: Indicações */}
+        <Card className="bg-pink-50 border-pink-200 dark:bg-pink-950/30 dark:border-pink-800">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-medium text-pink-700 dark:text-pink-300">Indicações</CardTitle>
+              <UserPlus className="h-4 w-4 text-pink-600 dark:text-pink-400" />
+            </div>
           </CardHeader>
           <CardContent>
             {loadingStats ? (
-              <Skeleton className="h-8 w-20" />
+              <Skeleton className="h-8 w-16" />
             ) : (
               <>
-                <div className="text-2xl font-bold">
-                  {(stats?.taxaConversao || 0).toFixed(1)}%
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {stats?.conversoesMes || 0} conversões
-                </p>
-              </>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Investimento</CardTitle>
-            <BarChart3 className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            {loadingStats ? (
-              <Skeleton className="h-8 w-20" />
-            ) : (
-              <>
-                <div className="text-2xl font-bold">
-                  R$ {(stats?.investimentoMes || 0).toLocaleString('pt-BR')}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Este mês
-                </p>
+                <div className="text-2xl font-bold text-pink-900 dark:text-pink-100">{stats?.indicacoesMes || 0}</div>
+                <p className="text-xs text-pink-600 dark:text-pink-400">Este mês</p>
               </>
             )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Quick Links */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card 
-          className="cursor-pointer hover:border-primary/50 transition-colors"
-          onClick={() => navigate('/marketing/campanhas')}
-        >
-          <CardContent className="flex items-center gap-4 p-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-100 text-blue-600">
-              <Megaphone className="h-6 w-6" />
-            </div>
-            <div>
-              <p className="font-medium">Campanhas</p>
-              <p className="text-sm text-muted-foreground">
-                {stats?.campanhasAtivas || 0} ativas
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+      {/* Grid Principal - 3 colunas */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* COLUNA 1-2 (col-span-2) */}
+        <div className="lg:col-span-2 space-y-6">
+          
+          {/* Card: Leads por Origem */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Leads por Origem</CardTitle>
+              <CardDescription>Distribuição de leads por canal no mês atual</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loadingOrigem ? (
+                <div className="space-y-3">
+                  {[1, 2, 3, 4].map(i => (
+                    <Skeleton key={i} className="h-8 w-full" />
+                  ))}
+                </div>
+              ) : !leadsPorOrigem?.length ? (
+                <p className="text-center text-muted-foreground py-8">
+                  Nenhum lead registrado este mês
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {leadsPorOrigem.map((item) => {
+                    const maxTotal = leadsPorOrigem[0]?.total || 1;
+                    const percent = (item.total / maxTotal) * 100;
+                    return (
+                      <div key={item.origem} className="flex items-center gap-4">
+                        <span className="w-32 text-sm truncate">
+                          {origemLabels[item.origem] || item.origem.replace('_', ' ')}
+                        </span>
+                        <Progress value={percent} className="flex-1" />
+                        <span className="w-12 text-right font-medium">{item.total}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
-        <Card 
-          className="cursor-pointer hover:border-primary/50 transition-colors"
-          onClick={() => navigate('/marketing/indicacoes')}
-        >
-          <CardContent className="flex items-center gap-4 p-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-green-100 text-green-600">
-              <Gift className="h-6 w-6" />
-            </div>
-            <div>
-              <p className="font-medium">Indicações</p>
-              <p className="text-sm text-muted-foreground">
-                {stats?.indicacoesMes || 0} este mês
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card 
-          className="cursor-pointer hover:border-primary/50 transition-colors"
-          onClick={() => navigate('/marketing/canais')}
-        >
-          <CardContent className="flex items-center gap-4 p-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-purple-100 text-purple-600">
-              <Target className="h-6 w-6" />
-            </div>
-            <div>
-              <p className="font-medium">Canais</p>
-              <p className="text-sm text-muted-foreground">
-                Gestão de origem
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card 
-          className="cursor-pointer hover:border-primary/50 transition-colors"
-          onClick={() => navigate('/marketing/utms')}
-        >
-          <CardContent className="flex items-center gap-4 p-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-orange-100 text-orange-600">
-              <Link2 className="h-6 w-6" />
-            </div>
-            <div>
-              <p className="font-medium">UTMs</p>
-              <p className="text-sm text-muted-foreground">
-                Gerador de links
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Campanhas Ativas e Indicações Pendentes */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Campanhas Ativas */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              Campanhas Ativas
+          {/* Card: Campanhas Ativas (Tabela) */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Campanhas Ativas</CardTitle>
               <Button variant="ghost" size="sm" onClick={() => navigate('/marketing/campanhas')}>
-                Ver todas
+                Ver todas <ChevronRight className="ml-1 h-4 w-4" />
               </Button>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {loadingCampanhas ? (
-              <div className="space-y-3">
-                {[1, 2, 3].map(i => (
-                  <Skeleton key={i} className="h-16 w-full" />
-                ))}
-              </div>
-            ) : campanhas?.length === 0 ? (
-              <p className="text-center text-muted-foreground py-8">
-                Nenhuma campanha ativa
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {campanhas?.slice(0, 5).map(campanha => (
-                  <div 
-                    key={campanha.id}
-                    className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 cursor-pointer transition-colors"
-                    onClick={() => navigate(`/marketing/campanhas/${campanha.id}`)}
-                  >
-                    <div>
-                      <p className="font-medium">{campanha.nome}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {campanha.codigo} • {campanha.canal?.nome || 'Sem canal'}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                        Ativa
-                      </Badge>
-                      {campanha.meta_leads && (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Meta: {campanha.meta_leads} leads
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+            </CardHeader>
+            <CardContent>
+              {loadingCampanhas ? (
+                <div className="space-y-3">
+                  {[1, 2, 3].map(i => (
+                    <Skeleton key={i} className="h-12 w-full" />
+                  ))}
+                </div>
+              ) : !topCampanhas?.length ? (
+                <p className="text-center text-muted-foreground py-8">
+                  Nenhuma campanha ativa
+                </p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Campanha</TableHead>
+                      <TableHead className="text-center">Leads</TableHead>
+                      <TableHead className="text-center">Conversões</TableHead>
+                      <TableHead className="text-right">CPL</TableHead>
+                      <TableHead className="text-right">Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {topCampanhas.map(campanha => (
+                      <TableRow 
+                        key={campanha.id}
+                        className="cursor-pointer hover:bg-muted/50"
+                        onClick={() => navigate(`/marketing/campanhas/${campanha.id}`)}
+                      >
+                        <TableCell>
+                          <div className="font-medium">{campanha.nome}</div>
+                          <div className="text-xs text-muted-foreground">{campanha.codigo}</div>
+                        </TableCell>
+                        <TableCell className="text-center">{campanha.totalLeads}</TableCell>
+                        <TableCell className="text-center">{campanha.totalConversoes}</TableCell>
+                        <TableCell className="text-right">
+                          R$ {campanha.totalLeads > 0 
+                            ? (campanha.totalGasto / campanha.totalLeads).toFixed(2) 
+                            : '0.00'}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                            Ativa
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </div>
 
-        {/* Indicações Pendentes de Recompensa */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              Recompensas Pendentes
-              <Badge variant="secondary">{indicacoesPendentes.length}</Badge>
-            </CardTitle>
-            <CardDescription>
-              Indicações convertidas aguardando pagamento
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {loadingIndicacoes ? (
-              <div className="space-y-3">
-                {[1, 2, 3].map(i => (
-                  <Skeleton key={i} className="h-16 w-full" />
-                ))}
-              </div>
-            ) : indicacoesPendentes.length === 0 ? (
-              <p className="text-center text-muted-foreground py-8">
-                Nenhuma recompensa pendente
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {indicacoesPendentes.slice(0, 5).map(indicacao => (
-                  <div 
-                    key={indicacao.id}
-                    className="flex items-center justify-between p-3 rounded-lg border"
-                  >
-                    <div>
-                      <p className="font-medium">{indicacao.indicador_nome}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Indicou: {indicacao.indicado_nome}
-                      </p>
+        {/* COLUNA 3 */}
+        <div className="space-y-6">
+          
+          {/* Card: Ações Rápidas */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Ações Rápidas</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-2">
+              <Button variant="outline" className="justify-start" onClick={() => setShowCampanhaModal(true)}>
+                <Plus className="mr-2 h-4 w-4" /> Nova Campanha
+              </Button>
+              <Button variant="outline" className="justify-start" onClick={() => navigate('/marketing/utms')}>
+                <Link className="mr-2 h-4 w-4" /> Gerar UTM
+              </Button>
+              <Button variant="outline" className="justify-start" onClick={() => setShowIndicacaoModal(true)}>
+                <UserPlus className="mr-2 h-4 w-4" /> Nova Indicação
+              </Button>
+              <Button variant="outline" className="justify-start" onClick={() => navigate('/vendas/relatorios')}>
+                <BarChart3 className="mr-2 h-4 w-4" /> Ver Relatórios
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Card: Top Origens */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Top Origens</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {loadingOrigem ? (
+                <div className="space-y-3">
+                  {[1, 2, 3].map(i => (
+                    <Skeleton key={i} className="h-12 w-full" />
+                  ))}
+                </div>
+              ) : !leadsPorOrigem?.length ? (
+                <p className="text-center text-muted-foreground py-4 text-sm">
+                  Sem dados
+                </p>
+              ) : (
+                <div className="space-y-1">
+                  {leadsPorOrigem.slice(0, 3).map((item, idx) => (
+                    <div key={item.origem} className="flex items-center gap-3 py-2">
+                      <div className={cn(
+                        "flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold",
+                        idx === 0 && "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300",
+                        idx === 1 && "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
+                        idx === 2 && "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300"
+                      )}>
+                        {idx + 1}º
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-medium">
+                          {origemLabels[item.origem] || item.origem.replace('_', ' ')}
+                        </p>
+                        <p className="text-xs text-muted-foreground">{item.total} leads</p>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <p className="font-medium text-green-600">
-                        R$ {(indicacao.valor_recompensa || 0).toFixed(2)}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {indicacao.data_conversao && format(new Date(indicacao.data_conversao), 'dd/MM/yyyy', { locale: ptBR })}
-                      </p>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Card: Indicações Recentes */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Indicações Recentes</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {!indicacoesRecentes?.length ? (
+                <p className="text-center text-muted-foreground py-4 text-sm">
+                  Nenhuma indicação
+                </p>
+              ) : (
+                <div className="space-y-1">
+                  {indicacoesRecentes.map(indicacao => (
+                    <div key={indicacao.id} className="flex items-center justify-between py-2 border-b last:border-0">
+                      <div>
+                        <p className="font-medium text-sm">{indicacao.indicado_nome}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {indicacao.data_indicacao && format(new Date(indicacao.data_indicacao), 'dd/MM/yyyy', { locale: ptBR })}
+                        </p>
+                      </div>
+                      <Badge variant={indicacao.status === 'convertido' ? 'default' : 'outline'}>
+                        {statusLabels[indicacao.status] || indicacao.status}
+                      </Badge>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
+
+      {/* Modais */}
+      <CampanhaFormDialog 
+        open={showCampanhaModal} 
+        onClose={() => setShowCampanhaModal(false)} 
+      />
+      <IndicacaoFormDialog 
+        open={showIndicacaoModal} 
+        onClose={() => setShowIndicacaoModal(false)} 
+      />
     </div>
   );
 }
