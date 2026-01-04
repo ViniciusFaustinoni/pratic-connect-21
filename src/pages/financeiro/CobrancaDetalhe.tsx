@@ -1,5 +1,5 @@
 import { ArrowLeft, Copy, Download, Send, Phone, MessageSquare, 
-         AlertTriangle, ExternalLink, MoreVertical, Mail, Ban } from 'lucide-react';
+         AlertTriangle, ExternalLink, MoreVertical, Mail, Ban, Loader2, RefreshCw } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -8,13 +8,14 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, 
          DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useParams, useNavigate } from 'react-router-dom';
 import { format, differenceInDays, isPast, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { QRCodeSVG } from 'qrcode.react';
+import { useAsaas } from '@/hooks/useAsaas';
 
 const statusConfig: Record<string, { label: string; class: string }> = {
   'PENDING': { label: 'Pendente', class: 'bg-yellow-100 text-yellow-800' },
@@ -69,6 +70,8 @@ const formatLinhaDigitavel = (linha: string | null | undefined) => {
 export default function CobrancaDetalhe() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { cancelarCobranca, gerarSegundaVia } = useAsaas();
 
   const { data: cobranca, isLoading, error } = useQuery({
     queryKey: ['cobranca', id],
@@ -115,8 +118,73 @@ export default function CobrancaDetalhe() {
     return isPast(venc) && !['RECEIVED', 'CONFIRMED', 'CANCELED', 'REFUNDED'].includes(status);
   };
 
-  const handleAcaoPlaceholder = (acao: string) => {
-    toast.info(`${acao} - Funcionalidade em desenvolvimento`);
+  const handleCancelarCobranca = async () => {
+    if (!cobranca?.asaas_id) return;
+    
+    if (cobranca.asaas_id.startsWith('local_')) {
+      // Cobrança local - cancelar diretamente no banco
+      const { error } = await supabase
+        .from('asaas_cobrancas')
+        .update({ status: 'CANCELED' })
+        .eq('id', cobranca.id);
+      
+      if (error) {
+        toast.error('Erro ao cancelar cobrança');
+        return;
+      }
+      
+      toast.success('Cobrança cancelada!');
+      queryClient.invalidateQueries({ queryKey: ['cobranca', id] });
+      return;
+    }
+    
+    try {
+      await cancelarCobranca.mutateAsync(cobranca.asaas_id);
+      queryClient.invalidateQueries({ queryKey: ['cobranca', id] });
+    } catch (error) {
+      // Error already handled in hook
+    }
+  };
+
+  const handleGerarSegundaVia = async () => {
+    if (!cobranca?.asaas_id || cobranca.asaas_id.startsWith('local_')) {
+      toast.error('Segunda via disponível apenas para cobranças ASAAS');
+      return;
+    }
+    
+    try {
+      await gerarSegundaVia.mutateAsync(cobranca.asaas_id);
+      queryClient.invalidateQueries({ queryKey: ['cobranca', id] });
+    } catch (error) {
+      // Error already handled in hook
+    }
+  };
+
+  const handleEnviarWhatsApp = () => {
+    if (!cobranca?.associado?.whatsapp && !cobranca?.associado?.telefone) {
+      toast.error('Associado não possui telefone cadastrado');
+      return;
+    }
+    
+    const telefone = (cobranca.associado.whatsapp || cobranca.associado.telefone || '').replace(/\D/g, '');
+    const valor = formatCurrency(cobranca.valor_liquido || cobranca.valor);
+    const vencimento = cobranca.data_vencimento 
+      ? format(parseISO(cobranca.data_vencimento), 'dd/MM/yyyy')
+      : '';
+    
+    let mensagem = `Olá ${cobranca.associado.nome}! Segue sua cobrança:\n\n`;
+    mensagem += `💰 Valor: ${valor}\n`;
+    mensagem += `📅 Vencimento: ${vencimento}\n\n`;
+    
+    if (cobranca.pix_copia_cola) {
+      mensagem += `📱 PIX Copia e Cola:\n${cobranca.pix_copia_cola}\n\n`;
+    }
+    
+    if (cobranca.boleto_url) {
+      mensagem += `📄 Boleto: ${cobranca.boleto_url}`;
+    }
+    
+    window.open(`https://wa.me/55${telefone}?text=${encodeURIComponent(mensagem)}`, '_blank');
   };
 
   if (isLoading) {
@@ -194,13 +262,9 @@ export default function CobrancaDetalhe() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => handleAcaoPlaceholder('Enviar por WhatsApp')}>
+            <DropdownMenuItem onClick={handleEnviarWhatsApp}>
               <MessageSquare className="mr-2 h-4 w-4" />
               Enviar por WhatsApp
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleAcaoPlaceholder('Enviar por E-mail')}>
-              <Mail className="mr-2 h-4 w-4" />
-              Enviar por E-mail
             </DropdownMenuItem>
             {cobranca.boleto_url && (
               <DropdownMenuItem onClick={() => window.open(cobranca.boleto_url, '_blank')}>
@@ -208,19 +272,34 @@ export default function CobrancaDetalhe() {
                 Baixar PDF do Boleto
               </DropdownMenuItem>
             )}
-            <DropdownMenuSeparator />
-            {!isPago && !isCancelado && (
-              <DropdownMenuItem onClick={() => handleAcaoPlaceholder('Registrar Pagamento')}>
-                <Send className="mr-2 h-4 w-4" />
-                Registrar Pagamento Manual
-              </DropdownMenuItem>
+            {!isPago && !isCancelado && !cobranca.asaas_id?.startsWith('local_') && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem 
+                  onClick={handleGerarSegundaVia}
+                  disabled={gerarSegundaVia.isPending}
+                >
+                  {gerarSegundaVia.isPending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                  )}
+                  Gerar Segunda Via
+                </DropdownMenuItem>
+              </>
             )}
+            <DropdownMenuSeparator />
             {podeCancelar && (
               <DropdownMenuItem 
-                onClick={() => handleAcaoPlaceholder('Cancelar Cobrança')}
+                onClick={handleCancelarCobranca}
                 className="text-destructive"
+                disabled={cancelarCobranca.isPending}
               >
-                <Ban className="mr-2 h-4 w-4" />
+                {cancelarCobranca.isPending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Ban className="mr-2 h-4 w-4" />
+                )}
                 Cancelar Cobrança
               </DropdownMenuItem>
             )}
@@ -236,12 +315,9 @@ export default function CobrancaDetalhe() {
           <AlertDescription className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <span>Esta cobrança está vencida há {diasAtraso} {diasAtraso === 1 ? 'dia' : 'dias'}.</span>
             <div className="flex gap-2">
-              <Button size="sm" variant="outline" onClick={() => handleAcaoPlaceholder('Enviar Lembrete')}>
+              <Button size="sm" variant="outline" onClick={handleEnviarWhatsApp}>
                 <Send className="mr-2 h-4 w-4" />
                 Enviar Lembrete
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => handleAcaoPlaceholder('Aplicar Juros/Multa')}>
-                Aplicar Juros/Multa
               </Button>
             </div>
           </AlertDescription>
@@ -583,20 +659,34 @@ export default function CobrancaDetalhe() {
       {!isPago && !isCancelado && (
         <Card>
           <CardContent className="flex flex-wrap gap-3 pt-6">
-            <Button onClick={() => handleAcaoPlaceholder('Registrar Pagamento')}>
-              Registrar Pagamento
-            </Button>
-            <Button variant="outline" onClick={() => handleAcaoPlaceholder('Enviar Lembrete')}>
+            <Button variant="outline" onClick={handleEnviarWhatsApp}>
               <Send className="mr-2 h-4 w-4" />
-              Enviar Lembrete
+              Enviar por WhatsApp
             </Button>
-            {mostrarAlertaVencido && (
-              <Button variant="outline" onClick={() => handleAcaoPlaceholder('Aplicar Juros/Multa')}>
-                Aplicar Juros/Multa
+            {!cobranca.asaas_id?.startsWith('local_') && (
+              <Button 
+                variant="outline" 
+                onClick={handleGerarSegundaVia}
+                disabled={gerarSegundaVia.isPending}
+              >
+                {gerarSegundaVia.isPending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                )}
+                Segunda Via
               </Button>
             )}
-            <Button variant="destructive" onClick={() => handleAcaoPlaceholder('Cancelar Cobrança')}>
-              <Ban className="mr-2 h-4 w-4" />
+            <Button 
+              variant="destructive" 
+              onClick={handleCancelarCobranca}
+              disabled={cancelarCobranca.isPending}
+            >
+              {cancelarCobranca.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Ban className="mr-2 h-4 w-4" />
+              )}
               Cancelar
             </Button>
           </CardContent>
