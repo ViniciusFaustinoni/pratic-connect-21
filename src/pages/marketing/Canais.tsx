@@ -6,9 +6,9 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { 
   Plus, Search, Radio, Globe, DollarSign, 
-  Users, Mail, Share2, Building, Target
+  Users, Mail, Share2, Building, Target, TrendingUp
 } from 'lucide-react';
-import { useCanais, useUpdateCanal } from '@/hooks/useMarketing';
+import { useCanais, useUpdateCanal, usePerformanceCanais } from '@/hooks/useMarketing';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CanalFormDialog } from '@/components/marketing/CanalFormDialog';
 
@@ -32,15 +32,39 @@ const tipoLabels: Record<string, string> = {
   offline: 'Offline',
 };
 
+const tipoCores: Record<string, string> = {
+  organico: 'text-green-600 bg-green-100',
+  pago: 'text-blue-600 bg-blue-100',
+  referral: 'text-purple-600 bg-purple-100',
+  direto: 'text-amber-600 bg-amber-100',
+  social: 'text-pink-600 bg-pink-100',
+  email: 'text-orange-600 bg-orange-100',
+  offline: 'text-gray-600 bg-gray-100',
+};
+
 export default function Canais() {
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingCanal, setEditingCanal] = useState<any>(null);
 
   const { data: canais, isLoading } = useCanais();
+  const { data: performance } = usePerformanceCanais();
   const updateCanal = useUpdateCanal();
 
-  const filteredCanais = canais?.filter(c =>
+  // Mesclar performance com canais
+  const canaisComPerformance = canais?.map(canal => {
+    const perf = performance?.find(p => p.id === canal.id);
+    return {
+      ...canal,
+      total_leads: perf?.total_leads || 0,
+      conversoes: perf?.conversoes || 0,
+      taxa_conversao: perf?.taxa_conversao || 0,
+      cpl_medio: perf?.cpl_medio || 0,
+      investimento_total: perf?.investimento_total || 0,
+    };
+  });
+
+  const filteredCanais = canaisComPerformance?.filter(c =>
     c.nome.toLowerCase().includes(search.toLowerCase())
   );
 
@@ -79,7 +103,7 @@ export default function Canais() {
       {isLoading ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3, 4, 5, 6].map(i => (
-            <Skeleton key={i} className="h-40" />
+            <Skeleton key={i} className="h-48" />
           ))}
         </div>
       ) : filteredCanais?.length === 0 ? (
@@ -100,15 +124,16 @@ export default function Canais() {
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {filteredCanais?.map(canal => {
             const Icon = tipoIcons[canal.tipo] || Radio;
+            const cores = tipoCores[canal.tipo] || 'text-gray-600 bg-gray-100';
             return (
               <Card 
                 key={canal.id} 
-                className={`transition-all ${!canal.ativo && 'opacity-60'}`}
+                className={`transition-all hover:shadow-md ${!canal.ativo && 'opacity-60'}`}
               >
                 <CardHeader className="pb-2">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                      <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${cores}`}>
                         <Icon className="h-5 w-5" />
                       </div>
                       <div>
@@ -131,22 +156,35 @@ export default function Canais() {
                     </p>
                   )}
                   
-                  <div className="flex gap-4 text-sm">
-                    {canal.custo_por_lead && (
-                      <div>
-                        <span className="text-muted-foreground">CPL: </span>
-                        <span className="font-medium">
-                          R$ {canal.custo_por_lead.toFixed(2)}
-                        </span>
-                      </div>
-                    )}
-                    {canal.meta_leads_mes && (
-                      <div>
-                        <span className="text-muted-foreground">Meta: </span>
-                        <span className="font-medium">{canal.meta_leads_mes}/mês</span>
-                      </div>
-                    )}
+                  {/* Métricas de Performance */}
+                  <div className="grid grid-cols-2 gap-2 text-sm pt-2 border-t">
+                    <div className="flex items-center gap-1">
+                      <Users className="h-3 w-3 text-muted-foreground" />
+                      <span className="text-muted-foreground">Leads: </span>
+                      <span className="font-medium">{canal.total_leads}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <TrendingUp className="h-3 w-3 text-green-600" />
+                      <span className="text-muted-foreground">Conv.: </span>
+                      <span className="font-medium text-green-600">{canal.conversoes}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Taxa: </span>
+                      <span className="font-medium">{canal.taxa_conversao?.toFixed(1)}%</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">CPL: </span>
+                      <span className="font-medium">R$ {canal.cpl_medio?.toFixed(2)}</span>
+                    </div>
                   </div>
+
+                  {/* Meta */}
+                  {canal.meta_leads_mes && (
+                    <div className="flex items-center justify-between text-xs bg-muted/50 rounded px-2 py-1">
+                      <span className="text-muted-foreground">Meta:</span>
+                      <span className="font-medium">{canal.total_leads}/{canal.meta_leads_mes}</span>
+                    </div>
+                  )}
 
                   <Button 
                     variant="outline" 
