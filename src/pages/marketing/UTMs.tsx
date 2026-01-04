@@ -1,10 +1,10 @@
-import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { useState, useMemo } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { 
-  Link2, Copy, Plus, Search, ExternalLink, 
+  Link2, Copy, Save, Search, ExternalLink, 
   MousePointer, Users 
 } from 'lucide-react';
 import { useUTMs, useGerarUTM, useCampanhas } from '@/hooks/useMarketing';
@@ -26,12 +26,14 @@ import {
   TableRow,
 } from '@/components/ui/table';
 
+const sourceOptions = ['google', 'facebook', 'instagram', 'whatsapp', 'email', 'indicacao', 'linkedin', 'tiktok'];
+const mediumOptions = ['cpc', 'organic', 'social', 'email', 'referral', 'banner', 'display', 'video'];
+
 export default function UTMs() {
   const [search, setSearch] = useState('');
-  const [showGenerator, setShowGenerator] = useState(false);
   
   // Form state
-  const [urlDestino, setUrlDestino] = useState('');
+  const [urlDestino, setUrlDestino] = useState('https://pratic.com.br/cotacao');
   const [utmSource, setUtmSource] = useState('');
   const [utmMedium, setUtmMedium] = useState('');
   const [utmCampaign, setUtmCampaign] = useState('');
@@ -49,8 +51,8 @@ export default function UTMs() {
     u.utm_campaign?.toLowerCase().includes(search.toLowerCase())
   );
 
-  // Preview da URL
-  const previewUrl = () => {
+  // Preview da URL em tempo real
+  const urlGerada = useMemo(() => {
     if (!urlDestino) return '';
     const params = new URLSearchParams();
     if (utmSource) params.append('utm_source', utmSource);
@@ -59,10 +61,13 @@ export default function UTMs() {
     if (utmContent) params.append('utm_content', utmContent);
     if (utmTerm) params.append('utm_term', utmTerm);
     
-    return `${urlDestino}${urlDestino.includes('?') ? '&' : '?'}${params.toString()}`;
-  };
+    const queryString = params.toString();
+    if (!queryString) return urlDestino;
+    
+    return `${urlDestino}${urlDestino.includes('?') ? '&' : '?'}${queryString}`;
+  }, [urlDestino, utmSource, utmMedium, utmCampaign, utmContent, utmTerm]);
 
-  const handleGerar = () => {
+  const handleSalvar = () => {
     if (!urlDestino || !utmSource) {
       toast.error('URL de destino e Source são obrigatórios');
       return;
@@ -78,8 +83,7 @@ export default function UTMs() {
       campanha_id: campanhaId || undefined,
     }, {
       onSuccess: () => {
-        setShowGenerator(false);
-        setUrlDestino('');
+        // Limpar campos após salvar
         setUtmSource('');
         setUtmMedium('');
         setUtmCampaign('');
@@ -98,31 +102,24 @@ export default function UTMs() {
   return (
     <div className="space-y-6 p-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Gerador de UTMs</h1>
-          <p className="text-muted-foreground">
-            Crie e gerencie links rastreáveis
-          </p>
-        </div>
-        <Button onClick={() => setShowGenerator(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Gerar Nova UTM
-        </Button>
+      <div>
+        <h1 className="text-2xl font-bold">Gerador de UTM</h1>
+        <p className="text-muted-foreground">
+          Crie e gerencie links rastreáveis para suas campanhas
+        </p>
       </div>
 
-      {/* Gerador */}
-      {showGenerator && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Novo Link UTM</CardTitle>
-            <CardDescription>
-              Preencha os parâmetros para gerar um link rastreável
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2 md:col-span-2">
+      {/* Layout 2 colunas */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* COLUNA 1 - GERADOR */}
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Gerar Nova UTM</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* URL de Destino */}
+              <div className="space-y-2">
                 <Label htmlFor="url">URL de Destino *</Label>
                 <Input
                   id="url"
@@ -132,58 +129,76 @@ export default function UTMs() {
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="source">Source * (origem)</Label>
-                <Input
-                  id="source"
-                  placeholder="google, facebook, instagram..."
-                  value={utmSource}
-                  onChange={(e) => setUtmSource(e.target.value)}
-                />
+              <div className="grid gap-4 md:grid-cols-2">
+                {/* utm_source */}
+                <div className="space-y-2">
+                  <Label>Source * (origem)</Label>
+                  <Select value={utmSource} onValueChange={setUtmSource}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {sourceOptions.map(opt => (
+                        <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* utm_medium */}
+                <div className="space-y-2">
+                  <Label>Medium (mídia)</Label>
+                  <Select value={utmMedium} onValueChange={setUtmMedium}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {mediumOptions.map(opt => (
+                        <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="medium">Medium (mídia)</Label>
-                <Input
-                  id="medium"
-                  placeholder="cpc, email, social..."
-                  value={utmMedium}
-                  onChange={(e) => setUtmMedium(e.target.value)}
-                />
-              </div>
-
+              {/* utm_campaign */}
               <div className="space-y-2">
                 <Label htmlFor="campaign">Campaign (campanha)</Label>
                 <Input
                   id="campaign"
-                  placeholder="black-friday, lancamento..."
+                  placeholder="black-friday, lancamento-2024..."
                   value={utmCampaign}
                   onChange={(e) => setUtmCampaign(e.target.value)}
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="content">Content (conteúdo)</Label>
-                <Input
-                  id="content"
-                  placeholder="banner-topo, cta-rodape..."
-                  value={utmContent}
-                  onChange={(e) => setUtmContent(e.target.value)}
-                />
+              <div className="grid gap-4 md:grid-cols-2">
+                {/* utm_content */}
+                <div className="space-y-2">
+                  <Label htmlFor="content">Content (conteúdo)</Label>
+                  <Input
+                    id="content"
+                    placeholder="banner-topo, cta-rodape..."
+                    value={utmContent}
+                    onChange={(e) => setUtmContent(e.target.value)}
+                  />
+                </div>
+
+                {/* utm_term */}
+                <div className="space-y-2">
+                  <Label htmlFor="term">Term (termo)</Label>
+                  <Input
+                    id="term"
+                    placeholder="protecao-veicular..."
+                    value={utmTerm}
+                    onChange={(e) => setUtmTerm(e.target.value)}
+                  />
+                </div>
               </div>
 
+              {/* Vincular a Campanha */}
               <div className="space-y-2">
-                <Label htmlFor="term">Term (termo)</Label>
-                <Input
-                  id="term"
-                  placeholder="protecao-veicular, rastreador..."
-                  value={utmTerm}
-                  onChange={(e) => setUtmTerm(e.target.value)}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="campanha">Vincular a Campanha</Label>
+                <Label>Vincular a Campanha (opcional)</Label>
                 <Select value={campanhaId} onValueChange={setCampanhaId}>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione uma campanha" />
@@ -196,133 +211,138 @@ export default function UTMs() {
                   </SelectContent>
                 </Select>
               </div>
-            </div>
+            </CardContent>
+          </Card>
 
-            {/* Preview */}
-            {previewUrl() && (
-              <div className="rounded-lg bg-muted p-4">
-                <Label className="text-xs text-muted-foreground">Preview da URL</Label>
-                <div className="flex items-center gap-2 mt-1">
-                  <code className="flex-1 text-sm break-all">{previewUrl()}</code>
-                  <Button 
-                    variant="ghost" 
-                    size="icon"
-                    onClick={() => copyToClipboard(previewUrl())}
-                  >
-                    <Copy className="h-4 w-4" />
-                  </Button>
-                </div>
+          {/* PREVIEW */}
+          <Card className="border-primary/20 bg-primary/5">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Link2 className="h-4 w-4" />
+                Preview da URL
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <code className="block text-sm break-all bg-background rounded p-3 border">
+                {urlGerada || 'Preencha os campos acima...'}
+              </code>
+              <div className="flex gap-2 mt-4">
+                <Button 
+                  variant="outline" 
+                  onClick={() => copyToClipboard(urlGerada)}
+                  disabled={!urlGerada}
+                  className="flex-1"
+                >
+                  <Copy className="mr-2 h-4 w-4" /> 
+                  Copiar
+                </Button>
+                <Button 
+                  onClick={handleSalvar}
+                  disabled={gerarUTM.isPending || !urlDestino || !utmSource}
+                  className="flex-1"
+                >
+                  <Save className="mr-2 h-4 w-4" /> 
+                  Salvar UTM
+                </Button>
               </div>
-            )}
+            </CardContent>
+          </Card>
+        </div>
 
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowGenerator(false)}>
-                Cancelar
-              </Button>
-              <Button 
-                onClick={handleGerar}
-                disabled={gerarUTM.isPending}
-              >
-                Gerar Link
-              </Button>
+        {/* COLUNA 2 - UTMs SALVOS */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+            <CardTitle>UTMs Salvos</CardTitle>
+            <div className="relative w-64">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Buscar UTMs..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-10"
+              />
             </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            {isLoading ? (
+              <div className="p-6 space-y-3">
+                {[1, 2, 3, 4, 5].map(i => (
+                  <Skeleton key={i} className="h-12 w-full" />
+                ))}
+              </div>
+            ) : filteredUtms?.length === 0 ? (
+              <div className="py-12 text-center">
+                <Link2 className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
+                <p className="text-lg font-medium">Nenhuma UTM encontrada</p>
+                <p className="text-muted-foreground text-sm mt-1">
+                  Crie sua primeira UTM usando o formulário ao lado
+                </p>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Source / Medium</TableHead>
+                    <TableHead>Campaign</TableHead>
+                    <TableHead className="text-center">Cliques</TableHead>
+                    <TableHead className="text-center">Leads</TableHead>
+                    <TableHead className="text-right">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredUtms?.map(utm => (
+                    <TableRow key={utm.id}>
+                      <TableCell>
+                        <div>
+                          <p className="font-medium">
+                            {utm.utm_source}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {utm.utm_medium || '-'}
+                          </p>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm">{utm.utm_campaign || '-'}</span>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          <MousePointer className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span>{utm.cliques}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span>{utm.leads_gerados}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          <Button 
+                            variant="ghost" 
+                            size="icon"
+                            onClick={() => copyToClipboard(utm.url_completa || '')}
+                          >
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon"
+                            onClick={() => window.open(utm.url_completa, '_blank')}
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
           </CardContent>
         </Card>
-      )}
-
-      {/* Busca */}
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder="Buscar UTMs..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-10"
-        />
       </div>
-
-      {/* Lista de UTMs */}
-      <Card>
-        <CardContent className="p-0">
-          {isLoading ? (
-            <div className="p-6 space-y-3">
-              {[1, 2, 3, 4, 5].map(i => (
-                <Skeleton key={i} className="h-12 w-full" />
-              ))}
-            </div>
-          ) : filteredUtms?.length === 0 ? (
-            <div className="py-12 text-center">
-              <Link2 className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
-              <p className="text-lg font-medium">Nenhuma UTM encontrada</p>
-              <Button className="mt-4" onClick={() => setShowGenerator(true)}>
-                <Plus className="mr-2 h-4 w-4" />
-                Gerar Nova UTM
-              </Button>
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>URL / Source</TableHead>
-                  <TableHead>Campaign</TableHead>
-                  <TableHead className="text-center">Cliques</TableHead>
-                  <TableHead className="text-center">Leads</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredUtms?.map(utm => (
-                  <TableRow key={utm.id}>
-                    <TableCell>
-                      <div>
-                        <p className="font-medium truncate max-w-xs">
-                          {utm.url_destino}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {utm.utm_source} / {utm.utm_medium || '-'}
-                        </p>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-sm">{utm.utm_campaign || '-'}</span>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <div className="flex items-center justify-center gap-1">
-                        <MousePointer className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span>{utm.cliques}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <div className="flex items-center justify-center gap-1">
-                        <Users className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span>{utm.leads_gerados}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button 
-                          variant="ghost" 
-                          size="icon"
-                          onClick={() => copyToClipboard(utm.url_completa || '')}
-                        >
-                          <Copy className="h-4 w-4" />
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="icon"
-                          onClick={() => window.open(utm.url_completa, '_blank')}
-                        >
-                          <ExternalLink className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
     </div>
   );
 }

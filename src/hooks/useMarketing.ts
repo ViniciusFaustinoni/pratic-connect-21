@@ -125,6 +125,15 @@ export interface MaterialMarketing {
   created_at: string;
 }
 
+export interface TopIndicador {
+  indicador_id?: string;
+  indicador_nome?: string;
+  indicador_telefone?: string;
+  total: number;
+  convertidas: number;
+  valorRecebido: number;
+}
+
 // ========== CANAIS ==========
 export function useCanais() {
   return useQuery({
@@ -338,6 +347,8 @@ export function useCreateIndicacao() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['indicacoes'] });
+      queryClient.invalidateQueries({ queryKey: ['indicacoes-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['top-indicadores'] });
       toast.success('Indicação registrada com sucesso!');
     },
     onError: (error: any) => {
@@ -361,6 +372,7 @@ export function useUpdateIndicacao() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['indicacoes'] });
+      queryClient.invalidateQueries({ queryKey: ['indicacoes-stats'] });
       toast.success('Indicação atualizada com sucesso!');
     },
     onError: (error: any) => {
@@ -389,10 +401,79 @@ export function useRecompensarIndicacao() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['indicacoes'] });
+      queryClient.invalidateQueries({ queryKey: ['indicacoes-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['top-indicadores'] });
       toast.success('Recompensa registrada com sucesso!');
     },
     onError: (error: any) => {
       toast.error('Erro ao registrar recompensa: ' + error.message);
+    },
+  });
+}
+
+// ========== INDICAÇÕES STATS ==========
+export function useIndicacoesStats() {
+  return useQuery({
+    queryKey: ['indicacoes-stats'],
+    queryFn: async () => {
+      const inicioMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+      
+      const [totalMes, convertidas, pendentes, pagas] = await Promise.all([
+        supabase.from('indicacoes').select('*', { count: 'exact', head: true })
+          .gte('data_indicacao', inicioMes.toISOString()),
+        supabase.from('indicacoes').select('*', { count: 'exact', head: true })
+          .eq('status', 'convertido').gte('data_indicacao', inicioMes.toISOString()),
+        supabase.from('indicacoes').select('*', { count: 'exact', head: true })
+          .eq('status', 'pendente'),
+        supabase.from('indicacoes').select('valor_recompensa')
+          .eq('recompensa_paga', true)
+          .gte('data_recompensa', inicioMes.toISOString().split('T')[0])
+      ]);
+      
+      return {
+        totalMes: totalMes.count || 0,
+        convertidasMes: convertidas.count || 0,
+        pendentes: pendentes.count || 0,
+        valorPagoMes: pagas.data?.reduce((s, i) => s + (i.valor_recompensa || 0), 0) || 0
+      };
+    },
+  });
+}
+
+// ========== TOP INDICADORES ==========
+export function useTopIndicadores() {
+  return useQuery({
+    queryKey: ['top-indicadores'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('indicacoes')
+        .select('indicador_id, indicador_nome, indicador_telefone, status, valor_recompensa, recompensa_paga');
+      
+      const grouped: Record<string, TopIndicador> = {};
+      data?.forEach(ind => {
+        const key = ind.indicador_id || ind.indicador_nome || 'unknown';
+        if (!grouped[key]) {
+          grouped[key] = {
+            indicador_id: ind.indicador_id || undefined,
+            indicador_nome: ind.indicador_nome || undefined,
+            indicador_telefone: ind.indicador_telefone || undefined,
+            total: 0,
+            convertidas: 0,
+            valorRecebido: 0,
+          };
+        }
+        grouped[key].total++;
+        if (ind.status === 'convertido' || ind.status === 'recompensado') {
+          grouped[key].convertidas++;
+        }
+        if (ind.recompensa_paga) {
+          grouped[key].valorRecebido += ind.valor_recompensa || 0;
+        }
+      });
+      
+      return Object.values(grouped)
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 10) as TopIndicador[];
     },
   });
 }
