@@ -94,6 +94,7 @@ import FuncionariosList from "./pages/rh/FuncionariosList";
 import FuncionarioDetalhe from "./pages/rh/FuncionarioDetalhe";
 import FuncionarioForm from "./pages/rh/FuncionarioForm";
 import ControlePonto from "./pages/rh/ControlePonto";
+import FeriasGestao from "./pages/rh/FeriasGestao";
 
 // Associate App Pages
 import AppLogin from "./pages/app/AppLogin";
@@ -217,6 +218,7 @@ const App = () => (
               <Route path="/rh/funcionarios/:id" element={<FuncionarioDetalhe />} />
               <Route path="/rh/funcionarios/:id/editar" element={<FuncionarioForm />} />
               <Route path="/rh/ponto" element={<ControlePonto />} />
+              <Route path="/rh/ferias" element={<FeriasGestao />} />
               
               {/* Monitoramento */}
               <Route path="/monitoramento/instalacoes" element={<Instalacoes />} />
