@@ -90,6 +90,8 @@ import ConsultasJuridicas from "./pages/juridico/ConsultasJuridicas";
 
 // RH
 import RHDashboard from "./pages/rh/RHDashboard";
+import FuncionariosList from "./pages/rh/FuncionariosList";
+import FuncionarioDetalhe from "./pages/rh/FuncionarioDetalhe";
 
 // Associate App Pages
 import AppLogin from "./pages/app/AppLogin";
@@ -208,6 +210,8 @@ const App = () => (
               
               {/* RH */}
               <Route path="/rh" element={<RHDashboard />} />
+              <Route path="/rh/funcionarios" element={<FuncionariosList />} />
+              <Route path="/rh/funcionarios/:id" element={<FuncionarioDetalhe />} />
               
               {/* Monitoramento */}
               <Route path="/monitoramento/instalacoes" element={<Instalacoes />} />
