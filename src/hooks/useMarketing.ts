@@ -611,3 +611,28 @@ export function useMarketingStats() {
     },
   });
 }
+
+// ========== PERFORMANCE CANAIS ==========
+export interface PerformanceCanal {
+  id: string;
+  nome: string;
+  tipo: string;
+  total_leads: number;
+  conversoes: number;
+  taxa_conversao: number;
+  cpl_medio: number;
+  investimento_total: number;
+}
+
+export function usePerformanceCanais() {
+  return useQuery({
+    queryKey: ['performance-canais'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('view_performance_canais')
+        .select('*');
+      if (error) throw error;
+      return data as PerformanceCanal[];
+    },
+  });
+}

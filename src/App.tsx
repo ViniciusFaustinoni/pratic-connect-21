@@ -107,6 +107,8 @@ import CampanhaForm from "./pages/marketing/CampanhaForm";
 import Canais from "./pages/marketing/Canais";
 import Indicacoes from "./pages/marketing/Indicacoes";
 import UTMs from "./pages/marketing/UTMs";
+import DistribuicaoLeads from "./pages/marketing/DistribuicaoLeads";
+import RelatoriosMarketing from "./pages/marketing/RelatoriosMarketing";
 
 // Associate App Pages
 import AppLogin from "./pages/app/AppLogin";
@@ -251,6 +253,8 @@ const App = () => (
               <Route path="/marketing/canais" element={<Canais />} />
               <Route path="/marketing/indicacoes" element={<Indicacoes />} />
               <Route path="/marketing/utms" element={<UTMs />} />
+              <Route path="/marketing/distribuicao" element={<DistribuicaoLeads />} />
+              <Route path="/marketing/relatorios" element={<RelatoriosMarketing />} />
               
               {/* Oficinas */}
               <Route path="/oficinas" element={<Oficinas />} />
