@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useAuth } from '@/contexts/AuthContext';
+import { CalcularRateioModal } from '@/components/diretoria';
 
 const statusConfig: Record<string, { label: string; class: string }> = {
   calculado: { label: 'Calculado', class: 'bg-yellow-100 text-yellow-800' },
@@ -31,6 +32,7 @@ export default function RateioSinistros() {
   const queryClient = useQueryClient();
   const { profile } = useAuth();
   const [showHistorico, setShowHistorico] = useState(false);
+  const [calcularModalOpen, setCalcularModalOpen] = useState(false);
 
   // Lista de rateios (histórico)
   const { data: rateios, isLoading: loadingRateios } = useQuery({
@@ -171,11 +173,6 @@ export default function RateioSinistros() {
     }
   });
 
-  const handleCalcular = () => {
-    const hoje = new Date();
-    calcularRateio.mutate({ mes: hoje.getMonth() + 1, ano: hoje.getFullYear() });
-  };
-
   const isLoading = loadingRateios || loadingAtual;
 
   return (
@@ -191,9 +188,9 @@ export default function RateioSinistros() {
             <History className="h-4 w-4 mr-2" />
             {showHistorico ? 'Ocultar Histórico' : 'Histórico'}
           </Button>
-          <Button onClick={handleCalcular} disabled={calcularRateio.isPending}>
+          <Button onClick={() => setCalcularModalOpen(true)}>
             <Calculator className="h-4 w-4 mr-2" />
-            {calcularRateio.isPending ? 'Calculando...' : 'Calcular Novo Rateio'}
+            Calcular Rateio
           </Button>
         </div>
       </div>
@@ -395,6 +392,11 @@ export default function RateioSinistros() {
           </CardContent>
         </Card>
       )}
+
+      <CalcularRateioModal
+        open={calcularModalOpen}
+        onClose={() => setCalcularModalOpen(false)}
+      />
     </div>
   );
 }
