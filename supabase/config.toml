@@ -21,6 +21,12 @@ verify_jwt = false
 [functions.autentique-status]
 verify_jwt = true
 
+[functions.autentique-resend]
+verify_jwt = true
+
+[functions.autentique-cancel]
+verify_jwt = true
+
 [functions.document-ocr]
 verify_jwt = true
 
