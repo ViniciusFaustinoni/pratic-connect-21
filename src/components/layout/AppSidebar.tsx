@@ -255,6 +255,8 @@ const menuConfig: {
         { title: 'Canais', url: '/marketing/canais', icon: Radio },
         { title: 'Indicações', url: '/marketing/indicacoes', icon: Gift },
         { title: 'UTMs', url: '/marketing/utms', icon: Link },
+        { title: 'Distribuição', url: '/marketing/distribuicao', icon: Users },
+        { title: 'Relatórios', url: '/marketing/relatorios', icon: ClipboardList },
       ],
     },
   ],

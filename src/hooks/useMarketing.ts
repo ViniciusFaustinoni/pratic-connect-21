@@ -636,3 +636,169 @@ export function usePerformanceCanais() {
     },
   });
 }
+
+// ========== HOOK CONSOLIDADO ==========
+export function useMarketing() {
+  const queryClient = useQueryClient();
+
+  // Estatísticas do mês
+  const statsQuery = useQuery({
+    queryKey: ['marketing-stats-consolidated'],
+    queryFn: async () => {
+      const inicioMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+      
+      const [leads, conversoes, campanhas, investimento] = await Promise.all([
+        supabase.from('leads').select('*', { count: 'exact', head: true })
+          .gte('created_at', inicioMes.toISOString()),
+        supabase.from('leads').select('*', { count: 'exact', head: true })
+          .eq('etapa', 'ganho').gte('updated_at', inicioMes.toISOString()),
+        supabase.from('campanhas').select('*', { count: 'exact', head: true })
+          .eq('status', 'ativa'),
+        supabase.from('campanhas_metricas').select('valor_gasto')
+          .gte('data', inicioMes.toISOString().split('T')[0])
+      ]);
+      
+      const totalInvestido = investimento.data?.reduce((sum, m) => sum + (m.valor_gasto || 0), 0) || 0;
+      
+      return {
+        leads: leads.count || 0,
+        conversoes: conversoes.count || 0,
+        campanhasAtivas: campanhas.count || 0,
+        investimento: totalInvestido,
+        cpl: leads.count ? totalInvestido / leads.count : 0
+      };
+    }
+  });
+
+  // Criar campanha
+  const criarCampanhaMutation = useMutation({
+    mutationFn: async (dados: any) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data, error } = await supabase
+        .from('campanhas')
+        .insert({
+          ...dados,
+          criado_por: user?.id,
+          status: 'rascunho'
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      toast.success('Campanha criada!');
+      queryClient.invalidateQueries({ queryKey: ['campanhas'] });
+    }
+  });
+
+  // Alterar status da campanha
+  const alterarStatusCampanhaMutation = useMutation({
+    mutationFn: async ({ campanhaId, novoStatus }: { campanhaId: string; novoStatus: string }) => {
+      const { error } = await supabase
+        .from('campanhas')
+        .update({ status: novoStatus, updated_at: new Date().toISOString() })
+        .eq('id', campanhaId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Status atualizado!');
+      queryClient.invalidateQueries({ queryKey: ['campanhas'] });
+      queryClient.invalidateQueries({ queryKey: ['campanha'] });
+    }
+  });
+
+  // Registrar indicação
+  const registrarIndicacaoMutation = useMutation({
+    mutationFn: async (dados: {
+      indicador_id?: string;
+      indicador_nome: string;
+      indicador_telefone: string;
+      indicado_nome: string;
+      indicado_telefone: string;
+      indicado_email?: string;
+    }) => {
+      const { data: programa } = await supabase
+        .from('programa_indicacao')
+        .select('id, valor_indicador')
+        .eq('ativo', true)
+        .maybeSingle();
+      
+      const { data, error } = await supabase
+        .from('indicacoes')
+        .insert({
+          ...dados,
+          programa_id: programa?.id,
+          valor_recompensa: programa?.valor_indicador,
+          status: 'pendente'
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      toast.success('Indicação registrada!');
+      queryClient.invalidateQueries({ queryKey: ['indicacoes'] });
+      queryClient.invalidateQueries({ queryKey: ['indicacoes-stats'] });
+    }
+  });
+
+  // Pagar recompensa de indicação
+  const pagarRecompensaMutation = useMutation({
+    mutationFn: async (indicacaoId: string) => {
+      const { error } = await supabase
+        .from('indicacoes')
+        .update({
+          status: 'recompensado',
+          recompensa_paga: true,
+          data_recompensa: new Date().toISOString().split('T')[0]
+        })
+        .eq('id', indicacaoId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Recompensa paga!');
+      queryClient.invalidateQueries({ queryKey: ['indicacoes'] });
+      queryClient.invalidateQueries({ queryKey: ['indicacoes-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['top-indicadores'] });
+    }
+  });
+
+  // Registrar métricas de campanha
+  const registrarMetricasMutation = useMutation({
+    mutationFn: async (dados: {
+      campanha_id: string;
+      data: string;
+      impressoes?: number;
+      cliques?: number;
+      leads?: number;
+      conversoes?: number;
+      valor_gasto?: number;
+    }) => {
+      const { data, error } = await supabase
+        .from('campanhas_metricas')
+        .upsert(dados, { onConflict: 'campanha_id,data' })
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      toast.success('Métricas registradas!');
+      queryClient.invalidateQueries({ queryKey: ['campanha-metricas'] });
+      queryClient.invalidateQueries({ queryKey: ['marketing-stats'] });
+    }
+  });
+
+  return {
+    stats: statsQuery.data,
+    isLoadingStats: statsQuery.isLoading,
+    criarCampanha: criarCampanhaMutation.mutate,
+    isCriandoCampanha: criarCampanhaMutation.isPending,
+    alterarStatusCampanha: alterarStatusCampanhaMutation.mutate,
+    registrarIndicacao: registrarIndicacaoMutation.mutate,
+    pagarRecompensa: pagarRecompensaMutation.mutate,
+    registrarMetricas: registrarMetricasMutation.mutate,
+  };
+}
