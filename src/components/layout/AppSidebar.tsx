@@ -38,8 +38,9 @@ import {
   Calendar,
   HelpCircle,
   Palmtree,
-  GraduationCap,
   UserCheck,
+  GitBranch,
+  Gift,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
@@ -236,8 +237,9 @@ const menuConfig: {
         { title: 'Funcionários', url: '/rh/funcionarios', icon: Users },
         { title: 'Ponto', url: '/rh/ponto', icon: Clock },
         { title: 'Férias', url: '/rh/ferias', icon: Palmtree },
+        { title: 'Organograma', url: '/rh/organograma', icon: GitBranch },
         { title: 'Departamentos', url: '/rh/departamentos', icon: Building2 },
-        { title: 'Treinamentos', url: '/rh/treinamentos', icon: GraduationCap },
+        { title: 'Benefícios', url: '/rh/beneficios', icon: Gift },
       ],
     },
   ],
