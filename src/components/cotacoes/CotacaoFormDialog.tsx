@@ -45,83 +45,22 @@ interface CotacaoFormDialogProps {
   leadId?: string;
 }
 
-// Planos mock como fallback
-const planosMock = [
-  { 
-    id: 'mock-1', 
-    nome: 'Proteção Básica', 
-    codigo: 'BASICO',
-    percentual_cota: 2.5,
-    taxa_administrativa: 49.90,
-    valor_rastreamento: 39.90,
-    valor_assistencia: 0,
-    valor_adesao: 199.90,
-    ativo: true,
-    tipo_uso: 'particular',
-    descricao: 'Plano básico de proteção veicular',
-    fipe_minima: null,
-    fipe_maxima: null,
-    created_at: '',
-    updated_at: ''
-  },
-  { 
-    id: 'mock-2', 
-    nome: 'Proteção Total', 
-    codigo: 'TOTAL',
-    percentual_cota: 3.0,
-    taxa_administrativa: 59.90,
-    valor_rastreamento: 39.90,
-    valor_assistencia: 29.90,
-    valor_adesao: 299.90,
-    ativo: true,
-    tipo_uso: 'particular',
-    descricao: 'Proteção completa com assistência 24h',
-    fipe_minima: null,
-    fipe_maxima: null,
-    created_at: '',
-    updated_at: ''
-  },
-  { 
-    id: 'mock-3', 
-    nome: 'Proteção Premium', 
-    codigo: 'PREMIUM',
-    percentual_cota: 3.5,
-    taxa_administrativa: 69.90,
-    valor_rastreamento: 49.90,
-    valor_assistencia: 49.90,
-    valor_adesao: 399.90,
-    ativo: true,
-    tipo_uso: 'particular',
-    descricao: 'Proteção premium com benefícios exclusivos',
-    fipe_minima: null,
-    fipe_maxima: null,
-    created_at: '',
-    updated_at: ''
-  },
-  { 
-    id: 'mock-4', 
-    nome: 'Proteção APP (Uber/99)', 
-    codigo: 'APP',
-    percentual_cota: 4.5,
-    taxa_administrativa: 79.90,
-    valor_rastreamento: 49.90,
-    valor_assistencia: 49.90,
-    valor_adesao: 499.90,
-    ativo: true,
-    tipo_uso: 'aplicativo',
-    descricao: 'Especial para motoristas de aplicativo',
-    fipe_minima: null,
-    fipe_maxima: null,
-    created_at: '',
-    updated_at: ''
-  }
-];
-
-type PlanoType = typeof planosMock[0];
+interface PlanoComTabela {
+  id: string;
+  nome: string;
+  codigo: string;
+  valor_adesao: number;
+  tipo_uso: string | null;
+  descricao: string | null;
+  valor_cota?: number;
+  taxa_administrativa?: number;
+  valor_rastreamento?: number;
+  valor_assistencia?: number;
+}
 
 export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDialogProps) {
   const createCotacao = useCreateCotacao();
-  const { data: planos } = usePlanos();
+  const { data: planos, isLoading: planosLoading } = usePlanos();
   const { data: lead } = useLead(leadId);
   const { getByPlaca, loading: fipeLoading } = useFipe();
 
@@ -131,7 +70,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
   const [veiculoEncontrado, setVeiculoEncontrado] = useState<PlateResult | null>(null);
 
   // Estado para plano selecionado (com dados calculados)
-  const [planoSelecionado, setPlanoSelecionado] = useState<PlanoType | null>(null);
+  const [planoSelecionado, setPlanoSelecionado] = useState<PlanoComTabela | null>(null);
 
   const form = useForm<CotacaoFormData>({
     resolver: zodResolver(cotacaoSchema),
@@ -151,17 +90,6 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
   const valorFipe = form.watch('valor_fipe');
   const planoId = form.watch('plano_id');
   const { data: tabelasPreco } = useTabelaPrecoByFipe(valorFipe);
-
-  // Usar planos do banco ou mock
-  const planosDisponiveis = planos && planos.length > 0 
-    ? planos.map(p => ({
-        ...p,
-        percentual_cota: 3.0, // Default se não tiver na tabela
-        taxa_administrativa: 49.90,
-        valor_rastreamento: 39.90,
-        valor_assistencia: 0,
-      }))
-    : planosMock;
 
   // Buscar por placa
   const buscarPorPlaca = async () => {
@@ -210,54 +138,67 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
 
   // Calculate values when plano or valor_fipe changes
   useEffect(() => {
-    if (!planoId || valorFipe <= 0) return;
+    if (!planoId || valorFipe <= 0 || !planos) return;
 
-    // Primeiro tenta usar tabela de preço do banco
-    if (tabelasPreco && tabelasPreco.length > 0) {
-      const tabela = tabelasPreco.find(t => t.plano_id === planoId) || tabelasPreco[0];
-      if (tabela) {
-        form.setValue('valor_cota', tabela.valor_cota);
-        form.setValue('taxa_administrativa', tabela.taxa_administrativa);
-        form.setValue('valor_rastreamento', tabela.valor_rastreamento);
-        form.setValue('valor_adesao', tabela.planos?.valor_adesao || 0);
-        
-        const total = tabela.valor_cota + tabela.taxa_administrativa + tabela.valor_rastreamento + (tabela.valor_assistencia || 0);
-        form.setValue('valor_total_mensal', total);
-        return;
-      }
-    }
+    const plano = planos.find(p => p.id === planoId);
+    if (!plano) return;
 
-    // Fallback: calcular usando plano mock/local
-    const plano = planosDisponiveis.find(p => p.id === planoId) as PlanoType | undefined;
-    if (plano) {
-      setPlanoSelecionado(plano);
+    // Buscar tabela de preço para este plano e faixa FIPE
+    const tabela = tabelasPreco?.find(t => t.plano_id === planoId);
+    
+    if (tabela) {
+      // Usar valores da tabela de preço
+      const valorCota = tabela.valor_cota;
+      const taxaAdmin = tabela.taxa_administrativa;
+      const rastreamento = tabela.valor_rastreamento;
+      const assistencia = tabela.valor_assistencia || 0;
+      const adesao = plano.valor_adesao || 0;
       
-      const percentual = plano.percentual_cota || 3.0;
-      const cotaMensal = (valorFipe * percentual) / 100;
-      const taxaAdmin = plano.taxa_administrativa || 49.90;
-      const rastreamento = plano.valor_rastreamento || 39.90;
-      const assistencia = plano.valor_assistencia || 0;
-      const adesao = plano.valor_adesao || 199.90;
+      const totalMensal = valorCota + taxaAdmin + rastreamento + assistencia;
       
-      const totalMensal = cotaMensal + taxaAdmin + rastreamento + assistencia;
-      
-      form.setValue('valor_cota', cotaMensal);
+      form.setValue('valor_cota', valorCota);
       form.setValue('taxa_administrativa', taxaAdmin);
       form.setValue('valor_rastreamento', rastreamento);
       form.setValue('valor_adesao', adesao);
       form.setValue('valor_total_mensal', totalMensal);
-    }
-  }, [planoId, valorFipe, tabelasPreco, form, planosDisponiveis]);
 
-  // Atualizar plano selecionado quando mudar
+      setPlanoSelecionado({
+        ...plano,
+        valor_cota: valorCota,
+        taxa_administrativa: taxaAdmin,
+        valor_rastreamento: rastreamento,
+        valor_assistencia: assistencia,
+      });
+    } else {
+      // Se não tem tabela de preço, usar valor de adesão do plano
+      setPlanoSelecionado({
+        ...plano,
+        valor_cota: 0,
+        taxa_administrativa: 0,
+        valor_rastreamento: 0,
+        valor_assistencia: 0,
+      });
+      toast.warning('Não há tabela de preço para este valor FIPE');
+    }
+  }, [planoId, valorFipe, tabelasPreco, form, planos]);
+
+  // Atualizar plano selecionado quando mudar (sem valores calculados)
   useEffect(() => {
-    if (planoId) {
-      const plano = planosDisponiveis.find(p => p.id === planoId) as PlanoType | undefined;
-      setPlanoSelecionado(plano || null);
+    if (planoId && planos) {
+      const plano = planos.find(p => p.id === planoId);
+      if (plano && valorFipe <= 0) {
+        setPlanoSelecionado({
+          ...plano,
+          valor_cota: 0,
+          taxa_administrativa: 0,
+          valor_rastreamento: 0,
+          valor_assistencia: 0,
+        });
+      }
     } else {
       setPlanoSelecionado(null);
     }
-  }, [planoId, planosDisponiveis]);
+  }, [planoId, planos, valorFipe]);
 
   const valorCota = form.watch('valor_cota');
   const taxaAdmin = form.watch('taxa_administrativa');
@@ -276,7 +217,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
     try {
       await createCotacao.mutateAsync({
         lead_id: data.lead_id,
-        plano_id: data.plano_id.startsWith('mock-') ? planosDisponiveis[0]?.id || data.plano_id : data.plano_id,
+        plano_id: data.plano_id,
         valor_fipe: data.valor_fipe,
         valor_cota: data.valor_cota,
         taxa_administrativa: data.taxa_administrativa,
@@ -298,7 +239,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
     }
   };
 
-  const isFormValid = valorFipe > 0 && planoId;
+  const isFormValid = valorFipe > 0 && planoId && !planosLoading && planos && planos.length > 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -445,22 +386,20 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Plano *</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select onValueChange={field.onChange} value={field.value} disabled={planosLoading}>
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder="Selecione um plano" />
+                            <SelectValue placeholder={planosLoading ? "Carregando..." : "Selecione um plano"} />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {planosDisponiveis.map((plano) => (
+                          {planos?.map((plano) => (
                             <SelectItem key={plano.id} value={plano.id}>
                               <div className="flex items-center justify-between gap-4 w-full">
                                 <span>{plano.nome}</span>
-                                {'percentual_cota' in plano && (
-                                  <Badge variant="outline" className="text-xs ml-2">
-                                    {(plano as PlanoType).percentual_cota}%
-                                  </Badge>
-                                )}
+                                <Badge variant="outline" className="text-xs ml-2">
+                                  {plano.tipo_uso}
+                                </Badge>
                               </div>
                             </SelectItem>
                           ))}
@@ -469,11 +408,11 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
                       <FormMessage />
 
                       {/* Info do plano selecionado */}
-                      {planoSelecionado && (
+                      {planoSelecionado && valorFipe > 0 && planoSelecionado.valor_cota && planoSelecionado.valor_cota > 0 && (
                         <div className="mt-2 p-3 bg-primary/5 rounded-lg text-xs space-y-1 border border-primary/10">
                           <div className="flex justify-between">
-                            <span className="text-muted-foreground">Cota:</span>
-                            <span className="font-medium">{planoSelecionado.percentual_cota}% do FIPE</span>
+                            <span className="text-muted-foreground">Cota mensal:</span>
+                            <span className="font-medium">{formatCurrency(planoSelecionado.valor_cota)}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Taxa Admin:</span>
@@ -575,6 +514,15 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
                           {!valorFipe 
                             ? 'Consulte o valor FIPE do veículo' 
                             : 'Selecione um plano para calcular'}
+                        </p>
+                      </div>
+                    )}
+
+                    {planos && planos.length === 0 && !planosLoading && (
+                      <div className="mt-4 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+                        <p className="text-xs text-destructive flex items-center gap-2">
+                          <AlertCircle className="h-4 w-4" />
+                          Nenhum plano cadastrado. Cadastre planos na área de Diretoria.
                         </p>
                       </div>
                     )}
