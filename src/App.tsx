@@ -119,6 +119,8 @@ import RateioSinistros from "./pages/diretoria/RateioSinistros";
 import IndicadoresAtuariais from "./pages/diretoria/IndicadoresAtuariais";
 import ConfiguracoesSistema from "./pages/diretoria/Configuracoes";
 import PerfisAcesso from "./pages/diretoria/PerfisAcesso";
+import LogsAuditoria from "./pages/diretoria/LogsAuditoria";
+import RelatoriosGerenciais from "./pages/diretoria/RelatoriosGerenciais";
 
 // Associate App Pages
 import AppLogin from "./pages/app/AppLogin";
@@ -275,6 +277,8 @@ const App = () => (
               <Route path="/diretoria/indicadores" element={<IndicadoresAtuariais />} />
               <Route path="/diretoria/configuracoes" element={<ConfiguracoesSistema />} />
               <Route path="/diretoria/perfis" element={<PerfisAcesso />} />
+              <Route path="/diretoria/logs" element={<LogsAuditoria />} />
+              <Route path="/diretoria/relatorios" element={<RelatoriosGerenciais />} />
               {/* Oficinas */}
               <Route path="/oficinas" element={<Oficinas />} />
               <Route path="/oficina/credenciadas" element={<OficinasList />} />
