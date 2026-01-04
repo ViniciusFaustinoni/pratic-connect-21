@@ -88,6 +88,9 @@ import AudienciasAgenda from "./pages/juridico/AudienciasAgenda";
 import AdvogadosList from "./pages/juridico/AdvogadosList";
 import ConsultasJuridicas from "./pages/juridico/ConsultasJuridicas";
 
+// RH
+import RHDashboard from "./pages/rh/RHDashboard";
+
 // Associate App Pages
 import AppLogin from "./pages/app/AppLogin";
 import AppRedefinirSenha from "./pages/app/AppRedefinirSenha";
@@ -202,6 +205,9 @@ const App = () => (
               <Route path="/juridico/audiencias" element={<AudienciasAgenda />} />
               <Route path="/juridico/advogados" element={<AdvogadosList />} />
               <Route path="/juridico/consultas" element={<ConsultasJuridicas />} />
+              
+              {/* RH */}
+              <Route path="/rh" element={<RHDashboard />} />
               
               {/* Monitoramento */}
               <Route path="/monitoramento/instalacoes" element={<Instalacoes />} />
