@@ -271,6 +271,8 @@ const menuConfig: {
         { title: 'Preços', url: '/diretoria/precos', icon: DollarSign },
         { title: 'Indicadores', url: '/diretoria/indicadores', icon: TrendingUp },
         { title: 'Rateios', url: '/diretoria/rateios', icon: PieChart },
+        { title: 'Relatórios', url: '/diretoria/relatorios', icon: ClipboardList },
+        { title: 'Logs', url: '/diretoria/logs', icon: FileText },
         { title: 'Perfis', url: '/diretoria/perfis', icon: Shield },
         { title: 'Configurações', url: '/diretoria/configuracoes', icon: Settings },
       ],
