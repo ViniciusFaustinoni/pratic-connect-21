@@ -15,7 +15,7 @@ import { useCotacoes } from '@/hooks/useCotacoes';
 import { useContratos } from '@/hooks/useContratos';
 import { useAssociados } from '@/hooks/useAssociados';
 import { usePendingDocumentos } from '@/hooks/useDocumentos';
-import { AlertasWidget } from '@/components/monitoramento/AlertasWidget';
+
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -273,9 +273,6 @@ export default function Dashboard() {
             )}
           </CardContent>
         </Card>
-
-        {/* Alertas Widget */}
-        <AlertasWidget limite={5} />
       </div>
     </div>
   );
