@@ -110,6 +110,9 @@ import UTMs from "./pages/marketing/UTMs";
 import DistribuicaoLeads from "./pages/marketing/DistribuicaoLeads";
 import RelatoriosMarketing from "./pages/marketing/RelatoriosMarketing";
 
+// Diretoria
+import DiretoriaDashboard from "./pages/diretoria/DiretoriaDashboard";
+
 // Associate App Pages
 import AppLogin from "./pages/app/AppLogin";
 import AppRedefinirSenha from "./pages/app/AppRedefinirSenha";
@@ -255,6 +258,9 @@ const App = () => (
               <Route path="/marketing/utms" element={<UTMs />} />
               <Route path="/marketing/distribuicao" element={<DistribuicaoLeads />} />
               <Route path="/marketing/relatorios" element={<RelatoriosMarketing />} />
+              
+              {/* Diretoria */}
+              <Route path="/diretoria" element={<DiretoriaDashboard />} />
               
               {/* Oficinas */}
               <Route path="/oficinas" element={<Oficinas />} />

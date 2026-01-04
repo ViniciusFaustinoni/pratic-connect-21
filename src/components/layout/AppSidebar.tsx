@@ -43,6 +43,7 @@ import {
   Gift,
   Megaphone,
   Link,
+  PieChart,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
@@ -257,6 +258,18 @@ const menuConfig: {
         { title: 'UTMs', url: '/marketing/utms', icon: Link },
         { title: 'Distribuição', url: '/marketing/distribuicao', icon: Users },
         { title: 'Relatórios', url: '/marketing/relatorios', icon: ClipboardList },
+      ],
+    },
+    {
+      id: 'diretoria',
+      label: 'Diretoria',
+      icon: Building2,
+      permission: 'isGerencia',
+      items: [
+        { title: 'Dashboard', url: '/diretoria', icon: BarChart3 },
+        { title: 'Indicadores', url: '/diretoria/indicadores', icon: TrendingUp },
+        { title: 'Rateios', url: '/diretoria/rateios', icon: PieChart },
+        { title: 'Configurações', url: '/configuracoes', icon: Settings },
       ],
     },
   ],
