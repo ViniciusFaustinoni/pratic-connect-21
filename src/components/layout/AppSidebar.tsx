@@ -33,6 +33,10 @@ import {
   UserX,
   BookOpen,
   Lock,
+  Scale,
+  Clock,
+  Calendar,
+  HelpCircle,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
@@ -203,6 +207,20 @@ const menuConfig: {
         { title: 'Balancete', url: '/contabilidade/balancete', icon: ClipboardList },
         { title: 'DRE', url: '/contabilidade/dre', icon: TrendingUp },
         { title: 'Fechamento', url: '/contabilidade/fechamento', icon: Lock },
+      ],
+    },
+    {
+      id: 'juridico',
+      label: 'Jurídico',
+      icon: Scale,
+      permission: 'canManageJuridico',
+      items: [
+        { title: 'Dashboard', url: '/juridico', icon: BarChart3 },
+        { title: 'Processos', url: '/juridico/processos', icon: FileText },
+        { title: 'Advogados', url: '/juridico/advogados', icon: Users },
+        { title: 'Prazos', url: '/juridico/prazos', icon: Clock },
+        { title: 'Audiências', url: '/juridico/audiencias', icon: Calendar },
+        { title: 'Consultas', url: '/juridico/consultas', icon: HelpCircle },
       ],
     },
   ],
