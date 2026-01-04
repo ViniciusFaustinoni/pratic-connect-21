@@ -103,6 +103,7 @@ import Beneficios from "./pages/rh/Beneficios";
 import MarketingDashboard from "./pages/marketing/MarketingDashboard";
 import Campanhas from "./pages/marketing/Campanhas";
 import CampanhaDetalhe from "./pages/marketing/CampanhaDetalhe";
+import CampanhaForm from "./pages/marketing/CampanhaForm";
 import Canais from "./pages/marketing/Canais";
 import Indicacoes from "./pages/marketing/Indicacoes";
 import UTMs from "./pages/marketing/UTMs";
@@ -244,7 +245,9 @@ const App = () => (
               {/* Marketing */}
               <Route path="/marketing" element={<MarketingDashboard />} />
               <Route path="/marketing/campanhas" element={<Campanhas />} />
+              <Route path="/marketing/campanhas/nova" element={<CampanhaForm />} />
               <Route path="/marketing/campanhas/:id" element={<CampanhaDetalhe />} />
+              <Route path="/marketing/campanhas/:id/editar" element={<CampanhaForm />} />
               <Route path="/marketing/canais" element={<Canais />} />
               <Route path="/marketing/indicacoes" element={<Indicacoes />} />
               <Route path="/marketing/utms" element={<UTMs />} />
