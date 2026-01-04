@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Search, User, X } from 'lucide-react';
+import { Search, User, X, Loader2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -24,6 +24,7 @@ import { Separator } from '@/components/ui/separator';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useAsaas } from '@/hooks/useAsaas';
 
 interface Associado {
   id: string;
@@ -84,6 +85,7 @@ const getAnos = () => {
 
 export function NovaCobrancaModal({ open, onClose, associadoId }: NovaCobrancaModalProps) {
   const queryClient = useQueryClient();
+  const { sincronizarCliente, criarCobranca } = useAsaas();
   const [associadoSelecionado, setAssociadoSelecionado] = useState<Associado | null>(null);
   const [termoBusca, setTermoBusca] = useState('');
   const [gerarBoleto, setGerarBoleto] = useState(true);
@@ -147,6 +149,11 @@ export function NovaCobrancaModal({ open, onClose, associadoId }: NovaCobrancaMo
   const createMutation = useMutation({
     mutationFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
+      const targetAssociadoId = associadoSelecionado?.id || associadoId;
+      
+      if (!targetAssociadoId) {
+        throw new Error('Associado não selecionado');
+      }
 
       const valor = parseFloat(formData.valor) || 0;
       const desconto = parseFloat(formData.desconto) || 0;
@@ -155,37 +162,58 @@ export function NovaCobrancaModal({ open, onClose, associadoId }: NovaCobrancaMo
       // Formatar competência como "MM/YYYY"
       const competencia = formData.tipo === 'mensalidade'
         ? `${String(formData.mes_referencia).padStart(2, '0')}/${formData.ano_referencia}`
-        : null;
+        : undefined;
 
-      // Gerar um asaas_id temporário (será substituído pela integração real)
-      const tempAsaasId = `local_${Date.now()}`;
-
-      const { data, error } = await supabase
-        .from('asaas_cobrancas')
-        .insert({
-          associado_id: associadoSelecionado?.id || associadoId,
-          asaas_id: tempAsaasId,
+      if (gerarBoleto) {
+        // Integração real com ASAAS
+        // 1. Sincronizar cliente
+        await sincronizarCliente.mutateAsync(targetAssociadoId);
+        
+        // 2. Criar cobrança via Edge Function
+        const result = await criarCobranca.mutateAsync({
+          billingType: 'UNDEFINED', // Gera boleto + PIX
+          value: valorLiquido,
+          dueDate: formData.data_vencimento,
+          description: formData.descricao || `${formData.tipo} - ${competencia || 'avulso'}`,
           tipo: formData.tipo,
-          valor: valor,
-          desconto: desconto,
-          valor_liquido: valorLiquido,
-          data_vencimento: formData.data_vencimento,
-          data_emissao: new Date().toISOString().split('T')[0],
           competencia: competencia,
-          referencia: formData.descricao || null,
-          status: 'PENDING',
-          criado_por: user?.id,
-        })
-        .select()
-        .single();
+          associado_id: targetAssociadoId,
+          desconto: desconto,
+        });
+        
+        return result.cobranca;
+      } else {
+        // Cobrança local sem ASAAS
+        const tempAsaasId = `local_${Date.now()}`;
 
-      if (error) throw error;
-      return data;
+        const { data, error } = await supabase
+          .from('asaas_cobrancas')
+          .insert({
+            associado_id: targetAssociadoId,
+            asaas_id: tempAsaasId,
+            tipo: formData.tipo,
+            valor: valor,
+            desconto: desconto,
+            valor_liquido: valorLiquido,
+            data_vencimento: formData.data_vencimento,
+            data_emissao: new Date().toISOString().split('T')[0],
+            competencia: competencia,
+            referencia: formData.descricao || null,
+            status: 'PENDING',
+            criado_por: user?.id,
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+        return data;
+      }
     },
     onSuccess: () => {
-      toast.success('Cobrança criada com sucesso!');
+      toast.success(gerarBoleto ? 'Cobrança criada com boleto/PIX!' : 'Cobrança criada com sucesso!');
       queryClient.invalidateQueries({ queryKey: ['cobrancas'] });
       queryClient.invalidateQueries({ queryKey: ['cobrancas-lista'] });
+      queryClient.invalidateQueries({ queryKey: ['asaas-cobrancas'] });
       handleClose();
     },
     onError: (error: Error) => {

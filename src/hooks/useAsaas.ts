@@ -21,7 +21,6 @@ interface CriarClienteParams {
 }
 
 interface CriarCobrancaParams {
-  customer: string;
   billingType: 'BOLETO' | 'PIX' | 'UNDEFINED';
   value: number;
   dueDate: string;
@@ -32,7 +31,7 @@ interface CriarCobrancaParams {
   veiculo_id?: string;
   contrato_id?: string;
   desconto?: number;
-  associado_id?: string;
+  associado_id: string;
 }
 
 export function useAsaas() {
@@ -105,7 +104,18 @@ export function useAsaas() {
         body: { 
           action: 'criar', 
           associado_id: params.associado_id,
-          dados: params,
+          dados: {
+            billingType: params.billingType,
+            value: params.value,
+            dueDate: params.dueDate,
+            description: params.description,
+            externalReference: params.externalReference,
+          },
+          tipo: params.tipo,
+          competencia: params.competencia,
+          desconto: params.desconto,
+          veiculo_id: params.veiculo_id,
+          contrato_id: params.contrato_id,
         },
       });
 
@@ -117,7 +127,7 @@ export function useAsaas() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['asaas-cobrancas'] });
       queryClient.invalidateQueries({ queryKey: ['cobrancas'] });
-      toast.success('Cobrança criada com sucesso!');
+      queryClient.invalidateQueries({ queryKey: ['cobrancas-lista'] });
     },
     onError: (error: Error) => {
       toast.error(`Erro ao criar cobrança: ${error.message}`);
