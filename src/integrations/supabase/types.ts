@@ -1986,6 +1986,51 @@ export type Database = {
           },
         ]
       }
+      coberturas: {
+        Row: {
+          ativo: boolean | null
+          carencia_dias: number | null
+          codigo: string
+          created_at: string | null
+          descricao: string | null
+          franquia_percentual: number | null
+          franquia_valor: number | null
+          id: string
+          nome: string
+          percentual_cobertura: number | null
+          tipo: string
+          valor_limite: number | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          carencia_dias?: number | null
+          codigo: string
+          created_at?: string | null
+          descricao?: string | null
+          franquia_percentual?: number | null
+          franquia_valor?: number | null
+          id?: string
+          nome: string
+          percentual_cobertura?: number | null
+          tipo: string
+          valor_limite?: number | null
+        }
+        Update: {
+          ativo?: boolean | null
+          carencia_dias?: number | null
+          codigo?: string
+          created_at?: string | null
+          descricao?: string | null
+          franquia_percentual?: number | null
+          franquia_valor?: number | null
+          id?: string
+          nome?: string
+          percentual_cobertura?: number | null
+          tipo?: string
+          valor_limite?: number | null
+        }
+        Relationships: []
+      }
       cobranca_contatos: {
         Row: {
           associado_id: string
@@ -2367,6 +2412,50 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["veiculo_id"]
+          },
+        ]
+      }
+      configuracoes: {
+        Row: {
+          categoria: string
+          chave: string
+          descricao: string | null
+          editavel: boolean | null
+          id: string
+          tipo: string
+          updated_at: string | null
+          updated_by: string | null
+          valor: string
+        }
+        Insert: {
+          categoria: string
+          chave: string
+          descricao?: string | null
+          editavel?: boolean | null
+          id?: string
+          tipo: string
+          updated_at?: string | null
+          updated_by?: string | null
+          valor: string
+        }
+        Update: {
+          categoria?: string
+          chave?: string
+          descricao?: string | null
+          editavel?: boolean | null
+          id?: string
+          tipo?: string
+          updated_at?: string | null
+          updated_by?: string | null
+          valor?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "configuracoes_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -4172,6 +4261,90 @@ export type Database = {
           },
         ]
       }
+      indicadores_atuariais: {
+        Row: {
+          ano: number
+          cancelamentos: number | null
+          churn_rate: number | null
+          cobertura_sinistros_meses: number | null
+          created_at: string | null
+          crescimento_liquido: number | null
+          despesas_operacionais: number | null
+          despesas_sinistros: number | null
+          frequencia_sinistros: number | null
+          id: string
+          margem_operacional: number | null
+          mes: number
+          novos_associados: number | null
+          receita_bruta: number | null
+          receita_liquida: number | null
+          resultado_operacional: number | null
+          saldo_fundo_reserva: number | null
+          sinistralidade_bruta: number | null
+          sinistralidade_liquida: number | null
+          taxa_cancelamento: number | null
+          taxa_crescimento: number | null
+          taxa_retencao: number | null
+          ticket_medio_mensalidade: number | null
+          ticket_medio_sinistro: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          ano: number
+          cancelamentos?: number | null
+          churn_rate?: number | null
+          cobertura_sinistros_meses?: number | null
+          created_at?: string | null
+          crescimento_liquido?: number | null
+          despesas_operacionais?: number | null
+          despesas_sinistros?: number | null
+          frequencia_sinistros?: number | null
+          id?: string
+          margem_operacional?: number | null
+          mes: number
+          novos_associados?: number | null
+          receita_bruta?: number | null
+          receita_liquida?: number | null
+          resultado_operacional?: number | null
+          saldo_fundo_reserva?: number | null
+          sinistralidade_bruta?: number | null
+          sinistralidade_liquida?: number | null
+          taxa_cancelamento?: number | null
+          taxa_crescimento?: number | null
+          taxa_retencao?: number | null
+          ticket_medio_mensalidade?: number | null
+          ticket_medio_sinistro?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          ano?: number
+          cancelamentos?: number | null
+          churn_rate?: number | null
+          cobertura_sinistros_meses?: number | null
+          created_at?: string | null
+          crescimento_liquido?: number | null
+          despesas_operacionais?: number | null
+          despesas_sinistros?: number | null
+          frequencia_sinistros?: number | null
+          id?: string
+          margem_operacional?: number | null
+          mes?: number
+          novos_associados?: number | null
+          receita_bruta?: number | null
+          receita_liquida?: number | null
+          resultado_operacional?: number | null
+          saldo_fundo_reserva?: number | null
+          sinistralidade_bruta?: number | null
+          sinistralidade_liquida?: number | null
+          taxa_cancelamento?: number | null
+          taxa_crescimento?: number | null
+          taxa_retencao?: number | null
+          ticket_medio_mensalidade?: number | null
+          ticket_medio_sinistro?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       instalacao_fotos: {
         Row: {
           arquivo_url: string
@@ -4827,6 +5000,62 @@ export type Database = {
           },
         ]
       }
+      logs_auditoria: {
+        Row: {
+          acao: string
+          created_at: string | null
+          dados_anteriores: Json | null
+          dados_novos: Json | null
+          descricao: string | null
+          id: string
+          ip_address: string | null
+          modulo: string | null
+          registro_id: string | null
+          tabela: string | null
+          user_agent: string | null
+          usuario_id: string | null
+          usuario_nome: string | null
+        }
+        Insert: {
+          acao: string
+          created_at?: string | null
+          dados_anteriores?: Json | null
+          dados_novos?: Json | null
+          descricao?: string | null
+          id?: string
+          ip_address?: string | null
+          modulo?: string | null
+          registro_id?: string | null
+          tabela?: string | null
+          user_agent?: string | null
+          usuario_id?: string | null
+          usuario_nome?: string | null
+        }
+        Update: {
+          acao?: string
+          created_at?: string | null
+          dados_anteriores?: Json | null
+          dados_novos?: Json | null
+          descricao?: string | null
+          id?: string
+          ip_address?: string | null
+          modulo?: string | null
+          registro_id?: string | null
+          tabela?: string | null
+          user_agent?: string | null
+          usuario_id?: string | null
+          usuario_nome?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "logs_auditoria_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       materiais_marketing: {
         Row: {
           altura: number | null
@@ -5125,35 +5354,83 @@ export type Database = {
       notificacoes: {
         Row: {
           created_at: string
+          data_expiracao: string | null
+          destino: string | null
+          destino_id: string | null
           id: string
           lida: boolean
           link: string | null
           mensagem: string
+          modulo: string | null
           tipo: string
           titulo: string
           user_id: string
         }
         Insert: {
           created_at?: string
+          data_expiracao?: string | null
+          destino?: string | null
+          destino_id?: string | null
           id?: string
           lida?: boolean
           link?: string | null
           mensagem: string
+          modulo?: string | null
           tipo?: string
           titulo: string
           user_id: string
         }
         Update: {
           created_at?: string
+          data_expiracao?: string | null
+          destino?: string | null
+          destino_id?: string | null
           id?: string
           lida?: boolean
           link?: string | null
           mensagem?: string
+          modulo?: string | null
           tipo?: string
           titulo?: string
           user_id?: string
         }
         Relationships: []
+      }
+      notificacoes_lidas: {
+        Row: {
+          id: string
+          lida_em: string | null
+          notificacao_id: string
+          usuario_id: string
+        }
+        Insert: {
+          id?: string
+          lida_em?: string | null
+          notificacao_id: string
+          usuario_id: string
+        }
+        Update: {
+          id?: string
+          lida_em?: string | null
+          notificacao_id?: string
+          usuario_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notificacoes_lidas_notificacao_id_fkey"
+            columns: ["notificacao_id"]
+            isOneToOne: false
+            referencedRelation: "notificacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notificacoes_lidas_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       oficinas: {
         Row: {
@@ -5672,45 +5949,117 @@ export type Database = {
       }
       planos: {
         Row: {
+          ano_fabricacao_maximo: number | null
+          ano_fabricacao_minimo: number | null
           ativo: boolean
           codigo: string
           created_at: string
           descricao: string | null
+          destaque: boolean | null
           fipe_maxima: number | null
           fipe_minima: number | null
           id: string
           nome: string
+          ordem: number | null
           tipo_uso: string
+          tipo_veiculo: string | null
           updated_at: string
+          uso: string | null
           valor_adesao: number
         }
         Insert: {
+          ano_fabricacao_maximo?: number | null
+          ano_fabricacao_minimo?: number | null
           ativo?: boolean
           codigo: string
           created_at?: string
           descricao?: string | null
+          destaque?: boolean | null
           fipe_maxima?: number | null
           fipe_minima?: number | null
           id?: string
           nome: string
+          ordem?: number | null
           tipo_uso?: string
+          tipo_veiculo?: string | null
           updated_at?: string
+          uso?: string | null
           valor_adesao: number
         }
         Update: {
+          ano_fabricacao_maximo?: number | null
+          ano_fabricacao_minimo?: number | null
           ativo?: boolean
           codigo?: string
           created_at?: string
           descricao?: string | null
+          destaque?: boolean | null
           fipe_maxima?: number | null
           fipe_minima?: number | null
           id?: string
           nome?: string
+          ordem?: number | null
           tipo_uso?: string
+          tipo_veiculo?: string | null
           updated_at?: string
+          uso?: string | null
           valor_adesao?: number
         }
         Relationships: []
+      }
+      planos_coberturas: {
+        Row: {
+          carencia_dias: number | null
+          cobertura_id: string
+          created_at: string | null
+          franquia_percentual: number | null
+          franquia_valor: number | null
+          id: string
+          obrigatoria: boolean | null
+          percentual_cobertura: number | null
+          plano_id: string
+          valor_limite: number | null
+        }
+        Insert: {
+          carencia_dias?: number | null
+          cobertura_id: string
+          created_at?: string | null
+          franquia_percentual?: number | null
+          franquia_valor?: number | null
+          id?: string
+          obrigatoria?: boolean | null
+          percentual_cobertura?: number | null
+          plano_id: string
+          valor_limite?: number | null
+        }
+        Update: {
+          carencia_dias?: number | null
+          cobertura_id?: string
+          created_at?: string | null
+          franquia_percentual?: number | null
+          franquia_valor?: number | null
+          id?: string
+          obrigatoria?: boolean | null
+          percentual_cobertura?: number | null
+          plano_id?: string
+          valor_limite?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planos_coberturas_cobertura_id_fkey"
+            columns: ["cobertura_id"]
+            isOneToOne: false
+            referencedRelation: "coberturas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "planos_coberturas_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "planos"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       ponto_registros: {
         Row: {
@@ -6744,6 +7093,125 @@ export type Database = {
           },
         ]
       }
+      rateios: {
+        Row: {
+          ano: number
+          aplicado_em: string | null
+          aprovado_em: string | null
+          aprovado_por: string | null
+          codigo: string | null
+          created_at: string | null
+          formula_utilizada: string | null
+          id: string
+          mes: number
+          observacoes: string | null
+          percentual_fundo_reserva: number | null
+          status: string | null
+          total_associados: number | null
+          total_sinistros: number | null
+          updated_at: string | null
+          valor_fundo_reserva: number | null
+          valor_rateio_por_associado: number | null
+          valor_total_sinistros: number | null
+        }
+        Insert: {
+          ano: number
+          aplicado_em?: string | null
+          aprovado_em?: string | null
+          aprovado_por?: string | null
+          codigo?: string | null
+          created_at?: string | null
+          formula_utilizada?: string | null
+          id?: string
+          mes: number
+          observacoes?: string | null
+          percentual_fundo_reserva?: number | null
+          status?: string | null
+          total_associados?: number | null
+          total_sinistros?: number | null
+          updated_at?: string | null
+          valor_fundo_reserva?: number | null
+          valor_rateio_por_associado?: number | null
+          valor_total_sinistros?: number | null
+        }
+        Update: {
+          ano?: number
+          aplicado_em?: string | null
+          aprovado_em?: string | null
+          aprovado_por?: string | null
+          codigo?: string | null
+          created_at?: string | null
+          formula_utilizada?: string | null
+          id?: string
+          mes?: number
+          observacoes?: string | null
+          percentual_fundo_reserva?: number | null
+          status?: string | null
+          total_associados?: number | null
+          total_sinistros?: number | null
+          updated_at?: string | null
+          valor_fundo_reserva?: number | null
+          valor_rateio_por_associado?: number | null
+          valor_total_sinistros?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rateios_aprovado_por_fkey"
+            columns: ["aprovado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rateios_detalhes: {
+        Row: {
+          created_at: string | null
+          id: string
+          plano_id: string
+          rateio_id: string
+          total_associados: number | null
+          total_sinistros: number | null
+          valor_rateio: number | null
+          valor_sinistros: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          plano_id: string
+          rateio_id: string
+          total_associados?: number | null
+          total_sinistros?: number | null
+          valor_rateio?: number | null
+          valor_sinistros?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          plano_id?: string
+          rateio_id?: string
+          total_associados?: number | null
+          total_sinistros?: number | null
+          valor_rateio?: number | null
+          valor_sinistros?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rateios_detalhes_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "planos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rateios_detalhes_rateio_id_fkey"
+            columns: ["rateio_id"]
+            isOneToOne: false
+            referencedRelation: "rateios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       regua_execucoes: {
         Row: {
           acao: string
@@ -7235,7 +7703,10 @@ export type Database = {
           nome: string | null
           plano_id: string
           taxa_administrativa: number
+          taxa_aplicativo: number | null
+          taxa_comercial: number | null
           tipo_uso: string | null
+          valor_adesao: number | null
           valor_assistencia: number | null
           valor_cota: number
           valor_rastreamento: number
@@ -7251,7 +7722,10 @@ export type Database = {
           nome?: string | null
           plano_id: string
           taxa_administrativa?: number
+          taxa_aplicativo?: number | null
+          taxa_comercial?: number | null
           tipo_uso?: string | null
+          valor_adesao?: number | null
           valor_assistencia?: number | null
           valor_cota: number
           valor_rastreamento?: number
@@ -7267,7 +7741,10 @@ export type Database = {
           nome?: string | null
           plano_id?: string
           taxa_administrativa?: number
+          taxa_aplicativo?: number | null
+          taxa_comercial?: number | null
           tipo_uso?: string | null
+          valor_adesao?: number | null
           valor_assistencia?: number | null
           valor_cota?: number
           valor_rastreamento?: number
@@ -7280,6 +7757,50 @@ export type Database = {
             columns: ["plano_id"]
             isOneToOne: false
             referencedRelation: "planos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tabelas_preco_historico: {
+        Row: {
+          created_at: string | null
+          fipe_ate: number
+          fipe_de: number
+          id: string
+          tabela_preco_id: string
+          valor_adesao: number | null
+          valor_cota: number
+          vigencia_fim: string
+          vigencia_inicio: string
+        }
+        Insert: {
+          created_at?: string | null
+          fipe_ate: number
+          fipe_de: number
+          id?: string
+          tabela_preco_id: string
+          valor_adesao?: number | null
+          valor_cota: number
+          vigencia_fim: string
+          vigencia_inicio: string
+        }
+        Update: {
+          created_at?: string | null
+          fipe_ate?: number
+          fipe_de?: number
+          id?: string
+          tabela_preco_id?: string
+          valor_adesao?: number | null
+          valor_cota?: number
+          vigencia_fim?: string
+          vigencia_inicio?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tabelas_preco_historico_tabela_preco_id_fkey"
+            columns: ["tabela_preco_id"]
+            isOneToOne: false
+            referencedRelation: "tabelas_preco"
             referencedColumns: ["id"]
           },
         ]
@@ -7830,6 +8351,21 @@ export type Database = {
         }
         Relationships: []
       }
+      view_dashboard_diretoria: {
+        Row: {
+          assistencias_mes: number | null
+          associados_ativos: number | null
+          associados_inadimplentes: number | null
+          conversoes_mes: number | null
+          despesas_mes: number | null
+          instalacoes_mes: number | null
+          leads_mes: number | null
+          receita_mes: number | null
+          sinistros_mes: number | null
+          valor_sinistros_mes: number | null
+        }
+        Relationships: []
+      }
       view_funcionarios_ativos: {
         Row: {
           agencia: string | null
@@ -8177,6 +8713,14 @@ export type Database = {
       atualizar_cobrancas_vencidas: { Args: never; Returns: number }
       atualizar_parcelas_vencidas: { Args: never; Returns: number }
       atualizar_valor_os: { Args: { os_id: string }; Returns: undefined }
+      calcular_sinistralidade: {
+        Args: { p_ano: number; p_mes: number }
+        Returns: {
+          frequencia: number
+          sinistralidade: number
+          ticket_medio: number
+        }[]
+      }
       can_access_api_settings: { Args: { _user_id: string }; Returns: boolean }
       can_manage_juridico: { Args: { _user_id: string }; Returns: boolean }
       can_manage_marketing: { Args: { _user_id: string }; Returns: boolean }
