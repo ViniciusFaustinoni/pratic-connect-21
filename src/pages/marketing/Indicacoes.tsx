@@ -6,9 +6,9 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Plus, Search, Gift, Users, TrendingUp,
-  DollarSign, Phone, Check, Settings
+  DollarSign, Phone, Check, Settings, Trophy, Clock
 } from 'lucide-react';
-import { useIndicacoes, useProgramaIndicacao, useRecompensarIndicacao, useMarketingStats } from '@/hooks/useMarketing';
+import { useIndicacoes, useProgramaIndicacao, useRecompensarIndicacao, useIndicacoesStats, useTopIndicadores } from '@/hooks/useMarketing';
 import { useNavigate } from 'react-router-dom';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
@@ -32,13 +32,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { cn } from '@/lib/utils';
 
 const statusConfig: Record<string, { label: string; className: string }> = {
-  pendente: { label: 'Pendente', className: 'bg-gray-100 text-gray-800' },
+  pendente: { label: 'Pendente', className: 'bg-yellow-100 text-yellow-800' },
   contatado: { label: 'Contatado', className: 'bg-blue-100 text-blue-800' },
   convertido: { label: 'Convertido', className: 'bg-green-100 text-green-800' },
   recompensado: { label: 'Recompensado', className: 'bg-purple-100 text-purple-800' },
-  expirado: { label: 'Expirado', className: 'bg-yellow-100 text-yellow-800' },
+  expirado: { label: 'Expirado', className: 'bg-gray-100 text-gray-800' },
   cancelado: { label: 'Cancelado', className: 'bg-red-100 text-red-800' },
 };
 
@@ -50,17 +51,39 @@ export default function Indicacoes() {
   const [recompensarId, setRecompensarId] = useState<string | null>(null);
 
   const { data: programa } = useProgramaIndicacao();
-  const { data: stats } = useMarketingStats();
-  const { data: indicacoes, isLoading } = useIndicacoes(
-    tab !== 'todas' ? { status: tab } : undefined
-  );
+  const { data: stats, isLoading: statsLoading } = useIndicacoesStats();
+  const { data: indicacoes, isLoading } = useIndicacoes();
+  const { data: topIndicadores, isLoading: topLoading } = useTopIndicadores();
   const recompensarMutation = useRecompensarIndicacao();
 
-  const filteredIndicacoes = indicacoes?.filter(i =>
-    i.indicador_nome?.toLowerCase().includes(search.toLowerCase()) ||
-    i.indicado_nome.toLowerCase().includes(search.toLowerCase()) ||
-    i.codigo.toLowerCase().includes(search.toLowerCase())
-  );
+  // Pendentes de pagamento
+  const pendentesPagamento = indicacoes?.filter(i => i.status === 'convertido' && !i.recompensa_paga) || [];
+
+  // Filtrar indicações baseado na tab
+  const getFilteredByTab = () => {
+    let filtered = indicacoes || [];
+    
+    if (tab === 'pendente') {
+      filtered = filtered.filter(i => i.status === 'pendente');
+    } else if (tab === 'convertido') {
+      filtered = filtered.filter(i => i.status === 'convertido');
+    } else if (tab === 'recompensado') {
+      filtered = filtered.filter(i => i.status === 'recompensado');
+    }
+    
+    // Aplicar busca
+    if (search) {
+      filtered = filtered.filter(i =>
+        i.indicador_nome?.toLowerCase().includes(search.toLowerCase()) ||
+        i.indicado_nome.toLowerCase().includes(search.toLowerCase()) ||
+        i.codigo.toLowerCase().includes(search.toLowerCase())
+      );
+    }
+    
+    return filtered;
+  };
+
+  const filteredIndicacoes = getFilteredByTab();
 
   const handleRecompensar = () => {
     if (recompensarId) {
@@ -120,7 +143,11 @@ export default function Indicacoes() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats?.indicacoesMes || 0}</div>
+            {statsLoading ? (
+              <Skeleton className="h-8 w-16" />
+            ) : (
+              <div className="text-2xl font-bold">{stats?.totalMes || 0}</div>
+            )}
           </CardContent>
         </Card>
 
@@ -130,33 +157,41 @@ export default function Indicacoes() {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats?.indicacoesConvertidas || 0}</div>
+            {statsLoading ? (
+              <Skeleton className="h-8 w-16" />
+            ) : (
+              <div className="text-2xl font-bold text-green-600">{stats?.convertidasMes || 0}</div>
+            )}
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Taxa de Conversão</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Pendentes</CardTitle>
+            <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {stats?.indicacoesMes 
-                ? ((stats.indicacoesConvertidas / stats.indicacoesMes) * 100).toFixed(1)
-                : 0}%
-            </div>
+            {statsLoading ? (
+              <Skeleton className="h-8 w-16" />
+            ) : (
+              <div className="text-2xl font-bold text-yellow-600">{stats?.pendentes || 0}</div>
+            )}
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Recompensas Pendentes</CardTitle>
+            <CardTitle className="text-sm font-medium">Valor Pago (Mês)</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-orange-600">
-              {indicacoes?.filter(i => i.status === 'convertido' && !i.recompensa_paga).length || 0}
-            </div>
+            {statsLoading ? (
+              <Skeleton className="h-8 w-24" />
+            ) : (
+              <div className="text-2xl font-bold">
+                R$ {(stats?.valorPagoMes || 0).toFixed(2)}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -181,41 +216,150 @@ export default function Indicacoes() {
           <TabsTrigger value="pendente">Pendentes</TabsTrigger>
           <TabsTrigger value="convertido">Convertidas</TabsTrigger>
           <TabsTrigger value="recompensado">Recompensadas</TabsTrigger>
+          <TabsTrigger value="pendentes-pagamento" className="flex items-center gap-2">
+            Pend. Pagamento
+            {pendentesPagamento.length > 0 && (
+              <Badge variant="destructive" className="h-5 px-1.5 text-xs">
+                {pendentesPagamento.length}
+              </Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="top">
+            <Trophy className="mr-1 h-4 w-4" />
+            Top Indicadores
+          </TabsTrigger>
         </TabsList>
 
-        <TabsContent value={tab} className="mt-4">
+        {/* Tab Todas/Pendentes/Convertidas/Recompensadas */}
+        {['todas', 'pendente', 'convertido', 'recompensado'].map(tabValue => (
+          <TabsContent key={tabValue} value={tabValue} className="mt-4">
+            <Card>
+              <CardContent className="p-0">
+                {isLoading ? (
+                  <div className="p-6 space-y-3">
+                    {[1, 2, 3, 4, 5].map(i => (
+                      <Skeleton key={i} className="h-12 w-full" />
+                    ))}
+                  </div>
+                ) : filteredIndicacoes?.length === 0 ? (
+                  <div className="py-12 text-center">
+                    <Gift className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
+                    <p className="text-lg font-medium">Nenhuma indicação encontrada</p>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Código</TableHead>
+                        <TableHead>Indicador</TableHead>
+                        <TableHead>Indicado</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Data</TableHead>
+                        <TableHead>Recompensa</TableHead>
+                        <TableHead className="text-right">Ações</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredIndicacoes?.map(indicacao => (
+                        <TableRow key={indicacao.id}>
+                          <TableCell className="font-mono text-sm">
+                            {indicacao.codigo}
+                          </TableCell>
+                          <TableCell>
+                            <div>
+                              <p className="font-medium">{indicacao.indicador_nome}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {indicacao.indicador_telefone}
+                              </p>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div>
+                              <p className="font-medium">{indicacao.indicado_nome}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {indicacao.indicado_telefone}
+                              </p>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge className={statusConfig[indicacao.status]?.className}>
+                              {statusConfig[indicacao.status]?.label}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {format(new Date(indicacao.data_indicacao), 'dd/MM/yyyy', { locale: ptBR })}
+                          </TableCell>
+                          <TableCell>
+                            {indicacao.valor_recompensa ? (
+                              <span className={indicacao.recompensa_paga ? 'text-green-600' : 'text-orange-600'}>
+                                R$ {indicacao.valor_recompensa.toFixed(2)}
+                              </span>
+                            ) : '-'}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-2">
+                              <Button variant="ghost" size="icon">
+                                <Phone className="h-4 w-4" />
+                              </Button>
+                              {indicacao.status === 'convertido' && !indicacao.recompensa_paga && (
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon"
+                                  onClick={() => setRecompensarId(indicacao.id)}
+                                >
+                                  <Check className="h-4 w-4 text-green-600" />
+                                </Button>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        ))}
+
+        {/* Tab Pendentes de Pagamento */}
+        <TabsContent value="pendentes-pagamento" className="mt-4">
           <Card>
+            <CardHeader>
+              <CardTitle>Indicações Pendentes de Pagamento</CardTitle>
+              <CardDescription>
+                Indicações já convertidas aguardando pagamento de recompensa
+              </CardDescription>
+            </CardHeader>
             <CardContent className="p-0">
               {isLoading ? (
                 <div className="p-6 space-y-3">
-                  {[1, 2, 3, 4, 5].map(i => (
+                  {[1, 2, 3].map(i => (
                     <Skeleton key={i} className="h-12 w-full" />
                   ))}
                 </div>
-              ) : filteredIndicacoes?.length === 0 ? (
+              ) : pendentesPagamento.length === 0 ? (
                 <div className="py-12 text-center">
-                  <Gift className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
-                  <p className="text-lg font-medium">Nenhuma indicação encontrada</p>
+                  <Check className="mx-auto h-12 w-12 text-green-500/50 mb-4" />
+                  <p className="text-lg font-medium">Nenhum pagamento pendente</p>
+                  <p className="text-muted-foreground">
+                    Todas as recompensas foram pagas!
+                  </p>
                 </div>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Código</TableHead>
                       <TableHead>Indicador</TableHead>
                       <TableHead>Indicado</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Data</TableHead>
-                      <TableHead>Recompensa</TableHead>
-                      <TableHead className="text-right">Ações</TableHead>
+                      <TableHead>Data Conversão</TableHead>
+                      <TableHead className="text-right">Valor</TableHead>
+                      <TableHead className="text-right">Ação</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredIndicacoes?.map(indicacao => (
+                    {pendentesPagamento.map(indicacao => (
                       <TableRow key={indicacao.id}>
-                        <TableCell className="font-mono text-sm">
-                          {indicacao.codigo}
-                        </TableCell>
                         <TableCell>
                           <div>
                             <p className="font-medium">{indicacao.indicador_nome}</p>
@@ -233,35 +377,98 @@ export default function Indicacoes() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge className={statusConfig[indicacao.status]?.className}>
-                            {statusConfig[indicacao.status]?.label}
-                          </Badge>
+                          {indicacao.data_conversao 
+                            ? format(new Date(indicacao.data_conversao), 'dd/MM/yyyy', { locale: ptBR })
+                            : '-'}
                         </TableCell>
-                        <TableCell>
-                          {format(new Date(indicacao.data_indicacao), 'dd/MM/yyyy', { locale: ptBR })}
-                        </TableCell>
-                        <TableCell>
-                          {indicacao.valor_recompensa ? (
-                            <span className={indicacao.recompensa_paga ? 'text-green-600' : 'text-orange-600'}>
-                              R$ {indicacao.valor_recompensa.toFixed(2)}
-                            </span>
-                          ) : '-'}
+                        <TableCell className="text-right font-medium text-green-600">
+                          R$ {(indicacao.valor_recompensa || 0).toFixed(2)}
                         </TableCell>
                         <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button variant="ghost" size="icon">
-                              <Phone className="h-4 w-4" />
-                            </Button>
-                            {indicacao.status === 'convertido' && !indicacao.recompensa_paga && (
-                              <Button 
-                                variant="ghost" 
-                                size="icon"
-                                onClick={() => setRecompensarId(indicacao.id)}
-                              >
-                                <Check className="h-4 w-4 text-green-600" />
-                              </Button>
-                            )}
+                          <Button 
+                            size="sm"
+                            onClick={() => setRecompensarId(indicacao.id)}
+                          >
+                            <DollarSign className="mr-1 h-4 w-4" />
+                            Pagar
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Tab Top Indicadores */}
+        <TabsContent value="top" className="mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Trophy className="h-5 w-5 text-yellow-500" />
+                Ranking de Indicadores
+              </CardTitle>
+              <CardDescription>
+                Associados que mais indicaram novos clientes
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              {topLoading ? (
+                <div className="p-6 space-y-3">
+                  {[1, 2, 3, 4, 5].map(i => (
+                    <Skeleton key={i} className="h-12 w-full" />
+                  ))}
+                </div>
+              ) : !topIndicadores?.length ? (
+                <div className="py-12 text-center">
+                  <Trophy className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
+                  <p className="text-lg font-medium">Nenhum indicador ainda</p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-16">Posição</TableHead>
+                      <TableHead>Indicador</TableHead>
+                      <TableHead className="text-center">Total Indicações</TableHead>
+                      <TableHead className="text-center">Convertidas</TableHead>
+                      <TableHead className="text-right">Valor Recebido</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {topIndicadores?.map((ind, idx) => (
+                      <TableRow key={ind.indicador_id || ind.indicador_nome}>
+                        <TableCell>
+                          <div className={cn(
+                            "flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold",
+                            idx === 0 && "bg-yellow-100 text-yellow-700",
+                            idx === 1 && "bg-gray-100 text-gray-700",
+                            idx === 2 && "bg-orange-100 text-orange-700",
+                            idx > 2 && "bg-muted"
+                          )}>
+                            {idx + 1}º
                           </div>
+                        </TableCell>
+                        <TableCell>
+                          <div>
+                            <p className="font-medium">{ind.indicador_nome}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {ind.indicador_telefone}
+                            </p>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <span className="font-medium">{ind.total}</span>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <span className="text-green-600 font-medium">{ind.convertidas}</span>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <span className="font-medium">
+                            R$ {ind.valorRecebido.toFixed(2)}
+                          </span>
                         </TableCell>
                       </TableRow>
                     ))}
