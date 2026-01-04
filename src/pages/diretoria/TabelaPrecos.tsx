@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { FaixaPrecoModal } from '@/components/diretoria';
 
 interface TabelaPrecoComPlano {
   id: string;
@@ -34,6 +35,9 @@ interface TabelaPrecoComPlano {
 export default function TabelaPrecos() {
   const [planoSelecionado, setPlanoSelecionado] = useState<string>('all');
   const [apenasVigentes, setApenasVigentes] = useState(true);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [faixaEdit, setFaixaEdit] = useState<TabelaPrecoComPlano | null>(null);
+  const [planoIdParaModal, setPlanoIdParaModal] = useState<string>('');
 
   const { data: precos, isLoading } = useQuery({
     queryKey: ['tabela-precos', planoSelecionado, apenasVigentes],
@@ -118,7 +122,19 @@ export default function TabelaPrecos() {
             <Download className="h-4 w-4 mr-2" />
             Exportar
           </Button>
-          <Button>
+          <Button 
+            onClick={() => { 
+              if (planoSelecionado && planoSelecionado !== 'all') {
+                setPlanoIdParaModal(planoSelecionado);
+                setFaixaEdit(null);
+                setModalOpen(true);
+              } else if (planos?.length) {
+                setPlanoIdParaModal(planos[0].id);
+                setFaixaEdit(null);
+                setModalOpen(true);
+              }
+            }}
+          >
             <Plus className="h-4 w-4 mr-2" />
             Nova Faixa
           </Button>
@@ -232,7 +248,16 @@ export default function TabelaPrecos() {
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-1">
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8"
+                            onClick={() => {
+                              setPlanoIdParaModal(preco.plano_id);
+                              setFaixaEdit(preco);
+                              setModalOpen(true);
+                            }}
+                          >
                             <Edit className="h-4 w-4" />
                           </Button>
                           <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -257,12 +282,27 @@ export default function TabelaPrecos() {
           <p className="text-muted-foreground mb-4">
             {planoSelecionado !== 'all' ? 'Não há faixas de preço para este produto.' : 'Comece criando sua primeira faixa de preço.'}
           </p>
-          <Button>
-            <Plus className="h-4 w-4 mr-2" />
-            Nova Faixa
-          </Button>
-        </Card>
-      )}
-    </div>
-  );
+        <Button 
+          onClick={() => {
+            if (planos?.length) {
+              setPlanoIdParaModal(planos[0].id);
+              setFaixaEdit(null);
+              setModalOpen(true);
+            }
+          }}
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          Nova Faixa
+        </Button>
+      </Card>
+    )}
+
+    <FaixaPrecoModal
+      open={modalOpen}
+      onClose={() => setModalOpen(false)}
+      planoId={planoIdParaModal}
+      faixa={faixaEdit}
+    />
+  </div>
+);
 }

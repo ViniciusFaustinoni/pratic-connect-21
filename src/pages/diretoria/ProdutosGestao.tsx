@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Package, Plus, Edit, DollarSign, Shield, Users, Star, MoreVertical } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,6 +10,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { ProdutoFormModal } from '@/components/diretoria';
 
 const tipoVeiculoConfig: Record<string, { label: string; class: string }> = {
   carro: { label: 'Carro', class: 'bg-blue-100 text-blue-800' },
@@ -29,6 +31,8 @@ const usoConfig: Record<string, { label: string; class: string }> = {
 export default function ProdutosGestao() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [modalOpen, setModalOpen] = useState(false);
+  const [produtoEdit, setProdutoEdit] = useState<any>(null);
 
   const { data: planos, isLoading } = useQuery({
     queryKey: ['planos-gestao'],
@@ -147,7 +151,7 @@ export default function ProdutosGestao() {
           <Package className="h-6 w-6 text-primary" />
           <h1 className="text-2xl font-bold">Gestão de Produtos</h1>
         </div>
-        <Button onClick={() => navigate('/diretoria/produtos/novo')}>
+        <Button onClick={() => { setProdutoEdit(null); setModalOpen(true); }}>
           <Plus className="h-4 w-4 mr-2" />
           Novo Produto
         </Button>
@@ -182,7 +186,7 @@ export default function ProdutosGestao() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => navigate(`/diretoria/produtos/${plano.id}`)}>
+                      <DropdownMenuItem onClick={() => { setProdutoEdit(plano); setModalOpen(true); }}>
                         <Edit className="h-4 w-4 mr-2" />
                         Editar
                       </DropdownMenuItem>
@@ -267,12 +271,18 @@ export default function ProdutosGestao() {
           <p className="text-muted-foreground mb-4">
             Comece criando seu primeiro plano de proteção.
           </p>
-          <Button onClick={() => navigate('/diretoria/produtos/novo')}>
-            <Plus className="h-4 w-4 mr-2" />
-            Novo Produto
-          </Button>
-        </Card>
-      )}
-    </div>
-  );
+        <Button onClick={() => { setProdutoEdit(null); setModalOpen(true); }}>
+          <Plus className="h-4 w-4 mr-2" />
+          Novo Produto
+        </Button>
+      </Card>
+    )}
+
+    <ProdutoFormModal
+      open={modalOpen}
+      onClose={() => setModalOpen(false)}
+      produto={produtoEdit}
+    />
+  </div>
+);
 }
