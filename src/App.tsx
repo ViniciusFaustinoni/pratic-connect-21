@@ -82,6 +82,7 @@ import RazaoConta from "./pages/contabilidade/RazaoConta";
 import JuridicoDashboard from "./pages/juridico/JuridicoDashboard";
 import ProcessosList from "./pages/juridico/ProcessosList";
 import ProcessoDetalhe from "./pages/juridico/ProcessoDetalhe";
+import ProcessoForm from "./pages/juridico/ProcessoForm";
 
 // Associate App Pages
 import AppLogin from "./pages/app/AppLogin";
@@ -190,7 +191,9 @@ const App = () => (
               {/* Jurídico */}
               <Route path="/juridico" element={<JuridicoDashboard />} />
               <Route path="/juridico/processos" element={<ProcessosList />} />
+              <Route path="/juridico/processos/novo" element={<ProcessoForm />} />
               <Route path="/juridico/processos/:id" element={<ProcessoDetalhe />} />
+              <Route path="/juridico/processos/:id/editar" element={<ProcessoForm />} />
               
               {/* Monitoramento */}
               <Route path="/monitoramento/instalacoes" element={<Instalacoes />} />
