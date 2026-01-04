@@ -246,19 +246,26 @@ export function useInstaladores() {
   return useQuery({
     queryKey: ['instaladores'],
     queryFn: async () => {
+      // 1. Buscar IDs dos instaladores na tabela user_roles
+      const { data: roles, error: rolesError } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .eq('role', 'instalador_vistoriador');
+
+      if (rolesError) throw rolesError;
+      if (!roles?.length) return [];
+
+      const userIds = roles.map(r => r.user_id);
+
+      // 2. Buscar profiles correspondentes
       const { data, error } = await supabase
         .from('profiles')
-        .select(`
-          id,
-          nome,
-          telefone,
-          user_roles!inner (role)
-        `)
-        .eq('user_roles.role', 'instalador_vistoriador')
+        .select('id, nome, telefone')
+        .in('id', userIds)
         .eq('ativo', true);
 
       if (error) throw error;
-      return data;
+      return data ?? [];
     },
   });
 }
