@@ -80,6 +80,7 @@ import RazaoConta from "./pages/contabilidade/RazaoConta";
 
 // Jurídico
 import JuridicoDashboard from "./pages/juridico/JuridicoDashboard";
+import ProcessosList from "./pages/juridico/ProcessosList";
 
 // Associate App Pages
 import AppLogin from "./pages/app/AppLogin";
@@ -187,6 +188,7 @@ const App = () => (
               
               {/* Jurídico */}
               <Route path="/juridico" element={<JuridicoDashboard />} />
+              <Route path="/juridico/processos" element={<ProcessosList />} />
               
               {/* Monitoramento */}
               <Route path="/monitoramento/instalacoes" element={<Instalacoes />} />
