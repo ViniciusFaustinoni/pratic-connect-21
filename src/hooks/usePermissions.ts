@@ -15,6 +15,7 @@ export type PermissionKey =
   | 'isAnalistaPlataforma'
   | 'isInstaladorVistoriador'
   | 'isAnalistaMarketing'
+  | 'isAnalistaJuridico'
   | 'isVendedor'
   | 'isGerencia'
   | 'canManageUsers'
@@ -30,7 +31,8 @@ export type PermissionKey =
   | 'canManageOficinas'
   | 'canManageSinistros'
   | 'canApproveOS'
-  | 'canManageContabilidade';
+  | 'canManageContabilidade'
+  | 'canManageJuridico';
 
 /**
  * Hook centralizado de permissões para verificar acessos de forma declarativa
@@ -56,6 +58,7 @@ export function usePermissions() {
     isAnalistaPlataforma: hasRole('analista_plataforma'),
     isInstaladorVistoriador: hasRole('instalador_vistoriador'),
     isAnalistaMarketing: hasRole('analista_marketing'),
+    isAnalistaJuridico: hasRole('analista_juridico'),
 
     // Verificações compostas (alias para funções do AuthContext)
     isVendedor: isVendedor(),
@@ -76,6 +79,7 @@ export function usePermissions() {
     canManageSinistros: hasRole('analista_cadastro') || isGerencia(),
     canApproveOS: isGerencia(),
     canManageContabilidade: hasRole('diretor') || hasRole('gerente_comercial'),
+    canManageJuridico: hasRole('diretor') || hasRole('gerente_comercial') || hasRole('analista_juridico'),
   };
 
   return {

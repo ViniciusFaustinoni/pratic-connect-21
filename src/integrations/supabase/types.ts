@@ -186,6 +186,99 @@ export type Database = {
           },
         ]
       }
+      advogados: {
+        Row: {
+          agencia: string | null
+          ativo: boolean | null
+          bairro: string | null
+          banco: string | null
+          cep: string | null
+          cidade: string | null
+          complemento: string | null
+          conta: string | null
+          cpf_cnpj: string | null
+          created_at: string | null
+          email: string | null
+          especialidades: string[] | null
+          estado: string | null
+          id: string
+          logradouro: string | null
+          nome: string
+          numero: string | null
+          oab: string | null
+          oab_estado: string | null
+          percentual_exito: number | null
+          pix_chave: string | null
+          pix_tipo: string | null
+          telefone: string | null
+          tipo: string
+          tipo_contrato: string | null
+          updated_at: string | null
+          valor_fixo: number | null
+          whatsapp: string | null
+        }
+        Insert: {
+          agencia?: string | null
+          ativo?: boolean | null
+          bairro?: string | null
+          banco?: string | null
+          cep?: string | null
+          cidade?: string | null
+          complemento?: string | null
+          conta?: string | null
+          cpf_cnpj?: string | null
+          created_at?: string | null
+          email?: string | null
+          especialidades?: string[] | null
+          estado?: string | null
+          id?: string
+          logradouro?: string | null
+          nome: string
+          numero?: string | null
+          oab?: string | null
+          oab_estado?: string | null
+          percentual_exito?: number | null
+          pix_chave?: string | null
+          pix_tipo?: string | null
+          telefone?: string | null
+          tipo: string
+          tipo_contrato?: string | null
+          updated_at?: string | null
+          valor_fixo?: number | null
+          whatsapp?: string | null
+        }
+        Update: {
+          agencia?: string | null
+          ativo?: boolean | null
+          bairro?: string | null
+          banco?: string | null
+          cep?: string | null
+          cidade?: string | null
+          complemento?: string | null
+          conta?: string | null
+          cpf_cnpj?: string | null
+          created_at?: string | null
+          email?: string | null
+          especialidades?: string[] | null
+          estado?: string | null
+          id?: string
+          logradouro?: string | null
+          nome?: string
+          numero?: string | null
+          oab?: string | null
+          oab_estado?: string | null
+          percentual_exito?: number | null
+          pix_chave?: string | null
+          pix_tipo?: string | null
+          telefone?: string | null
+          tipo?: string
+          tipo_contrato?: string | null
+          updated_at?: string | null
+          valor_fixo?: number | null
+          whatsapp?: string | null
+        }
+        Relationships: []
+      }
       api_keys: {
         Row: {
           ativa: boolean | null
@@ -1720,6 +1813,134 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["veiculo_id"]
+          },
+        ]
+      }
+      consultas_juridicas: {
+        Row: {
+          associado_id: string | null
+          assunto: string
+          created_at: string | null
+          departamento: string | null
+          descricao: string
+          id: string
+          numero: string | null
+          parecer: string | null
+          prioridade: string | null
+          processo_id: string | null
+          respondido_em: string | null
+          respondido_por: string | null
+          sinistro_id: string | null
+          solicitante_id: string | null
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          associado_id?: string | null
+          assunto: string
+          created_at?: string | null
+          departamento?: string | null
+          descricao: string
+          id?: string
+          numero?: string | null
+          parecer?: string | null
+          prioridade?: string | null
+          processo_id?: string | null
+          respondido_em?: string | null
+          respondido_por?: string | null
+          sinistro_id?: string | null
+          solicitante_id?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          associado_id?: string | null
+          assunto?: string
+          created_at?: string | null
+          departamento?: string | null
+          descricao?: string
+          id?: string
+          numero?: string | null
+          parecer?: string | null
+          prioridade?: string | null
+          processo_id?: string | null
+          respondido_em?: string | null
+          respondido_por?: string | null
+          sinistro_id?: string | null
+          solicitante_id?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consultas_juridicas_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consultas_juridicas_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "consultas_juridicas_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "consultas_juridicas_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "consultas_juridicas_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "consultas_juridicas_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "consultas_juridicas_processo_id_fkey"
+            columns: ["processo_id"]
+            isOneToOne: false
+            referencedRelation: "processos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consultas_juridicas_respondido_por_fkey"
+            columns: ["respondido_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consultas_juridicas_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "sinistros"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consultas_juridicas_solicitante_id_fkey"
+            columns: ["solicitante_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -3900,6 +4121,520 @@ export type Database = {
         }
         Relationships: []
       }
+      processos: {
+        Row: {
+          advogado_id: string | null
+          associado_id: string | null
+          comarca: string | null
+          created_at: string | null
+          criado_por: string | null
+          data_audiencia: string | null
+          data_citacao: string | null
+          data_distribuicao: string | null
+          data_encerramento: string | null
+          data_sentenca: string | null
+          data_transito_julgado: string | null
+          fase: string | null
+          id: string
+          natureza: string
+          numero: string | null
+          numero_processo: string | null
+          objeto: string
+          observacoes: string | null
+          parte_contraria_advogado: string | null
+          parte_contraria_cpf_cnpj: string | null
+          parte_contraria_nome: string
+          parte_contraria_oab: string | null
+          responsavel_id: string | null
+          rito: string | null
+          sinistro_id: string | null
+          status: string | null
+          tipo: string
+          tribunal: string | null
+          updated_at: string | null
+          valor_acordo: number | null
+          valor_causa: number | null
+          valor_condenacao: number | null
+          vara: string | null
+        }
+        Insert: {
+          advogado_id?: string | null
+          associado_id?: string | null
+          comarca?: string | null
+          created_at?: string | null
+          criado_por?: string | null
+          data_audiencia?: string | null
+          data_citacao?: string | null
+          data_distribuicao?: string | null
+          data_encerramento?: string | null
+          data_sentenca?: string | null
+          data_transito_julgado?: string | null
+          fase?: string | null
+          id?: string
+          natureza: string
+          numero?: string | null
+          numero_processo?: string | null
+          objeto: string
+          observacoes?: string | null
+          parte_contraria_advogado?: string | null
+          parte_contraria_cpf_cnpj?: string | null
+          parte_contraria_nome: string
+          parte_contraria_oab?: string | null
+          responsavel_id?: string | null
+          rito?: string | null
+          sinistro_id?: string | null
+          status?: string | null
+          tipo: string
+          tribunal?: string | null
+          updated_at?: string | null
+          valor_acordo?: number | null
+          valor_causa?: number | null
+          valor_condenacao?: number | null
+          vara?: string | null
+        }
+        Update: {
+          advogado_id?: string | null
+          associado_id?: string | null
+          comarca?: string | null
+          created_at?: string | null
+          criado_por?: string | null
+          data_audiencia?: string | null
+          data_citacao?: string | null
+          data_distribuicao?: string | null
+          data_encerramento?: string | null
+          data_sentenca?: string | null
+          data_transito_julgado?: string | null
+          fase?: string | null
+          id?: string
+          natureza?: string
+          numero?: string | null
+          numero_processo?: string | null
+          objeto?: string
+          observacoes?: string | null
+          parte_contraria_advogado?: string | null
+          parte_contraria_cpf_cnpj?: string | null
+          parte_contraria_nome?: string
+          parte_contraria_oab?: string | null
+          responsavel_id?: string | null
+          rito?: string | null
+          sinistro_id?: string | null
+          status?: string | null
+          tipo?: string
+          tribunal?: string | null
+          updated_at?: string | null
+          valor_acordo?: number | null
+          valor_causa?: number | null
+          valor_condenacao?: number | null
+          vara?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "processos_advogado_id_fkey"
+            columns: ["advogado_id"]
+            isOneToOne: false
+            referencedRelation: "advogados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "processos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "processos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "processos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "processos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "processos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "processos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "processos_criado_por_fkey"
+            columns: ["criado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "processos_responsavel_id_fkey"
+            columns: ["responsavel_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "processos_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "sinistros"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      processos_andamentos: {
+        Row: {
+          created_at: string | null
+          data: string
+          descricao: string
+          gera_prazo: boolean | null
+          id: string
+          prazo_cumprido: boolean | null
+          prazo_cumprido_em: string | null
+          prazo_data: string | null
+          prazo_descricao: string | null
+          prazo_dias: number | null
+          processo_id: string
+          registrado_por: string | null
+          tipo: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          data: string
+          descricao: string
+          gera_prazo?: boolean | null
+          id?: string
+          prazo_cumprido?: boolean | null
+          prazo_cumprido_em?: string | null
+          prazo_data?: string | null
+          prazo_descricao?: string | null
+          prazo_dias?: number | null
+          processo_id: string
+          registrado_por?: string | null
+          tipo?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          data?: string
+          descricao?: string
+          gera_prazo?: boolean | null
+          id?: string
+          prazo_cumprido?: boolean | null
+          prazo_cumprido_em?: string | null
+          prazo_data?: string | null
+          prazo_descricao?: string | null
+          prazo_dias?: number | null
+          processo_id?: string
+          registrado_por?: string | null
+          tipo?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "processos_andamentos_processo_id_fkey"
+            columns: ["processo_id"]
+            isOneToOne: false
+            referencedRelation: "processos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "processos_andamentos_registrado_por_fkey"
+            columns: ["registrado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      processos_audiencias: {
+        Row: {
+          advogado_presente: boolean | null
+          created_at: string | null
+          data_hora: string
+          id: string
+          link_videoconferencia: string | null
+          local: string | null
+          observacoes: string | null
+          parte_presente: boolean | null
+          pauta: string | null
+          processo_id: string
+          resultado: string | null
+          status: string | null
+          testemunhas: string | null
+          tipo: string
+          updated_at: string | null
+        }
+        Insert: {
+          advogado_presente?: boolean | null
+          created_at?: string | null
+          data_hora: string
+          id?: string
+          link_videoconferencia?: string | null
+          local?: string | null
+          observacoes?: string | null
+          parte_presente?: boolean | null
+          pauta?: string | null
+          processo_id: string
+          resultado?: string | null
+          status?: string | null
+          testemunhas?: string | null
+          tipo: string
+          updated_at?: string | null
+        }
+        Update: {
+          advogado_presente?: boolean | null
+          created_at?: string | null
+          data_hora?: string
+          id?: string
+          link_videoconferencia?: string | null
+          local?: string | null
+          observacoes?: string | null
+          parte_presente?: boolean | null
+          pauta?: string | null
+          processo_id?: string
+          resultado?: string | null
+          status?: string | null
+          testemunhas?: string | null
+          tipo?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "processos_audiencias_processo_id_fkey"
+            columns: ["processo_id"]
+            isOneToOne: false
+            referencedRelation: "processos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      processos_custas: {
+        Row: {
+          comprovante_url: string | null
+          created_at: string | null
+          data_pagamento: string | null
+          data_vencimento: string | null
+          descricao: string
+          id: string
+          pago_por: string | null
+          processo_id: string
+          status: string | null
+          tipo: string
+          valor: number
+        }
+        Insert: {
+          comprovante_url?: string | null
+          created_at?: string | null
+          data_pagamento?: string | null
+          data_vencimento?: string | null
+          descricao: string
+          id?: string
+          pago_por?: string | null
+          processo_id: string
+          status?: string | null
+          tipo: string
+          valor: number
+        }
+        Update: {
+          comprovante_url?: string | null
+          created_at?: string | null
+          data_pagamento?: string | null
+          data_vencimento?: string | null
+          descricao?: string
+          id?: string
+          pago_por?: string | null
+          processo_id?: string
+          status?: string | null
+          tipo?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "processos_custas_pago_por_fkey"
+            columns: ["pago_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "processos_custas_processo_id_fkey"
+            columns: ["processo_id"]
+            isOneToOne: false
+            referencedRelation: "processos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      processos_documentos: {
+        Row: {
+          andamento_id: string | null
+          arquivo_tamanho: number | null
+          arquivo_url: string | null
+          created_at: string | null
+          descricao: string | null
+          enviado_por: string | null
+          id: string
+          nome: string
+          processo_id: string
+          tipo: string
+        }
+        Insert: {
+          andamento_id?: string | null
+          arquivo_tamanho?: number | null
+          arquivo_url?: string | null
+          created_at?: string | null
+          descricao?: string | null
+          enviado_por?: string | null
+          id?: string
+          nome: string
+          processo_id: string
+          tipo: string
+        }
+        Update: {
+          andamento_id?: string | null
+          arquivo_tamanho?: number | null
+          arquivo_url?: string | null
+          created_at?: string | null
+          descricao?: string | null
+          enviado_por?: string | null
+          id?: string
+          nome?: string
+          processo_id?: string
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "processos_documentos_andamento_id_fkey"
+            columns: ["andamento_id"]
+            isOneToOne: false
+            referencedRelation: "processos_andamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "processos_documentos_enviado_por_fkey"
+            columns: ["enviado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "processos_documentos_processo_id_fkey"
+            columns: ["processo_id"]
+            isOneToOne: false
+            referencedRelation: "processos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      processos_prazos: {
+        Row: {
+          alerta_enviado_1d: boolean | null
+          alerta_enviado_3d: boolean | null
+          alerta_enviado_hoje: boolean | null
+          andamento_id: string | null
+          created_at: string | null
+          cumprido_em: string | null
+          cumprido_por: string | null
+          data_fim: string
+          data_inicio: string
+          descricao: string
+          dias_uteis: boolean | null
+          id: string
+          observacao_cumprimento: string | null
+          prioridade: string | null
+          processo_id: string
+          responsavel_id: string | null
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          alerta_enviado_1d?: boolean | null
+          alerta_enviado_3d?: boolean | null
+          alerta_enviado_hoje?: boolean | null
+          andamento_id?: string | null
+          created_at?: string | null
+          cumprido_em?: string | null
+          cumprido_por?: string | null
+          data_fim: string
+          data_inicio: string
+          descricao: string
+          dias_uteis?: boolean | null
+          id?: string
+          observacao_cumprimento?: string | null
+          prioridade?: string | null
+          processo_id: string
+          responsavel_id?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          alerta_enviado_1d?: boolean | null
+          alerta_enviado_3d?: boolean | null
+          alerta_enviado_hoje?: boolean | null
+          andamento_id?: string | null
+          created_at?: string | null
+          cumprido_em?: string | null
+          cumprido_por?: string | null
+          data_fim?: string
+          data_inicio?: string
+          descricao?: string
+          dias_uteis?: boolean | null
+          id?: string
+          observacao_cumprimento?: string | null
+          prioridade?: string | null
+          processo_id?: string
+          responsavel_id?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "processos_prazos_andamento_id_fkey"
+            columns: ["andamento_id"]
+            isOneToOne: false
+            referencedRelation: "processos_andamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "processos_prazos_cumprido_por_fkey"
+            columns: ["cumprido_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "processos_prazos_processo_id_fkey"
+            columns: ["processo_id"]
+            isOneToOne: false
+            referencedRelation: "processos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "processos_prazos_responsavel_id_fkey"
+            columns: ["responsavel_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           ativo: boolean
@@ -5146,6 +5881,31 @@ export type Database = {
         }
         Relationships: []
       }
+      view_prazos_proximos: {
+        Row: {
+          data_fim: string | null
+          descricao: string | null
+          id: string | null
+          parte_contraria_nome: string | null
+          prioridade: string | null
+          processo_cnj: string | null
+          processo_numero: string | null
+          processo_tipo: string | null
+          responsavel_id: string | null
+          responsavel_nome: string | null
+          status: string | null
+          urgencia: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "processos_prazos_responsavel_id_fkey"
+            columns: ["responsavel_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       view_rastreadores_posicao: {
         Row: {
           ano_modelo: number | null
@@ -5190,6 +5950,7 @@ export type Database = {
       atualizar_parcelas_vencidas: { Args: never; Returns: number }
       atualizar_valor_os: { Args: { os_id: string }; Returns: undefined }
       can_access_api_settings: { Args: { _user_id: string }; Returns: boolean }
+      can_manage_juridico: { Args: { _user_id: string }; Returns: boolean }
       get_alertas_contagem: {
         Args: never
         Returns: {
@@ -5268,6 +6029,7 @@ export type Database = {
         | "instalador_vistoriador"
         | "associado"
         | "analista_marketing"
+        | "analista_juridico"
       etapa_lead:
         | "novo"
         | "contato_inicial"
@@ -5566,6 +6328,7 @@ export const Constants = {
         "instalador_vistoriador",
         "associado",
         "analista_marketing",
+        "analista_juridico",
       ],
       etapa_lead: [
         "novo",
