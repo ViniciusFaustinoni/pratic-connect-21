@@ -51,124 +51,86 @@ serve(async (req) => {
 
     const apiKey = Deno.env.get('FIPE_PLACAS_API_KEY');
     if (!apiKey) {
+      console.error("[plate-lookup] FIPE_PLACAS_API_KEY não configurada");
       throw new Error("API de placas não configurada. Configure o secret FIPE_PLACAS_API_KEY");
     }
 
-    // Consultar API de placas (fipeapi.com.br ou similar)
-    // Ajustar URL e headers conforme a API contratada
-    const apiUrl = `https://wdapi2.com.br/consulta/${placaNormalizada}/${apiKey}`;
+    // Consultar API de placas (placas.fipeapi.com.br)
+    const apiUrl = `https://placas.fipeapi.com.br/placas/${placaNormalizada}?key=${apiKey}`;
     
-    console.log(`[plate-lookup] Chamando API de placas...`);
-    const response = await fetch(apiUrl, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    });
+    console.log(`[plate-lookup] Chamando API: placas.fipeapi.com.br`);
+    const response = await fetch(apiUrl);
 
     if (!response.ok) {
-      console.error(`[plate-lookup] Erro na API: ${response.status}`);
-      throw new Error("Erro ao consultar API de placas");
+      console.error(`[plate-lookup] Erro HTTP: ${response.status}`);
+      
+      if (response.status === 403) {
+        throw new Error("Chave de API inválida ou sem créditos. Verifique sua conta no fipeapi.com.br");
+      }
+      if (response.status === 429) {
+        throw new Error("Limite de consultas excedido. Tente novamente em alguns minutos.");
+      }
+      if (response.status === 404) {
+        throw new Error("Veículo não encontrado na base de dados.");
+      }
+      
+      throw new Error(`Erro na consulta de placa (código ${response.status})`);
     }
 
     const apiData = await response.json();
     console.log(`[plate-lookup] Resposta da API:`, JSON.stringify(apiData));
 
-    // Verificar se encontrou o veículo
-    if (apiData.error || apiData.mensagem || !apiData.MARCA) {
-      throw new Error(apiData.mensagem || apiData.error || "Veículo não encontrado");
+    // Extrair dados aninhados (estrutura: { data: { veiculo: {...}, fipes: [...] } })
+    const veiculo = apiData.data?.veiculo || apiData.veiculo || apiData;
+    const fipesArray = apiData.data?.fipes || apiData.fipes || [];
+
+    if (!veiculo || !veiculo.marca_modelo) {
+      console.error("[plate-lookup] Veículo não encontrado ou sem dados");
+      throw new Error("Veículo não encontrado na base de dados");
     }
 
-    // Extrair dados do veículo da resposta da API
-    // Formato típico: { MARCA: "I/CHEVROLET", MODELO: "ONIX 1.0", ano: "2022", ... }
+    // Separar marca e modelo (vem junto: "VW/GOL 1.0")
+    const marcaModelo = veiculo.marca_modelo || '';
+    const [marca, ...modeloParts] = marcaModelo.split('/');
+    const modelo = modeloParts.join('/').trim();
+
+    console.log(`[plate-lookup] Marca: ${marca}, Modelo: ${modelo}`);
+
     const vehicleData = {
-      placa: formatarPlaca(placaNormalizada),
-      marca: apiData.MARCA?.replace(/^I\//, '').trim() || '',
-      modelo: apiData.MODELO?.trim() || '',
-      submodelo: apiData.SUBMODELO?.trim() || '',
-      anoFabricacao: parseInt(apiData.ano) || null,
-      anoModelo: parseInt(apiData.anoModelo) || parseInt(apiData.ano) || null,
-      cor: apiData.cor || apiData.COR || '',
-      combustivel: apiData.combustivel || apiData.COMBUSTIVEL || '',
-      chassi: apiData.chassi || '',
-      municipio: apiData.municipio || '',
-      uf: apiData.uf || '',
-      situacao: apiData.situacao || '',
-      origem: apiData.origem || '',
+      placa: veiculo.placa || formatarPlaca(placaNormalizada),
+      chassi: veiculo.chassi || '',
+      marca: marca.trim(),
+      modelo: modelo,
+      marca_modelo: marcaModelo,
+      ano: veiculo.ano || '',
+      cor: veiculo.cor || '',
+      combustivel: veiculo.combustivel || '',
+      municipio: veiculo.municipio || '',
+      uf: veiculo.uf || '',
+      motor: veiculo.n_motor || '',
+      renavam: veiculo.renavam || '',
+      potencia: veiculo.potencia || '',
+      cilindradas: veiculo.cilindradas || '',
+      tipo_veiculo: veiculo.tipo_de_veiculo || '',
+      categoria: veiculo.categoria || '',
+      procedencia: veiculo.procedencia || '',
     };
 
-    console.log(`[plate-lookup] Dados extraídos:`, JSON.stringify(vehicleData));
-
-    // Tentar buscar valor FIPE via edge function fipe-lookup
-    let fipeData = null;
-    
-    if (vehicleData.marca && vehicleData.modelo && vehicleData.anoModelo) {
-      console.log(`[plate-lookup] Buscando FIPE para: ${vehicleData.marca} ${vehicleData.modelo} ${vehicleData.anoModelo}`);
-      
-      try {
-        const supabaseUrl = Deno.env.get('SUPABASE_URL');
-        const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
-        
-        const fipeResponse = await fetch(
-          `${supabaseUrl}/functions/v1/fipe-lookup`,
-          {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${supabaseAnonKey}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              action: 'buscar-por-nome',
-              tipo: 'carros',
-              marca: vehicleData.marca,
-              modelo: `${vehicleData.modelo} ${vehicleData.submodelo}`.trim(),
-              ano: vehicleData.anoModelo.toString()
-            })
-          }
-        );
-
-        const fipeLookupData = await fipeResponse.json();
-        console.log(`[plate-lookup] Resposta FIPE:`, JSON.stringify(fipeLookupData));
-        
-        if (fipeLookupData.success && fipeLookupData.found) {
-          fipeData = {
-            codigoFipe: fipeLookupData.data.codigoFipe,
-            valorFipe: fipeLookupData.data.valorNumerico,
-            valorFipeFormatado: fipeLookupData.data.valor,
-            mesReferencia: fipeLookupData.data.mesReferencia,
-            marcaFipe: fipeLookupData.data.marca,
-            modeloFipe: fipeLookupData.data.modelo,
-          };
-        }
-      } catch (fipeError) {
-        console.error(`[plate-lookup] Erro ao buscar FIPE:`, fipeError);
-        // Não falhar se FIPE não encontrar, apenas retornar sem valor FIPE
-      }
-    }
+    // FIPE já vem na resposta da API
+    const fipeData = fipesArray[0] ? {
+      codigo: fipesArray[0].codigo,
+      valor: fipesArray[0].valor,
+      mesReferencia: fipesArray[0].mes_referencia,
+    } : null;
 
     const result = {
       success: true,
       extractedPlate: formatarPlaca(placaNormalizada),
-      vehicleData: {
-        placa: formatarPlaca(placaNormalizada),
-        chassi: vehicleData.chassi || '',
-        marca: vehicleData.marca,
-        modelo: vehicleData.modelo,
-        marca_modelo: `${vehicleData.marca} ${vehicleData.modelo}`.trim(),
-        ano: vehicleData.anoModelo?.toString() || vehicleData.anoFabricacao?.toString() || '',
-        cor: vehicleData.cor,
-        combustivel: vehicleData.combustivel,
-        municipio: vehicleData.municipio,
-        uf: vehicleData.uf,
-      },
-      fipeData: fipeData ? {
-        codigo: fipeData.codigoFipe,
-        valor: fipeData.valorFipe,
-        mesReferencia: fipeData.mesReferencia,
-      } : null
+      vehicleData,
+      fipeData,
     };
 
-    console.log(`[plate-lookup] Retornando resultado:`, JSON.stringify(result));
+    console.log(`[plate-lookup] Sucesso:`, JSON.stringify(result));
 
     return new Response(
       JSON.stringify(result),
