@@ -78,6 +78,9 @@ import DRE from "./pages/contabilidade/DRE";
 import Fechamentos from "./pages/contabilidade/Fechamentos";
 import RazaoConta from "./pages/contabilidade/RazaoConta";
 
+// Jurídico
+import JuridicoDashboard from "./pages/juridico/JuridicoDashboard";
+
 // Associate App Pages
 import AppLogin from "./pages/app/AppLogin";
 import AppRedefinirSenha from "./pages/app/AppRedefinirSenha";
@@ -181,6 +184,9 @@ const App = () => (
               <Route path="/contabilidade/dre" element={<DRE />} />
               <Route path="/contabilidade/fechamento" element={<Fechamentos />} />
               <Route path="/contabilidade/razao/:contaId" element={<RazaoConta />} />
+              
+              {/* Jurídico */}
+              <Route path="/juridico" element={<JuridicoDashboard />} />
               
               {/* Monitoramento */}
               <Route path="/monitoramento/instalacoes" element={<Instalacoes />} />
