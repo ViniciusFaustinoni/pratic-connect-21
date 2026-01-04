@@ -1,7 +1,5 @@
 import { Outlet, useLocation, Link } from 'react-router-dom';
-import { Home, Receipt, MapPin, HelpCircle, User, Bell } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Home, Receipt, MapPin, HelpCircle, User } from 'lucide-react';
 
 const navItems = [
   { icon: Home, label: 'Início', path: '/app' },
@@ -24,22 +22,10 @@ export function AppAssociadoLayout({ children }: { children?: React.ReactNode })
   return (
     <div className="max-w-md mx-auto border-x border-gray-200 min-h-screen bg-gray-50 flex flex-col">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-white shadow-sm h-14 px-4 flex justify-between items-center">
+      <header className="sticky top-0 z-50 bg-white shadow-sm h-14 px-4 flex items-center">
         <Link to="/app" className="font-bold text-xl text-blue-600">
           PRATIC
         </Link>
-
-        <Button variant="ghost" size="icon" className="relative" asChild>
-          <Link to="/app/notificacoes">
-            <Bell className="h-5 w-5" />
-            <Badge 
-              variant="destructive" 
-              className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs"
-            >
-              3
-            </Badge>
-          </Link>
-        </Button>
       </header>
 
       {/* Área de Conteúdo */}
