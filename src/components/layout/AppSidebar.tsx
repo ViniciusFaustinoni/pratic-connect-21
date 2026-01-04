@@ -37,6 +37,9 @@ import {
   Clock,
   Calendar,
   HelpCircle,
+  Palmtree,
+  GraduationCap,
+  UserCheck,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
@@ -221,6 +224,20 @@ const menuConfig: {
         { title: 'Prazos', url: '/juridico/prazos', icon: Clock },
         { title: 'Audiências', url: '/juridico/audiencias', icon: Calendar },
         { title: 'Consultas', url: '/juridico/consultas', icon: HelpCircle },
+      ],
+    },
+    {
+      id: 'rh',
+      label: 'Recursos Humanos',
+      icon: UserCheck,
+      permission: 'canManageRH',
+      items: [
+        { title: 'Dashboard', url: '/rh', icon: BarChart3 },
+        { title: 'Funcionários', url: '/rh/funcionarios', icon: Users },
+        { title: 'Ponto', url: '/rh/ponto', icon: Clock },
+        { title: 'Férias', url: '/rh/ferias', icon: Palmtree },
+        { title: 'Departamentos', url: '/rh/departamentos', icon: Building2 },
+        { title: 'Treinamentos', url: '/rh/treinamentos', icon: GraduationCap },
       ],
     },
   ],
