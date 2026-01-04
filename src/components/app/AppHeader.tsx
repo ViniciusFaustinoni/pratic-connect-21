@@ -1,15 +1,9 @@
-import { Bell, Shield, Menu } from 'lucide-react';
+import { Shield } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { AppMobileMenu } from './AppMobileMenu';
 import { AppUserDropdown } from './AppUserDropdown';
-
-interface AppHeaderProps {
-  notificationCount?: number;
-  onNotificationClick?: () => void;
-}
 
 const navItems = [
   { path: '/app/home', label: 'Início' },
@@ -18,7 +12,7 @@ const navItems = [
   { path: '/app/assistencia', label: 'Assistência' },
 ];
 
-export function AppHeader({ notificationCount = 0, onNotificationClick }: AppHeaderProps) {
+export function AppHeader() {
   const navigate = useNavigate();
 
   return (
@@ -60,24 +54,6 @@ export function AppHeader({ notificationCount = 0, onNotificationClick }: AppHea
 
       {/* Actions */}
       <div className="flex items-center gap-2">
-        {/* Notifications */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="relative min-h-[44px] min-w-[44px]"
-          onClick={onNotificationClick}
-        >
-          <Bell className="h-5 w-5" />
-          {notificationCount > 0 && (
-            <Badge
-              variant="destructive"
-              className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center p-0 text-xs"
-            >
-              {notificationCount > 9 ? '9+' : notificationCount}
-            </Badge>
-          )}
-        </Button>
-
         {/* Desktop: User dropdown */}
         <div className="hidden md:block">
           <AppUserDropdown />
