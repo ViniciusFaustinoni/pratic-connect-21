@@ -75,6 +75,7 @@ Deno.serve(async (req) => {
           id,
           nome,
           user_id,
+          email,
           telefone,
           whatsapp
         )
@@ -124,6 +125,32 @@ Deno.serve(async (req) => {
     }
 
     console.log(`[notificar-sinistro] Notificação criada para user_id=${associado.user_id}`);
+
+    // Enviar email se o associado tiver email
+    if (associado.email) {
+      try {
+        const appUrl = Deno.env.get('APP_URL') || 'https://iyxdgmukrrdkffraptsx.lovableproject.com';
+        
+        await supabase.functions.invoke('send-email', {
+          body: {
+            template: 'sinistro-status',
+            to: associado.email,
+            data: {
+              protocolo: sinistro.protocolo,
+              statusLabel: titulo,
+              titulo,
+              mensagem,
+              link: `${appUrl}/app/sinistros/${sinistro_id}`,
+            }
+          }
+        });
+        
+        console.log(`[notificar-sinistro] Email enviado para ${associado.email}`);
+      } catch (emailError) {
+        console.error(`[notificar-sinistro] Erro ao enviar email:`, emailError);
+        // Não falhar a função por erro de email
+      }
+    }
 
     // TODO: Integração com Evolution API (WhatsApp)
     // Quando os secrets EVOLUTION_API_URL e EVOLUTION_API_KEY forem configurados:

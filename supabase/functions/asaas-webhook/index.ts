@@ -62,16 +62,27 @@ serve(async (req) => {
     if (event.payment) {
       const payment = event.payment;
       
-      // Buscar cobrança no banco
+      // Buscar cobrança no banco com dados do associado
       const { data: cobranca, error: fetchError } = await supabase
         .from('asaas_cobrancas')
-        .select('id, associado_id, valor')
+        .select(`
+          id, 
+          associado_id, 
+          valor,
+          competencia,
+          associados:associado_id (
+            email,
+            nome
+          )
+        `)
         .eq('asaas_id', payment.id)
         .maybeSingle();
 
       if (fetchError) {
         console.error('[asaas-webhook] Erro ao buscar cobrança:', fetchError);
       }
+
+      const associado = cobranca?.associados as any;
 
       // Mapear status do ASAAS para status interno
       const statusMap: Record<string, string> = {
@@ -125,6 +136,31 @@ serve(async (req) => {
               mensagem: `Seu pagamento de R$ ${payment.value.toFixed(2)} foi confirmado.`,
               tipo: 'sucesso',
             });
+
+            // Enviar email de confirmação de pagamento
+            if (associado?.email) {
+              try {
+                const dataPagamento = payment.paymentDate || payment.clientPaymentDate;
+                const dataFormatada = dataPagamento 
+                  ? new Date(dataPagamento).toLocaleDateString('pt-BR')
+                  : new Date().toLocaleDateString('pt-BR');
+
+                await supabase.functions.invoke('send-email', {
+                  body: {
+                    template: 'pagamento-confirmado',
+                    to: associado.email,
+                    data: {
+                      competencia: cobranca.competencia || 'Mensalidade',
+                      valor: payment.value.toFixed(2),
+                      dataPagamento: dataFormatada,
+                    }
+                  }
+                });
+                console.log(`[asaas-webhook] Email de pagamento enviado para ${associado.email}`);
+              } catch (emailError) {
+                console.error('[asaas-webhook] Erro ao enviar email:', emailError);
+              }
+            }
           }
           break;
 
