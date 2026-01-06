@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
-import { useDocumentosByAssociado } from '@/hooks/useDocumentos';
+import { useDocumentosPorAssociado } from '@/hooks/useDocumentos';
 import { useUploadDocumento } from '@/hooks/useUploadDocumento';
 import { DocumentUploaderCard } from './DocumentUploaderCard';
 import { DocumentPreviewDialog } from './DocumentPreviewDialog';
@@ -123,7 +123,7 @@ export function DocumentUploader({
   readOnly = false,
 }: DocumentUploaderProps) {
   const { toast } = useToast();
-  const { data: documentos, isLoading } = useDocumentosByAssociado(associadoId);
+  const { data: documentos, isLoading } = useDocumentosPorAssociado(associadoId);
   const uploadMutation = useUploadDocumento();
 
   const [uploadingTipo, setUploadingTipo] = useState<TipoDocumento | null>(null);

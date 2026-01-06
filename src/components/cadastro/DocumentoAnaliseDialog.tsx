@@ -75,8 +75,8 @@ export function DocumentoAnaliseDialog({
       const result = await ocr.mutateAsync({
         url: documento.arquivo_url,
         tipoEsperado: documento.tipo,
-        cpfEsperado: documento.associados?.cpf,
-        nomeEsperado: documento.associados?.nome,
+        cpfEsperado: documento.associado?.cpf,
+        nomeEsperado: documento.associado?.nome,
       });
 
       setOcrResult(result);
