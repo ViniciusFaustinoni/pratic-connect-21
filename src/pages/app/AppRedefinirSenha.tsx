@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,6 +16,7 @@ import {
   Lock,
   Check,
   X,
+  ArrowLeft,
 } from 'lucide-react';
 
 interface PasswordStrength {
@@ -229,8 +230,8 @@ export default function AppRedefinirSenha() {
       {/* Header com Logo */}
       <div className="flex flex-1 flex-col items-center justify-center px-4 pb-4 pt-12">
         <div className="flex flex-col items-center gap-3">
-          <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-white/20 shadow-lg backdrop-blur-sm">
-            <Shield className="h-12 w-12 text-primary-foreground" />
+          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-background/10 backdrop-blur-sm">
+            <Shield className="h-10 w-10 text-primary-foreground" />
           </div>
           <div className="text-center">
             <h1 className="text-3xl font-bold text-primary-foreground">PRATIC</h1>
@@ -420,10 +421,14 @@ export default function AppRedefinirSenha() {
             </Button>
           </form>
 
-          {/* Versão */}
-          <p className="mt-6 text-center text-xs text-muted-foreground">
-            Versão 1.0.0
-          </p>
+          {/* Link Voltar */}
+          <Link
+            to="/app/login"
+            className="mt-6 flex items-center justify-center gap-2 text-sm font-medium text-primary hover:underline"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Voltar para o login
+          </Link>
         </div>
       </div>
     </div>
