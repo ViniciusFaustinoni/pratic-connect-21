@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
+import type { StatusCotacao } from '@/types/vendas';
 
 type Cotacao = Tables<'cotacoes'>;
 type CotacaoInsert = TablesInsert<'cotacoes'>;
@@ -24,6 +26,11 @@ function gerarNumeroCotacao(): string {
 export interface CotacaoWithRelations extends Cotacao {
   leads?: Tables<'leads'> | null;
   planos?: Tables<'planos'> | null;
+  vendedor?: {
+    id: string;
+    nome: string;
+    email: string;
+  } | null;
 }
 
 export function useCotacoes() {
@@ -40,7 +47,26 @@ export function useCotacoes() {
         .order('created_at', { ascending: false });
       
       if (error) throw error;
-      return data as CotacaoWithRelations[];
+      
+      // Buscar vendedores separadamente se necessário
+      const cotacoes = data || [];
+      const vendedorIds = [...new Set(cotacoes.map(c => c.vendedor_id).filter(Boolean))];
+      
+      if (vendedorIds.length > 0) {
+        const { data: vendedores } = await supabase
+          .from('profiles')
+          .select('id, nome, email')
+          .in('id', vendedorIds);
+        
+        const vendedorMap = new Map(vendedores?.map(v => [v.id, v]) || []);
+        
+        return cotacoes.map(c => ({
+          ...c,
+          vendedor: c.vendedor_id ? vendedorMap.get(c.vendedor_id) || null : null,
+        })) as CotacaoWithRelations[];
+      }
+      
+      return cotacoes as CotacaoWithRelations[];
     },
   });
 }
@@ -62,7 +88,19 @@ export function useCotacao(id: string | undefined) {
         .single();
       
       if (error) throw error;
-      return data as CotacaoWithRelations;
+      
+      // Buscar vendedor separadamente
+      let vendedor = null;
+      if (data.vendedor_id) {
+        const { data: v } = await supabase
+          .from('profiles')
+          .select('id, nome, email')
+          .eq('id', data.vendedor_id)
+          .single();
+        vendedor = v;
+      }
+      
+      return { ...data, vendedor } as CotacaoWithRelations;
     },
     enabled: !!id,
   });
@@ -111,4 +149,71 @@ export function useUpdateCotacao() {
       queryClient.invalidateQueries({ queryKey: ['cotacoes', data.id] });
     },
   });
+}
+
+// Hook para reenviar cotação (atualiza updated_at)
+export function useReenviarCotacao() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase
+        .from('cotacoes')
+        .update({ updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data as Cotacao;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
+      queryClient.invalidateQueries({ queryKey: ['cotacoes', data.id] });
+      toast.success('Cotação reenviada com sucesso!');
+    },
+    onError: () => {
+      toast.error('Erro ao reenviar cotação');
+    },
+  });
+}
+
+// Hook para atualizar status
+export function useAtualizarStatusCotacao() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: StatusCotacao }) => {
+      const { data, error } = await supabase
+        .from('cotacoes')
+        .update({ status })
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data as Cotacao;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
+      queryClient.invalidateQueries({ queryKey: ['cotacoes', data.id] });
+      toast.success('Status atualizado!');
+    },
+    onError: () => {
+      toast.error('Erro ao atualizar status');
+    },
+  });
+}
+
+// Hook combinado para actions
+export function useCotacaoActions() {
+  const reenviar = useReenviarCotacao();
+  const atualizarStatus = useAtualizarStatusCotacao();
+  
+  return {
+    reenviarCotacao: reenviar.mutate,
+    atualizarStatus: atualizarStatus.mutate,
+    isReenviando: reenviar.isPending,
+    isAtualizando: atualizarStatus.isPending,
+  };
 }
