@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Plus, MoreHorizontal, Loader2, ChevronLeft, ChevronRight, Edit, ArrowRight, XCircle, MessageCircle, Eye } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Plus, MoreHorizontal, Loader2, ChevronLeft, ChevronRight, Edit, ArrowRight, XCircle, MessageCircle, Eye, Search, Filter, Trash2, X } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Table,
   TableBody,
@@ -25,20 +27,48 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ETAPA_LABELS, ORIGEM_LABELS, type EtapaLead } from '@/types/database';
+import { ETAPA_LABELS, ORIGEM_LABELS, type EtapaLead, type OrigemLead } from '@/types/database';
 import { etapaColors, origemColors, ETAPAS_FUNIL, canTransition, getNextStages } from '@/lib/lead-transitions';
 import { useLeads, useAllLeads, type LeadFilters as LeadFiltersType, type LeadWithVendedor } from '@/hooks/useLeads';
 import { useChangeLeadEtapa } from '@/hooks/useLeadHistorico';
+import { useLeadActions } from '@/hooks/useLeadActions';
+import { useVendedores } from '@/hooks/useVendedores';
+import { usePermissions } from '@/hooks/usePermissions';
 import { LeadFormDialog } from '@/components/leads/LeadFormDialog';
 import { LeadEditDialog } from '@/components/leads/LeadEditDialog';
-import { LeadFilters } from '@/components/leads/LeadFilters';
 import { LeadKanbanCard } from '@/components/leads/LeadKanbanCard';
 import { LeadLossDialog } from '@/components/leads/LeadLossDialog';
 import { LeadMetricsBar } from '@/components/leads/LeadMetricsBar';
 import { LeadDetailDrawer } from '@/components/leads/LeadDetailDrawer';
 import { CotacaoFormDialog } from '@/components/cotacoes/CotacaoFormDialog';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 import {
   DndContext,
   DragEndEvent,
@@ -54,8 +84,19 @@ import type { Tables } from '@/integrations/supabase/types';
 
 type Lead = Tables<'leads'>;
 
+// Definição de etapas e origens para o filtro
+const ETAPAS_TODAS: EtapaLead[] = [
+  'novo', 'contato', 'qualificado', 'cotacao_enviada', 'negociacao',
+  'vistoria_agendada', 'contrato_enviado', 'contrato_assinado', 'instalacao_agendada', 'ganho', 'perdido'
+];
+
+const ORIGENS_TODAS: OrigemLead[] = [
+  'site', 'indicacao', 'telefone', 'whatsapp', 'facebook', 'instagram', 'google', 'outro'
+];
+
 export default function Leads() {
   const navigate = useNavigate();
+  const { hasPermission } = usePermissions();
   const [filters, setFilters] = useState<LeadFiltersType>({});
   const [page, setPage] = useState(1);
   const [view, setView] = useState<'table' | 'kanban'>('table');
@@ -67,6 +108,17 @@ export default function Leads() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [drawerLeadId, setDrawerLeadId] = useState<string | null>(null);
 
+  // Estados do Sheet de filtros
+  const [showFilters, setShowFilters] = useState(false);
+  const [tempFilters, setTempFilters] = useState<LeadFiltersType>({});
+
+  // Estado do dialog de exclusão
+  const [deleteDialog, setDeleteDialog] = useState<{
+    open: boolean;
+    leadId: string | null;
+    leadNome: string;
+  }>({ open: false, leadId: null, leadNome: '' });
+
   // Para tabela com paginação
   const { data: leadsData, isLoading } = useLeads({ filters, page, perPage: 20 });
   
@@ -74,6 +126,8 @@ export default function Leads() {
   const { data: allLeads } = useAllLeads({ vendedor_id: filters.vendedor_id, search: filters.search });
   
   const changeEtapa = useChangeLeadEtapa();
+  const { excluirLead, isDeleting } = useLeadActions();
+  const { data: vendedores } = useVendedores();
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -117,6 +171,47 @@ export default function Leads() {
       toast.error('Erro ao atualizar lead');
     }
   };
+
+  // Handlers de filtros
+  const handleApplyFilters = () => {
+    setFilters(tempFilters);
+    setPage(1);
+    setShowFilters(false);
+  };
+
+  const handleClearFilters = () => {
+    setTempFilters({});
+    setFilters({});
+    setPage(1);
+  };
+
+  const handleOpenFilters = () => {
+    setTempFilters(filters);
+    setShowFilters(true);
+  };
+
+  // Handler de exclusão
+  const handleDelete = async () => {
+    if (deleteDialog.leadId) {
+      try {
+        await excluirLead(deleteDialog.leadId);
+        toast.success('Lead excluído com sucesso');
+      } catch (error) {
+        toast.error('Erro ao excluir lead');
+      }
+      setDeleteDialog({ open: false, leadId: null, leadNome: '' });
+    }
+  };
+
+  // Verificar se há filtros ativos
+  const hasActiveFilters = !!(
+    filters.etapa ||
+    filters.origem ||
+    filters.vendedor_id ||
+    filters.data_de ||
+    filters.data_ate ||
+    filters.search
+  );
 
   // Drag and drop handlers
   const handleDragStart = (event: DragStartEvent) => {
@@ -172,7 +267,20 @@ export default function Leads() {
   const total = leadsData?.total || 0;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
+      {/* Breadcrumb */}
+      <nav className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Link to="/dashboard" className="hover:text-foreground transition-colors">
+          Home
+        </Link>
+        <span>/</span>
+        <Link to="/vendas/dashboard" className="hover:text-foreground transition-colors">
+          Vendas
+        </Link>
+        <span>/</span>
+        <span className="text-foreground font-medium">Leads</span>
+      </nav>
+
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -198,8 +306,87 @@ export default function Leads() {
       {/* Metrics - Barra compacta para Kanban */}
       {view === 'kanban' && <LeadMetricsBar leads={allLeads || []} />}
 
-      {/* Filters */}
-      <LeadFilters filters={filters} onFiltersChange={(f) => { setFilters(f); setPage(1); }} />
+      {/* Barra de busca e filtros */}
+      <div className="flex items-center gap-3">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por nome, telefone, placa..."
+            value={filters.search || ''}
+            onChange={(e) => {
+              setFilters({ ...filters, search: e.target.value });
+              setPage(1);
+            }}
+            className="pl-10"
+          />
+        </div>
+        <Button 
+          variant="outline" 
+          onClick={handleOpenFilters}
+          className={cn(hasActiveFilters && 'border-primary text-primary')}
+        >
+          <Filter className="h-4 w-4 mr-2" />
+          Filtros
+          {hasActiveFilters && (
+            <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-xs">
+              Ativos
+            </Badge>
+          )}
+        </Button>
+      </div>
+
+      {/* Filtros ativos */}
+      {hasActiveFilters && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-sm text-muted-foreground">Filtros:</span>
+          {filters.etapa && (
+            <Badge variant="secondary" className="gap-1">
+              Etapa: {ETAPA_LABELS[filters.etapa]}
+              <button onClick={() => setFilters({ ...filters, etapa: undefined })} className="hover:text-destructive">
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          )}
+          {filters.origem && (
+            <Badge variant="secondary" className="gap-1">
+              Origem: {ORIGEM_LABELS[filters.origem]}
+              <button onClick={() => setFilters({ ...filters, origem: undefined })} className="hover:text-destructive">
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          )}
+          {filters.vendedor_id && (
+            <Badge variant="secondary" className="gap-1">
+              Vendedor: {vendedores?.find(v => v.id === filters.vendedor_id)?.nome || 'Selecionado'}
+              <button onClick={() => setFilters({ ...filters, vendedor_id: undefined })} className="hover:text-destructive">
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          )}
+          {filters.data_de && (
+            <Badge variant="secondary" className="gap-1">
+              De: {filters.data_de}
+              <button onClick={() => setFilters({ ...filters, data_de: undefined })} className="hover:text-destructive">
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          )}
+          {filters.data_ate && (
+            <Badge variant="secondary" className="gap-1">
+              Até: {filters.data_ate}
+              <button onClick={() => setFilters({ ...filters, data_ate: undefined })} className="hover:text-destructive">
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          )}
+          <button 
+            className="text-sm text-primary hover:underline"
+            onClick={handleClearFilters}
+          >
+            Limpar todos
+          </button>
+        </div>
+      )}
 
       {/* Table View */}
       {view === 'table' && (
@@ -375,6 +562,22 @@ export default function Leads() {
                                     </DropdownMenuItem>
                                   </>
                                 )}
+
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem 
+                                  className="text-destructive focus:text-destructive"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setDeleteDialog({
+                                      open: true,
+                                      leadId: lead.id,
+                                      leadNome: lead.nome,
+                                    });
+                                  }}
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Excluir
+                                </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </TableCell>
@@ -495,6 +698,150 @@ export default function Leads() {
           </DragOverlay>
         </DndContext>
       )}
+
+      {/* Sheet de Filtros */}
+      <Sheet open={showFilters} onOpenChange={setShowFilters}>
+        <SheetContent>
+          <SheetHeader>
+            <SheetTitle>Filtros</SheetTitle>
+            <SheetDescription>
+              Refine a lista de leads
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="space-y-4 py-6">
+            {/* Filtro: Etapa */}
+            <div className="space-y-2">
+              <Label>Etapa</Label>
+              <Select
+                value={tempFilters.etapa || 'todas'}
+                onValueChange={(value) => 
+                  setTempFilters({ ...tempFilters, etapa: value === 'todas' ? undefined : value as EtapaLead })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Todas as etapas" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todas">Todas as etapas</SelectItem>
+                  {ETAPAS_TODAS.map((etapa) => (
+                    <SelectItem key={etapa} value={etapa}>
+                      {ETAPA_LABELS[etapa]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Filtro: Origem */}
+            <div className="space-y-2">
+              <Label>Origem</Label>
+              <Select
+                value={tempFilters.origem || 'todas'}
+                onValueChange={(value) => 
+                  setTempFilters({ ...tempFilters, origem: value === 'todas' ? undefined : value as OrigemLead })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Todas as origens" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todas">Todas as origens</SelectItem>
+                  {ORIGENS_TODAS.map((origem) => (
+                    <SelectItem key={origem} value={origem}>
+                      {ORIGEM_LABELS[origem]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Filtro: Vendedor (apenas para gerência/supervisor) */}
+            {(hasPermission('isGerenciaOrSupervisor') || hasPermission('isDiretor')) && vendedores && (
+              <div className="space-y-2">
+                <Label>Vendedor</Label>
+                <Select
+                  value={tempFilters.vendedor_id || 'todos'}
+                  onValueChange={(value) => 
+                    setTempFilters({ ...tempFilters, vendedor_id: value === 'todos' ? undefined : value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Todos os vendedores" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos os vendedores</SelectItem>
+                    {vendedores.map((vendedor) => (
+                      <SelectItem key={vendedor.id} value={vendedor.id}>
+                        {vendedor.nome}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* Filtro: Período */}
+            <div className="space-y-2">
+              <Label>Período</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">De</Label>
+                  <Input
+                    type="date"
+                    value={tempFilters.data_de || ''}
+                    onChange={(e) => setTempFilters({ ...tempFilters, data_de: e.target.value || undefined })}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Até</Label>
+                  <Input
+                    type="date"
+                    value={tempFilters.data_ate || ''}
+                    onChange={(e) => setTempFilters({ ...tempFilters, data_ate: e.target.value || undefined })}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <SheetFooter>
+            <Button variant="outline" onClick={() => setTempFilters({})}>
+              Limpar
+            </Button>
+            <Button onClick={handleApplyFilters}>
+              Aplicar Filtros
+            </Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
+
+      {/* Dialog de Exclusão */}
+      <AlertDialog
+        open={deleteDialog.open}
+        onOpenChange={(open) => setDeleteDialog({ open, leadId: null, leadNome: '' })}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir lead</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir o lead <strong>{deleteDialog.leadNome}</strong>?
+              <br />
+              Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={isDeleting}
+            >
+              {isDeleting ? 'Excluindo...' : 'Excluir'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Dialogs */}
       <LeadFormDialog open={showLeadForm} onOpenChange={setShowLeadForm} />
