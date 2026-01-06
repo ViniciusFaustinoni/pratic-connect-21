@@ -1,10 +1,30 @@
-import { useParams, useNavigate } from 'react-router-dom';
+import { useState } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useUsuario, useUsuarioActions } from '@/hooks/useUsuarios';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from '@/components/ui/breadcrumb';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { 
   ArrowLeft, 
   Mail, 
@@ -42,6 +62,31 @@ const PERFIL_COLORS: Record<PerfilAcesso, string> = {
   analista_juridico: 'bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200',
 };
 
+// ============================================
+// HELPER: Obter iniciais do nome
+// ============================================
+const getInitials = (nome: string) => {
+  return nome
+    .split(' ')
+    .map(n => n[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+};
+
+// ============================================
+// HELPER: Mascarar CPF
+// ============================================
+const maskCPF = (cpf: string | null) => {
+  if (!cpf) return '-';
+  // Remove caracteres não numéricos e mascara
+  const numbers = cpf.replace(/\D/g, '');
+  if (numbers.length >= 7) {
+    return `***.${numbers.slice(3, 6)}.***-**`;
+  }
+  return '***.***.***-**';
+};
+
 export default function UsuarioDetalhePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -56,9 +101,40 @@ export default function UsuarioDetalhePage() {
     isLoading: actionLoading 
   } = useUsuarioActions();
 
+  // Estado do dialog de confirmação
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    type: 'desativar' | 'ativar' | 'bloquear' | 'desbloquear' | 'resetar';
+  }>({ open: false, type: 'desativar' });
+
+  const handleConfirmAction = () => {
+    if (!usuario) return;
+
+    switch (confirmDialog.type) {
+      case 'desativar':
+        desativarUsuario(usuario.id);
+        break;
+      case 'ativar':
+        ativarUsuario(usuario.id);
+        break;
+      case 'bloquear':
+        bloquearUsuario({ profileId: usuario.id });
+        break;
+      case 'desbloquear':
+        desbloquearUsuario(usuario.id);
+        break;
+      case 'resetar':
+        resetarSenha(usuario.email);
+        break;
+    }
+
+    setConfirmDialog({ open: false, type: 'desativar' });
+  };
+
   if (isLoading) {
     return (
       <div className="p-6 space-y-6">
+        <Skeleton className="h-6 w-64" />
         <Skeleton className="h-10 w-48" />
         <Skeleton className="h-64 w-full" />
       </div>
@@ -73,7 +149,7 @@ export default function UsuarioDetalhePage() {
             <p className="text-destructive">Usuário não encontrado</p>
             <Button variant="outline" onClick={() => navigate('/diretoria/usuarios')} className="mt-4">
               <ArrowLeft className="h-4 w-4 mr-2" />
-              Voltar
+              Voltar para lista
             </Button>
           </CardContent>
         </Card>
@@ -98,12 +174,40 @@ export default function UsuarioDetalhePage() {
 
   return (
     <div className="p-6 space-y-6">
+      {/* Breadcrumb */}
+      <Breadcrumb>
+        <BreadcrumbList>
+          <BreadcrumbItem>
+            <BreadcrumbLink asChild>
+              <Link to="/diretoria">Diretoria</Link>
+            </BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            <BreadcrumbLink asChild>
+              <Link to="/diretoria/usuarios">Usuários</Link>
+            </BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            <BreadcrumbPage>{usuario.nome}</BreadcrumbPage>
+          </BreadcrumbItem>
+        </BreadcrumbList>
+      </Breadcrumb>
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/diretoria/usuarios')}>
-            <ArrowLeft className="h-5 w-5" />
+          <Button variant="ghost" onClick={() => navigate('/diretoria/usuarios')}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Voltar
           </Button>
+          <Avatar className="h-14 w-14">
+            {usuario.avatar_url && <AvatarImage src={usuario.avatar_url} />}
+            <AvatarFallback className="text-lg bg-primary text-primary-foreground">
+              {getInitials(usuario.nome)}
+            </AvatarFallback>
+          </Avatar>
           <div>
             <h1 className="text-2xl font-bold">{usuario.nome}</h1>
             <p className="text-muted-foreground">Detalhes do usuário</p>
@@ -113,7 +217,7 @@ export default function UsuarioDetalhePage() {
         <div className="flex gap-2">
           <Button 
             variant="outline" 
-            onClick={() => resetarSenha(usuario.email)}
+            onClick={() => setConfirmDialog({ open: true, type: 'resetar' })}
             disabled={actionLoading}
           >
             <KeyRound className="h-4 w-4 mr-2" />
@@ -123,7 +227,7 @@ export default function UsuarioDetalhePage() {
           {usuario.ativo ? (
             <Button 
               variant="outline" 
-              onClick={() => desativarUsuario(usuario.id)}
+              onClick={() => setConfirmDialog({ open: true, type: 'desativar' })}
               disabled={actionLoading}
               className="text-orange-600 hover:text-orange-700"
             >
@@ -133,7 +237,7 @@ export default function UsuarioDetalhePage() {
           ) : (
             <Button 
               variant="outline" 
-              onClick={() => ativarUsuario(usuario.id)}
+              onClick={() => setConfirmDialog({ open: true, type: 'ativar' })}
               disabled={actionLoading}
               className="text-green-600 hover:text-green-700"
             >
@@ -145,7 +249,7 @@ export default function UsuarioDetalhePage() {
           {usuario.bloqueado ? (
             <Button 
               variant="outline" 
-              onClick={() => desbloquearUsuario(usuario.id)}
+              onClick={() => setConfirmDialog({ open: true, type: 'desbloquear' })}
               disabled={actionLoading}
               className="text-green-600 hover:text-green-700"
             >
@@ -155,7 +259,7 @@ export default function UsuarioDetalhePage() {
           ) : (
             <Button 
               variant="destructive" 
-              onClick={() => bloquearUsuario({ profileId: usuario.id })}
+              onClick={() => setConfirmDialog({ open: true, type: 'bloquear' })}
               disabled={actionLoading}
             >
               <Ban className="h-4 w-4 mr-2" />
@@ -204,7 +308,7 @@ export default function UsuarioDetalhePage() {
 
               <div>
                 <label className="text-sm font-medium text-muted-foreground">CPF</label>
-                <p>{usuario.cpf || '-'}</p>
+                <p>{maskCPF(usuario.cpf)}</p>
               </div>
 
               <div>
@@ -283,6 +387,52 @@ export default function UsuarioDetalhePage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Dialog de Confirmação */}
+      <AlertDialog open={confirmDialog.open} onOpenChange={(open) => setConfirmDialog(prev => ({ ...prev, open }))}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirmDialog.type === 'desativar' && 'Desativar usuário'}
+              {confirmDialog.type === 'ativar' && 'Ativar usuário'}
+              {confirmDialog.type === 'bloquear' && 'Bloquear usuário'}
+              {confirmDialog.type === 'desbloquear' && 'Desbloquear usuário'}
+              {confirmDialog.type === 'resetar' && 'Resetar senha'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmDialog.type === 'desativar' && (
+                <>Tem certeza que deseja desativar <strong>{usuario.nome}</strong>? O usuário não poderá mais acessar o sistema.</>
+              )}
+              {confirmDialog.type === 'ativar' && (
+                <>Tem certeza que deseja ativar <strong>{usuario.nome}</strong>? O usuário poderá acessar o sistema novamente.</>
+              )}
+              {confirmDialog.type === 'bloquear' && (
+                <>Tem certeza que deseja bloquear <strong>{usuario.nome}</strong>? O acesso será revogado imediatamente.</>
+              )}
+              {confirmDialog.type === 'desbloquear' && (
+                <>Tem certeza que deseja desbloquear <strong>{usuario.nome}</strong>? O acesso será restaurado.</>
+              )}
+              {confirmDialog.type === 'resetar' && (
+                <>Um email será enviado para <strong>{usuario.email}</strong> com instruções para redefinir a senha.</>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmAction} disabled={actionLoading}>
+              {actionLoading ? 'Aguarde...' : (
+                <>
+                  {confirmDialog.type === 'desativar' && 'Desativar'}
+                  {confirmDialog.type === 'ativar' && 'Ativar'}
+                  {confirmDialog.type === 'bloquear' && 'Bloquear'}
+                  {confirmDialog.type === 'desbloquear' && 'Desbloquear'}
+                  {confirmDialog.type === 'resetar' && 'Enviar email'}
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
