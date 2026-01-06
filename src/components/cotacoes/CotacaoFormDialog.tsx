@@ -29,14 +29,14 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
 import { CurrencyInput } from '@/components/inputs/MaskedInputs';
 import { cotacaoSchema, type CotacaoFormData } from '@/lib/validations';
 import { useCreateCotacao } from '@/hooks/useCotacoes';
 import { usePlanos, useTabelaPrecoByFipe } from '@/hooks/usePlanos';
 import { useLead } from '@/hooks/useLeads';
-import { useFipe, type PlateResult, type VehicleData, type FipeData } from '@/hooks/useFipe';
+import { useFipe, type PlateResult, type FipeMarca, type FipeModelo, type FipeAno } from '@/hooks/useFipe';
 import { toast } from 'sonner';
-import { FipeSelector, type FipeSelectionData } from '@/components/fipe/FipeSelector';
 import { Separator } from '@/components/ui/separator';
 
 interface CotacaoFormDialogProps {
@@ -62,12 +62,26 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
   const createCotacao = useCreateCotacao();
   const { data: planos, isLoading: planosLoading } = usePlanos();
   const { data: lead } = useLead(leadId);
-  const { getByPlaca, loading: fipeLoading } = useFipe();
+  const { getMarcas, getModelos, getAnos, getPreco, getByPlaca, buscarPorNome, loading: fipeLoading } = useFipe();
 
   // Estados para busca por placa
   const [placa, setPlaca] = useState('');
   const [buscandoPlaca, setBuscandoPlaca] = useState(false);
   const [veiculoEncontrado, setVeiculoEncontrado] = useState<PlateResult | null>(null);
+
+  // Estados para seleção FIPE manual
+  const [marcas, setMarcas] = useState<FipeMarca[]>([]);
+  const [modelos, setModelos] = useState<FipeModelo[]>([]);
+  const [anos, setAnos] = useState<FipeAno[]>([]);
+  const [marcaSelecionada, setMarcaSelecionada] = useState('');
+  const [modeloSelecionado, setModeloSelecionado] = useState('');
+  const [anoSelecionado, setAnoSelecionado] = useState('');
+  
+  // Loading states
+  const [loadingMarcas, setLoadingMarcas] = useState(false);
+  const [loadingModelos, setLoadingModelos] = useState(false);
+  const [loadingAnos, setLoadingAnos] = useState(false);
+  const [buscandoFipe, setBuscandoFipe] = useState(false);
 
   // Estado para plano selecionado (com dados calculados)
   const [planoSelecionado, setPlanoSelecionado] = useState<PlanoComTabela | null>(null);
@@ -91,6 +105,87 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
   const planoId = form.watch('plano_id');
   const { data: tabelasPreco } = useTabelaPrecoByFipe(valorFipe);
 
+  // Carregar marcas quando dialog abre
+  useEffect(() => {
+    if (open && marcas.length === 0) {
+      const fetchMarcas = async () => {
+        setLoadingMarcas(true);
+        try {
+          const data = await getMarcas('carros');
+          setMarcas(data);
+        } catch (error) {
+          console.error('Erro ao carregar marcas:', error);
+        } finally {
+          setLoadingMarcas(false);
+        }
+      };
+      fetchMarcas();
+    }
+  }, [open, getMarcas, marcas.length]);
+
+  // Auto-buscar FIPE quando marca, modelo e ano estiverem selecionados
+  useEffect(() => {
+    if (marcaSelecionada && modeloSelecionado && anoSelecionado) {
+      const buscarFipeAutomatico = async () => {
+        setBuscandoFipe(true);
+        try {
+          const resultado = await getPreco(marcaSelecionada, modeloSelecionado, anoSelecionado, 'carros');
+          if (resultado && resultado.valorNumerico) {
+            form.setValue('valor_fipe', resultado.valorNumerico);
+            toast.success(`Valor FIPE: ${resultado.valor}`);
+          }
+        } catch (error) {
+          console.error('Erro ao buscar FIPE:', error);
+        } finally {
+          setBuscandoFipe(false);
+        }
+      };
+      buscarFipeAutomatico();
+    }
+  }, [marcaSelecionada, modeloSelecionado, anoSelecionado, getPreco, form]);
+
+  // Handler para mudança de marca
+  const handleMarcaChange = async (value: string) => {
+    setMarcaSelecionada(value);
+    setModeloSelecionado('');
+    setAnoSelecionado('');
+    setModelos([]);
+    setAnos([]);
+    form.setValue('valor_fipe', 0);
+
+    if (value) {
+      setLoadingModelos(true);
+      try {
+        const data = await getModelos(value, 'carros');
+        setModelos(data);
+      } catch (error) {
+        console.error('Erro ao carregar modelos:', error);
+      } finally {
+        setLoadingModelos(false);
+      }
+    }
+  };
+
+  // Handler para mudança de modelo
+  const handleModeloChange = async (value: string) => {
+    setModeloSelecionado(value);
+    setAnoSelecionado('');
+    setAnos([]);
+    form.setValue('valor_fipe', 0);
+
+    if (marcaSelecionada && value) {
+      setLoadingAnos(true);
+      try {
+        const data = await getAnos(marcaSelecionada, value, 'carros');
+        setAnos(data);
+      } catch (error) {
+        console.error('Erro ao carregar anos:', error);
+      } finally {
+        setLoadingAnos(false);
+      }
+    }
+  };
+
   // Buscar por placa
   const buscarPorPlaca = async () => {
     const placaLimpa = placa.replace(/[^A-Za-z0-9]/g, '');
@@ -106,12 +201,78 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
       if (resultado.success && resultado.vehicleData) {
         setVeiculoEncontrado(resultado);
         
-        // Preencher valor FIPE se encontrado
+        // Tentar encontrar marca/modelo na lista e preencher campos
+        const marcaNome = resultado.vehicleData.marca?.toLowerCase();
+        const modeloNome = resultado.vehicleData.modelo?.toLowerCase();
+        const anoVeiculo = resultado.vehicleData.ano?.split('/')[0];
+
+        // Buscar marca
+        let marcasCarregadas = marcas;
+        if (marcasCarregadas.length === 0) {
+          setLoadingMarcas(true);
+          marcasCarregadas = await getMarcas('carros');
+          setMarcas(marcasCarregadas);
+          setLoadingMarcas(false);
+        }
+
+        const marcaEncontrada = marcasCarregadas.find(
+          m => m.nome.toLowerCase().includes(marcaNome) || marcaNome?.includes(m.nome.toLowerCase())
+        );
+
+        if (marcaEncontrada) {
+          setMarcaSelecionada(marcaEncontrada.codigo);
+          
+          // Buscar modelos
+          setLoadingModelos(true);
+          const modelosData = await getModelos(marcaEncontrada.codigo, 'carros');
+          setModelos(modelosData);
+          setLoadingModelos(false);
+
+          // Encontrar modelo
+          const modeloEncontrado = modelosData.find(
+            m => m.nome.toLowerCase().includes(modeloNome) || modeloNome?.includes(m.nome.toLowerCase())
+          );
+
+          if (modeloEncontrado) {
+            setModeloSelecionado(modeloEncontrado.codigo.toString());
+
+            // Buscar anos
+            setLoadingAnos(true);
+            const anosData = await getAnos(marcaEncontrada.codigo, modeloEncontrado.codigo.toString(), 'carros');
+            setAnos(anosData);
+            setLoadingAnos(false);
+
+            // Encontrar ano
+            const anoEncontrado = anosData.find(a => a.nome.includes(anoVeiculo || ''));
+            if (anoEncontrado) {
+              setAnoSelecionado(anoEncontrado.codigo);
+              // O useEffect acima vai buscar o FIPE automaticamente
+            }
+          }
+        }
+
+        // Se a API de placa já retornou valor FIPE, usar diretamente
         if (resultado.fipeData?.valor) {
           form.setValue('valor_fipe', resultado.fipeData.valor);
+          toast.success(`Veículo encontrado! FIPE: R$ ${resultado.fipeData.valor.toLocaleString('pt-BR')}`);
+        } else {
+          toast.success(`Veículo encontrado: ${resultado.vehicleData.marca} ${resultado.vehicleData.modelo}`);
+          if (!marcaEncontrada) {
+            // Se não encontrou marca na lista, tentar buscar por nome
+            const fipeResult = await buscarPorNome(
+              resultado.vehicleData.marca,
+              resultado.vehicleData.modelo,
+              anoVeiculo,
+              'carros'
+            );
+            if (fipeResult?.valorNumerico) {
+              form.setValue('valor_fipe', fipeResult.valorNumerico);
+              toast.success(`Valor FIPE: ${fipeResult.valor}`);
+            } else {
+              toast.info('Selecione marca/modelo/ano para buscar o valor FIPE');
+            }
+          }
         }
-        
-        toast.success(`Veículo encontrado: ${resultado.vehicleData.marca} ${resultado.vehicleData.modelo}`);
       } else {
         toast.error(resultado.error || 'Veículo não encontrado');
       }
@@ -232,6 +393,11 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
       setVeiculoEncontrado(null);
       setPlaca('');
       setPlanoSelecionado(null);
+      setMarcaSelecionada('');
+      setModeloSelecionado('');
+      setAnoSelecionado('');
+      setModelos([]);
+      setAnos([]);
       onOpenChange(false);
     } catch (error) {
       toast.error('Erro ao criar cotação');
@@ -352,14 +518,89 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
                   </Card>
                 )}
 
-                <FipeSelector 
-                  tipo="carros"
-                  showResult={false}
-                  onSelect={(data: FipeSelectionData) => {
-                    form.setValue('valor_fipe', data.valorFipe);
-                    setVeiculoEncontrado(null); // Limpa veículo da placa se usar FIPE manual
-                  }}
-                />
+                {/* Seleção FIPE Manual - Marca */}
+                <div className="space-y-1.5">
+                  <Label>Marca</Label>
+                  <Select 
+                    value={marcaSelecionada} 
+                    onValueChange={handleMarcaChange}
+                    disabled={loadingMarcas}
+                  >
+                    <SelectTrigger>
+                      {loadingMarcas ? (
+                        <div className="flex items-center gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span>Carregando...</span>
+                        </div>
+                      ) : (
+                        <SelectValue placeholder="Selecione a marca" />
+                      )}
+                    </SelectTrigger>
+                    <SelectContent>
+                      {marcas.map((marca) => (
+                        <SelectItem key={marca.codigo} value={marca.codigo}>
+                          {marca.nome}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Seleção FIPE Manual - Modelo */}
+                <div className="space-y-1.5">
+                  <Label>Modelo</Label>
+                  <Select 
+                    value={modeloSelecionado} 
+                    onValueChange={handleModeloChange}
+                    disabled={!marcaSelecionada || loadingModelos}
+                  >
+                    <SelectTrigger>
+                      {loadingModelos ? (
+                        <div className="flex items-center gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span>Carregando...</span>
+                        </div>
+                      ) : (
+                        <SelectValue placeholder={marcaSelecionada ? "Selecione o modelo" : "Selecione a marca primeiro"} />
+                      )}
+                    </SelectTrigger>
+                    <SelectContent>
+                      {modelos.map((modelo) => (
+                        <SelectItem key={modelo.codigo} value={modelo.codigo.toString()}>
+                          {modelo.nome}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Seleção FIPE Manual - Ano */}
+                <div className="space-y-1.5">
+                  <Label>Ano</Label>
+                  <Select 
+                    value={anoSelecionado} 
+                    onValueChange={setAnoSelecionado}
+                    disabled={!modeloSelecionado || loadingAnos}
+                  >
+                    <SelectTrigger>
+                      {loadingAnos ? (
+                        <div className="flex items-center gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span>Carregando...</span>
+                        </div>
+                      ) : (
+                        <SelectValue placeholder={modeloSelecionado ? "Selecione o ano" : "Selecione o modelo primeiro"} />
+                      )}
+                    </SelectTrigger>
+                    <SelectContent>
+                      {anos.map((ano) => (
+                        <SelectItem key={ano.codigo} value={ano.codigo}>
+                          {ano.nome}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
                 <Separator />
 
@@ -370,10 +611,23 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
                     <FormItem>
                       <FormLabel>Valor FIPE *</FormLabel>
                       <FormControl>
-                        <CurrencyInput 
-                          value={field.value} 
-                          onChange={field.onChange} 
-                        />
+                        <div className="relative">
+                          <CurrencyInput 
+                            value={field.value} 
+                            onChange={field.onChange}
+                            disabled={buscandoFipe}
+                          />
+                          {buscandoFipe && (
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                            </div>
+                          )}
+                          {field.value > 0 && !buscandoFipe && (
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                              <CheckCircle2 className="h-4 w-4 text-green-500" />
+                            </div>
+                          )}
+                        </div>
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -416,13 +670,13 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
                           </div>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Taxa Admin:</span>
-                            <span className="font-medium">{formatCurrency(planoSelecionado.taxa_administrativa)}</span>
+                            <span className="font-medium">{formatCurrency(planoSelecionado.taxa_administrativa || 0)}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Rastreamento:</span>
-                            <span className="font-medium">{formatCurrency(planoSelecionado.valor_rastreamento)}</span>
+                            <span className="font-medium">{formatCurrency(planoSelecionado.valor_rastreamento || 0)}</span>
                           </div>
-                          {planoSelecionado.valor_assistencia > 0 && (
+                          {planoSelecionado.valor_assistencia && planoSelecionado.valor_assistencia > 0 && (
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">Assistência 24h:</span>
                               <span className="font-medium">{formatCurrency(planoSelecionado.valor_assistencia)}</span>
