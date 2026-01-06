@@ -3,7 +3,7 @@ import { Slot } from "@radix-ui/react-slot";
 import { VariantProps, cva } from "class-variance-authority";
 import { PanelLeft } from "lucide-react";
 
-import { useIsMobile } from "@/hooks/use-mobile";
+import { useIsMobile, useBreakpoint } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,8 +16,9 @@ const SIDEBAR_COOKIE_NAME = "sidebar:state";
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
 const SIDEBAR_WIDTH = "16rem";
 const SIDEBAR_WIDTH_MOBILE = "18rem";
-const SIDEBAR_WIDTH_ICON = "3rem";
+const SIDEBAR_WIDTH_ICON = "3.5rem";
 const SIDEBAR_KEYBOARD_SHORTCUT = "b";
+const SIDEBAR_STORAGE_KEY = "sidebar-preference";
 
 type SidebarContext = {
   state: "expanded" | "collapsed";
@@ -26,6 +27,7 @@ type SidebarContext = {
   openMobile: boolean;
   setOpenMobile: (open: boolean) => void;
   isMobile: boolean;
+  isTablet: boolean;
   toggleSidebar: () => void;
 };
 
@@ -49,12 +51,15 @@ const SidebarProvider = React.forwardRef<
   }
 >(({ defaultOpen = true, open: openProp, onOpenChange: setOpenProp, className, style, children, ...props }, ref) => {
   const isMobile = useIsMobile();
+  const breakpoint = useBreakpoint();
+  const isTablet = breakpoint === 'tablet';
   const [openMobile, setOpenMobile] = React.useState(false);
+  const [hasUserPreference, setHasUserPreference] = React.useState(false);
 
   // This is the internal state of the sidebar.
-  // We use openProp and setOpenProp for control from outside the component.
   const [_open, _setOpen] = React.useState(defaultOpen);
   const open = openProp ?? _open;
+  
   const setOpen = React.useCallback(
     (value: boolean | ((value: boolean) => boolean)) => {
       const openState = typeof value === "function" ? value(open) : value;
@@ -70,10 +75,42 @@ const SidebarProvider = React.forwardRef<
     [setOpenProp, open],
   );
 
+  // Auto-collapse based on breakpoint (respects user preference)
+  React.useEffect(() => {
+    // Check for saved user preference
+    const savedPreference = localStorage.getItem(SIDEBAR_STORAGE_KEY);
+    
+    if (savedPreference) {
+      setHasUserPreference(true);
+      // User has a manual preference - respect it
+      const preferExpanded = savedPreference === 'expanded';
+      if (breakpoint !== 'mobile') {
+        _setOpen(preferExpanded);
+      }
+    } else {
+      // No user preference - auto-collapse based on breakpoint
+      setHasUserPreference(false);
+      if (breakpoint === 'desktop') {
+        _setOpen(true); // expanded
+      } else if (breakpoint === 'tablet') {
+        _setOpen(false); // collapsed
+      }
+      // mobile is handled by Sheet
+    }
+  }, [breakpoint]);
+
   // Helper to toggle the sidebar.
   const toggleSidebar = React.useCallback(() => {
-    return isMobile ? setOpenMobile((open) => !open) : setOpen((open) => !open);
-  }, [isMobile, setOpen, setOpenMobile]);
+    if (isMobile) {
+      setOpenMobile((open) => !open);
+    } else {
+      const newState = !open;
+      setOpen(newState);
+      // Save user preference when manually toggling
+      localStorage.setItem(SIDEBAR_STORAGE_KEY, newState ? 'expanded' : 'collapsed');
+      setHasUserPreference(true);
+    }
+  }, [isMobile, setOpen, setOpenMobile, open]);
 
   // Adds a keyboard shortcut to toggle the sidebar.
   React.useEffect(() => {
@@ -89,7 +126,6 @@ const SidebarProvider = React.forwardRef<
   }, [toggleSidebar]);
 
   // We add a state so that we can do data-state="expanded" or "collapsed".
-  // This makes it easier to style the sidebar with Tailwind classes.
   const state = open ? "expanded" : "collapsed";
 
   const contextValue = React.useMemo<SidebarContext>(
@@ -98,11 +134,12 @@ const SidebarProvider = React.forwardRef<
       open,
       setOpen,
       isMobile,
+      isTablet,
       openMobile,
       setOpenMobile,
       toggleSidebar,
     }),
-    [state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar],
+    [state, open, setOpen, isMobile, isTablet, openMobile, setOpenMobile, toggleSidebar],
   );
 
   return (
