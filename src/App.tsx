@@ -125,6 +125,7 @@ import RelatoriosGerenciais from "./pages/diretoria/RelatoriosGerenciais";
 
 // Associate App Pages
 import AppLogin from "./pages/app/AppLogin";
+import AppForgotPassword from "./pages/app/AppForgotPassword";
 import AppRedefinirSenha from "./pages/app/AppRedefinirSenha";
 import AppHome from "./pages/app/AppHome";
 import MeusBoletos from "./pages/app/MeusBoletos";
@@ -296,6 +297,7 @@ const App = () => (
             
             {/* Associate App Routes */}
             <Route path="/app/login" element={<AppLogin />} />
+            <Route path="/app/forgot-password" element={<AppForgotPassword />} />
             <Route path="/app/redefinir-senha" element={<AppRedefinirSenha />} />
             <Route element={<AssociadoAppLayout />}>
               <Route path="/app/home" element={<AppHome />} />
