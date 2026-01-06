@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
+import type { StatusContrato } from '@/types/vendas';
 
 type Contrato = Tables<'contratos'>;
 type ContratoInsert = TablesInsert<'contratos'>;
@@ -11,6 +13,11 @@ export interface ContratoWithRelations extends Contrato {
   cotacoes?: Tables<'cotacoes'> | null;
   associados?: Tables<'associados'> | null;
   leads?: Tables<'leads'> | null;
+  vendedor?: {
+    id: string;
+    nome: string;
+    email: string;
+  } | null;
 }
 
 export function useContratos() {
@@ -53,10 +60,77 @@ export function useContrato(id: string | undefined) {
         .single();
       
       if (error) throw error;
-      return data as ContratoWithRelations;
+
+      // Buscar vendedor separadamente se existir vendedor_id
+      let vendedor = null;
+      if (data.vendedor_id) {
+        const { data: vendedorData } = await supabase
+          .from('profiles')
+          .select('id, nome, email')
+          .eq('id', data.vendedor_id)
+          .single();
+        vendedor = vendedorData;
+      }
+      
+      return { ...data, vendedor } as ContratoWithRelations;
     },
     enabled: !!id,
   });
+}
+
+// Hook para ações do contrato
+export function useContratoActions() {
+  const queryClient = useQueryClient();
+
+  const reenviarAssinaturaMutation = useMutation({
+    mutationFn: async (id: string) => {
+      // Atualiza status para enviado (integração Autentique será feita depois)
+      const { error } = await supabase
+        .from('contratos')
+        .update({ 
+          status: 'enviado',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contratos'] });
+      toast.success('Contrato reenviado para assinatura!');
+    },
+    onError: () => {
+      toast.error('Erro ao reenviar contrato');
+    },
+  });
+
+  const cancelarContratoMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('contratos')
+        .update({ 
+          status: 'cancelado',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contratos'] });
+      toast.success('Contrato cancelado');
+    },
+    onError: () => {
+      toast.error('Erro ao cancelar contrato');
+    },
+  });
+
+  return {
+    reenviarAssinatura: reenviarAssinaturaMutation.mutate,
+    cancelarContrato: cancelarContratoMutation.mutate,
+    isReenviando: reenviarAssinaturaMutation.isPending,
+    isCancelando: cancelarContratoMutation.isPending,
+  };
 }
 
 export function useCreateContrato() {
