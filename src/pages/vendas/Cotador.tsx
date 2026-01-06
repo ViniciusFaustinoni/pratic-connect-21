@@ -13,6 +13,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
 import { 
   Car, 
   Calculator, 
@@ -21,9 +25,43 @@ import {
   MessageSquare,
   AlertTriangle,
   Loader2,
+  Users,
+  ChevronsUpDown,
+  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
+// ============================================
+// INTERFACE LEAD
+// ============================================
+
+interface Lead {
+  id: string;
+  nome: string;
+  telefone: string;
+  email?: string;
+  veiculo?: {
+    marca: string;
+    modelo: string;
+    ano: number;
+    placa?: string;
+  };
+}
+
+// ============================================
+// DADOS MOCK DE LEADS
+// ============================================
+
+const mockLeads: Lead[] = [
+  { id: '1', nome: 'João Silva', telefone: '(11) 99999-1111', email: 'joao@email.com', veiculo: { marca: 'Volkswagen', modelo: 'Gol', ano: 2020, placa: 'ABC-1234' } },
+  { id: '2', nome: 'Maria Oliveira', telefone: '(21) 98888-2222', email: 'maria@email.com', veiculo: { marca: 'Hyundai', modelo: 'HB20', ano: 2021 } },
+  { id: '3', nome: 'Pedro Costa', telefone: '(31) 97777-3333', email: 'pedro@email.com', veiculo: { marca: 'Chevrolet', modelo: 'Onix', ano: 2022, placa: 'DEF-5678' } },
+  { id: '4', nome: 'Ana Souza', telefone: '(41) 96666-4444', email: 'ana@email.com', veiculo: { marca: 'Fiat', modelo: 'Argo', ano: 2021 } },
+  { id: '5', nome: 'Lucas Ferreira', telefone: '(51) 95555-5555', email: 'lucas@email.com', veiculo: { marca: 'Toyota', modelo: 'Corolla', ano: 2020, placa: 'GHI-9012' } },
+  { id: '6', nome: 'Carla Mendes', telefone: '(61) 94444-6666', email: 'carla@email.com' },
+  { id: '7', nome: 'Rafael Almeida', telefone: '(71) 93333-7777', email: 'rafael@email.com', veiculo: { marca: 'Honda', modelo: 'Civic', ano: 2019 } },
+  { id: '8', nome: 'Fernanda Lima', telefone: '(81) 92222-8888', email: 'fernanda@email.com', veiculo: { marca: 'Nissan', modelo: 'Kicks', ano: 2022, placa: 'JKL-3456' } },
+];
 // ============================================
 // DADOS MOCK
 // ============================================
@@ -156,6 +194,50 @@ export default function CotadorPage() {
   const [cotacaoCalculada, setCotacaoCalculada] = useState(false);
   const [planoSelecionado, setPlanoSelecionado] = useState<string | null>(null);
 
+  // Estado do lead
+  const [leadSelecionado, setLeadSelecionado] = useState<Lead | null>(null);
+  const [buscaLead, setBuscaLead] = useState('');
+  const [comboboxAberto, setComboboxAberto] = useState(false);
+
+  // Filtro de leads
+  const leadsFiltrados = useMemo(() => {
+    const termo = buscaLead.toLowerCase();
+    if (!termo) return mockLeads;
+    return mockLeads.filter(lead => 
+      lead.nome.toLowerCase().includes(termo) ||
+      lead.telefone.includes(termo) ||
+      lead.email?.toLowerCase().includes(termo) ||
+      lead.veiculo?.modelo.toLowerCase().includes(termo) ||
+      lead.veiculo?.placa?.toLowerCase().includes(termo)
+    );
+  }, [buscaLead]);
+
+  // Selecionar lead
+  const handleSelecionarLead = (lead: Lead) => {
+    setLeadSelecionado(lead);
+    setComboboxAberto(false);
+    setBuscaLead('');
+    
+    // Auto-preencher campos do veículo se existirem
+    if (lead.veiculo) {
+      setMarca(lead.veiculo.marca);
+      setModelo(lead.veiculo.modelo);
+      setAno(lead.veiculo.ano.toString());
+      // Calcular FIPE automaticamente
+      const fipe = calcularFipeMock(lead.veiculo.marca, lead.veiculo.modelo, lead.veiculo.ano);
+      setValorFipe(fipe);
+      setCotacaoCalculada(false);
+      setPlanoSelecionado(null);
+      toast.success('Dados do veículo preenchidos automaticamente');
+    }
+  };
+
+  // Limpar lead
+  const handleLimparLead = () => {
+    setLeadSelecionado(null);
+    // Manter os dados do veículo
+  };
+
   // Modelos disponíveis baseado na marca
   const modelosDisponiveis = useMemo(() => {
     if (!marca) return [];
@@ -213,8 +295,9 @@ export default function CotadorPage() {
     const plano = planos.find(p => p.id === planoSelecionado);
     if (!plano) return;
 
+    const nomeCliente = leadSelecionado ? `\n*Cliente:* ${leadSelecionado.nome}` : '';
     const mensagem = `
-🚗 *COTAÇÃO DE PROTEÇÃO VEICULAR*
+🚗 *COTAÇÃO DE PROTEÇÃO VEICULAR*${nomeCliente}
 
 *Veículo:* ${marca} ${modelo} ${ano}
 *Valor FIPE:* ${formatCurrency(valorFipe)}
@@ -229,7 +312,11 @@ ${plano.coberturas.map(c => `✓ ${c}`).join('\n')}
 _Cotação válida por 7 dias_
     `.trim();
 
-    const url = `https://wa.me/?text=${encodeURIComponent(mensagem)}`;
+    // Se tiver lead, usa o telefone dele
+    const telefone = leadSelecionado?.telefone.replace(/\D/g, '') || '';
+    const url = telefone 
+      ? `https://wa.me/55${telefone}?text=${encodeURIComponent(mensagem)}`
+      : `https://wa.me/?text=${encodeURIComponent(mensagem)}`;
     window.open(url, '_blank');
     
     toast.success('Cotação preparada para envio!');
@@ -261,6 +348,114 @@ _Cotação válida por 7 dias_
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            {/* Campo Vincular Lead (opcional) */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="flex items-center gap-2">
+                  <Users className="h-4 w-4" />
+                  Vincular a Lead (opcional)
+                </Label>
+                {leadSelecionado && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleLimparLead}
+                    className="h-auto py-1 px-2 text-xs text-muted-foreground hover:text-destructive"
+                  >
+                    <X className="h-3 w-3 mr-1" />
+                    Remover
+                  </Button>
+                )}
+              </div>
+
+              {leadSelecionado ? (
+                // Lead selecionado - mostrar card resumo
+                <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/50">
+                  <Avatar className="h-10 w-10">
+                    <AvatarFallback className="bg-primary/10 text-primary font-medium">
+                      {leadSelecionado.nome.charAt(0)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium truncate">{leadSelecionado.nome}</p>
+                    <p className="text-sm text-muted-foreground">{leadSelecionado.telefone}</p>
+                  </div>
+                  {leadSelecionado.veiculo && (
+                    <Badge variant="secondary">
+                      {leadSelecionado.veiculo.modelo} {leadSelecionado.veiculo.ano}
+                    </Badge>
+                  )}
+                </div>
+              ) : (
+                // Combobox de busca
+                <Popover open={comboboxAberto} onOpenChange={setComboboxAberto}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={comboboxAberto}
+                      className="w-full justify-between font-normal text-muted-foreground"
+                    >
+                      Buscar lead por nome, telefone ou placa...
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                    <Command shouldFilter={false}>
+                      <CommandInput 
+                        placeholder="Digite para buscar..." 
+                        value={buscaLead}
+                        onValueChange={setBuscaLead}
+                      />
+                      <CommandList>
+                        <CommandEmpty>
+                          <div className="py-6 text-center text-sm text-muted-foreground">
+                            Nenhum lead encontrado
+                          </div>
+                        </CommandEmpty>
+                        <CommandGroup>
+                          {leadsFiltrados.map((lead) => (
+                            <CommandItem
+                              key={lead.id}
+                              value={lead.id}
+                              onSelect={() => handleSelecionarLead(lead)}
+                              className="cursor-pointer"
+                            >
+                              <div className="flex items-center gap-3 w-full">
+                                <Avatar className="h-8 w-8">
+                                  <AvatarFallback className="text-xs">
+                                    {lead.nome.charAt(0)}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-medium truncate">{lead.nome}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {lead.telefone}
+                                    {lead.veiculo && ` • ${lead.veiculo.modelo} ${lead.veiculo.ano}`}
+                                  </p>
+                                </div>
+                                {lead.veiculo?.placa && (
+                                  <Badge variant="outline" className="text-xs">
+                                    {lead.veiculo.placa}
+                                  </Badge>
+                                )}
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              )}
+              
+              <p className="text-xs text-muted-foreground">
+                Vincule a um lead para manter histórico e facilitar conversão
+              </p>
+            </div>
+
+            <div className="border-t pt-4" />
+
             {/* Marca */}
             <div className="space-y-2">
               <Label>Marca *</Label>
