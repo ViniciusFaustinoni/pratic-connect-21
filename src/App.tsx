@@ -12,6 +12,7 @@ import { InstaladorLayout } from "@/components/instalador/InstaladorLayout";
 
 // Internal System Pages
 import Auth from "./pages/Auth";
+import Login from "./pages/auth/Login";
 import Dashboard from "./pages/Dashboard";
 import Leads from "./pages/vendas/Leads";
 import LeadDetalhe from "./pages/vendas/LeadDetalhe";
@@ -160,6 +161,7 @@ const App = () => (
           <Routes>
             {/* Auth */}
             <Route path="/auth" element={<Auth />} />
+            <Route path="/login" element={<Login />} />
             
             {/* Redirect root to dashboard */}
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
