@@ -35,7 +35,7 @@ import { LeadEditDialog } from '@/components/leads/LeadEditDialog';
 import { LeadFilters } from '@/components/leads/LeadFilters';
 import { LeadKanbanCard } from '@/components/leads/LeadKanbanCard';
 import { LeadLossDialog } from '@/components/leads/LeadLossDialog';
-import { LeadMetricsCards } from '@/components/leads/LeadMetricsCards';
+import { LeadMetricsBar } from '@/components/leads/LeadMetricsBar';
 import { LeadDetailDrawer } from '@/components/leads/LeadDetailDrawer';
 import { CotacaoFormDialog } from '@/components/cotacoes/CotacaoFormDialog';
 import { toast } from 'sonner';
@@ -195,8 +195,8 @@ export default function Leads() {
         </div>
       </div>
 
-      {/* Metrics */}
-      {view === 'kanban' && <LeadMetricsCards leads={allLeads || []} />}
+      {/* Metrics - Barra compacta para Kanban */}
+      {view === 'kanban' && <LeadMetricsBar leads={allLeads || []} />}
 
       {/* Filters */}
       <LeadFilters filters={filters} onFiltersChange={(f) => { setFilters(f); setPage(1); }} />
@@ -429,38 +429,47 @@ export default function Leads() {
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
-          <div className="grid auto-cols-[260px] grid-flow-col gap-3 overflow-x-auto pb-4">
+          <div className="flex gap-2 overflow-x-auto pb-4 -mx-2 px-2">
             {ETAPAS_FUNIL.map((etapa) => {
               const leadsInEtapa = (allLeads || []).filter((l) => l.etapa === etapa);
               return (
                 <div 
                   key={etapa} 
                   id={etapa}
-                  className="flex flex-col rounded-lg bg-muted/50 p-3 min-h-[400px]"
+                  className="flex-shrink-0 w-[220px] flex flex-col rounded-lg bg-muted/40 min-h-[500px]"
                 >
-                  <div className="mb-3 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Badge className={etapaColors[etapa]}>{ETAPA_LABELS[etapa]}</Badge>
-                      <span className="text-sm text-muted-foreground">
+                  {/* Header da coluna mais compacto */}
+                  <div className="sticky top-0 bg-muted/40 px-2.5 py-2 border-b border-border/50">
+                    <div className="flex items-center justify-between">
+                      <Badge className={`${etapaColors[etapa]} text-xs`}>
+                        {ETAPA_LABELS[etapa]}
+                      </Badge>
+                      <span className="text-xs font-medium text-muted-foreground bg-background rounded-full px-2 py-0.5">
                         {leadsInEtapa.length}
                       </span>
                     </div>
                   </div>
+                  {/* Cards */}
                   <SortableContext
                     items={leadsInEtapa.map((l) => l.id)}
                     strategy={verticalListSortingStrategy}
                   >
                     <div 
-                      className="flex flex-col gap-2 flex-1"
+                      className="flex flex-col gap-2 flex-1 p-2 overflow-y-auto"
                       data-etapa={etapa}
                     >
                       {leadsInEtapa.map((lead) => (
                         <LeadKanbanCard
                           key={lead.id}
                           lead={lead}
-                          onClick={() => navigate(`/vendas/leads/${lead.id}`)}
+                          onClick={() => setDrawerLeadId(lead.id)}
                         />
                       ))}
+                      {leadsInEtapa.length === 0 && (
+                        <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground py-8">
+                          Nenhum lead
+                        </div>
+                      )}
                     </div>
                   </SortableContext>
                 </div>
@@ -469,14 +478,14 @@ export default function Leads() {
           </div>
           <DragOverlay>
             {activeLead ? (
-              <Card className="shadow-lg">
-                <CardContent className="p-3">
+              <Card className="shadow-lg w-[220px]">
+                <CardContent className="p-2.5">
                   <div className="flex items-center gap-2">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-sm font-medium text-primary">
-                      {activeLead.nome.charAt(0)}
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">
+                      {activeLead.nome.charAt(0).toUpperCase()}
                     </div>
-                    <div>
-                      <p className="font-medium text-sm">{activeLead.nome}</p>
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm truncate">{activeLead.nome}</p>
                       <p className="text-xs text-muted-foreground">{activeLead.telefone}</p>
                     </div>
                   </div>
