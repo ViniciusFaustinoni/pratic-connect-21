@@ -1,233 +1,568 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
-import type { Profile, UserRole, AppRole, TipoUsuario } from '@/types/database';
+import {
+  Profile,
+  PerfilAcesso,
+  TipoUsuario,
+  AuthState,
+  AuthFlags,
+  AuthContextType,
+  AuthResult,
+  EmailCredentials,
+  CPFCredentials,
+  MagicLinkCredentials,
+  SignUpData,
+  computeAuthFlags,
+  translateAuthError,
+} from '@/types/auth';
 
-interface SignUpMetadata {
-  nome?: string;
-  tipo?: TipoUsuario;
-  telefone?: string;
-  cpf?: string;
+// ============================================
+// CONTEXT
+// ============================================
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+// ============================================
+// PROVIDER PROPS
+// ============================================
+interface AuthProviderProps {
+  children: ReactNode;
 }
 
-interface AuthContextType {
-  user: User | null;
-  session: Session | null;
-  profile: Profile | null;
-  roles: AppRole[];
-  loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
-  signUp: (email: string, password: string, metadata?: SignUpMetadata) => Promise<{ error: Error | null }>;
-  signInWithMagicLink: (email: string) => Promise<{ error: Error | null }>;
-  signInWithGoogle: () => Promise<{ error: Error | null }>;
-  signOut: () => Promise<void>;
-  hasRole: (role: AppRole) => boolean;
+// ============================================
+// EXTENDED CONTEXT TYPE (com aliases de compatibilidade)
+// ============================================
+type ExtendedAuthContextType = Omit<AuthContextType, 'isFuncionario' | 'isAssociado' | 'isVendedor' | 'isInstalador'> & {
+  // Aliases para compatibilidade com código existente
+  roles: PerfilAcesso[];
+  hasRole: (role: PerfilAcesso) => boolean;
+  getRedirectUrl: () => string;
+  // Funções legadas (mantidas para compatibilidade - sobrescrevem as flags boolean)
   isGerencia: () => boolean;
   isVendedor: () => boolean;
   isFuncionario: () => boolean;
   isAssociado: () => boolean;
   isInstalador: () => boolean;
-  canAccessApiSettings: () => boolean;
-  getRedirectUrl: () => string;
-}
+};
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+// ============================================
+// PROVIDER
+// ============================================
+export function AuthProvider({ children }: AuthProviderProps) {
+  // Estado principal
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [roles, setRoles] = useState<AppRole[]>([]);
+  const [perfis, setPerfis] = useState<PerfilAcesso[]>([]);
   const [loading, setLoading] = useState(true);
+  const [initialized, setInitialized] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const fetchProfile = async (userId: string) => {
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('user_id', userId)
-      .maybeSingle();
-    
-    // Verificar se usuário está bloqueado
-    if (data?.bloqueado) {
-      await supabase.auth.signOut();
-      throw new Error(`Usuário bloqueado: ${data.motivo_bloqueio || 'Contate o administrador'}`);
+  // ============================================
+  // FUNÇÕES DE BUSCA
+  // ============================================
+
+  const fetchProfile = useCallback(async (userId: string): Promise<Profile | null> => {
+    try {
+      const { data, error: fetchError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (fetchError) {
+        console.error('Erro ao buscar perfil:', fetchError);
+        return null;
+      }
+
+      // Verificar se usuário está bloqueado
+      if (data?.bloqueado) {
+        await supabase.auth.signOut();
+        throw new Error(`Usuário bloqueado: ${data.motivo_bloqueio || 'Contate o administrador'}`);
+      }
+
+      return data as Profile | null;
+    } catch (err) {
+      console.error('Erro ao buscar perfil:', err);
+      return null;
     }
-    
-    return data as Profile | null;
-  };
+  }, []);
 
-  const fetchRoles = async (userId: string) => {
-    const { data } = await supabase
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', userId);
-    
-    return (data || []).map((r: { role: AppRole }) => r.role);
-  };
+  const fetchPerfis = useCallback(async (userId: string): Promise<PerfilAcesso[]> => {
+    try {
+      const { data, error: fetchError } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', userId);
+
+      if (fetchError) {
+        console.error('Erro ao buscar perfis:', fetchError);
+        return [];
+      }
+
+      return (data || []).map((r: { role: PerfilAcesso }) => r.role);
+    } catch (err) {
+      console.error('Erro ao buscar perfis:', err);
+      return [];
+    }
+  }, []);
+
+  // ============================================
+  // USEEFFECT: INICIALIZAÇÃO E LISTENER
+  // ============================================
 
   useEffect(() => {
+    let mounted = true;
+
+    const loadUserData = async (currentSession: Session | null) => {
+      if (!currentSession?.user) {
+        if (mounted) {
+          setUser(null);
+          setSession(null);
+          setProfile(null);
+          setPerfis([]);
+          setLoading(false);
+          setInitialized(true);
+        }
+        return;
+      }
+
+      try {
+        if (mounted) {
+          setUser(currentSession.user);
+          setSession(currentSession);
+        }
+
+        const [userProfile, userPerfis] = await Promise.all([
+          fetchProfile(currentSession.user.id),
+          fetchPerfis(currentSession.user.id),
+        ]);
+
+        if (mounted) {
+          setProfile(userProfile);
+          setPerfis(userPerfis);
+        }
+      } catch (err) {
+        console.error('Erro ao carregar dados do usuário:', err);
+        if (mounted) {
+          setError(err instanceof Error ? err.message : 'Erro ao carregar dados do usuário');
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+          setInitialized(true);
+        }
+      }
+    };
+
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        
-        // Defer Supabase calls with setTimeout
-        if (session?.user) {
+      (event, currentSession) => {
+        setSession(currentSession);
+        setUser(currentSession?.user ?? null);
+
+        // Defer Supabase calls with setTimeout to prevent deadlock
+        if (currentSession?.user) {
           setTimeout(async () => {
-            const [profileData, rolesData] = await Promise.all([
-              fetchProfile(session.user.id),
-              fetchRoles(session.user.id),
-            ]);
-            setProfile(profileData);
-            setRoles(rolesData);
-            setLoading(false);
+            if (!mounted) return;
+            await loadUserData(currentSession);
           }, 0);
         } else {
           setProfile(null);
-          setRoles([]);
+          setPerfis([]);
           setLoading(false);
+          setInitialized(true);
         }
       }
     );
 
     // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      
-      if (session?.user) {
-        Promise.all([
-          fetchProfile(session.user.id),
-          fetchRoles(session.user.id),
-        ]).then(([profileData, rolesData]) => {
-          setProfile(profileData);
-          setRoles(rolesData);
-          setLoading(false);
-        });
+    supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
+      setSession(currentSession);
+      setUser(currentSession?.user ?? null);
+
+      if (currentSession?.user) {
+        loadUserData(currentSession);
       } else {
         setLoading(false);
+        setInitialized(true);
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, [fetchProfile, fetchPerfis]);
+
+  // ============================================
+  // MÉTODOS DE AUTENTICAÇÃO
+  // ============================================
+
+  const signIn = useCallback(async (credentials: EmailCredentials): Promise<AuthResult> => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: credentials.email,
+        password: credentials.password,
+      });
+
+      if (signInError) {
+        const errorMessage = translateAuthError(signInError);
+        setError(errorMessage);
+        return { success: false, error: errorMessage };
+      }
+
+      return { success: true, redirectTo: '/dashboard' };
+    } catch (err) {
+      const errorMessage = 'Erro ao fazer login';
+      setError(errorMessage);
+      return { success: false, error: errorMessage };
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error as Error | null };
-  };
+  const signInWithCPF = useCallback(async (credentials: CPFCredentials): Promise<AuthResult> => {
+    try {
+      setLoading(true);
+      setError(null);
 
-  const signUp = async (email: string, password: string, metadata?: SignUpMetadata) => {
-    const redirectUrl = `${window.location.origin}/`;
-    
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: redirectUrl,
-        data: {
-          nome: metadata?.nome || email.split('@')[0],
-          tipo: metadata?.tipo || 'funcionario',
-          telefone: metadata?.telefone,
-          cpf: metadata?.cpf,
+      // Limpar CPF (remover pontos/traços)
+      const cpfLimpo = credentials.cpf.replace(/\D/g, '');
+
+      // Buscar email do associado pelo CPF na tabela profiles
+      const { data: profileData, error: searchError } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('cpf', cpfLimpo)
+        .eq('tipo', 'associado')
+        .maybeSingle();
+
+      if (searchError || !profileData?.email) {
+        return { success: false, error: 'CPF não encontrado' };
+      }
+
+      // Login com email encontrado
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: profileData.email,
+        password: credentials.password,
+      });
+
+      if (signInError) {
+        return { success: false, error: translateAuthError(signInError) };
+      }
+
+      return { success: true, redirectTo: '/app/home' };
+    } catch (err) {
+      return { success: false, error: 'Erro ao fazer login' };
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const signInWithGoogle = useCallback(async (): Promise<AuthResult> => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const { error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/dashboard`,
         },
-      },
-    });
-    return { error: error as Error | null };
-  };
+      });
 
-  const signInWithMagicLink = async (email: string) => {
-    const redirectUrl = `${window.location.origin}/dashboard`;
-    
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: redirectUrl,
-      },
-    });
-    return { error: error as Error | null };
-  };
+      if (oauthError) {
+        return { success: false, error: translateAuthError(oauthError) };
+      }
 
-  const signInWithGoogle = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/dashboard`,
-      },
-    });
-    return { error: error as Error | null };
-  };
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: 'Erro ao fazer login com Google' };
+    }
+  }, []);
 
-  const signOut = async () => {
-    await supabase.auth.signOut();
-  };
+  const signInWithMagicLink = useCallback(async (credentials: MagicLinkCredentials): Promise<AuthResult> => {
+    try {
+      setLoading(true);
+      setError(null);
 
-  const hasRole = (role: AppRole) => roles.includes(role);
+      const { error: otpError } = await supabase.auth.signInWithOtp({
+        email: credentials.email,
+        options: {
+          emailRedirectTo: credentials.redirectTo || `${window.location.origin}/dashboard`,
+        },
+      });
 
-  const isGerencia = () => 
-    hasRole('diretor') || hasRole('gerente_comercial');
+      if (otpError) {
+        return { success: false, error: translateAuthError(otpError) };
+      }
 
-  const isVendedor = () => 
-    hasRole('vendedor_clt') || hasRole('vendedor_externo') || hasRole('supervisor_vendas');
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: 'Erro ao enviar link de acesso' };
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  const isFuncionario = () => profile?.tipo === 'funcionario';
+  const signUp = useCallback(async (data: SignUpData): Promise<AuthResult> => {
+    try {
+      setLoading(true);
+      setError(null);
 
-  const isAssociado = () => profile?.tipo === 'associado';
+      const { error: signUpError } = await supabase.auth.signUp({
+        email: data.email,
+        password: data.password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/`,
+          data: {
+            nome: data.nome,
+            tipo: data.tipo || 'funcionario',
+            telefone: data.telefone,
+            cpf: data.cpf,
+          },
+        },
+      });
 
-  const isInstalador = () => hasRole('instalador_vistoriador');
+      if (signUpError) {
+        return { success: false, error: translateAuthError(signUpError) };
+      }
 
-  const canAccessApiSettings = () =>
-    hasRole('diretor') || hasRole('analista_marketing');
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: 'Erro ao criar conta' };
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  /**
-   * Retorna a URL de redirect baseada no tipo de usuário
-   * - funcionario/prestador → /dashboard
-   * - associado → /app/home
-   * - instalador → /instalador
-   */
-  const getRedirectUrl = () => {
+  const signOut = useCallback(async (): Promise<void> => {
+    try {
+      setLoading(true);
+      await supabase.auth.signOut();
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const resetPassword = useCallback(async (email: string): Promise<AuthResult> => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth/reset-password`,
+      });
+
+      if (resetError) {
+        return { success: false, error: translateAuthError(resetError) };
+      }
+
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: 'Erro ao enviar email de recuperação' };
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const updatePassword = useCallback(async (newPassword: string): Promise<AuthResult> => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+
+      if (updateError) {
+        return { success: false, error: translateAuthError(updateError) };
+      }
+
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: 'Erro ao atualizar senha' };
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const refreshSession = useCallback(async (): Promise<void> => {
+    try {
+      await supabase.auth.refreshSession();
+    } catch (err) {
+      console.error('Erro ao atualizar sessão:', err);
+    }
+  }, []);
+
+  const updateProfile = useCallback(async (
+    data: Partial<Pick<Profile, 'nome' | 'telefone' | 'avatar_url'>>
+  ): Promise<AuthResult> => {
+    try {
+      if (!profile?.id) {
+        return { success: false, error: 'Usuário não encontrado' };
+      }
+
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({
+          ...data,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', profile.id);
+
+      if (updateError) {
+        return { success: false, error: 'Erro ao atualizar perfil' };
+      }
+
+      // Atualizar estado local
+      setProfile(prev => prev ? { ...prev, ...data } : null);
+
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: 'Erro ao atualizar perfil' };
+    }
+  }, [profile?.id]);
+
+  // ============================================
+  // MÉTODOS DE VERIFICAÇÃO
+  // ============================================
+
+  const hasPerfil = useCallback((perfil: PerfilAcesso): boolean => {
+    return perfis.includes(perfil);
+  }, [perfis]);
+
+  const hasAnyPerfil = useCallback((checkPerfis: PerfilAcesso[]): boolean => {
+    return checkPerfis.some(p => perfis.includes(p));
+  }, [perfis]);
+
+  const hasAllPerfis = useCallback((checkPerfis: PerfilAcesso[]): boolean => {
+    return checkPerfis.every(p => perfis.includes(p));
+  }, [perfis]);
+
+  const canAccess = useCallback((allowedPerfis: PerfilAcesso[], requireAll = false): boolean => {
+    // Diretor sempre pode acessar tudo
+    if (perfis.includes('diretor')) return true;
+    return requireAll ? hasAllPerfis(allowedPerfis) : hasAnyPerfil(allowedPerfis);
+  }, [perfis, hasAllPerfis, hasAnyPerfil]);
+
+  // ============================================
+  // HELPER: getRedirectUrl (compatibilidade)
+  // ============================================
+
+  const getRedirectUrl = useCallback((): string => {
     if (profile?.tipo === 'associado') {
       return '/app/home';
     }
-    if (isInstalador()) {
+    if (hasPerfil('instalador_vistoriador')) {
       return '/instalador';
     }
     return '/dashboard';
+  }, [profile?.tipo, hasPerfil]);
+
+  // ============================================
+  // COMPUTAR FLAGS
+  // ============================================
+
+  const authState: AuthState = {
+    user,
+    session,
+    profile,
+    perfis,
+    loading,
+    initialized,
+    error,
+  };
+
+  const flags: AuthFlags = computeAuthFlags(authState);
+
+  // ============================================
+  // FUNÇÕES LEGADAS (compatibilidade)
+  // ============================================
+
+  const isGerenciaFn = useCallback((): boolean => {
+    return perfis.includes('diretor') || perfis.includes('gerente_comercial');
+  }, [perfis]);
+
+  const isVendedorFn = useCallback((): boolean => {
+    return perfis.includes('vendedor_clt') || perfis.includes('vendedor_externo') || perfis.includes('supervisor_vendas');
+  }, [perfis]);
+
+  const isFuncionarioFn = useCallback((): boolean => {
+    return profile?.tipo === 'funcionario';
+  }, [profile?.tipo]);
+
+  const isAssociadoFn = useCallback((): boolean => {
+    return profile?.tipo === 'associado';
+  }, [profile?.tipo]);
+
+  const isInstaladorFn = useCallback((): boolean => {
+    return perfis.includes('instalador_vistoriador');
+  }, [perfis]);
+
+  // ============================================
+  // VALOR DO CONTEXT
+  // ============================================
+
+  const value: ExtendedAuthContextType = {
+    // Estado
+    ...authState,
+    // Flags computadas
+    ...flags,
+    // Métodos de autenticação
+    signIn,
+    signInWithCPF,
+    signInWithGoogle,
+    signInWithMagicLink,
+    signUp,
+    signOut,
+    resetPassword,
+    updatePassword,
+    refreshSession,
+    updateProfile,
+    // Métodos de verificação
+    hasPerfil,
+    hasAnyPerfil,
+    hasAllPerfis,
+    canAccess,
+    // Aliases para compatibilidade
+    roles: perfis,
+    hasRole: hasPerfil,
+    getRedirectUrl,
+    // Funções legadas
+    isGerencia: isGerenciaFn,
+    isVendedor: isVendedorFn,
+    isFuncionario: isFuncionarioFn,
+    isAssociado: isAssociadoFn,
+    isInstalador: isInstaladorFn,
   };
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        session,
-        profile,
-        roles,
-        loading,
-        signIn,
-        signUp,
-        signInWithMagicLink,
-        signInWithGoogle,
-        signOut,
-        hasRole,
-        isGerencia,
-        isVendedor,
-        isFuncionario,
-        isAssociado,
-        isInstalador,
-        canAccessApiSettings,
-        getRedirectUrl,
-      }}
-    >
+    <AuthContext.Provider value={value as unknown as AuthContextType}>
       {children}
     </AuthContext.Provider>
   );
 }
 
-export function useAuth() {
+// ============================================
+// HOOK useAuth
+// ============================================
+
+export function useAuth(): ExtendedAuthContextType {
   const context = useContext(AuthContext);
+
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error('useAuth deve ser usado dentro de um AuthProvider');
   }
-  return context;
+
+  return context as unknown as ExtendedAuthContextType;
 }
+
+// ============================================
+// EXPORTS
+// ============================================
+export { AuthContext };

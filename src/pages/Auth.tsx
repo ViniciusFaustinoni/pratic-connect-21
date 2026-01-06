@@ -125,11 +125,11 @@ export default function Auth() {
     }
     
     setIsLoading(true);
-    const { error } = await signInWithMagicLink(magicLinkEmail);
+    const result = await signInWithMagicLink({ email: magicLinkEmail });
     setIsLoading(false);
     
-    if (error) {
-      setError(error.message);
+    if (!result.success) {
+      setError(result.error || 'Erro ao enviar link');
     } else {
       setMagicLinkSent(true);
     }
@@ -164,11 +164,12 @@ export default function Auth() {
     }
     
     setIsLoading(true);
-    const { error } = await signIn(loginEmail, loginPassword);
+    const result = await signIn({ email: loginEmail, password: loginPassword });
     setIsLoading(false);
     
-    if (error) {
-      if (error.message.includes('Invalid login credentials')) {
+    if (!result.success) {
+      const errorMessage = result.error || 'Erro ao fazer login';
+      if (errorMessage.includes('incorretos') || errorMessage.includes('Invalid')) {
         const { isNowLocked, attemptsRemaining } = recordFailedAttempt(loginEmail);
         
         if (isNowLocked) {
@@ -178,10 +179,10 @@ export default function Auth() {
         } else {
           setError(`Email ou senha inválidos. ${attemptsRemaining} tentativa${attemptsRemaining !== 1 ? 's' : ''} restante${attemptsRemaining !== 1 ? 's' : ''}.`);
         }
-      } else if (error.message.includes('Email not confirmed')) {
+      } else if (errorMessage.includes('não confirmado') || errorMessage.includes('Email not confirmed')) {
         setError('Por favor, confirme seu email antes de fazer login');
       } else {
-        setError(error.message);
+        setError(errorMessage);
       }
     } else {
       // Login successful, reset attempts
@@ -207,14 +208,20 @@ export default function Auth() {
     }
     
     setIsLoading(true);
-    const { error } = await signUp(signupEmail, signupPassword, { nome: signupNome });
+    const result = await signUp({ 
+      email: signupEmail, 
+      password: signupPassword, 
+      nome: signupNome,
+      tipo: 'funcionario' 
+    });
     setIsLoading(false);
     
-    if (error) {
-      if (error.message.includes('already registered')) {
+    if (!result.success) {
+      const errorMessage = result.error || 'Erro ao criar conta';
+      if (errorMessage.includes('já está cadastrado') || errorMessage.includes('already registered')) {
         setError('Este email já está cadastrado');
       } else {
-        setError(error.message);
+        setError(errorMessage);
       }
     } else {
       setSuccess('Cadastro realizado! Verifique seu email para confirmar a conta.');

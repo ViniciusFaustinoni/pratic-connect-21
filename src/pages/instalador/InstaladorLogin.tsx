@@ -46,13 +46,14 @@ export default function InstaladorLogin() {
     setLoading(true);
 
     try {
-      const { error: signInError } = await signIn(email, password);
+      const result = await signIn({ email, password });
 
-      if (signInError) {
-        if (signInError.message.includes('Invalid login credentials')) {
+      if (!result.success) {
+        const errorMessage = result.error || 'Erro ao fazer login';
+        if (errorMessage.includes('incorretos') || errorMessage.includes('Invalid')) {
           setError('Email ou senha inválidos.');
         } else {
-          setError(signInError.message);
+          setError(errorMessage);
         }
       }
     } catch (err) {
