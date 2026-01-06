@@ -122,6 +122,8 @@ import RateioSinistros from "./pages/diretoria/RateioSinistros";
 import IndicadoresAtuariais from "./pages/diretoria/IndicadoresAtuariais";
 import ConfiguracoesSistema from "./pages/diretoria/Configuracoes";
 import PerfisAcesso from "./pages/diretoria/PerfisAcesso";
+import UsuariosPage from "./pages/diretoria/Usuarios";
+import UsuarioDetalhePage from "./pages/diretoria/UsuarioDetalhe";
 import LogsAuditoria from "./pages/diretoria/LogsAuditoria";
 import RelatoriosGerenciais from "./pages/diretoria/RelatoriosGerenciais";
 
@@ -284,6 +286,8 @@ const App = () => (
               <Route path="/diretoria/indicadores" element={<IndicadoresAtuariais />} />
               <Route path="/diretoria/configuracoes" element={<ConfiguracoesSistema />} />
               <Route path="/diretoria/perfis" element={<PerfisAcesso />} />
+              <Route path="/diretoria/usuarios" element={<UsuariosPage />} />
+              <Route path="/diretoria/usuarios/:id" element={<UsuarioDetalhePage />} />
               <Route path="/diretoria/logs" element={<LogsAuditoria />} />
               <Route path="/diretoria/relatorios" element={<RelatoriosGerenciais />} />
               {/* Oficinas */}
