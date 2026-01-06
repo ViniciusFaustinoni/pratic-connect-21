@@ -25,6 +25,7 @@ import Contratos from "./pages/vendas/Contratos";
 import DashboardVendas from "./pages/vendas/DashboardVendas";
 import RelatoriosVendas from "./pages/vendas/RelatoriosVendas";
 import Metas from "./pages/vendas/Metas";
+import Cotador from "./pages/vendas/Cotador";
 import Associados from "./pages/cadastro/Associados";
 import AssociadoDetalhe from "./pages/cadastro/AssociadoDetalhe";
 import Veiculos from "./pages/cadastro/Veiculos";
@@ -189,6 +190,7 @@ const App = () => (
               <Route path="/vendas/contratos" element={<Contratos />} />
               <Route path="/vendas/relatorios" element={<RelatoriosVendas />} />
               <Route path="/vendas/metas" element={<Metas />} />
+              <Route path="/vendas/cotador" element={<Cotador />} />
               
               {/* Cadastro */}
               <Route path="/cadastro/associados" element={<Associados />} />
