@@ -603,13 +603,12 @@ export default function AppLogin() {
 
               {/* Link Esqueci Senha */}
               <div className="mt-4 text-center">
-                <button
-                  type="button"
+                <Link
+                  to="/app/forgot-password"
                   className="text-sm font-medium text-primary hover:underline"
-                  onClick={() => setModalRecuperarSenha(true)}
                 >
                   Esqueci minha senha
-                </button>
+                </Link>
               </div>
             </CollapsibleContent>
           </Collapsible>
