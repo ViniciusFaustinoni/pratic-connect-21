@@ -285,3 +285,251 @@ export const PERFIL_ACESSO_LABELS: Record<PerfilAcesso, string> = {
   analista_marketing: 'Analista de Marketing',
   analista_juridico: 'Analista Jurídico',
 };
+
+// ============================================================
+// IMPORTS DO SUPABASE PARA ESTADO DO CONTEXTO
+// ============================================================
+
+import type { User, Session } from '@supabase/supabase-js';
+
+// ============================================================
+// ESTADO DO CONTEXTO DE AUTENTICAÇÃO
+// ============================================================
+
+/**
+ * Estado interno do contexto de autenticação
+ * @description Mantém os dados da sessão, usuário e perfis
+ * @see AuthContext.tsx
+ */
+export interface AuthState {
+  /**
+   * Usuário do Supabase Auth (tabela auth.users)
+   * @description Contém id, email, metadata do provider
+   */
+  user: User | null;
+  
+  /**
+   * Sessão ativa do Supabase
+   * @description Contém access_token, refresh_token, expires_at
+   */
+  session: Session | null;
+  
+  /**
+   * Perfil do usuário (tabela public.profiles)
+   * @description Dados customizados: nome, cpf, tipo, etc.
+   */
+  profile: Profile | null;
+  
+  /**
+   * Lista de perfis de acesso ativos
+   * @description Array de strings com os perfis (ex: ['diretor', 'gerente_comercial'])
+   */
+  perfis: PerfilAcesso[];
+  
+  /**
+   * Indica se está carregando dados de autenticação
+   * @description true durante fetchProfile, fetchPerfis, signIn, etc.
+   */
+  loading: boolean;
+  
+  /**
+   * Indica se o contexto foi inicializado
+   * @description true após a primeira verificação de sessão
+   */
+  initialized: boolean;
+  
+  /**
+   * Mensagem de erro da última operação
+   * @description null se não houver erro
+   */
+  error: string | null;
+}
+
+// ============================================================
+// FLAGS DE CONVENIÊNCIA
+// ============================================================
+
+/**
+ * Flags booleanas derivadas do estado
+ * @description Facilita verificações de permissão nos componentes
+ * 
+ * @example
+ * const { isAuthenticated, isDiretor, isVendedor } = useAuth();
+ * if (isDiretor) {
+ *   // Acesso total
+ * }
+ */
+export interface AuthFlags {
+  /**
+   * Se há uma sessão ativa
+   * @derived session !== null
+   */
+  isAuthenticated: boolean;
+  
+  /**
+   * Se o usuário é funcionário da PRATIC
+   * @derived profile?.tipo === 'funcionario'
+   */
+  isFuncionario: boolean;
+  
+  /**
+   * Se o usuário é associado (cliente)
+   * @derived profile?.tipo === 'associado'
+   */
+  isAssociado: boolean;
+  
+  /**
+   * Se o usuário é prestador de serviço
+   * @derived profile?.tipo === 'prestador'
+   */
+  isPrestador: boolean;
+  
+  /**
+   * Se o usuário está ativo no sistema
+   * @derived profile?.ativo === true
+   */
+  isAtivo: boolean;
+  
+  /**
+   * Se o usuário está bloqueado
+   * @derived profile?.bloqueado === true
+   */
+  isBloqueado: boolean;
+  
+  /**
+   * Se tem perfil de diretor (acesso total)
+   * @derived perfis.includes('diretor')
+   */
+  isDiretor: boolean;
+  
+  /**
+   * Se tem perfil de gerente comercial
+   * @derived perfis.includes('gerente_comercial')
+   */
+  isGerente: boolean;
+  
+  /**
+   * Se tem perfil de supervisor de vendas
+   * @derived perfis.includes('supervisor_vendas')
+   */
+  isSupervisor: boolean;
+  
+  /**
+   * Se é vendedor (CLT ou externo)
+   * @derived perfis.includes('vendedor_clt') || perfis.includes('vendedor_externo')
+   */
+  isVendedor: boolean;
+  
+  /**
+   * Se é analista de cadastro
+   * @derived perfis.includes('analista_cadastro')
+   */
+  isAnalistaCadastro: boolean;
+  
+  /**
+   * Se é coordenador de monitoramento
+   * @derived perfis.includes('coordenador_monitoramento')
+   */
+  isCoordenadorMonitoramento: boolean;
+  
+  /**
+   * Se é analista de plataforma
+   * @derived perfis.includes('analista_plataforma')
+   */
+  isAnalistaPlataforma: boolean;
+  
+  /**
+   * Se é instalador/vistoriador
+   * @derived perfis.includes('instalador_vistoriador')
+   */
+  isInstalador: boolean;
+  
+  /**
+   * Se é analista de marketing
+   * @derived perfis.includes('analista_marketing')
+   */
+  isAnalistaMarketing: boolean;
+  
+  /**
+   * Se é analista jurídico
+   * @derived perfis.includes('analista_juridico')
+   */
+  isAnalistaJuridico: boolean;
+}
+
+// ============================================================
+// VALORES INICIAIS
+// ============================================================
+
+/**
+ * Estado inicial do contexto
+ * @description Usado no createContext e reset
+ */
+export const initialAuthState: AuthState = {
+  user: null,
+  session: null,
+  profile: null,
+  perfis: [],
+  loading: true,
+  initialized: false,
+  error: null,
+};
+
+/**
+ * Flags iniciais (tudo false)
+ * @description Usado quando não há usuário logado
+ */
+export const initialAuthFlags: AuthFlags = {
+  isAuthenticated: false,
+  isFuncionario: false,
+  isAssociado: false,
+  isPrestador: false,
+  isAtivo: false,
+  isBloqueado: false,
+  isDiretor: false,
+  isGerente: false,
+  isSupervisor: false,
+  isVendedor: false,
+  isAnalistaCadastro: false,
+  isCoordenadorMonitoramento: false,
+  isAnalistaPlataforma: false,
+  isInstalador: false,
+  isAnalistaMarketing: false,
+  isAnalistaJuridico: false,
+};
+
+// ============================================================
+// HELPER PARA CALCULAR FLAGS
+// ============================================================
+
+/**
+ * Calcula as flags baseado no estado
+ * @param state Estado atual do auth
+ * @returns Objeto com todas as flags calculadas
+ * 
+ * @example
+ * const flags = computeAuthFlags(authState);
+ * console.log(flags.isDiretor); // true ou false
+ */
+export function computeAuthFlags(state: AuthState): AuthFlags {
+  const { session, profile, perfis } = state;
+  
+  return {
+    isAuthenticated: session !== null,
+    isFuncionario: profile?.tipo === 'funcionario',
+    isAssociado: profile?.tipo === 'associado',
+    isPrestador: profile?.tipo === 'prestador',
+    isAtivo: profile?.ativo === true,
+    isBloqueado: profile?.bloqueado === true,
+    isDiretor: perfis.includes('diretor'),
+    isGerente: perfis.includes('gerente_comercial'),
+    isSupervisor: perfis.includes('supervisor_vendas'),
+    isVendedor: perfis.includes('vendedor_clt') || perfis.includes('vendedor_externo'),
+    isAnalistaCadastro: perfis.includes('analista_cadastro'),
+    isCoordenadorMonitoramento: perfis.includes('coordenador_monitoramento'),
+    isAnalistaPlataforma: perfis.includes('analista_plataforma'),
+    isInstalador: perfis.includes('instalador_vistoriador'),
+    isAnalistaMarketing: perfis.includes('analista_marketing'),
+    isAnalistaJuridico: perfis.includes('analista_juridico'),
+  };
+}
