@@ -457,8 +457,8 @@ export function AppSidebar() {
 
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-sidebar-border space-y-1 py-2">
-        {/* Configurações - Agora no Footer */}
+      <SidebarFooter className="border-t border-sidebar-border py-2">
+        {/* Configurações */}
         {visibleConfigItems.length > 0 && (
           <SidebarMenu>
             {visibleConfigItems.map((item) => (
@@ -475,49 +475,6 @@ export function AppSidebar() {
                 </SidebarMenuButton>
               </SidebarMenuItem>
             ))}
-          </SidebarMenu>
-        )}
-
-        {/* Perfil do Usuário */}
-        {profile && (
-          <SidebarMenu>
-            <SidebarMenuItem>
-              {collapsed ? (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="flex h-10 w-full items-center justify-center">
-                      <Avatar className="h-8 w-8">
-                        <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground text-xs font-medium">
-                          {profile.nome?.charAt(0).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent side="right" sideOffset={10}>
-                    <div className="flex flex-col">
-                      <span className="font-medium">{profile.nome}</span>
-                      <span className="text-xs text-muted-foreground">{profile.email}</span>
-                    </div>
-                  </TooltipContent>
-                </Tooltip>
-              ) : (
-                <div className="flex items-center gap-3 px-2 py-1.5">
-                  <Avatar className="h-8 w-8 shrink-0">
-                    <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground text-xs font-medium">
-                      {profile.nome?.charAt(0).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex flex-col overflow-hidden">
-                    <span className="truncate text-sm font-medium text-sidebar-foreground">
-                      {profile.nome}
-                    </span>
-                    <span className="truncate text-xs text-sidebar-foreground/70">
-                      {profile.email}
-                    </span>
-                  </div>
-                </div>
-              )}
-            </SidebarMenuItem>
           </SidebarMenu>
         )}
       </SidebarFooter>
