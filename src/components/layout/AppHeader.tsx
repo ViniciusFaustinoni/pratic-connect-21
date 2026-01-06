@@ -36,11 +36,16 @@ export function AppHeader() {
         {/* User Menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="gap-2 pl-2 pr-3">
+            <Button variant="ghost" className="h-auto gap-3 px-2 py-1.5">
               <UserAvatar src={profile?.avatar_url} name={profile?.nome} size="sm" />
-              <span className="hidden font-medium sm:inline-block">
-                {profile?.nome?.split(' ')[0]}
-              </span>
+              <div className="hidden flex-col items-start sm:flex">
+                <span className="text-sm font-medium">
+                  {profile?.nome}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {profile?.email}
+                </span>
+              </div>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
