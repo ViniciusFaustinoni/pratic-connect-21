@@ -1167,6 +1167,62 @@ export type Database = {
           },
         ]
       }
+      auth_logs: {
+        Row: {
+          acao: string
+          cidade: string | null
+          created_at: string | null
+          dispositivo: string | null
+          email: string | null
+          id: string
+          ip_address: unknown
+          metadata: Json | null
+          navegador: string | null
+          pais: string | null
+          profile_id: string | null
+          sistema_operacional: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          acao: string
+          cidade?: string | null
+          created_at?: string | null
+          dispositivo?: string | null
+          email?: string | null
+          id?: string
+          ip_address?: unknown
+          metadata?: Json | null
+          navegador?: string | null
+          pais?: string | null
+          profile_id?: string | null
+          sistema_operacional?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          acao?: string
+          cidade?: string | null
+          created_at?: string | null
+          dispositivo?: string | null
+          email?: string | null
+          id?: string
+          ip_address?: unknown
+          metadata?: Json | null
+          navegador?: string | null
+          pais?: string | null
+          profile_id?: string | null
+          sistema_operacional?: string | null
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "auth_logs_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       avaliacoes: {
         Row: {
           avaliador_id: string
@@ -8931,6 +8987,16 @@ export type Database = {
       is_gerencia: { Args: { _user_id: string }; Returns: boolean }
       is_prestador: { Args: { _user_id: string }; Returns: boolean }
       is_vendedor: { Args: { _user_id: string }; Returns: boolean }
+      log_auth_event: {
+        Args: {
+          p_acao: string
+          p_email?: string
+          p_ip?: string
+          p_metadata?: Json
+          p_user_agent?: string
+        }
+        Returns: string
+      }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       verificar_acordos_quebrados: { Args: never; Returns: number }
