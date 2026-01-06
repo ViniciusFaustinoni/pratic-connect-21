@@ -458,20 +458,20 @@ export function AppSidebar() {
         )}
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-sidebar-border p-2">
+      <SidebarFooter className="border-t border-sidebar-border">
         {profile && (
           <SidebarMenu>
             <SidebarMenuItem>
               {collapsed ? (
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <SidebarMenuButton size="lg" className="justify-center">
-                      <Avatar className="h-8 w-8 shrink-0">
-                        <AvatarFallback className="bg-sidebar-accent text-sidebar-accent-foreground text-sm">
+                    <div className="flex h-10 w-full items-center justify-center">
+                      <Avatar className="h-8 w-8">
+                        <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground text-xs font-medium">
                           {profile.nome?.charAt(0).toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
-                    </SidebarMenuButton>
+                    </div>
                   </TooltipTrigger>
                   <TooltipContent side="right" sideOffset={10}>
                     <div className="flex flex-col">
@@ -481,9 +481,9 @@ export function AppSidebar() {
                   </TooltipContent>
                 </Tooltip>
               ) : (
-                <SidebarMenuButton size="lg" className="cursor-default hover:bg-transparent">
+                <div className="flex items-center gap-3 px-2 py-1.5">
                   <Avatar className="h-8 w-8 shrink-0">
-                    <AvatarFallback className="bg-sidebar-accent text-sidebar-accent-foreground text-sm">
+                    <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground text-xs font-medium">
                       {profile.nome?.charAt(0).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
@@ -495,7 +495,7 @@ export function AppSidebar() {
                       {profile.email}
                     </span>
                   </div>
-                </SidebarMenuButton>
+                </div>
               )}
             </SidebarMenuItem>
           </SidebarMenu>
