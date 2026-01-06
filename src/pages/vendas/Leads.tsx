@@ -284,14 +284,14 @@ export default function Leads() {
         </nav>
 
         {/* Header */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+        <div className="flex items-start sm:items-center justify-between gap-4">
+          <div className="min-w-0">
             <h1 className="text-2xl font-bold">Leads</h1>
             <p className="text-muted-foreground">
               {total} leads encontrados
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2 flex-shrink-0">
             <Tabs value={view} onValueChange={(v) => setView(v as 'table' | 'kanban')}>
               <TabsList>
                 <TabsTrigger value="table">Lista</TabsTrigger>
