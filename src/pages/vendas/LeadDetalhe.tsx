@@ -113,7 +113,7 @@ export default function LeadDetalhe() {
 
       {/* Actions */}
       <div className="flex flex-wrap gap-2">
-        <Button variant="outline" onClick={() => setShowEditDialog(true)}>
+        <Button variant="outline" onClick={() => navigate(`/vendas/leads/${id}/editar`)}>
           <Edit className="mr-2 h-4 w-4" />
           Editar
         </Button>

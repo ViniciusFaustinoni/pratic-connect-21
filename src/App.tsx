@@ -18,6 +18,7 @@ import ResetPassword from "./pages/auth/ResetPassword";
 import Dashboard from "./pages/Dashboard";
 import Leads from "./pages/vendas/Leads";
 import LeadDetalhe from "./pages/vendas/LeadDetalhe";
+import LeadEditar from "./pages/vendas/LeadEditar";
 import Acompanhamento from "./pages/vendas/Acompanhamento";
 import Cotacoes from "./pages/vendas/Cotacoes";
 import Contratos from "./pages/vendas/Contratos";
@@ -182,6 +183,7 @@ const App = () => (
               <Route path="/vendas/dashboard" element={<DashboardVendas />} />
               <Route path="/vendas/leads" element={<Leads />} />
               <Route path="/vendas/leads/:id" element={<LeadDetalhe />} />
+              <Route path="/vendas/leads/:id/editar" element={<LeadEditar />} />
               <Route path="/vendas/acompanhamento" element={<Acompanhamento />} />
               <Route path="/vendas/cotacoes" element={<Cotacoes />} />
               <Route path="/vendas/contratos" element={<Contratos />} />
