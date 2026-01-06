@@ -533,3 +533,313 @@ export function computeAuthFlags(state: AuthState): AuthFlags {
     isAnalistaJuridico: perfis.includes('analista_juridico'),
   };
 }
+
+// ═══════════════════════════════════════════════════════════════
+// TIPOS DE RESULTADO E CREDENCIAIS (1.F.03)
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Resultado de operações de autenticação
+ * @description Padrão de retorno para signIn, signUp, resetPassword, etc.
+ */
+export interface AuthResult {
+  /** Se a operação foi bem sucedida */
+  success: boolean;
+  
+  /** Mensagem de erro (se success = false) */
+  error?: string;
+  
+  /** Código do erro para tratamento específico */
+  errorCode?: string;
+  
+  /** URL para redirect após sucesso (ex: /dashboard, /app) */
+  redirectTo?: string;
+}
+
+/**
+ * Credenciais para login por email
+ * @description Usado por funcionários no sistema interno
+ */
+export interface EmailCredentials {
+  /** Email do funcionário */
+  email: string;
+  
+  /** Senha */
+  password: string;
+  
+  /** Manter sessão ativa (remember me) */
+  rememberMe?: boolean;
+}
+
+/**
+ * Credenciais para login por CPF
+ * @description Usado por associados no app
+ */
+export interface CPFCredentials {
+  /** CPF do associado (com ou sem formatação) */
+  cpf: string;
+  
+  /** Senha */
+  password: string;
+}
+
+/**
+ * Credenciais para magic link
+ * @description Login sem senha via email
+ */
+export interface MagicLinkCredentials {
+  /** Email para enviar o link */
+  email: string;
+  
+  /** URL de redirect após login */
+  redirectTo?: string;
+}
+
+/**
+ * Dados para criar novo usuário
+ * @description Usado em signUp e primeiro acesso
+ */
+export interface SignUpData {
+  /** Email do usuário */
+  email: string;
+  
+  /** Senha (mínimo 6 caracteres) */
+  password: string;
+  
+  /** Nome completo */
+  nome: string;
+  
+  /** CPF (obrigatório para associados) */
+  cpf?: string;
+  
+  /** Telefone com DDD */
+  telefone?: string;
+  
+  /** Tipo do usuário */
+  tipo: TipoUsuario;
+  
+  /** Perfis a atribuir (default: baseado no tipo) */
+  perfis?: PerfilAcesso[];
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MÉTODOS DE AUTENTICAÇÃO (1.F.03)
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Métodos de autenticação do contexto
+ * @description Todas as operações de login, logout, senha
+ */
+export interface AuthMethods {
+  /**
+   * Login por email/senha
+   * @description Usado por funcionários no sistema interno
+   * @param credentials Email e senha
+   * @returns Resultado com success e possível redirect
+   * @example
+   * const result = await signIn({ email: 'user@pratic.com', password: '123456' });
+   * if (result.success) navigate(result.redirectTo || '/dashboard');
+   */
+  signIn: (credentials: EmailCredentials) => Promise<AuthResult>;
+  
+  /**
+   * Login por CPF/senha
+   * @description Usado por associados no app
+   * @param credentials CPF e senha
+   * @returns Resultado com success e possível redirect
+   * @example
+   * const result = await signInWithCPF({ cpf: '123.456.789-00', password: '123456' });
+   * if (result.success) navigate('/app');
+   */
+  signInWithCPF: (credentials: CPFCredentials) => Promise<AuthResult>;
+  
+  /**
+   * Login com Google OAuth
+   * @description Redireciona para OAuth do Google
+   * @returns Resultado (redirect acontece automaticamente)
+   */
+  signInWithGoogle: () => Promise<AuthResult>;
+  
+  /**
+   * Login sem senha via magic link
+   * @description Envia link de acesso por email
+   * @param credentials Email do usuário
+   * @returns Resultado indicando se email foi enviado
+   */
+  signInWithMagicLink: (credentials: MagicLinkCredentials) => Promise<AuthResult>;
+  
+  /**
+   * Criar novo usuário
+   * @description Cadastro de funcionário ou associado
+   * @param data Dados do novo usuário
+   * @returns Resultado com success
+   */
+  signUp: (data: SignUpData) => Promise<AuthResult>;
+  
+  /**
+   * Encerrar sessão
+   * @description Logout + limpeza de estado + redirect
+   */
+  signOut: () => Promise<void>;
+  
+  /**
+   * Solicitar recuperação de senha
+   * @description Envia email com link de reset
+   * @param email Email do usuário
+   * @returns Resultado indicando se email foi enviado
+   */
+  resetPassword: (email: string) => Promise<AuthResult>;
+  
+  /**
+   * Alterar senha do usuário logado
+   * @description Requer estar autenticado
+   * @param newPassword Nova senha (mínimo 6 caracteres)
+   * @returns Resultado da operação
+   */
+  updatePassword: (newPassword: string) => Promise<AuthResult>;
+  
+  /**
+   * Forçar refresh da sessão
+   * @description Atualiza token e recarrega profile/perfis
+   */
+  refreshSession: () => Promise<void>;
+  
+  /**
+   * Atualizar dados do profile
+   * @description Atualiza nome, telefone, etc.
+   * @param data Dados parciais a atualizar
+   * @returns Resultado da operação
+   */
+  updateProfile: (data: Partial<Pick<Profile, 'nome' | 'telefone' | 'avatar_url'>>) => Promise<AuthResult>;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MÉTODOS DE VERIFICAÇÃO DE PERFIS (1.F.03)
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Métodos para verificar permissões
+ * @description Usados em Guards e condicionais de UI
+ */
+export interface AuthVerification {
+  /**
+   * Verifica se o usuário tem um perfil específico
+   * @param perfil Perfil a verificar
+   * @returns true se o usuário tem o perfil ativo
+   * @example
+   * if (hasPerfil('diretor')) { // mostrar opção admin }
+   */
+  hasPerfil: (perfil: PerfilAcesso) => boolean;
+  
+  /**
+   * Verifica se o usuário tem qualquer um dos perfis
+   * @param perfis Array de perfis (OR)
+   * @returns true se o usuário tem pelo menos um dos perfis
+   * @example
+   * if (hasAnyPerfil(['diretor', 'gerente_comercial'])) { // acesso a relatórios }
+   */
+  hasAnyPerfil: (perfis: PerfilAcesso[]) => boolean;
+  
+  /**
+   * Verifica se o usuário tem todos os perfis
+   * @param perfis Array de perfis (AND)
+   * @returns true se o usuário tem todos os perfis
+   * @example
+   * if (hasAllPerfis(['supervisor_vendas', 'analista_cadastro'])) { // acesso especial }
+   */
+  hasAllPerfis: (perfis: PerfilAcesso[]) => boolean;
+  
+  /**
+   * Verifica acesso combinando regras
+   * @param requiredPerfis Perfis necessários
+   * @param requireAll Se true, exige todos; se false (default), exige qualquer um
+   * @returns true se as condições são atendidas
+   * @example
+   * if (canAccess(['vendedor_clt', 'vendedor_externo'])) { // acesso a vendas }
+   */
+  canAccess: (requiredPerfis: PerfilAcesso[], requireAll?: boolean) => boolean;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// INTERFACE COMPLETA DO CONTEXTO (1.F.03)
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Interface completa do AuthContext
+ * @description Combina estado, flags, métodos e verificações
+ * @see AuthState - Estado interno (user, session, profile, perfis)
+ * @see AuthFlags - Flags de conveniência (isFuncionario, isDiretor, etc.)
+ * @see AuthMethods - Métodos de autenticação (signIn, signOut, etc.)
+ * @see AuthVerification - Métodos de verificação (hasPerfil, canAccess)
+ */
+export interface AuthContextType extends AuthState, AuthFlags, AuthMethods, AuthVerification {}
+
+// ═══════════════════════════════════════════════════════════════
+// MAPEAMENTO DE ERROS (1.F.03)
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Códigos de erro do Supabase Auth
+ * @description Usados para traduzir erros para português
+ */
+export const AUTH_ERROR_CODES = {
+  'invalid_credentials': 'Email ou senha incorretos',
+  'email_not_confirmed': 'Email não confirmado. Verifique sua caixa de entrada.',
+  'user_not_found': 'Usuário não encontrado',
+  'invalid_email': 'Email inválido',
+  'weak_password': 'Senha muito fraca. Use pelo menos 6 caracteres.',
+  'email_taken': 'Este email já está cadastrado',
+  'too_many_requests': 'Muitas tentativas. Aguarde alguns minutos.',
+  'session_expired': 'Sessão expirada. Faça login novamente.',
+  'network_error': 'Erro de conexão. Verifique sua internet.',
+  'cpf_not_found': 'CPF não encontrado no sistema',
+  'user_blocked': 'Usuário bloqueado. Entre em contato com o suporte.',
+  'user_inactive': 'Usuário inativo. Entre em contato com o suporte.',
+  'unknown': 'Erro desconhecido. Tente novamente.',
+} as const;
+
+/**
+ * Tipo para códigos de erro
+ */
+export type AuthErrorCode = keyof typeof AUTH_ERROR_CODES;
+
+/**
+ * Função para traduzir erro do Supabase
+ * @param error Erro retornado pelo Supabase
+ * @returns Mensagem traduzida para português
+ */
+export function translateAuthError(error: { message?: string; code?: string } | null): string {
+  if (!error) return AUTH_ERROR_CODES.unknown;
+  
+  const code = error.code as AuthErrorCode;
+  if (code && AUTH_ERROR_CODES[code]) {
+    return AUTH_ERROR_CODES[code];
+  }
+  
+  // Fallback: tentar identificar pelo message
+  const message = error.message?.toLowerCase() || '';
+  
+  if (message.includes('invalid login credentials')) {
+    return AUTH_ERROR_CODES.invalid_credentials;
+  }
+  if (message.includes('email not confirmed')) {
+    return AUTH_ERROR_CODES.email_not_confirmed;
+  }
+  if (message.includes('user not found')) {
+    return AUTH_ERROR_CODES.user_not_found;
+  }
+  if (message.includes('password')) {
+    return AUTH_ERROR_CODES.weak_password;
+  }
+  if (message.includes('already registered') || message.includes('already exists')) {
+    return AUTH_ERROR_CODES.email_taken;
+  }
+  if (message.includes('rate limit') || message.includes('too many')) {
+    return AUTH_ERROR_CODES.too_many_requests;
+  }
+  if (message.includes('network') || message.includes('fetch')) {
+    return AUTH_ERROR_CODES.network_error;
+  }
+  
+  return error.message || AUTH_ERROR_CODES.unknown;
+}
