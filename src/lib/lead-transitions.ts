@@ -171,3 +171,36 @@ export const ETAPAS_FUNIL: EtapaLead[] = [
   'ganho',
   'perdido',
 ];
+
+/**
+ * Etapas do Kanban de VENDAS (7 etapas oficiais)
+ * NÃO inclui etapas do módulo Monitoramento
+ */
+export const ETAPAS_KANBAN_VENDAS: EtapaLead[] = [
+  'novo',
+  'contato',
+  'qualificado',
+  'cotacao_enviada',
+  'negociacao',
+  'ganho',
+  'perdido',
+];
+
+/**
+ * Cores dos dots para headers das colunas Kanban
+ */
+export const etapaDotColors: Record<EtapaLead, string> = {
+  novo: 'bg-blue-500',
+  contato_inicial: 'bg-sky-500',
+  contato: 'bg-cyan-500',
+  apresentacao: 'bg-violet-500',
+  qualificado: 'bg-purple-500',
+  cotacao_enviada: 'bg-orange-500',
+  negociacao: 'bg-pink-500',
+  vistoria_agendada: 'bg-teal-500',
+  contrato_enviado: 'bg-indigo-500',
+  contrato_assinado: 'bg-emerald-500',
+  instalacao_agendada: 'bg-lime-500',
+  ganho: 'bg-green-500',
+  perdido: 'bg-red-500',
+};

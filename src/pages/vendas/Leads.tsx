@@ -54,7 +54,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ETAPA_LABELS, ORIGEM_LABELS, type EtapaLead, type OrigemLead } from '@/types/database';
-import { etapaColors, origemColors, ETAPAS_FUNIL, canTransition, getNextStages } from '@/lib/lead-transitions';
+import { etapaColors, etapaDotColors, origemColors, ETAPAS_KANBAN_VENDAS, canTransition, getNextStages } from '@/lib/lead-transitions';
 import { useLeads, useAllLeads, type LeadFilters as LeadFiltersType, type LeadWithVendedor } from '@/hooks/useLeads';
 import { useChangeLeadEtapa } from '@/hooks/useLeadHistorico';
 import { useLeadActions } from '@/hooks/useLeadActions';
@@ -632,27 +632,31 @@ export default function Leads() {
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
-          <div className="flex gap-2 overflow-x-auto pb-4 -mx-2 px-2">
-            {ETAPAS_FUNIL.map((etapa) => {
+          <div className="flex gap-4 overflow-x-auto pb-4 px-1" style={{ minWidth: 'max-content' }}>
+            {ETAPAS_KANBAN_VENDAS.map((etapa) => {
               const leadsInEtapa = (allLeads || []).filter((l) => l.etapa === etapa);
               return (
                 <div 
                   key={etapa} 
                   id={etapa}
-                  className="flex-shrink-0 w-[220px] flex flex-col rounded-lg bg-muted/40 min-h-[500px]"
+                  className="flex-shrink-0 w-64 flex flex-col rounded-xl bg-muted/50"
+                  style={{ minHeight: 'calc(100vh - 280px)' }}
                 >
-                  {/* Header da coluna mais compacto */}
-                  <div className="sticky top-0 bg-muted/40 px-2.5 py-2 border-b border-border/50">
+                  {/* Header da coluna com dot colorido */}
+                  <div className="sticky top-0 bg-muted/50 px-3 py-2.5 border-b border-border/50">
                     <div className="flex items-center justify-between">
-                      <Badge className={`${etapaColors[etapa]} text-xs`}>
-                        {ETAPA_LABELS[etapa]}
-                      </Badge>
-                      <span className="text-xs font-medium text-muted-foreground bg-background rounded-full px-2 py-0.5">
+                      <div className="flex items-center gap-2">
+                        <span className={`w-2.5 h-2.5 rounded-full ${etapaDotColors[etapa]}`} />
+                        <span className="font-semibold text-sm text-foreground">
+                          {ETAPA_LABELS[etapa]}
+                        </span>
+                      </div>
+                      <span className="w-6 h-6 rounded-full bg-muted text-xs font-medium flex items-center justify-center">
                         {leadsInEtapa.length}
                       </span>
                     </div>
                   </div>
-                  {/* Cards */}
+                  {/* Cards com scroll vertical */}
                   <SortableContext
                     items={leadsInEtapa.map((l) => l.id)}
                     strategy={verticalListSortingStrategy}
