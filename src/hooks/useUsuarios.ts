@@ -245,18 +245,55 @@ export function useUsuarioActions() {
     },
   });
 
+  // Atualizar usuário
+  const atualizarUsuario = useMutation({
+    mutationFn: async ({ 
+      id, 
+      data 
+    }: { 
+      id: string; 
+      data: Partial<{
+        nome: string;
+        email: string;
+        telefone: string | null;
+        tipo: 'funcionario' | 'associado' | 'prestador';
+        ativo: boolean;
+      }>;
+    }) => {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ 
+          ...data, 
+          updated_at: new Date().toISOString() 
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['usuarios'] });
+      queryClient.invalidateQueries({ queryKey: ['usuario'] });
+      toast.success('Usuário atualizado com sucesso');
+    },
+    onError: (error: Error) => {
+      toast.error('Erro ao atualizar usuário: ' + error.message);
+    },
+  });
+
   return {
     desativarUsuario: desativarUsuario.mutate,
     ativarUsuario: ativarUsuario.mutate,
     bloquearUsuario: bloquearUsuario.mutate,
     desbloquearUsuario: desbloquearUsuario.mutate,
     resetarSenha: resetarSenha.mutate,
+    atualizarUsuario: atualizarUsuario.mutate,
     isLoading: 
       desativarUsuario.isPending || 
       ativarUsuario.isPending || 
       bloquearUsuario.isPending ||
       desbloquearUsuario.isPending ||
       resetarSenha.isPending,
+    isUpdating: atualizarUsuario.isPending,
   };
 }
 
