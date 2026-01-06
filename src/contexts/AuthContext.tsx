@@ -1,7 +1,14 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
-import type { Profile, UserRole, AppRole } from '@/types/database';
+import type { Profile, UserRole, AppRole, TipoUsuario } from '@/types/database';
+
+interface SignUpMetadata {
+  nome?: string;
+  tipo?: TipoUsuario;
+  telefone?: string;
+  cpf?: string;
+}
 
 interface AuthContextType {
   user: User | null;
@@ -10,7 +17,7 @@ interface AuthContextType {
   roles: AppRole[];
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
-  signUp: (email: string, password: string, nome: string) => Promise<{ error: Error | null }>;
+  signUp: (email: string, password: string, metadata?: SignUpMetadata) => Promise<{ error: Error | null }>;
   signInWithMagicLink: (email: string) => Promise<{ error: Error | null }>;
   signInWithGoogle: () => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
@@ -111,7 +118,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error: error as Error | null };
   };
 
-  const signUp = async (email: string, password: string, nome: string) => {
+  const signUp = async (email: string, password: string, metadata?: SignUpMetadata) => {
     const redirectUrl = `${window.location.origin}/`;
     
     const { error } = await supabase.auth.signUp({
@@ -119,7 +126,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       password,
       options: {
         emailRedirectTo: redirectUrl,
-        data: { nome, tipo: 'funcionario' },
+        data: {
+          nome: metadata?.nome || email.split('@')[0],
+          tipo: metadata?.tipo || 'funcionario',
+          telefone: metadata?.telefone,
+          cpf: metadata?.cpf,
+        },
       },
     });
     return { error: error as Error | null };

@@ -207,7 +207,7 @@ export default function Auth() {
     }
     
     setIsLoading(true);
-    const { error } = await signUp(signupEmail, signupPassword, signupNome);
+    const { error } = await signUp(signupEmail, signupPassword, { nome: signupNome });
     setIsLoading(false);
     
     if (error) {
