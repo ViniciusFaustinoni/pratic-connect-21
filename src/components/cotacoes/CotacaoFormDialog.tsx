@@ -1,13 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Loader2, Calculator, Car, Search, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Loader2, Car, Search, CheckCircle2, Shield, FileText, ChevronRight, ChevronLeft, Check, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -38,6 +37,7 @@ import { useLead } from '@/hooks/useLeads';
 import { useFipe, type PlateResult, type FipeMarca, type FipeModelo, type FipeAno } from '@/hooks/useFipe';
 import { toast } from 'sonner';
 import { Separator } from '@/components/ui/separator';
+import { cn } from '@/lib/utils';
 
 interface CotacaoFormDialogProps {
   open: boolean;
@@ -45,24 +45,38 @@ interface CotacaoFormDialogProps {
   leadId?: string;
 }
 
-interface PlanoComTabela {
-  id: string;
-  nome: string;
-  codigo: string;
-  valor_adesao: number;
-  tipo_uso: string | null;
-  descricao: string | null;
-  valor_cota?: number;
-  taxa_administrativa?: number;
-  valor_rastreamento?: number;
-  valor_assistencia?: number;
+interface PlanoComPreco {
+  plano: {
+    id: string;
+    nome: string;
+    codigo: string;
+    valor_adesao: number;
+    tipo_uso: string | null;
+    descricao: string | null;
+  };
+  valorCota: number;
+  taxaAdmin: number;
+  rastreamento: number;
+  assistencia: number;
+  totalMensal: number;
 }
+
+type Step = 1 | 2 | 3;
+
+const steps = [
+  { number: 1, label: 'Veículo', icon: Car },
+  { number: 2, label: 'Plano', icon: Shield },
+  { number: 3, label: 'Resumo', icon: FileText },
+];
 
 export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDialogProps) {
   const createCotacao = useCreateCotacao();
   const { data: planos, isLoading: planosLoading } = usePlanos();
   const { data: lead } = useLead(leadId);
   const { getMarcas, getModelos, getAnos, getPreco, getByPlaca, buscarPorNome, loading: fipeLoading } = useFipe();
+
+  // Step state
+  const [step, setStep] = useState<Step>(1);
 
   // Estados para busca por placa
   const [placa, setPlaca] = useState('');
@@ -83,8 +97,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
   const [loadingAnos, setLoadingAnos] = useState(false);
   const [buscandoFipe, setBuscandoFipe] = useState(false);
 
-  // Estado para plano selecionado (com dados calculados)
-  const [planoSelecionado, setPlanoSelecionado] = useState<PlanoComTabela | null>(null);
+  // Estado para plano selecionado
+  const [planoSelecionadoData, setPlanoSelecionadoData] = useState<PlanoComPreco | null>(null);
 
   const form = useForm<CotacaoFormData>({
     resolver: zodResolver(cotacaoSchema),
@@ -105,6 +119,37 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
   const planoId = form.watch('plano_id');
   const { data: tabelasPreco } = useTabelaPrecoByFipe(valorFipe);
 
+  // Combinar planos com seus preços para o valor FIPE atual
+  const planosComPrecos = useMemo<PlanoComPreco[]>(() => {
+    if (!planos || !tabelasPreco || valorFipe <= 0) return [];
+
+    return planos.map(plano => {
+      const tabela = tabelasPreco.find(t => t.plano_id === plano.id);
+      if (!tabela) return null;
+
+      return {
+        plano: {
+          id: plano.id,
+          nome: plano.nome,
+          codigo: plano.codigo,
+          valor_adesao: plano.valor_adesao || 0,
+          tipo_uso: plano.tipo_uso,
+          descricao: plano.descricao,
+        },
+        valorCota: tabela.valor_cota,
+        taxaAdmin: tabela.taxa_administrativa,
+        rastreamento: tabela.valor_rastreamento,
+        assistencia: tabela.valor_assistencia || 0,
+        totalMensal: tabela.valor_cota + tabela.taxa_administrativa + 
+                     tabela.valor_rastreamento + (tabela.valor_assistencia || 0),
+      };
+    }).filter((p): p is PlanoComPreco => p !== null);
+  }, [planos, tabelasPreco, valorFipe]);
+
+  // Validação por etapa
+  const canGoToStep2 = valorFipe > 0;
+  const canGoToStep3 = valorFipe > 0 && planoId;
+
   // Carregar marcas quando dialog abre
   useEffect(() => {
     if (open && marcas.length === 0) {
@@ -122,6 +167,13 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
       fetchMarcas();
     }
   }, [open, getMarcas, marcas.length]);
+
+  // Reset step when dialog closes
+  useEffect(() => {
+    if (!open) {
+      setStep(1);
+    }
+  }, [open]);
 
   // Auto-buscar FIPE quando marca, modelo e ano estiverem selecionados
   useEffect(() => {
@@ -201,12 +253,10 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
       if (resultado.success && resultado.vehicleData) {
         setVeiculoEncontrado(resultado);
         
-        // Tentar encontrar marca/modelo na lista e preencher campos
         const marcaNome = resultado.vehicleData.marca?.toLowerCase();
         const modeloNome = resultado.vehicleData.modelo?.toLowerCase();
         const anoVeiculo = resultado.vehicleData.ano?.split('/')[0];
 
-        // Buscar marca
         let marcasCarregadas = marcas;
         if (marcasCarregadas.length === 0) {
           setLoadingMarcas(true);
@@ -222,13 +272,11 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
         if (marcaEncontrada) {
           setMarcaSelecionada(marcaEncontrada.codigo);
           
-          // Buscar modelos
           setLoadingModelos(true);
           const modelosData = await getModelos(marcaEncontrada.codigo, 'carros');
           setModelos(modelosData);
           setLoadingModelos(false);
 
-          // Encontrar modelo
           const modeloEncontrado = modelosData.find(
             m => m.nome.toLowerCase().includes(modeloNome) || modeloNome?.includes(m.nome.toLowerCase())
           );
@@ -236,29 +284,24 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
           if (modeloEncontrado) {
             setModeloSelecionado(modeloEncontrado.codigo.toString());
 
-            // Buscar anos
             setLoadingAnos(true);
             const anosData = await getAnos(marcaEncontrada.codigo, modeloEncontrado.codigo.toString(), 'carros');
             setAnos(anosData);
             setLoadingAnos(false);
 
-            // Encontrar ano
             const anoEncontrado = anosData.find(a => a.nome.includes(anoVeiculo || ''));
             if (anoEncontrado) {
               setAnoSelecionado(anoEncontrado.codigo);
-              // O useEffect acima vai buscar o FIPE automaticamente
             }
           }
         }
 
-        // Se a API de placa já retornou valor FIPE, usar diretamente
         if (resultado.fipeData?.valor) {
           form.setValue('valor_fipe', resultado.fipeData.valor);
           toast.success(`Veículo encontrado! FIPE: R$ ${resultado.fipeData.valor.toLocaleString('pt-BR')}`);
         } else {
           toast.success(`Veículo encontrado: ${resultado.vehicleData.marca} ${resultado.vehicleData.modelo}`);
           if (!marcaEncontrada) {
-            // Se não encontrou marca na lista, tentar buscar por nome
             const fipeResult = await buscarPorNome(
               resultado.vehicleData.marca,
               resultado.vehicleData.modelo,
@@ -297,75 +340,16 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
     }
   }, [lead, form]);
 
-  // Calculate values when plano or valor_fipe changes
-  useEffect(() => {
-    if (!planoId || valorFipe <= 0 || !planos) return;
-
-    const plano = planos.find(p => p.id === planoId);
-    if (!plano) return;
-
-    // Buscar tabela de preço para este plano e faixa FIPE
-    const tabela = tabelasPreco?.find(t => t.plano_id === planoId);
-    
-    if (tabela) {
-      // Usar valores da tabela de preço
-      const valorCota = tabela.valor_cota;
-      const taxaAdmin = tabela.taxa_administrativa;
-      const rastreamento = tabela.valor_rastreamento;
-      const assistencia = tabela.valor_assistencia || 0;
-      const adesao = plano.valor_adesao || 0;
-      
-      const totalMensal = valorCota + taxaAdmin + rastreamento + assistencia;
-      
-      form.setValue('valor_cota', valorCota);
-      form.setValue('taxa_administrativa', taxaAdmin);
-      form.setValue('valor_rastreamento', rastreamento);
-      form.setValue('valor_adesao', adesao);
-      form.setValue('valor_total_mensal', totalMensal);
-
-      setPlanoSelecionado({
-        ...plano,
-        valor_cota: valorCota,
-        taxa_administrativa: taxaAdmin,
-        valor_rastreamento: rastreamento,
-        valor_assistencia: assistencia,
-      });
-    } else {
-      // Se não tem tabela de preço, usar valor de adesão do plano
-      setPlanoSelecionado({
-        ...plano,
-        valor_cota: 0,
-        taxa_administrativa: 0,
-        valor_rastreamento: 0,
-        valor_assistencia: 0,
-      });
-      toast.warning('Não há tabela de preço para este valor FIPE');
-    }
-  }, [planoId, valorFipe, tabelasPreco, form, planos]);
-
-  // Atualizar plano selecionado quando mudar (sem valores calculados)
-  useEffect(() => {
-    if (planoId && planos) {
-      const plano = planos.find(p => p.id === planoId);
-      if (plano && valorFipe <= 0) {
-        setPlanoSelecionado({
-          ...plano,
-          valor_cota: 0,
-          taxa_administrativa: 0,
-          valor_rastreamento: 0,
-          valor_assistencia: 0,
-        });
-      }
-    } else {
-      setPlanoSelecionado(null);
-    }
-  }, [planoId, planos, valorFipe]);
-
-  const valorCota = form.watch('valor_cota');
-  const taxaAdmin = form.watch('taxa_administrativa');
-  const valorRastreamento = form.watch('valor_rastreamento');
-  const valorAdesao = form.watch('valor_adesao');
-  const valorTotal = form.watch('valor_total_mensal');
+  // Handler de seleção de plano
+  const handleSelectPlano = (planoPreco: PlanoComPreco) => {
+    form.setValue('plano_id', planoPreco.plano.id);
+    form.setValue('valor_cota', planoPreco.valorCota);
+    form.setValue('taxa_administrativa', planoPreco.taxaAdmin);
+    form.setValue('valor_rastreamento', planoPreco.rastreamento);
+    form.setValue('valor_adesao', planoPreco.plano.valor_adesao);
+    form.setValue('valor_total_mensal', planoPreco.totalMensal);
+    setPlanoSelecionadoData(planoPreco);
+  };
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -392,12 +376,13 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
       form.reset();
       setVeiculoEncontrado(null);
       setPlaca('');
-      setPlanoSelecionado(null);
+      setPlanoSelecionadoData(null);
       setMarcaSelecionada('');
       setModeloSelecionado('');
       setAnoSelecionado('');
       setModelos([]);
       setAnos([]);
+      setStep(1);
       onOpenChange(false);
     } catch (error) {
       toast.error('Erro ao criar cotação');
@@ -405,11 +390,28 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
     }
   };
 
-  const isFormValid = valorFipe > 0 && planoId && !planosLoading && planos && planos.length > 0;
+  // Get marca/modelo names for display
+  const getMarcaNome = () => {
+    if (veiculoEncontrado?.vehicleData?.marca) return veiculoEncontrado.vehicleData.marca;
+    const marca = marcas.find(m => m.codigo === marcaSelecionada);
+    return marca?.nome || '';
+  };
+
+  const getModeloNome = () => {
+    if (veiculoEncontrado?.vehicleData?.modelo) return veiculoEncontrado.vehicleData.modelo;
+    const modelo = modelos.find(m => m.codigo.toString() === modeloSelecionado);
+    return modelo?.nome || '';
+  };
+
+  const getAnoNome = () => {
+    if (veiculoEncontrado?.vehicleData?.ano) return veiculoEncontrado.vehicleData.ano;
+    const ano = anos.find(a => a.codigo === anoSelecionado);
+    return ano?.nome || '';
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Nova Cotação</DialogTitle>
           <DialogDescription>
@@ -417,193 +419,183 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
           </DialogDescription>
         </DialogHeader>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            {/* Busca por Placa - Prioridade */}
-            <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <Car className="h-5 w-5 text-primary" />
-                <span className="font-medium text-foreground">Busca Rápida por Placa</span>
-                <Badge variant="outline" className="ml-auto text-xs">Recomendado</Badge>
-              </div>
-              
-              <div className="flex gap-2">
-                <div className="flex-1">
-                  <Input
-                    placeholder="ABC1D23 ou ABC-1234"
-                    value={placa}
-                    onChange={(e) => setPlaca(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ''))}
-                    maxLength={8}
-                    className="uppercase font-mono text-lg tracking-wider"
-                  />
-                </div>
-                <Button 
-                  type="button"
-                  onClick={buscarPorPlaca}
-                  disabled={buscandoPlaca || fipeLoading || placa.replace(/[^A-Z0-9]/g, '').length < 7}
-                  className="px-6"
-                >
-                  {buscandoPlaca ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <>
-                      <Search className="h-4 w-4 mr-2" />
-                      Buscar
-                    </>
-                  )}
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                Digite a placa para preencher os dados automaticamente
-              </p>
-
-              {/* Veículo encontrado */}
-              {veiculoEncontrado?.success && veiculoEncontrado.vehicleData && (
-                <div className="mt-3 p-3 bg-background rounded-lg border">
-                  <div className="flex items-center gap-2 text-primary mb-2">
-                    <CheckCircle2 className="h-4 w-4" />
-                    <span className="text-sm font-medium">Veículo Encontrado</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div>
-                      <span className="text-muted-foreground">Marca/Modelo:</span>
-                      <p className="font-medium">{veiculoEncontrado.vehicleData.marca} {veiculoEncontrado.vehicleData.modelo}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Ano:</span>
-                      <p className="font-medium">{veiculoEncontrado.vehicleData.ano}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Cor:</span>
-                      <p className="font-medium">{veiculoEncontrado.vehicleData.cor}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Combustível:</span>
-                      <p className="font-medium">{veiculoEncontrado.vehicleData.combustivel}</p>
-                    </div>
-                    {veiculoEncontrado.fipeData?.valor && (
-                      <div className="col-span-2 pt-2 border-t mt-1">
-                        <span className="text-muted-foreground">Valor FIPE:</span>
-                        <p className="font-bold text-primary">{formatCurrency(veiculoEncontrado.fipeData.valor)}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
+        {/* Stepper */}
+        <div className="flex items-center justify-center gap-1 mb-4">
+          {steps.map((s, i) => (
+            <div key={s.number} className="flex items-center">
+              <button
+                type="button"
+                onClick={() => {
+                  if (s.number === 1) setStep(1);
+                  else if (s.number === 2 && canGoToStep2) setStep(2);
+                  else if (s.number === 3 && canGoToStep3) setStep(3);
+                }}
+                disabled={
+                  (s.number === 2 && !canGoToStep2) ||
+                  (s.number === 3 && !canGoToStep3)
+                }
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm transition-all",
+                  step === s.number 
+                    ? "bg-primary text-primary-foreground" 
+                    : step > s.number 
+                      ? "bg-primary/20 text-primary cursor-pointer hover:bg-primary/30"
+                      : "bg-muted text-muted-foreground",
+                  ((s.number === 2 && !canGoToStep2) || (s.number === 3 && !canGoToStep3)) && "opacity-50 cursor-not-allowed"
+                )}
+              >
+                <s.icon className="h-4 w-4" />
+                <span className="hidden sm:inline">{s.label}</span>
+              </button>
+              {i < steps.length - 1 && (
+                <ChevronRight className="h-4 w-4 mx-1 text-muted-foreground" />
               )}
             </div>
+          ))}
+        </div>
 
-            {/* Divisor */}
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-border" />
-              </div>
-              <div className="relative flex justify-center">
-                <span className="bg-background px-3 text-sm text-muted-foreground">
-                  ou busque pela tabela FIPE
-                </span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Left: Form */}
-              <div className="space-y-4">
-                {lead && !veiculoEncontrado && (
-                  <Card className="bg-muted/50">
-                    <CardContent className="p-3">
-                      <p className="text-sm font-medium">{lead.nome}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {lead.veiculo_marca} {lead.veiculo_modelo} {lead.veiculo_ano}
-                      </p>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* Seleção FIPE Manual - Marca */}
-                <div className="space-y-1.5">
-                  <Label>Marca</Label>
-                  <Select 
-                    value={marcaSelecionada} 
-                    onValueChange={handleMarcaChange}
-                    disabled={loadingMarcas}
-                  >
-                    <SelectTrigger>
-                      {loadingMarcas ? (
-                        <div className="flex items-center gap-2">
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            
+            {/* STEP 1: Veículo */}
+            {step === 1 && (
+              <div className="space-y-4 animate-in fade-in duration-200">
+                {/* Busca por Placa */}
+                <Card className="bg-primary/5 border-primary/20">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Car className="h-5 w-5 text-primary" />
+                      <span className="font-medium">Busca Rápida por Placa</span>
+                      <Badge variant="outline" className="ml-auto text-xs">Recomendado</Badge>
+                    </div>
+                    
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="ABC1D23"
+                        value={placa}
+                        onChange={(e) => setPlaca(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ''))}
+                        maxLength={8}
+                        className="uppercase font-mono text-lg tracking-wider flex-1"
+                      />
+                      <Button 
+                        type="button"
+                        onClick={buscarPorPlaca}
+                        disabled={buscandoPlaca || fipeLoading || placa.replace(/[^A-Z0-9]/g, '').length < 7}
+                      >
+                        {buscandoPlaca ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
-                          <span>Carregando...</span>
+                        ) : (
+                          <Search className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+
+                    {/* Veículo encontrado */}
+                    {veiculoEncontrado?.success && veiculoEncontrado.vehicleData && (
+                      <div className="mt-3 p-3 bg-background rounded-lg border border-green-500/30">
+                        <div className="flex items-center gap-2 text-green-600 mb-2">
+                          <CheckCircle2 className="h-4 w-4" />
+                          <span className="text-sm font-medium">Veículo Encontrado</span>
                         </div>
-                      ) : (
-                        <SelectValue placeholder="Selecione a marca" />
-                      )}
-                    </SelectTrigger>
-                    <SelectContent>
-                      {marcas.map((marca) => (
-                        <SelectItem key={marca.codigo} value={marca.codigo}>
-                          {marca.nome}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                        <p className="font-medium">
+                          {veiculoEncontrado.vehicleData.marca} {veiculoEncontrado.vehicleData.modelo}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {veiculoEncontrado.vehicleData.ano} • {veiculoEncontrado.vehicleData.cor} • {veiculoEncontrado.vehicleData.combustivel}
+                        </p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Divisor */}
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t" />
+                  </div>
+                  <div className="relative flex justify-center">
+                    <span className="bg-background px-3 text-xs text-muted-foreground">
+                      ou selecione manualmente
+                    </span>
+                  </div>
                 </div>
 
-                {/* Seleção FIPE Manual - Modelo */}
-                <div className="space-y-1.5">
-                  <Label>Modelo</Label>
-                  <Select 
-                    value={modeloSelecionado} 
-                    onValueChange={handleModeloChange}
-                    disabled={!marcaSelecionada || loadingModelos}
-                  >
-                    <SelectTrigger>
-                      {loadingModelos ? (
-                        <div className="flex items-center gap-2">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          <span>Carregando...</span>
-                        </div>
-                      ) : (
-                        <SelectValue placeholder={marcaSelecionada ? "Selecione o modelo" : "Selecione a marca primeiro"} />
-                      )}
-                    </SelectTrigger>
-                    <SelectContent>
-                      {modelos.map((modelo) => (
-                        <SelectItem key={modelo.codigo} value={modelo.codigo.toString()}>
-                          {modelo.nome}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                {/* Seleção FIPE Manual - Grid compacto */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Marca</Label>
+                    <Select 
+                      value={marcaSelecionada} 
+                      onValueChange={handleMarcaChange}
+                      disabled={loadingMarcas}
+                    >
+                      <SelectTrigger className="h-9">
+                        {loadingMarcas ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <SelectValue placeholder="Marca" />
+                        )}
+                      </SelectTrigger>
+                      <SelectContent>
+                        {marcas.map((marca) => (
+                          <SelectItem key={marca.codigo} value={marca.codigo}>
+                            {marca.nome}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs">Modelo</Label>
+                    <Select 
+                      value={modeloSelecionado} 
+                      onValueChange={handleModeloChange}
+                      disabled={!marcaSelecionada || loadingModelos}
+                    >
+                      <SelectTrigger className="h-9">
+                        {loadingModelos ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <SelectValue placeholder="Modelo" />
+                        )}
+                      </SelectTrigger>
+                      <SelectContent>
+                        {modelos.map((modelo) => (
+                          <SelectItem key={modelo.codigo} value={modelo.codigo.toString()}>
+                            {modelo.nome}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs">Ano</Label>
+                    <Select 
+                      value={anoSelecionado} 
+                      onValueChange={setAnoSelecionado}
+                      disabled={!modeloSelecionado || loadingAnos}
+                    >
+                      <SelectTrigger className="h-9">
+                        {loadingAnos ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <SelectValue placeholder="Ano" />
+                        )}
+                      </SelectTrigger>
+                      <SelectContent>
+                        {anos.map((ano) => (
+                          <SelectItem key={ano.codigo} value={ano.codigo}>
+                            {ano.nome}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
-                {/* Seleção FIPE Manual - Ano */}
-                <div className="space-y-1.5">
-                  <Label>Ano</Label>
-                  <Select 
-                    value={anoSelecionado} 
-                    onValueChange={setAnoSelecionado}
-                    disabled={!modeloSelecionado || loadingAnos}
-                  >
-                    <SelectTrigger>
-                      {loadingAnos ? (
-                        <div className="flex items-center gap-2">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          <span>Carregando...</span>
-                        </div>
-                      ) : (
-                        <SelectValue placeholder={modeloSelecionado ? "Selecione o ano" : "Selecione o modelo primeiro"} />
-                      )}
-                    </SelectTrigger>
-                    <SelectContent>
-                      {anos.map((ano) => (
-                        <SelectItem key={ano.codigo} value={ano.codigo}>
-                          {ano.nome}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <Separator />
-
+                {/* Valor FIPE */}
                 <FormField
                   control={form.control}
                   name="valor_fipe"
@@ -634,169 +626,214 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
                   )}
                 />
 
-                <FormField
-                  control={form.control}
-                  name="plano_id"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Plano *</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value} disabled={planosLoading}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder={planosLoading ? "Carregando..." : "Selecione um plano"} />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {planos?.map((plano) => (
-                            <SelectItem key={plano.id} value={plano.id}>
-                              <div className="flex items-center justify-between gap-4 w-full">
-                                <span>{plano.nome}</span>
-                                <Badge variant="outline" className="text-xs ml-2">
-                                  {plano.tipo_uso}
-                                </Badge>
-                              </div>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-
-                      {/* Info do plano selecionado */}
-                      {planoSelecionado && valorFipe > 0 && planoSelecionado.valor_cota && planoSelecionado.valor_cota > 0 && (
-                        <div className="mt-2 p-3 bg-primary/5 rounded-lg text-xs space-y-1 border border-primary/10">
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Cota mensal:</span>
-                            <span className="font-medium">{formatCurrency(planoSelecionado.valor_cota)}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Taxa Admin:</span>
-                            <span className="font-medium">{formatCurrency(planoSelecionado.taxa_administrativa || 0)}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Rastreamento:</span>
-                            <span className="font-medium">{formatCurrency(planoSelecionado.valor_rastreamento || 0)}</span>
-                          </div>
-                          {planoSelecionado.valor_assistencia && planoSelecionado.valor_assistencia > 0 && (
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">Assistência 24h:</span>
-                              <span className="font-medium">{formatCurrency(planoSelecionado.valor_assistencia)}</span>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="validade_dias"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Validade (dias)</FormLabel>
-                      <FormControl>
-                        <Input 
-                          type="number" 
-                          min={1} 
-                          max={30}
-                          {...field}
-                          onChange={(e) => field.onChange(parseInt(e.target.value))}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                {/* Botão Próximo */}
+                <div className="flex justify-end pt-2">
+                  <Button 
+                    type="button"
+                    onClick={() => setStep(2)} 
+                    disabled={!canGoToStep2}
+                  >
+                    Selecionar Plano
+                    <ChevronRight className="h-4 w-4 ml-1" />
+                  </Button>
+                </div>
               </div>
+            )}
 
-              {/* Right: Preview */}
-              <div>
-                <Card className="sticky top-0">
-                  <CardContent className="p-4 space-y-3">
-                    <div className="flex items-center gap-2 text-primary">
-                      <Calculator className="h-4 w-4" />
-                      <span className="font-medium">Resumo da Cotação</span>
+            {/* STEP 2: Seleção de Plano */}
+            {step === 2 && (
+              <div className="space-y-4 animate-in fade-in duration-200">
+                <div className="text-center pb-2">
+                  <p className="text-sm text-muted-foreground">
+                    Veículo FIPE: <span className="font-semibold text-foreground">{formatCurrency(valorFipe)}</span>
+                  </p>
+                </div>
+
+                {planosLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                  </div>
+                ) : planosComPrecos.length === 0 ? (
+                  <Card className="border-amber-500/30 bg-amber-500/5">
+                    <CardContent className="p-4 text-center">
+                      <AlertCircle className="h-8 w-8 text-amber-500 mx-auto mb-2" />
+                      <p className="font-medium text-amber-700 dark:text-amber-400">
+                        Nenhum plano disponível para este valor FIPE
+                      </p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Verifique se há tabelas de preço cadastradas para a faixa de R$ {valorFipe.toLocaleString('pt-BR')}
+                      </p>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {planosComPrecos.map((planoPreco) => (
+                      <Card 
+                        key={planoPreco.plano.id}
+                        className={cn(
+                          "cursor-pointer transition-all hover:shadow-md",
+                          planoId === planoPreco.plano.id 
+                            ? "ring-2 ring-primary border-primary bg-primary/5" 
+                            : "hover:border-primary/50"
+                        )}
+                        onClick={() => handleSelectPlano(planoPreco)}
+                      >
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <h4 className="font-semibold text-sm">{planoPreco.plano.nome}</h4>
+                            {planoId === planoPreco.plano.id && (
+                              <CheckCircle2 className="h-4 w-4 text-primary" />
+                            )}
+                          </div>
+                          <p className="text-xl font-bold text-primary mb-3">
+                            {formatCurrency(planoPreco.totalMensal)}
+                            <span className="text-xs font-normal text-muted-foreground">/mês</span>
+                          </p>
+                          <ul className="text-xs space-y-1 text-muted-foreground">
+                            <li>• Cota: {formatCurrency(planoPreco.valorCota)}</li>
+                            <li>• Taxa: {formatCurrency(planoPreco.taxaAdmin)}</li>
+                            <li>• Rast.: {formatCurrency(planoPreco.rastreamento)}</li>
+                            {planoPreco.assistencia > 0 && (
+                              <li>• Assist.: {formatCurrency(planoPreco.assistencia)}</li>
+                            )}
+                          </ul>
+                          <Separator className="my-3" />
+                          <div className="text-xs">
+                            <span className="text-muted-foreground">Adesão: </span>
+                            <span className="font-medium">{formatCurrency(planoPreco.plano.valor_adesao)}</span>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+
+                {/* Navegação */}
+                <div className="flex justify-between pt-2">
+                  <Button type="button" variant="outline" onClick={() => setStep(1)}>
+                    <ChevronLeft className="h-4 w-4 mr-1" />
+                    Voltar
+                  </Button>
+                  <Button 
+                    type="button"
+                    onClick={() => setStep(3)} 
+                    disabled={!canGoToStep3}
+                  >
+                    Revisar Cotação
+                    <ChevronRight className="h-4 w-4 ml-1" />
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* STEP 3: Resumo */}
+            {step === 3 && planoSelecionadoData && (
+              <div className="space-y-4 animate-in fade-in duration-200">
+                {/* Card do Veículo */}
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Car className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-medium">Veículo</span>
                     </div>
-
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Valor FIPE:</span>
-                        <span className="font-medium">{valorFipe > 0 ? formatCurrency(valorFipe) : '-'}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Cota mensal:</span>
-                        <span className="font-medium">{valorCota > 0 ? formatCurrency(valorCota) : '-'}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Taxa administrativa:</span>
-                        <span className="font-medium">{taxaAdmin > 0 ? formatCurrency(taxaAdmin) : '-'}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Rastreamento:</span>
-                        <span className="font-medium">{valorRastreamento > 0 ? formatCurrency(valorRastreamento) : '-'}</span>
-                      </div>
-
-                      {planoSelecionado?.valor_assistencia && planoSelecionado.valor_assistencia > 0 && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Assistência 24h:</span>
-                          <span className="font-medium">{formatCurrency(planoSelecionado.valor_assistencia)}</span>
-                        </div>
+                    <div className="text-sm">
+                      {getMarcaNome() && getModeloNome() ? (
+                        <>
+                          <p className="font-medium">{getMarcaNome()} {getModeloNome()}</p>
+                          <p className="text-muted-foreground">
+                            {getAnoNome()} {placa && `• Placa: ${placa}`}
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-muted-foreground">Valor FIPE informado manualmente</p>
                       )}
-
-                      <div className="border-t pt-2 mt-2">
-                        <div className="flex justify-between font-medium">
-                          <span>Total Mensal:</span>
-                          <span className="text-primary text-lg">
-                            {valorTotal > 0 ? formatCurrency(valorTotal) : 'R$ 0,00'}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="border-t pt-2 mt-2">
-                        <div className="flex justify-between text-muted-foreground">
-                          <span>Adesão:</span>
-                          <span>{valorAdesao > 0 ? formatCurrency(valorAdesao) : '-'}</span>
-                        </div>
-                      </div>
+                      <p className="font-semibold text-primary mt-1">
+                        FIPE: {formatCurrency(valorFipe)}
+                      </p>
                     </div>
-
-                    {/* Aviso se não preencheu tudo */}
-                    {(!valorFipe || !planoId) && (
-                      <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
-                        <p className="text-xs text-amber-700 dark:text-amber-400 flex items-center gap-2">
-                          <AlertCircle className="h-4 w-4" />
-                          {!valorFipe 
-                            ? 'Consulte o valor FIPE do veículo' 
-                            : 'Selecione um plano para calcular'}
-                        </p>
-                      </div>
-                    )}
-
-                    {planos && planos.length === 0 && !planosLoading && (
-                      <div className="mt-4 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
-                        <p className="text-xs text-destructive flex items-center gap-2">
-                          <AlertCircle className="h-4 w-4" />
-                          Nenhum plano cadastrado. Cadastre planos na área de Diretoria.
-                        </p>
-                      </div>
-                    )}
                   </CardContent>
                 </Card>
-              </div>
-            </div>
 
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Cancelar
-              </Button>
-              <Button 
-                type="submit" 
-                disabled={createCotacao.isPending || !isFormValid}
-              >
-                {createCotacao.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Criar Cotação
-              </Button>
-            </DialogFooter>
+                {/* Card do Plano */}
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Shield className="h-4 w-4 text-primary" />
+                      <span className="text-sm font-medium">{planoSelecionadoData.plano.nome}</span>
+                    </div>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Cota mensal</span>
+                        <span>{formatCurrency(planoSelecionadoData.valorCota)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Taxa administrativa</span>
+                        <span>{formatCurrency(planoSelecionadoData.taxaAdmin)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Rastreamento</span>
+                        <span>{formatCurrency(planoSelecionadoData.rastreamento)}</span>
+                      </div>
+                      {planoSelecionadoData.assistencia > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Assistência 24h</span>
+                          <span>{formatCurrency(planoSelecionadoData.assistencia)}</span>
+                        </div>
+                      )}
+                      <Separator />
+                      <div className="flex justify-between font-bold text-lg pt-1">
+                        <span>Total Mensal</span>
+                        <span className="text-primary">{formatCurrency(planoSelecionadoData.totalMensal)}</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Adesão e Validade */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-muted/50 rounded-lg p-3 text-center">
+                    <p className="text-xs text-muted-foreground">Adesão</p>
+                    <p className="font-bold">{formatCurrency(planoSelecionadoData.plano.valor_adesao)}</p>
+                  </div>
+                  <FormField
+                    control={form.control}
+                    name="validade_dias"
+                    render={({ field }) => (
+                      <FormItem className="bg-muted/50 rounded-lg p-3 text-center space-y-0">
+                        <FormLabel className="text-xs text-muted-foreground">Validade</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="number" 
+                            min={1} 
+                            max={30}
+                            {...field}
+                            onChange={(e) => field.onChange(parseInt(e.target.value))}
+                            className="h-7 text-center font-bold bg-transparent border-0 p-0"
+                          />
+                        </FormControl>
+                        <p className="text-xs text-muted-foreground">dias</p>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                {/* Navegação */}
+                <div className="flex justify-between pt-2">
+                  <Button type="button" variant="outline" onClick={() => setStep(2)}>
+                    <ChevronLeft className="h-4 w-4 mr-1" />
+                    Alterar Plano
+                  </Button>
+                  <Button type="submit" disabled={createCotacao.isPending}>
+                    {createCotacao.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                    ) : (
+                      <Check className="h-4 w-4 mr-1" />
+                    )}
+                    Criar Cotação
+                  </Button>
+                </div>
+              </div>
+            )}
           </form>
         </Form>
       </DialogContent>
