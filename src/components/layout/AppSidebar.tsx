@@ -64,8 +64,14 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions, PermissionKey } from '@/hooks/usePermissions';
+import { cn } from '@/lib/utils';
 
 interface MenuItem {
   title: string;
@@ -321,7 +327,10 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon" className="border-r-0">
       <SidebarHeader className="border-b border-sidebar-border p-4">
-        <div className="flex items-center gap-3">
+        <div className={cn(
+          "flex items-center",
+          collapsed ? "justify-center" : "gap-3"
+        )}>
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-sidebar-primary">
             <Shield className="h-5 w-5 text-sidebar-primary-foreground" />
           </div>
@@ -365,31 +374,48 @@ export function AppSidebar() {
             <Collapsible defaultOpen={isGroupActive(group.items)}>
               <CollapsibleTrigger asChild>
                 <SidebarGroupLabel className="cursor-pointer hover:bg-sidebar-accent/50">
-                  <group.icon className="h-4 w-4" />
-                  <span>{group.label}</span>
-                  <ChevronDown className="ml-auto h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
+                  {collapsed ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="flex w-full items-center justify-center">
+                          <group.icon className="h-4 w-4" />
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent side="right">
+                        {group.label}
+                      </TooltipContent>
+                    </Tooltip>
+                  ) : (
+                    <>
+                      <group.icon className="h-4 w-4" />
+                      <span>{group.label}</span>
+                      <ChevronDown className="ml-auto h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
+                    </>
+                  )}
                 </SidebarGroupLabel>
               </CollapsibleTrigger>
-              <CollapsibleContent>
-                <SidebarGroupContent>
-                  <SidebarMenu>
-                    {group.items.map((item) => (
-                      <SidebarMenuItem key={item.url}>
-                        <SidebarMenuButton
-                          asChild
-                          isActive={isActive(item.url)}
-                          tooltip={item.title}
-                        >
-                          <NavLink to={item.url}>
-                            <item.icon className="h-4 w-4" />
-                            <span>{item.title}</span>
-                          </NavLink>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    ))}
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              </CollapsibleContent>
+              {!collapsed && (
+                <CollapsibleContent>
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {group.items.map((item) => (
+                        <SidebarMenuItem key={item.url}>
+                          <SidebarMenuButton
+                            asChild
+                            isActive={isActive(item.url)}
+                            tooltip={item.title}
+                          >
+                            <NavLink to={item.url}>
+                              <item.icon className="h-4 w-4" />
+                              <span>{item.title}</span>
+                            </NavLink>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      ))}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </CollapsibleContent>
+              )}
             </Collapsible>
           </SidebarGroup>
         ))}
@@ -420,19 +446,40 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border p-4">
-        {!collapsed && profile && (
-          <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sidebar-accent text-sm font-medium text-sidebar-accent-foreground">
-              {profile.nome?.charAt(0).toUpperCase()}
-            </div>
-            <div className="flex flex-col overflow-hidden">
-              <span className="truncate text-sm font-medium text-sidebar-foreground">
-                {profile.nome}
-              </span>
-              <span className="truncate text-xs text-sidebar-foreground/70">
-                {profile.email}
-              </span>
-            </div>
+        {profile && (
+          <div className={cn(
+            "flex items-center",
+            collapsed ? "justify-center" : "gap-3"
+          )}>
+            {collapsed ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sidebar-accent text-sm font-medium text-sidebar-accent-foreground">
+                    {profile.nome?.charAt(0).toUpperCase()}
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="right">
+                  <div className="flex flex-col">
+                    <span className="font-medium">{profile.nome}</span>
+                    <span className="text-xs text-muted-foreground">{profile.email}</span>
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              <>
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sidebar-accent text-sm font-medium text-sidebar-accent-foreground">
+                  {profile.nome?.charAt(0).toUpperCase()}
+                </div>
+                <div className="flex flex-col overflow-hidden">
+                  <span className="truncate text-sm font-medium text-sidebar-foreground">
+                    {profile.nome}
+                  </span>
+                  <span className="truncate text-xs text-sidebar-foreground/70">
+                    {profile.email}
+                  </span>
+                </div>
+              </>
+            )}
           </div>
         )}
       </SidebarFooter>
