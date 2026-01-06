@@ -456,15 +456,22 @@ export function AppSidebar() {
 
             {/* Dynamic Groups with Collapsible */}
             {visibleGroups.map((group) => (
-              <SidebarGroup key={group.id}>
-                <Collapsible defaultOpen={isGroupActive(group.items)}>
-                  <CollapsibleTrigger asChild>
-                    <SidebarGroupLabel className="cursor-pointer hover:bg-sidebar-accent/50">
+              <Collapsible 
+                key={group.id}
+                defaultOpen={isGroupActive(group.items)} 
+                className="group/collapsible"
+              >
+                <SidebarGroup>
+                  <SidebarGroupLabel 
+                    asChild 
+                    className="cursor-pointer hover:bg-sidebar-accent/50 transition-colors"
+                  >
+                    <CollapsibleTrigger className="flex w-full items-center gap-2">
                       <group.icon className="h-4 w-4" />
-                      <span>{group.label}</span>
-                      <ChevronDown className="ml-auto h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
-                    </SidebarGroupLabel>
-                  </CollapsibleTrigger>
+                      <span className="flex-1 text-left">{group.label}</span>
+                      <ChevronDown className="h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
+                    </CollapsibleTrigger>
+                  </SidebarGroupLabel>
                   <CollapsibleContent>
                     <SidebarGroupContent>
                       <SidebarMenu>
@@ -485,8 +492,8 @@ export function AppSidebar() {
                       </SidebarMenu>
                     </SidebarGroupContent>
                   </CollapsibleContent>
-                </Collapsible>
-              </SidebarGroup>
+                </SidebarGroup>
+              </Collapsible>
             ))}
           </>
         )}
