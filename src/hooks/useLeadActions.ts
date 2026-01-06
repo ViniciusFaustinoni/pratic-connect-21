@@ -100,6 +100,28 @@ export function useLeadActions() {
   });
 
   // ============================================
+  // EXCLUIR LEAD
+  // ============================================
+  const excluirLead = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('leads')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      invalidateLeadQueries();
+      toast.success('Lead excluído com sucesso!');
+    },
+    onError: (error: Error) => {
+      console.error('Erro ao excluir lead:', error);
+      toast.error('Erro ao excluir lead: ' + error.message);
+    },
+  });
+
+  // ============================================
   // RETURN
   // ============================================
   return {
@@ -107,10 +129,12 @@ export function useLeadActions() {
     criarLead: criarLead.mutateAsync,
     atualizarLead: atualizarLead.mutateAsync,
     atribuirVendedor: atribuirVendedor.mutate,
+    excluirLead: excluirLead.mutateAsync,
     
     // Loading states
     isCreating: criarLead.isPending,
     isUpdating: atualizarLead.isPending,
     isAssigning: atribuirVendedor.isPending,
+    isDeleting: excluirLead.isPending,
   };
 }
