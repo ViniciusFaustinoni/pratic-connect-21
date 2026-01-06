@@ -65,16 +65,10 @@ import {
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
-import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions, PermissionKey } from '@/hooks/usePermissions';
 import { cn } from '@/lib/utils';
@@ -350,42 +344,36 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent className="scrollbar-thin">
-        {/* Main */}
-        {visibleMainItems.length > 0 && (
-          <SidebarGroup>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {visibleMainItems.map((item) => (
-                  <SidebarMenuItem key={item.url}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={isActive(item.url)}
-                      tooltip={item.title}
-                    >
-                      <NavLink to={item.url}>
-                        <item.icon className="h-4 w-4" />
-                        <span>{item.title}</span>
-                      </NavLink>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
+        {collapsed ? (
+          /* ========================================
+             MODO COLAPSADO - Lista simples de ícones
+             ======================================== */
+          <SidebarGroup className="p-1">
+            <SidebarMenu className="gap-0.5">
+              {/* Main Items */}
+              {visibleMainItems.map((item) => (
+                <SidebarMenuItem key={item.url}>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={isActive(item.url)}
+                    tooltip={item.title}
+                  >
+                    <NavLink to={item.url}>
+                      <item.icon className="h-4 w-4" />
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
 
-        {/* Dynamic Groups */}
-        {visibleGroups.map((group) => (
-          <SidebarGroup key={group.id}>
-            {collapsed ? (
-              /* VERSÃO MINIMIZADA: Popover com todos os subitens */
-              <SidebarMenu>
-                <SidebarMenuItem>
+              {/* All Groups as Icons with Popover */}
+              {visibleGroups.map((group) => (
+                <SidebarMenuItem key={group.id}>
                   <Popover>
                     <PopoverTrigger asChild>
                       <SidebarMenuButton
                         isActive={isGroupActive(group.items)}
                         className="cursor-pointer"
+                        tooltip={group.label}
                       >
                         <group.icon className="h-4 w-4" />
                       </SidebarMenuButton>
@@ -419,66 +407,114 @@ export function AppSidebar() {
                     </PopoverContent>
                   </Popover>
                 </SidebarMenuItem>
-              </SidebarMenu>
-            ) : (
-              /* VERSÃO EXPANDIDA: Collapsible com subitens */
-              <Collapsible defaultOpen={isGroupActive(group.items)}>
-                <CollapsibleTrigger asChild>
-                  <SidebarGroupLabel className="cursor-pointer hover:bg-sidebar-accent/50">
-                    <group.icon className="h-4 w-4" />
-                    <span>{group.label}</span>
-                    <ChevronDown className="ml-auto h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
-                  </SidebarGroupLabel>
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <SidebarGroupContent>
-                    <SidebarMenu>
-                      {group.items.map((item) => (
-                        <SidebarMenuItem key={item.url}>
-                          <SidebarMenuButton
-                            asChild
-                            isActive={isActive(item.url)}
-                            tooltip={item.title}
-                          >
-                            <NavLink to={item.url}>
-                              <item.icon className="h-4 w-4" />
-                              <span>{item.title}</span>
-                            </NavLink>
-                          </SidebarMenuButton>
-                        </SidebarMenuItem>
-                      ))}
-                    </SidebarMenu>
-                  </SidebarGroupContent>
-                </CollapsibleContent>
-              </Collapsible>
-            )}
-          </SidebarGroup>
-        ))}
+              ))}
 
+              {/* Config Items */}
+              {visibleConfigItems.map((item) => (
+                <SidebarMenuItem key={item.url}>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={isActive(item.url)}
+                    tooltip={item.title}
+                  >
+                    <NavLink to={item.url}>
+                      <item.icon className="h-4 w-4" />
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroup>
+        ) : (
+          /* ========================================
+             MODO EXPANDIDO - Accordions e submenus
+             ======================================== */
+          <>
+            {/* Main Items */}
+            {visibleMainItems.length > 0 && (
+              <SidebarGroup>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {visibleMainItems.map((item) => (
+                      <SidebarMenuItem key={item.url}>
+                        <SidebarMenuButton
+                          asChild
+                          isActive={isActive(item.url)}
+                          tooltip={item.title}
+                        >
+                          <NavLink to={item.url}>
+                            <item.icon className="h-4 w-4" />
+                            <span>{item.title}</span>
+                          </NavLink>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            )}
+
+            {/* Dynamic Groups with Collapsible */}
+            {visibleGroups.map((group) => (
+              <SidebarGroup key={group.id}>
+                <Collapsible defaultOpen={isGroupActive(group.items)}>
+                  <CollapsibleTrigger asChild>
+                    <SidebarGroupLabel className="cursor-pointer hover:bg-sidebar-accent/50">
+                      <group.icon className="h-4 w-4" />
+                      <span>{group.label}</span>
+                      <ChevronDown className="ml-auto h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
+                    </SidebarGroupLabel>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <SidebarGroupContent>
+                      <SidebarMenu>
+                        {group.items.map((item) => (
+                          <SidebarMenuItem key={item.url}>
+                            <SidebarMenuButton
+                              asChild
+                              isActive={isActive(item.url)}
+                              tooltip={item.title}
+                            >
+                              <NavLink to={item.url}>
+                                <item.icon className="h-4 w-4" />
+                                <span>{item.title}</span>
+                              </NavLink>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        ))}
+                      </SidebarMenu>
+                    </SidebarGroupContent>
+                  </CollapsibleContent>
+                </Collapsible>
+              </SidebarGroup>
+            ))}
+          </>
+        )}
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-sidebar-border py-2">
-        {/* Configurações */}
-        {visibleConfigItems.length > 0 && (
-          <SidebarMenu>
-            {visibleConfigItems.map((item) => (
-              <SidebarMenuItem key={item.url}>
-                <SidebarMenuButton
-                  asChild
-                  isActive={isActive(item.url)}
-                  tooltip={item.title}
-                  className="group-data-[collapsible=icon]:justify-center"
-                >
-                  <NavLink to={item.url}>
-                    <item.icon className="h-4 w-4 shrink-0" />
-                    <span className="group-data-[collapsible=icon]:hidden">{item.title}</span>
-                  </NavLink>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            ))}
-          </SidebarMenu>
-        )}
-      </SidebarFooter>
+      {!collapsed && (
+        <SidebarFooter className="border-t border-sidebar-border py-2">
+          {/* Configurações - apenas no modo expandido */}
+          {visibleConfigItems.length > 0 && (
+            <SidebarMenu>
+              {visibleConfigItems.map((item) => (
+                <SidebarMenuItem key={item.url}>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={isActive(item.url)}
+                    tooltip={item.title}
+                  >
+                    <NavLink to={item.url}>
+                      <item.icon className="h-4 w-4 shrink-0" />
+                      <span>{item.title}</span>
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          )}
+        </SidebarFooter>
+      )}
     </Sidebar>
   );
 }
