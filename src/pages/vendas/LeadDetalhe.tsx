@@ -1,27 +1,38 @@
 import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Phone, Mail, Car, Edit, MessageSquare, Loader2, FileText, ArrowRight, XCircle } from 'lucide-react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { ArrowLeft, Phone, Mail, Car, Edit, MessageSquare, Loader2, FileText, ArrowRightLeft, Trash2, User, Clock, Calendar, Tag, DollarSign } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from '@/components/ui/breadcrumb';
 import { useLead } from '@/hooks/useLeads';
 import { useCotacoesByLead } from '@/hooks/useCotacoesByLead';
-import { ETAPA_LABELS, ORIGEM_LABELS, type EtapaLead } from '@/types/database';
-import { etapaColors, ETAPAS_FUNIL, getNextStages } from '@/lib/lead-transitions';
+import { ETAPA_LABELS, ORIGEM_LABELS, ETAPA_COLORS, ORIGEM_COLORS, type EtapaLead } from '@/types/vendas';
 import { useChangeLeadEtapa } from '@/hooks/useLeadHistorico';
+import { useLeadActions } from '@/hooks/useLeadActions';
 import { CotacaoFormDialog } from '@/components/cotacoes/CotacaoFormDialog';
-import { LeadEditDialog } from '@/components/leads/LeadEditDialog';
-import { LeadLossDialog } from '@/components/leads/LeadLossDialog';
 import { LeadTimeline } from '@/components/leads/LeadTimeline';
+import { MoverEtapaModal } from '@/components/vendas/MoverEtapaModal';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
+import { format, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 const STATUS_COTACAO_LABELS: Record<string, string> = {
@@ -32,46 +43,74 @@ const STATUS_COTACAO_LABELS: Record<string, string> = {
   expirada: 'Expirada',
 };
 
+// Utilities
+const formatCurrency = (value: number | null) => {
+  if (!value) return '—';
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+};
+
+const formatPhone = (phone: string | null) => {
+  if (!phone) return '—';
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length === 11) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  }
+  return phone;
+};
+
+const formatCPF = (cpf: string | null) => {
+  if (!cpf) return '—';
+  const digits = cpf.replace(/\D/g, '');
+  if (digits.length === 11) {
+    return `***.${digits.slice(3, 6)}.***-${digits.slice(9)}`;
+  }
+  return '—';
+};
+
+const formatDate = (dateStr: string) => 
+  format(new Date(dateStr), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
+
+const formatDateTime = (dateStr: string) => 
+  format(new Date(dateStr), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
+
 export default function LeadDetalhe() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { data: lead, isLoading } = useLead(id);
   const { data: cotacoes, isLoading: isLoadingCotacoes } = useCotacoesByLead(id);
   const changeEtapa = useChangeLeadEtapa();
+  const { excluirLead, isDeleting } = useLeadActions();
   
   const [showCotacaoForm, setShowCotacaoForm] = useState(false);
-  const [showEditDialog, setShowEditDialog] = useState(false);
-  const [showLossDialog, setShowLossDialog] = useState(false);
+  const [showMoverModal, setShowMoverModal] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
-  const formatCurrency = (value: number | null) => {
-    if (!value) return '-';
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-  };
-
-  const formatDate = (dateStr: string) => 
-    format(new Date(dateStr), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
-
-  const formatDateTime = (dateStr: string) => 
-    format(new Date(dateStr), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
-
-  const handleAdvanceStage = async (newEtapa: EtapaLead) => {
+  const handleMoverEtapa = async (novaEtapa: EtapaLead, observacao: string, motivoPerda?: string) => {
     if (!lead) return;
-    
-    // Se for perdido, abrir modal
-    if (newEtapa === 'perdido') {
-      setShowLossDialog(true);
-      return;
-    }
     
     try {
       await changeEtapa.mutateAsync({
         leadId: lead.id,
         etapaAnterior: lead.etapa as EtapaLead,
-        etapaNova: newEtapa,
+        etapaNova: novaEtapa,
+        motivoPerda,
+        observacaoPerda: observacao,
       });
-      toast.success(`Lead movido para ${ETAPA_LABELS[newEtapa]}`);
+      toast.success(`Lead movido para ${ETAPA_LABELS[novaEtapa]}`);
+      setShowMoverModal(false);
     } catch (error) {
-      toast.error('Erro ao atualizar lead');
+      toast.error('Erro ao mover lead');
+    }
+  };
+
+  const handleExcluir = async () => {
+    if (!id) return;
+    try {
+      await excluirLead(id);
+      toast.success('Lead excluído com sucesso');
+      navigate('/vendas/leads');
+    } catch (error) {
+      toast.error('Erro ao excluir lead');
     }
   };
 
@@ -82,8 +121,8 @@ export default function LeadDetalhe() {
     window.open(`https://wa.me/55${phone}?text=${message}`, '_blank');
   };
 
-  // Próximas etapas permitidas
-  const nextStages = lead ? getNextStages(lead.etapa as EtapaLead) : [];
+  // Calcular dias na etapa
+  const diasNaEtapa = lead ? differenceInDays(new Date(), new Date(lead.updated_at)) : 0;
 
   if (isLoading) {
     return (
@@ -99,99 +138,215 @@ export default function LeadDetalhe() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/vendas/leads')}>
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold">{lead.nome}</h1>
-          <p className="text-muted-foreground">Lead criado em {formatDate(lead.created_at)}</p>
-        </div>
-        <Badge className={etapaColors[lead.etapa as EtapaLead]}>{ETAPA_LABELS[lead.etapa as EtapaLead]}</Badge>
-      </div>
+      {/* Breadcrumb */}
+      <Breadcrumb>
+        <BreadcrumbList>
+          <BreadcrumbItem>
+            <BreadcrumbLink asChild>
+              <Link to="/">Home</Link>
+            </BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            <BreadcrumbLink asChild>
+              <Link to="/vendas/leads">Leads</Link>
+            </BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            <BreadcrumbPage>{lead.nome}</BreadcrumbPage>
+          </BreadcrumbItem>
+        </BreadcrumbList>
+      </Breadcrumb>
 
-      {/* Actions */}
-      <div className="flex flex-wrap gap-2">
-        <Button variant="outline" onClick={() => navigate(`/vendas/leads/${id}/editar`)}>
-          <Edit className="mr-2 h-4 w-4" />
-          Editar
-        </Button>
-        <Button variant="outline" onClick={handleWhatsApp}>
-          <MessageSquare className="mr-2 h-4 w-4" />
-          WhatsApp
-        </Button>
-        {nextStages.length > 0 && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline">
-                <ArrowRight className="mr-2 h-4 w-4" />
-                Avançar Etapa
+      {/* Botão Voltar */}
+      <Button variant="ghost" size="sm" onClick={() => navigate('/vendas/leads')}>
+        <ArrowLeft className="mr-2 h-4 w-4" />
+        Voltar
+      </Button>
+
+      {/* Header Card */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex flex-col md:flex-row md:items-center gap-4">
+            {/* Avatar + Info */}
+            <div className="flex items-center gap-4 flex-1">
+              <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
+                <span className="text-2xl font-semibold text-primary">
+                  {lead.nome.charAt(0).toUpperCase()}
+                </span>
+              </div>
+              <div>
+                <div className="flex items-center gap-3">
+                  <h1 className="text-2xl font-bold">{lead.nome}</h1>
+                  <Badge className={ETAPA_COLORS[lead.etapa as EtapaLead]}>
+                    {ETAPA_LABELS[lead.etapa as EtapaLead]}
+                  </Badge>
+                </div>
+                <p className="text-muted-foreground">
+                  Lead criado em {formatDate(lead.created_at)}
+                </p>
+                {diasNaEtapa > 0 && (
+                  <p className="text-sm text-muted-foreground flex items-center gap-1">
+                    <Clock className="h-3 w-3" />
+                    {diasNaEtapa} {diasNaEtapa === 1 ? 'dia' : 'dias'} na etapa atual
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" onClick={() => navigate(`/vendas/leads/${id}/editar`)}>
+                <Edit className="mr-2 h-4 w-4" />
+                Editar
               </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              {nextStages.filter(e => e !== 'perdido').map((etapa) => (
-                <DropdownMenuItem key={etapa} onClick={() => handleAdvanceStage(etapa)}>
-                  {ETAPA_LABELS[etapa]}
-                </DropdownMenuItem>
-              ))}
-              {nextStages.includes('perdido') && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    className="text-destructive"
-                    onClick={() => setShowLossDialog(true)}
-                  >
-                    <XCircle className="mr-2 h-4 w-4" />
-                    Marcar como Perdido
-                  </DropdownMenuItem>
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
-        <Button onClick={() => setShowCotacaoForm(true)}>
-          <FileText className="mr-2 h-4 w-4" />
-          Criar Cotação
-        </Button>
-      </div>
+              <Button variant="outline" size="sm" onClick={() => setShowMoverModal(true)}>
+                <ArrowRightLeft className="mr-2 h-4 w-4" />
+                Mover Etapa
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleWhatsApp}>
+                <MessageSquare className="mr-2 h-4 w-4" />
+                WhatsApp
+              </Button>
+              <Button size="sm" onClick={() => setShowCotacaoForm(true)}>
+                <FileText className="mr-2 h-4 w-4" />
+                Criar Cotação
+              </Button>
+              <Button variant="destructive" size="sm" onClick={() => setShowDeleteDialog(true)}>
+                <Trash2 className="mr-2 h-4 w-4" />
+                Excluir
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
+      {/* Grid de Cards */}
       <div className="grid gap-6 md:grid-cols-2">
-        {/* Dados de Contato */}
+        {/* Dados Pessoais */}
         <Card>
-          <CardHeader><CardTitle>Dados de Contato</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <User className="h-4 w-4" />
+              Dados Pessoais
+            </CardTitle>
+          </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex items-center gap-2">
               <Phone className="h-4 w-4 text-muted-foreground" />
-              {lead.telefone}
+              <span>{formatPhone(lead.telefone)}</span>
             </div>
-            {lead.email && (
-              <div className="flex items-center gap-2">
-                <Mail className="h-4 w-4 text-muted-foreground" />
-                {lead.email}
-              </div>
-            )}
-            <div><span className="text-muted-foreground">CPF:</span> {lead.cpf || '-'}</div>
-            <div><span className="text-muted-foreground">Origem:</span> <Badge variant="outline">{ORIGEM_LABELS[lead.origem]}</Badge></div>
+            <Separator />
+            <div className="flex items-center gap-2">
+              <Mail className="h-4 w-4 text-muted-foreground" />
+              <span>{lead.email || '—'}</span>
+            </div>
+            <Separator />
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground">CPF:</span>
+              <span>{formatCPF(lead.cpf)}</span>
+            </div>
           </CardContent>
         </Card>
 
         {/* Dados do Veículo */}
         <Card>
-          <CardHeader><CardTitle>Dados do Veículo</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Car className="h-4 w-4" />
+              Dados do Veículo
+            </CardTitle>
+          </CardHeader>
           <CardContent className="space-y-3">
             {lead.veiculo_marca ? (
               <>
                 <div className="flex items-center gap-2">
                   <Car className="h-4 w-4 text-muted-foreground" />
-                  {lead.veiculo_marca} {lead.veiculo_modelo}
+                  <span>{lead.veiculo_marca} {lead.veiculo_modelo}</span>
                 </div>
-                <div><span className="text-muted-foreground">Ano:</span> {lead.veiculo_ano || '-'}</div>
-                <div><span className="text-muted-foreground">Placa:</span> {lead.veiculo_placa || '-'}</div>
-                <div><span className="text-muted-foreground">Valor FIPE:</span> {formatCurrency(lead.veiculo_fipe)}</div>
+                <Separator />
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                  <span>Ano: {lead.veiculo_ano || '—'}</span>
+                </div>
+                <Separator />
+                <div className="flex items-center gap-2">
+                  <Tag className="h-4 w-4 text-muted-foreground" />
+                  <span>Placa: {lead.veiculo_placa || '—'}</span>
+                </div>
+                <Separator />
+                <div className="flex items-center gap-2">
+                  <DollarSign className="h-4 w-4 text-muted-foreground" />
+                  <span>FIPE: {formatCurrency(lead.veiculo_fipe)}</span>
+                </div>
               </>
             ) : (
               <p className="text-muted-foreground">Nenhum veículo informado</p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Status */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Tag className="h-4 w-4" />
+              Status
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Origem</span>
+              <Badge variant="outline" className={ORIGEM_COLORS[lead.origem]}>
+                {ORIGEM_LABELS[lead.origem]}
+              </Badge>
+            </div>
+            <Separator />
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Etapa</span>
+              <Badge className={ETAPA_COLORS[lead.etapa as EtapaLead]}>
+                {ETAPA_LABELS[lead.etapa as EtapaLead]}
+              </Badge>
+            </div>
+            <Separator />
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Dias na etapa</span>
+              <span className={diasNaEtapa > 5 ? 'text-orange-600' : diasNaEtapa > 10 ? 'text-destructive' : ''}>
+                {diasNaEtapa} {diasNaEtapa === 1 ? 'dia' : 'dias'}
+              </span>
+            </div>
+            {lead.motivo_perda && (
+              <>
+                <Separator />
+                <div>
+                  <span className="text-muted-foreground">Motivo da perda</span>
+                  <p className="text-sm mt-1">{lead.motivo_perda}</p>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Vendedor Responsável */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <User className="h-4 w-4" />
+              Vendedor Responsável
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {lead.vendedor_id ? (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <User className="h-4 w-4" />
+                <span>Vendedor atribuído (ID: {lead.vendedor_id.slice(0, 8)}...)</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <User className="h-4 w-4" />
+                <span>Nenhum vendedor atribuído</span>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -265,18 +420,38 @@ export default function LeadDetalhe() {
         onOpenChange={setShowCotacaoForm} 
         leadId={lead.id} 
       />
-      <LeadEditDialog
-        open={showEditDialog}
-        onOpenChange={setShowEditDialog}
-        lead={lead}
-      />
-      <LeadLossDialog
-        open={showLossDialog}
-        onOpenChange={setShowLossDialog}
-        leadId={lead.id}
+      
+      <MoverEtapaModal
+        open={showMoverModal}
+        onOpenChange={setShowMoverModal}
         leadNome={lead.nome}
         etapaAtual={lead.etapa as EtapaLead}
+        onMover={handleMoverEtapa}
+        isMoving={changeEtapa.isPending}
       />
+
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir lead</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir o lead <strong>{lead.nome}</strong>?
+              <br /><br />
+              Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleExcluir}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={isDeleting}
+            >
+              {isDeleting ? 'Excluindo...' : 'Excluir'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
