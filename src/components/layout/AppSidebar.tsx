@@ -455,32 +455,30 @@ export function AppSidebar() {
           </SidebarGroup>
         ))}
 
-        {/* Config */}
-        {visibleConfigItems.length > 0 && (
-          <SidebarGroup>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {visibleConfigItems.map((item) => (
-                  <SidebarMenuItem key={item.url}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={isActive(item.url)}
-                      tooltip={item.title}
-                    >
-                      <NavLink to={item.url}>
-                        <item.icon className="h-4 w-4" />
-                        <span>{item.title}</span>
-                      </NavLink>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-sidebar-border">
+      <SidebarFooter className="border-t border-sidebar-border space-y-1 py-2">
+        {/* Configurações - Agora no Footer */}
+        {visibleConfigItems.length > 0 && (
+          <SidebarMenu>
+            {visibleConfigItems.map((item) => (
+              <SidebarMenuItem key={item.url}>
+                <SidebarMenuButton
+                  asChild
+                  isActive={isActive(item.url)}
+                  tooltip={item.title}
+                >
+                  <NavLink to={item.url}>
+                    <item.icon className="h-4 w-4" />
+                    <span>{item.title}</span>
+                  </NavLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            ))}
+          </SidebarMenu>
+        )}
+
+        {/* Perfil do Usuário */}
         {profile && (
           <SidebarMenu>
             <SidebarMenuItem>
