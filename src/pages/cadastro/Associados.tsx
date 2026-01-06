@@ -4,7 +4,7 @@ import {
   Search, Plus, MoreVertical, Loader2, 
   UserCheck, Clock, AlertTriangle, UserX,
   Eye, Edit, FileText, Receipt, Lock, Unlock, Pause, XCircle,
-  MessageCircle, X, ChevronLeft, ChevronRight, Users, Download
+  MessageCircle, X, ChevronLeft, ChevronRight, Users, Download, Filter, DollarSign
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Input } from '@/components/ui/input';
@@ -34,9 +34,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { STATUS_ASSOCIADO_LABELS, type StatusAssociado } from '@/types/database';
-import { useAssociados, useAssociadosMetricas, useAssociadosCidades, useUpdateAssociadoStatus } from '@/hooks/useAssociados';
+import { useAssociados, useAssociadosContagem, useAssociadosCidades, useUpdateAssociadoStatus } from '@/hooks/useAssociados';
 import { usePlanos } from '@/hooks/usePlanos';
 import { AssociadoFormDialog } from '@/components/associados/AssociadoFormDialog';
+import { AssociadoFilters } from '@/components/cadastro/AssociadoFilters';
 import { ConfirmacaoAcaoDialog } from '@/components/associados/ConfirmacaoAcaoDialog';
 import { useToast } from '@/hooks/use-toast';
 
@@ -72,17 +73,24 @@ export default function Associados() {
     associadoId: string;
     nomeAssociado: string;
   } | null>(null);
+  const [filtersSheetOpen, setFiltersSheetOpen] = useState(false);
+  const [sheetFilters, setSheetFilters] = useState<{
+    status?: StatusAssociado[];
+    plano_id?: string;
+    cidade?: string;
+    periodo?: string;
+  }>({});
 
   // Queries
   const { data, isLoading } = useAssociados();
   const associados = data?.associados;
-  const { data: metricas } = useAssociadosMetricas();
+  const { data: contagem } = useAssociadosContagem();
   const { data: planos } = usePlanos();
   const { data: cidades } = useAssociadosCidades();
   const updateStatus = useUpdateAssociadoStatus();
 
   // Check if any filter is active
-  const hasFilters = search || statusFilter !== 'all' || planoFilter !== 'all' || cidadeFilter !== 'all';
+  const hasFilters = search || statusFilter !== 'all' || planoFilter !== 'all' || cidadeFilter !== 'all' || Object.keys(sheetFilters).length > 0;
 
   // Filter associados
   const filteredAssociados = useMemo(() => {
@@ -97,18 +105,44 @@ export default function Associados() {
         associado.telefone.includes(search) ||
         associado.veiculos?.some(v => v.placa.toLowerCase().includes(searchLower));
       
-      // Status filter
-      const matchesStatus = statusFilter === 'all' || associado.status === statusFilter;
+      // Status filter (inline or from sheet)
+      const statusList = sheetFilters.status || (statusFilter !== 'all' ? [statusFilter] : null);
+      const matchesStatus = !statusList || statusList.includes(associado.status as StatusAssociado);
       
-      // Plano filter
-      const matchesPlano = planoFilter === 'all' || associado.plano_id === planoFilter;
+      // Plano filter (inline or from sheet)
+      const planoId = sheetFilters.plano_id || (planoFilter !== 'all' ? planoFilter : null);
+      const matchesPlano = !planoId || associado.plano_id === planoId;
       
-      // Cidade filter
-      const matchesCidade = cidadeFilter === 'all' || associado.cidade === cidadeFilter;
+      // Cidade filter (inline or from sheet)
+      const cidadeVal = sheetFilters.cidade || (cidadeFilter !== 'all' ? cidadeFilter : null);
+      const matchesCidade = !cidadeVal || associado.cidade === cidadeVal;
       
-      return matchesSearch && matchesStatus && matchesPlano && matchesCidade;
+      // Período filter from sheet
+      let matchesPeriodo = true;
+      if (sheetFilters.periodo && associado.data_adesao) {
+        const hoje = new Date();
+        const dataAdesao = new Date(associado.data_adesao);
+        let dataLimite: Date;
+        
+        switch (sheetFilters.periodo) {
+          case 'ultimo_mes':
+            dataLimite = new Date(hoje.getFullYear(), hoje.getMonth() - 1, hoje.getDate());
+            break;
+          case 'ultimos_3_meses':
+            dataLimite = new Date(hoje.getFullYear(), hoje.getMonth() - 3, hoje.getDate());
+            break;
+          case 'ultimo_ano':
+            dataLimite = new Date(hoje.getFullYear() - 1, hoje.getMonth(), hoje.getDate());
+            break;
+          default:
+            dataLimite = new Date(0);
+        }
+        matchesPeriodo = dataAdesao >= dataLimite;
+      }
+      
+      return matchesSearch && matchesStatus && matchesPlano && matchesCidade && matchesPeriodo;
     });
-  }, [associados, search, statusFilter, planoFilter, cidadeFilter]);
+  }, [associados, search, statusFilter, planoFilter, cidadeFilter, sheetFilters]);
 
   // Pagination
   const totalPages = Math.ceil(filteredAssociados.length / pageSize);
@@ -130,6 +164,22 @@ export default function Associados() {
     setStatusFilter('all');
     setPlanoFilter('all');
     setCidadeFilter('all');
+    setSheetFilters({});
+    setPage(1);
+  };
+
+  const handleApplySheetFilters = (filters: typeof sheetFilters) => {
+    setSheetFilters(filters);
+    // Sync inline filters if sheet has values
+    if (filters.status?.length === 1) {
+      setStatusFilter(filters.status[0]);
+    }
+    if (filters.plano_id) {
+      setPlanoFilter(filters.plano_id);
+    }
+    if (filters.cidade) {
+      setCidadeFilter(filters.cidade);
+    }
     setPage(1);
   };
 
@@ -254,6 +304,15 @@ export default function Associados() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          <Button variant="outline" onClick={() => setFiltersSheetOpen(true)} className="relative">
+            <Filter className="mr-2 h-4 w-4" />
+            Filtros
+            {Object.keys(sheetFilters).length > 0 && (
+              <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-primary text-[10px] font-medium text-primary-foreground flex items-center justify-center">
+                {Object.keys(sheetFilters).length}
+              </span>
+            )}
+          </Button>
           <Button onClick={() => setFormDialogOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />
             Novo Associado
@@ -263,54 +322,66 @@ export default function Associados() {
 
       {/* Metrics Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card>
+        <Card 
+          className="cursor-pointer transition-colors hover:bg-muted/50" 
+          onClick={() => { setStatusFilter('all'); setSheetFilters({}); setPage(1); }}
+        >
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg bg-muted p-2">
+                <Users className="h-5 w-5 text-muted-foreground" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{contagem?.total?.toLocaleString() ?? 0}</p>
+                <p className="text-xs text-muted-foreground">Total de associados</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card 
+          className={`cursor-pointer transition-colors hover:bg-muted/50 ${statusFilter === 'ativo' ? 'ring-2 ring-green-500' : ''}`}
+          onClick={() => { setStatusFilter(statusFilter === 'ativo' ? 'all' : 'ativo'); setPage(1); }}
+        >
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="rounded-lg bg-green-500/10 p-2">
                 <UserCheck className="h-5 w-5 text-green-500" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{metricas?.ativos ?? 0}</p>
-                <p className="text-xs text-muted-foreground">Associados ativos</p>
+                <p className="text-2xl font-bold">{contagem?.ativo?.toLocaleString() ?? 0}</p>
+                <p className="text-xs text-muted-foreground">Ativos</p>
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card 
+          className={`cursor-pointer transition-colors hover:bg-muted/50 ${statusFilter === 'suspenso' ? 'ring-2 ring-yellow-500' : ''}`}
+          onClick={() => { setStatusFilter(statusFilter === 'suspenso' ? 'all' : 'suspenso'); setPage(1); }}
+        >
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="rounded-lg bg-yellow-500/10 p-2">
-                <Clock className="h-5 w-5 text-yellow-500" />
+                <AlertTriangle className="h-5 w-5 text-yellow-500" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{metricas?.emAnalise ?? 0}</p>
-                <p className="text-xs text-muted-foreground">Aguardando aprovação</p>
+                <p className="text-2xl font-bold">{contagem?.suspenso?.toLocaleString() ?? 0}</p>
+                <p className="text-xs text-muted-foreground">Suspensos</p>
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card 
+          className={`cursor-pointer transition-colors hover:bg-muted/50 ${statusFilter === 'inadimplente' ? 'ring-2 ring-orange-500' : ''}`}
+          onClick={() => { setStatusFilter(statusFilter === 'inadimplente' ? 'all' : 'inadimplente'); setPage(1); }}
+        >
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="rounded-lg bg-orange-500/10 p-2">
-                <AlertTriangle className="h-5 w-5 text-orange-500" />
+                <DollarSign className="h-5 w-5 text-orange-500" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{metricas?.inadimplentes ?? 0}</p>
-                <p className="text-xs text-muted-foreground">Com boletos atrasados</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-red-500/10 p-2">
-                <UserX className="h-5 w-5 text-red-500" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{metricas?.canceladosMes ?? 0}</p>
-                <p className="text-xs text-muted-foreground">Cancelados este mês</p>
+                <p className="text-2xl font-bold">{contagem?.inadimplente?.toLocaleString() ?? 0}</p>
+                <p className="text-xs text-muted-foreground">Inadimplentes</p>
               </div>
             </div>
           </CardContent>
@@ -615,6 +686,16 @@ export default function Associados() {
           onConfirm={handleAcaoConfirm}
         />
       )}
+
+      {/* Filters Sheet */}
+      <AssociadoFilters
+        open={filtersSheetOpen}
+        onClose={() => setFiltersSheetOpen(false)}
+        onApply={handleApplySheetFilters}
+        initialFilters={sheetFilters}
+        planos={planos}
+        cidades={cidades}
+      />
     </div>
   );
 }
