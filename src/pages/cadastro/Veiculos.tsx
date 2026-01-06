@@ -39,10 +39,11 @@ export default function Veiculos() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const { data: veiculos, isLoading } = useVeiculos();
-  const { data: associados } = useAssociados();
+  const { data: associadosData } = useAssociados();
+  const associados = associadosData?.associados;
 
   // Create a map of associado_id to nome for quick lookup
-  const associadoMap = new Map(
+  const associadoMap = new Map<string, string>(
     associados?.map((a) => [a.id, a.nome]) || []
   );
 

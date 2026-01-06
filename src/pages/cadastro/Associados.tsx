@@ -74,7 +74,8 @@ export default function Associados() {
   } | null>(null);
 
   // Queries
-  const { data: associados, isLoading } = useAssociados();
+  const { data, isLoading } = useAssociados();
+  const associados = data?.associados;
   const { data: metricas } = useAssociadosMetricas();
   const { data: planos } = usePlanos();
   const { data: cidades } = useAssociadosCidades();

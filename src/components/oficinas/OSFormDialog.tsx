@@ -45,7 +45,8 @@ interface Props {
 export function OSFormDialog({ open, onOpenChange, sinistroId, defaultValues }: Props) {
   const createOS = useCreateOrdemServico();
   const { data: oficinas } = useOficinas({ status: 'ativo' });
-  const { data: associados } = useAssociados();
+  const { data: associadosData } = useAssociados();
+  const associados = associadosData?.associados;
   const { data: veiculos } = useVeiculos();
 
   const form = useForm<FormData>({

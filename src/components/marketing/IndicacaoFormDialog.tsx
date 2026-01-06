@@ -39,7 +39,8 @@ export function IndicacaoFormDialog({ open, onClose }: IndicacaoFormDialogProps)
   const [observacoes, setObservacoes] = useState('');
 
   const { data: programa } = useProgramaIndicacao();
-  const { data: associados } = useAssociados();
+  const { data: associadosData } = useAssociados();
+  const associados = associadosData?.associados;
   const createMutation = useCreateIndicacao();
 
   const resetForm = () => {
