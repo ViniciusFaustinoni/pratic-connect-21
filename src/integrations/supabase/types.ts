@@ -8843,6 +8843,11 @@ export type Database = {
         }
         Returns: string
       }
+      am_i_associado: { Args: never; Returns: boolean }
+      am_i_funcionario: { Args: never; Returns: boolean }
+      am_i_gerencia: { Args: never; Returns: boolean }
+      am_i_prestador: { Args: never; Returns: boolean }
+      am_i_vendedor: { Args: never; Returns: boolean }
       atualizar_cobrancas_vencidas: { Args: never; Returns: number }
       atualizar_parcelas_vencidas: { Args: never; Returns: number }
       atualizar_valor_os: { Args: { os_id: string }; Returns: undefined }
@@ -8885,6 +8890,10 @@ export type Database = {
         Returns: Database["public"]["Enums"]["app_role"][]
       }
       get_my_profile_id: { Args: never; Returns: string }
+      get_my_tipo: {
+        Args: never
+        Returns: Database["public"]["Enums"]["tipo_usuario"]
+      }
       get_ultimas_posicoes: {
         Args: never
         Returns: {
@@ -8920,6 +8929,7 @@ export type Database = {
       is_associado: { Args: { _user_id: string }; Returns: boolean }
       is_funcionario: { Args: { _user_id: string }; Returns: boolean }
       is_gerencia: { Args: { _user_id: string }; Returns: boolean }
+      is_prestador: { Args: { _user_id: string }; Returns: boolean }
       is_vendedor: { Args: { _user_id: string }; Returns: boolean }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
