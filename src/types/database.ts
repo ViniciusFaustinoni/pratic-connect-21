@@ -129,9 +129,14 @@ export interface Profile {
   cpf?: string;
   tipo: TipoUsuario;
   ativo: boolean;
+  bloqueado?: boolean;
+  motivo_bloqueio?: string;
   avatar_url?: string;
+  data_ultimo_acesso?: string;
   created_at: string;
   updated_at: string;
+  created_by?: string;
+  updated_by?: string;
 }
 
 export interface UserRole {
