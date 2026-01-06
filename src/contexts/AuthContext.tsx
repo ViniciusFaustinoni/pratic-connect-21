@@ -40,6 +40,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .eq('user_id', userId)
       .maybeSingle();
     
+    // Verificar se usuário está bloqueado
+    if (data?.bloqueado) {
+      await supabase.auth.signOut();
+      throw new Error(`Usuário bloqueado: ${data.motivo_bloqueio || 'Contate o administrador'}`);
+    }
+    
     return data as Profile | null;
   };
 

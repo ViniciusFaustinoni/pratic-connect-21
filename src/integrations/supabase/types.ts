@@ -6829,10 +6829,14 @@ export type Database = {
         Row: {
           ativo: boolean
           avatar_url: string | null
+          bloqueado: boolean | null
           cpf: string | null
           created_at: string
+          created_by: string | null
+          data_ultimo_acesso: string | null
           email: string
           id: string
+          motivo_bloqueio: string | null
           nome: string
           notif_documentos_pendentes: boolean | null
           notif_novos_leads: boolean | null
@@ -6840,15 +6844,20 @@ export type Database = {
           telefone: string | null
           tipo: Database["public"]["Enums"]["tipo_usuario"]
           updated_at: string
+          updated_by: string | null
           user_id: string
         }
         Insert: {
           ativo?: boolean
           avatar_url?: string | null
+          bloqueado?: boolean | null
           cpf?: string | null
           created_at?: string
+          created_by?: string | null
+          data_ultimo_acesso?: string | null
           email: string
           id?: string
+          motivo_bloqueio?: string | null
           nome: string
           notif_documentos_pendentes?: boolean | null
           notif_novos_leads?: boolean | null
@@ -6856,15 +6865,20 @@ export type Database = {
           telefone?: string | null
           tipo?: Database["public"]["Enums"]["tipo_usuario"]
           updated_at?: string
+          updated_by?: string | null
           user_id: string
         }
         Update: {
           ativo?: boolean
           avatar_url?: string | null
+          bloqueado?: boolean | null
           cpf?: string | null
           created_at?: string
+          created_by?: string | null
+          data_ultimo_acesso?: string | null
           email?: string
           id?: string
+          motivo_bloqueio?: string | null
           nome?: string
           notif_documentos_pendentes?: boolean | null
           notif_novos_leads?: boolean | null
@@ -6872,9 +6886,25 @@ export type Database = {
           telefone?: string | null
           tipo?: Database["public"]["Enums"]["tipo_usuario"]
           updated_at?: string
+          updated_by?: string | null
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profiles_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       programa_indicacao: {
         Row: {
@@ -8836,6 +8866,7 @@ export type Database = {
           visualizados: number
         }[]
       }
+      get_current_profile_id: { Args: never; Returns: string }
       get_estatisticas_assistencia_dia: {
         Args: { p_data?: string }
         Returns: Json
@@ -8890,6 +8921,8 @@ export type Database = {
       is_funcionario: { Args: { _user_id: string }; Returns: boolean }
       is_gerencia: { Args: { _user_id: string }; Returns: boolean }
       is_vendedor: { Args: { _user_id: string }; Returns: boolean }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
       verificar_acordos_quebrados: { Args: never; Returns: number }
     }
     Enums: {
