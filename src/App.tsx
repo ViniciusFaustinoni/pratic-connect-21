@@ -21,6 +21,7 @@ import LeadDetalhe from "./pages/vendas/LeadDetalhe";
 import LeadEditar from "./pages/vendas/LeadEditar";
 import Acompanhamento from "./pages/vendas/Acompanhamento";
 import Cotacoes from "./pages/vendas/Cotacoes";
+import CotacaoDetalhe from "./pages/vendas/CotacaoDetalhe";
 import Contratos from "./pages/vendas/Contratos";
 import DashboardVendas from "./pages/vendas/DashboardVendas";
 import RelatoriosVendas from "./pages/vendas/RelatoriosVendas";
@@ -187,6 +188,7 @@ const App = () => (
               <Route path="/vendas/leads/:id/editar" element={<LeadEditar />} />
               <Route path="/vendas/acompanhamento" element={<Acompanhamento />} />
               <Route path="/vendas/cotacoes" element={<Cotacoes />} />
+              <Route path="/vendas/cotacoes/:id" element={<CotacaoDetalhe />} />
               <Route path="/vendas/contratos" element={<Contratos />} />
               <Route path="/vendas/relatorios" element={<RelatoriosVendas />} />
               <Route path="/vendas/metas" element={<Metas />} />
