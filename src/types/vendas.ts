@@ -444,29 +444,29 @@ export interface ContratoWithRelations extends Contrato {
 /** Filtros para listagem de leads */
 export interface LeadFilters {
   search?: string;
-  etapa?: EtapaLead | 'todas';
-  origem?: OrigemLead | 'todas';
-  vendedor_id?: string | 'todos';
-  data_inicio?: string;
-  data_fim?: string;
+  etapa?: EtapaLead | 'all';
+  origem?: OrigemLead | 'all';
+  vendedor_id?: string | 'all';
+  data_de?: string;
+  data_ate?: string;
 }
 
 /** Filtros para listagem de cotações */
 export interface CotacaoFilters {
   search?: string;
-  status?: StatusCotacao | 'todos';
-  vendedor_id?: string | 'todos';
-  data_inicio?: string;
-  data_fim?: string;
+  status?: StatusCotacao | 'all';
+  vendedor_id?: string | 'all';
+  data_de?: string;
+  data_ate?: string;
 }
 
 /** Filtros para listagem de contratos */
 export interface ContratoFilters {
   search?: string;
-  status?: StatusContrato | 'todos';
-  vendedor_id?: string | 'todos';
-  data_inicio?: string;
-  data_fim?: string;
+  status?: StatusContrato | 'all';
+  vendedor_id?: string | 'all';
+  data_de?: string;
+  data_ate?: string;
 }
 
 /** Paginação padrão */

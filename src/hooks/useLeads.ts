@@ -1,65 +1,70 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
-import type { EtapaLead, OrigemLead } from '@/types/database';
+import type { EtapaLead } from '@/types/vendas';
+
+// Re-export types for backward compatibility
+export type { LeadFilters, LeadWithVendedor } from '@/types/vendas';
 
 type Lead = Tables<'leads'>;
 type LeadInsert = TablesInsert<'leads'>;
 type LeadUpdate = TablesUpdate<'leads'>;
 
-// Tipo para lead com vendedor
-export interface LeadWithVendedor extends Lead {
-  vendedor?: {
-    nome: string;
-  } | null;
-}
-
-export interface LeadFilters {
-  etapa?: EtapaLead | 'all';
-  origem?: OrigemLead | 'all';
-  vendedor_id?: string | 'all';
-  data_de?: string;
-  data_ate?: string;
-  search?: string;
-}
+// ============================================
+// TIPOS DO HOOK
+// ============================================
 
 export interface UseLeadsOptions {
-  filters?: LeadFilters;
+  filters?: {
+    etapa?: string;
+    origem?: string;
+    vendedor_id?: string;
+    data_de?: string;
+    data_ate?: string;
+    search?: string;
+  };
   page?: number;
   perPage?: number;
+  enabled?: boolean;
 }
 
 export interface LeadsResult {
-  leads: LeadWithVendedor[];
+  leads: Lead[];
   total: number;
   totalPages: number;
 }
 
+// ============================================
+// HOOK PRINCIPAL — LISTAGEM PAGINADA
+// ============================================
+
 export function useLeads(options?: UseLeadsOptions) {
-  const { filters, page = 1, perPage = 20 } = options || {};
+  const { filters, page = 1, perPage = 20, enabled = true } = options || {};
 
   return useQuery({
     queryKey: ['leads', filters, page, perPage],
     queryFn: async (): Promise<LeadsResult> => {
-      // Buscar leads - note que vendedor_id aponta para profiles.user_id, não profiles.id
       let query = supabase
         .from('leads')
-        .select(`*`, { count: 'exact' });
+        .select('*', { count: 'exact' });
 
-      // Apply filters - cast etapa to the type expected by Supabase
+      // Filtro: etapa
       if (filters?.etapa && filters.etapa !== 'all') {
-        query = query.eq('etapa', filters.etapa as 'novo');
+        query = query.eq('etapa', filters.etapa as Tables<'leads'>['etapa']);
       }
 
+      // Filtro: origem
       if (filters?.origem && filters.origem !== 'all') {
-        // Usar filtro como unknown para evitar problemas com enum
-        query = query.eq('origem', filters.origem as unknown as 'site');
+        query = query.eq('origem', filters.origem as Tables<'leads'>['origem']);
       }
 
+      // Filtro: vendedor
       if (filters?.vendedor_id && filters.vendedor_id !== 'all') {
         query = query.eq('vendedor_id', filters.vendedor_id);
       }
 
+      // Filtro: período
       if (filters?.data_de) {
         query = query.gte('created_at', filters.data_de);
       }
@@ -68,6 +73,7 @@ export function useLeads(options?: UseLeadsOptions) {
         query = query.lte('created_at', filters.data_ate + 'T23:59:59');
       }
 
+      // Filtro: busca (nome, telefone, placa, cpf)
       if (filters?.search) {
         const searchTerm = `%${filters.search}%`;
         query = query.or(
@@ -75,7 +81,7 @@ export function useLeads(options?: UseLeadsOptions) {
         );
       }
 
-      // Apply pagination
+      // Paginação
       const from = (page - 1) * perPage;
       const to = from + perPage - 1;
 
@@ -86,16 +92,20 @@ export function useLeads(options?: UseLeadsOptions) {
       if (error) throw error;
 
       return {
-        leads: (data || []) as LeadWithVendedor[],
+        leads: data || [],
         total: count || 0,
         totalPages: Math.ceil((count || 0) / perPage),
       };
     },
+    enabled,
   });
 }
 
-// Hook simples para buscar todos os leads (usado no Kanban)
-export function useAllLeads(filters?: LeadFilters) {
+// ============================================
+// HOOK — TODOS OS LEADS (KANBAN)
+// ============================================
+
+export function useAllLeads(filters?: UseLeadsOptions['filters']) {
   return useQuery({
     queryKey: ['leads', 'all', filters],
     queryFn: async () => {
@@ -106,7 +116,7 @@ export function useAllLeads(filters?: LeadFilters) {
       }
 
       if (filters?.origem && filters.origem !== 'all') {
-        query = query.eq('origem', filters.origem as unknown as 'site');
+        query = query.eq('origem', filters.origem as Tables<'leads'>['origem']);
       }
 
       if (filters?.data_de) {
@@ -132,6 +142,10 @@ export function useAllLeads(filters?: LeadFilters) {
   });
 }
 
+// ============================================
+// HOOK — LEAD INDIVIDUAL
+// ============================================
+
 export function useLead(id: string | undefined) {
   return useQuery({
     queryKey: ['leads', id],
@@ -151,6 +165,70 @@ export function useLead(id: string | undefined) {
   });
 }
 
+// ============================================
+// HOOK — LEADS POR ETAPA (KANBAN)
+// ============================================
+
+export function useLeadsByEtapa(etapas: EtapaLead[]) {
+  return useQuery({
+    queryKey: ['leads-by-etapa', etapas],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('leads')
+        .select('*')
+        .in('etapa', etapas)
+        .order('updated_at', { ascending: false });
+
+      if (error) throw error;
+
+      // Agrupar por etapa
+      const grouped: Record<EtapaLead, Lead[]> = {} as Record<EtapaLead, Lead[]>;
+      etapas.forEach(etapa => {
+        grouped[etapa] = [];
+      });
+
+      data.forEach(lead => {
+        const etapa = lead.etapa as EtapaLead;
+        if (grouped[etapa]) {
+          grouped[etapa].push(lead);
+        }
+      });
+
+      return grouped;
+    },
+    enabled: etapas.length > 0,
+  });
+}
+
+// ============================================
+// HOOK — CONTAGEM POR ETAPA
+// ============================================
+
+export function useLeadsContagem() {
+  return useQuery({
+    queryKey: ['leads-contagem'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('leads')
+        .select('etapa');
+
+      if (error) throw error;
+
+      // Contar por etapa
+      const contagem: Record<string, number> = {};
+      data.forEach(lead => {
+        contagem[lead.etapa] = (contagem[lead.etapa] || 0) + 1;
+      });
+
+      return contagem as Record<EtapaLead, number>;
+    },
+  });
+}
+
+// ============================================
+// MUTATIONS
+// ============================================
+
 export function useCreateLead() {
   const queryClient = useQueryClient();
 
@@ -167,6 +245,11 @@ export function useCreateLead() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leads'] });
+      queryClient.invalidateQueries({ queryKey: ['leads-contagem'] });
+      toast.success('Lead criado com sucesso!');
+    },
+    onError: (error: Error) => {
+      toast.error('Erro ao criar lead: ' + error.message);
     },
   });
 }
@@ -189,6 +272,11 @@ export function useUpdateLead() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['leads'] });
       queryClient.invalidateQueries({ queryKey: ['leads', data.id] });
+      queryClient.invalidateQueries({ queryKey: ['leads-contagem'] });
+      toast.success('Lead atualizado com sucesso!');
+    },
+    onError: (error: Error) => {
+      toast.error('Erro ao atualizar lead: ' + error.message);
     },
   });
 }
