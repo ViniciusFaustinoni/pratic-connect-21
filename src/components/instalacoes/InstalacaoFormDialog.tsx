@@ -37,7 +37,7 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { useAssociados } from '@/hooks/useAssociados';
+import { useAssociados, type AssociadoWithRelations } from '@/hooks/useAssociados';
 import { useVeiculos } from '@/hooks/useVeiculos';
 import { useCreateInstalacao, useUpdateInstalacao, useInstalacao, useInstaladores, useRastreadoresEstoque } from '@/hooks/useInstalacoes';
 import { buscarCep } from '@/lib/cep';
@@ -74,7 +74,8 @@ export function InstalacaoFormDialog({ open, onOpenChange, instalacaoId }: Insta
   const [buscandoCep, setBuscandoCep] = useState(false);
 
   const { data: instalacao, isLoading: loadingInstalacao } = useInstalacao(instalacaoId);
-  const { data: associados, isLoading: loadingAssociados } = useAssociados();
+  const { data: associadosData, isLoading: loadingAssociados } = useAssociados();
+  const associados = associadosData?.associados;
   const { data: veiculos, isLoading: loadingVeiculos } = useVeiculos();
   const { data: instaladores } = useInstaladores();
   const { data: rastreadores } = useRastreadoresEstoque();

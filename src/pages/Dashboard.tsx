@@ -44,7 +44,8 @@ export default function Dashboard() {
   const { data: leadsData, isLoading: leadsLoading } = useLeads({ page: 1, perPage: 100 });
   const { data: cotacoes, isLoading: cotacoesLoading } = useCotacoes();
   const { data: contratos, isLoading: contratosLoading } = useContratos();
-  const { data: associados, isLoading: associadosLoading } = useAssociados();
+  const { data: associadosData, isLoading: associadosLoading } = useAssociados();
+  const associados = associadosData?.associados;
   const { data: pendingDocs, isLoading: docsLoading } = usePendingDocumentos();
 
   const isLoading = leadsLoading || cotacoesLoading || contratosLoading || associadosLoading;

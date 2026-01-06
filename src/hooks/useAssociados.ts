@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 import type { StatusAssociado } from '@/types/database';
 
@@ -11,28 +12,213 @@ export interface AssociadoWithRelations extends Associado {
   planos?: Tables<'planos'> | null;
   contratos?: Tables<'contratos'> | null;
   veiculos?: Tables<'veiculos'>[];
+  veiculos_count?: number;
+  documentos_pendentes?: number;
 }
 
-export function useAssociados() {
+export interface VeiculoComRelacoes extends Tables<'veiculos'> {
+  rastreador?: {
+    id: string;
+    codigo: string;
+    numero_serie: string | null;
+  } | null;
+}
+
+export interface AssociadoFilters {
+  search?: string;
+  status?: StatusAssociado | StatusAssociado[];
+  plano_id?: string;
+  cidade?: string;
+  estado?: string;
+  data_adesao_inicio?: string;
+  data_adesao_fim?: string;
+}
+
+export interface ContagemAssociados {
+  total: number;
+  em_analise: number;
+  aprovado: number;
+  documentacao_pendente: number;
+  aguardando_instalacao: number;
+  ativo: number;
+  inadimplente: number;
+  suspenso: number;
+  cancelado: number;
+  bloqueado: number;
+}
+
+// ============================================
+// HOOK: LISTA DE ASSOCIADOS COM FILTROS/PAGINAÇÃO
+// ============================================
+interface UseAssociadosParams {
+  filters?: AssociadoFilters;
+  pagination?: { page: number; pageSize: number };
+  enabled?: boolean;
+}
+
+export function useAssociados({ filters, pagination, enabled = true }: UseAssociadosParams = {}) {
+  const page = pagination?.page ?? 1;
+  const pageSize = pagination?.pageSize ?? 20;
+
   return useQuery({
-    queryKey: ['associados'],
+    queryKey: ['associados', filters, pagination],
     queryFn: async () => {
+      let query = supabase
+        .from('associados')
+        .select(`
+          *,
+          planos (*),
+          contratos (*)
+        `, { count: 'exact' });
+
+      // Filtro por status (pode ser array)
+      if (filters?.status) {
+        if (Array.isArray(filters.status)) {
+          query = query.in('status', filters.status);
+        } else {
+          query = query.eq('status', filters.status);
+        }
+      }
+
+      // Filtro por plano
+      if (filters?.plano_id) {
+        query = query.eq('plano_id', filters.plano_id);
+      }
+
+      // Filtro por cidade
+      if (filters?.cidade) {
+        query = query.eq('cidade', filters.cidade);
+      }
+
+      // Filtro por estado
+      if (filters?.estado) {
+        query = query.eq('uf', filters.estado);
+      }
+
+      // Filtro por período de adesão
+      if (filters?.data_adesao_inicio) {
+        query = query.gte('data_adesao', filters.data_adesao_inicio);
+      }
+      if (filters?.data_adesao_fim) {
+        query = query.lte('data_adesao', filters.data_adesao_fim);
+      }
+
+      // Busca por nome, CPF ou email
+      if (filters?.search) {
+        const searchTerm = filters.search.replace(/\D/g, '');
+        if (searchTerm.length === 11) {
+          query = query.eq('cpf', searchTerm);
+        } else {
+          query = query.or(`nome.ilike.%${filters.search}%,email.ilike.%${filters.search}%`);
+        }
+      }
+
+      // Ordenação e paginação
+      query = query
+        .order('created_at', { ascending: false })
+        .range((page - 1) * pageSize, page * pageSize - 1);
+
+      const { data, error, count } = await query;
+
+      if (error) throw error;
+
+      return {
+        associados: (data || []) as AssociadoWithRelations[],
+        pagination: {
+          page,
+          pageSize,
+          total: count || 0,
+          totalPages: Math.ceil((count || 0) / pageSize),
+        },
+      };
+    },
+    enabled,
+  });
+}
+
+// ============================================
+// HOOK: ASSOCIADO INDIVIDUAL
+// ============================================
+export function useAssociado(id: string | undefined) {
+  return useQuery({
+    queryKey: ['associado', id],
+    queryFn: async () => {
+      if (!id) throw new Error('ID é obrigatório');
+
       const { data, error } = await supabase
         .from('associados')
         .select(`
           *,
           planos (*),
-          contratos (*),
-          veiculos (id, placa, marca, modelo)
+          contratos (*)
         `)
-        .order('created_at', { ascending: false });
-      
+        .eq('id', id)
+        .single();
+
       if (error) throw error;
-      return data as AssociadoWithRelations[];
+
+      // Fetch vehicles separately
+      const { data: veiculos } = await supabase
+        .from('veiculos')
+        .select('*')
+        .eq('associado_id', id);
+
+      // Fetch pending documents count
+      const { count: docsPendentes } = await supabase
+        .from('documentos')
+        .select('*', { count: 'exact', head: true })
+        .eq('associado_id', id)
+        .eq('status', 'pendente');
+
+      return {
+        ...data,
+        veiculos: veiculos || [],
+        documentos_pendentes: docsPendentes || 0,
+      } as AssociadoWithRelations;
+    },
+    enabled: !!id,
+  });
+}
+
+// ============================================
+// HOOK: CONTAGEM POR STATUS
+// ============================================
+export function useAssociadosContagem() {
+  return useQuery({
+    queryKey: ['associados-contagem'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('associados')
+        .select('status');
+
+      if (error) throw error;
+
+      const contagem: ContagemAssociados = {
+        total: data.length,
+        em_analise: 0,
+        aprovado: 0,
+        documentacao_pendente: 0,
+        aguardando_instalacao: 0,
+        ativo: 0,
+        inadimplente: 0,
+        suspenso: 0,
+        cancelado: 0,
+        bloqueado: 0,
+      };
+
+      data.forEach((assoc) => {
+        const status = assoc.status as keyof typeof contagem;
+        if (status && status in contagem) {
+          contagem[status]++;
+        }
+      });
+
+      return contagem;
     },
   });
 }
 
+// Legacy alias for backwards compatibility
 export function useAssociadosMetricas() {
   return useQuery({
     queryKey: ['associados', 'metricas'],
@@ -61,6 +247,9 @@ export function useAssociadosMetricas() {
   });
 }
 
+// ============================================
+// HOOK: CIDADES (para filtros)
+// ============================================
 export function useAssociadosCidades() {
   return useQuery({
     queryKey: ['associados', 'cidades'],
@@ -69,48 +258,234 @@ export function useAssociadosCidades() {
         .from('associados')
         .select('cidade')
         .not('cidade', 'is', null);
-      
+
       if (error) throw error;
-      
+
       const cidades = [...new Set(data.map(a => a.cidade).filter(Boolean))] as string[];
       return cidades.sort();
     }
   });
 }
 
-export function useAssociado(id: string | undefined) {
+// ============================================
+// HOOK: VEÍCULOS DO ASSOCIADO
+// ============================================
+export function useVeiculosDoAssociado(associadoId: string | undefined) {
   return useQuery({
-    queryKey: ['associados', id],
+    queryKey: ['veiculos-associado', associadoId],
     queryFn: async () => {
-      if (!id) throw new Error('ID é obrigatório');
-      
+      if (!associadoId) throw new Error('ID do associado não informado');
+
       const { data, error } = await supabase
-        .from('associados')
+        .from('veiculos')
         .select(`
           *,
-          planos (*),
-          contratos (*)
+          rastreador:rastreadores(id, codigo, numero_serie)
         `)
-        .eq('id', id)
-        .single();
-      
-      if (error) throw error;
+        .eq('associado_id', associadoId)
+        .order('created_at', { ascending: false });
 
-      // Fetch vehicles separately
-      const { data: veiculos } = await supabase
-        .from('veiculos')
-        .select('*')
-        .eq('associado_id', id);
-      
-      return { ...data, veiculos: veiculos || [] } as AssociadoWithRelations;
+      if (error) throw error;
+      return (data || []) as unknown as VeiculoComRelacoes[];
     },
-    enabled: !!id,
+    enabled: !!associadoId,
   });
 }
 
+// ============================================
+// HOOK: BUSCA RÁPIDA (AUTOCOMPLETE)
+// ============================================
+export function useBuscaAssociados(termo: string) {
+  return useQuery({
+    queryKey: ['busca-associados', termo],
+    queryFn: async () => {
+      if (!termo || termo.length < 3) return [];
+
+      const { data, error } = await supabase
+        .from('associados')
+        .select('id, nome, cpf, telefone, status')
+        .or(`nome.ilike.%${termo}%,cpf.ilike.%${termo}%`)
+        .limit(10);
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: termo.length >= 3,
+  });
+}
+
+// ============================================
+// HOOK: ESTATÍSTICAS DO ASSOCIADO
+// ============================================
+export function useAssociadoStats(associadoId: string | undefined) {
+  return useQuery({
+    queryKey: ['associado-stats', associadoId],
+    queryFn: async () => {
+      if (!associadoId) throw new Error('ID não informado');
+
+      const { count: veiculosCount } = await supabase
+        .from('veiculos')
+        .select('*', { count: 'exact', head: true })
+        .eq('associado_id', associadoId);
+
+      const { data: documentos } = await supabase
+        .from('documentos')
+        .select('status')
+        .eq('associado_id', associadoId);
+
+      const docStats = {
+        total: documentos?.length || 0,
+        pendentes: documentos?.filter(d => d.status === 'pendente').length || 0,
+        aprovados: documentos?.filter(d => d.status === 'aprovado').length || 0,
+        reprovados: documentos?.filter(d => d.status === 'reprovado').length || 0,
+      };
+
+      let sinistrosCount = 0;
+      try {
+        const { count } = await supabase
+          .from('sinistros')
+          .select('*', { count: 'exact', head: true })
+          .eq('associado_id', associadoId);
+        sinistrosCount = count || 0;
+      } catch {
+        // Table may not exist yet
+      }
+
+      return {
+        veiculos: veiculosCount || 0,
+        documentos: docStats,
+        sinistros: sinistrosCount,
+      };
+    },
+    enabled: !!associadoId,
+  });
+}
+
+// ============================================
+// HOOK: AÇÕES DE ASSOCIADO (CONSOLIDADO)
+// ============================================
+export function useAssociadoActions() {
+  const queryClient = useQueryClient();
+
+  const invalidateAll = () => {
+    queryClient.invalidateQueries({ queryKey: ['associados'] });
+    queryClient.invalidateQueries({ queryKey: ['associados-contagem'] });
+    queryClient.invalidateQueries({ queryKey: ['associado'] });
+    queryClient.invalidateQueries({ queryKey: ['associado-stats'] });
+  };
+
+  const atualizarStatus = useMutation({
+    mutationFn: async ({ id, status, motivo }: { id: string; status: StatusAssociado; motivo?: string }) => {
+      const updateData: Record<string, unknown> = {
+        status,
+        updated_at: new Date().toISOString(),
+      };
+
+      if (status === 'bloqueado' && motivo) {
+        updateData.bloqueado = true;
+        updateData.motivo_bloqueio = motivo;
+        updateData.data_bloqueio = new Date().toISOString();
+      }
+
+      if (status === 'ativo') {
+        updateData.bloqueado = false;
+        updateData.motivo_bloqueio = null;
+      }
+
+      const { error } = await supabase.from('associados').update(updateData).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: (_, { status }) => {
+      invalidateAll();
+      toast.success(`Status alterado para ${status}`);
+    },
+    onError: () => toast.error('Erro ao atualizar status'),
+  });
+
+  const suspenderAssociado = useMutation({
+    mutationFn: async ({ id, motivo }: { id: string; motivo?: string }) => {
+      const { error } = await supabase.from('associados').update({
+        status: 'suspenso' as StatusAssociado,
+        motivo_bloqueio: motivo || 'Suspenso pelo sistema',
+        updated_at: new Date().toISOString(),
+      }).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      invalidateAll();
+      toast.success('Associado suspenso');
+    },
+    onError: () => toast.error('Erro ao suspender associado'),
+  });
+
+  const reativarAssociado = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('associados').update({
+        status: 'ativo' as StatusAssociado,
+        bloqueado: false,
+        motivo_bloqueio: null,
+        updated_at: new Date().toISOString(),
+      }).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      invalidateAll();
+      toast.success('Associado reativado!');
+    },
+    onError: () => toast.error('Erro ao reativar associado'),
+  });
+
+  const cancelarAssociado = useMutation({
+    mutationFn: async ({ id, motivo }: { id: string; motivo: string }) => {
+      const { error } = await supabase.from('associados').update({
+        status: 'cancelado' as StatusAssociado,
+        motivo_bloqueio: motivo,
+        updated_at: new Date().toISOString(),
+      }).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      invalidateAll();
+      toast.success('Associado cancelado');
+    },
+    onError: () => toast.error('Erro ao cancelar associado'),
+  });
+
+  const atualizarDados = useMutation({
+    mutationFn: async ({ id, dados }: { id: string; dados: AssociadoUpdate }) => {
+      const { error } = await supabase.from('associados').update({
+        ...dados,
+        updated_at: new Date().toISOString(),
+      }).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      invalidateAll();
+      toast.success('Dados atualizados!');
+    },
+    onError: () => toast.error('Erro ao atualizar dados'),
+  });
+
+  return {
+    atualizarStatus: atualizarStatus.mutate,
+    suspenderAssociado: suspenderAssociado.mutate,
+    reativarAssociado: reativarAssociado.mutate,
+    cancelarAssociado: cancelarAssociado.mutate,
+    atualizarDados: atualizarDados.mutate,
+    isAtualizandoStatus: atualizarStatus.isPending,
+    isSuspendendo: suspenderAssociado.isPending,
+    isReativando: reativarAssociado.isPending,
+    isCancelando: cancelarAssociado.isPending,
+    isAtualizandoDados: atualizarDados.isPending,
+  };
+}
+
+// ============================================
+// HOOKS DE MUTAÇÃO (legado - mantido para compatibilidade)
+// ============================================
 export function useCreateAssociado() {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: async (associado: AssociadoInsert) => {
       const { data, error } = await supabase
@@ -118,19 +493,20 @@ export function useCreateAssociado() {
         .insert(associado)
         .select()
         .single();
-      
+
       if (error) throw error;
       return data as Associado;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['associados'] });
+      queryClient.invalidateQueries({ queryKey: ['associados-contagem'] });
     },
   });
 }
 
 export function useUpdateAssociado() {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: async ({ id, ...updates }: AssociadoUpdate & { id: string }) => {
       const { data, error } = await supabase
@@ -139,53 +515,53 @@ export function useUpdateAssociado() {
         .eq('id', id)
         .select()
         .single();
-      
+
       if (error) throw error;
       return data as Associado;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['associados'] });
-      queryClient.invalidateQueries({ queryKey: ['associados', data.id] });
+      queryClient.invalidateQueries({ queryKey: ['associado', data.id] });
     },
   });
 }
 
 export function useUpdateAssociadoStatus() {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
-    mutationFn: async ({ 
-      id, 
-      status, 
-      motivo 
-    }: { 
-      id: string; 
-      status: StatusAssociado; 
+    mutationFn: async ({
+      id,
+      status,
+      motivo
+    }: {
+      id: string;
+      status: StatusAssociado;
       motivo?: string;
     }) => {
       const updates: Partial<Associado> = {
         status,
         updated_at: new Date().toISOString(),
       };
-      
+
       if (status === 'bloqueado' || status === 'suspenso' || status === 'cancelado') {
         updates.motivo_bloqueio = motivo;
         updates.data_bloqueio = new Date().toISOString();
       }
-      
+
       const { data, error } = await supabase
         .from('associados')
         .update(updates)
         .eq('id', id)
         .select()
         .single();
-      
+
       if (error) throw error;
       return data as Associado;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['associados'] });
-      queryClient.invalidateQueries({ queryKey: ['associados', data.id] });
+      queryClient.invalidateQueries({ queryKey: ['associado', data.id] });
     },
   });
 }

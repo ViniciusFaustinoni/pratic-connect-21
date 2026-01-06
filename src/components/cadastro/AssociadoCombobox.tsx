@@ -37,7 +37,8 @@ export function AssociadoCombobox({
   disabled = false,
 }: AssociadoComboboxProps) {
   const [open, setOpen] = useState(false);
-  const { data: associados, isLoading } = useAssociados();
+  const { data, isLoading } = useAssociados();
+  const associados = data?.associados;
 
   const selectedAssociado = associados?.find((a) => a.id === value);
 
