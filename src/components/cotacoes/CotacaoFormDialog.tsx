@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
+import { useNavigate } from 'react-router-dom';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Loader2, Car, Search, CheckCircle2, Shield, FileText, ChevronRight, ChevronLeft, Check, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -70,6 +71,7 @@ const steps = [
 ];
 
 export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDialogProps) {
+  const navigate = useNavigate();
   const createCotacao = useCreateCotacao();
   const { data: planos, isLoading: planosLoading } = usePlanos();
   const { data: lead } = useLead(leadId);
@@ -360,6 +362,10 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
 
   const onSubmit = async (data: CotacaoFormData) => {
     try {
+      // Extrair ano numérico do texto (ex: "2022 Gasolina" -> 2022)
+      const anoTexto = getAnoNome();
+      const anoNumerico = anoTexto ? parseInt(anoTexto.split(' ')[0]) : null;
+      
       await createCotacao.mutateAsync({
         lead_id: data.lead_id,
         plano_id: data.plano_id,
@@ -369,10 +375,19 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
         valor_rastreamento: data.valor_rastreamento,
         valor_adesao: data.valor_adesao,
         valor_total_mensal: data.valor_total_mensal,
+        valor_assistencia: planoSelecionadoData?.assistencia || 0,
         validade_dias: data.validade_dias,
         status: 'rascunho',
+        // Dados do veículo
+        veiculo_marca: getMarcaNome() || null,
+        veiculo_modelo: getModeloNome() || null,
+        veiculo_ano: anoNumerico,
+        codigo_fipe: veiculoEncontrado?.fipeData?.codigo || null,
       });
+      
       toast.success('Cotação criada com sucesso!');
+      
+      // Resetar estados
       form.reset();
       setVeiculoEncontrado(null);
       setPlaca('');
@@ -383,7 +398,12 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
       setModelos([]);
       setAnos([]);
       setStep(1);
+      
+      // Fechar modal
       onOpenChange(false);
+      
+      // Redirecionar para a página de cotações
+      navigate('/vendas/cotacoes');
     } catch (error) {
       toast.error('Erro ao criar cotação');
       console.error(error);

@@ -167,7 +167,13 @@ export const cotacaoSchema = z.object({
   valor_rastreamento: z.number().min(0),
   valor_adesao: z.number().min(0),
   valor_total_mensal: z.number().min(0),
+  valor_assistencia: z.number().min(0).optional(),
   validade_dias: z.number().min(1).max(30).default(7),
+  // Campos do veículo
+  veiculo_marca: z.string().optional(),
+  veiculo_modelo: z.string().optional(),
+  veiculo_ano: z.number().optional().nullable(),
+  codigo_fipe: z.string().optional(),
 });
 
 // Schema de Contrato
