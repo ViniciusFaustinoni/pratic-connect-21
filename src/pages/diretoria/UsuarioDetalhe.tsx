@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useUsuario, useUsuarioActions } from '@/hooks/useUsuarios';
+import { GerenciarPerfisModal } from '@/components/usuarios/GerenciarPerfisModal';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -37,7 +38,8 @@ import {
   UserX,
   UserCheck,
   Ban,
-  Unlock
+  Unlock,
+  Plus
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TIPO_USUARIO_LABELS, PERFIL_ACESSO_LABELS, type PerfilAcesso } from '@/types/auth';
@@ -106,6 +108,9 @@ export default function UsuarioDetalhePage() {
     open: boolean;
     type: 'desativar' | 'ativar' | 'bloquear' | 'desbloquear' | 'resetar';
   }>({ open: false, type: 'desativar' });
+
+  // Estado do modal de perfis
+  const [showPerfisModal, setShowPerfisModal] = useState(false);
 
   const handleConfirmAction = () => {
     if (!usuario) return;
@@ -380,13 +385,23 @@ export default function UsuarioDetalhePage() {
             <Button 
               variant="outline" 
               className="w-full mt-4"
-              onClick={() => navigate('/diretoria/perfis')}
+              onClick={() => setShowPerfisModal(true)}
             >
+              <Plus className="h-4 w-4 mr-2" />
               Gerenciar Perfis
             </Button>
           </CardContent>
         </Card>
       </div>
+
+      {/* Modal de Gerenciamento de Perfis */}
+      {usuario && (
+        <GerenciarPerfisModal
+          open={showPerfisModal}
+          onOpenChange={setShowPerfisModal}
+          usuario={usuario}
+        />
+      )}
 
       {/* Dialog de Confirmação */}
       <AlertDialog open={confirmDialog.open} onOpenChange={(open) => setConfirmDialog(prev => ({ ...prev, open }))}>
