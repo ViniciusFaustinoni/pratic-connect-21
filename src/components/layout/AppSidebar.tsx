@@ -69,6 +69,11 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions, PermissionKey } from '@/hooks/usePermissions';
@@ -373,29 +378,46 @@ export function AppSidebar() {
         {visibleGroups.map((group) => (
           <SidebarGroup key={group.id}>
             {collapsed ? (
-              /* VERSÃO MINIMIZADA: Ícone clicável que navega para primeira rota */
+              /* VERSÃO MINIMIZADA: Popover com todos os subitens */
               <SidebarMenu>
                 <SidebarMenuItem>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
+                  <Popover>
+                    <PopoverTrigger asChild>
                       <SidebarMenuButton
-                        asChild
                         isActive={isGroupActive(group.items)}
+                        className="cursor-pointer"
                       >
-                        <NavLink to={group.items[0]?.url || '#'}>
-                          <group.icon className="h-4 w-4" />
-                        </NavLink>
+                        <group.icon className="h-4 w-4" />
                       </SidebarMenuButton>
-                    </TooltipTrigger>
-                    <TooltipContent side="right" sideOffset={10}>
-                      <div className="flex flex-col gap-0.5">
-                        <span className="font-medium">{group.label}</span>
-                        <span className="text-xs text-muted-foreground">
-                          Clique para acessar
-                        </span>
+                    </PopoverTrigger>
+                    <PopoverContent 
+                      side="right" 
+                      sideOffset={8}
+                      align="start"
+                      className="w-52 p-2"
+                    >
+                      <div className="mb-2 flex items-center gap-2 px-2 text-sm font-semibold text-foreground">
+                        <group.icon className="h-4 w-4" />
+                        {group.label}
                       </div>
-                    </TooltipContent>
-                  </Tooltip>
+                      <div className="space-y-0.5">
+                        {group.items.map((item) => (
+                          <NavLink 
+                            key={item.url} 
+                            to={item.url}
+                            className={cn(
+                              "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
+                              "hover:bg-accent hover:text-accent-foreground",
+                              isActive(item.url) && "bg-accent text-accent-foreground font-medium"
+                            )}
+                          >
+                            <item.icon className="h-4 w-4" />
+                            {item.title}
+                          </NavLink>
+                        ))}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                 </SidebarMenuItem>
               </SidebarMenu>
             ) : (
