@@ -267,126 +267,129 @@ export default function Leads() {
   const total = leadsData?.total || 0;
 
   return (
-    <div className="space-y-4">
-      {/* Breadcrumb */}
-      <nav className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Link to="/dashboard" className="hover:text-foreground transition-colors">
-          Home
-        </Link>
-        <span>/</span>
-        <Link to="/vendas/dashboard" className="hover:text-foreground transition-colors">
-          Vendas
-        </Link>
-        <span>/</span>
-        <span className="text-foreground font-medium">Leads</span>
-      </nav>
+    <div className="flex flex-col h-[calc(100vh-4rem)]">
+      {/* Header Fixo */}
+      <div className="flex-shrink-0 space-y-4 pb-4">
+        {/* Breadcrumb */}
+        <nav className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Link to="/dashboard" className="hover:text-foreground transition-colors">
+            Home
+          </Link>
+          <span>/</span>
+          <Link to="/vendas/dashboard" className="hover:text-foreground transition-colors">
+            Vendas
+          </Link>
+          <span>/</span>
+          <span className="text-foreground font-medium">Leads</span>
+        </nav>
 
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Leads</h1>
-          <p className="text-muted-foreground">
-            {total} leads encontrados
-          </p>
+        {/* Header */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Leads</h1>
+            <p className="text-muted-foreground">
+              {total} leads encontrados
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Tabs value={view} onValueChange={(v) => setView(v as 'table' | 'kanban')}>
+              <TabsList>
+                <TabsTrigger value="table">Lista</TabsTrigger>
+                <TabsTrigger value="kanban">Kanban</TabsTrigger>
+              </TabsList>
+            </Tabs>
+            <Button className="gap-2" onClick={() => setShowLeadForm(true)}>
+              <Plus className="h-4 w-4" />
+              Novo Lead
+            </Button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Tabs value={view} onValueChange={(v) => setView(v as 'table' | 'kanban')}>
-            <TabsList>
-              <TabsTrigger value="table">Lista</TabsTrigger>
-              <TabsTrigger value="kanban">Kanban</TabsTrigger>
-            </TabsList>
-          </Tabs>
-          <Button className="gap-2" onClick={() => setShowLeadForm(true)}>
-            <Plus className="h-4 w-4" />
-            Novo Lead
+
+        {/* Metrics - Barra compacta para Kanban */}
+        {view === 'kanban' && <LeadMetricsBar leads={allLeads || []} />}
+
+        {/* Barra de busca e filtros */}
+        <div className="flex items-center gap-3">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por nome, telefone, placa..."
+              value={filters.search || ''}
+              onChange={(e) => {
+                setFilters({ ...filters, search: e.target.value });
+                setPage(1);
+              }}
+              className="pl-10"
+            />
+          </div>
+          <Button 
+            variant="outline" 
+            onClick={handleOpenFilters}
+            className={cn(hasActiveFilters && 'border-primary text-primary')}
+          >
+            <Filter className="h-4 w-4 mr-2" />
+            Filtros
+            {hasActiveFilters && (
+              <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-xs">
+                Ativos
+              </Badge>
+            )}
           </Button>
         </div>
+
+        {/* Filtros ativos */}
+        {hasActiveFilters && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm text-muted-foreground">Filtros:</span>
+            {filters.etapa && (
+              <Badge variant="secondary" className="gap-1">
+                Etapa: {ETAPA_LABELS[filters.etapa]}
+                <button onClick={() => setFilters({ ...filters, etapa: undefined })} className="hover:text-destructive">
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            )}
+            {filters.origem && (
+              <Badge variant="secondary" className="gap-1">
+                Origem: {ORIGEM_LABELS[filters.origem]}
+                <button onClick={() => setFilters({ ...filters, origem: undefined })} className="hover:text-destructive">
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            )}
+            {filters.vendedor_id && (
+              <Badge variant="secondary" className="gap-1">
+                Vendedor: {vendedores?.find(v => v.id === filters.vendedor_id)?.nome || 'Selecionado'}
+                <button onClick={() => setFilters({ ...filters, vendedor_id: undefined })} className="hover:text-destructive">
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            )}
+            {filters.data_de && (
+              <Badge variant="secondary" className="gap-1">
+                De: {filters.data_de}
+                <button onClick={() => setFilters({ ...filters, data_de: undefined })} className="hover:text-destructive">
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            )}
+            {filters.data_ate && (
+              <Badge variant="secondary" className="gap-1">
+                Até: {filters.data_ate}
+                <button onClick={() => setFilters({ ...filters, data_ate: undefined })} className="hover:text-destructive">
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            )}
+            <button 
+              className="text-sm text-primary hover:underline"
+              onClick={handleClearFilters}
+            >
+              Limpar todos
+            </button>
+          </div>
+        )}
       </div>
-
-      {/* Metrics - Barra compacta para Kanban */}
-      {view === 'kanban' && <LeadMetricsBar leads={allLeads || []} />}
-
-      {/* Barra de busca e filtros */}
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar por nome, telefone, placa..."
-            value={filters.search || ''}
-            onChange={(e) => {
-              setFilters({ ...filters, search: e.target.value });
-              setPage(1);
-            }}
-            className="pl-10"
-          />
-        </div>
-        <Button 
-          variant="outline" 
-          onClick={handleOpenFilters}
-          className={cn(hasActiveFilters && 'border-primary text-primary')}
-        >
-          <Filter className="h-4 w-4 mr-2" />
-          Filtros
-          {hasActiveFilters && (
-            <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-xs">
-              Ativos
-            </Badge>
-          )}
-        </Button>
-      </div>
-
-      {/* Filtros ativos */}
-      {hasActiveFilters && (
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-sm text-muted-foreground">Filtros:</span>
-          {filters.etapa && (
-            <Badge variant="secondary" className="gap-1">
-              Etapa: {ETAPA_LABELS[filters.etapa]}
-              <button onClick={() => setFilters({ ...filters, etapa: undefined })} className="hover:text-destructive">
-                <X className="h-3 w-3" />
-              </button>
-            </Badge>
-          )}
-          {filters.origem && (
-            <Badge variant="secondary" className="gap-1">
-              Origem: {ORIGEM_LABELS[filters.origem]}
-              <button onClick={() => setFilters({ ...filters, origem: undefined })} className="hover:text-destructive">
-                <X className="h-3 w-3" />
-              </button>
-            </Badge>
-          )}
-          {filters.vendedor_id && (
-            <Badge variant="secondary" className="gap-1">
-              Vendedor: {vendedores?.find(v => v.id === filters.vendedor_id)?.nome || 'Selecionado'}
-              <button onClick={() => setFilters({ ...filters, vendedor_id: undefined })} className="hover:text-destructive">
-                <X className="h-3 w-3" />
-              </button>
-            </Badge>
-          )}
-          {filters.data_de && (
-            <Badge variant="secondary" className="gap-1">
-              De: {filters.data_de}
-              <button onClick={() => setFilters({ ...filters, data_de: undefined })} className="hover:text-destructive">
-                <X className="h-3 w-3" />
-              </button>
-            </Badge>
-          )}
-          {filters.data_ate && (
-            <Badge variant="secondary" className="gap-1">
-              Até: {filters.data_ate}
-              <button onClick={() => setFilters({ ...filters, data_ate: undefined })} className="hover:text-destructive">
-                <X className="h-3 w-3" />
-              </button>
-            </Badge>
-          )}
-          <button 
-            className="text-sm text-primary hover:underline"
-            onClick={handleClearFilters}
-          >
-            Limpar todos
-          </button>
-        </div>
-      )}
 
       {/* Table View */}
       {view === 'table' && (
@@ -626,55 +629,55 @@ export default function Leads() {
 
       {/* Kanban View */}
       {view === 'kanban' && (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-        >
-          <div className="flex gap-4 overflow-x-auto pb-4 px-1" style={{ minWidth: 'max-content' }}>
-            {ETAPAS_KANBAN_VENDAS.map((etapa) => {
-              const leadsInEtapa = (allLeads || []).filter((l) => l.etapa === etapa);
-              return (
-                <div 
-                  key={etapa} 
-                  id={etapa}
-                  className="flex-shrink-0 w-64 flex flex-col rounded-xl bg-muted/50"
-                  style={{ minHeight: 'calc(100vh - 280px)' }}
-                >
-                  {/* Header da coluna com dot colorido */}
-                  <div className="sticky top-0 bg-muted/50 px-3 py-2.5 border-b border-border/50">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className={`w-2.5 h-2.5 rounded-full ${etapaDotColors[etapa]}`} />
-                        <span className="font-semibold text-sm text-foreground">
-                          {ETAPA_LABELS[etapa]}
+        <div className="flex-1 overflow-hidden">
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+          >
+            <div className="flex gap-4 h-full overflow-x-auto pb-4 px-1">
+              {ETAPAS_KANBAN_VENDAS.map((etapa) => {
+                const leadsInEtapa = (allLeads || []).filter((l) => l.etapa === etapa);
+                return (
+                  <div 
+                    key={etapa} 
+                    id={etapa}
+                    className="flex-shrink-0 w-64 flex flex-col rounded-xl bg-muted/50 h-full"
+                  >
+                    {/* Header da coluna com dot colorido */}
+                    <div className="flex-shrink-0 bg-muted/50 px-3 py-2.5 border-b border-border/50 rounded-t-xl">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className={`w-2.5 h-2.5 rounded-full ${etapaDotColors[etapa]}`} />
+                          <span className="font-semibold text-sm text-foreground">
+                            {ETAPA_LABELS[etapa]}
+                          </span>
+                        </div>
+                        <span className="w-6 h-6 rounded-full bg-muted text-xs font-medium flex items-center justify-center">
+                          {leadsInEtapa.length}
                         </span>
                       </div>
-                      <span className="w-6 h-6 rounded-full bg-muted text-xs font-medium flex items-center justify-center">
-                        {leadsInEtapa.length}
-                      </span>
                     </div>
-                  </div>
-                  {/* Cards com scroll vertical */}
-                  <SortableContext
-                    items={leadsInEtapa.map((l) => l.id)}
-                    strategy={verticalListSortingStrategy}
-                  >
-                    <div 
-                      className="flex flex-col gap-2 flex-1 p-2 overflow-y-auto"
-                      data-etapa={etapa}
+                    {/* Cards com scroll vertical */}
+                    <SortableContext
+                      items={leadsInEtapa.map((l) => l.id)}
+                      strategy={verticalListSortingStrategy}
                     >
-                      {leadsInEtapa.map((lead) => (
-                        <LeadKanbanCard
-                          key={lead.id}
-                          lead={lead}
-                          onClick={() => setDrawerLeadId(lead.id)}
-                        />
-                      ))}
-                      {leadsInEtapa.length === 0 && (
-                        <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground py-8">
-                          Nenhum lead
+                      <div 
+                        className="flex flex-col gap-2 flex-1 p-2 overflow-y-auto"
+                        data-etapa={etapa}
+                      >
+                        {leadsInEtapa.map((lead) => (
+                          <LeadKanbanCard
+                            key={lead.id}
+                            lead={lead}
+                            onClick={() => setDrawerLeadId(lead.id)}
+                          />
+                        ))}
+                        {leadsInEtapa.length === 0 && (
+                          <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground py-8">
+                            Nenhum lead
                         </div>
                       )}
                     </div>
@@ -701,6 +704,7 @@ export default function Leads() {
             ) : null}
           </DragOverlay>
         </DndContext>
+        </div>
       )}
 
       {/* Sheet de Filtros */}
