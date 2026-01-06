@@ -467,10 +467,11 @@ export function AppSidebar() {
                   asChild
                   isActive={isActive(item.url)}
                   tooltip={item.title}
+                  className="group-data-[collapsible=icon]:justify-center"
                 >
                   <NavLink to={item.url}>
-                    <item.icon className="h-4 w-4" />
-                    <span>{item.title}</span>
+                    <item.icon className="h-4 w-4 shrink-0" />
+                    <span className="group-data-[collapsible=icon]:hidden">{item.title}</span>
                   </NavLink>
                 </SidebarMenuButton>
               </SidebarMenuItem>
