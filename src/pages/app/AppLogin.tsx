@@ -210,10 +210,11 @@ export default function AppLogin() {
       // For now, we'll use email-based auth with CPF as identifier
       // The email format will be cpf@associado.pratic.com.br
       const email = `${rawCPF}@associado.pratic.com.br`;
-      const { error: signInError } = await signIn(email, password);
+      const result = await signIn({ email, password });
 
-      if (signInError) {
-        if (signInError.message.includes('Invalid login credentials')) {
+      if (!result.success) {
+        const errorMessage = result.error || 'Erro ao fazer login';
+        if (errorMessage.includes('incorretos') || errorMessage.includes('Invalid')) {
           const attemptsRemaining = getAttemptsRemaining(rawCPF);
           recordFailedAttempt(rawCPF);
 
@@ -224,7 +225,7 @@ export default function AppLogin() {
             setError(`CPF ou senha inválidos. ${attemptsRemaining - 1} tentativas restantes.`);
           }
         } else {
-          setError(signInError.message);
+          setError(errorMessage);
         }
       } else {
         resetAttempts(rawCPF);
