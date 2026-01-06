@@ -124,6 +124,7 @@ import ConfiguracoesSistema from "./pages/diretoria/Configuracoes";
 import PerfisAcesso from "./pages/diretoria/PerfisAcesso";
 import UsuariosPage from "./pages/diretoria/Usuarios";
 import UsuarioDetalhePage from "./pages/diretoria/UsuarioDetalhe";
+import UsuarioEditarPage from "./pages/diretoria/UsuarioEditar";
 import LogsAuditoria from "./pages/diretoria/LogsAuditoria";
 import RelatoriosGerenciais from "./pages/diretoria/RelatoriosGerenciais";
 
@@ -288,6 +289,7 @@ const App = () => (
               <Route path="/diretoria/perfis" element={<PerfisAcesso />} />
               <Route path="/diretoria/usuarios" element={<UsuariosPage />} />
               <Route path="/diretoria/usuarios/:id" element={<UsuarioDetalhePage />} />
+              <Route path="/diretoria/usuarios/:id/editar" element={<UsuarioEditarPage />} />
               <Route path="/diretoria/logs" element={<LogsAuditoria />} />
               <Route path="/diretoria/relatorios" element={<RelatoriosGerenciais />} />
               {/* Oficinas */}
