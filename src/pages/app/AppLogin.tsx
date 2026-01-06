@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,7 +18,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
-import { Shield, Eye, EyeOff, Loader2, AlertCircle, Lock, MessageCircle, CheckCircle, FlaskConical, Copy, Check, Mail, ChevronDown } from 'lucide-react';
+import { Shield, Eye, EyeOff, Loader2, AlertCircle, Lock, MessageCircle, CheckCircle, FlaskConical, Copy, Check, Mail, ChevronDown, User } from 'lucide-react';
 import { z } from 'zod';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -30,7 +30,31 @@ import {
   getAttemptsRemaining,
 } from '@/lib/login-rate-limit';
 
-// CPF mask utility
+// ============================================
+// TIPOS E CONSTANTES
+// ============================================
+type LoginError = 
+  | 'invalid_credentials'
+  | 'cpf_not_found'
+  | 'account_blocked'
+  | 'account_suspended'
+  | 'too_many_requests'
+  | 'network_error'
+  | 'unknown_error';
+
+const ERROR_MESSAGES: Record<LoginError, string> = {
+  invalid_credentials: 'CPF ou senha incorretos',
+  cpf_not_found: 'CPF não encontrado. Verifique os dados.',
+  account_blocked: 'Sua conta está bloqueada. Entre em contato conosco.',
+  account_suspended: 'Sua conta está suspensa. Regularize sua situação.',
+  too_many_requests: 'Muitas tentativas. Aguarde alguns minutos.',
+  network_error: 'Erro de conexão. Verifique sua internet.',
+  unknown_error: 'Erro inesperado. Tente novamente.',
+};
+
+// ============================================
+// CPF UTILITIES
+// ============================================
 function formatCPF(value: string): string {
   const numbers = value.replace(/\D/g, '').slice(0, 11);
   if (numbers.length <= 3) return numbers;
@@ -41,6 +65,56 @@ function formatCPF(value: string): string {
 
 function unformatCPF(value: string): string {
   return value.replace(/\D/g, '');
+}
+
+function isValidCPF(cpf: string): boolean {
+  const numbers = unformatCPF(cpf);
+  if (numbers.length !== 11) return false;
+  
+  // Verificar se todos os dígitos são iguais (ex: 111.111.111-11)
+  if (/^(\d)\1+$/.test(numbers)) return false;
+  
+  // Validar primeiro dígito verificador
+  let sum = 0;
+  for (let i = 0; i < 9; i++) {
+    sum += parseInt(numbers[i]) * (10 - i);
+  }
+  let remainder = (sum * 10) % 11;
+  if (remainder === 10 || remainder === 11) remainder = 0;
+  if (remainder !== parseInt(numbers[9])) return false;
+  
+  // Validar segundo dígito verificador
+  sum = 0;
+  for (let i = 0; i < 10; i++) {
+    sum += parseInt(numbers[i]) * (11 - i);
+  }
+  remainder = (sum * 10) % 11;
+  if (remainder === 10 || remainder === 11) remainder = 0;
+  if (remainder !== parseInt(numbers[10])) return false;
+  
+  return true;
+}
+
+function parseLoginError(errorMessage: string): LoginError {
+  if (errorMessage.includes('Invalid login credentials') || errorMessage.includes('incorretos')) {
+    return 'invalid_credentials';
+  }
+  if (errorMessage.includes('not found') || errorMessage.includes('não encontrado')) {
+    return 'cpf_not_found';
+  }
+  if (errorMessage.includes('blocked') || errorMessage.includes('bloqueado')) {
+    return 'account_blocked';
+  }
+  if (errorMessage.includes('suspended') || errorMessage.includes('suspenso')) {
+    return 'account_suspended';
+  }
+  if (errorMessage.includes('Too many') || errorMessage.includes('rate limit')) {
+    return 'too_many_requests';
+  }
+  if (errorMessage.includes('fetch') || errorMessage.includes('network')) {
+    return 'network_error';
+  }
+  return 'unknown_error';
 }
 
 const cpfSchema = z.string().length(11, 'CPF deve ter 11 dígitos');
@@ -69,7 +143,7 @@ export default function AppLogin() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<LoginError | string | null>(null);
   const [accountLocked, setAccountLocked] = useState(false);
   const [lockTimeRemaining, setLockTimeRemaining] = useState(0);
   const [showCpfSenha, setShowCpfSenha] = useState(false);
@@ -136,7 +210,7 @@ export default function AppLogin() {
 
   const handleCPFChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setCpf(formatCPF(e.target.value));
-    setError('');
+    setError(null);
   };
 
   // Google Login
@@ -148,18 +222,18 @@ export default function AppLogin() {
         redirectTo: `${window.location.origin}/app/home`
       }
     });
-    if (error) setError(error.message);
+    if (error) setError(parseLoginError(error.message));
   };
 
   // Magic Link Login
   const handleMagicLink = async (e: React.FormEvent) => {
     e.preventDefault();
     setMagicLinkLoading(true);
-    setError('');
+    setError(null);
 
     const emailResult = emailSchema.safeParse(magicLinkEmail);
     if (!emailResult.success) {
-      setError('Email inválido');
+      setError('invalid_credentials');
       setMagicLinkLoading(false);
       return;
     }
@@ -173,7 +247,7 @@ export default function AppLogin() {
 
     setMagicLinkLoading(false);
     if (error) {
-      setError(error.message);
+      setError(parseLoginError(error.message));
     } else {
       setMagicLinkEnviado(true);
     }
@@ -182,25 +256,25 @@ export default function AppLogin() {
   // CPF + Senha Login
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setError(null);
 
     const rawCPF = unformatCPF(cpf);
 
-    // Validate CPF
+    // Validate CPF format and digits
     const cpfResult = cpfSchema.safeParse(rawCPF);
-    if (!cpfResult.success) {
-      setError('CPF inválido. Digite os 11 dígitos.');
+    if (!cpfResult.success || !isValidCPF(rawCPF)) {
+      setError('invalid_credentials');
       return;
     }
 
     // Check if locked
     if (isLocked(rawCPF)) {
-      setError(`Conta bloqueada. Tente novamente em ${formatLockTime(getRemainingLockTimeSeconds(rawCPF))}.`);
+      setError('too_many_requests');
       return;
     }
 
-    if (!password) {
-      setError('Digite sua senha.');
+    if (!password || password.length < 6) {
+      setError('invalid_credentials');
       return;
     }
 
@@ -214,24 +288,27 @@ export default function AppLogin() {
 
       if (!result.success) {
         const errorMessage = result.error || 'Erro ao fazer login';
-        if (errorMessage.includes('incorretos') || errorMessage.includes('Invalid')) {
+        const parsedError = parseLoginError(errorMessage);
+        
+        if (parsedError === 'invalid_credentials') {
           const attemptsRemaining = getAttemptsRemaining(rawCPF);
           recordFailedAttempt(rawCPF);
 
           if (isLocked(rawCPF)) {
             setAccountLocked(true);
-            setError('Muitas tentativas falhas. Conta bloqueada por 15 minutos.');
+            setError('too_many_requests');
           } else {
+            // Keep showing attempts remaining in Portuguese
             setError(`CPF ou senha inválidos. ${attemptsRemaining - 1} tentativas restantes.`);
           }
         } else {
-          setError(errorMessage);
+          setError(parsedError);
         }
       } else {
         resetAttempts(rawCPF);
       }
     } catch (err) {
-      setError('Erro ao fazer login. Tente novamente.');
+      setError('unknown_error');
     } finally {
       setLoading(false);
     }
@@ -338,7 +415,9 @@ export default function AppLogin() {
           {error && (
             <Alert variant="destructive" className="mb-4">
               <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
+              <AlertDescription>
+                {ERROR_MESSAGES[error as LoginError] || error}
+              </AlertDescription>
             </Alert>
           )}
 
@@ -370,11 +449,11 @@ export default function AppLogin() {
                   <Mail className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     type="email"
-                    placeholder="seu@email.com"
+                    placeholder="seuemail@exemplo.com"
                     value={magicLinkEmail}
                     onChange={(e) => {
                       setMagicLinkEmail(e.target.value);
-                      setError('');
+                      setError(null);
                     }}
                     disabled={magicLinkLoading}
                     className="h-12 pl-10"
@@ -453,16 +532,19 @@ export default function AppLogin() {
 
                 <div className="space-y-2">
                   <Label htmlFor="cpf">CPF</Label>
-                  <Input
-                    id="cpf"
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="000.000.000-00"
-                    value={cpf}
-                    onChange={handleCPFChange}
-                    disabled={loading}
-                    className="h-12 text-center text-lg tracking-wide"
-                  />
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      id="cpf"
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="000.000.000-00"
+                      value={cpf}
+                      onChange={handleCPFChange}
+                      disabled={loading || accountLocked}
+                      className="h-12 pl-10 text-lg tracking-wide"
+                    />
+                  </div>
                 </div>
 
                 <div className="space-y-2">
@@ -475,7 +557,7 @@ export default function AppLogin() {
                       value={password}
                       onChange={(e) => {
                         setPassword(e.target.value);
-                        setError('');
+                        setError(null);
                       }}
                       disabled={loading || accountLocked}
                       className="h-12 pr-12"
@@ -487,6 +569,7 @@ export default function AppLogin() {
                       className="absolute right-1 top-1/2 h-10 w-10 -translate-y-1/2 hover:bg-transparent"
                       onClick={() => setShowPassword(!showPassword)}
                       disabled={loading || accountLocked}
+                      aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
                     >
                       {showPassword ? (
                         <EyeOff className="h-5 w-5 text-muted-foreground" />
@@ -558,6 +641,16 @@ export default function AppLogin() {
               Criar Conta de Teste
             </Button>
           )}
+
+          {/* Link para Sistema Interno */}
+          <div className="mt-4 text-center">
+            <p className="text-sm text-muted-foreground">
+              É funcionário?{' '}
+              <Link to="/login" className="font-medium text-primary hover:underline">
+                Acesse o Sistema
+              </Link>
+            </p>
+          </div>
 
           {/* Versão */}
           <p className="mt-6 text-center text-xs text-muted-foreground">
