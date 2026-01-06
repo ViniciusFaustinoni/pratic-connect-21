@@ -32,6 +32,7 @@ import Associados from "./pages/cadastro/Associados";
 import AssociadoDetalhe from "./pages/cadastro/AssociadoDetalhe";
 import Veiculos from "./pages/cadastro/Veiculos";
 import Documentos from "./pages/cadastro/Documentos";
+import FilaDocumentos from "./pages/cadastro/FilaDocumentos";
 import SinistrosList from "./pages/eventos/SinistrosList";
 import SinistroDetalhe from "./pages/eventos/SinistroDetalhe";
 import SinistrosDashboard from "./pages/eventos/SinistrosDashboard";
@@ -201,6 +202,7 @@ const App = () => (
               <Route path="/cadastro/associados/:id" element={<AssociadoDetalhe />} />
               <Route path="/cadastro/veiculos" element={<Veiculos />} />
               <Route path="/cadastro/documentos" element={<Documentos />} />
+              <Route path="/cadastro/fila-documentos" element={<FilaDocumentos />} />
               
               {/* Eventos */}
               <Route path="/eventos/dashboard" element={<SinistrosDashboard />} />
