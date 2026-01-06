@@ -6,8 +6,15 @@ import type { Profile, PerfilAcesso } from '@/types/auth';
 // ============================================
 // TIPOS
 // ============================================
+export interface RoleRecord {
+  id: string;
+  role: PerfilAcesso;
+  created_at: string;
+}
+
 export interface ProfileWithRoles extends Profile {
   roles: PerfilAcesso[];
+  roleRecords?: RoleRecord[];
 }
 
 export interface UsuarioFilters {
@@ -280,6 +287,57 @@ export function useUsuarioActions() {
     },
   });
 
+  // Adicionar perfil ao usuário
+  const adicionarPerfil = useMutation({
+    mutationFn: async ({ userId, role }: { userId: string; role: PerfilAcesso }) => {
+      // Verificar se já existe
+      const { data: existente } = await supabase
+        .from('user_roles')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('role', role)
+        .maybeSingle();
+
+      if (existente) {
+        throw new Error('Este perfil já está atribuído ao usuário');
+      }
+
+      const { error } = await supabase
+        .from('user_roles')
+        .insert({ user_id: userId, role });
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['usuario'] });
+      queryClient.invalidateQueries({ queryKey: ['usuarios'] });
+      toast.success('Perfil adicionado com sucesso');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+
+  // Remover perfil do usuário
+  const removerPerfil = useMutation({
+    mutationFn: async (roleId: string) => {
+      const { error } = await supabase
+        .from('user_roles')
+        .delete()
+        .eq('id', roleId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['usuario'] });
+      queryClient.invalidateQueries({ queryKey: ['usuarios'] });
+      toast.success('Perfil removido com sucesso');
+    },
+    onError: (error: Error) => {
+      toast.error('Erro ao remover perfil: ' + error.message);
+    },
+  });
+
   return {
     desativarUsuario: desativarUsuario.mutate,
     ativarUsuario: ativarUsuario.mutate,
@@ -287,6 +345,8 @@ export function useUsuarioActions() {
     desbloquearUsuario: desbloquearUsuario.mutate,
     resetarSenha: resetarSenha.mutate,
     atualizarUsuario: atualizarUsuario.mutate,
+    adicionarPerfil: adicionarPerfil.mutate,
+    removerPerfil: removerPerfil.mutate,
     isLoading: 
       desativarUsuario.isPending || 
       ativarUsuario.isPending || 
@@ -294,6 +354,8 @@ export function useUsuarioActions() {
       desbloquearUsuario.isPending ||
       resetarSenha.isPending,
     isUpdating: atualizarUsuario.isPending,
+    isAddingPerfil: adicionarPerfil.isPending,
+    isRemovingPerfil: removerPerfil.isPending,
   };
 }
 
@@ -314,21 +376,31 @@ export function useUsuario(profileId: string | undefined) {
 
       if (profileError) throw profileError;
 
-      // Buscar roles
+      // Buscar roles com id e created_at para poder gerenciar
       let roles: PerfilAcesso[] = [];
+      let roleRecords: RoleRecord[] = [];
+      
       if (profile.user_id) {
         const { data: rolesData, error: rolesError } = await supabase
           .from('user_roles')
-          .select('role')
+          .select('id, role, created_at')
           .eq('user_id', profile.user_id);
 
         if (rolesError) throw rolesError;
-        roles = rolesData?.map(r => r.role as PerfilAcesso) || [];
+        
+        roleRecords = rolesData?.map(r => ({
+          id: r.id,
+          role: r.role as PerfilAcesso,
+          created_at: r.created_at,
+        })) || [];
+        
+        roles = roleRecords.map(r => r.role);
       }
 
       return {
         ...profile,
         roles,
+        roleRecords,
       } as ProfileWithRoles;
     },
     enabled: !!profileId,
