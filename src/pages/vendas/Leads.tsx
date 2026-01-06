@@ -270,19 +270,6 @@ export default function Leads() {
     <div className="flex flex-col h-[calc(100vh-4rem)]">
       {/* Header Fixo */}
       <div className="flex-shrink-0 space-y-4 pb-4">
-        {/* Breadcrumb */}
-        <nav className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Link to="/dashboard" className="hover:text-foreground transition-colors">
-            Home
-          </Link>
-          <span>/</span>
-          <Link to="/vendas/dashboard" className="hover:text-foreground transition-colors">
-            Vendas
-          </Link>
-          <span>/</span>
-          <span className="text-foreground font-medium">Leads</span>
-        </nav>
-
         {/* Header */}
         <div className="flex items-start sm:items-center justify-between gap-4">
           <div className="min-w-0">
