@@ -2,16 +2,18 @@ import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { 
   ArrowLeft, Phone, Mail, MessageCircle, MapPin, Calendar, User, Car, 
-  FileCheck, FileText, Clock, Edit, Ban, AlertTriangle, Loader2,
-  Receipt, MoreHorizontal, CheckCircle, XCircle, Pause, Play, Lock, Unlock,
-  CreditCard
+  FileCheck, FileText, Clock, Edit, AlertTriangle, Loader2,
+  Receipt, MoreHorizontal, CheckCircle, XCircle, Pause, Play, Plus,
+  CreditCard, Shield, Eye, ExternalLink, Wifi, WifiOff, Send, History,
+  TrendingUp, DollarSign
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,13 +21,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { 
   Table, 
   TableBody, 
@@ -35,417 +30,420 @@ import {
   TableRow 
 } from '@/components/ui/table';
 import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from '@/components/ui/breadcrumb';
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { 
   STATUS_ASSOCIADO_LABELS, 
   STATUS_VEICULO_LABELS,
-  STATUS_CONTRATO_LABELS,
+  STATUS_DOCUMENTO_LABELS,
+  TIPO_DOCUMENTO_LABELS,
+  STATUS_ASSOCIADO_COLORS,
+  STATUS_VEICULO_COLORS,
+  STATUS_DOCUMENTO_COLORS,
   type StatusAssociado,
   type StatusVeiculo,
-} from '@/types/database';
-import { useAssociado, useUpdateAssociadoStatus } from '@/hooks/useAssociados';
-import { useVeiculos } from '@/hooks/useVeiculos';
-import { useAssociadoHistoricoCompleto } from '@/hooks/useAssociadoHistoricoCompleto';
-import { useToast } from '@/hooks/use-toast';
-import { DocumentUploader } from '@/components/cadastro/DocumentUploader';
-import { ConfirmacaoAcaoDialog } from '@/components/associados/ConfirmacaoAcaoDialog';
-import { AssociadoEditDialog } from '@/components/associados/AssociadoEditDialog';
-import { TimelineHistorico } from '@/components/cadastro/TimelineHistorico';
-import { AdicionarObservacao } from '@/components/cadastro/AdicionarObservacao';
+} from '@/types/cadastro';
+import { useAssociado, useVeiculosDoAssociado, useAssociadoStats, useAssociadoActions } from '@/hooks/useAssociados';
+import { useDocumentosPorAssociado } from '@/hooks/useDocumentos';
+import { cn } from '@/lib/utils';
 
-const statusColors: Record<StatusAssociado, string> = {
-  em_analise: 'bg-blue-500 text-white',
-  aprovado: 'bg-green-100 text-green-800',
-  documentacao_pendente: 'bg-yellow-500 text-white',
-  aguardando_instalacao: 'bg-purple-500 text-white',
-  ativo: 'bg-green-500 text-white',
-  inadimplente: 'bg-orange-500 text-white',
-  suspenso: 'bg-gray-500 text-white',
-  cancelado: 'bg-destructive text-destructive-foreground',
-  bloqueado: 'bg-red-700 text-white',
+// ============================================
+// UTILITÁRIOS
+// ============================================
+const formatCPF = (cpf: string | null) => {
+  if (!cpf) return '—';
+  const d = cpf.replace(/\D/g, '');
+  return d.length === 11 ? `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6,9)}-${d.slice(9)}` : cpf;
 };
 
-const avatarColors: Record<StatusAssociado, string> = {
-  em_analise: 'bg-blue-500',
-  aprovado: 'bg-green-500',
-  documentacao_pendente: 'bg-yellow-500',
-  aguardando_instalacao: 'bg-purple-500',
-  ativo: 'bg-green-600',
-  inadimplente: 'bg-orange-500',
-  suspenso: 'bg-gray-500',
-  cancelado: 'bg-red-600',
-  bloqueado: 'bg-red-700',
+const formatCPFMasked = (cpf: string | null) => {
+  if (!cpf) return '—';
+  const d = cpf.replace(/\D/g, '');
+  return d.length === 11 ? `***.${d.slice(3,6)}.***-${d.slice(9)}` : cpf;
 };
 
-const veiculoStatusColors: Record<StatusVeiculo, string> = {
-  em_analise: 'bg-blue-100 text-blue-800',
-  aprovado: 'bg-green-100 text-green-800',
-  instalacao_pendente: 'bg-yellow-100 text-yellow-800',
-  ativo: 'bg-green-500 text-white',
-  suspenso: 'bg-orange-100 text-orange-800',
-  cancelado: 'bg-red-100 text-red-800',
-  sinistrado: 'bg-purple-100 text-purple-800',
+const formatPhone = (phone: string | null) => {
+  if (!phone) return '—';
+  const d = phone.replace(/\D/g, '');
+  if (d.length === 11) return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`;
+  if (d.length === 10) return `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`;
+  return phone;
 };
 
+const formatCurrency = (v: number | null | undefined) => 
+  v ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v) : 'R$ 0,00';
+
+const formatDate = (d: string | null | undefined) => 
+  d ? new Date(d).toLocaleDateString('pt-BR') : '—';
+
+const formatDateShort = (d: string | null | undefined) => 
+  d ? new Date(d).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }) : '—';
+
+const formatDateTime = (d: string) => 
+  new Date(d).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+const calcularIdade = (dn: string | null | undefined) => {
+  if (!dn) return null;
+  const hoje = new Date(), nasc = new Date(dn);
+  let idade = hoje.getFullYear() - nasc.getFullYear();
+  const m = hoje.getMonth() - nasc.getMonth();
+  if (m < 0 || (m === 0 && hoje.getDate() < nasc.getDate())) idade--;
+  return idade;
+};
+
+const getInitials = (nome: string) => {
+  const p = nome.split(' ');
+  return p.length >= 2 ? `${p[0][0]}${p[p.length-1][0]}`.toUpperCase() : nome.slice(0,2).toUpperCase();
+};
+
+// ============================================
+// MOCK DATA
+// ============================================
+const MOCK_FATURAS = [
+  { id: '1', referencia: 'Jan/2026', vencimento: '2026-01-15', valor: 249.90, status: 'pago' },
+  { id: '2', referencia: 'Dez/2025', vencimento: '2025-12-15', valor: 249.90, status: 'pago' },
+  { id: '3', referencia: 'Nov/2025', vencimento: '2025-11-15', valor: 249.90, status: 'pago' },
+  { id: '4', referencia: 'Out/2025', vencimento: '2025-10-15', valor: 249.90, status: 'pago' },
+  { id: '5', referencia: 'Set/2025', vencimento: '2025-09-15', valor: 249.90, status: 'pago' },
+];
+
+const MOCK_HISTORICO = [
+  { id: '1', tipo: 'pagamento', data: '2026-01-15T14:32:00', titulo: 'Pagamento confirmado', descricao: 'Fatura Jan/2026 - R$ 249,90 via Boleto', icone: CheckCircle, cor: 'text-green-500' },
+  { id: '2', tipo: 'documento', data: '2026-01-10T16:45:00', titulo: 'Documento aprovado', descricao: 'CNH aprovada por Maria Santos', icone: FileText, cor: 'text-blue-500' },
+  { id: '3', tipo: 'veiculo', data: '2026-01-05T10:20:00', titulo: 'Veículo adicionado', descricao: 'Hyundai HB20 2022 - Placa DEF-5678', icone: Car, cor: 'text-purple-500' },
+  { id: '4', tipo: 'atendimento', data: '2026-01-02T09:15:00', titulo: 'Atendimento finalizado', descricao: 'Chamado #1234 - Dúvida sobre cobertura', icone: MessageCircle, cor: 'text-yellow-500' },
+  { id: '5', tipo: 'fatura', data: '2026-01-01T00:01:00', titulo: 'Fatura gerada', descricao: 'Fatura Jan/2026 - R$ 249,90', icone: Receipt, cor: 'text-muted-foreground' },
+  { id: '6', tipo: 'contrato', data: '2024-01-15T11:30:00', titulo: 'Contrato assinado', descricao: 'Adesão concluída - Plano Completo', icone: Shield, cor: 'text-green-600' },
+];
+
+// ============================================
+// COMPONENTE PRINCIPAL
+// ============================================
 export default function AssociadoDetalhe() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { toast } = useToast();
+  
+  const [activeTab, setActiveTab] = useState('resumo');
+  const [suspenderDialogOpen, setSuspenderDialogOpen] = useState(false);
+  const [cancelarDialogOpen, setCancelarDialogOpen] = useState(false);
 
+  // Data fetching
   const { data: associado, isLoading, refetch } = useAssociado(id);
-  const { data: veiculos } = useVeiculos(id);
-  const { data: historico, isLoading: historicoLoading } = useAssociadoHistoricoCompleto(id);
-  const updateStatus = useUpdateAssociadoStatus();
+  const { data: veiculos, isLoading: isLoadingVeiculos } = useVeiculosDoAssociado(id);
+  const { data: documentos, isLoading: isLoadingDocs } = useDocumentosPorAssociado(id);
+  const { data: stats } = useAssociadoStats(id);
+  
+  // Actions
+  const { 
+    suspenderAssociado, 
+    reativarAssociado, 
+    cancelarAssociado,
+    isSuspendendo, 
+    isReativando, 
+    isCancelando 
+  } = useAssociadoActions();
 
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [confirmDialog, setConfirmDialog] = useState<{
-    open: boolean;
-    action: 'bloquear' | 'suspender' | 'cancelar';
-  }>({ open: false, action: 'bloquear' });
-  const [selectedVeiculoId, setSelectedVeiculoId] = useState<string | undefined>(undefined);
-
-  const formatDate = (dateStr: string | null | undefined) => {
-    if (!dateStr) return '-';
-    return new Date(dateStr).toLocaleDateString('pt-BR');
-  };
-
-  const formatCurrency = (value: number | null | undefined) => {
-    if (!value) return 'N/A';
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-    }).format(value);
-  };
-
-  const getInitials = (name: string) => {
-    return name
-      .split(' ')
-      .map((n) => n[0])
-      .slice(0, 2)
-      .join('')
-      .toUpperCase();
-  };
-
+  // Handlers
   const handleWhatsApp = () => {
-    if (associado?.telefone) {
-      const phone = associado.telefone.replace(/\D/g, '');
-      window.open(`https://wa.me/55${phone}`, '_blank');
-    }
+    if (!associado?.telefone) return;
+    window.open(`https://wa.me/55${associado.telefone.replace(/\D/g, '')}`, '_blank');
   };
 
-  const handleStatusAction = (action: 'bloquear' | 'suspender' | 'cancelar') => {
-    setConfirmDialog({ open: true, action });
+  const handleEmail = () => {
+    if (!associado?.email) return;
+    window.open(`mailto:${associado.email}`, '_blank');
   };
 
-  const handleConfirmAction = async (motivo: string) => {
-    if (!confirmDialog.action || !associado) return;
-    
-    const statusMap = {
-      bloquear: 'bloqueado' as const,
-      suspender: 'suspenso' as const,
-      cancelar: 'cancelado' as const,
-    };
-
-    try {
-      await updateStatus.mutateAsync({
-        id: associado.id,
-        status: statusMap[confirmDialog.action],
-        motivo,
-      });
-      toast({ title: 'Status atualizado', description: `Associado ${confirmDialog.action === 'bloquear' ? 'bloqueado' : confirmDialog.action === 'suspender' ? 'suspenso' : 'cancelado'} com sucesso.` });
-      refetch();
-    } catch {
-      toast({ title: 'Erro', description: 'Não foi possível atualizar o status.', variant: 'destructive' });
-    }
-    setConfirmDialog({ open: false, action: 'bloquear' });
+  const handleSuspender = () => {
+    if (!id) return;
+    suspenderAssociado({ id });
+    setSuspenderDialogOpen(false);
   };
 
-  const handleReativar = async () => {
-    if (!associado) return;
-    try {
-      await updateStatus.mutateAsync({ id: associado.id, status: 'ativo' });
-      toast({ title: 'Associado reativado', description: 'O associado foi reativado com sucesso.' });
-      refetch();
-    } catch {
-      toast({ title: 'Erro', description: 'Não foi possível reativar o associado.', variant: 'destructive' });
-    }
+  const handleReativar = () => {
+    if (id) reativarAssociado(id);
   };
 
-  const handleDesbloquear = async () => {
-    if (!associado) return;
-    try {
-      await updateStatus.mutateAsync({ id: associado.id, status: 'ativo' });
-      toast({ title: 'Associado desbloqueado', description: 'O associado foi desbloqueado com sucesso.' });
-      refetch();
-    } catch {
-      toast({ title: 'Erro', description: 'Não foi possível desbloquear o associado.', variant: 'destructive' });
-    }
+  const handleCancelar = () => {
+    if (!id) return;
+    cancelarAssociado({ id, motivo: 'Cancelado pelo administrador' });
+    setCancelarDialogOpen(false);
+    navigate('/cadastro/associados');
   };
 
-  // Set default vehicle when data loads
-  if (veiculos?.length && !selectedVeiculoId) {
-    setSelectedVeiculoId(veiculos[0].id);
-  }
-
+  // ============================================
+  // LOADING STATE
+  // ============================================
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="space-y-6">
+        <Skeleton className="h-8 w-64" />
+        <Skeleton className="h-32 w-full" />
+        <Skeleton className="h-10 w-full" />
+        <div className="grid grid-cols-4 gap-4">
+          <Skeleton className="h-24" />
+          <Skeleton className="h-24" />
+          <Skeleton className="h-24" />
+          <Skeleton className="h-24" />
+        </div>
       </div>
     );
   }
 
+  // ============================================
+  // ERROR STATE
+  // ============================================
   if (!associado) {
     return (
       <div className="flex flex-col items-center justify-center h-64">
         <User className="h-12 w-12 text-muted-foreground/50" />
         <h3 className="mt-4 font-semibold">Associado não encontrado</h3>
         <Button variant="link" onClick={() => navigate('/cadastro/associados')}>
-          Voltar para a lista
+          <ArrowLeft className="mr-2 h-4 w-4" /> Voltar
         </Button>
       </div>
     );
   }
 
+  // Computed values
   const status = associado.status as StatusAssociado;
+  const idade = calcularIdade(associado.data_nascimento);
+  const docsPendentes = documentos?.filter(d => d.status === 'pendente').length || 0;
+  const docsAprovados = documentos?.filter(d => d.status === 'aprovado').length || 0;
+  const docsReprovados = documentos?.filter(d => d.status === 'reprovado').length || 0;
 
+  // ============================================
+  // RENDER
+  // ============================================
   return (
     <div className="space-y-6">
-      {/* Breadcrumb */}
-      <Breadcrumb>
-        <BreadcrumbList>
-          <BreadcrumbItem>
-            <BreadcrumbLink asChild>
-              <Link to="/cadastro/associados">Cadastro</Link>
-            </BreadcrumbLink>
-          </BreadcrumbItem>
-          <BreadcrumbSeparator />
-          <BreadcrumbItem>
-            <BreadcrumbLink asChild>
-              <Link to="/cadastro/associados">Associados</Link>
-            </BreadcrumbLink>
-          </BreadcrumbItem>
-          <BreadcrumbSeparator />
-          <BreadcrumbItem>
-            <BreadcrumbPage>{associado.nome}</BreadcrumbPage>
-          </BreadcrumbItem>
-        </BreadcrumbList>
-      </Breadcrumb>
+      {/* BREADCRUMB */}
+      <nav className="flex items-center text-sm text-muted-foreground">
+        <Link to="/" className="hover:text-foreground">Home</Link>
+        <span className="mx-2">/</span>
+        <Link to="/cadastro/associados" className="hover:text-foreground">Cadastro</Link>
+        <span className="mx-2">/</span>
+        <Link to="/cadastro/associados" className="hover:text-foreground">Associados</Link>
+        <span className="mx-2">/</span>
+        <span className="text-foreground font-medium">{associado.nome}</span>
+      </nav>
 
-      {/* Header Card */}
+      <Button variant="ghost" size="sm" onClick={() => navigate('/cadastro/associados')}>
+        <ArrowLeft className="mr-2 h-4 w-4" /> Voltar
+      </Button>
+
+      {/* HEADER CARD */}
       <Card>
         <CardContent className="p-6">
-          <div className="flex flex-col lg:flex-row gap-6">
-            {/* Left: Avatar + Name */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+            {/* Left: Avatar + Info */}
             <div className="flex items-start gap-4">
-              <Avatar className={`h-16 w-16 ${avatarColors[status]} text-white`}>
+              <Avatar className="h-16 w-16 bg-primary text-primary-foreground">
                 <AvatarFallback className="bg-transparent text-xl font-bold">
                   {getInitials(associado.nome)}
                 </AvatarFallback>
               </Avatar>
-              <div>
-                <h1 className="text-2xl font-bold">{associado.nome}</h1>
-                <p className="text-muted-foreground">CPF: {associado.cpf}</p>
-                <div className="flex items-center gap-2 mt-2">
-                  <Badge className={statusColors[status]}>
+              <div className="space-y-1">
+                <div className="flex items-center gap-3">
+                  <h1 className="text-2xl font-bold">{associado.nome}</h1>
+                  <Badge className={cn(STATUS_ASSOCIADO_COLORS[status])}>
                     {STATUS_ASSOCIADO_LABELS[status]}
                   </Badge>
-                  {associado.bloqueado && (
-                    <Badge className="bg-red-700 text-white">
-                      <Ban className="mr-1 h-3 w-3" />
-                      Bloqueado
-                    </Badge>
-                  )}
+                </div>
+                <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                  <span>CPF: {formatCPFMasked(associado.cpf)}</span>
+                  <span>Desde {formatDateShort(associado.data_adesao)}</span>
+                </div>
+                <div className="flex items-center gap-4 text-sm">
+                  <span className="flex items-center gap-1">
+                    <Phone className="h-3.5 w-3.5" />
+                    {formatPhone(associado.telefone)}
+                  </span>
+                  <span className="flex items-center gap-1 text-muted-foreground">
+                    <Mail className="h-3.5 w-3.5" />
+                    {associado.email}
+                  </span>
                 </div>
               </div>
             </div>
 
-            {/* Center: Contact Info */}
-            <div className="flex-1 grid grid-cols-2 gap-3 text-sm">
-              <div className="flex items-center gap-2">
-                <Phone className="h-4 w-4 text-muted-foreground" />
-                <span>{associado.telefone}</span>
-              </div>
-              <div className="flex items-center gap-2 cursor-pointer text-green-600 hover:underline" onClick={handleWhatsApp}>
-                <MessageCircle className="h-4 w-4" />
-                <span>WhatsApp</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Mail className="h-4 w-4 text-muted-foreground" />
-                <span className="truncate">{associado.email}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <MapPin className="h-4 w-4 text-muted-foreground" />
-                <span>{associado.cidade ? `${associado.cidade}/${associado.uf}` : '-'}</span>
-              </div>
-            </div>
+            {/* Right: Actions */}
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="outline" onClick={() => navigate(`/cadastro/associados/${id}/editar`)}>
+                <Edit className="mr-2 h-4 w-4" /> Editar
+              </Button>
+              <Button variant="outline" onClick={() => setActiveTab('documentos')}>
+                <FileCheck className="mr-2 h-4 w-4" /> Documentos
+                {docsPendentes > 0 && (
+                  <Badge variant="destructive" className="ml-2 h-5 px-1.5">{docsPendentes}</Badge>
+                )}
+              </Button>
+              <Button variant="outline" onClick={() => setActiveTab('financeiro')}>
+                <DollarSign className="mr-2 h-4 w-4" /> Financeiro
+              </Button>
+              
+              {status === 'ativo' && (
+                <Button variant="outline" className="text-yellow-600" onClick={() => setSuspenderDialogOpen(true)}>
+                  <Pause className="mr-2 h-4 w-4" /> Suspender
+                </Button>
+              )}
+              
+              {status === 'suspenso' && (
+                <Button variant="outline" className="text-green-600" onClick={handleReativar} disabled={isReativando}>
+                  {isReativando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
+                  Reativar
+                </Button>
+              )}
 
-            {/* Right: Mini Cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              <div className="bg-muted/50 rounded-lg p-3 text-center">
-                <p className="text-xs text-muted-foreground">Plano</p>
-                <p className="font-semibold text-sm truncate">{associado.planos?.nome || '-'}</p>
-              </div>
-              <div className="bg-muted/50 rounded-lg p-3 text-center">
-                <p className="text-xs text-muted-foreground">Desde</p>
-                <p className="font-semibold text-sm">{formatDate(associado.data_adesao)}</p>
-              </div>
-              <div className="bg-muted/50 rounded-lg p-3 text-center">
-                <p className="text-xs text-muted-foreground">Dia Venc.</p>
-                <p className="font-semibold text-sm">
-                  {associado.dia_vencimento ? `Dia ${associado.dia_vencimento}` : '-'}
-                </p>
-              </div>
-              <div className="bg-muted/50 rounded-lg p-3 text-center">
-                <p className="text-xs text-muted-foreground">Veículos</p>
-                <p className="font-semibold text-sm">{veiculos?.length || 0}</p>
-              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={handleWhatsApp}>
+                    <MessageCircle className="mr-2 h-4 w-4" /> WhatsApp
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleEmail}>
+                    <Mail className="mr-2 h-4 w-4" /> Email
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem 
+                    onClick={() => setCancelarDialogOpen(true)}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <XCircle className="mr-2 h-4 w-4" /> Cancelar Associação
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Action Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <Button variant="ghost" onClick={() => navigate('/cadastro/associados')}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Voltar
-        </Button>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={() => setEditDialogOpen(true)}>
-            <Edit className="mr-2 h-4 w-4" />
-            Editar Dados
-          </Button>
-          <Button variant="outline" onClick={handleWhatsApp}>
-            <MessageCircle className="mr-2 h-4 w-4" />
-            Enviar Mensagem
-          </Button>
-          <Button variant="outline" onClick={() => toast({ title: 'Em desenvolvimento', description: 'Módulo financeiro em implementação.' })}>
-            <Receipt className="mr-2 h-4 w-4" />
-            Gerar Boleto
-          </Button>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline">
-                <MoreHorizontal className="mr-2 h-4 w-4" />
-                Alterar Status
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="bg-popover">
-              {status === 'ativo' && (
-                <>
-                  <DropdownMenuItem onClick={() => handleStatusAction('suspender')}>
-                    <Pause className="mr-2 h-4 w-4" />
-                    Suspender
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleStatusAction('bloquear')}>
-                    <Lock className="mr-2 h-4 w-4" />
-                    Bloquear
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => handleStatusAction('cancelar')} className="text-destructive">
-                    <XCircle className="mr-2 h-4 w-4" />
-                    Cancelar
-                  </DropdownMenuItem>
-                </>
-              )}
-              {status === 'suspenso' && (
-                <>
-                  <DropdownMenuItem onClick={handleReativar}>
-                    <Play className="mr-2 h-4 w-4" />
-                    Reativar
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleStatusAction('bloquear')}>
-                    <Lock className="mr-2 h-4 w-4" />
-                    Bloquear
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => handleStatusAction('cancelar')} className="text-destructive">
-                    <XCircle className="mr-2 h-4 w-4" />
-                    Cancelar
-                  </DropdownMenuItem>
-                </>
-              )}
-              {status === 'bloqueado' && (
-                <>
-                  <DropdownMenuItem onClick={handleDesbloquear}>
-                    <Unlock className="mr-2 h-4 w-4" />
-                    Desbloquear
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => handleStatusAction('cancelar')} className="text-destructive">
-                    <XCircle className="mr-2 h-4 w-4" />
-                    Cancelar
-                  </DropdownMenuItem>
-                </>
-              )}
-              {status === 'inadimplente' && (
-                <>
-                  <DropdownMenuItem onClick={() => handleStatusAction('suspender')}>
-                    <Pause className="mr-2 h-4 w-4" />
-                    Suspender
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleStatusAction('bloquear')}>
-                    <Lock className="mr-2 h-4 w-4" />
-                    Bloquear
-                  </DropdownMenuItem>
-                </>
-              )}
-              {status === 'em_analise' && (
-                <>
-                  <DropdownMenuItem onClick={handleReativar}>
-                    <CheckCircle className="mr-2 h-4 w-4" />
-                    Aprovar
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleStatusAction('cancelar')} className="text-destructive">
-                    <XCircle className="mr-2 h-4 w-4" />
-                    Reprovar
-                  </DropdownMenuItem>
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <Tabs defaultValue="dados" className="space-y-4">
+      {/* TABS */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList className="flex-wrap">
+          <TabsTrigger value="resumo">
+            <TrendingUp className="mr-2 h-4 w-4" /> Resumo
+          </TabsTrigger>
           <TabsTrigger value="dados">
-            <User className="mr-2 h-4 w-4" />
-            Dados
+            <User className="mr-2 h-4 w-4" /> Dados Pessoais
           </TabsTrigger>
           <TabsTrigger value="veiculos">
-            <Car className="mr-2 h-4 w-4" />
-            Veículos ({veiculos?.length || 0})
+            <Car className="mr-2 h-4 w-4" /> Veículos {veiculos?.length ? `(${veiculos.length})` : ''}
           </TabsTrigger>
           <TabsTrigger value="documentos">
-            <FileCheck className="mr-2 h-4 w-4" />
-            Documentos
+            <FileCheck className="mr-2 h-4 w-4" /> Documentos
+            {docsPendentes > 0 && <Badge variant="destructive" className="ml-2 h-5 px-1.5">{docsPendentes}</Badge>}
           </TabsTrigger>
-          <TabsTrigger value="contrato">
-            <FileText className="mr-2 h-4 w-4" />
-            Contrato
-          </TabsTrigger>
-          <TabsTrigger value="boletos">
-            <CreditCard className="mr-2 h-4 w-4" />
-            Boletos
+          <TabsTrigger value="financeiro">
+            <CreditCard className="mr-2 h-4 w-4" /> Financeiro
           </TabsTrigger>
           <TabsTrigger value="historico">
-            <Clock className="mr-2 h-4 w-4" />
-            Histórico
+            <History className="mr-2 h-4 w-4" /> Histórico
           </TabsTrigger>
         </TabsList>
 
-        {/* Tab: Dados */}
+        {/* ============================================ */}
+        {/* TAB: RESUMO */}
+        {/* ============================================ */}
+        <TabsContent value="resumo" className="space-y-6">
+          {/* Stats Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card>
+              <CardContent className="p-4 text-center">
+                <Car className="h-8 w-8 mx-auto text-blue-500" />
+                <p className="text-2xl font-bold mt-2">{stats?.veiculos || 0}</p>
+                <p className="text-sm text-muted-foreground">Veículos</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 text-center">
+                <FileCheck className="h-8 w-8 mx-auto text-green-500" />
+                <p className="text-2xl font-bold mt-2">{docsAprovados}/{documentos?.length || 0}</p>
+                <p className="text-sm text-muted-foreground">Documentos ✓</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 text-center">
+                <CheckCircle className="h-8 w-8 mx-auto text-green-500" />
+                <p className="text-2xl font-bold mt-2">12 meses</p>
+                <p className="text-sm text-muted-foreground">Em Dia</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 text-center">
+                <AlertTriangle className="h-8 w-8 mx-auto text-orange-500" />
+                <p className="text-2xl font-bold mt-2">{stats?.sinistros || 0}</p>
+                <p className="text-sm text-muted-foreground">Sinistros</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Info Cards */}
+          <div className="grid md:grid-cols-2 gap-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Informações Rápidas</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                <div className="flex justify-between"><span className="text-muted-foreground">Plano</span><span className="font-medium">{associado.planos?.nome || '—'}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Mensalidade</span><span className="font-medium">R$ 249,90</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Dia vencimento</span><span className="font-medium">Todo dia {associado.dia_vencimento || 15}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Forma pagamento</span><span className="font-medium">Boleto</span></div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Próximos Vencimentos</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                <div className="flex justify-between"><span className="text-muted-foreground">Mensalidade</span><span className="font-medium">15/02/2026</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">CNH vence</span><span className="font-medium">10/05/2026</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">CRLV vence</span><span className="font-medium">Dez/2026</span></div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Recent Activity */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Últimas Atividades</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {MOCK_HISTORICO.slice(0, 5).map((e) => {
+                  const Icon = e.icone;
+                  return (
+                    <div key={e.id} className="flex items-start gap-3">
+                      <Icon className={cn('h-5 w-5 mt-0.5', e.cor)} />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm">{e.titulo}</p>
+                        <p className="text-sm text-muted-foreground truncate">{e.descricao}</p>
+                      </div>
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">
+                        {formatDate(e.data.split('T')[0])}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ============================================ */}
+        {/* TAB: DADOS PESSOAIS */}
+        {/* ============================================ */}
         <TabsContent value="dados" className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
             {/* Dados Pessoais */}
@@ -453,67 +451,32 @@ export default function AssociadoDetalhe() {
               <CardHeader>
                 <CardTitle className="text-base">Dados Pessoais</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="text-muted-foreground">Nome</p>
-                    <p className="font-medium">{associado.nome}</p>
-                  </div>
+              <CardContent className="space-y-4 text-sm">
+                <div>
+                  <p className="text-muted-foreground">Nome Completo</p>
+                  <p className="font-medium">{associado.nome}</p>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="text-muted-foreground">CPF</p>
-                    <p className="font-medium">{associado.cpf}</p>
+                    <p className="font-medium">{formatCPF(associado.cpf)}</p>
                   </div>
                   <div>
                     <p className="text-muted-foreground">RG</p>
-                    <p className="font-medium">{associado.rg || '-'}</p>
+                    <p className="font-medium">{associado.rg || '—'}</p>
                   </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <p className="text-muted-foreground">Data de Nascimento</p>
-                    <p className="font-medium">{formatDate(associado.data_nascimento)}</p>
+                    <p className="text-muted-foreground">Nascimento</p>
+                    <p className="font-medium">
+                      {formatDate(associado.data_nascimento)}
+                      {idade && <span className="text-muted-foreground ml-1">({idade} anos)</span>}
+                    </p>
                   </div>
                   <div>
                     <p className="text-muted-foreground">Sexo</p>
-                    <p className="font-medium">{associado.sexo || '-'}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Estado Civil</p>
-                    <p className="font-medium">{associado.estado_civil || '-'}</p>
-                  </div>
-                  <div className="col-span-2">
-                    <p className="text-muted-foreground">Profissão</p>
-                    <p className="font-medium">{associado.profissao || '-'}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Contato */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Contato</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <Phone className="h-4 w-4 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm text-muted-foreground">Telefone</p>
-                    <p className="font-medium">{associado.telefone}</p>
-                  </div>
-                </div>
-                {associado.whatsapp && (
-                  <div className="flex items-center gap-3">
-                    <MessageCircle className="h-4 w-4 text-muted-foreground" />
-                    <div>
-                      <p className="text-sm text-muted-foreground">WhatsApp</p>
-                      <p className="font-medium">{associado.whatsapp}</p>
-                    </div>
-                  </div>
-                )}
-                <div className="flex items-center gap-3">
-                  <Mail className="h-4 w-4 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm text-muted-foreground">E-mail</p>
-                    <p className="font-medium">{associado.email}</p>
+                    <p className="font-medium">{associado.sexo === 'M' ? 'Masculino' : associado.sexo === 'F' ? 'Feminino' : '—'}</p>
                   </div>
                 </div>
               </CardContent>
@@ -524,265 +487,475 @@ export default function AssociadoDetalhe() {
               <CardHeader>
                 <CardTitle className="text-base">Endereço</CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="flex items-start gap-3">
-                  <MapPin className="h-4 w-4 text-muted-foreground mt-1" />
-                  <div className="text-sm">
-                    {associado.logradouro ? (
-                      <>
-                        <p className="font-medium">
-                          {associado.logradouro}, {associado.numero}
-                          {associado.complemento && ` - ${associado.complemento}`}
-                        </p>
-                        <p className="text-muted-foreground">
-                          {associado.bairro} - {associado.cidade}/{associado.uf}
-                        </p>
-                        <p className="text-muted-foreground">CEP: {associado.cep}</p>
-                      </>
-                    ) : (
-                      <p className="text-muted-foreground">Endereço não cadastrado</p>
-                    )}
-                  </div>
+              <CardContent className="space-y-4 text-sm">
+                <div>
+                  <p className="text-muted-foreground">CEP</p>
+                  <p className="font-medium">{associado.cep || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Logradouro</p>
+                  <p className="font-medium">
+                    {associado.logradouro || '—'}
+                    {associado.numero && `, ${associado.numero}`}
+                    {associado.complemento && ` - ${associado.complemento}`}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Bairro</p>
+                  <p className="font-medium">{associado.bairro || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Cidade / Estado</p>
+                  <p className="font-medium">{associado.cidade || '—'} {associado.uf && `- ${associado.uf}`}</p>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Associação */}
+            {/* Contatos */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Associação</CardTitle>
+                <CardTitle className="text-base">Contatos</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="grid grid-cols-2 gap-4 text-sm">
+              <CardContent className="space-y-4 text-sm">
+                <div>
+                  <p className="text-muted-foreground">Telefone Principal</p>
+                  <p className="font-medium">{formatPhone(associado.telefone)}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Telefone Secundário</p>
+                  <p className="font-medium">{formatPhone(associado.telefone_secundario)}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Email</p>
+                  <p className="font-medium">{associado.email || '—'}</p>
+                </div>
+                <div className="flex gap-2 pt-2">
+                  <Button size="sm" variant="outline" onClick={handleWhatsApp}>
+                    <MessageCircle className="mr-2 h-4 w-4" /> WhatsApp
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={handleEmail}>
+                    <Mail className="mr-2 h-4 w-4" /> Email
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Plano e Contrato */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Plano e Contrato</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4 text-sm">
+                <div>
+                  <p className="text-muted-foreground">Plano</p>
+                  <p className="font-medium">{associado.planos?.nome || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Data de Adesão</p>
+                  <p className="font-medium">{formatDate(associado.data_adesao)}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Contrato</p>
+                  <p className="font-medium">{associado.contratos?.numero || 'CTR-2024-00123'}</p>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <p className="text-muted-foreground">Plano</p>
-                    <p className="font-medium">{associado.planos?.nome || '-'}</p>
+                    <p className="text-muted-foreground">Vencimento</p>
+                    <p className="font-medium">Todo dia {associado.dia_vencimento || 15}</p>
                   </div>
                   <div>
-                    <p className="text-muted-foreground">Status</p>
-                    <Badge className={statusColors[status]}>
-                      {STATUS_ASSOCIADO_LABELS[status]}
-                    </Badge>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Data de Adesão</p>
-                    <p className="font-medium">{formatDate(associado.data_adesao)}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Dia de Vencimento</p>
-                    <p className="font-medium">
-                      {associado.dia_vencimento ? `Dia ${associado.dia_vencimento}` : '-'}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Cadastrado em</p>
-                    <p className="font-medium">{formatDate(associado.created_at)}</p>
+                    <p className="text-muted-foreground">Valor</p>
+                    <p className="font-medium">R$ 249,90/mês</p>
                   </div>
                 </div>
-
-                {associado.bloqueado && associado.motivo_bloqueio && (
-                  <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
-                    <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
-                      <AlertTriangle className="h-4 w-4" />
-                      <span className="font-medium">Motivo do bloqueio:</span>
-                    </div>
-                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">
-                      {associado.motivo_bloqueio}
-                    </p>
-                  </div>
-                )}
               </CardContent>
             </Card>
           </div>
         </TabsContent>
 
-        {/* Tab: Veículos */}
-        <TabsContent value="veiculos">
-          <Card>
-            <CardContent className="p-0">
-              {!veiculos?.length ? (
-                <div className="flex flex-col items-center justify-center py-12">
-                  <Car className="h-12 w-12 text-muted-foreground/50" />
-                  <h3 className="mt-4 font-semibold">Nenhum veículo cadastrado</h3>
-                </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Veículo</TableHead>
-                      <TableHead>Placa</TableHead>
-                      <TableHead>Ano</TableHead>
-                      <TableHead>Valor FIPE</TableHead>
-                      <TableHead>Uso App</TableHead>
-                      <TableHead>Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {veiculos.map((veiculo) => (
-                      <TableRow key={veiculo.id}>
-                        <TableCell>
-                          <div>
-                            <p className="font-medium">{veiculo.marca}</p>
-                            <p className="text-sm text-muted-foreground">{veiculo.modelo}</p>
-                          </div>
-                        </TableCell>
-                        <TableCell className="font-mono">{veiculo.placa}</TableCell>
-                        <TableCell>{veiculo.ano_fabricacao}/{veiculo.ano_modelo}</TableCell>
-                        <TableCell>{formatCurrency(veiculo.valor_fipe)}</TableCell>
-                        <TableCell>
-                          {veiculo.uso_aplicativo ? (
-                            <Badge variant="outline">{veiculo.plataforma_app || 'Sim'}</Badge>
-                          ) : (
-                            <span className="text-muted-foreground">Não</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Badge className={veiculoStatusColors[(veiculo.status as StatusVeiculo) || 'em_analise']}>
-                            {STATUS_VEICULO_LABELS[(veiculo.status as StatusVeiculo) || 'em_analise']}
+        {/* ============================================ */}
+        {/* TAB: VEÍCULOS */}
+        {/* ============================================ */}
+        <TabsContent value="veiculos" className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold">Veículos ({veiculos?.length || 0})</h3>
+            <Button>
+              <Plus className="mr-2 h-4 w-4" /> Adicionar
+            </Button>
+          </div>
+
+          {isLoadingVeiculos ? (
+            <Skeleton className="h-48 w-full" />
+          ) : veiculos && veiculos.length > 0 ? (
+            <div className="grid gap-4">
+              {veiculos.map((v) => (
+                <Card key={v.id}>
+                  <CardContent className="p-6">
+                    <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                      <div className="space-y-3 flex-1">
+                        <div className="flex items-center gap-3">
+                          <h4 className="text-lg font-semibold">{v.marca} {v.modelo} {v.ano_modelo}</h4>
+                          <Badge className={cn(STATUS_VEICULO_COLORS[(v.status as StatusVeiculo) || 'em_analise'])}>
+                            {STATUS_VEICULO_LABELS[(v.status as StatusVeiculo) || 'em_analise']}
                           </Badge>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                          <div>
+                            <p className="text-muted-foreground">Placa</p>
+                            <p className="font-mono font-medium">{v.placa}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Chassi</p>
+                            <p className="font-mono text-xs">{v.chassi || '—'}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Renavam</p>
+                            <p className="font-medium">{v.renavam || '—'}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Cor</p>
+                            <p className="font-medium">{v.cor || '—'}</p>
+                          </div>
+                        </div>
 
-        {/* Tab: Documentos */}
-        <TabsContent value="documentos" className="space-y-4">
-          {veiculos && veiculos.length > 1 && (
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Veículo:</span>
-              <Select value={selectedVeiculoId} onValueChange={setSelectedVeiculoId}>
-                <SelectTrigger className="w-64">
-                  <SelectValue placeholder="Selecione o veículo" />
-                </SelectTrigger>
-                <SelectContent>
-                  {veiculos.map((v) => (
-                    <SelectItem key={v.id} value={v.id}>
-                      {v.placa} - {v.modelo}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                          <div>
+                            <p className="text-muted-foreground">Valor FIPE</p>
+                            <p className="font-medium">{formatCurrency(v.valor_fipe)}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Código FIPE</p>
+                            <p className="font-medium">{v.codigo_fipe || '—'}</p>
+                          </div>
+                        </div>
+
+                        <Separator />
+
+                        <div className="flex items-center gap-4 text-sm">
+                          <div className="flex items-center gap-2">
+                            {v.rastreador ? (
+                              <>
+                                <Wifi className="h-4 w-4 text-green-500" />
+                                <span>Rastreador: {v.rastreador?.codigo} — {v.rastreador?.numero_serie}</span>
+                              </>
+                            ) : (
+                              <>
+                                <WifiOff className="h-4 w-4 text-muted-foreground" />
+                                <span className="text-muted-foreground">Sem rastreador</span>
+                              </>
+                            )}
+                          </div>
+                          <span className="text-muted-foreground">Uso app: {v.uso_aplicativo ? 'Sim' : 'Não'}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        <Button size="sm" variant="outline">
+                          <Eye className="mr-2 h-4 w-4" /> Detalhes
+                        </Button>
+                        <Button size="sm" variant="outline">
+                          <Edit className="mr-2 h-4 w-4" /> Editar
+                        </Button>
+                        <Button size="sm" variant="outline">
+                          <FileText className="mr-2 h-4 w-4" /> Documentos
+                        </Button>
+                        {!v.rastreador && (
+                          <Button size="sm" variant="outline">
+                            <Calendar className="mr-2 h-4 w-4" /> Agendar Instalação
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
+          ) : (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <Car className="h-12 w-12 text-muted-foreground/50" />
+                <h3 className="mt-4 font-semibold">Nenhum veículo cadastrado</h3>
+                <Button className="mt-4">
+                  <Plus className="mr-2 h-4 w-4" /> Adicionar
+                </Button>
+              </CardContent>
+            </Card>
           )}
-          <DocumentUploader
-            associadoId={id!}
-            veiculoId={selectedVeiculoId || veiculos?.[0]?.id}
-            modo="completo"
-            onTodosEnviados={() => toast({ title: 'Todos os documentos obrigatórios enviados!' })}
-          />
         </TabsContent>
 
-        {/* Tab: Contrato */}
-        <TabsContent value="contrato">
-          <Card>
-            <CardContent className="p-6">
-              {!associado.contratos ? (
-                <div className="flex flex-col items-center justify-center py-8">
-                  <FileText className="h-12 w-12 text-muted-foreground/50" />
-                  <h3 className="mt-4 font-semibold">Nenhum contrato vinculado</h3>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {/* ============================================ */}
+        {/* TAB: DOCUMENTOS */}
+        {/* ============================================ */}
+        <TabsContent value="documentos" className="space-y-4">
+          {/* Summary Cards */}
+          <div className="grid grid-cols-3 gap-4">
+            <Card>
+              <CardContent className="p-4 text-center">
+                <p className="text-2xl font-bold">{documentos?.length || 0}</p>
+                <p className="text-sm text-muted-foreground">Total</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 text-center">
+                <p className="text-2xl font-bold text-green-600">{docsAprovados}</p>
+                <p className="text-sm text-muted-foreground">Aprovados</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 text-center">
+                <p className="text-2xl font-bold text-yellow-600">{docsPendentes}</p>
+                <p className="text-sm text-muted-foreground">Pendentes</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Rejected Alert */}
+          {docsReprovados > 0 && (
+            <Card className="border-destructive bg-destructive/5">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <XCircle className="h-5 w-5 text-destructive" />
                     <div>
-                      <p className="text-sm text-muted-foreground">Número</p>
-                      <p className="font-medium">{associado.contratos.numero}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Status</p>
-                      <Badge>
-                        {STATUS_CONTRATO_LABELS[associado.contratos.status]}
-                      </Badge>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Data de Início</p>
-                      <p className="font-medium">{formatDate(associado.contratos.data_inicio)}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Valor Mensal</p>
-                      <p className="font-medium">{formatCurrency(associado.contratos.valor_mensal)}</p>
+                      <p className="font-medium text-destructive">{docsReprovados} documento(s) reprovado(s)</p>
+                      <p className="text-sm text-muted-foreground">Solicite o reenvio ao associado.</p>
                     </div>
                   </div>
-                  {associado.contratos.autentique_url && (
-                    <>
-                      <Separator />
-                      <Button 
-                        variant="outline"
-                        onClick={() => window.open(associado.contratos?.autentique_url || '', '_blank')}
-                      >
-                        <FileText className="mr-2 h-4 w-4" />
-                        Ver Contrato no Autentique
-                      </Button>
-                    </>
-                  )}
+                  <Button size="sm" variant="outline">
+                    <Send className="mr-2 h-4 w-4" /> Solicitar Reenvio
+                  </Button>
                 </div>
-              )}
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Documents Table */}
+          {isLoadingDocs ? (
+            <Skeleton className="h-48 w-full" />
+          ) : documentos && documentos.length > 0 ? (
+            <Card>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Documento</TableHead>
+                    <TableHead>Veículo</TableHead>
+                    <TableHead>Enviado</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Ação</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {documentos.map((d) => (
+                    <TableRow key={d.id}>
+                      <TableCell className="font-medium">{TIPO_DOCUMENTO_LABELS[d.tipo]}</TableCell>
+                      <TableCell>
+                        {d.veiculo ? (
+                          <Badge variant="outline">{d.veiculo.placa}</Badge>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell>{formatDate(d.created_at)}</TableCell>
+                      <TableCell>
+                        <Badge className={cn(STATUS_DOCUMENTO_COLORS[d.status])}>
+                          {STATUS_DOCUMENTO_LABELS[d.status]}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Button 
+                          size="sm" 
+                          variant="ghost"
+                          onClick={() => navigate(`/cadastro/documentos/${d.id}`)}
+                        >
+                          {d.status === 'pendente' ? (
+                            <><Eye className="mr-2 h-4 w-4" /> Analisar</>
+                          ) : (
+                            <Eye className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Card>
+          ) : (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <FileText className="h-12 w-12 text-muted-foreground/50" />
+                <h3 className="mt-4 font-semibold">Nenhum documento</h3>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
-        {/* Tab: Boletos */}
-        <TabsContent value="boletos">
+        {/* ============================================ */}
+        {/* TAB: FINANCEIRO */}
+        {/* ============================================ */}
+        <TabsContent value="financeiro" className="space-y-4">
+          {/* Summary Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card>
+              <CardContent className="p-4 text-center">
+                <p className="text-sm text-muted-foreground">Situação</p>
+                <Badge className="mt-2 bg-green-100 text-green-800">EM DIA</Badge>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 text-center">
+                <p className="text-sm text-muted-foreground">Próxima Fatura</p>
+                <p className="text-xl font-bold mt-1">15/02/2026</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 text-center">
+                <p className="text-sm text-muted-foreground">Total Pago</p>
+                <p className="text-xl font-bold mt-1 text-green-600">R$ 2.998,80</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 text-center">
+                <p className="text-sm text-muted-foreground">Em Aberto</p>
+                <p className="text-xl font-bold mt-1">R$ 0,00</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Invoices Table */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-base">Boletos</CardTitle>
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => toast({ title: 'Em desenvolvimento', description: 'Módulo financeiro em implementação.' })}
-              >
-                <Receipt className="mr-2 h-4 w-4" />
-                Gerar Novo Boleto
+              <CardTitle className="text-base">Últimas Faturas</CardTitle>
+              <Button variant="outline" size="sm">
+                <ExternalLink className="mr-2 h-4 w-4" /> Ver todas
               </Button>
             </CardHeader>
-            <CardContent>
-              <div className="flex flex-col items-center justify-center py-12">
-                <CreditCard className="h-12 w-12 text-muted-foreground/50" />
-                <h3 className="mt-4 font-semibold">Módulo financeiro em desenvolvimento</h3>
-                <p className="text-sm text-muted-foreground text-center mt-1">
-                  Em breve você poderá visualizar e gerenciar os boletos do associado aqui.
-                </p>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Referência</TableHead>
+                    <TableHead>Vencimento</TableHead>
+                    <TableHead>Valor</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Ação</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {MOCK_FATURAS.map((f) => (
+                    <TableRow key={f.id}>
+                      <TableCell className="font-medium">{f.referencia}</TableCell>
+                      <TableCell>{formatDate(f.vencimento)}</TableCell>
+                      <TableCell>{formatCurrency(f.valor)}</TableCell>
+                      <TableCell>
+                        <Badge className="bg-green-100 text-green-800">Pago</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Button size="sm" variant="ghost">
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          {/* Action Buttons */}
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline">
+              <Receipt className="mr-2 h-4 w-4" /> 2ª Via Boleto
+            </Button>
+            <Button variant="outline">
+              <FileText className="mr-2 h-4 w-4" /> Extrato
+            </Button>
+            <Button variant="outline">
+              <CreditCard className="mr-2 h-4 w-4" /> Alterar Pagamento
+            </Button>
+          </div>
+        </TabsContent>
+
+        {/* ============================================ */}
+        {/* TAB: HISTÓRICO */}
+        {/* ============================================ */}
+        <TabsContent value="historico" className="space-y-4">
+          <h3 className="text-lg font-semibold">Histórico de Atividades</h3>
+          
+          <Card>
+            <CardContent className="p-6">
+              <div className="space-y-0">
+                {MOCK_HISTORICO.map((e, i) => {
+                  const Icon = e.icone;
+                  const isLast = i === MOCK_HISTORICO.length - 1;
+                  return (
+                    <div key={e.id} className="flex gap-4">
+                      <div className="flex flex-col items-center">
+                        <div className={cn('p-2 rounded-full bg-muted')}>
+                          <Icon className={cn('h-4 w-4', e.cor)} />
+                        </div>
+                        {!isLast && <div className="w-px h-full bg-border min-h-[40px]" />}
+                      </div>
+                      <div className="pb-6 flex-1">
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <p className="font-medium">{e.titulo}</p>
+                            <p className="text-sm text-muted-foreground">{e.descricao}</p>
+                          </div>
+                          <span className="text-xs text-muted-foreground whitespace-nowrap">
+                            {formatDateTime(e.data)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
 
-        {/* Tab: Histórico */}
-        <TabsContent value="historico">
-          <Card>
-            <CardContent className="p-6">
-              <AdicionarObservacao associadoId={id!} />
-              <TimelineHistorico
-                eventos={historico || []}
-                isLoading={historicoLoading}
-                showFilters={true}
-                maxItems={50}
-              />
-            </CardContent>
-          </Card>
+          <Button variant="outline" className="w-full">
+            <Clock className="mr-2 h-4 w-4" /> Carregar mais
+          </Button>
         </TabsContent>
       </Tabs>
 
-      {/* Dialogs */}
-      <ConfirmacaoAcaoDialog
-        open={confirmDialog.open}
-        onOpenChange={(open) => setConfirmDialog({ ...confirmDialog, open })}
-        acao={confirmDialog.action}
-        nomeAssociado={associado.nome}
-        onConfirm={handleConfirmAction}
-      />
+      {/* ============================================ */}
+      {/* DIALOGS */}
+      {/* ============================================ */}
+      <AlertDialog open={suspenderDialogOpen} onOpenChange={setSuspenderDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Suspender Associado</AlertDialogTitle>
+            <AlertDialogDescription>
+              Suspender <strong>{associado.nome}</strong>? O associado perderá acesso aos benefícios até ser reativado.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleSuspender} className="bg-yellow-600 hover:bg-yellow-700">
+              {isSuspendendo ? 'Suspendendo...' : 'Suspender'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
-      <AssociadoEditDialog
-        open={editDialogOpen}
-        onOpenChange={setEditDialogOpen}
-        associado={associado}
-        onSuccess={() => refetch()}
-      />
+      <AlertDialog open={cancelarDialogOpen} onOpenChange={setCancelarDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancelar Associação</AlertDialogTitle>
+            <AlertDialogDescription>
+              Cancelar <strong>{associado.nome}</strong>? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Manter</AlertDialogCancel>
+            <AlertDialogAction onClick={handleCancelar} className="bg-destructive hover:bg-destructive/90">
+              {isCancelando ? 'Cancelando...' : 'Cancelar'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
