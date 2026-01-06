@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Loader2, Car, Search, CheckCircle2, Shield, FileText, ChevronRight, ChevronLeft, Check, AlertCircle } from 'lucide-react';
+import { Loader2, Car, Search, CheckCircle2, Shield, Check, AlertCircle, Copy, MessageCircle, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -62,23 +62,12 @@ interface PlanoComPreco {
   totalMensal: number;
 }
 
-type Step = 1 | 2 | 3;
-
-const steps = [
-  { number: 1, label: 'Veículo', icon: Car },
-  { number: 2, label: 'Plano', icon: Shield },
-  { number: 3, label: 'Resumo', icon: FileText },
-];
-
 export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDialogProps) {
   const navigate = useNavigate();
   const createCotacao = useCreateCotacao();
   const { data: planos, isLoading: planosLoading } = usePlanos();
   const { data: lead } = useLead(leadId);
   const { getMarcas, getModelos, getAnos, getPreco, getByPlaca, buscarPorNome, loading: fipeLoading } = useFipe();
-
-  // Step state
-  const [step, setStep] = useState<Step>(1);
 
   // Estados para busca por placa
   const [placa, setPlaca] = useState('');
@@ -119,6 +108,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
 
   const valorFipe = form.watch('valor_fipe');
   const planoId = form.watch('plano_id');
+  const validadeDias = form.watch('validade_dias');
   const { data: tabelasPreco } = useTabelaPrecoByFipe(valorFipe);
 
   // Combinar planos com seus preços para o valor FIPE atual
@@ -148,10 +138,6 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
     }).filter((p): p is PlanoComPreco => p !== null);
   }, [planos, tabelasPreco, valorFipe]);
 
-  // Validação por etapa
-  const canGoToStep2 = valorFipe > 0;
-  const canGoToStep3 = valorFipe > 0 && planoId;
-
   // Carregar marcas quando dialog abre
   useEffect(() => {
     if (open && marcas.length === 0) {
@@ -169,13 +155,6 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
       fetchMarcas();
     }
   }, [open, getMarcas, marcas.length]);
-
-  // Reset step when dialog closes
-  useEffect(() => {
-    if (!open) {
-      setStep(1);
-    }
-  }, [open]);
 
   // Auto-buscar FIPE quando marca, modelo e ano estiverem selecionados
   useEffect(() => {
@@ -360,6 +339,63 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
     }).format(value);
   };
 
+  // Get marca/modelo names for display
+  const getMarcaNome = () => {
+    if (veiculoEncontrado?.vehicleData?.marca) return veiculoEncontrado.vehicleData.marca;
+    const marca = marcas.find(m => m.codigo === marcaSelecionada);
+    return marca?.nome || '';
+  };
+
+  const getModeloNome = () => {
+    if (veiculoEncontrado?.vehicleData?.modelo) return veiculoEncontrado.vehicleData.modelo;
+    const modelo = modelos.find(m => m.codigo.toString() === modeloSelecionado);
+    return modelo?.nome || '';
+  };
+
+  const getAnoNome = () => {
+    if (veiculoEncontrado?.vehicleData?.ano) return veiculoEncontrado.vehicleData.ano;
+    const ano = anos.find(a => a.codigo === anoSelecionado);
+    return ano?.nome || '';
+  };
+
+  // Copiar valores para clipboard
+  const copiarValores = () => {
+    if (!planoSelecionadoData) return;
+    
+    const veiculoInfo = getMarcaNome() && getModeloNome() 
+      ? `${getMarcaNome()} ${getModeloNome()} ${getAnoNome()}`
+      : 'Veículo não informado';
+    
+    const texto = `*Cotação Protecar*
+Veículo: ${veiculoInfo}
+FIPE: ${formatCurrency(valorFipe)}
+Plano: ${planoSelecionadoData.plano.nome}
+Valor Mensal: ${formatCurrency(planoSelecionadoData.totalMensal)}
+Adesão: ${formatCurrency(planoSelecionadoData.plano.valor_adesao)}
+Validade: ${validadeDias} dias`;
+    
+    navigator.clipboard.writeText(texto);
+    toast.success('Valores copiados!');
+  };
+
+  // Enviar por WhatsApp
+  const enviarWhatsApp = () => {
+    if (!planoSelecionadoData) return;
+    
+    const veiculoInfo = getMarcaNome() && getModeloNome() 
+      ? `${getMarcaNome()} ${getModeloNome()} ${getAnoNome()}`
+      : 'Veículo não informado';
+    
+    const texto = encodeURIComponent(`*Cotação Protecar*
+Veículo: ${veiculoInfo}
+FIPE: ${formatCurrency(valorFipe)}
+Plano: ${planoSelecionadoData.plano.nome}
+Valor Mensal: ${formatCurrency(planoSelecionadoData.totalMensal)}
+Adesão: ${formatCurrency(planoSelecionadoData.plano.valor_adesao)}`);
+    
+    window.open(`https://wa.me/?text=${texto}`, '_blank');
+  };
+
   const onSubmit = async (data: CotacaoFormData) => {
     try {
       // Extrair ano numérico do texto (ex: "2022 Gasolina" -> 2022)
@@ -397,7 +433,6 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
       setAnoSelecionado('');
       setModelos([]);
       setAnos([]);
-      setStep(1);
       
       // Fechar modal
       onOpenChange(false);
@@ -410,450 +445,360 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
     }
   };
 
-  // Get marca/modelo names for display
-  const getMarcaNome = () => {
-    if (veiculoEncontrado?.vehicleData?.marca) return veiculoEncontrado.vehicleData.marca;
-    const marca = marcas.find(m => m.codigo === marcaSelecionada);
-    return marca?.nome || '';
-  };
-
-  const getModeloNome = () => {
-    if (veiculoEncontrado?.vehicleData?.modelo) return veiculoEncontrado.vehicleData.modelo;
-    const modelo = modelos.find(m => m.codigo.toString() === modeloSelecionado);
-    return modelo?.nome || '';
-  };
-
-  const getAnoNome = () => {
-    if (veiculoEncontrado?.vehicleData?.ano) return veiculoEncontrado.vehicleData.ano;
-    const ano = anos.find(a => a.codigo === anoSelecionado);
-    return ano?.nome || '';
-  };
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Nova Cotação</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <Zap className="h-5 w-5 text-primary" />
+            Cotação Rápida
+          </DialogTitle>
           <DialogDescription>
-            {lead ? `Cotação para ${lead.nome}` : 'Crie uma nova cotação para o cliente'}
+            {lead ? `Cotação para ${lead.nome}` : 'Faça uma cotação em segundos'}
           </DialogDescription>
         </DialogHeader>
 
-        {/* Stepper */}
-        <div className="flex items-center justify-center gap-1 mb-4">
-          {steps.map((s, i) => (
-            <div key={s.number} className="flex items-center">
-              <button
-                type="button"
-                onClick={() => {
-                  if (s.number === 1) setStep(1);
-                  else if (s.number === 2 && canGoToStep2) setStep(2);
-                  else if (s.number === 3 && canGoToStep3) setStep(3);
-                }}
-                disabled={
-                  (s.number === 2 && !canGoToStep2) ||
-                  (s.number === 3 && !canGoToStep3)
-                }
-                className={cn(
-                  "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm transition-all",
-                  step === s.number 
-                    ? "bg-primary text-primary-foreground" 
-                    : step > s.number 
-                      ? "bg-primary/20 text-primary cursor-pointer hover:bg-primary/30"
-                      : "bg-muted text-muted-foreground",
-                  ((s.number === 2 && !canGoToStep2) || (s.number === 3 && !canGoToStep3)) && "opacity-50 cursor-not-allowed"
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+            
+            {/* BLOCO 1: VEÍCULO */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                <Car className="h-4 w-4 text-primary" />
+                Veículo
+              </h3>
+              
+              {/* Busca por placa */}
+              <div className="flex gap-2">
+                <Input
+                  placeholder="ABC1D23"
+                  value={placa}
+                  onChange={(e) => setPlaca(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ''))}
+                  maxLength={8}
+                  className="uppercase font-mono text-lg tracking-wider flex-1"
+                />
+                <Button 
+                  type="button"
+                  onClick={buscarPorPlaca}
+                  disabled={buscandoPlaca || fipeLoading || placa.replace(/[^A-Z0-9]/g, '').length < 7}
+                >
+                  {buscandoPlaca ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Search className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+
+              {/* Veículo encontrado - inline */}
+              {veiculoEncontrado?.success && veiculoEncontrado.vehicleData && (
+                <div className="flex items-center gap-2 p-2 bg-green-50 dark:bg-green-950/30 rounded-lg border border-green-200 dark:border-green-800 text-sm">
+                  <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0" />
+                  <span className="font-medium">
+                    {veiculoEncontrado.vehicleData.marca} {veiculoEncontrado.vehicleData.modelo} {veiculoEncontrado.vehicleData.ano}
+                  </span>
+                  <span className="text-muted-foreground">• {veiculoEncontrado.vehicleData.cor}</span>
+                </div>
+              )}
+
+              {/* Divisor */}
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center">
+                  <span className="bg-background px-3 text-xs text-muted-foreground">
+                    ou selecione manualmente
+                  </span>
+                </div>
+              </div>
+
+              {/* Seleção manual - grid compacto */}
+              <div className="grid grid-cols-3 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs">Marca</Label>
+                  <Select 
+                    value={marcaSelecionada} 
+                    onValueChange={handleMarcaChange}
+                    disabled={loadingMarcas}
+                  >
+                    <SelectTrigger className="h-9">
+                      {loadingMarcas ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <SelectValue placeholder="Marca" />
+                      )}
+                    </SelectTrigger>
+                    <SelectContent>
+                      {marcas.map((marca) => (
+                        <SelectItem key={marca.codigo} value={marca.codigo}>
+                          {marca.nome}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs">Modelo</Label>
+                  <Select 
+                    value={modeloSelecionado} 
+                    onValueChange={handleModeloChange}
+                    disabled={!marcaSelecionada || loadingModelos}
+                  >
+                    <SelectTrigger className="h-9">
+                      {loadingModelos ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <SelectValue placeholder="Modelo" />
+                      )}
+                    </SelectTrigger>
+                    <SelectContent>
+                      {modelos.map((modelo) => (
+                        <SelectItem key={modelo.codigo} value={modelo.codigo.toString()}>
+                          {modelo.nome}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs">Ano</Label>
+                  <Select 
+                    value={anoSelecionado} 
+                    onValueChange={setAnoSelecionado}
+                    disabled={!modeloSelecionado || loadingAnos}
+                  >
+                    <SelectTrigger className="h-9">
+                      {loadingAnos ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <SelectValue placeholder="Ano" />
+                      )}
+                    </SelectTrigger>
+                    <SelectContent>
+                      {anos.map((ano) => (
+                        <SelectItem key={ano.codigo} value={ano.codigo}>
+                          {ano.nome}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* BLOCO 2: VALOR FIPE */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <Label className="text-sm font-semibold">Valor FIPE</Label>
+                {valorFipe > 0 && (
+                  <Badge variant="outline" className="text-xs">
+                    {veiculoEncontrado?.fipeData?.valor ? 'Automático' : 'Manual'}
+                  </Badge>
                 )}
-              >
-                <s.icon className="h-4 w-4" />
-                <span className="hidden sm:inline">{s.label}</span>
-              </button>
-              {i < steps.length - 1 && (
-                <ChevronRight className="h-4 w-4 mx-1 text-muted-foreground" />
+              </div>
+              <FormField
+                control={form.control}
+                name="valor_fipe"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormControl>
+                      <div className="relative">
+                        <CurrencyInput 
+                          value={field.value} 
+                          onChange={field.onChange}
+                          disabled={buscandoFipe}
+                        />
+                        {buscandoFipe && (
+                          <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                          </div>
+                        )}
+                        {field.value > 0 && !buscandoFipe && (
+                          <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                            <CheckCircle2 className="h-4 w-4 text-green-500" />
+                          </div>
+                        )}
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <Separator />
+
+            {/* BLOCO 3: PLANOS - Sempre visível */}
+            <div>
+              <h3 className="text-sm font-semibold flex items-center gap-2 mb-3">
+                <Shield className="h-4 w-4 text-primary" />
+                Selecione o Plano
+              </h3>
+
+              {planosLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                </div>
+              ) : valorFipe > 0 && planosComPrecos.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {planosComPrecos.map((planoPreco) => (
+                    <Card 
+                      key={planoPreco.plano.id}
+                      className={cn(
+                        "cursor-pointer transition-all hover:shadow-md",
+                        planoId === planoPreco.plano.id 
+                          ? "ring-2 ring-primary border-primary bg-primary/5" 
+                          : "hover:border-primary/50"
+                      )}
+                      onClick={() => handleSelectPlano(planoPreco)}
+                    >
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="font-semibold text-sm">{planoPreco.plano.nome}</h4>
+                          {planoId === planoPreco.plano.id && (
+                            <CheckCircle2 className="h-4 w-4 text-primary" />
+                          )}
+                        </div>
+                        <p className="text-xl font-bold text-primary mb-3">
+                          {formatCurrency(planoPreco.totalMensal)}
+                          <span className="text-xs font-normal text-muted-foreground">/mês</span>
+                        </p>
+                        <ul className="text-xs space-y-1 text-muted-foreground">
+                          <li>• Cota: {formatCurrency(planoPreco.valorCota)}</li>
+                          <li>• Taxa: {formatCurrency(planoPreco.taxaAdmin)}</li>
+                          <li>• Rast.: {formatCurrency(planoPreco.rastreamento)}</li>
+                          {planoPreco.assistencia > 0 && (
+                            <li>• Assist.: {formatCurrency(planoPreco.assistencia)}</li>
+                          )}
+                        </ul>
+                        <Separator className="my-3" />
+                        <div className="text-xs">
+                          <span className="text-muted-foreground">Adesão: </span>
+                          <span className="font-medium">{formatCurrency(planoPreco.plano.valor_adesao)}</span>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              ) : valorFipe > 0 ? (
+                <Card className="border-amber-500/30 bg-amber-500/5">
+                  <CardContent className="p-4 text-center">
+                    <AlertCircle className="h-8 w-8 text-amber-500 mx-auto mb-2" />
+                    <p className="font-medium text-amber-700 dark:text-amber-400">
+                      Nenhum plano disponível para este valor FIPE
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Verifique se há tabelas de preço cadastradas para a faixa de R$ {valorFipe.toLocaleString('pt-BR')}
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="text-center py-6 text-muted-foreground border-2 border-dashed rounded-lg">
+                  <p className="text-sm">Informe o valor FIPE para ver os planos disponíveis</p>
+                </div>
               )}
             </div>
-          ))}
-        </div>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            
-            {/* STEP 1: Veículo */}
-            {step === 1 && (
-              <div className="space-y-4 animate-in fade-in duration-200">
-                {/* Busca por Placa */}
+            {/* BLOCO 4: RESUMO INLINE (quando plano selecionado) */}
+            {planoSelecionadoData && (
+              <>
+                <Separator />
                 <Card className="bg-primary/5 border-primary/20">
                   <CardContent className="p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <Car className="h-5 w-5 text-primary" />
-                      <span className="font-medium">Busca Rápida por Placa</span>
-                      <Badge variant="outline" className="ml-auto text-xs">Recomendado</Badge>
-                    </div>
-                    
-                    <div className="flex gap-2">
-                      <Input
-                        placeholder="ABC1D23"
-                        value={placa}
-                        onChange={(e) => setPlaca(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ''))}
-                        maxLength={8}
-                        className="uppercase font-mono text-lg tracking-wider flex-1"
-                      />
-                      <Button 
-                        type="button"
-                        onClick={buscarPorPlaca}
-                        disabled={buscandoPlaca || fipeLoading || placa.replace(/[^A-Z0-9]/g, '').length < 7}
-                      >
-                        {buscandoPlaca ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Search className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </div>
-
-                    {/* Veículo encontrado */}
-                    {veiculoEncontrado?.success && veiculoEncontrado.vehicleData && (
-                      <div className="mt-3 p-3 bg-background rounded-lg border border-green-500/30">
-                        <div className="flex items-center gap-2 text-green-600 mb-2">
-                          <CheckCircle2 className="h-4 w-4" />
-                          <span className="text-sm font-medium">Veículo Encontrado</span>
-                        </div>
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground">Veículo</p>
                         <p className="font-medium">
-                          {veiculoEncontrado.vehicleData.marca} {veiculoEncontrado.vehicleData.modelo}
+                          {getMarcaNome() && getModeloNome() 
+                            ? `${getMarcaNome()} ${getModeloNome()} ${getAnoNome()}`
+                            : 'Valor FIPE informado manualmente'
+                          }
                         </p>
-                        <p className="text-sm text-muted-foreground">
-                          {veiculoEncontrado.vehicleData.ano} • {veiculoEncontrado.vehicleData.cor} • {veiculoEncontrado.vehicleData.combustivel}
-                        </p>
+                        <p className="text-sm text-muted-foreground">FIPE: {formatCurrency(valorFipe)}</p>
                       </div>
-                    )}
+                      <div className="text-right">
+                        <p className="text-xs text-muted-foreground">{planoSelecionadoData.plano.nome}</p>
+                        <p className="text-2xl font-bold text-primary">
+                          {formatCurrency(planoSelecionadoData.totalMensal)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">/mês</p>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-4 mt-3 pt-3 border-t text-sm">
+                      <div>
+                        <span className="text-muted-foreground">Adesão:</span>{' '}
+                        <strong>{formatCurrency(planoSelecionadoData.plano.valor_adesao)}</strong>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-muted-foreground">Validade:</span>
+                        <FormField
+                          control={form.control}
+                          name="validade_dias"
+                          render={({ field }) => (
+                            <FormItem className="flex items-center gap-1 space-y-0">
+                              <FormControl>
+                                <Input 
+                                  type="number" 
+                                  min={1} 
+                                  max={30}
+                                  {...field}
+                                  onChange={(e) => field.onChange(parseInt(e.target.value) || 7)}
+                                  className="w-14 h-7 text-center font-medium"
+                                />
+                              </FormControl>
+                              <span className="text-muted-foreground">dias</span>
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </div>
                   </CardContent>
                 </Card>
-
-                {/* Divisor */}
-                <div className="relative">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t" />
-                  </div>
-                  <div className="relative flex justify-center">
-                    <span className="bg-background px-3 text-xs text-muted-foreground">
-                      ou selecione manualmente
-                    </span>
-                  </div>
-                </div>
-
-                {/* Seleção FIPE Manual - Grid compacto */}
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs">Marca</Label>
-                    <Select 
-                      value={marcaSelecionada} 
-                      onValueChange={handleMarcaChange}
-                      disabled={loadingMarcas}
-                    >
-                      <SelectTrigger className="h-9">
-                        {loadingMarcas ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                        ) : (
-                          <SelectValue placeholder="Marca" />
-                        )}
-                      </SelectTrigger>
-                      <SelectContent>
-                        {marcas.map((marca) => (
-                          <SelectItem key={marca.codigo} value={marca.codigo}>
-                            {marca.nome}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label className="text-xs">Modelo</Label>
-                    <Select 
-                      value={modeloSelecionado} 
-                      onValueChange={handleModeloChange}
-                      disabled={!marcaSelecionada || loadingModelos}
-                    >
-                      <SelectTrigger className="h-9">
-                        {loadingModelos ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                        ) : (
-                          <SelectValue placeholder="Modelo" />
-                        )}
-                      </SelectTrigger>
-                      <SelectContent>
-                        {modelos.map((modelo) => (
-                          <SelectItem key={modelo.codigo} value={modelo.codigo.toString()}>
-                            {modelo.nome}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label className="text-xs">Ano</Label>
-                    <Select 
-                      value={anoSelecionado} 
-                      onValueChange={setAnoSelecionado}
-                      disabled={!modeloSelecionado || loadingAnos}
-                    >
-                      <SelectTrigger className="h-9">
-                        {loadingAnos ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                        ) : (
-                          <SelectValue placeholder="Ano" />
-                        )}
-                      </SelectTrigger>
-                      <SelectContent>
-                        {anos.map((ano) => (
-                          <SelectItem key={ano.codigo} value={ano.codigo}>
-                            {ano.nome}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                {/* Valor FIPE */}
-                <FormField
-                  control={form.control}
-                  name="valor_fipe"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Valor FIPE *</FormLabel>
-                      <FormControl>
-                        <div className="relative">
-                          <CurrencyInput 
-                            value={field.value} 
-                            onChange={field.onChange}
-                            disabled={buscandoFipe}
-                          />
-                          {buscandoFipe && (
-                            <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                              <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                            </div>
-                          )}
-                          {field.value > 0 && !buscandoFipe && (
-                            <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                              <CheckCircle2 className="h-4 w-4 text-green-500" />
-                            </div>
-                          )}
-                        </div>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Botão Próximo */}
-                <div className="flex justify-end pt-2">
-                  <Button 
-                    type="button"
-                    onClick={() => setStep(2)} 
-                    disabled={!canGoToStep2}
-                  >
-                    Selecionar Plano
-                    <ChevronRight className="h-4 w-4 ml-1" />
-                  </Button>
-                </div>
-              </div>
+              </>
             )}
 
-            {/* STEP 2: Seleção de Plano */}
-            {step === 2 && (
-              <div className="space-y-4 animate-in fade-in duration-200">
-                <div className="text-center pb-2">
-                  <p className="text-sm text-muted-foreground">
-                    Veículo FIPE: <span className="font-semibold text-foreground">{formatCurrency(valorFipe)}</span>
-                  </p>
-                </div>
-
-                {planosLoading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                  </div>
-                ) : planosComPrecos.length === 0 ? (
-                  <Card className="border-amber-500/30 bg-amber-500/5">
-                    <CardContent className="p-4 text-center">
-                      <AlertCircle className="h-8 w-8 text-amber-500 mx-auto mb-2" />
-                      <p className="font-medium text-amber-700 dark:text-amber-400">
-                        Nenhum plano disponível para este valor FIPE
-                      </p>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Verifique se há tabelas de preço cadastradas para a faixa de R$ {valorFipe.toLocaleString('pt-BR')}
-                      </p>
-                    </CardContent>
-                  </Card>
+            {/* BLOCO 5: AÇÕES */}
+            <div className="flex items-center justify-between pt-2 border-t">
+              <div className="flex gap-2">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  size="sm"
+                  disabled={!planoSelecionadoData}
+                  onClick={copiarValores}
+                >
+                  <Copy className="h-4 w-4 mr-1" />
+                  Copiar
+                </Button>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  size="sm"
+                  disabled={!planoSelecionadoData}
+                  onClick={enviarWhatsApp}
+                >
+                  <MessageCircle className="h-4 w-4 mr-1" />
+                  WhatsApp
+                </Button>
+              </div>
+              <Button 
+                type="submit" 
+                disabled={createCotacao.isPending || !planoSelecionadoData}
+              >
+                {createCotacao.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {planosComPrecos.map((planoPreco) => (
-                      <Card 
-                        key={planoPreco.plano.id}
-                        className={cn(
-                          "cursor-pointer transition-all hover:shadow-md",
-                          planoId === planoPreco.plano.id 
-                            ? "ring-2 ring-primary border-primary bg-primary/5" 
-                            : "hover:border-primary/50"
-                        )}
-                        onClick={() => handleSelectPlano(planoPreco)}
-                      >
-                        <CardContent className="p-4">
-                          <div className="flex items-center justify-between mb-2">
-                            <h4 className="font-semibold text-sm">{planoPreco.plano.nome}</h4>
-                            {planoId === planoPreco.plano.id && (
-                              <CheckCircle2 className="h-4 w-4 text-primary" />
-                            )}
-                          </div>
-                          <p className="text-xl font-bold text-primary mb-3">
-                            {formatCurrency(planoPreco.totalMensal)}
-                            <span className="text-xs font-normal text-muted-foreground">/mês</span>
-                          </p>
-                          <ul className="text-xs space-y-1 text-muted-foreground">
-                            <li>• Cota: {formatCurrency(planoPreco.valorCota)}</li>
-                            <li>• Taxa: {formatCurrency(planoPreco.taxaAdmin)}</li>
-                            <li>• Rast.: {formatCurrency(planoPreco.rastreamento)}</li>
-                            {planoPreco.assistencia > 0 && (
-                              <li>• Assist.: {formatCurrency(planoPreco.assistencia)}</li>
-                            )}
-                          </ul>
-                          <Separator className="my-3" />
-                          <div className="text-xs">
-                            <span className="text-muted-foreground">Adesão: </span>
-                            <span className="font-medium">{formatCurrency(planoPreco.plano.valor_adesao)}</span>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
+                  <Check className="h-4 w-4 mr-1" />
                 )}
-
-                {/* Navegação */}
-                <div className="flex justify-between pt-2">
-                  <Button type="button" variant="outline" onClick={() => setStep(1)}>
-                    <ChevronLeft className="h-4 w-4 mr-1" />
-                    Voltar
-                  </Button>
-                  <Button 
-                    type="button"
-                    onClick={() => setStep(3)} 
-                    disabled={!canGoToStep3}
-                  >
-                    Revisar Cotação
-                    <ChevronRight className="h-4 w-4 ml-1" />
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {/* STEP 3: Resumo */}
-            {step === 3 && planoSelecionadoData && (
-              <div className="space-y-4 animate-in fade-in duration-200">
-                {/* Card do Veículo */}
-                <Card>
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Car className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm font-medium">Veículo</span>
-                    </div>
-                    <div className="text-sm">
-                      {getMarcaNome() && getModeloNome() ? (
-                        <>
-                          <p className="font-medium">{getMarcaNome()} {getModeloNome()}</p>
-                          <p className="text-muted-foreground">
-                            {getAnoNome()} {placa && `• Placa: ${placa}`}
-                          </p>
-                        </>
-                      ) : (
-                        <p className="text-muted-foreground">Valor FIPE informado manualmente</p>
-                      )}
-                      <p className="font-semibold text-primary mt-1">
-                        FIPE: {formatCurrency(valorFipe)}
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Card do Plano */}
-                <Card>
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <Shield className="h-4 w-4 text-primary" />
-                      <span className="text-sm font-medium">{planoSelecionadoData.plano.nome}</span>
-                    </div>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Cota mensal</span>
-                        <span>{formatCurrency(planoSelecionadoData.valorCota)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Taxa administrativa</span>
-                        <span>{formatCurrency(planoSelecionadoData.taxaAdmin)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Rastreamento</span>
-                        <span>{formatCurrency(planoSelecionadoData.rastreamento)}</span>
-                      </div>
-                      {planoSelecionadoData.assistencia > 0 && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Assistência 24h</span>
-                          <span>{formatCurrency(planoSelecionadoData.assistencia)}</span>
-                        </div>
-                      )}
-                      <Separator />
-                      <div className="flex justify-between font-bold text-lg pt-1">
-                        <span>Total Mensal</span>
-                        <span className="text-primary">{formatCurrency(planoSelecionadoData.totalMensal)}</span>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Adesão e Validade */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-muted/50 rounded-lg p-3 text-center">
-                    <p className="text-xs text-muted-foreground">Adesão</p>
-                    <p className="font-bold">{formatCurrency(planoSelecionadoData.plano.valor_adesao)}</p>
-                  </div>
-                  <FormField
-                    control={form.control}
-                    name="validade_dias"
-                    render={({ field }) => (
-                      <FormItem className="bg-muted/50 rounded-lg p-3 text-center space-y-0">
-                        <FormLabel className="text-xs text-muted-foreground">Validade</FormLabel>
-                        <FormControl>
-                          <Input 
-                            type="number" 
-                            min={1} 
-                            max={30}
-                            {...field}
-                            onChange={(e) => field.onChange(parseInt(e.target.value))}
-                            className="h-7 text-center font-bold bg-transparent border-0 p-0"
-                          />
-                        </FormControl>
-                        <p className="text-xs text-muted-foreground">dias</p>
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                {/* Navegação */}
-                <div className="flex justify-between pt-2">
-                  <Button type="button" variant="outline" onClick={() => setStep(2)}>
-                    <ChevronLeft className="h-4 w-4 mr-1" />
-                    Alterar Plano
-                  </Button>
-                  <Button type="submit" disabled={createCotacao.isPending}>
-                    {createCotacao.isPending ? (
-                      <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                    ) : (
-                      <Check className="h-4 w-4 mr-1" />
-                    )}
-                    Criar Cotação
-                  </Button>
-                </div>
-              </div>
-            )}
+                Criar Cotação
+              </Button>
+            </div>
+            
           </form>
         </Form>
       </DialogContent>
