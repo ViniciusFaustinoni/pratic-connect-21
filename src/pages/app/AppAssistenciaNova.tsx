@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   ArrowLeft, Check, Loader2, MapPin, Phone, Clock, Car, 
-  Truck, Key, Fuel, CircleDot, Battery, Edit2, MessageSquare
+  Truck, Key, Fuel, CircleDot, Battery, Edit2, MessageSquare,
+  AlertTriangle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -274,6 +275,18 @@ export default function AppAssistenciaNova() {
       </div>
 
       <div className="p-4">
+        {/* Alerta de Segurança */}
+        <Card className="border-0 shadow-sm bg-amber-50 mb-4">
+          <CardContent className="p-3">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-amber-800">
+                <strong>Em caso de acidente com vítimas</strong>, ligue primeiro para o SAMU (192) ou Bombeiros (193).
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* ETAPA 1: Tipo de Serviço */}
         {etapaAtual === 1 && (
           <div className="space-y-3 animate-fade-in">
@@ -588,7 +601,7 @@ export default function AppAssistenciaNova() {
                 ← Voltar
               </Button>
               <Button
-                className="w-full min-h-[48px] bg-green-600 hover:bg-green-700 text-white font-semibold"
+                className="w-full min-h-[52px] bg-destructive hover:bg-destructive/90 text-destructive-foreground font-semibold text-lg"
                 onClick={handleConfirmar}
                 disabled={isEnviando}
               >
@@ -598,12 +611,12 @@ export default function AppAssistenciaNova() {
                     Enviando solicitação...
                   </>
                 ) : (
-                  <>
-                    <Check className="mr-2 h-5 w-5" />
-                    Confirmar Solicitação
-                  </>
+                  'Solicitar Agora'
                 )}
               </Button>
+              <p className="text-xs text-muted-foreground text-center">
+                Você receberá uma ligação em até 5 minutos
+              </p>
             </div>
           </div>
         )}
