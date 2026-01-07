@@ -304,9 +304,15 @@ export function useVendedoresDisponiveis() {
 // HISTÓRICO
 // ============================================
 
-export function useHistoricoDistribuicao(leadId?: string) {
+export function useHistoricoDistribuicao(filtros?: {
+  leadId?: string;
+  vendedor_id?: string;
+  data_inicio?: string;
+  data_fim?: string;
+  limit?: number;
+}) {
   return useQuery({
-    queryKey: ['distribuicao-historico', leadId],
+    queryKey: ['distribuicao-historico', filtros],
     queryFn: async (): Promise<HistoricoDistribuicao[]> => {
       let query = supabase
         .from('distribuicao_historico')
@@ -315,12 +321,22 @@ export function useHistoricoDistribuicao(leadId?: string) {
           lead:leads!lead_id(id, nome, telefone),
           vendedor:profiles!vendedor_id(id, nome)
         `)
-        .order('created_at', { ascending: false })
-        .limit(50);
+        .order('created_at', { ascending: false });
 
-      if (leadId) {
-        query = query.eq('lead_id', leadId);
+      if (filtros?.leadId) {
+        query = query.eq('lead_id', filtros.leadId);
       }
+      if (filtros?.vendedor_id) {
+        query = query.eq('vendedor_id', filtros.vendedor_id);
+      }
+      if (filtros?.data_inicio) {
+        query = query.gte('created_at', filtros.data_inicio);
+      }
+      if (filtros?.data_fim) {
+        query = query.lte('created_at', filtros.data_fim);
+      }
+
+      query = query.limit(filtros?.limit ?? 50);
 
       const { data, error } = await query;
 
