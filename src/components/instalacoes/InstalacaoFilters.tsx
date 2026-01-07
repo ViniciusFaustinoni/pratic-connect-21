@@ -37,7 +37,11 @@ export function InstalacaoFilters({ filters, onFiltersChange }: InstalacaoFilter
   const { data: instaladores } = useInstaladores();
 
   const handleStatusToggle = (status: StatusInstalacao) => {
-    const currentStatus = filters.status || [];
+    const currentStatus = Array.isArray(filters.status) 
+      ? filters.status 
+      : filters.status 
+        ? [filters.status] 
+        : [];
     const newStatus = currentStatus.includes(status)
       ? currentStatus.filter(s => s !== status)
       : [...currentStatus, status];
