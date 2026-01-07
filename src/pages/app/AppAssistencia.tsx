@@ -63,9 +63,18 @@ export default function AppAssistencia() {
       <div>
         <h1 className="text-xl font-bold text-foreground">Assistência 24h</h1>
         <p className="text-sm text-muted-foreground">
-          Solicite serviços de emergência
+          Guincho, pane seca, chaveiro e mais
         </p>
       </div>
+
+      {/* Botão Principal de Solicitação */}
+      <Button
+        className="w-full h-14 bg-primary hover:bg-primary/90 text-lg font-semibold shadow-lg"
+        onClick={() => navigate('/app/assistencia/nova')}
+      >
+        <Phone className="mr-2 h-5 w-5" />
+        Solicitar Assistência
+      </Button>
 
       {/* Active Chamado Alert */}
       {chamadoAtivo && (
@@ -173,10 +182,10 @@ export default function AppAssistencia() {
         </CardContent>
       </Card>
 
-      {/* My Chamados */}
+      {/* Histórico */}
       <Card className="border-0 shadow-sm">
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Meus Chamados</CardTitle>
+          <CardTitle className="text-base">Histórico</CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading ? (
