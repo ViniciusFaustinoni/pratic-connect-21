@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { Eye, EyeOff, Loader2, Lock, Mail, CheckCircle } from 'lucide-react';
+import { Eye, EyeOff, Loader2, Lock, Mail, CheckCircle, AlertCircle } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -475,6 +476,7 @@ export default function Auth() {
                 <div className="space-y-2">
                   <Label htmlFor="login-password">Senha</Label>
                   <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                       id="login-password"
                       type={showPassword ? 'text' : 'password'}
@@ -482,10 +484,15 @@ export default function Auth() {
                       value={loginPassword}
                       onChange={(e) => {
                         setLoginPassword(e.target.value);
-                        if (errors.senha) setErrors(prev => ({ ...prev, senha: undefined }));
+                        if (errors.senha) {
+                          setErrors(prev => ({ ...prev, senha: undefined }));
+                        }
                       }}
+                      className={cn(
+                        "pl-10 pr-10",
+                        errors.senha && "border-destructive focus:border-destructive focus:ring-destructive"
+                      )}
                       disabled={loginLoading || bloqueio?.bloqueado}
-                      className={`pr-10 ${errors.senha ? 'border-destructive' : ''}`}
                     />
                     <button
                       type="button"
@@ -493,11 +500,12 @@ export default function Auth() {
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                       tabIndex={-1}
                     >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
                   </div>
                   {errors.senha && (
-                    <p className="text-sm text-destructive animate-in fade-in duration-200">
+                    <p className="text-sm text-destructive flex items-center gap-1 animate-in fade-in duration-200">
+                      <AlertCircle className="h-4 w-4" />
                       {errors.senha}
                     </p>
                   )}
