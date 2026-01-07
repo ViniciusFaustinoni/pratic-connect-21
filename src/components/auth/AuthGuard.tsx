@@ -7,7 +7,7 @@ interface AuthGuardProps {
 }
 
 export function AuthGuard({ children }: AuthGuardProps) {
-  const { user, loading } = useAuth();
+  const { user, profile, loading } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -23,6 +23,11 @@ export function AuthGuard({ children }: AuthGuardProps) {
 
   if (!user) {
     return <Navigate to="/auth" state={{ from: location }} replace />;
+  }
+
+  // Verificar primeiro_acesso - forçar definição de senha
+  if (profile?.primeiro_acesso) {
+    return <Navigate to="/definir-senha" replace />;
   }
 
   return <>{children}</>;

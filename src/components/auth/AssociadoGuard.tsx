@@ -29,6 +29,11 @@ export function AssociadoGuard({ children }: AssociadoGuardProps) {
     return <Navigate to="/app/login" state={{ from: location }} replace />;
   }
 
+  // Verificar primeiro_acesso - forçar definição de senha
+  if (profile?.primeiro_acesso) {
+    return <Navigate to="/definir-senha" replace />;
+  }
+
   // Se é funcionário, redirecionar para o dashboard interno
   if (profile?.tipo === 'funcionario') {
     return <Navigate to="/dashboard" replace />;
