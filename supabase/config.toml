@@ -62,3 +62,6 @@ verify_jwt = false
 
 [functions.whatsapp-send-media]
 verify_jwt = false
+
+[functions.rastreador-posicao]
+verify_jwt = false

@@ -29,7 +29,29 @@ export interface PosicaoAtual {
   status_comunicacao: 'online' | 'atencao' | 'offline' | 'sem_dados';
 }
 
-// Hook para buscar última posição de um rastreador
+interface PosicaoTempoRealResponse {
+  success: boolean;
+  tempo_real: boolean;
+  mensagem?: string;
+  posicao: {
+    latitude: number;
+    longitude: number;
+    velocidade: number;
+    direcao?: number;
+    ignicao: boolean;
+    data_posicao: string;
+    endereco?: string;
+    dados_extras?: Record<string, unknown>;
+  } | null;
+  veiculo: {
+    id: string;
+    placa: string;
+    modelo: string;
+    marca?: string;
+  } | null;
+}
+
+// Hook para buscar última posição de um rastreador (do banco)
 export function useRastreadorPosicaoAtual(rastreadorId: string | undefined) {
   return useQuery({
     queryKey: ['rastreador-posicao', rastreadorId],
@@ -55,8 +77,69 @@ export function useRastreadorPosicaoAtual(rastreadorId: string | undefined) {
       return data;
     },
     enabled: !!rastreadorId,
-    refetchInterval: 30000, // Atualiza a cada 30 segundos
+    refetchInterval: 30000,
   });
+}
+
+// Hook para buscar posição em TEMPO REAL via Edge Function
+export function useRastreadorTempoReal(rastreadorId?: string, autoRefresh = true) {
+  const queryClient = useQueryClient();
+
+  const query = useQuery({
+    queryKey: ['rastreador-tempo-real', rastreadorId],
+    queryFn: async (): Promise<PosicaoTempoRealResponse> => {
+      if (!rastreadorId) throw new Error('ID não fornecido');
+
+      const { data, error } = await supabase.functions.invoke('rastreador-posicao', {
+        body: { rastreador_id: rastreadorId },
+      });
+
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error);
+
+      return data;
+    },
+    enabled: !!rastreadorId,
+    refetchInterval: autoRefresh ? 30000 : false,
+    staleTime: 15000,
+  });
+
+  const atualizarManual = useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase.functions.invoke('rastreador-posicao', {
+        body: { rastreador_id: id },
+      });
+
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error);
+
+      return data as PosicaoTempoRealResponse;
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(['rastreador-tempo-real', rastreadorId], data);
+
+      if (data.tempo_real) {
+        toast.success('Posição atualizada!');
+      } else {
+        toast.info(data.mensagem || 'Exibindo última posição conhecida');
+      }
+    },
+    onError: (error: Error) => {
+      toast.error(`Erro: ${error.message}`);
+    },
+  });
+
+  return {
+    posicao: query.data?.posicao ?? null,
+    veiculo: query.data?.veiculo ?? null,
+    tempoReal: query.data?.tempo_real,
+    mensagem: query.data?.mensagem,
+    isLoading: query.isLoading,
+    isRefetching: query.isRefetching,
+    error: query.error,
+    refetch: query.refetch,
+    atualizarManual,
+  };
 }
 
 // Hook para buscar histórico de posições
@@ -102,7 +185,7 @@ export function useTodasPosicoesAtuais() {
       if (error) throw error;
       return data as PosicaoAtual[];
     },
-    refetchInterval: 60000, // Atualiza a cada 1 minuto
+    refetchInterval: 60000,
   });
 }
 
@@ -122,12 +205,12 @@ export function useSyncRastreadores() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['rastreadores'] });
       queryClient.invalidateQueries({ queryKey: ['rastreadores-posicoes-atuais'] });
-      
+
       const total = data?.results?.reduce(
-        (acc: number, r: { posicoes_atualizadas: number }) => acc + (r.posicoes_atualizadas || 0), 
+        (acc: number, r: { posicoes_atualizadas: number }) => acc + (r.posicoes_atualizadas || 0),
         0
       ) || 0;
-      
+
       toast.success(`Sincronização concluída: ${total} posições atualizadas`);
     },
     onError: (error: Error) => {
@@ -175,10 +258,9 @@ export function useAlertasContagem() {
       const { data, error } = await supabase.rpc('get_alertas_contagem');
 
       if (error) throw error;
-      
-      // RPC retorna um array, pegamos o primeiro item
+
       const result = Array.isArray(data) ? data[0] : data;
-      
+
       return result as {
         abertos: number;
         visualizados: number;
