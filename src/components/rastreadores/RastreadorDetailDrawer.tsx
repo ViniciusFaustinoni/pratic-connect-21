@@ -48,6 +48,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { MapaRastreador } from './MapaRastreador';
 import { MapaHistorico } from './MapaHistorico';
+import { BotaoRedefinirSenha } from './BotaoRedefinirSenha';
 
 interface RastreadorDetailDrawerProps {
   rastreadorId: string | null;
@@ -373,6 +374,12 @@ export function RastreadorDetailDrawer({
                           <Package className="mr-2 h-4 w-4" />
                           Desinstalar
                         </Button>
+                        {rastreador.veiculos?.associados && (
+                          <BotaoRedefinirSenha
+                            rastreadorId={rastreadorId!}
+                            nomeAssociado={rastreador.veiculos.associados.nome}
+                          />
+                        )}
                       </>
                     )}
                     {rastreador.status !== 'baixado' && (
