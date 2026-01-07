@@ -1167,6 +1167,53 @@ export type Database = {
           },
         ]
       }
+      auth_bloqueios: {
+        Row: {
+          bloqueado_ate: string | null
+          bloqueio_permanente: boolean
+          created_at: string
+          desbloqueado_em: string | null
+          desbloqueado_por: string | null
+          email: string
+          id: string
+          ip: unknown
+          motivo: string | null
+          nivel: number
+        }
+        Insert: {
+          bloqueado_ate?: string | null
+          bloqueio_permanente?: boolean
+          created_at?: string
+          desbloqueado_em?: string | null
+          desbloqueado_por?: string | null
+          email: string
+          id?: string
+          ip?: unknown
+          motivo?: string | null
+          nivel?: number
+        }
+        Update: {
+          bloqueado_ate?: string | null
+          bloqueio_permanente?: boolean
+          created_at?: string
+          desbloqueado_em?: string | null
+          desbloqueado_por?: string | null
+          email?: string
+          id?: string
+          ip?: unknown
+          motivo?: string | null
+          nivel?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "auth_bloqueios_desbloqueado_por_fkey"
+            columns: ["desbloqueado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       auth_logs: {
         Row: {
           acao: string
@@ -1275,6 +1322,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      auth_tentativas: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          ip: unknown
+          motivo_falha: string | null
+          sucesso: boolean
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          ip?: unknown
+          motivo_falha?: string | null
+          sucesso?: boolean
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          ip?: unknown
+          motivo_falha?: string | null
+          sucesso?: boolean
+        }
+        Relationships: []
       }
       avaliacoes: {
         Row: {
