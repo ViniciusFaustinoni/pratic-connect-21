@@ -104,3 +104,25 @@ export interface WhatsAppQRCodeResponse {
   pairingCode?: string;
   error?: string;
 }
+
+export type WhatsAppMediaType = 'image' | 'document' | 'audio' | 'video';
+
+export interface WhatsAppSendMediaPayload {
+  telefone: string;
+  media_url?: string;
+  media_base64?: string;
+  media_type: WhatsAppMediaType;
+  mimetype: string;
+  filename?: string;
+  caption?: string;
+  instancia_id?: string;
+  referencia_tipo?: string;
+  referencia_id?: string;
+}
+
+export interface WhatsAppSendMediaResponse {
+  success: boolean;
+  mensagem_id?: string;
+  message_id?: string;
+  error?: string;
+}
