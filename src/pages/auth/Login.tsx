@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,6 +10,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import { Shield, Mail, Lock, Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 // ============================================
 // TIPOS
@@ -160,6 +162,37 @@ export default function LoginPage() {
         setError(parseSupabaseError(result.error || ''));
         return;
       }
+
+      // Buscar profile incluindo primeiro_acesso
+      const { data: userProfile, error: profileError } = await supabase
+        .from('profiles')
+        .select('id, nome, tipo, primeiro_acesso')
+        .eq('email', formData.email.trim().toLowerCase())
+        .maybeSingle();
+
+      if (profileError) {
+        console.error('Erro ao buscar profile:', profileError);
+      }
+
+      // Verificar primeiro_acesso - redirecionar para definir senha
+      if (userProfile?.primeiro_acesso) {
+        toast.success('Por favor, defina sua nova senha.');
+        navigate('/definir-senha', { replace: true });
+        return;
+      }
+
+      // Redirecionar conforme tipo de usuário
+      const primeiroNome = userProfile?.nome?.split(' ')[0] || '';
+      toast.success(`Bem-vindo${primeiroNome ? `, ${primeiroNome}` : ''}!`);
+
+      if (userProfile?.tipo === 'associado') {
+        navigate('/app/home', { replace: true });
+      } else {
+        const params = new URLSearchParams(location.search);
+        const returnTo = params.get('returnTo') || '/dashboard';
+        navigate(returnTo, { replace: true });
+      }
+
     } catch (err) {
       setError('unknown_error');
     } finally {
