@@ -7148,14 +7148,18 @@ export type Database = {
       }
       rastreadores: {
         Row: {
+          bloqueado: boolean | null
           chip_iccid: string | null
           codigo: string
+          config_plataforma: Json | null
           created_at: string
+          dados_extras: Json | null
           id: string
           id_plataforma: string | null
           imei: string | null
           numero_serie: string | null
           plataforma: string
+          plataforma_device_id: string | null
           status: Database["public"]["Enums"]["status_rastreador"]
           ultima_comunicacao: string | null
           ultima_ignicao: boolean | null
@@ -7166,14 +7170,18 @@ export type Database = {
           veiculo_id: string | null
         }
         Insert: {
+          bloqueado?: boolean | null
           chip_iccid?: string | null
           codigo: string
+          config_plataforma?: Json | null
           created_at?: string
+          dados_extras?: Json | null
           id?: string
           id_plataforma?: string | null
           imei?: string | null
           numero_serie?: string | null
           plataforma?: string
+          plataforma_device_id?: string | null
           status?: Database["public"]["Enums"]["status_rastreador"]
           ultima_comunicacao?: string | null
           ultima_ignicao?: boolean | null
@@ -7184,14 +7192,18 @@ export type Database = {
           veiculo_id?: string | null
         }
         Update: {
+          bloqueado?: boolean | null
           chip_iccid?: string | null
           codigo?: string
+          config_plataforma?: Json | null
           created_at?: string
+          dados_extras?: Json | null
           id?: string
           id_plataforma?: string | null
           imei?: string | null
           numero_serie?: string | null
           plataforma?: string
+          plataforma_device_id?: string | null
           status?: Database["public"]["Enums"]["status_rastreador"]
           ultima_comunicacao?: string | null
           ultima_ignicao?: boolean | null
@@ -7231,6 +7243,144 @@ export type Database = {
             referencedColumns: ["veiculo_id"]
           },
         ]
+      }
+      rastreadores_config_plataformas: {
+        Row: {
+          ambiente_atual: string | null
+          api_url_producao: string
+          api_url_sandbox: string
+          ativa: boolean | null
+          auth_type: string
+          config: Json | null
+          created_at: string | null
+          id: string
+          nome_exibicao: string
+          plataforma: string
+          suporta_acionamento_roubo: boolean | null
+          suporta_bloqueio: boolean | null
+          suporta_historico_trajeto: boolean | null
+          suporta_posicao_tempo_real: boolean | null
+          suporta_webhooks: boolean | null
+          updated_at: string | null
+        }
+        Insert: {
+          ambiente_atual?: string | null
+          api_url_producao: string
+          api_url_sandbox: string
+          ativa?: boolean | null
+          auth_type: string
+          config?: Json | null
+          created_at?: string | null
+          id?: string
+          nome_exibicao: string
+          plataforma: string
+          suporta_acionamento_roubo?: boolean | null
+          suporta_bloqueio?: boolean | null
+          suporta_historico_trajeto?: boolean | null
+          suporta_posicao_tempo_real?: boolean | null
+          suporta_webhooks?: boolean | null
+          updated_at?: string | null
+        }
+        Update: {
+          ambiente_atual?: string | null
+          api_url_producao?: string
+          api_url_sandbox?: string
+          ativa?: boolean | null
+          auth_type?: string
+          config?: Json | null
+          created_at?: string | null
+          id?: string
+          nome_exibicao?: string
+          plataforma?: string
+          suporta_acionamento_roubo?: boolean | null
+          suporta_bloqueio?: boolean | null
+          suporta_historico_trajeto?: boolean | null
+          suporta_posicao_tempo_real?: boolean | null
+          suporta_webhooks?: boolean | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      rastreadores_logs: {
+        Row: {
+          created_at: string | null
+          erro_mensagem: string | null
+          id: string
+          operacao: string
+          plataforma: string
+          rastreador_id: string | null
+          request: Json | null
+          response: Json | null
+          status: string | null
+          tempo_resposta_ms: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          erro_mensagem?: string | null
+          id?: string
+          operacao: string
+          plataforma: string
+          rastreador_id?: string | null
+          request?: Json | null
+          response?: Json | null
+          status?: string | null
+          tempo_resposta_ms?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          erro_mensagem?: string | null
+          id?: string
+          operacao?: string
+          plataforma?: string
+          rastreador_id?: string | null
+          request?: Json | null
+          response?: Json | null
+          status?: string | null
+          tempo_resposta_ms?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rastreadores_logs_rastreador_id_fkey"
+            columns: ["rastreador_id"]
+            isOneToOne: false
+            referencedRelation: "rastreadores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rastreadores_logs_rastreador_id_fkey"
+            columns: ["rastreador_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["rastreador_id"]
+          },
+        ]
+      }
+      rastreadores_tokens_cache: {
+        Row: {
+          created_at: string | null
+          expires_at: string
+          id: string
+          plataforma: string
+          refresh_token: string | null
+          token: string
+        }
+        Insert: {
+          created_at?: string | null
+          expires_at: string
+          id?: string
+          plataforma: string
+          refresh_token?: string | null
+          token: string
+        }
+        Update: {
+          created_at?: string | null
+          expires_at?: string
+          id?: string
+          plataforma?: string
+          refresh_token?: string | null
+          token?: string
+        }
+        Relationships: []
       }
       rateios: {
         Row: {
