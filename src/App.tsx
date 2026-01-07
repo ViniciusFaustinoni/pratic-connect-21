@@ -37,7 +37,7 @@ import AnaliseDocumento from "./pages/cadastro/AnaliseDocumento";
 import SinistrosList from "./pages/eventos/SinistrosList";
 import SinistroDetalhe from "./pages/eventos/SinistroDetalhe";
 import SinistrosDashboard from "./pages/eventos/SinistrosDashboard";
-import Instalacoes from "./pages/monitoramento/Instalacoes";
+import InstalacoesList from "./pages/monitoramento/InstalacoesList";
 import Rotas from "./pages/monitoramento/Rotas";
 import Estoque from "./pages/monitoramento/Estoque";
 import Rastreadores from "./pages/monitoramento/Rastreadores";
@@ -272,7 +272,7 @@ const App = () => (
               <Route path="/rh/beneficios" element={<Beneficios />} />
               
               {/* Monitoramento */}
-              <Route path="/monitoramento/instalacoes" element={<Instalacoes />} />
+              <Route path="/monitoramento/instalacoes" element={<InstalacoesList />} />
               <Route path="/monitoramento/rotas" element={<Rotas />} />
               <Route path="/monitoramento/estoque" element={<Estoque />} />
               <Route path="/monitoramento/mapa" element={<Mapa />} />
