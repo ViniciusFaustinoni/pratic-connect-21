@@ -443,18 +443,31 @@ export default function Auth() {
 
                 <div className="space-y-2">
                   <Label htmlFor="login-email">Email</Label>
-                  <Input
-                    id="login-email"
-                    type="email"
-                    placeholder="seu@email.com"
-                    value={loginEmail}
-                    onChange={(e) => {
-                      setLoginEmail(e.target.value);
-                      if (errors.email) setErrors(prev => ({ ...prev, email: undefined }));
-                    }}
-                    disabled={loginLoading || bloqueio?.bloqueado}
-                    className={errors.email ? 'border-destructive' : ''}
-                  />
+              <Input
+                id="login-email"
+                type="email"
+                placeholder="seu@email.com"
+                value={loginEmail}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setLoginEmail(value);
+                  
+                  // Limpar erro somente quando formato ficar válido
+                  if (value && errors.email) {
+                    if (validateEmail(value)) {
+                      setErrors(prev => ({ ...prev, email: undefined }));
+                    }
+                  }
+                }}
+                onBlur={() => {
+                  // Validar ao sair do campo (se tiver conteúdo)
+                  if (loginEmail && !validateEmail(loginEmail)) {
+                    setErrors(prev => ({ ...prev, email: 'Formato de email inválido' }));
+                  }
+                }}
+                disabled={loginLoading || bloqueio?.bloqueado}
+                className={errors.email ? 'border-destructive' : ''}
+              />
                   {errors.email && (
                     <p className="text-sm text-destructive animate-in fade-in duration-200">
                       {errors.email}
