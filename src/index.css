@@ -156,9 +156,13 @@
   }
 
   /* Safe area for iPhones with notch */
-  .pb-safe {
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-  }
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.h-safe-area-inset-bottom {
+  height: env(safe-area-inset-bottom, 0px);
+}
 }
 
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
