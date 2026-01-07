@@ -13,7 +13,7 @@ export type StatusInstalacao =
 
 export type PeriodoInstalacao = 'manha' | 'tarde' | 'noite';
 
-export type StatusRota = 'planejada' | 'em_andamento' | 'concluida' | 'cancelada';
+export type StatusRota = 'pendente' | 'em_andamento' | 'concluida' | 'cancelada';
 
 export type StatusRastreador = 'estoque' | 'instalado' | 'manutencao' | 'baixado';
 
@@ -48,17 +48,17 @@ export const PERIODO_LABELS: Record<PeriodoInstalacao, string> = {
 };
 
 export const STATUS_ROTA_LABELS: Record<StatusRota, string> = {
-  planejada: 'Planejada',
+  pendente: 'Pendente',
   em_andamento: 'Em Andamento',
   concluida: 'Concluída',
   cancelada: 'Cancelada',
 };
 
 export const STATUS_ROTA_COLORS: Record<StatusRota, string> = {
-  planejada: 'bg-blue-100 text-blue-800',
-  em_andamento: 'bg-orange-100 text-orange-800',
+  pendente: 'bg-muted text-muted-foreground',
+  em_andamento: 'bg-blue-100 text-blue-800',
   concluida: 'bg-green-100 text-green-800',
-  cancelada: 'bg-red-100 text-red-800',
+  cancelada: 'bg-destructive/10 text-destructive',
 };
 
 export const STATUS_RASTREADOR_LABELS: Record<StatusRastreador, string> = {
