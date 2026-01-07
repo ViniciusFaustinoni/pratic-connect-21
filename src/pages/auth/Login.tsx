@@ -7,8 +7,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
-import { Shield, Mail, Lock, Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react';
+import { Shield, Mail, Lock, Eye, EyeOff, Loader2, AlertCircle, Check, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -74,7 +75,7 @@ export default function LoginPage() {
   const { signIn, signInWithGoogle, user, loading: authLoading, isAssociado } = useAuth();
 
   // ============================================
-  // ESTADOS
+  // ESTADOS DO FORMULÁRIO
   // ============================================
   const [formData, setFormData] = useState<LoginFormData>({
     email: '',
@@ -83,6 +84,21 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<LoginError | null>(null);
+  const [lembrarMe, setLembrarMe] = useState(false);
+
+  // ============================================
+  // ESTADOS DE VALIDAÇÃO EM TEMPO REAL
+  // ============================================
+  const [emailValido, setEmailValido] = useState<boolean | null>(null);
+  const [senhaValida, setSenhaValida] = useState<boolean | null>(null);
+
+  // ============================================
+  // ESTADOS DE RATE LIMITING
+  // ============================================
+  const [tentativasRestantes, setTentativasRestantes] = useState<number | null>(null);
+  const [bloqueado, setBloqueado] = useState(false);
+  const [tempoRestante, setTempoRestante] = useState<number>(0);
+  const [bloqueadoPermanente, setBloqueadoPermanente] = useState(false);
 
   // ============================================
   // REDIRECT SE JÁ AUTENTICADO
@@ -100,13 +116,60 @@ export default function LoginPage() {
   }, [authLoading, user, isAssociado, navigate, location.search]);
 
   // ============================================
-  // HANDLER GENÉRICO PARA INPUTS
+  // VERIFICAR BLOQUEIO AO DIGITAR EMAIL (DEBOUNCED)
+  // ============================================
+  useEffect(() => {
+    if (!formData.email || !emailValido) return;
+    
+    const timeout = setTimeout(async () => {
+      try {
+        const response = await supabase.functions.invoke('auth-tentativas', {
+          body: { action: 'verificar', email: formData.email.trim().toLowerCase() }
+        });
+        
+        if (response.data?.bloqueado) {
+          setBloqueado(true);
+          setTempoRestante(response.data.minutos_restantes || 0);
+          setBloqueadoPermanente(response.data.permanente || false);
+        } else {
+          setBloqueado(false);
+          setBloqueadoPermanente(false);
+        }
+      } catch (err) {
+        console.error('Erro ao verificar bloqueio:', err);
+      }
+    }, 500);
+
+    return () => clearTimeout(timeout);
+  }, [formData.email, emailValido]);
+
+  // ============================================
+  // HANDLER GENÉRICO PARA INPUTS COM VALIDAÇÃO EM TEMPO REAL
   // ============================================
   const handleInputChange = (field: keyof LoginFormData) => (
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
-    setFormData(prev => ({ ...prev, [field]: e.target.value }));
+    const value = e.target.value;
+    setFormData(prev => ({ ...prev, [field]: value }));
     if (error) setError(null);
+
+    // Validação em tempo real
+    if (field === 'email') {
+      if (!value.trim()) {
+        setEmailValido(null);
+      } else {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        setEmailValido(emailRegex.test(value.trim()));
+      }
+    }
+    
+    if (field === 'password') {
+      if (!value) {
+        setSenhaValida(null);
+      } else {
+        setSenhaValida(value.length >= 6);
+      }
+    }
   };
 
   // ============================================
@@ -142,13 +205,59 @@ export default function LoginPage() {
   };
 
   // ============================================
+  // REGISTRAR TENTATIVA FALHA
+  // ============================================
+  const registrarTentativaFalha = async (email: string, motivo: string) => {
+    try {
+      const response = await supabase.functions.invoke('auth-tentativas', {
+        body: { 
+          action: 'registrar', 
+          email: email.trim().toLowerCase(), 
+          sucesso: false,
+          motivo_falha: motivo
+        }
+      });
+      
+      if (response.data?.bloqueado) {
+        setBloqueado(true);
+        setTempoRestante(response.data.minutos || 0);
+        setBloqueadoPermanente(response.data.permanente || false);
+        setTentativasRestantes(null);
+      } else if (response.data?.tentativas_restantes !== undefined) {
+        setTentativasRestantes(response.data.tentativas_restantes);
+      }
+    } catch (err) {
+      console.error('Erro ao registrar tentativa:', err);
+    }
+  };
+
+  // ============================================
+  // REGISTRAR TENTATIVA SUCESSO
+  // ============================================
+  const registrarTentativaSucesso = async (email: string) => {
+    try {
+      await supabase.functions.invoke('auth-tentativas', {
+        body: { 
+          action: 'registrar', 
+          email: email.trim().toLowerCase(), 
+          sucesso: true
+        }
+      });
+      setTentativasRestantes(null);
+      setBloqueado(false);
+    } catch (err) {
+      console.error('Erro ao registrar sucesso:', err);
+    }
+  };
+
+  // ============================================
   // SUBMIT LOGIN EMAIL/SENHA
   // ============================================
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    if (!validateForm()) return;
+    if (!validateForm() || bloqueado) return;
 
     setIsSubmitting(true);
 
@@ -159,9 +268,14 @@ export default function LoginPage() {
       });
 
       if (!result.success) {
-        setError(parseSupabaseError(result.error || ''));
+        const errorType = parseSupabaseError(result.error || '');
+        setError(errorType);
+        await registrarTentativaFalha(formData.email, errorType);
         return;
       }
+
+      // Login bem-sucedido
+      await registrarTentativaSucesso(formData.email);
 
       // Buscar profile incluindo primeiro_acesso
       const { data: userProfile, error: profileError } = await supabase
@@ -195,6 +309,7 @@ export default function LoginPage() {
 
     } catch (err) {
       setError('unknown_error');
+      await registrarTentativaFalha(formData.email, 'unknown_error');
     } finally {
       setIsSubmitting(false);
     }
@@ -221,16 +336,19 @@ export default function LoginPage() {
   };
 
   // ============================================
-  // LOADING STATE
+  // LOADING STATE COM ANIMAÇÃO
   // ============================================
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-muted/30 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+      <div className="min-h-screen bg-muted/30 flex items-center justify-center animate-in fade-in duration-300">
+        <div className="flex flex-col items-center gap-4 animate-in zoom-in-95 duration-300">
+          <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
-          <p className="text-muted-foreground">Verificando sessão...</p>
+          <div className="text-center">
+            <p className="font-medium text-foreground">Verificando sessão</p>
+            <p className="text-sm text-muted-foreground">Aguarde um momento...</p>
+          </div>
         </div>
       </div>
     );
@@ -242,7 +360,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-muted/30 flex flex-col items-center justify-center p-4">
       {/* LOGO E TÍTULO */}
-      <div className="flex flex-col items-center mb-8">
+      <div className="flex flex-col items-center mb-8 animate-in fade-in slide-in-from-top-4 duration-500">
         <div className="h-16 w-16 rounded-full bg-primary flex items-center justify-center mb-4">
           <Shield className="h-8 w-8 text-primary-foreground" />
         </div>
@@ -251,7 +369,7 @@ export default function LoginPage() {
       </div>
 
       {/* CARD DE LOGIN */}
-      <Card className="w-full max-w-md shadow-lg">
+      <Card className="w-full max-w-md shadow-lg animate-in zoom-in-95 fade-in duration-500 delay-150">
         <CardHeader className="text-center">
           <CardTitle className="text-xl">Acesso ao Sistema</CardTitle>
           <CardDescription>
@@ -260,9 +378,32 @@ export default function LoginPage() {
         </CardHeader>
 
         <CardContent className="space-y-4">
+          {/* ALERTA DE BLOQUEIO */}
+          {bloqueado && (
+            <Alert variant="destructive" className="animate-in fade-in slide-in-from-top-2 duration-300">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                {bloqueadoPermanente 
+                  ? 'Conta bloqueada permanentemente. Contate seu supervisor para desbloquear.'
+                  : `Conta temporariamente bloqueada. Tente novamente em ${tempoRestante} minuto(s).`
+                }
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* ALERTA DE TENTATIVAS RESTANTES */}
+          {tentativasRestantes !== null && tentativasRestantes <= 2 && !bloqueado && (
+            <Alert className="border-yellow-500 bg-yellow-50 dark:bg-yellow-950/20 animate-in fade-in slide-in-from-top-2 duration-300">
+              <AlertCircle className="h-4 w-4 text-yellow-600" />
+              <AlertDescription className="text-yellow-700 dark:text-yellow-400">
+                Atenção: {tentativasRestantes} tentativa(s) restante(s) antes do bloqueio.
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* ALERTA DE ERRO */}
-          {error && (
-            <Alert variant="destructive">
+          {error && !bloqueado && (
+            <Alert variant="destructive" className="animate-in fade-in slide-in-from-top-2 duration-300">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>{ERROR_MESSAGES[error]}</AlertDescription>
             </Alert>
@@ -281,15 +422,30 @@ export default function LoginPage() {
                   placeholder="seu.email@pratic.com.br"
                   value={formData.email}
                   onChange={handleInputChange('email')}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || bloqueado}
                   className={cn(
-                    "pl-10 h-11",
-                    error && !formData.email && "border-destructive focus-visible:ring-destructive"
+                    "pl-10 pr-10 h-11 transition-colors duration-200",
+                    emailValido === false && formData.email && "border-destructive focus-visible:ring-destructive",
+                    emailValido === true && "border-green-500 focus-visible:ring-green-500"
                   )}
                   autoComplete="email"
                   autoFocus
                 />
+                {emailValido !== null && formData.email && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 animate-in zoom-in duration-200">
+                    {emailValido ? (
+                      <Check className="h-4 w-4 text-green-500" />
+                    ) : (
+                      <X className="h-4 w-4 text-destructive" />
+                    )}
+                  </div>
+                )}
               </div>
+              {emailValido === false && formData.email && (
+                <p className="text-xs text-destructive animate-in fade-in duration-200">
+                  Digite um e-mail válido
+                </p>
+              )}
             </div>
 
             {/* CAMPO SENHA */}
@@ -298,7 +454,7 @@ export default function LoginPage() {
                 <Label htmlFor="password">Senha</Label>
                 <Link
                   to="/forgot-password"
-                  className="text-xs text-primary hover:underline"
+                  className="text-xs text-primary hover:underline transition-colors"
                 >
                   Esqueceu a senha?
                 </Link>
@@ -311,10 +467,11 @@ export default function LoginPage() {
                   placeholder="••••••••"
                   value={formData.password}
                   onChange={handleInputChange('password')}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || bloqueado}
                   className={cn(
-                    "pl-10 pr-10 h-11",
-                    error && !formData.password && "border-destructive focus-visible:ring-destructive"
+                    "pl-10 pr-10 h-11 transition-colors duration-200",
+                    senhaValida === false && formData.password && "border-destructive focus-visible:ring-destructive",
+                    senhaValida === true && "border-green-500 focus-visible:ring-green-500"
                   )}
                   autoComplete="current-password"
                 />
@@ -332,13 +489,38 @@ export default function LoginPage() {
                   )}
                 </button>
               </div>
+              {senhaValida === false && formData.password && (
+                <p className="text-xs text-destructive animate-in fade-in duration-200">
+                  A senha deve ter no mínimo 6 caracteres
+                </p>
+              )}
+            </div>
+
+            {/* CHECKBOX LEMBRAR-ME */}
+            <div className="flex items-center space-x-2">
+              <Checkbox 
+                id="lembrar-me" 
+                checked={lembrarMe}
+                onCheckedChange={(checked) => setLembrarMe(checked === true)}
+                disabled={isSubmitting || bloqueado}
+              />
+              <Label 
+                htmlFor="lembrar-me" 
+                className="text-sm font-normal cursor-pointer select-none"
+              >
+                Lembrar-me
+              </Label>
             </div>
 
             {/* BOTÃO ENTRAR */}
-            <Button type="submit" className="w-full h-11" disabled={isSubmitting}>
+            <Button 
+              type="submit" 
+              className="w-full h-11 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]" 
+              disabled={isSubmitting || bloqueado || emailValido === false || senhaValida === false}
+            >
               {isSubmitting ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
                   Entrando...
                 </>
               ) : (
@@ -363,19 +545,19 @@ export default function LoginPage() {
           <Button
             type="button"
             variant="outline"
-            className="w-full h-11"
+            className="w-full h-11 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
             onClick={handleGoogleLogin}
-            disabled={isSubmitting}
+            disabled={isSubmitting || bloqueado}
           >
             <GoogleIcon />
-            Google
+            <span className="ml-2">Google</span>
           </Button>
         </CardContent>
 
         <CardFooter>
           <p className="text-sm text-muted-foreground text-center w-full">
             É associado?{' '}
-            <Link to="/app/login" className="text-primary hover:underline font-medium">
+            <Link to="/app/login" className="text-primary hover:underline font-medium transition-colors">
               Acesse o App do Associado
             </Link>
           </p>
@@ -383,7 +565,7 @@ export default function LoginPage() {
       </Card>
 
       {/* FOOTER */}
-      <div className="mt-8 text-center">
+      <div className="mt-8 text-center animate-in fade-in slide-in-from-bottom-4 duration-500 delay-300">
         <p className="text-sm text-muted-foreground">
           © {new Date().getFullYear()} PRATIC Proteção Veicular
         </p>
