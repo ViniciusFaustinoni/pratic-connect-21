@@ -118,8 +118,8 @@ import CampanhaForm from "./pages/marketing/CampanhaForm";
 import Canais from "./pages/marketing/Canais";
 import Indicacoes from "./pages/marketing/Indicacoes";
 import UTMs from "./pages/marketing/UTMs";
-import DistribuicaoLeads from "./pages/marketing/DistribuicaoLeads";
 import RelatoriosMarketing from "./pages/marketing/RelatoriosMarketing";
+import DistribuicaoConfig from "./pages/vendas/DistribuicaoConfig";
 
 // Diretoria
 import DiretoriaDashboard from "./pages/diretoria/DiretoriaDashboard";
@@ -199,6 +199,7 @@ const App = () => (
               <Route path="/vendas/relatorios" element={<RelatoriosVendas />} />
               <Route path="/vendas/metas" element={<Metas />} />
               <Route path="/vendas/cotador" element={<Cotador />} />
+              <Route path="/vendas/distribuicao" element={<DistribuicaoConfig />} />
               
               {/* Cadastro */}
               <Route path="/cadastro/associados" element={<Associados />} />
@@ -291,7 +292,7 @@ const App = () => (
               <Route path="/marketing/canais" element={<Canais />} />
               <Route path="/marketing/indicacoes" element={<Indicacoes />} />
               <Route path="/marketing/utms" element={<UTMs />} />
-              <Route path="/marketing/distribuicao" element={<DistribuicaoLeads />} />
+              <Route path="/marketing/distribuicao" element={<DistribuicaoConfig />} />
               <Route path="/marketing/relatorios" element={<RelatoriosMarketing />} />
               
               {/* Diretoria */}

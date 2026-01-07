@@ -6,95 +6,81 @@ import type {
   VendedorDistribuicao,
   HistoricoDistribuicao,
   EstatisticasDistribuicao,
-  AtualizarConfigPayload,
-  AtualizarVendedorPayload,
-  DistribuirLeadManualPayload,
   StatusDistribuicao,
-  TipoAtribuicao,
 } from '@/types/distribuicao';
 
 // ============================================
 // CONFIGURAÇÃO
 // ============================================
 
-export function useDistribuicaoConfig() {
+export function useConfiguracaoDistribuicao() {
   return useQuery({
     queryKey: ['distribuicao-config'],
     queryFn: async (): Promise<ConfiguracaoDistribuicao | null> => {
       const { data, error } = await supabase
-        .from('distribuicao_leads_config')
+        .from('distribuicao_config')
         .select('*')
         .limit(1)
         .maybeSingle();
 
-      if (error) {
-        throw error;
-      }
-
+      if (error) throw error;
       if (!data) return null;
 
-      // Buscar fallback vendedor separadamente se existir
-      let fallback_vendedor = null;
-      if (data.fallback_vendedor_id) {
-        const { data: vendedor } = await supabase
+      // Buscar fallback usuário se existir
+      let fallback_usuario = null;
+      if (data.fallback_usuario_id) {
+        const { data: usuario } = await supabase
           .from('profiles')
           .select('id, nome')
-          .eq('id', data.fallback_vendedor_id)
+          .eq('id', data.fallback_usuario_id)
           .single();
-        fallback_vendedor = vendedor;
+        fallback_usuario = usuario;
       }
 
       return {
         id: data.id,
-        ativo: data.ativo,
-        tipo_distribuicao: data.tipo || 'round_robin',
-        proximo_vendedor: data.proximo_vendedor || 0,
-        limite_diario_padrao: data.limite_diario_padrao,
-        resetar_contadores_hora: data.resetar_contadores_hora,
-        fallback_vendedor_id: data.fallback_vendedor_id,
-        distribuir_fins_semana: data.distribuir_fins_semana,
-        created_at: data.created_at,
-        updated_at: data.updated_at,
-        fallback_vendedor,
+        ativo: data.ativo ?? true,
+        limite_diario_padrao: data.limite_diario_padrao ?? 20,
+        resetar_contadores_hora: data.resetar_contadores_hora ?? 0,
+        fallback_usuario_id: data.fallback_usuario_id,
+        distribuir_fins_semana: data.distribuir_fins_semana ?? false,
+        created_at: data.created_at ?? '',
+        updated_at: data.updated_at ?? '',
+        fallback_usuario,
       };
     },
   });
 }
 
-export function useAtualizarConfig() {
+export function useAtualizarConfiguracao() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (payload: AtualizarConfigPayload) => {
+    mutationFn: async (payload: Partial<ConfiguracaoDistribuicao>) => {
       const { data: existing } = await supabase
-        .from('distribuicao_leads_config')
+        .from('distribuicao_config')
         .select('id')
         .limit(1)
         .maybeSingle();
 
-      const updateData: Record<string, unknown> = {
+      const updateData = {
         ...payload,
         updated_at: new Date().toISOString(),
       };
 
-      // Map tipo_distribuicao to tipo for the database
-      if (payload.tipo_distribuicao) {
-        updateData.tipo = payload.tipo_distribuicao;
-        delete updateData.tipo_distribuicao;
-      }
+      // Remove campos que não existem na tabela
+      delete (updateData as any).fallback_usuario;
 
       if (existing) {
         const { error } = await supabase
-          .from('distribuicao_leads_config')
-          .update(updateData as any)
+          .from('distribuicao_config')
+          .update(updateData)
           .eq('id', existing.id);
-
         if (error) throw error;
       } else {
         const { error } = await supabase
-          .from('distribuicao_leads_config')
-          .insert(updateData as any);
-
+          .from('distribuicao_config')
+          .insert(updateData);
         if (error) throw error;
       }
     },
@@ -113,40 +99,109 @@ export function useAtualizarConfig() {
 // VENDEDORES
 // ============================================
 
-export function useDistribuicaoVendedores() {
+export function useVendedoresDistribuicao() {
   return useQuery({
     queryKey: ['distribuicao-vendedores'],
     queryFn: async (): Promise<VendedorDistribuicao[]> => {
       const { data, error } = await supabase
-        .from('distribuicao_leads_vendedores')
+        .from('distribuicao_vendedores')
         .select(`
           *,
-          vendedor:profiles!vendedor_id(id, nome, email, telefone, avatar_url)
+          vendedor:profiles!vendedor_id(id, nome, email, telefone)
         `)
         .order('ordem', { ascending: true });
 
       if (error) throw error;
 
       return (data || []).map(item => ({
-        ...item,
+        id: item.id,
+        vendedor_id: item.vendedor_id,
         status: (item.status as StatusDistribuicao) || 'ativo',
-        ordem: item.ordem || 0,
-        total_leads_historico: item.total_leads_historico || 0,
-      })) as VendedorDistribuicao[];
+        limite_diario: item.limite_diario ?? 0,
+        leads_hoje: item.leads_hoje ?? 0,
+        total_leads: item.total_leads ?? 0,
+        ultima_atribuicao: item.ultima_atribuicao,
+        ordem: item.ordem ?? 0,
+        created_at: item.created_at ?? '',
+        updated_at: item.updated_at ?? '',
+        vendedor: item.vendedor,
+      }));
     },
   });
 }
 
-export function useAtualizarVendedor() {
+export function useAdicionarVendedorDistribuicao() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (payload: AtualizarVendedorPayload) => {
-      const { id, ...updates } = payload;
+    mutationFn: async (vendedor_id: string) => {
+      // Buscar próxima ordem
+      const { data: existing } = await supabase
+        .from('distribuicao_vendedores')
+        .select('ordem')
+        .order('ordem', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const proximaOrdem = (existing?.ordem ?? 0) + 1;
 
       const { error } = await supabase
-        .from('distribuicao_leads_vendedores')
-        .update({ ...updates, updated_at: new Date().toISOString() })
+        .from('distribuicao_vendedores')
+        .insert({
+          vendedor_id,
+          status: 'ativo',
+          limite_diario: 0,
+          leads_hoje: 0,
+          total_leads: 0,
+          ordem: proximaOrdem,
+        });
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['distribuicao-vendedores'] });
+      queryClient.invalidateQueries({ queryKey: ['vendedores-disponiveis'] });
+      toast.success('Vendedor adicionado à distribuição');
+    },
+    onError: (error) => {
+      console.error('Erro ao adicionar vendedor:', error);
+      toast.error('Erro ao adicionar vendedor');
+    },
+  });
+}
+
+export function useRemoverVendedorDistribuicao() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('distribuicao_vendedores')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['distribuicao-vendedores'] });
+      queryClient.invalidateQueries({ queryKey: ['vendedores-disponiveis'] });
+      toast.success('Vendedor removido da distribuição');
+    },
+    onError: (error) => {
+      console.error('Erro ao remover vendedor:', error);
+      toast.error('Erro ao remover vendedor');
+    },
+  });
+}
+
+export function useAtualizarStatusVendedor() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: StatusDistribuicao }) => {
+      const { error } = await supabase
+        .from('distribuicao_vendedores')
+        .update({ status, updated_at: new Date().toISOString() })
         .eq('id', id);
 
       if (error) throw error;
@@ -154,34 +209,64 @@ export function useAtualizarVendedor() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['distribuicao-vendedores'] });
       queryClient.invalidateQueries({ queryKey: ['distribuicao-estatisticas'] });
-      toast.success('Vendedor atualizado');
+      toast.success('Status atualizado');
     },
     onError: (error) => {
-      console.error('Erro ao atualizar vendedor:', error);
-      toast.error('Erro ao atualizar vendedor');
+      console.error('Erro ao atualizar status:', error);
+      toast.error('Erro ao atualizar status');
     },
   });
 }
 
-export function useToggleRecebendoLeads() {
+export function useAtualizarLimiteVendedor() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, recebendo_leads }: { id: string; recebendo_leads: boolean }) => {
+    mutationFn: async ({ id, limite_diario }: { id: string; limite_diario: number }) => {
       const { error } = await supabase
-        .from('distribuicao_leads_vendedores')
-        .update({ recebendo_leads, updated_at: new Date().toISOString() })
+        .from('distribuicao_vendedores')
+        .update({ limite_diario, updated_at: new Date().toISOString() })
         .eq('id', id);
 
       if (error) throw error;
     },
-    onSuccess: (_, { recebendo_leads }) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['distribuicao-vendedores'] });
-      toast.success(recebendo_leads ? 'Vendedor ativado' : 'Vendedor pausado');
+      toast.success('Limite atualizado');
     },
     onError: (error) => {
-      console.error('Erro ao toggle recebendo:', error);
-      toast.error('Erro ao atualizar vendedor');
+      console.error('Erro ao atualizar limite:', error);
+      toast.error('Erro ao atualizar limite');
+    },
+  });
+}
+
+// ============================================
+// VENDEDORES DISPONÍVEIS (para adicionar)
+// ============================================
+
+export function useVendedoresDisponiveis() {
+  return useQuery({
+    queryKey: ['vendedores-disponiveis'],
+    queryFn: async () => {
+      // Buscar vendedores já na distribuição
+      const { data: jaAdicionados } = await supabase
+        .from('distribuicao_vendedores')
+        .select('vendedor_id');
+
+      const idsJaAdicionados = (jaAdicionados || []).map(v => v.vendedor_id);
+
+      // Buscar profiles que são vendedores e não estão na distribuição
+      const { data: vendedores, error } = await supabase
+        .from('profiles')
+        .select('id, nome, email')
+        .eq('tipo', 'funcionario')
+        .eq('ativo', true);
+
+      if (error) throw error;
+
+      // Filtrar os que já estão na distribuição
+      return (vendedores || []).filter(v => !idsJaAdicionados.includes(v.id));
     },
   });
 }
@@ -190,14 +275,17 @@ export function useToggleRecebendoLeads() {
 // HISTÓRICO
 // ============================================
 
-export function useDistribuicaoHistorico(leadId?: string) {
+export function useHistoricoDistribuicao(leadId?: string) {
   return useQuery({
     queryKey: ['distribuicao-historico', leadId],
     queryFn: async (): Promise<HistoricoDistribuicao[]> => {
-      // Buscar histórico
       let query = supabase
-        .from('distribuicao_leads_historico')
-        .select('*')
+        .from('distribuicao_historico')
+        .select(`
+          *,
+          lead:leads!lead_id(id, nome, telefone),
+          vendedor:profiles!vendedor_id(id, nome)
+        `)
         .order('created_at', { ascending: false })
         .limit(50);
 
@@ -209,60 +297,16 @@ export function useDistribuicaoHistorico(leadId?: string) {
 
       if (error) throw error;
 
-      // Buscar dados relacionados separadamente
-      const result: HistoricoDistribuicao[] = [];
-
-      for (const item of data || []) {
-        let lead = null;
-        let vendedor = null;
-        let vendedor_anterior = null;
-
-        // Buscar lead
-        if (item.lead_id) {
-          const { data: leadData } = await supabase
-            .from('leads')
-            .select('id, nome, telefone')
-            .eq('id', item.lead_id)
-            .single();
-          lead = leadData;
-        }
-
-        // Buscar vendedor
-        if (item.vendedor_id) {
-          const { data: vendedorData } = await supabase
-            .from('profiles')
-            .select('id, nome')
-            .eq('id', item.vendedor_id)
-            .single();
-          vendedor = vendedorData;
-        }
-
-        // Buscar vendedor anterior
-        if (item.vendedor_anterior_id) {
-          const { data: vendedorAnteriorData } = await supabase
-            .from('profiles')
-            .select('id, nome')
-            .eq('id', item.vendedor_anterior_id)
-            .single();
-          vendedor_anterior = vendedorAnteriorData;
-        }
-
-        result.push({
-          id: item.id,
-          lead_id: item.lead_id,
-          vendedor_id: item.vendedor_id,
-          vendedor_anterior_id: item.vendedor_anterior_id,
-          tipo: item.tipo as TipoAtribuicao,
-          motivo: item.motivo,
-          created_at: item.created_at,
-          created_by: item.created_by,
-          lead,
-          vendedor,
-          vendedor_anterior,
-        });
-      }
-
-      return result;
+      return (data || []).map(item => ({
+        id: item.id,
+        lead_id: item.lead_id,
+        vendedor_id: item.vendedor_id,
+        atribuido_automaticamente: item.atribuido_automaticamente ?? true,
+        motivo: item.motivo ?? 'round_robin',
+        created_at: item.created_at ?? '',
+        lead: item.lead,
+        vendedor: item.vendedor,
+      }));
     },
   });
 }
@@ -271,7 +315,7 @@ export function useDistribuicaoHistorico(leadId?: string) {
 // ESTATÍSTICAS
 // ============================================
 
-export function useDistribuicaoEstatisticas() {
+export function useEstatisticasDistribuicao() {
   return useQuery({
     queryKey: ['distribuicao-estatisticas'],
     queryFn: async (): Promise<EstatisticasDistribuicao> => {
@@ -279,12 +323,11 @@ export function useDistribuicaoEstatisticas() {
 
       // Vendedores ativos
       const { data: vendedores } = await supabase
-        .from('distribuicao_leads_vendedores')
-        .select('vendedor_id, leads_recebidos_hoje, status, recebendo_leads')
-        .eq('status', 'ativo')
-        .eq('recebendo_leads', true);
+        .from('distribuicao_vendedores')
+        .select('vendedor_id, leads_hoje, status')
+        .eq('status', 'ativo');
 
-      // Buscar nomes dos vendedores
+      // Buscar nomes
       const vendedorIds = (vendedores || []).map(v => v.vendedor_id);
       const { data: profiles } = await supabase
         .from('profiles')
@@ -307,7 +350,7 @@ export function useDistribuicaoEstatisticas() {
 
       // Distribuídos hoje
       const { count: distribuidosHoje } = await supabase
-        .from('distribuicao_leads_historico')
+        .from('distribuicao_historico')
         .select('*', { count: 'exact', head: true })
         .gte('created_at', `${hoje}T00:00:00`);
 
@@ -315,47 +358,39 @@ export function useDistribuicaoEstatisticas() {
       const totalVendedoresAtivos = vendedoresAtivos.length;
 
       // Calcular mais/menos leads
-      let vendedorMaisLeads = null;
-      let vendedorMenosLeads = null;
+      let vendedor_mais_leads = null;
+      let vendedor_menos_leads = null;
 
       if (vendedoresAtivos.length > 0) {
         const sorted = [...vendedoresAtivos].sort(
-          (a, b) => (b.leads_recebidos_hoje || 0) - (a.leads_recebidos_hoje || 0)
+          (a, b) => (b.leads_hoje || 0) - (a.leads_hoje || 0)
         );
 
         const mais = sorted[0];
         const menos = sorted[sorted.length - 1];
 
         if (mais) {
-          const nome = profileMap.get(mais.vendedor_id) || 'Vendedor';
-          vendedorMaisLeads = {
-            vendedor: nome,
-            quantidade: mais.leads_recebidos_hoje || 0,
+          vendedor_mais_leads = {
+            vendedor: profileMap.get(mais.vendedor_id) || 'Vendedor',
+            quantidade: mais.leads_hoje || 0,
           };
         }
 
         if (menos) {
-          const nome = profileMap.get(menos.vendedor_id) || 'Vendedor';
-          vendedorMenosLeads = {
-            vendedor: nome,
-            quantidade: menos.leads_recebidos_hoje || 0,
+          vendedor_menos_leads = {
+            vendedor: profileMap.get(menos.vendedor_id) || 'Vendedor',
+            quantidade: menos.leads_hoje || 0,
           };
         }
       }
 
-      const totalLeadsHoje = leadsHoje || 0;
-      const mediaVendedor = totalVendedoresAtivos > 0 
-        ? Math.round(totalLeadsHoje / totalVendedoresAtivos) 
-        : 0;
-
       return {
         total_vendedores_ativos: totalVendedoresAtivos,
-        total_leads_hoje: totalLeadsHoje,
+        total_leads_hoje: leadsHoje || 0,
         leads_distribuidos_hoje: distribuidosHoje || 0,
         leads_sem_vendedor: leadsSemVendedor || 0,
-        media_por_vendedor: mediaVendedor,
-        vendedor_mais_leads: vendedorMaisLeads,
-        vendedor_menos_leads: vendedorMenosLeads,
+        vendedor_mais_leads,
+        vendedor_menos_leads,
       };
     },
   });
@@ -369,41 +404,40 @@ export function useDistribuirLeadManual() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (payload: DistribuirLeadManualPayload) => {
-      // Buscar vendedor anterior
-      const { data: lead } = await supabase
-        .from('leads')
-        .select('vendedor_id')
-        .eq('id', payload.lead_id)
-        .single();
-
-      const vendedorAnteriorId = lead?.vendedor_id;
-
+    mutationFn: async ({ lead_id, vendedor_id }: { lead_id: string; vendedor_id: string }) => {
       // Atualizar lead
       const { error: updateError } = await supabase
         .from('leads')
-        .update({ vendedor_id: payload.vendedor_id })
-        .eq('id', payload.lead_id);
+        .update({ vendedor_id })
+        .eq('id', lead_id);
 
       if (updateError) throw updateError;
 
       // Registrar histórico
       const { error: histError } = await supabase
-        .from('distribuicao_leads_historico')
+        .from('distribuicao_historico')
         .insert({
-          lead_id: payload.lead_id,
-          vendedor_id: payload.vendedor_id,
-          vendedor_anterior_id: vendedorAnteriorId,
-          tipo: vendedorAnteriorId ? 'reatribuicao' : 'manual',
-          motivo: payload.motivo || 'Atribuição manual',
+          lead_id,
+          vendedor_id,
+          atribuido_automaticamente: false,
+          motivo: 'manual',
         });
 
       if (histError) throw histError;
+
+      // Atualizar contador do vendedor
+      const { error: contadorError } = await supabase.rpc('atribuir_lead_automaticamente', {
+        p_lead_id: lead_id,
+      });
+
+      // Ignorar erro do RPC se já foi atribuído manualmente
+      if (contadorError) console.warn('RPC warning:', contadorError);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leads'] });
       queryClient.invalidateQueries({ queryKey: ['distribuicao-historico'] });
       queryClient.invalidateQueries({ queryKey: ['distribuicao-estatisticas'] });
+      queryClient.invalidateQueries({ queryKey: ['distribuicao-vendedores'] });
       toast.success('Lead atribuído com sucesso');
     },
     onError: (error) => {
@@ -418,13 +452,12 @@ export function useResetarContadores() {
 
   return useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.rpc('resetar_contadores_diarios');
+      const { error } = await supabase.rpc('resetar_contadores_distribuicao');
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['distribuicao-vendedores'] });
       queryClient.invalidateQueries({ queryKey: ['distribuicao-estatisticas'] });
-      queryClient.invalidateQueries({ queryKey: ['distribuicao-config'] });
       toast.success('Contadores resetados');
     },
     onError: (error) => {
@@ -433,3 +466,9 @@ export function useResetarContadores() {
     },
   });
 }
+
+// Aliases para compatibilidade
+export const useDistribuicaoConfig = useConfiguracaoDistribuicao;
+export const useDistribuicaoVendedores = useVendedoresDistribuicao;
+export const useDistribuicaoHistorico = useHistoricoDistribuicao;
+export const useDistribuicaoEstatisticas = useEstatisticasDistribuicao;

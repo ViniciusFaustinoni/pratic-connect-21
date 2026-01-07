@@ -44,7 +44,7 @@ export default function DistribuicaoConfig() {
   const { data: vendedores, isLoading: loadingVendedores } = useVendedoresDistribuicao();
   const { data: estatisticas } = useEstatisticasDistribuicao();
   const { data: disponiveis } = useVendedoresDisponiveis();
-  const { data: historico } = useHistoricoDistribuicao({ limit: 10 });
+  const { data: historico } = useHistoricoDistribuicao();
   
   // Mutations
   const atualizarConfig = useAtualizarConfiguracao();
@@ -68,8 +68,8 @@ export default function DistribuicaoConfig() {
     });
   };
   
-  const handleSalvarLimite = (vendedor_id: string) => {
-    atualizarLimite.mutate({ vendedor_id, limite_diario: novoLimite }, {
+  const handleSalvarLimite = (id: string, vendedor_id: string) => {
+    atualizarLimite.mutate({ id, limite_diario: novoLimite }, {
       onSuccess: () => setEditandoLimite(null),
     });
   };
@@ -254,7 +254,7 @@ export default function DistribuicaoConfig() {
                       {v.leads_hoje}
                     </TableCell>
                     <TableCell className="text-center">
-                      {editandoLimite === v.vendedor_id ? (
+                      {editandoLimite === v.id ? (
                         <div className="flex items-center justify-center gap-1">
                           <Input
                             type="number"
@@ -263,7 +263,7 @@ export default function DistribuicaoConfig() {
                             className="w-16 h-8 text-center"
                             min={0}
                           />
-                          <Button size="sm" variant="ghost" onClick={() => handleSalvarLimite(v.vendedor_id)}>
+                          <Button size="sm" variant="ghost" onClick={() => handleSalvarLimite(v.id, v.vendedor_id)}>
                             OK
                           </Button>
                         </div>
@@ -272,7 +272,7 @@ export default function DistribuicaoConfig() {
                           variant="ghost"
                           size="sm"
                           onClick={() => {
-                            setEditandoLimite(v.vendedor_id);
+                            setEditandoLimite(v.id);
                             setNovoLimite(v.limite_diario || config?.limite_diario_padrao || 20);
                           }}
                         >
@@ -295,21 +295,21 @@ export default function DistribuicaoConfig() {
                         <DropdownMenuContent align="end">
                           {v.status === 'ativo' ? (
                             <DropdownMenuItem
-                              onClick={() => atualizarStatus.mutate({ vendedor_id: v.vendedor_id, status: 'pausado' })}
+                              onClick={() => atualizarStatus.mutate({ id: v.id, status: 'pausado' })}
                             >
                               <Pause className="h-4 w-4 mr-2" />
                               Pausar
                             </DropdownMenuItem>
                           ) : (
                             <DropdownMenuItem
-                              onClick={() => atualizarStatus.mutate({ vendedor_id: v.vendedor_id, status: 'ativo' })}
+                              onClick={() => atualizarStatus.mutate({ id: v.id, status: 'ativo' })}
                             >
                               <Play className="h-4 w-4 mr-2" />
                               Ativar
                             </DropdownMenuItem>
                           )}
                           <DropdownMenuItem
-                            onClick={() => atualizarStatus.mutate({ vendedor_id: v.vendedor_id, status: 'ferias' })}
+                            onClick={() => atualizarStatus.mutate({ id: v.id, status: 'ferias' })}
                           >
                             <UserMinus className="h-4 w-4 mr-2" />
                             Marcar Férias
