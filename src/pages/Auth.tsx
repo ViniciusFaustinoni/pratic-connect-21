@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { Eye, EyeOff, Loader2, Lock, Mail, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -54,7 +54,7 @@ export default function Auth() {
   const { user, profile, signIn, signInWithMagicLink, signInWithGoogle, getRedirectUrl, loading: authLoading } = useAuth();
 
   // Estados gerais
-  const [activeTab, setActiveTab] = useState<'magic-link' | 'senha'>('magic-link');
+  const [activeTab, setActiveTab] = useState<'magic-link' | 'senha'>('senha');
   
   // Estados Magic Link
   const [magicEmail, setMagicEmail] = useState('');
@@ -436,13 +436,12 @@ export default function Auth() {
                 </div>
 
                 <div className="flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('magic-link')}
+                  <Link
+                    to="/forgot-password"
                     className="text-sm text-primary hover:underline"
                   >
                     Esqueci minha senha
-                  </button>
+                  </Link>
                 </div>
 
                 <Button 
