@@ -12,22 +12,17 @@ interface AuthResult {
   expires_at: Date;
 }
 
-interface Credenciais {
-  public_key?: string;
-  username?: string;
-  password_hash?: string;
-  bearer_token?: string;
-  configurado?: boolean;
-}
+// Credenciais não são mais armazenadas localmente
+// Tudo vem dos Supabase Secrets
 
 /**
  * Autenticação Softruck (OAuth JWT)
  */
-async function authSoftruck(baseUrl: string, credenciais?: Credenciais): Promise<AuthResult> {
-  // Tentar credenciais do banco primeiro, depois fallback para env
-  const publicKey = credenciais?.public_key || Deno.env.get('SOFTRUCK_PUBLIC_KEY');
-  const username = credenciais?.username || Deno.env.get('SOFTRUCK_USERNAME');
-  const password = credenciais?.password_hash || Deno.env.get('SOFTRUCK_PASSWORD');
+async function authSoftruck(baseUrl: string): Promise<AuthResult> {
+  // Usar apenas secrets (fonte segura)
+  const publicKey = Deno.env.get('SOFTRUCK_PUBLIC_KEY');
+  const username = Deno.env.get('SOFTRUCK_USERNAME');
+  const password = Deno.env.get('SOFTRUCK_PASSWORD');
 
   if (!publicKey || !username || !password) {
     throw new Error('Credenciais Softruck não configuradas. Configure em Monitoramento > Credenciais API.');
@@ -66,9 +61,9 @@ async function authSoftruck(baseUrl: string, credenciais?: Credenciais): Promise
 /**
  * RedeVeículos usa token fixo (Bearer)
  */
-function authRedeVeiculos(credenciais?: Credenciais): AuthResult {
-  // Tentar credenciais do banco primeiro, depois fallback para env
-  const token = credenciais?.bearer_token || Deno.env.get('REDE_VEICULOS_TOKEN');
+function authRedeVeiculos(): AuthResult {
+  // Usar apenas secrets (fonte segura)
+  const token = Deno.env.get('REDE_VEICULOS_TOKEN');
   
   if (!token) {
     throw new Error('Token Rede Veículos não configurado. Configure em Monitoramento > Credenciais API.');
@@ -138,24 +133,17 @@ serve(async (req) => {
       throw new Error(`Plataforma ${plataforma} está desativada`);
     }
 
-    // Buscar credenciais do banco
-    const { data: credenciais } = await supabase
-      .from('rastreadores_credenciais')
-      .select('*')
-      .eq('plataforma_id', config.id)
-      .single();
-
     const baseUrl = config.ambiente_atual === 'producao' 
       ? config.api_url_producao 
       : config.api_url_sandbox;
 
-    // Autenticar conforme tipo da plataforma
+    // Autenticar usando secrets
     let authResult: AuthResult;
     
     if (plataforma === 'softruck') {
-      authResult = await authSoftruck(baseUrl, credenciais || undefined);
+      authResult = await authSoftruck(baseUrl);
     } else {
-      authResult = authRedeVeiculos(credenciais || undefined);
+      authResult = authRedeVeiculos();
     }
 
     // Salvar token no cache
