@@ -1,7 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { format, isPast, isToday } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
-import { ArrowLeft, Copy, ExternalLink, QrCode, FileText, CheckCircle, AlertCircle, Clock, Calendar } from 'lucide-react';
+import { ArrowLeft, Copy, ExternalLink, QrCode, FileText, CheckCircle, AlertCircle, Clock, Calendar, Share2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -45,6 +44,26 @@ export default function BoletoDetalhe() {
       style: 'currency',
       currency: 'BRL'
     }).format(value);
+  };
+
+  const compartilhar = async () => {
+    if (!cobranca) return;
+    const texto = `Boleto PRATIC - ${tipoLabels[cobranca.tipo] || cobranca.tipo}\nValor: ${formatCurrency(Number(cobranca.valor_final))}\nVencimento: ${format(new Date(cobranca.data_vencimento), "dd/MM/yyyy")}\n\nLinha digitável:\n${cobranca.linha_digitavel || 'Não disponível'}`;
+    
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'Boleto PRATIC',
+          text: texto,
+        });
+      } catch {
+        // User cancelled or error
+      }
+    } else {
+      if (cobranca.linha_digitavel) {
+        copiarTexto(cobranca.linha_digitavel, 'Linha digitável');
+      }
+    }
   };
 
   const getStatus = () => {
@@ -94,12 +113,13 @@ export default function BoletoDetalhe() {
   return (
     <div className="p-4 space-y-4 pb-24">
       {/* Header */}
-      <div className="flex items-center gap-2">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/app/boletos')}>
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <h1 className="text-xl font-bold">Boleto</h1>
-      </div>
+      <button 
+        onClick={() => navigate('/app/boletos')} 
+        className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <ArrowLeft className="h-5 w-5" />
+        <span>Voltar</span>
+      </button>
 
       {/* Card Status */}
       <Card>
@@ -268,6 +288,18 @@ export default function BoletoDetalhe() {
             <p className="text-sm text-muted-foreground">{cobranca.descricao}</p>
           </CardContent>
         </Card>
+      )}
+
+      {/* Botão Compartilhar */}
+      {!isPago && (
+        <Button 
+          variant="outline" 
+          className="w-full" 
+          onClick={compartilhar}
+        >
+          <Share2 className="h-4 w-4 mr-2" />
+          Compartilhar Boleto
+        </Button>
       )}
     </div>
   );
