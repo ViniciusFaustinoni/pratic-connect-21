@@ -18,6 +18,7 @@ import { toast } from 'sonner';
 import { maskTelefone } from '@/lib/validations';
 import { UserAvatar } from '@/components/UserAvatar';
 import { AvatarCropDialog } from '@/components/AvatarCropDialog';
+import { ConfiguracaoEvolutionURL, WhatsAppStatusCard } from '@/components/whatsapp';
 
 type NotifType = 'notif_novos_leads' | 'notif_documentos_pendentes' | 'notif_resumo_diario';
 
@@ -32,6 +33,7 @@ const abas: Tab[] = [
   { id: 'perfil', nome: 'Meu Perfil', icon: User, descricao: 'Dados pessoais e foto' },
   { id: 'seguranca', nome: 'Segurança', icon: Lock, descricao: 'Senha e autenticação' },
   { id: 'notificacoes', nome: 'Notificações', icon: Bell, descricao: 'Alertas e avisos' },
+  { id: 'whatsapp', nome: 'WhatsApp', icon: MessageCircle, descricao: 'Conexão e integração' },
   { id: 'empresa', nome: 'Empresa', icon: Building, descricao: 'Dados da associação' },
   { id: 'sistema', nome: 'Sistema', icon: Settings, descricao: 'Preferências gerais' },
 ];
@@ -756,6 +758,20 @@ export default function Configuracoes() {
                   </div>
                 </CardContent>
               </Card>
+            </div>
+          )}
+
+          {/* Aba WhatsApp */}
+          {abaAtiva === 'whatsapp' && (
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-xl font-semibold">Configurações WhatsApp</h2>
+                <p className="text-sm text-muted-foreground">Configure a integração com WhatsApp via Evolution API</p>
+              </div>
+
+              <ConfiguracaoEvolutionURL />
+              
+              <WhatsAppStatusCard />
             </div>
           )}
 
