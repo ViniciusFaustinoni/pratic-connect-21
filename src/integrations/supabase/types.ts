@@ -7069,6 +7069,7 @@ export type Database = {
           notif_documentos_pendentes: boolean | null
           notif_novos_leads: boolean | null
           notif_resumo_diario: boolean | null
+          primeiro_acesso: boolean
           telefone: string | null
           tipo: Database["public"]["Enums"]["tipo_usuario"]
           updated_at: string
@@ -7090,6 +7091,7 @@ export type Database = {
           notif_documentos_pendentes?: boolean | null
           notif_novos_leads?: boolean | null
           notif_resumo_diario?: boolean | null
+          primeiro_acesso?: boolean
           telefone?: string | null
           tipo?: Database["public"]["Enums"]["tipo_usuario"]
           updated_at?: string
@@ -7111,6 +7113,7 @@ export type Database = {
           notif_documentos_pendentes?: boolean | null
           notif_novos_leads?: boolean | null
           notif_resumo_diario?: boolean | null
+          primeiro_acesso?: boolean
           telefone?: string | null
           tipo?: Database["public"]["Enums"]["tipo_usuario"]
           updated_at?: string

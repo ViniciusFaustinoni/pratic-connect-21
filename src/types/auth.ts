@@ -174,6 +174,12 @@ export interface Profile {
   
   /** Receber resumo diário por email */
   notif_resumo_diario: boolean | null;
+  
+  /** 
+   * Se é o primeiro acesso do usuário
+   * @description Quando true, usuário deve definir nova senha
+   */
+  primeiro_acesso: boolean;
 }
 
 // ============================================================
