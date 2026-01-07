@@ -1223,6 +1223,59 @@ export type Database = {
           },
         ]
       }
+      auth_sessoes: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          expira_em: string
+          id: string
+          ip: unknown
+          navegador: string | null
+          profile_id: string
+          sistema_operacional: string | null
+          tipo_dispositivo: string
+          token_hash: string
+          ultimo_acesso: string
+          user_agent: string | null
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          expira_em: string
+          id?: string
+          ip?: unknown
+          navegador?: string | null
+          profile_id: string
+          sistema_operacional?: string | null
+          tipo_dispositivo: string
+          token_hash: string
+          ultimo_acesso?: string
+          user_agent?: string | null
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          expira_em?: string
+          id?: string
+          ip?: unknown
+          navegador?: string | null
+          profile_id?: string
+          sistema_operacional?: string | null
+          tipo_dispositivo?: string
+          token_hash?: string
+          ultimo_acesso?: string
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "auth_sessoes_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       avaliacoes: {
         Row: {
           avaliador_id: string
