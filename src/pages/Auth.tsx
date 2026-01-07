@@ -271,18 +271,24 @@ export default function Auth() {
             ? 'Conta bloqueada permanentemente. Contate seu supervisor.'
             : `Conta bloqueada por ${tentativaResult.minutos} minutos.`
         });
-      } else if (tentativaResult.tentativas_restantes > 0) {
-        setErrors(prev => ({ 
-          ...prev, 
-          geral: `Email ou senha inválidos. ${tentativaResult.tentativas_restantes} tentativa(s) restante(s).` 
-        }));
       } else {
-        setErrors(prev => ({ 
-          ...prev, 
-          geral: error.message || 'Email ou senha inválidos' 
-        }));
+        // Mensagem GENÉRICA por segurança - não revela se email existe ou não
+        const errorMessage = error.message || '';
+        
+        if (errorMessage.includes('Invalid login credentials')) {
+          setErrors({ geral: 'Email ou senha incorretos' });
+        } else if (errorMessage.includes('Email not confirmed')) {
+          setErrors({ geral: 'Email não confirmado. Verifique sua caixa de entrada.' });
+        } else if (tentativaResult.tentativas_restantes > 0) {
+          setErrors({ 
+            geral: `Email ou senha incorretos. ${tentativaResult.tentativas_restantes} tentativa(s) restante(s).` 
+          });
+        } else {
+          setErrors({ geral: 'Erro ao fazer login. Tente novamente.' });
+        }
       }
       
+      console.error('Erro no login:', error);
       toast.error('Erro ao fazer login');
     } finally {
       setLoginLoading(false);
