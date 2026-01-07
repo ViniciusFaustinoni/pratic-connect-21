@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { encerrarSessao, SESSION_TOKEN_KEY } from '@/hooks/useAuthSession';
 import {
   Profile,
   PerfilAcesso,
@@ -343,6 +344,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const signOut = useCallback(async (): Promise<void> => {
     try {
       setLoading(true);
+      
+      // Encerrar sessão customizada se existir
+      const sessionToken = localStorage.getItem(SESSION_TOKEN_KEY);
+      if (sessionToken) {
+        await encerrarSessao(sessionToken);
+        localStorage.removeItem(SESSION_TOKEN_KEY);
+      }
+      
       await supabase.auth.signOut();
     } finally {
       setLoading(false);
