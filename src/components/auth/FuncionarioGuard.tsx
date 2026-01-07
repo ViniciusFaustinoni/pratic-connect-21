@@ -29,6 +29,11 @@ export function FuncionarioGuard({ children }: FuncionarioGuardProps) {
     return <Navigate to="/auth" state={{ from: location }} replace />;
   }
 
+  // Verificar primeiro_acesso - forçar definição de senha
+  if (profile?.primeiro_acesso) {
+    return <Navigate to="/definir-senha" replace />;
+  }
+
   // Se é associado, redirecionar para o app do associado
   if (profile?.tipo === 'associado') {
     return <Navigate to="/app/home" replace />;
