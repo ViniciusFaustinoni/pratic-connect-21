@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Shield, AlertCircle, Mail, CheckCircle2, Lock } from 'lucide-react';
+import { Loader2, Shield, AlertCircle, Mail, CheckCircle2, Lock, Eye, EyeOff } from 'lucide-react';
 import { z } from 'zod';
 import { 
   isLocked, 
@@ -24,18 +24,9 @@ const loginSchema = z.object({
   password: z.string().min(6, 'Senha deve ter no mínimo 6 caracteres'),
 });
 
-const signupSchema = z.object({
-  nome: z.string().min(3, 'Nome deve ter no mínimo 3 caracteres'),
-  email: z.string().email('Email inválido'),
-  password: z.string().min(6, 'Senha deve ter no mínimo 6 caracteres'),
-  confirmPassword: z.string(),
-}).refine((data) => data.password === data.confirmPassword, {
-  message: 'As senhas não coincidem',
-  path: ['confirmPassword'],
-});
 
 export default function Auth() {
-  const { user, profile, signIn, signUp, signInWithMagicLink, signInWithGoogle, loading: authLoading, getRedirectUrl } = useAuth();
+  const { user, profile, signIn, signInWithMagicLink, signInWithGoogle, loading: authLoading, getRedirectUrl } = useAuth();
   const location = useLocation();
   const stateFrom = (location.state as { from?: { pathname: string } })?.from?.pathname;
   
@@ -55,11 +46,11 @@ export default function Auth() {
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   
-  // Signup form
-  const [signupNome, setSignupNome] = useState('');
-  const [signupEmail, setSignupEmail] = useState('');
-  const [signupPassword, setSignupPassword] = useState('');
-  const [signupConfirmPassword, setSignupConfirmPassword] = useState('');
+  // Password visibility
+  const [showPassword, setShowPassword] = useState(false);
+  
+  // Controlled tabs
+  const [activeTab, setActiveTab] = useState('magic');
 
   // Check lockout status and start countdown timer
   useEffect(() => {
@@ -190,52 +181,11 @@ export default function Auth() {
     }
   };
 
-  const handleSignup = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setSuccess(null);
-    
-    const validation = signupSchema.safeParse({
-      nome: signupNome,
-      email: signupEmail,
-      password: signupPassword,
-      confirmPassword: signupConfirmPassword,
-    });
-    
-    if (!validation.success) {
-      setError(validation.error.errors[0].message);
-      return;
-    }
-    
-    setIsLoading(true);
-    const result = await signUp({ 
-      email: signupEmail, 
-      password: signupPassword, 
-      nome: signupNome,
-      tipo: 'funcionario' 
-    });
-    setIsLoading(false);
-    
-    if (!result.success) {
-      const errorMessage = result.error || 'Erro ao criar conta';
-      if (errorMessage.includes('já está cadastrado') || errorMessage.includes('already registered')) {
-        setError('Este email já está cadastrado');
-      } else {
-        setError(errorMessage);
-      }
-    } else {
-      setSuccess('Cadastro realizado! Verifique seu email para confirmar a conta.');
-      setSignupNome('');
-      setSignupEmail('');
-      setSignupPassword('');
-      setSignupConfirmPassword('');
-    }
-  };
-
   const resetMagicLink = () => {
     setMagicLinkSent(false);
     setMagicLinkEmail('');
   };
+
 
   const handleGoogleLogin = async () => {
     setError(null);
@@ -294,6 +244,9 @@ export default function Auth() {
               <GoogleIcon />
               <span className="text-foreground">Continuar com Google</span>
             </Button>
+            <p className="mt-2 text-center text-xs text-muted-foreground">
+              Só funciona se seu email já estiver cadastrado no sistema
+            </p>
             
             {/* Divider */}
             <div className="relative my-4">
@@ -306,12 +259,11 @@ export default function Auth() {
             </div>
           </CardHeader>
 
-          <Tabs defaultValue="magic" className="w-full">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <CardHeader className="pb-4 pt-0">
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="magic" className="tracking-tight-magic text-xs sm:text-sm">Magic Link</TabsTrigger>
                 <TabsTrigger value="login" className="tracking-tight-magic text-xs sm:text-sm">Senha</TabsTrigger>
-                <TabsTrigger value="signup" className="tracking-tight-magic text-xs sm:text-sm">Cadastrar</TabsTrigger>
               </TabsList>
             </CardHeader>
             
@@ -424,16 +376,28 @@ export default function Auth() {
                     <Label htmlFor="login-password" className="tracking-tight-magic text-muted-foreground">
                       Senha
                     </Label>
-                    <Input
-                      id="login-password"
-                      type="password"
-                      placeholder="••••••••"
-                      value={loginPassword}
-                      onChange={(e) => setLoginPassword(e.target.value)}
-                      required
-                      disabled={isLoading || accountLocked}
-                      className="tracking-tight-magic"
-                    />
+                    <div className="relative">
+                      <Input
+                        id="login-password"
+                        type={showPassword ? 'text' : 'password'}
+                        placeholder="••••••••"
+                        value={loginPassword}
+                        onChange={(e) => setLoginPassword(e.target.value)}
+                        required
+                        disabled={isLoading || accountLocked}
+                        className="tracking-tight-magic pr-10"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-0 top-0 h-full px-3 text-muted-foreground hover:text-foreground hover:bg-transparent"
+                        onClick={() => setShowPassword(!showPassword)}
+                        disabled={isLoading || accountLocked}
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
                   </div>
                   <Button 
                     type="submit" 
@@ -454,88 +418,18 @@ export default function Auth() {
                       'Entrar'
                     )}
                   </Button>
+                  <div className="text-center">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('magic')}
+                      className="text-sm text-primary hover:underline"
+                    >
+                      Esqueci minha senha
+                    </button>
+                  </div>
                 </form>
               </TabsContent>
 
-              {/* Signup Tab */}
-              <TabsContent value="signup" className="mt-0">
-                <form onSubmit={handleSignup} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-nome" className="tracking-tight-magic text-muted-foreground">
-                      Nome completo
-                    </Label>
-                    <Input
-                      id="signup-nome"
-                      type="text"
-                      placeholder="Seu nome"
-                      value={signupNome}
-                      onChange={(e) => setSignupNome(e.target.value)}
-                      required
-                      disabled={isLoading}
-                      className="tracking-tight-magic"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-email" className="tracking-tight-magic text-muted-foreground">
-                      Email
-                    </Label>
-                    <Input
-                      id="signup-email"
-                      type="email"
-                      placeholder="seu@email.com"
-                      value={signupEmail}
-                      onChange={(e) => setSignupEmail(e.target.value)}
-                      required
-                      disabled={isLoading}
-                      className="tracking-tight-magic"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-password" className="tracking-tight-magic text-muted-foreground">
-                      Senha
-                    </Label>
-                    <Input
-                      id="signup-password"
-                      type="password"
-                      placeholder="••••••••"
-                      value={signupPassword}
-                      onChange={(e) => setSignupPassword(e.target.value)}
-                      required
-                      disabled={isLoading}
-                      className="tracking-tight-magic"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-confirm" className="tracking-tight-magic text-muted-foreground">
-                      Confirmar senha
-                    </Label>
-                    <Input
-                      id="signup-confirm"
-                      type="password"
-                      placeholder="••••••••"
-                      value={signupConfirmPassword}
-                      onChange={(e) => setSignupConfirmPassword(e.target.value)}
-                      required
-                      disabled={isLoading}
-                      className="tracking-tight-magic"
-                    />
-                  </div>
-                  <Button 
-                    type="submit" 
-                    className="tracking-tight-magic w-full" 
-                    disabled={isLoading}
-                  >
-                    {isLoading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Cadastrando...
-                      </>
-                    ) : (
-                      'Criar conta'
-                    )}
-                  </Button>
-                </form>
-              </TabsContent>
             </CardContent>
           </Tabs>
         </Card>
