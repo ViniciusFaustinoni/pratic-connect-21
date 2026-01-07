@@ -44,6 +44,7 @@ import {
   Megaphone,
   Link,
   PieChart,
+  Key,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
@@ -147,6 +148,12 @@ const menuConfig: {
           url: '/monitoramento/mapa', 
           icon: Map,
           permission: 'canManageRastreadores',
+        },
+        { 
+          title: 'Credenciais API', 
+          url: '/monitoramento/credenciais', 
+          icon: Key,
+          permission: 'isGerencia',
         },
       ],
     },
