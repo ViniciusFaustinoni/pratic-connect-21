@@ -50,3 +50,12 @@ verify_jwt = false
 
 [functions.send-email]
 verify_jwt = true
+
+[functions.whatsapp-status]
+verify_jwt = true
+
+[functions.whatsapp-qrcode]
+verify_jwt = true
+
+[functions.whatsapp-logout]
+verify_jwt = true

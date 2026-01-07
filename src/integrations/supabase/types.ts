@@ -8630,6 +8630,200 @@ export type Database = {
           },
         ]
       }
+      whatsapp_instancias: {
+        Row: {
+          api_url: string
+          ativa: boolean | null
+          created_at: string | null
+          descricao: string | null
+          foto_perfil: string | null
+          id: string
+          instance_name: string
+          nome: string
+          nome_perfil: string | null
+          principal: boolean | null
+          status: string | null
+          telefone: string | null
+          ultima_conexao: string | null
+          updated_at: string | null
+          webhook_enabled: boolean | null
+          webhook_events: string[] | null
+          webhook_url: string | null
+        }
+        Insert: {
+          api_url: string
+          ativa?: boolean | null
+          created_at?: string | null
+          descricao?: string | null
+          foto_perfil?: string | null
+          id?: string
+          instance_name: string
+          nome: string
+          nome_perfil?: string | null
+          principal?: boolean | null
+          status?: string | null
+          telefone?: string | null
+          ultima_conexao?: string | null
+          updated_at?: string | null
+          webhook_enabled?: boolean | null
+          webhook_events?: string[] | null
+          webhook_url?: string | null
+        }
+        Update: {
+          api_url?: string
+          ativa?: boolean | null
+          created_at?: string | null
+          descricao?: string | null
+          foto_perfil?: string | null
+          id?: string
+          instance_name?: string
+          nome?: string
+          nome_perfil?: string | null
+          principal?: boolean | null
+          status?: string | null
+          telefone?: string | null
+          ultima_conexao?: string | null
+          updated_at?: string | null
+          webhook_enabled?: boolean | null
+          webhook_events?: string[] | null
+          webhook_url?: string | null
+        }
+        Relationships: []
+      }
+      whatsapp_logs: {
+        Row: {
+          created_at: string | null
+          erro: string | null
+          evento: string | null
+          id: string
+          instancia_id: string | null
+          payload: Json | null
+          resposta: Json | null
+          tipo: string
+        }
+        Insert: {
+          created_at?: string | null
+          erro?: string | null
+          evento?: string | null
+          id?: string
+          instancia_id?: string | null
+          payload?: Json | null
+          resposta?: Json | null
+          tipo: string
+        }
+        Update: {
+          created_at?: string | null
+          erro?: string | null
+          evento?: string | null
+          id?: string
+          instancia_id?: string | null
+          payload?: Json | null
+          resposta?: Json | null
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_logs_instancia_id_fkey"
+            columns: ["instancia_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_instancias"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      whatsapp_mensagens: {
+        Row: {
+          created_at: string | null
+          delivered_at: string | null
+          direcao: string | null
+          enviado_por: string | null
+          erro_codigo: string | null
+          erro_mensagem: string | null
+          id: string
+          instancia_id: string | null
+          media_filename: string | null
+          media_mimetype: string | null
+          media_url: string | null
+          mensagem: string | null
+          message_id: string | null
+          nome_contato: string | null
+          read_at: string | null
+          referencia_id: string | null
+          referencia_tipo: string | null
+          sent_at: string | null
+          status: string | null
+          telefone: string
+          template_id: string | null
+          template_variaveis: Json | null
+          tipo: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          delivered_at?: string | null
+          direcao?: string | null
+          enviado_por?: string | null
+          erro_codigo?: string | null
+          erro_mensagem?: string | null
+          id?: string
+          instancia_id?: string | null
+          media_filename?: string | null
+          media_mimetype?: string | null
+          media_url?: string | null
+          mensagem?: string | null
+          message_id?: string | null
+          nome_contato?: string | null
+          read_at?: string | null
+          referencia_id?: string | null
+          referencia_tipo?: string | null
+          sent_at?: string | null
+          status?: string | null
+          telefone: string
+          template_id?: string | null
+          template_variaveis?: Json | null
+          tipo?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          delivered_at?: string | null
+          direcao?: string | null
+          enviado_por?: string | null
+          erro_codigo?: string | null
+          erro_mensagem?: string | null
+          id?: string
+          instancia_id?: string | null
+          media_filename?: string | null
+          media_mimetype?: string | null
+          media_url?: string | null
+          mensagem?: string | null
+          message_id?: string | null
+          nome_contato?: string | null
+          read_at?: string | null
+          referencia_id?: string | null
+          referencia_tipo?: string | null
+          sent_at?: string | null
+          status?: string | null
+          telefone?: string
+          template_id?: string | null
+          template_variaveis?: Json | null
+          tipo?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_mensagens_enviado_por_fkey"
+            columns: ["enviado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_mensagens_instancia_id_fkey"
+            columns: ["instancia_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_instancias"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       view_acompanhamento: {
