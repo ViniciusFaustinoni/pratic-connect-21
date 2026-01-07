@@ -130,7 +130,7 @@ serve(async (req) => {
       etapaInicial = fonteData.etapa_inicial || 'novo';
     }
 
-    // Create lead
+    // Create lead data - vendedor_id será preenchido pelo trigger se null
     const leadData = {
       nome: body.nome,
       telefone: body.telefone,
@@ -144,7 +144,7 @@ serve(async (req) => {
       observacoes: body.observacoes || null,
       origem: 'api',
       etapa: etapaInicial,
-      vendedor_id: vendedorPadraoId,
+      vendedor_id: vendedorPadraoId, // Se null, o trigger distribuir_lead_round_robin será acionado
       fonte_id: fonteId,
     };
 
@@ -166,7 +166,6 @@ serve(async (req) => {
 
     // Update lead count on fonte
     if (fonteId) {
-      // Direct increment
       const { data: currentFonte } = await supabase
         .from('lead_fontes')
         .select('total_leads')
@@ -181,12 +180,23 @@ serve(async (req) => {
       }
     }
 
-    console.log('Lead created successfully:', lead.id);
+    // Buscar vendedor atribuído (pode ter sido pelo trigger)
+    const { data: leadAtualizado } = await supabase
+      .from('leads')
+      .select('vendedor_id')
+      .eq('id', lead.id)
+      .single();
+
+    const vendedorAtribuido = leadAtualizado?.vendedor_id || null;
+
+    console.log('Lead created successfully:', lead.id, 'Vendedor:', vendedorAtribuido);
 
     return new Response(
       JSON.stringify({
         success: true,
         lead_id: lead.id,
+        vendedor_id: vendedorAtribuido,
+        distribuido_automaticamente: !vendedorPadraoId && vendedorAtribuido !== null,
         message: 'Lead created successfully'
       }),
       { status: 201, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
