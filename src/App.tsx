@@ -57,6 +57,7 @@ import OrdensServicoList from "./pages/oficina/OrdensServicoList";
 import OrdemServicoDetalhePage from "./pages/oficina/OrdemServicoDetalhe";
 import Configuracoes from "./pages/Configuracoes";
 import NotFound from "./pages/NotFound";
+import AcessoNegado from "./pages/AcessoNegado";
 import AssistenciaDashboard from "./pages/assistencia/AssistenciaDashboard";
 import ChamadosList from "./pages/assistencia/ChamadosList";
 import ChamadoDetalhe from "./pages/assistencia/ChamadoDetalhe";
@@ -360,6 +361,9 @@ const App = () => (
               <Route path="/instalador" element={<InstaladorHome />} />
               <Route path="/instalador/instalacao/:id" element={<InstaladorChecklist />} />
             </Route>
+            
+            {/* Acesso Negado */}
+            <Route path="/acesso-negado" element={<AcessoNegado />} />
             
             {/* 404 */}
             <Route path="*" element={<NotFound />} />
