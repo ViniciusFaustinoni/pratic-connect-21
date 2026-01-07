@@ -92,21 +92,18 @@ export default function Auth() {
     
     const trimmedEmail = loginEmail.trim();
     
-    // Validação Email Vazio
+    // Validação Email
     if (!trimmedEmail) {
       newErrors.email = 'Email é obrigatório';
-    } 
-    // Validação Formato Email
-    else if (!validateEmail(trimmedEmail)) {
+    } else if (!validateEmail(trimmedEmail)) {
       newErrors.email = 'Formato de email inválido';
     }
     
-    // Validação Senha (aba senha)
+    // Validação Senha (APENAS na aba senha, não no Magic Link)
     if (activeTab === 'senha') {
-      if (!loginPassword || !loginPassword.trim()) {
+      const trimmedSenha = loginPassword.trim();
+      if (!trimmedSenha) {
         newErrors.senha = 'Senha é obrigatória';
-      } else if (loginPassword.length < 6) {
-        newErrors.senha = 'Senha deve ter no mínimo 6 caracteres';
       }
     }
     
