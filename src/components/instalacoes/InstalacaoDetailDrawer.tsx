@@ -26,7 +26,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
-import { useInstalacao, useUpdateInstalacaoStatus, Instalacao } from '@/hooks/useInstalacoes';
+import { useInstalacao, useUpdateInstalacaoStatus, type Instalacao } from '@/hooks/useInstalacoes';
 import { STATUS_INSTALACAO_LABELS, STATUS_INSTALACAO_COLORS, PERIODO_LABELS } from '@/types/database';
 
 interface InstalacaoDetailDrawerProps {

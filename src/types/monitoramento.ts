@@ -1,28 +1,21 @@
 // ============================================
-// ENUMS E TIPOS BASE
+// ENUMS E TIPOS BASE (alinhados com o banco)
 // ============================================
 
+// Usar os tipos do banco diretamente para status de instalação
 export type StatusInstalacao = 
-  | 'pendente' 
   | 'agendada' 
   | 'em_rota' 
   | 'em_andamento' 
   | 'concluida' 
   | 'reagendada' 
-  | 'cancelada' 
-  | 'nao_realizada';
+  | 'cancelada';
 
 export type PeriodoInstalacao = 'manha' | 'tarde' | 'noite';
 
 export type StatusRota = 'planejada' | 'em_andamento' | 'concluida' | 'cancelada';
 
-export type StatusRastreador = 
-  | 'disponivel' 
-  | 'reservado' 
-  | 'instalado' 
-  | 'manutencao' 
-  | 'defeito' 
-  | 'perdido';
+export type StatusRastreador = 'estoque' | 'instalado' | 'manutencao' | 'baixado';
 
 export type PlataformaRastreador = 'rede_veiculos' | 'soft_truck' | 'nenhum';
 
@@ -31,25 +24,21 @@ export type PlataformaRastreador = 'rede_veiculos' | 'soft_truck' | 'nenhum';
 // ============================================
 
 export const STATUS_INSTALACAO_LABELS: Record<StatusInstalacao, string> = {
-  pendente: 'Pendente',
   agendada: 'Agendada',
   em_rota: 'Em Rota',
   em_andamento: 'Em Andamento',
   concluida: 'Concluída',
   reagendada: 'Reagendada',
   cancelada: 'Cancelada',
-  nao_realizada: 'Não Realizada',
 };
 
 export const STATUS_INSTALACAO_COLORS: Record<StatusInstalacao, string> = {
-  pendente: 'bg-yellow-100 text-yellow-800 border-yellow-300',
   agendada: 'bg-blue-100 text-blue-800 border-blue-300',
   em_rota: 'bg-purple-100 text-purple-800 border-purple-300',
   em_andamento: 'bg-orange-100 text-orange-800 border-orange-300',
   concluida: 'bg-green-100 text-green-800 border-green-300',
   reagendada: 'bg-gray-100 text-gray-800 border-gray-300',
   cancelada: 'bg-red-100 text-red-800 border-red-300',
-  nao_realizada: 'bg-red-100 text-red-800 border-red-300',
 };
 
 export const PERIODO_LABELS: Record<PeriodoInstalacao, string> = {
@@ -73,21 +62,17 @@ export const STATUS_ROTA_COLORS: Record<StatusRota, string> = {
 };
 
 export const STATUS_RASTREADOR_LABELS: Record<StatusRastreador, string> = {
-  disponivel: 'Disponível',
-  reservado: 'Reservado',
+  estoque: 'Em Estoque',
   instalado: 'Instalado',
   manutencao: 'Em Manutenção',
-  defeito: 'Com Defeito',
-  perdido: 'Perdido',
+  baixado: 'Baixado',
 };
 
 export const STATUS_RASTREADOR_COLORS: Record<StatusRastreador, string> = {
-  disponivel: 'bg-green-100 text-green-800',
-  reservado: 'bg-blue-100 text-blue-800',
+  estoque: 'bg-green-100 text-green-800',
   instalado: 'bg-purple-100 text-purple-800',
   manutencao: 'bg-yellow-100 text-yellow-800',
-  defeito: 'bg-red-100 text-red-800',
-  perdido: 'bg-gray-100 text-gray-800',
+  baixado: 'bg-gray-100 text-gray-800',
 };
 
 // ============================================
@@ -96,107 +81,105 @@ export const STATUS_RASTREADOR_COLORS: Record<StatusRastreador, string> = {
 
 export interface Instalador {
   id: string;
-  usuario_id: string;
   nome: string;
-  telefone: string;
-  email?: string;
-  ativo: boolean;
-  regioes_atendimento: string[];
-  created_at: string;
-  updated_at: string;
+  telefone?: string | null;
+  email?: string | null;
 }
 
 export interface Rastreador {
   id: string;
   codigo: string;
-  numero_serie: string;
-  modelo: string;
-  imei: string;
-  plataforma: PlataformaRastreador;
+  numero_serie?: string | null;
+  imei?: string | null;
   status: StatusRastreador;
-  veiculo_id?: string;
-  instalacao_id?: string;
-  data_compra?: string;
-  garantia_ate?: string;
-  observacoes?: string;
-  created_at: string;
-  updated_at: string;
+  veiculo_id?: string | null;
 }
 
 export interface Instalacao {
   id: string;
   associado_id: string;
   veiculo_id: string;
-  rastreador_id?: string;
-  instalador_id?: string;
-  rota_id?: string;
+  rastreador_id?: string | null;
+  instalador_id?: string | null;
   status: StatusInstalacao;
   data_agendada: string;
   periodo: PeriodoInstalacao;
-  endereco_cep: string;
-  endereco_logradouro: string;
-  endereco_numero: string;
-  endereco_complemento?: string;
-  endereco_bairro: string;
-  endereco_cidade: string;
-  endereco_estado: string;
-  observacoes?: string;
-  motivo_cancelamento?: string;
-  motivo_reagendamento?: string;
-  data_realizada?: string;
-  hora_inicio?: string;
-  hora_fim?: string;
-  foto_instalacao_url?: string;
-  assinatura_cliente_url?: string;
+  cep?: string | null;
+  logradouro?: string | null;
+  numero?: string | null;
+  complemento?: string | null;
+  bairro?: string | null;
+  cidade?: string | null;
+  uf?: string | null;
+  observacoes?: string | null;
+  motivo_cancelamento?: string | null;
+  motivo_reagendamento?: string | null;
+  data_realizada?: string | null;
+  hora_inicio?: string | null;
+  hora_fim?: string | null;
+  foto_instalacao_url?: string | null;
+  assinatura_cliente_url?: string | null;
   created_at: string;
   updated_at: string;
 }
 
 export interface InstalacaoComRelacoes extends Instalacao {
-  associado?: {
+  // Nomes usados pelo banco (join padrão)
+  associados?: {
     id: string;
     nome: string;
-    telefone: string;
-    email?: string;
-  };
-  veiculo?: {
+    telefone?: string | null;
+    email?: string | null;
+    cpf?: string | null;
+    cep?: string | null;
+    logradouro?: string | null;
+    numero?: string | null;
+    complemento?: string | null;
+    bairro?: string | null;
+    cidade?: string | null;
+    uf?: string | null;
+  } | null;
+  veiculos?: {
     id: string;
     placa: string;
-    marca: string;
-    modelo: string;
-    ano_modelo: number;
-    cor: string;
-  };
-  rastreador?: {
+    marca?: string | null;
+    modelo?: string | null;
+    ano_modelo?: number | null;
+    cor?: string | null;
+    chassi?: string | null;
+    renavam?: string | null;
+  } | null;
+  rastreadores?: {
     id: string;
     codigo: string;
-    modelo: string;
-    imei: string;
-  };
-  instalador?: {
+    numero_serie?: string | null;
+    imei?: string | null;
+  } | null;
+  // Profile do instalador (join com alias)
+  profiles?: {
     id: string;
     nome: string;
-    telefone: string;
-  };
+    telefone?: string | null;
+    email?: string | null;
+  } | null;
 }
 
 export interface Rota {
   id: string;
   codigo: string;
-  data: string;
+  data_rota: string;
   instalador_id: string;
-  regiao: string;
+  regiao?: string | null;
   status: StatusRota;
-  ordem_instalacoes: string[];
-  km_estimado?: number;
-  km_realizado?: number;
-  observacoes?: string;
+  km_estimado?: number | null;
+  km_realizado?: number | null;
+  observacoes?: string | null;
   created_at: string;
   updated_at: string;
 }
 
 export interface RotaComRelacoes extends Rota {
-  instalador?: Instalador;
+  instalador?: Instalador | null;
   instalacoes?: InstalacaoResumo[];
   total_instalacoes?: number;
   concluidas?: number;
@@ -217,13 +200,11 @@ export interface InstalacaoResumo {
 
 export interface InstalacaoFilters {
   search?: string;
-  status?: StatusInstalacao | StatusInstalacao[];
+  status?: StatusInstalacao[];
   periodo?: PeriodoInstalacao;
-  instalador_id?: string;
-  data_inicio?: string;
-  data_fim?: string;
-  regiao?: string;
-  sem_instalador?: boolean;
+  instaladorId?: string;
+  dataInicio?: Date;
+  dataFim?: Date;
 }
 
 export interface RotaFilters {
@@ -237,7 +218,6 @@ export interface RastreadorFilters {
   search?: string;
   status?: StatusRastreador;
   plataforma?: PlataformaRastreador;
-  disponivel?: boolean;
 }
 
 // ============================================
@@ -249,14 +229,16 @@ export interface AgendarInstalacaoPayload {
   veiculo_id: string;
   data_agendada: string;
   periodo: PeriodoInstalacao;
-  endereco_cep: string;
-  endereco_logradouro: string;
-  endereco_numero: string;
-  endereco_complemento?: string;
-  endereco_bairro: string;
-  endereco_cidade: string;
-  endereco_estado: string;
-  observacoes?: string;
+  cep?: string | null;
+  logradouro?: string | null;
+  numero?: string | null;
+  complemento?: string | null;
+  bairro?: string | null;
+  cidade?: string | null;
+  uf?: string | null;
+  observacoes?: string | null;
+  rastreador_id?: string | null;
+  instalador_id?: string | null;
 }
 
 export interface AtribuirInstaladorPayload {
@@ -316,6 +298,14 @@ export interface EstatisticasInstalador {
   concluidas_mes: number;
   taxa_sucesso: number;
   tempo_medio_minutos: number;
+}
+
+// Métricas
+export interface InstalacoesMetricas {
+  agendadas: number;
+  emRota: number;
+  concluidasHoje: number;
+  reagendadas: number;
 }
 
 // ============================================

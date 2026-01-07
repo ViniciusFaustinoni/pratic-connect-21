@@ -19,9 +19,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import { InstalacaoFilters as Filters, StatusInstalacao, PeriodoInstalacao } from '@/hooks/useInstalacoes';
-import { useInstaladores } from '@/hooks/useInstalacoes';
-import { STATUS_INSTALACAO_LABELS, PERIODO_LABELS, PeriodoInstalacao as PeriodoType } from '@/types/database';
+import { InstalacaoFilters as Filters, useInstaladores } from '@/hooks/useInstalacoes';
+import { STATUS_INSTALACAO_LABELS, PERIODO_LABELS, PeriodoInstalacao } from '@/types/database';
+import type { Instalacao } from '@/hooks/useInstalacoes';
+
+type StatusInstalacao = Instalacao['status'];
 
 interface InstalacaoFiltersProps {
   filters: Filters;
