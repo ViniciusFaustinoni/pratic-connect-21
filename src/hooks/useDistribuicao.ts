@@ -241,6 +241,35 @@ export function useAtualizarLimiteVendedor() {
   });
 }
 
+export function useReordenarVendedores() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (vendedoresOrdenados: { id: string; ordem: number }[]) => {
+      const promises = vendedoresOrdenados.map(({ id, ordem }) =>
+        supabase
+          .from('distribuicao_vendedores')
+          .update({ ordem, updated_at: new Date().toISOString() })
+          .eq('id', id)
+      );
+
+      const results = await Promise.all(promises);
+      const erros = results.filter(r => r.error);
+      if (erros.length > 0) {
+        throw erros[0].error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['distribuicao-vendedores'] });
+      toast.success('Ordem atualizada');
+    },
+    onError: (error) => {
+      console.error('Erro ao reordenar vendedores:', error);
+      toast.error('Erro ao reordenar vendedores');
+    },
+  });
+}
+
 // ============================================
 // VENDEDORES DISPONÍVEIS (para adicionar)
 // ============================================
