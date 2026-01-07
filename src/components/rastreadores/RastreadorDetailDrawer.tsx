@@ -47,6 +47,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { MapaRastreador } from './MapaRastreador';
+import { MapaHistorico } from './MapaHistorico';
 
 interface RastreadorDetailDrawerProps {
   rastreadorId: string | null;
@@ -173,11 +174,13 @@ export function RastreadorDetailDrawer({
             </SheetHeader>
 
             <Tabs defaultValue="info" className="mt-6">
-              <TabsList className="grid w-full grid-cols-2">
+              <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="info">Informações</TabsTrigger>
                 <TabsTrigger value="mapa" disabled={!isInstalled}>
-                  <Navigation className="h-4 w-4 mr-1" />
                   Rastreamento
+                </TabsTrigger>
+                <TabsTrigger value="historico" disabled={!isInstalled}>
+                  Histórico
                 </TabsTrigger>
               </TabsList>
 
@@ -394,6 +397,15 @@ export function RastreadorDetailDrawer({
                     rastreadorId={rastreadorId} 
                     altura="350px"
                     mostrarControles={true}
+                  />
+                )}
+              </TabsContent>
+
+              <TabsContent value="historico" className="mt-4">
+                {isInstalled && rastreadorId && (
+                  <MapaHistorico 
+                    rastreadorId={rastreadorId} 
+                    altura="300px"
                   />
                 )}
               </TabsContent>
