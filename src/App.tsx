@@ -12,6 +12,7 @@ import { InstaladorLayout } from "@/components/instalador/InstaladorLayout";
 
 // Internal System Pages
 import Auth from "./pages/Auth";
+import AuthCallback from "./pages/auth/AuthCallback";
 import Login from "./pages/auth/Login";
 import ForgotPassword from "./pages/auth/ForgotPassword";
 import ResetPassword from "./pages/auth/ResetPassword";
@@ -177,6 +178,7 @@ const App = () => (
           <Routes>
             {/* Auth */}
             <Route path="/auth" element={<Auth />} />
+            <Route path="/auth/callback" element={<AuthCallback />} />
             <Route path="/login" element={<Login />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/auth/reset-password" element={<ResetPassword />} />

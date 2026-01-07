@@ -272,7 +272,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/dashboard`,
+          redirectTo: `${window.location.origin}/auth/callback`,
         },
       });
 
@@ -294,7 +294,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const { error: otpError } = await supabase.auth.signInWithOtp({
         email: credentials.email,
         options: {
-          emailRedirectTo: credentials.redirectTo || `${window.location.origin}/dashboard`,
+          emailRedirectTo: credentials.redirectTo || `${window.location.origin}/auth/callback`,
         },
       });
 
