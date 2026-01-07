@@ -3012,117 +3012,89 @@ export type Database = {
           },
         ]
       }
-      distribuicao_leads_config: {
+      distribuicao_config: {
         Row: {
           ativo: boolean | null
           created_at: string | null
           distribuir_fins_semana: boolean | null
-          fallback_vendedor_id: string | null
+          fallback_usuario_id: string | null
           id: string
           limite_diario_padrao: number | null
-          proximo_vendedor: number | null
-          regras_canal: Json | null
-          regras_regiao: Json | null
           resetar_contadores_hora: number | null
-          tipo: string
           updated_at: string | null
-          vendedores_ordem: string[] | null
         }
         Insert: {
           ativo?: boolean | null
           created_at?: string | null
           distribuir_fins_semana?: boolean | null
-          fallback_vendedor_id?: string | null
+          fallback_usuario_id?: string | null
           id?: string
           limite_diario_padrao?: number | null
-          proximo_vendedor?: number | null
-          regras_canal?: Json | null
-          regras_regiao?: Json | null
           resetar_contadores_hora?: number | null
-          tipo: string
           updated_at?: string | null
-          vendedores_ordem?: string[] | null
         }
         Update: {
           ativo?: boolean | null
           created_at?: string | null
           distribuir_fins_semana?: boolean | null
-          fallback_vendedor_id?: string | null
+          fallback_usuario_id?: string | null
           id?: string
           limite_diario_padrao?: number | null
-          proximo_vendedor?: number | null
-          regras_canal?: Json | null
-          regras_regiao?: Json | null
           resetar_contadores_hora?: number | null
-          tipo?: string
           updated_at?: string | null
-          vendedores_ordem?: string[] | null
         }
         Relationships: [
           {
-            foreignKeyName: "distribuicao_leads_config_fallback_vendedor_id_fkey"
-            columns: ["fallback_vendedor_id"]
+            foreignKeyName: "distribuicao_config_fallback_usuario_id_fkey"
+            columns: ["fallback_usuario_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
       }
-      distribuicao_leads_historico: {
+      distribuicao_historico: {
         Row: {
+          atribuido_automaticamente: boolean | null
           created_at: string | null
-          created_by: string | null
           id: string
-          lead_id: string | null
+          lead_id: string
           motivo: string | null
-          tipo: string
-          vendedor_anterior_id: string | null
-          vendedor_id: string | null
+          vendedor_id: string
         }
         Insert: {
+          atribuido_automaticamente?: boolean | null
           created_at?: string | null
-          created_by?: string | null
           id?: string
-          lead_id?: string | null
+          lead_id: string
           motivo?: string | null
-          tipo: string
-          vendedor_anterior_id?: string | null
-          vendedor_id?: string | null
+          vendedor_id: string
         }
         Update: {
+          atribuido_automaticamente?: boolean | null
           created_at?: string | null
-          created_by?: string | null
           id?: string
-          lead_id?: string | null
+          lead_id?: string
           motivo?: string | null
-          tipo?: string
-          vendedor_anterior_id?: string | null
-          vendedor_id?: string | null
+          vendedor_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "distribuicao_leads_historico_lead_id_fkey"
+            foreignKeyName: "distribuicao_historico_lead_id_fkey"
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "leads"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "distribuicao_leads_historico_lead_id_fkey"
+            foreignKeyName: "distribuicao_historico_lead_id_fkey"
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "view_acompanhamento"
             referencedColumns: ["lead_id"]
           },
           {
-            foreignKeyName: "distribuicao_leads_historico_vendedor_anterior_id_fkey"
-            columns: ["vendedor_anterior_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "distribuicao_leads_historico_vendedor_id_fkey"
+            foreignKeyName: "distribuicao_historico_vendedor_id_fkey"
             columns: ["vendedor_id"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -3130,67 +3102,46 @@ export type Database = {
           },
         ]
       }
-      distribuicao_leads_vendedores: {
+      distribuicao_vendedores: {
         Row: {
-          canais: string[] | null
           created_at: string | null
           id: string
-          leads_recebidos_hoje: number | null
-          leads_recebidos_mes: number | null
-          max_leads_dia: number | null
-          max_leads_mes: number | null
+          leads_hoje: number | null
+          limite_diario: number | null
           ordem: number | null
-          recebendo_leads: boolean | null
-          regioes: string[] | null
           status: string | null
-          taxa_conversao: number | null
-          ticket_medio: number | null
-          total_leads_historico: number | null
+          total_leads: number | null
           ultima_atribuicao: string | null
           updated_at: string | null
           vendedor_id: string
         }
         Insert: {
-          canais?: string[] | null
           created_at?: string | null
           id?: string
-          leads_recebidos_hoje?: number | null
-          leads_recebidos_mes?: number | null
-          max_leads_dia?: number | null
-          max_leads_mes?: number | null
+          leads_hoje?: number | null
+          limite_diario?: number | null
           ordem?: number | null
-          recebendo_leads?: boolean | null
-          regioes?: string[] | null
           status?: string | null
-          taxa_conversao?: number | null
-          ticket_medio?: number | null
-          total_leads_historico?: number | null
+          total_leads?: number | null
           ultima_atribuicao?: string | null
           updated_at?: string | null
           vendedor_id: string
         }
         Update: {
-          canais?: string[] | null
           created_at?: string | null
           id?: string
-          leads_recebidos_hoje?: number | null
-          leads_recebidos_mes?: number | null
-          max_leads_dia?: number | null
-          max_leads_mes?: number | null
+          leads_hoje?: number | null
+          limite_diario?: number | null
           ordem?: number | null
-          recebendo_leads?: boolean | null
-          regioes?: string[] | null
           status?: string | null
-          taxa_conversao?: number | null
-          ticket_medio?: number | null
-          total_leads_historico?: number | null
+          total_leads?: number | null
           ultima_atribuicao?: string | null
           updated_at?: string | null
           vendedor_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "distribuicao_leads_vendedores_vendedor_id_fkey"
+            foreignKeyName: "distribuicao_vendedores_vendedor_id_fkey"
             columns: ["vendedor_id"]
             isOneToOne: true
             referencedRelation: "profiles"
@@ -9148,6 +9099,10 @@ export type Database = {
       am_i_gerencia: { Args: never; Returns: boolean }
       am_i_prestador: { Args: never; Returns: boolean }
       am_i_vendedor: { Args: never; Returns: boolean }
+      atribuir_lead_automaticamente: {
+        Args: { p_lead_id: string }
+        Returns: string
+      }
       atualizar_cobrancas_vencidas: { Args: never; Returns: number }
       atualizar_parcelas_vencidas: { Args: never; Returns: number }
       atualizar_valor_os: { Args: { os_id: string }; Returns: undefined }
@@ -9162,10 +9117,6 @@ export type Database = {
       can_access_api_settings: { Args: { _user_id: string }; Returns: boolean }
       can_manage_juridico: { Args: { _user_id: string }; Returns: boolean }
       can_manage_marketing: { Args: { _user_id: string }; Returns: boolean }
-      distribuir_lead_round_robin: {
-        Args: { p_lead_id: string }
-        Returns: string
-      }
       get_alertas_contagem: {
         Args: never
         Returns: {
@@ -9198,6 +9149,7 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["tipo_usuario"]
       }
+      get_proximo_vendedor_distribuicao: { Args: never; Returns: string }
       get_ultimas_posicoes: {
         Args: never
         Returns: {
@@ -9245,8 +9197,7 @@ export type Database = {
         }
         Returns: string
       }
-      resetar_contadores_diarios: { Args: never; Returns: undefined }
-      resetar_contadores_mensais: { Args: never; Returns: undefined }
+      resetar_contadores_distribuicao: { Args: never; Returns: undefined }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       verificar_acordos_quebrados: { Args: never; Returns: number }
