@@ -422,3 +422,12 @@ export function useRemoveInstalacaoFromRota() {
     },
   });
 }
+
+// Rotas do dia (wrapper para useRotas com filtro de data)
+export function useRotasDoDia(data?: string) {
+  const dataFiltro = data || format(new Date(), 'yyyy-MM-dd');
+  return useRotas({
+    dataInicio: new Date(dataFiltro),
+    dataFim: new Date(dataFiltro),
+  });
+}

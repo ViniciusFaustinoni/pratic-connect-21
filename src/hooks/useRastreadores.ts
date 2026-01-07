@@ -329,3 +329,13 @@ export function useVeiculosSemRastreador() {
     },
   });
 }
+
+// Rastreadores disponíveis (em estoque)
+export function useRastreadoresDisponiveis() {
+  return useRastreadores({ status: ['estoque'] });
+}
+
+// Contagem de rastreadores (alias para useRastreadoresMetricas)
+export function useRastreadoresContagem() {
+  return useRastreadoresMetricas();
+}
