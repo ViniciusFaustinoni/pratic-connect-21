@@ -42,8 +42,13 @@ export default function Instalacoes() {
   const [selectedInstalacaoId, setSelectedInstalacaoId] = useState<string | null>(null);
   const [editInstalacaoId, setEditInstalacaoId] = useState<string | undefined>(undefined);
 
-  const { data: instalacoes, isLoading } = useInstalacoes(filters);
+  const { data: instalacoesList, isLoading } = useInstalacoes(filters);
   const { data: metricas, isLoading: loadingMetricas } = useInstalacoesMetricas();
+  
+  // Normalizar os dados para sempre ser um array
+  const instalacoes = Array.isArray(instalacoesList) 
+    ? instalacoesList 
+    : instalacoesList?.instalacoes || [];
 
   const handleOpenDetail = (id: string) => {
     setSelectedInstalacaoId(id);
