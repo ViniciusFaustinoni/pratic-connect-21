@@ -65,3 +65,6 @@ verify_jwt = false
 
 [functions.rastreador-posicao]
 verify_jwt = false
+
+[functions.rastreador-historico]
+verify_jwt = false
