@@ -1,0 +1,1 @@
+export { WhatsAppStatusCard } from './WhatsAppStatusCard';
