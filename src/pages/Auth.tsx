@@ -215,20 +215,27 @@ export default function Auth() {
         throw new Error(authResult.error || 'Erro ao fazer login');
       }
       
-      // Buscar profile incluindo primeiro_acesso
+      // Buscar usuário autenticado
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        setErrors({ geral: 'Erro ao fazer login' });
+        return;
+      }
+
+      // Buscar profile por user_id (mais confiável que email)
       const { data: userProfile, error: profileError } = await supabase
         .from('profiles')
         .select('id, nome, tipo, primeiro_acesso')
-        .eq('email', loginEmail.toLowerCase())
-        .maybeSingle();
+        .eq('user_id', user.id)
+        .single();
 
-      if (profileError) {
+      if (profileError || !userProfile) {
         console.error('Erro ao buscar profile:', profileError);
-        throw new Error('Erro ao verificar perfil');
-      }
-
-      if (!userProfile) {
-        throw new Error('Perfil não encontrado');
+        // Fallback: vai para dashboard
+        toast.success('Bem-vindo!');
+        navigate('/dashboard', { replace: true });
+        return;
       }
 
       // Registrar sucesso
