@@ -23,7 +23,11 @@ import {
   MessageCircle,
   Cake,
   Camera,
-  Trash2
+  Trash2,
+  Bell,
+  Moon,
+  HelpCircle,
+  FileText
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -33,6 +37,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
+import { Switch } from '@/components/ui/switch';
 import {
   Dialog,
   DialogContent,
@@ -83,6 +88,7 @@ export default function AppPerfil() {
   const [modalEndereco, setModalEndereco] = useState(false);
   const [modalSenha, setModalSenha] = useState(false);
   const [modalLogout, setModalLogout] = useState(false);
+  const [notificacoes, setNotificacoes] = useState(true);
   
   // Estados para upload de avatar
   const [cropDialogOpen, setCropDialogOpen] = useState(false);
@@ -441,6 +447,60 @@ export default function AppPerfil() {
         </CardContent>
       </Card>
 
+      {/* Configurações */}
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Bell className="h-4 w-4 text-primary" />
+            Configurações
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Bell className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium">Notificações</span>
+            </div>
+            <Switch checked={notificacoes} onCheckedChange={setNotificacoes} />
+          </div>
+          <Separator />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Moon className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium">Modo escuro</span>
+            </div>
+            <Switch disabled />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Links de Ajuda */}
+      <Card className="border-0 shadow-sm">
+        <CardContent className="p-0 divide-y">
+          <button className="w-full flex items-center justify-between px-6 py-4 hover:bg-muted/50 transition-colors">
+            <div className="flex items-center gap-3">
+              <HelpCircle className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium">Central de Ajuda</span>
+            </div>
+            <ChevronRight className="h-5 w-5 text-muted-foreground" />
+          </button>
+          <button className="w-full flex items-center justify-between px-6 py-4 hover:bg-muted/50 transition-colors">
+            <div className="flex items-center gap-3">
+              <FileText className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium">Termos de Uso</span>
+            </div>
+            <ChevronRight className="h-5 w-5 text-muted-foreground" />
+          </button>
+          <button className="w-full flex items-center justify-between px-6 py-4 hover:bg-muted/50 transition-colors">
+            <div className="flex items-center gap-3">
+              <FileText className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium">Política de Privacidade</span>
+            </div>
+            <ChevronRight className="h-5 w-5 text-muted-foreground" />
+          </button>
+        </CardContent>
+      </Card>
+
       {/* Botão Sair */}
       <Button
         variant="outline"
@@ -450,6 +510,11 @@ export default function AppPerfil() {
         <LogOut className="h-4 w-4 mr-2" />
         Sair da Conta
       </Button>
+
+      {/* Versão do App */}
+      <p className="text-xs text-center text-muted-foreground py-4">
+        Versão 2.0.0 • PRATIC Proteção Veicular
+      </p>
 
       {/* Modal Editar Dados Pessoais */}
       <ModalEditarDadosPessoais
