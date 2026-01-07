@@ -8824,6 +8824,45 @@ export type Database = {
           },
         ]
       }
+      whatsapp_templates: {
+        Row: {
+          ativo: boolean | null
+          categoria: string
+          codigo: string
+          created_at: string | null
+          descricao: string | null
+          id: string
+          mensagem: string
+          nome: string
+          updated_at: string | null
+          variaveis: string[] | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          categoria: string
+          codigo: string
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          mensagem: string
+          nome: string
+          updated_at?: string | null
+          variaveis?: string[] | null
+        }
+        Update: {
+          ativo?: boolean | null
+          categoria?: string
+          codigo?: string
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          mensagem?: string
+          nome?: string
+          updated_at?: string | null
+          variaveis?: string[] | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       view_acompanhamento: {
@@ -9389,6 +9428,10 @@ export type Database = {
           p_metadata?: Json
           p_user_agent?: string
         }
+        Returns: string
+      }
+      processar_template: {
+        Args: { p_template_id: string; p_variaveis: Json }
         Returns: string
       }
       resetar_contadores_distribuicao: { Args: never; Returns: undefined }
