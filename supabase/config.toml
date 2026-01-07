@@ -52,13 +52,13 @@ verify_jwt = false
 verify_jwt = true
 
 [functions.whatsapp-status]
-verify_jwt = true
+verify_jwt = false
 
 [functions.whatsapp-qrcode]
-verify_jwt = true
+verify_jwt = false
 
 [functions.whatsapp-logout]
-verify_jwt = true
+verify_jwt = false
 
 [functions.whatsapp-send-media]
-verify_jwt = true
+verify_jwt = false
