@@ -9246,6 +9246,7 @@ export type Database = {
         Returns: string
       }
       resetar_contadores_diarios: { Args: never; Returns: undefined }
+      resetar_contadores_mensais: { Args: never; Returns: undefined }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       verificar_acordos_quebrados: { Args: never; Returns: number }
