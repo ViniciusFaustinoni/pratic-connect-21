@@ -71,3 +71,12 @@ verify_jwt = false
 
 [functions.rastreador-redefinir-senha]
 verify_jwt = false
+
+[functions.rastreador-salvar-credenciais]
+verify_jwt = false
+
+[functions.rastreador-testar-conexao]
+verify_jwt = false
+
+[functions.rastreador-auth]
+verify_jwt = false

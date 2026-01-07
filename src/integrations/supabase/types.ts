@@ -7352,6 +7352,59 @@ export type Database = {
         }
         Relationships: []
       }
+      rastreadores_credenciais: {
+        Row: {
+          bearer_token: string | null
+          configurado: boolean | null
+          created_at: string | null
+          id: string
+          password_hash: string | null
+          plataforma_id: string
+          public_key: string | null
+          testado_em: string | null
+          teste_mensagem: string | null
+          teste_sucesso: boolean | null
+          updated_at: string | null
+          username: string | null
+        }
+        Insert: {
+          bearer_token?: string | null
+          configurado?: boolean | null
+          created_at?: string | null
+          id?: string
+          password_hash?: string | null
+          plataforma_id: string
+          public_key?: string | null
+          testado_em?: string | null
+          teste_mensagem?: string | null
+          teste_sucesso?: boolean | null
+          updated_at?: string | null
+          username?: string | null
+        }
+        Update: {
+          bearer_token?: string | null
+          configurado?: boolean | null
+          created_at?: string | null
+          id?: string
+          password_hash?: string | null
+          plataforma_id?: string
+          public_key?: string | null
+          testado_em?: string | null
+          teste_mensagem?: string | null
+          teste_sucesso?: boolean | null
+          updated_at?: string | null
+          username?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rastreadores_credenciais_plataforma_id_fkey"
+            columns: ["plataforma_id"]
+            isOneToOne: true
+            referencedRelation: "rastreadores_config_plataformas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rastreadores_logs: {
         Row: {
           created_at: string | null
