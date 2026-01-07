@@ -67,7 +67,11 @@ export default function Auth() {
   const [loginPassword, setLoginPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loginLoading, setLoginLoading] = useState(false);
-  const [loginError, setLoginError] = useState<string | null>(null);
+  const [errors, setErrors] = useState<{
+    email?: string;
+    senha?: string;
+    geral?: string;
+  }>({});
   
   // Estados de Bloqueio
   const [bloqueio, setBloqueio] = useState<{
@@ -75,6 +79,40 @@ export default function Auth() {
     permanente: boolean;
     mensagem: string;
   } | null>(null);
+
+  // Validação de formato de email
+  const validateEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email.trim());
+  };
+
+  // Função de validação completa
+  const validateForm = (): boolean => {
+    const newErrors: typeof errors = {};
+    
+    const trimmedEmail = loginEmail.trim();
+    
+    // Validação Email Vazio
+    if (!trimmedEmail) {
+      newErrors.email = 'Email é obrigatório';
+    } 
+    // Validação Formato Email
+    else if (!validateEmail(trimmedEmail)) {
+      newErrors.email = 'Formato de email inválido';
+    }
+    
+    // Validação Senha (aba senha)
+    if (activeTab === 'senha') {
+      if (!loginPassword || !loginPassword.trim()) {
+        newErrors.senha = 'Senha é obrigatória';
+      } else if (loginPassword.length < 6) {
+        newErrors.senha = 'Senha deve ter no mínimo 6 caracteres';
+      }
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
   // Verificar bloqueio quando email muda (com debounce)
   useEffect(() => {
@@ -152,13 +190,10 @@ export default function Auth() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoginError(null);
+    setErrors({}); // Limpar erros anteriores
 
-    // Validar campos
-    const result = loginSchema.safeParse({ email: loginEmail, password: loginPassword });
-    if (!result.success) {
-      const firstError = result.error.errors[0];
-      setLoginError(firstError.message);
+    // Validar PRIMEIRO - se falhar, NÃO continua
+    if (!validateForm()) {
       return;
     }
 
@@ -239,9 +274,15 @@ export default function Auth() {
             : `Conta bloqueada por ${tentativaResult.minutos} minutos.`
         });
       } else if (tentativaResult.tentativas_restantes > 0) {
-        setLoginError(`Email ou senha inválidos. ${tentativaResult.tentativas_restantes} tentativa(s) restante(s).`);
+        setErrors(prev => ({ 
+          ...prev, 
+          geral: `Email ou senha inválidos. ${tentativaResult.tentativas_restantes} tentativa(s) restante(s).` 
+        }));
       } else {
-        setLoginError(error.message || 'Email ou senha inválidos');
+        setErrors(prev => ({ 
+          ...prev, 
+          geral: error.message || 'Email ou senha inválidos' 
+        }));
       }
       
       toast.error('Erro ao fazer login');
@@ -393,10 +434,10 @@ export default function Auth() {
                   </Alert>
                 )}
 
-                {/* Erro de Login */}
-                {loginError && !bloqueio?.bloqueado && (
-                  <Alert variant="destructive">
-                    <AlertDescription>{loginError}</AlertDescription>
+                {/* Erro Geral de Login */}
+                {errors.geral && !bloqueio?.bloqueado && (
+                  <Alert variant="destructive" className="animate-in fade-in duration-200">
+                    <AlertDescription>{errors.geral}</AlertDescription>
                   </Alert>
                 )}
 
@@ -407,9 +448,18 @@ export default function Auth() {
                     type="email"
                     placeholder="seu@email.com"
                     value={loginEmail}
-                    onChange={(e) => setLoginEmail(e.target.value)}
+                    onChange={(e) => {
+                      setLoginEmail(e.target.value);
+                      if (errors.email) setErrors(prev => ({ ...prev, email: undefined }));
+                    }}
                     disabled={loginLoading || bloqueio?.bloqueado}
+                    className={errors.email ? 'border-destructive' : ''}
                   />
+                  {errors.email && (
+                    <p className="text-sm text-destructive animate-in fade-in duration-200">
+                      {errors.email}
+                    </p>
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -420,9 +470,12 @@ export default function Auth() {
                       type={showPassword ? 'text' : 'password'}
                       placeholder="••••••••"
                       value={loginPassword}
-                      onChange={(e) => setLoginPassword(e.target.value)}
+                      onChange={(e) => {
+                        setLoginPassword(e.target.value);
+                        if (errors.senha) setErrors(prev => ({ ...prev, senha: undefined }));
+                      }}
                       disabled={loginLoading || bloqueio?.bloqueado}
-                      className="pr-10"
+                      className={`pr-10 ${errors.senha ? 'border-destructive' : ''}`}
                     />
                     <button
                       type="button"
@@ -433,6 +486,11 @@ export default function Auth() {
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
+                  {errors.senha && (
+                    <p className="text-sm text-destructive animate-in fade-in duration-200">
+                      {errors.senha}
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex justify-end">
