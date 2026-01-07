@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 import { z } from 'zod';
 import { 
   verificarBloqueio, 
@@ -181,20 +182,49 @@ export default function Auth() {
         throw new Error(authResult.error || 'Erro ao fazer login');
       }
       
+      // Buscar profile incluindo primeiro_acesso
+      const { data: userProfile, error: profileError } = await supabase
+        .from('profiles')
+        .select('id, nome, tipo, primeiro_acesso')
+        .eq('email', loginEmail.toLowerCase())
+        .maybeSingle();
+
+      if (profileError) {
+        console.error('Erro ao buscar profile:', profileError);
+        throw new Error('Erro ao verificar perfil');
+      }
+
+      if (!userProfile) {
+        throw new Error('Perfil não encontrado');
+      }
+
       // Registrar sucesso
       await registrarTentativa(loginEmail, true);
       
-      // Criar sessão customizada (profile será buscado pelo AuthContext)
-      if (profile?.id) {
-        const tipoDispositivo = detectarDispositivo();
-        const sessaoResult = await criarSessao(profile.id, tipoDispositivo);
-        
-        if (sessaoResult.success && sessaoResult.token) {
-          localStorage.setItem(SESSION_TOKEN_KEY, sessaoResult.token);
-        }
+      // Criar sessão customizada
+      const tipoDispositivo = detectarDispositivo();
+      const sessaoResult = await criarSessao(userProfile.id, tipoDispositivo);
+      
+      if (sessaoResult.success && sessaoResult.token) {
+        localStorage.setItem(SESSION_TOKEN_KEY, sessaoResult.token);
       }
 
-      toast.success('Login realizado com sucesso!');
+      // Verificar primeiro_acesso - redirecionar para definir senha
+      if (userProfile.primeiro_acesso) {
+        toast.success('Por favor, defina sua nova senha.');
+        navigate('/definir-senha', { replace: true });
+        return;
+      }
+
+      // Redirecionar conforme tipo de usuário
+      const primeiroNome = userProfile.nome?.split(' ')[0] || 'usuário';
+      toast.success(`Bem-vindo, ${primeiroNome}!`);
+
+      if (userProfile.tipo === 'associado') {
+        navigate('/app/home', { replace: true });
+      } else {
+        navigate(stateFrom || '/dashboard', { replace: true });
+      }
       
     } catch (error: any) {
       // Registrar falha
