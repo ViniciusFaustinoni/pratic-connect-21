@@ -38,7 +38,7 @@ export default function AuthCallback() {
         // 2. Buscar profile pelo email
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
-          .select('id, nome, tipo, ativo, bloqueado')
+          .select('id, nome, tipo, ativo, bloqueado, primeiro_acesso')
           .eq('email', email)
           .maybeSingle();
 
@@ -86,9 +86,20 @@ export default function AuthCallback() {
 
         // 6. Aguardar e redirecionar
         setTimeout(() => {
+          // Verificar primeiro acesso
+          if (profile.primeiro_acesso) {
+            navigate('/definir-senha', { replace: true });
+            return;
+          }
+          
           // Redirecionar conforme tipo
-          // Por ora, todos vão para dashboard (associado usa app separado)
-          navigate('/dashboard', { replace: true });
+          if (profile.tipo === 'associado') {
+            navigate('/app/home', { replace: true });
+          } else if (profile.tipo === 'prestador') {
+            navigate('/instalador', { replace: true });
+          } else {
+            navigate('/dashboard', { replace: true });
+          }
         }, 1000);
 
       } catch (error) {
