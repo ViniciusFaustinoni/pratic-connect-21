@@ -78,5 +78,8 @@ verify_jwt = false
 [functions.rastreador-testar-conexao]
 verify_jwt = false
 
+[functions.rastreador-verificar-secrets]
+verify_jwt = false
+
 [functions.rastreador-auth]
 verify_jwt = false

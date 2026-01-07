@@ -34,17 +34,6 @@ serve(async (req) => {
       throw new Error(`Plataforma não encontrada: ${plataforma_codigo}`);
     }
 
-    // Buscar credenciais
-    const { data: credenciais, error: credError } = await supabase
-      .from('rastreadores_credenciais')
-      .select('*')
-      .eq('plataforma_id', plataforma.id)
-      .single();
-
-    if (credError || !credenciais) {
-      throw new Error('Credenciais não encontradas. Salve as credenciais primeiro.');
-    }
-
     const baseUrl = plataforma.ambiente_atual === 'producao' 
       ? plataforma.api_url_producao 
       : plataforma.api_url_sandbox;
@@ -52,22 +41,23 @@ serve(async (req) => {
     let testeSucesso = false;
     let mensagem = '';
 
-    // Testar conexão conforme plataforma
+    // Testar conexão usando secrets
     if (plataforma_codigo === 'softruck') {
-      if (!credenciais.public_key || !credenciais.username || !credenciais.password_hash) {
-        mensagem = 'Credenciais Softruck incompletas';
+      const publicKey = Deno.env.get('SOFTRUCK_PUBLIC_KEY');
+      const username = Deno.env.get('SOFTRUCK_USERNAME');
+      const password = Deno.env.get('SOFTRUCK_PASSWORD');
+
+      if (!publicKey || !username || !password) {
+        mensagem = 'Credenciais Softruck não configuradas nos secrets';
       } else {
         try {
           const response = await fetch(`${baseUrl}/auth/login`, {
             method: 'POST',
             headers: { 
               'Content-Type': 'application/json',
-              'public-key': credenciais.public_key,
+              'public-key': publicKey,
             },
-            body: JSON.stringify({
-              username: credenciais.username,
-              password: credenciais.password_hash,
-            })
+            body: JSON.stringify({ username, password })
           });
 
           const data = await response.json();
@@ -84,12 +74,13 @@ serve(async (req) => {
       }
 
     } else if (plataforma_codigo === 'rede_veiculos') {
-      if (!credenciais.bearer_token) {
-        mensagem = 'Token não configurado';
-      } else if (credenciais.bearer_token.length < 10) {
+      const token = Deno.env.get('REDE_VEICULOS_TOKEN');
+
+      if (!token) {
+        mensagem = 'Token Rede Veículos não configurado nos secrets';
+      } else if (token.length < 10) {
         mensagem = 'Token parece inválido (muito curto)';
       } else {
-        // Token fixo - validação básica de formato
         testeSucesso = true;
         mensagem = 'Token Rede Veículos configurado com sucesso!';
       }
@@ -97,17 +88,17 @@ serve(async (req) => {
       mensagem = `Plataforma ${plataforma_codigo} não suportada para teste`;
     }
 
-    // Atualizar status do teste
+    // Atualizar status do teste na tabela de credenciais (se existir)
     await supabase
       .from('rastreadores_credenciais')
-      .update({
+      .upsert({
+        plataforma_id: plataforma.id,
         testado_em: new Date().toISOString(),
         teste_sucesso: testeSucesso,
         teste_mensagem: mensagem,
         configurado: testeSucesso,
         updated_at: new Date().toISOString(),
-      })
-      .eq('plataforma_id', plataforma.id);
+      }, { onConflict: 'plataforma_id' });
 
     return new Response(
       JSON.stringify({
