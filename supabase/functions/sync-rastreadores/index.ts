@@ -12,30 +12,30 @@ const corsHeaders = {
 
 interface PlataformaConfig {
   baseUrl: string;
-  apiKey: string;
+  apiKey?: string;
   enabled: boolean;
+  // Softruck específico
+  publicKey?: string;
+  username?: string;
+  password?: string;
 }
 
 const getPlataformasConfig = (): Record<string, PlataformaConfig> => ({
+  softruck: {
+    baseUrl: Deno.env.get("SOFTRUCK_AMBIENTE") === "producao" 
+      ? "https://api.softruck.com/v2"
+      : "https://api.apiary.softruck.com/v2",
+    publicKey: Deno.env.get("SOFTRUCK_PUBLIC_KEY") || "",
+    username: Deno.env.get("SOFTRUCK_USERNAME") || "",
+    password: Deno.env.get("SOFTRUCK_PASSWORD") || "",
+    enabled: Boolean(Deno.env.get("SOFTRUCK_PUBLIC_KEY") && Deno.env.get("SOFTRUCK_USERNAME")),
+  },
   rede_veiculos: {
-    baseUrl: Deno.env.get("REDE_VEICULOS_URL") || "",
-    apiKey: Deno.env.get("REDE_VEICULOS_KEY") || "",
-    enabled: Boolean(Deno.env.get("REDE_VEICULOS_KEY")),
-  },
-  sascar: {
-    baseUrl: Deno.env.get("SASCAR_URL") || "",
-    apiKey: Deno.env.get("SASCAR_KEY") || "",
-    enabled: Boolean(Deno.env.get("SASCAR_KEY")),
-  },
-  autotrac: {
-    baseUrl: Deno.env.get("AUTOTRAC_URL") || "",
-    apiKey: Deno.env.get("AUTOTRAC_KEY") || "",
-    enabled: Boolean(Deno.env.get("AUTOTRAC_KEY")),
-  },
-  onixsat: {
-    baseUrl: Deno.env.get("ONIXSAT_URL") || "",
-    apiKey: Deno.env.get("ONIXSAT_KEY") || "",
-    enabled: Boolean(Deno.env.get("ONIXSAT_KEY")),
+    baseUrl: Deno.env.get("REDE_VEICULOS_AMBIENTE") === "producao"
+      ? "https://integracao.redeveiculos.com/api/v2/prod"
+      : "https://integracao.redeveiculos.com/api/v2/sandbox",
+    apiKey: Deno.env.get("REDE_VEICULOS_TOKEN") || "",
+    enabled: Boolean(Deno.env.get("REDE_VEICULOS_TOKEN")),
   },
 });
 
@@ -48,6 +48,7 @@ interface Rastreador {
   codigo: string;
   plataforma: string;
   id_plataforma: string;
+  plataforma_device_id?: string;
 }
 
 interface Posicao {
@@ -72,8 +73,163 @@ interface SyncResult {
 }
 
 // =====================================================
+// AUTENTICAÇÃO SOFTRUCK
+// =====================================================
+
+async function getSoftruckToken(
+  supabase: any,
+  config: PlataformaConfig
+): Promise<string> {
+  // Verificar cache
+  const { data: cached } = await supabase
+    .from("rastreadores_tokens_cache")
+    .select("token, expires_at")
+    .eq("plataforma", "softruck")
+    .gt("expires_at", new Date().toISOString())
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .single();
+
+  if (cached?.token) {
+    console.log("[Softruck] Usando token do cache");
+    return cached.token;
+  }
+
+  // Obter novo token
+  console.log("[Softruck] Obtendo novo token...");
+  
+  const response = await fetch(`${config.baseUrl}/auth/login`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "public-key": config.publicKey || "",
+    },
+    body: JSON.stringify({
+      username: config.username,
+      password: config.password,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Falha auth Softruck: ${response.status} - ${errorText}`);
+  }
+
+  const data = await response.json();
+
+  if (!data.data?.token) {
+    throw new Error("Token Softruck não retornado na resposta");
+  }
+
+  // Buscar plataforma_id
+  const { data: plataforma } = await supabase
+    .from("rastreadores_config_plataformas")
+    .select("id")
+    .eq("plataforma", "softruck")
+    .single();
+
+  // Salvar no cache (expira em 6 dias)
+  const expiresAt = new Date(Date.now() + 6 * 24 * 60 * 60 * 1000);
+  
+  await supabase.from("rastreadores_tokens_cache").insert({
+    plataforma: "softruck",
+    plataforma_id: plataforma?.id || null,
+    token: data.data.token,
+    refresh_token: data.data.refresh_token || null,
+    expires_at: expiresAt.toISOString(),
+  });
+
+  console.log("[Softruck] Novo token obtido e cacheado");
+  return data.data.token;
+}
+
+// =====================================================
 // FUNÇÕES DE SINCRONIZAÇÃO POR PLATAFORMA
 // =====================================================
+
+async function syncSoftruck(
+  rastreadores: Rastreador[],
+  config: PlataformaConfig,
+  supabase: any
+): Promise<{ posicoes: Posicao[]; result: SyncResult }> {
+  const result: SyncResult = {
+    plataforma: "softruck",
+    total: rastreadores.length,
+    sucesso: 0,
+    falhas: 0,
+    erros: [],
+  };
+  const posicoes: Posicao[] = [];
+
+  if (!config.enabled) {
+    result.erros.push("API Softruck não configurada (secrets faltando)");
+    result.falhas = rastreadores.length;
+    return { posicoes, result };
+  }
+
+  try {
+    // Obter token
+    const token = await getSoftruckToken(supabase, config);
+
+    // Para cada rastreador, buscar posição
+    for (const rast of rastreadores) {
+      try {
+        // Usar device_id ou id_plataforma
+        const deviceId = rast.plataforma_device_id || rast.id_plataforma;
+        
+        const response = await fetch(
+          `${config.baseUrl}/tracking/gps-data?device_id=${deviceId}`,
+          {
+            method: "GET",
+            headers: {
+              "Authorization": `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        // A resposta da Softruck pode ser um objeto ou array
+        const gpsData = Array.isArray(data.data) ? data.data[0] : data.data;
+
+        if (gpsData && gpsData.latitude && gpsData.longitude) {
+          posicoes.push({
+            rastreador_id: rast.id,
+            latitude: parseFloat(gpsData.latitude),
+            longitude: parseFloat(gpsData.longitude),
+            velocidade: parseInt(gpsData.speed || gpsData.velocidade || 0),
+            ignicao: Boolean(gpsData.ignition || gpsData.ignicao),
+            data_posicao: gpsData.timestamp || gpsData.datetime || new Date().toISOString(),
+            odometro: gpsData.odometer || undefined,
+            direcao: gpsData.heading || gpsData.direction || undefined,
+          });
+          result.sucesso++;
+        } else {
+          result.falhas++;
+          result.erros.push(`${rast.codigo}: Sem dados de posição`);
+        }
+      } catch (error: unknown) {
+        result.falhas++;
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        result.erros.push(`${rast.codigo}: ${errorMessage}`);
+        console.error(`[Softruck] Erro no rastreador ${rast.codigo}:`, error);
+      }
+    }
+  } catch (error: unknown) {
+    // Erro geral (ex: falha na autenticação)
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    result.erros.push(`Erro geral: ${errorMessage}`);
+    result.falhas = rastreadores.length;
+    console.error("[Softruck] Erro geral:", error);
+  }
+
+  return { posicoes, result };
+}
 
 async function syncRedeVeiculos(
   rastreadores: Rastreador[],
@@ -89,7 +245,7 @@ async function syncRedeVeiculos(
   const posicoes: Posicao[] = [];
 
   if (!config.enabled) {
-    result.erros.push("API não configurada");
+    result.erros.push("API Rede Veículos não configurada (REDE_VEICULOS_TOKEN faltando)");
     result.falhas = rastreadores.length;
     return { posicoes, result };
   }
@@ -97,9 +253,8 @@ async function syncRedeVeiculos(
   for (const rast of rastreadores) {
     try {
       // Chamada à API da Rede Veículos
-      // ADAPTAR CONFORME DOCUMENTAÇÃO REAL DA API
       const response = await fetch(
-        `${config.baseUrl}/api/v1/veiculos/${rast.id_plataforma}/posicao`,
+        `${config.baseUrl}/veiculos/${rast.id_plataforma}/posicao`,
         {
           method: "GET",
           headers: {
@@ -117,110 +272,30 @@ async function syncRedeVeiculos(
       const data = await response.json();
 
       // Mapear resposta da API para nosso formato
-      posicoes.push({
-        rastreador_id: rast.id,
-        latitude: parseFloat(data.latitude || data.lat || 0),
-        longitude: parseFloat(data.longitude || data.lng || data.lon || 0),
-        velocidade: parseInt(data.velocidade || data.speed || 0),
-        ignicao: Boolean(data.ignicao || data.ignition || data.ign),
-        data_posicao: data.data_hora || data.timestamp || data.datetime || new Date().toISOString(),
-        odometro: data.odometro || data.hodometro || undefined,
-        direcao: data.direcao || data.heading || data.curso || undefined,
-        bateria_nivel: data.bateria || data.battery || undefined,
-        sinal_gsm: data.sinal || data.gsm || undefined,
-      });
-
-      result.sucesso++;
+      if (data.latitude && data.longitude) {
+        posicoes.push({
+          rastreador_id: rast.id,
+          latitude: parseFloat(data.latitude || data.lat || 0),
+          longitude: parseFloat(data.longitude || data.lng || data.lon || 0),
+          velocidade: parseInt(data.velocidade || data.speed || 0),
+          ignicao: Boolean(data.ignicao || data.ignition || data.ign),
+          data_posicao: data.data_hora || data.timestamp || data.datetime || new Date().toISOString(),
+          odometro: data.odometro || data.hodometro || undefined,
+          direcao: data.direcao || data.heading || data.curso || undefined,
+          bateria_nivel: data.bateria || data.battery || undefined,
+          sinal_gsm: data.sinal || data.gsm || undefined,
+        });
+        result.sucesso++;
+      } else {
+        result.falhas++;
+        result.erros.push(`${rast.codigo}: Sem dados de posição`);
+      }
     } catch (error: unknown) {
       result.falhas++;
       const errorMessage = error instanceof Error ? error.message : String(error);
       result.erros.push(`${rast.codigo}: ${errorMessage}`);
       console.error(`[Rede Veículos] Erro no rastreador ${rast.codigo}:`, error);
     }
-  }
-
-  return { posicoes, result };
-}
-
-async function syncSascar(
-  rastreadores: Rastreador[],
-  config: PlataformaConfig
-): Promise<{ posicoes: Posicao[]; result: SyncResult }> {
-  const result: SyncResult = {
-    plataforma: "sascar",
-    total: rastreadores.length,
-    sucesso: 0,
-    falhas: 0,
-    erros: [],
-  };
-  const posicoes: Posicao[] = [];
-
-  if (!config.enabled) {
-    result.erros.push("API não configurada");
-    result.falhas = rastreadores.length;
-    return { posicoes, result };
-  }
-
-  // TODO: Implementar conforme documentação da Sascar
-  for (const rast of rastreadores) {
-    result.falhas++;
-    result.erros.push(`${rast.codigo}: API Sascar não implementada`);
-  }
-
-  return { posicoes, result };
-}
-
-async function syncAutotrac(
-  rastreadores: Rastreador[],
-  config: PlataformaConfig
-): Promise<{ posicoes: Posicao[]; result: SyncResult }> {
-  const result: SyncResult = {
-    plataforma: "autotrac",
-    total: rastreadores.length,
-    sucesso: 0,
-    falhas: 0,
-    erros: [],
-  };
-  const posicoes: Posicao[] = [];
-
-  if (!config.enabled) {
-    result.erros.push("API não configurada");
-    result.falhas = rastreadores.length;
-    return { posicoes, result };
-  }
-
-  // TODO: Implementar conforme documentação da Autotrac
-  for (const rast of rastreadores) {
-    result.falhas++;
-    result.erros.push(`${rast.codigo}: API Autotrac não implementada`);
-  }
-
-  return { posicoes, result };
-}
-
-async function syncOnixsat(
-  rastreadores: Rastreador[],
-  config: PlataformaConfig
-): Promise<{ posicoes: Posicao[]; result: SyncResult }> {
-  const result: SyncResult = {
-    plataforma: "onixsat",
-    total: rastreadores.length,
-    sucesso: 0,
-    falhas: 0,
-    erros: [],
-  };
-  const posicoes: Posicao[] = [];
-
-  if (!config.enabled) {
-    result.erros.push("API não configurada");
-    result.falhas = rastreadores.length;
-    return { posicoes, result };
-  }
-
-  // TODO: Implementar conforme documentação da Onixsat
-  for (const rast of rastreadores) {
-    result.falhas++;
-    result.erros.push(`${rast.codigo}: API Onixsat não implementada`);
   }
 
   return { posicoes, result };
@@ -241,6 +316,15 @@ serve(async (req) => {
   console.log(`[sync-rastreadores] Iniciando sincronização: ${new Date().toISOString()}`);
 
   try {
+    // Verificar se foi solicitada uma plataforma específica
+    let plataformaFiltro: string | null = null;
+    try {
+      const body = await req.json();
+      plataformaFiltro = body?.plataforma || null;
+    } catch {
+      // Sem body ou body inválido - sincroniza todas
+    }
+
     // Criar cliente Supabase com service role
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -252,11 +336,17 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     // Buscar rastreadores instalados com id_plataforma
-    const { data: rastreadores, error: errRast } = await supabase
+    let query = supabase
       .from("rastreadores")
-      .select("id, codigo, plataforma, id_plataforma")
+      .select("id, codigo, plataforma, id_plataforma, plataforma_device_id")
       .eq("status", "instalado")
       .not("id_plataforma", "is", null);
+
+    if (plataformaFiltro) {
+      query = query.eq("plataforma", plataformaFiltro);
+    }
+
+    const { data: rastreadores, error: errRast } = await query;
 
     if (errRast) {
       throw new Error(`Erro ao buscar rastreadores: ${errRast.message}`);
@@ -313,17 +403,11 @@ serve(async (req) => {
       let syncResult: { posicoes: Posicao[]; result: SyncResult };
 
       switch (plataforma) {
+        case "softruck":
+          syncResult = await syncSoftruck(rasts, configs.softruck, supabase);
+          break;
         case "rede_veiculos":
           syncResult = await syncRedeVeiculos(rasts, configs.rede_veiculos);
-          break;
-        case "sascar":
-          syncResult = await syncSascar(rasts, configs.sascar);
-          break;
-        case "autotrac":
-          syncResult = await syncAutotrac(rasts, configs.autotrac);
-          break;
-        case "onixsat":
-          syncResult = await syncOnixsat(rasts, configs.onixsat);
           break;
         default:
           syncResult = {
@@ -381,7 +465,7 @@ serve(async (req) => {
         falhas: totalFalhas,
         posicoes_inseridas: posicoesInseridas,
         duracao_ms: duracao,
-        plataformas: resultados,
+        results: resultados,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
