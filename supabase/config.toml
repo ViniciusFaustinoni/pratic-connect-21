@@ -89,3 +89,9 @@ verify_jwt = false
 
 [functions.auth-tentativas]
 verify_jwt = false
+
+[functions.create-user]
+verify_jwt = true
+
+[functions.ativar-associado]
+verify_jwt = false
