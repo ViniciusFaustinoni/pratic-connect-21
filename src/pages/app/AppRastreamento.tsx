@@ -9,6 +9,13 @@ import {
   CollapsibleContent, 
   CollapsibleTrigger 
 } from '@/components/ui/collapsible';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { 
   ArrowLeft, 
   RefreshCw, 
@@ -22,17 +29,20 @@ import {
   ChevronDown,
   ChevronUp,
   WifiOff,
-  Radio
+  Radio,
+  Navigation
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMyVehicleWithTracker, useMyVehicles } from '@/hooks/useMyData';
 import { cn } from '@/lib/utils';
 
-// Dados mock para demonstração
+// Dados mock para demonstração (substituir por dados reais da API de rastreamento)
 const dadosMock = {
   velocidade: 45,
   ignicao: true,
   endereco: "Rua das Flores, 123 - Centro, Uberlândia - MG",
+  latitude: -18.9186,
+  longitude: -48.2772,
   emMovimento: true,
   historico: [
     { id: "1", hora: "08:00", evento: "Saída de casa", tipo: "inicio" },
@@ -51,9 +61,12 @@ export default function AppRastreamento() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [historicoAberto, setHistoricoAberto] = useState(false);
   const [simulandoOffline, setSimulandoOffline] = useState(false);
+  const [veiculoSelecionado, setVeiculoSelecionado] = useState<string | null>(null);
   
   const isLoading = vehiclesLoading || trackerLoading;
-  const vehicle = vehicles?.[0];
+  const vehicle = veiculoSelecionado 
+    ? vehicles?.find(v => v.id === veiculoSelecionado) 
+    : vehicles?.[0];
   const isOnline = !simulandoOffline && tracker?.status === 'instalado' && tracker?.ultima_comunicacao;
 
   // Tempo desde última atualização
@@ -92,6 +105,18 @@ export default function AppRastreamento() {
 
   const handleCentralizar = () => {
     toast.success('Mapa centralizado no veículo');
+  };
+
+  const abrirNoGoogleMaps = () => {
+    // Usar coordenadas do mock por enquanto (substituir por dados reais da API)
+    if (dadosMock.latitude && dadosMock.longitude) {
+      window.open(
+        `https://www.google.com/maps/search/?api=1&query=${dadosMock.latitude},${dadosMock.longitude}`,
+        '_blank'
+      );
+    } else {
+      toast.error('Coordenadas não disponíveis');
+    }
   };
 
   const handleReconectar = () => {
@@ -191,6 +216,31 @@ export default function AppRastreamento() {
         </Button>
       </header>
 
+      {/* Seletor de Veículo (quando há mais de 1) */}
+      {vehicles && vehicles.length > 1 && (
+        <div className="border-b bg-background px-4 py-2">
+          <Select 
+            value={veiculoSelecionado || vehicle?.id} 
+            onValueChange={setVeiculoSelecionado}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Selecione o veículo" />
+            </SelectTrigger>
+            <SelectContent>
+              {vehicles.map((v) => (
+                <SelectItem key={v.id} value={v.id}>
+                  <div className="flex items-center gap-2">
+                    <Car className="h-4 w-4" />
+                    <span className="font-mono">{v.placa}</span>
+                    <span className="text-muted-foreground">- {v.marca} {v.modelo}</span>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
       <div className="flex-1 space-y-4 p-4">
         {/* Área do Mapa (Placeholder Visual) */}
         <div className="relative h-[60vh] overflow-hidden rounded-xl bg-gradient-to-br from-slate-200 via-slate-100 to-slate-200 shadow-sm">
@@ -260,6 +310,17 @@ export default function AppRastreamento() {
             }} />
           </div>
         </div>
+
+        {/* Botão Ver no Google Maps */}
+        <Button 
+          variant="outline" 
+          className="w-full gap-2"
+          onClick={abrirNoGoogleMaps}
+          disabled={!isOnline}
+        >
+          <Navigation className="h-4 w-4" />
+          Ver no Google Maps
+        </Button>
 
         {/* Card do Veículo */}
         <Card className="border-0 shadow-sm">
