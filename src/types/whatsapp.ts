@@ -107,6 +107,29 @@ export interface WhatsAppQRCodeResponse {
 
 export type WhatsAppMediaType = 'image' | 'document' | 'audio' | 'video';
 
+// Templates
+export type WhatsAppTemplateCategoria = 
+  | 'vendas' 
+  | 'cadastro' 
+  | 'cobranca' 
+  | 'monitoramento' 
+  | 'eventos' 
+  | 'assistencia' 
+  | 'geral';
+
+export interface WhatsAppTemplate {
+  id: string;
+  codigo: string;
+  nome: string;
+  descricao?: string;
+  categoria: WhatsAppTemplateCategoria;
+  mensagem: string;
+  variaveis: string[];
+  ativo: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface WhatsAppSendMediaPayload {
   telefone: string;
   media_url?: string;
