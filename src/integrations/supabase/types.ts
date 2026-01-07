@@ -7205,6 +7205,7 @@ export type Database = {
           numero_serie: string | null
           plataforma: string
           plataforma_device_id: string | null
+          plataforma_user_id: string | null
           status: Database["public"]["Enums"]["status_rastreador"]
           ultima_comunicacao: string | null
           ultima_ignicao: boolean | null
@@ -7227,6 +7228,7 @@ export type Database = {
           numero_serie?: string | null
           plataforma?: string
           plataforma_device_id?: string | null
+          plataforma_user_id?: string | null
           status?: Database["public"]["Enums"]["status_rastreador"]
           ultima_comunicacao?: string | null
           ultima_ignicao?: boolean | null
@@ -7249,6 +7251,7 @@ export type Database = {
           numero_serie?: string | null
           plataforma?: string
           plataforma_device_id?: string | null
+          plataforma_user_id?: string | null
           status?: Database["public"]["Enums"]["status_rastreador"]
           ultima_comunicacao?: string | null
           ultima_ignicao?: boolean | null
@@ -7305,6 +7308,7 @@ export type Database = {
           suporta_bloqueio: boolean | null
           suporta_historico_trajeto: boolean | null
           suporta_posicao_tempo_real: boolean | null
+          suporta_redefinir_senha: boolean | null
           suporta_webhooks: boolean | null
           updated_at: string | null
         }
@@ -7323,6 +7327,7 @@ export type Database = {
           suporta_bloqueio?: boolean | null
           suporta_historico_trajeto?: boolean | null
           suporta_posicao_tempo_real?: boolean | null
+          suporta_redefinir_senha?: boolean | null
           suporta_webhooks?: boolean | null
           updated_at?: string | null
         }
@@ -7341,6 +7346,7 @@ export type Database = {
           suporta_bloqueio?: boolean | null
           suporta_historico_trajeto?: boolean | null
           suporta_posicao_tempo_real?: boolean | null
+          suporta_redefinir_senha?: boolean | null
           suporta_webhooks?: boolean | null
           updated_at?: string | null
         }
