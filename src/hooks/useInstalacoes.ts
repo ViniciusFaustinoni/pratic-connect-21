@@ -1,13 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Tables, TablesInsert, TablesUpdate, Database } from '@/integrations/supabase/types';
+import { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 import { startOfDay, endOfDay, addDays } from 'date-fns';
+import { toast } from 'sonner';
 
+// Types derivados do banco
 export type Instalacao = Tables<'instalacoes'>;
 export type InstalacaoInsert = TablesInsert<'instalacoes'>;
 export type InstalacaoUpdate = TablesUpdate<'instalacoes'>;
-export type StatusInstalacao = Database['public']['Enums']['status_instalacao'];
-export type PeriodoInstalacao = Database['public']['Enums']['periodo_instalacao'];
 
 export interface InstalacaoWithRelations extends Instalacao {
   associados?: Tables<'associados'> | null;
@@ -17,8 +17,8 @@ export interface InstalacaoWithRelations extends Instalacao {
 }
 
 export interface InstalacaoFilters {
-  status?: StatusInstalacao[];
-  periodo?: PeriodoInstalacao;
+  status?: Instalacao['status'][];
+  periodo?: Instalacao['periodo'];
   dataInicio?: Date;
   dataFim?: Date;
   instaladorId?: string;
@@ -32,6 +32,9 @@ export interface InstalacoesMetricas {
   reagendadas: number;
 }
 
+// ============================================
+// LISTA DE INSTALAÇÕES
+// ============================================
 export function useInstalacoes(filters?: InstalacaoFilters) {
   return useQuery({
     queryKey: ['instalacoes', filters],
@@ -85,6 +88,9 @@ export function useInstalacoes(filters?: InstalacaoFilters) {
   });
 }
 
+// ============================================
+// INSTALAÇÃO INDIVIDUAL
+// ============================================
 export function useInstalacao(id: string | undefined) {
   return useQuery({
     queryKey: ['instalacao', id],
@@ -110,6 +116,9 @@ export function useInstalacao(id: string | undefined) {
   });
 }
 
+// ============================================
+// MÉTRICAS
+// ============================================
 export function useInstalacoesMetricas() {
   return useQuery({
     queryKey: ['instalacoes-metricas'],
@@ -155,6 +164,9 @@ export function useInstalacoesMetricas() {
   });
 }
 
+// ============================================
+// CRIAR INSTALAÇÃO
+// ============================================
 export function useCreateInstalacao() {
   const queryClient = useQueryClient();
 
@@ -172,10 +184,17 @@ export function useCreateInstalacao() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['instalacoes'] });
       queryClient.invalidateQueries({ queryKey: ['instalacoes-metricas'] });
+      toast.success('Instalação criada com sucesso!');
+    },
+    onError: () => {
+      toast.error('Erro ao criar instalação');
     },
   });
 }
 
+// ============================================
+// ATUALIZAR INSTALAÇÃO
+// ============================================
 export function useUpdateInstalacao() {
   const queryClient = useQueryClient();
 
@@ -195,10 +214,17 @@ export function useUpdateInstalacao() {
       queryClient.invalidateQueries({ queryKey: ['instalacoes'] });
       queryClient.invalidateQueries({ queryKey: ['instalacao', variables.id] });
       queryClient.invalidateQueries({ queryKey: ['instalacoes-metricas'] });
+      toast.success('Instalação atualizada!');
+    },
+    onError: () => {
+      toast.error('Erro ao atualizar instalação');
     },
   });
 }
 
+// ============================================
+// ATUALIZAR STATUS
+// ============================================
 export function useUpdateInstalacaoStatus() {
   const queryClient = useQueryClient();
 
@@ -218,10 +244,17 @@ export function useUpdateInstalacaoStatus() {
       queryClient.invalidateQueries({ queryKey: ['instalacoes'] });
       queryClient.invalidateQueries({ queryKey: ['instalacao', variables.id] });
       queryClient.invalidateQueries({ queryKey: ['instalacoes-metricas'] });
+      toast.success('Status atualizado!');
+    },
+    onError: () => {
+      toast.error('Erro ao atualizar status');
     },
   });
 }
 
+// ============================================
+// DELETAR INSTALAÇÃO
+// ============================================
 export function useDeleteInstalacao() {
   const queryClient = useQueryClient();
 
@@ -237,11 +270,17 @@ export function useDeleteInstalacao() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['instalacoes'] });
       queryClient.invalidateQueries({ queryKey: ['instalacoes-metricas'] });
+      toast.success('Instalação removida!');
+    },
+    onError: () => {
+      toast.error('Erro ao remover instalação');
     },
   });
 }
 
-// Hook para buscar instaladores (profiles com role instalador_vistoriador)
+// ============================================
+// INSTALADORES (profiles com role instalador)
+// ============================================
 export function useInstaladores() {
   return useQuery({
     queryKey: ['instaladores'],
@@ -270,7 +309,9 @@ export function useInstaladores() {
   });
 }
 
-// Hook para buscar rastreadores em estoque
+// ============================================
+// RASTREADORES EM ESTOQUE
+// ============================================
 export function useRastreadoresEstoque() {
   return useQuery({
     queryKey: ['rastreadores-estoque'],
