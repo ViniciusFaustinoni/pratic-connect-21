@@ -58,6 +58,7 @@ import { cn } from '@/lib/utils';
 import { TIPO_USUARIO_LABELS, PERFIL_ACESSO_LABELS, type PerfilAcesso, type TipoUsuario } from '@/types/auth';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { NovoFuncionarioModal } from '@/components/usuarios/NovoFuncionarioModal';
 
 // ============================================
 // CORES DOS BADGES DE PERFIL
@@ -95,6 +96,9 @@ export default function UsuariosPage() {
   // Estado de paginação
   const [page, setPage] = useState(1);
   const pageSize = 20;
+
+  // Estado do modal de novo funcionário
+  const [showNovoFuncionarioModal, setShowNovoFuncionarioModal] = useState(false);
 
   // Estado do modal de confirmação
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -219,6 +223,10 @@ export default function UsuariosPage() {
           <Button variant="outline" onClick={() => navigate('/diretoria/perfis')}>
             <Shield className="h-4 w-4 mr-2" />
             Perfis de Acesso
+          </Button>
+          <Button onClick={() => setShowNovoFuncionarioModal(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Novo Usuário
           </Button>
         </div>
       </div>
@@ -587,6 +595,15 @@ export default function UsuariosPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Modal de Novo Funcionário */}
+      <NovoFuncionarioModal
+        open={showNovoFuncionarioModal}
+        onOpenChange={setShowNovoFuncionarioModal}
+        onSuccess={() => {
+          // Refetch será automático pelo React Query
+        }}
+      />
     </div>
   );
 }
