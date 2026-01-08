@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus, MoreHorizontal, Loader2, ChevronLeft, ChevronRight, Edit, ArrowRight, XCircle, MessageCircle, Eye, Search, Filter, Trash2, X, RotateCcw, GripVertical } from 'lucide-react';
+import { Plus, MoreHorizontal, Loader2, ChevronLeft, ChevronRight, Edit, ArrowRight, XCircle, MessageCircle, Eye, Search, Filter, Trash2, X } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
@@ -53,7 +53,6 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ScrollIndicator } from '@/components/ui/scroll-indicator';
 import { ETAPA_LABELS, ORIGEM_LABELS, type EtapaLead, type OrigemLead } from '@/types/database';
 import { etapaColors, etapaDotColors, origemColors, ETAPAS_KANBAN_VENDAS, canTransition, getNextStages } from '@/lib/lead-transitions';
 import { useLeads, useAllLeads, type LeadFilters as LeadFiltersType, type LeadWithVendedor } from '@/hooks/useLeads';
@@ -61,7 +60,6 @@ import { useChangeLeadEtapa } from '@/hooks/useLeadHistorico';
 import { useLeadActions } from '@/hooks/useLeadActions';
 import { useVendedores } from '@/hooks/useVendedores';
 import { usePermissions } from '@/hooks/usePermissions';
-import { useKanbanColumnOrder } from '@/hooks/useKanbanColumnOrder';
 import { LeadFormDialog } from '@/components/leads/LeadFormDialog';
 import { LeadEditDialog } from '@/components/leads/LeadEditDialog';
 import { LeadKanbanCard } from '@/components/leads/LeadKanbanCard';
@@ -81,8 +79,7 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import type { Tables } from '@/integrations/supabase/types';
 
 type Lead = Tables<'leads'>;
@@ -97,60 +94,6 @@ const ORIGENS_TODAS: OrigemLead[] = [
   'site', 'indicacao', 'telefone', 'whatsapp', 'facebook', 'instagram', 'google', 'outro'
 ];
 
-// Componente de coluna sortável do Kanban
-interface KanbanColumnProps {
-  etapa: EtapaLead;
-  leadsCount: number;
-  children: React.ReactNode;
-}
-
-function KanbanColumn({ etapa, leadsCount, children }: KanbanColumnProps) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: etapa });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
-
-  return (
-    <div 
-      ref={setNodeRef}
-      style={style}
-      className="flex-shrink-0 w-64 flex flex-col rounded-xl bg-muted/50 h-full"
-    >
-      {/* Header da coluna - arrastável */}
-      <div 
-        {...attributes}
-        {...listeners}
-        className="flex-shrink-0 bg-muted/50 px-3 py-2.5 border-b border-border/50 rounded-t-xl cursor-grab active:cursor-grabbing"
-      >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className={`w-2.5 h-2.5 rounded-full ${etapaDotColors[etapa]}`} />
-            <span className="font-semibold text-sm text-foreground">
-              {ETAPA_LABELS[etapa]}
-            </span>
-          </div>
-          <span className="w-6 h-6 rounded-full bg-muted text-xs font-medium flex items-center justify-center">
-            {leadsCount}
-          </span>
-        </div>
-      </div>
-      {/* Cards */}
-      {children}
-    </div>
-  );
-}
-
 export default function Leads() {
   const navigate = useNavigate();
   const { hasPermission } = usePermissions();
@@ -163,7 +106,6 @@ export default function Leads() {
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [lossDialogLead, setLossDialogLead] = useState<Lead | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [dragType, setDragType] = useState<'card' | 'column' | null>(null);
   const [drawerLeadId, setDrawerLeadId] = useState<string | null>(null);
 
   // Estados do Sheet de filtros
@@ -186,7 +128,6 @@ export default function Leads() {
   const changeEtapa = useChangeLeadEtapa();
   const { excluirLead, isDeleting } = useLeadActions();
   const { data: vendedores } = useVendedores();
-  const { columnOrder, reorderColumns, resetOrder } = useKanbanColumnOrder();
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -274,59 +215,17 @@ export default function Leads() {
 
   // Drag and drop handlers
   const handleDragStart = (event: DragStartEvent) => {
-    const id = event.active.id as string;
-    
-    // Verificar se é uma coluna ou um card
-    if (columnOrder.includes(id as EtapaLead)) {
-      setDragType('column');
-      setActiveId(id);
-    } else {
-      setDragType('card');
-      setActiveId(id);
-    }
+    setActiveId(event.active.id as string);
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
-    
-    if (!over) {
-      setActiveId(null);
-      setDragType(null);
-      return;
-    }
-
-    // Se for drag de coluna
-    if (dragType === 'column') {
-      if (active.id !== over.id && columnOrder.includes(over.id as EtapaLead)) {
-        reorderColumns(active.id as string, over.id as string);
-        toast.success('Ordem das colunas atualizada');
-      }
-      setActiveId(null);
-      setDragType(null);
-      return;
-    }
-
-    // Se for drag de card
     setActiveId(null);
-    setDragType(null);
+
+    if (!over) return;
 
     const leadId = active.id as string;
-    
-    // Determinar a etapa de destino
-    let targetEtapa: EtapaLead | null = null;
-    
-    // Se o over é uma coluna (etapa)
-    if (columnOrder.includes(over.id as EtapaLead)) {
-      targetEtapa = over.id as EtapaLead;
-    } else {
-      // Se o over é um card, encontrar a etapa do card
-      const overLead = allLeads?.find((l) => l.id === over.id);
-      if (overLead) {
-        targetEtapa = overLead.etapa as EtapaLead;
-      }
-    }
-    
-    if (!targetEtapa) return;
+    const targetEtapa = over.id as EtapaLead;
 
     const lead = allLeads?.find((l) => l.id === leadId);
     if (!lead || lead.etapa === targetEtapa) return;
@@ -380,17 +279,6 @@ export default function Leads() {
             </p>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
-            {view === 'kanban' && (
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={resetOrder}
-                className="gap-1.5 h-9 text-muted-foreground hover:text-foreground"
-              >
-                <RotateCcw className="h-4 w-4" />
-                <span className="hidden sm:inline">Resetar</span>
-              </Button>
-            )}
             <Tabs value={view} onValueChange={(v) => setView(v as 'table' | 'kanban')}>
               <TabsList className="h-9">
                 <TabsTrigger value="table" className="text-xs sm:text-sm px-2 sm:px-3">Lista</TabsTrigger>
@@ -729,72 +617,81 @@ export default function Leads() {
 
       {/* Kanban View */}
       {view === 'kanban' && (
-        <div className="flex-1 min-h-0">
+        <div className="flex-1 overflow-hidden">
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
           >
-            <ScrollIndicator className="h-full">
-              <SortableContext items={columnOrder} strategy={horizontalListSortingStrategy}>
-                <div className="flex gap-3 h-full min-w-max pb-2 px-1">
-                  {columnOrder.map((etapa) => {
-                    const leadsInEtapa = (allLeads || []).filter((l) => l.etapa === etapa);
-                    return (
-                      <KanbanColumn key={etapa} etapa={etapa} leadsCount={leadsInEtapa.length}>
-                        <SortableContext
-                          items={leadsInEtapa.map((l) => l.id)}
-                          strategy={verticalListSortingStrategy}
-                        >
-                          <div 
-                            className="flex flex-col gap-2 flex-1 p-2 overflow-y-auto"
-                            data-etapa={etapa}
-                          >
-                            {leadsInEtapa.map((lead) => (
-                              <LeadKanbanCard
-                                key={lead.id}
-                                lead={lead}
-                                onClick={() => setDrawerLeadId(lead.id)}
-                              />
-                            ))}
-                            {leadsInEtapa.length === 0 && (
-                              <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground py-8">
-                                Nenhum lead
-                              </div>
-                            )}
-                          </div>
-                        </SortableContext>
-                      </KanbanColumn>
-                    );
-                  })}
-                </div>
-              </SortableContext>
-            </ScrollIndicator>
-            <DragOverlay>
-              {activeId && dragType === 'card' && activeLead ? (
-                <Card className="shadow-lg w-[220px]">
-                  <CardContent className="p-2.5">
-                    <div className="flex items-center gap-2">
-                      <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">
-                        {activeLead.nome.charAt(0).toUpperCase()}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="font-medium text-sm truncate">{activeLead.nome}</p>
-                        <p className="text-xs text-muted-foreground">{activeLead.telefone}</p>
+            <div className="flex gap-4 h-full overflow-x-auto pb-4 px-1">
+              {ETAPAS_KANBAN_VENDAS.map((etapa) => {
+                const leadsInEtapa = (allLeads || []).filter((l) => l.etapa === etapa);
+                return (
+                  <div 
+                    key={etapa} 
+                    id={etapa}
+                    className="flex-shrink-0 w-64 flex flex-col rounded-xl bg-muted/50 h-full"
+                  >
+                    {/* Header da coluna com dot colorido */}
+                    <div className="flex-shrink-0 bg-muted/50 px-3 py-2.5 border-b border-border/50 rounded-t-xl">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className={`w-2.5 h-2.5 rounded-full ${etapaDotColors[etapa]}`} />
+                          <span className="font-semibold text-sm text-foreground">
+                            {ETAPA_LABELS[etapa]}
+                          </span>
+                        </div>
+                        <span className="w-6 h-6 rounded-full bg-muted text-xs font-medium flex items-center justify-center">
+                          {leadsInEtapa.length}
+                        </span>
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
-              ) : activeId && dragType === 'column' ? (
-                <div className="w-64 h-20 bg-muted/80 rounded-xl border-2 border-dashed border-primary/50 flex items-center justify-center">
-                  <span className="text-sm font-medium text-primary">
-                    {ETAPA_LABELS[activeId as EtapaLead]}
-                  </span>
+                    {/* Cards com scroll vertical */}
+                    <SortableContext
+                      items={leadsInEtapa.map((l) => l.id)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      <div 
+                        className="flex flex-col gap-2 flex-1 p-2 overflow-y-auto"
+                        data-etapa={etapa}
+                      >
+                        {leadsInEtapa.map((lead) => (
+                          <LeadKanbanCard
+                            key={lead.id}
+                            lead={lead}
+                            onClick={() => setDrawerLeadId(lead.id)}
+                          />
+                        ))}
+                        {leadsInEtapa.length === 0 && (
+                          <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground py-8">
+                            Nenhum lead
+                        </div>
+                      )}
+                    </div>
+                  </SortableContext>
                 </div>
-              ) : null}
-            </DragOverlay>
-          </DndContext>
+              );
+            })}
+          </div>
+          <DragOverlay>
+            {activeLead ? (
+              <Card className="shadow-lg w-[220px]">
+                <CardContent className="p-2.5">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">
+                      {activeLead.nome.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm truncate">{activeLead.nome}</p>
+                      <p className="text-xs text-muted-foreground">{activeLead.telefone}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : null}
+          </DragOverlay>
+        </DndContext>
         </div>
       )}
 
