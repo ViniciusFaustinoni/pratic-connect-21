@@ -95,3 +95,6 @@ verify_jwt = true
 
 [functions.ativar-associado]
 verify_jwt = false
+
+[functions.processar-extrato]
+verify_jwt = true
