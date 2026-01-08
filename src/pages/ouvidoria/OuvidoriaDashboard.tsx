@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useEstatisticasOuvidoria, useManifestacoes } from "@/hooks/useOuvidoria";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -12,7 +13,8 @@ import {
   Lightbulb,
   Shield,
   Trophy,
-  Star
+  Star,
+  Plus
 } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from "recharts";
 import { TIPO_MANIFESTACAO_LABELS, PRIORIDADE_LABELS, SETOR_ELOGIO_LABELS, type SetorElogio } from "@/types/ouvidoria";
@@ -20,6 +22,7 @@ import { ManifestacaoCard } from "@/components/ouvidoria/ManifestacaoCard";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { mockEstatisticas } from "@/mocks/ouvidoria";
+import { NovaManifestacaoModal } from "@/components/ouvidoria/NovaManifestacaoModal";
 
 const COLORS_TIPO = {
   reclamacao: "#f97316",
@@ -38,6 +41,7 @@ const COLORS_PRIORIDADE = {
 
 export default function OuvidoriaDashboard() {
   const navigate = useNavigate();
+  const [showModal, setShowModal] = useState(false);
   const { data: estatisticas, isLoading: isLoadingStats } = useEstatisticasOuvidoria();
   const { data: manifestacoesRecentes, isLoading: isLoadingRecentes } = useManifestacoes();
 
@@ -72,10 +76,22 @@ export default function OuvidoriaDashboard() {
             Acompanhe manifestações de associados
           </p>
         </div>
-        <Button onClick={() => navigate("/ouvidoria/manifestacoes")}>
-          Ver todas as manifestações
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={() => setShowModal(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Nova Manifestação
+          </Button>
+          <Button variant="outline" onClick={() => navigate("/ouvidoria/manifestacoes")}>
+            Ver todas as manifestações
+          </Button>
+        </div>
       </div>
+
+      {/* Modal de Cadastro Manual */}
+      <NovaManifestacaoModal
+        open={showModal}
+        onOpenChange={setShowModal}
+      />
 
       {/* Seção Registrar Manifestação */}
       <div className="space-y-4">

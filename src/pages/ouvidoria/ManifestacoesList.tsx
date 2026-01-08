@@ -37,7 +37,8 @@ import {
   Forward,
   AlertTriangle,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Plus
 } from "lucide-react";
 import { format, differenceInHours } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -47,6 +48,8 @@ import { StatusBadge } from "@/components/ouvidoria/StatusBadge";
 import { PrioridadeBadge } from "@/components/ouvidoria/PrioridadeBadge";
 import { TipoBadge } from "@/components/ouvidoria/TipoBadge";
 import { EncaminharModal } from "@/components/ouvidoria/EncaminharModal";
+import { NovaManifestacaoModal } from "@/components/ouvidoria/NovaManifestacaoModal";
+import { canalIcons } from "@/constants/ouvidoria";
 import { toast } from "sonner";
 
 export default function ManifestacoesList() {
@@ -58,6 +61,7 @@ export default function ManifestacoesList() {
   const [page, setPage] = useState(1);
   const [encaminharOpen, setEncaminharOpen] = useState(false);
   const [encaminharId, setEncaminharId] = useState("");
+  const [showNovaModal, setShowNovaModal] = useState(false);
 
   const { data: manifestacoes, isLoading } = useManifestacoes({
     ...filters,
@@ -133,11 +137,17 @@ export default function ManifestacoesList() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Fila de Manifestações</h1>
-        <p className="text-muted-foreground">
-          Gerencie as manifestações da ouvidoria
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Fila de Manifestações</h1>
+          <p className="text-muted-foreground">
+            Gerencie as manifestações da ouvidoria
+          </p>
+        </div>
+        <Button onClick={() => setShowNovaModal(true)}>
+          <Plus className="h-4 w-4 mr-2" />
+          Nova Manifestação
+        </Button>
       </div>
 
       {/* Filtros inline */}
@@ -248,6 +258,7 @@ export default function ManifestacoesList() {
                     />
                   </TableHead>
                   <TableHead>Protocolo</TableHead>
+                  <TableHead>Canal</TableHead>
                   <TableHead>Associado</TableHead>
                   <TableHead>Tipo</TableHead>
                   <TableHead>Assunto</TableHead>
@@ -273,6 +284,21 @@ export default function ManifestacoesList() {
                     </TableCell>
                     <TableCell className="font-mono text-sm">
                       {m.protocolo}
+                    </TableCell>
+                    <TableCell>
+                      {(() => {
+                        const canalConfig = canalIcons[m.canal];
+                        if (canalConfig) {
+                          const IconComponent = canalConfig.icon;
+                          return (
+                            <div className="flex items-center gap-1" title={canalConfig.label}>
+                              <IconComponent className="h-4 w-4 text-muted-foreground" />
+                              <span className="text-xs text-muted-foreground">{canalConfig.label}</span>
+                            </div>
+                          );
+                        }
+                        return <span className="text-xs text-muted-foreground">-</span>;
+                      })()}
                     </TableCell>
                     <TableCell>
                       {m.anonimo ? (
@@ -380,6 +406,12 @@ export default function ManifestacoesList() {
         open={encaminharOpen}
         onOpenChange={setEncaminharOpen}
         manifestacaoId={encaminharId}
+      />
+
+      {/* Modal Nova Manifestação */}
+      <NovaManifestacaoModal
+        open={showNovaModal}
+        onOpenChange={setShowNovaModal}
       />
     </div>
   );
