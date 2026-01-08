@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Search, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -33,6 +33,8 @@ import { leadSchema, type LeadFormData } from '@/lib/validations';
 import { useCreateLead } from '@/hooks/useLeads';
 import { ORIGEM_LABELS } from '@/types/database';
 import { toast } from 'sonner';
+import { useFipe } from '@/hooks/useFipe';
+import { Badge } from '@/components/ui/badge';
 
 interface LeadFormDialogProps {
   open: boolean;
@@ -41,8 +43,9 @@ interface LeadFormDialogProps {
 
 export function LeadFormDialog({ open, onOpenChange }: LeadFormDialogProps) {
   const [step, setStep] = useState(1);
+  const [placaConsultada, setPlacaConsultada] = useState(false);
   const createLead = useCreateLead();
-
+  const { loading: placaLoading, error: placaError, getByPlaca, clearError } = useFipe();
   const form = useForm<LeadFormData>({
     resolver: zodResolver(leadSchema),
     defaultValues: {
@@ -69,6 +72,39 @@ export function LeadFormDialog({ open, onOpenChange }: LeadFormDialogProps) {
     const isValid = await form.trigger(fieldsToValidate);
     if (isValid) {
       setStep(step + 1);
+    }
+  };
+
+  // Consulta automática de placa via FIPE
+  const handlePlacaLookup = async (placa: string) => {
+    const placaLimpa = placa.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    
+    if (placaLimpa.length !== 7) {
+      setPlacaConsultada(false);
+      return;
+    }
+    
+    clearError();
+    const result = await getByPlaca(placa);
+    
+    if (result.success && result.vehicleData) {
+      form.setValue('veiculo_marca', result.vehicleData.marca || '');
+      form.setValue('veiculo_modelo', result.vehicleData.modelo || '');
+      
+      const anoStr = result.vehicleData.ano;
+      const ano = anoStr ? parseInt(anoStr.split('/')[0]) : null;
+      if (ano && !isNaN(ano)) {
+        form.setValue('veiculo_ano', ano);
+      }
+      
+      if (result.fipeData?.valor) {
+        form.setValue('veiculo_fipe', result.fipeData.valor);
+      }
+      
+      setPlacaConsultada(true);
+      toast.success('Dados do veículo preenchidos automaticamente!');
+    } else {
+      setPlacaConsultada(false);
     }
   };
 
@@ -101,6 +137,8 @@ export function LeadFormDialog({ open, onOpenChange }: LeadFormDialogProps) {
   const handleClose = () => {
     form.reset();
     setStep(1);
+    setPlacaConsultada(false);
+    clearError();
     onOpenChange(false);
   };
 
@@ -180,6 +218,57 @@ export function LeadFormDialog({ open, onOpenChange }: LeadFormDialogProps) {
             {/* Step 2: Veículo */}
             {step === 2 && (
               <>
+                {/* Campo Placa com Consulta Automática */}
+                <FormField
+                  control={form.control}
+                  name="veiculo_placa"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center gap-2">
+                        Placa
+                        {placaConsultada && (
+                          <Badge variant="secondary" className="text-xs font-normal">
+                            <CheckCircle2 className="h-3 w-3 mr-1 text-green-600" />
+                            FIPE consultada
+                          </Badge>
+                        )}
+                      </FormLabel>
+                      <div className="flex gap-2">
+                        <FormControl>
+                          <PlacaInput 
+                            value={field.value || ''} 
+                            onChange={(value) => {
+                              field.onChange(value);
+                              setPlacaConsultada(false);
+                            }}
+                            className="flex-1"
+                          />
+                        </FormControl>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          disabled={placaLoading || !field.value || field.value.replace(/[^A-Za-z0-9]/g, '').length < 7}
+                          onClick={() => handlePlacaLookup(field.value || '')}
+                          title="Consultar placa na FIPE"
+                        >
+                          {placaLoading ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Search className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </div>
+                      {placaError && (
+                        <p className="text-xs text-orange-500 mt-1">
+                          {placaError} - Preencha manualmente
+                        </p>
+                      )}
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
@@ -188,7 +277,11 @@ export function LeadFormDialog({ open, onOpenChange }: LeadFormDialogProps) {
                       <FormItem>
                         <FormLabel>Marca</FormLabel>
                         <FormControl>
-                          <Input placeholder="Honda, Toyota..." {...field} />
+                          <Input 
+                            placeholder="Honda, Toyota..." 
+                            {...field} 
+                            className={placaConsultada ? 'border-green-200 bg-green-50' : ''}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -202,7 +295,11 @@ export function LeadFormDialog({ open, onOpenChange }: LeadFormDialogProps) {
                       <FormItem>
                         <FormLabel>Modelo</FormLabel>
                         <FormControl>
-                          <Input placeholder="Civic, Corolla..." {...field} />
+                          <Input 
+                            placeholder="Civic, Corolla..." 
+                            {...field} 
+                            className={placaConsultada ? 'border-green-200 bg-green-50' : ''}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -223,6 +320,7 @@ export function LeadFormDialog({ open, onOpenChange }: LeadFormDialogProps) {
                             placeholder="2024" 
                             value={field.value ?? ''} 
                             onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : null)}
+                            className={placaConsultada ? 'border-green-200 bg-green-50' : ''}
                           />
                         </FormControl>
                         <FormMessage />
@@ -232,35 +330,22 @@ export function LeadFormDialog({ open, onOpenChange }: LeadFormDialogProps) {
 
                   <FormField
                     control={form.control}
-                    name="veiculo_placa"
+                    name="veiculo_fipe"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Placa</FormLabel>
+                        <FormLabel>Valor FIPE</FormLabel>
                         <FormControl>
-                          <PlacaInput value={field.value || ''} onChange={field.onChange} />
+                          <CurrencyInput 
+                            value={field.value ?? 0} 
+                            onChange={field.onChange}
+                            className={placaConsultada ? 'border-green-200 bg-green-50' : ''}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
                 </div>
-
-                <FormField
-                  control={form.control}
-                  name="veiculo_fipe"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Valor FIPE</FormLabel>
-                      <FormControl>
-                        <CurrencyInput 
-                          value={field.value ?? 0} 
-                          onChange={field.onChange} 
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
               </>
             )}
 
