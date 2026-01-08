@@ -298,7 +298,7 @@ const configItems: MenuItem[] = [
     title: 'Configurações', 
     url: '/configuracoes', 
     icon: Settings,
-    permission: 'isGerencia',
+    permission: 'canViewDashboard', // Todos funcionários podem acessar
   },
 ];
 
