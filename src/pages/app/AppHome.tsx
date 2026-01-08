@@ -69,27 +69,48 @@ export default function AppHome() {
       )}
 
       {/* CARD DE SITUAÇÃO */}
-      <Card className="border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950">
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-500">
-                <Shield className="h-6 w-6 text-white" />
+      {(() => {
+        const statusAssociado = isTestMode && associado ? associado.status : MOCK_ASSOCIADO.status;
+        const plano = isTestMode && associado ? associado.plano : MOCK_ASSOCIADO.plano;
+        const desde = isTestMode && associado ? associado.associadoDesde?.split('-')[0] : MOCK_ASSOCIADO.desde;
+        const isAtivo = statusAssociado === 'ativo';
+        const isSuspenso = statusAssociado === 'suspenso';
+        
+        return (
+          <Card className={isAtivo 
+            ? "border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950"
+            : "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950"
+          }>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className={`flex h-12 w-12 items-center justify-center rounded-full ${isAtivo ? 'bg-green-500' : 'bg-red-500'}`}>
+                    {isAtivo ? <Shield className="h-6 w-6 text-white" /> : <AlertTriangle className="h-6 w-6 text-white" />}
+                  </div>
+                  <div>
+                    <p className={`text-sm ${isAtivo ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}`}>
+                      Sua proteção está
+                    </p>
+                    <p className={`text-lg font-bold ${isAtivo ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}`}>
+                      {isAtivo ? 'ATIVA' : isSuspenso ? 'SUSPENSA' : 'INATIVA'}
+                    </p>
+                  </div>
+                </div>
+                {isAtivo ? (
+                  <CheckCircle className="h-8 w-8 text-green-500" />
+                ) : (
+                  <AlertTriangle className="h-8 w-8 text-red-500" />
+                )}
               </div>
-              <div>
-                <p className="text-sm text-green-700 dark:text-green-300">Sua proteção está</p>
-                <p className="text-lg font-bold text-green-700 dark:text-green-300">ATIVA</p>
+              <div className={`mt-3 flex items-center gap-2 text-sm ${isAtivo ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                <span>{plano}</span>
+                <span>•</span>
+                <span>Desde {desde}</span>
               </div>
-            </div>
-            <CheckCircle className="h-8 w-8 text-green-500" />
-          </div>
-          <div className="mt-3 flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
-            <span>{MOCK_ASSOCIADO.plano}</span>
-            <span>•</span>
-            <span>Desde {MOCK_ASSOCIADO.desde}</span>
-          </div>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       {/* BOLETO PENDENTE */}
       {MOCK_BOLETO && (
