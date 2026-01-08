@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Plus, MoreHorizontal, Loader2, ChevronLeft, ChevronRight, Edit, ArrowRight, XCircle, MessageCircle, Eye, Search, Filter, Trash2, X } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
@@ -119,6 +119,25 @@ export default function Leads() {
     leadNome: string;
   }>({ open: false, leadId: null, leadNome: '' });
 
+  // Estado local para busca com debounce (evita perda de foco)
+  const [searchInput, setSearchInput] = useState(filters.search || '');
+
+  // Debounce de 300ms - só atualiza filters após parar de digitar
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchInput !== filters.search) {
+        setFilters(prev => ({ ...prev, search: searchInput }));
+        setPage(1);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  // Sincronizar estado local quando filters externos mudam
+  useEffect(() => {
+    setSearchInput(filters.search || '');
+  }, [filters.search]);
+
   // Para tabela com paginação
   const { data: leadsData, isLoading } = useLeads({ filters, page, perPage: 20 });
   
@@ -180,6 +199,7 @@ export default function Leads() {
   };
 
   const handleClearFilters = () => {
+    setSearchInput('');
     setTempFilters({});
     setFilters({});
     setPage(1);
@@ -302,11 +322,8 @@ export default function Leads() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Buscar por nome, telefone, placa..."
-              value={filters.search || ''}
-              onChange={(e) => {
-                setFilters({ ...filters, search: e.target.value });
-                setPage(1);
-              }}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
               className="pl-10"
             />
           </div>
