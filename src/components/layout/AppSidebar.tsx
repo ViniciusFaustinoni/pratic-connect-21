@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -309,7 +310,12 @@ export function AppSidebar() {
   const { profile } = useAuth();
   const permissions = usePermissions();
 
-  const isActive = (path: string) => location.pathname === path;
+  // Verificar se um path está ativo (suporta subrotas)
+  const isActive = (path: string) => {
+    if (path === '/dashboard') return location.pathname === path;
+    return location.pathname === path || location.pathname.startsWith(path + '/');
+  };
+  
   const isGroupActive = (items: MenuItem[]) => 
     items.some((item) => location.pathname.startsWith(item.url));
 
@@ -330,6 +336,28 @@ export function AppSidebar() {
   const visibleMainItems = filterByPermission(menuConfig.main);
   const visibleGroups = filterGroups(menuConfig.groups);
   const visibleConfigItems = filterByPermission(configItems);
+
+  // Estado controlado para grupos expandidos
+  const [openGroups, setOpenGroups] = useState<string[]>(() => 
+    visibleGroups.filter(g => isGroupActive(g.items)).map(g => g.id)
+  );
+
+  // Toggle de grupo
+  const toggleGroup = (groupId: string) => {
+    setOpenGroups(prev => 
+      prev.includes(groupId)
+        ? prev.filter(id => id !== groupId)
+        : [...prev, groupId]
+    );
+  };
+
+  // Auto-expandir grupo quando navegar para rota dentro dele
+  useEffect(() => {
+    const activeGroup = visibleGroups.find(g => isGroupActive(g.items));
+    if (activeGroup && !openGroups.includes(activeGroup.id)) {
+      setOpenGroups(prev => [...prev, activeGroup.id]);
+    }
+  }, [location.pathname]);
 
   return (
     <Sidebar collapsible="icon" className="border-r-0">
@@ -465,7 +493,8 @@ export function AppSidebar() {
             {visibleGroups.map((group) => (
               <Collapsible 
                 key={group.id}
-                defaultOpen={isGroupActive(group.items)} 
+                open={openGroups.includes(group.id)}
+                onOpenChange={() => toggleGroup(group.id)}
                 className="group/collapsible"
               >
                 <SidebarGroup>
