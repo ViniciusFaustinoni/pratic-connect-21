@@ -10,6 +10,17 @@ export interface Notificacao {
   link: string | null;
   lida: boolean;
   created_at: string;
+  // Novos campos
+  icone?: string | null;
+  categoria?: 'financeiro' | 'veiculo' | 'seguranca' | 'comunicado' | 'tarefa' | null;
+  prioridade?: 'alta' | 'media' | 'baixa' | null;
+  referencia_tipo?: string | null;
+  referencia_id?: string | null;
+  canal_sistema?: boolean;
+  canal_push?: boolean;
+  canal_whatsapp?: boolean;
+  canal_email?: boolean;
+  lida_em?: string | null;
 }
 
 export function useMyNotificacoes() {

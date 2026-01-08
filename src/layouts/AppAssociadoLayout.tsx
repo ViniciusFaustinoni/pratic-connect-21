@@ -1,7 +1,12 @@
+import { useState, useEffect } from 'react';
 import { Outlet, useLocation, Link } from 'react-router-dom';
 import { Home, Receipt, MapPin, Phone, User, Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useUnreadCount } from '@/hooks/useMyNotificacoes';
+import { useNotificacoesRealtime } from '@/hooks/useNotificacoesRealtime';
+import { useNotificacoesPreferencias } from '@/hooks/useNotificacoesPreferencias';
+import { NotificacoesOnboarding } from '@/components/app/NotificacoesOnboarding';
 
 const NAV_ITEMS = [
   { icon: Home, label: 'Início', path: '/app' },
@@ -13,7 +18,21 @@ const NAV_ITEMS = [
 
 export function AppAssociadoLayout({ children }: { children?: React.ReactNode }) {
   const location = useLocation();
-  const notificacoesNaoLidas = 3; // Mock - substituir por contexto real
+  const { data: unreadCount = 0 } = useUnreadCount();
+  const { data: preferencias } = useNotificacoesPreferencias();
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  // Ativar realtime (sem som para associados por padrão)
+  useNotificacoesRealtime({ enableSound: false });
+
+  // Mostrar onboarding se não foi completado
+  useEffect(() => {
+    if (preferencias && !preferencias.onboarding_completo) {
+      // Pequeno delay para não mostrar imediatamente ao carregar
+      const timer = setTimeout(() => setShowOnboarding(true), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [preferencias]);
 
   const isActive = (path: string) => {
     if (path === '/app') {
@@ -42,9 +61,9 @@ export function AppAssociadoLayout({ children }: { children?: React.ReactNode })
             <Button variant="ghost" size="icon" className="relative" asChild>
               <Link to="/app/notificacoes">
                 <Bell className="h-5 w-5" />
-                {notificacoesNaoLidas > 0 && (
+                {unreadCount > 0 && (
                   <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-destructive text-destructive-foreground text-xs flex items-center justify-center font-medium">
-                    {notificacoesNaoLidas > 9 ? '9+' : notificacoesNaoLidas}
+                    {unreadCount > 9 ? '9+' : unreadCount}
                   </span>
                 )}
               </Link>
@@ -91,6 +110,12 @@ export function AppAssociadoLayout({ children }: { children?: React.ReactNode })
         </nav>
 
       </div>
+
+      {/* Onboarding Modal */}
+      <NotificacoesOnboarding 
+        open={showOnboarding} 
+        onOpenChange={setShowOnboarding} 
+      />
     </div>
   );
 }
