@@ -274,14 +274,6 @@ export default function Leads() {
 
   const activeLead = activeId ? allLeads?.find((l) => l.id === activeId) : null;
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
   const leads = leadsData?.leads || [];
   const totalPages = leadsData?.totalPages || 1;
   const total = leadsData?.total || 0;
@@ -416,7 +408,13 @@ export default function Leads() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {leads.length === 0 ? (
+                  {isLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={9} className="text-center py-8">
+                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground mx-auto" />
+                      </TableCell>
+                    </TableRow>
+                  ) : leads.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                         Nenhum lead encontrado
