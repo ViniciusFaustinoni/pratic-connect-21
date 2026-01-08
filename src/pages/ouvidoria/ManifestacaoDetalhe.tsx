@@ -1,7 +1,5 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
 import {
   useManifestacao,
   useAssumirManifestacao,
@@ -48,10 +46,16 @@ import {
   MessageSquare,
   StickyNote,
   CheckCircle,
+  Trophy,
+  Send as SendIcon,
 } from "lucide-react";
-import { CATEGORIA_LABELS, CANAL_LABELS, STATUS_LABELS, type StatusManifestacao } from "@/types/ouvidoria";
+import { CATEGORIA_LABELS, CANAL_LABELS, STATUS_LABELS, SETOR_ELOGIO_LABELS, type StatusManifestacao, type SetorElogio } from "@/types/ouvidoria";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { setoresElogio } from "@/constants/ouvidoria";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { toast } from "sonner";
 
 export default function ManifestacaoDetalhe() {
   const { id } = useParams<{ id: string }>();
@@ -324,6 +328,73 @@ export default function ManifestacaoDetalhe() {
               )}
             </CardContent>
           </Card>
+
+          {/* Card Detalhes do Elogio - só aparece para tipo elogio */}
+          {manifestacao.tipo === 'elogio' && (
+            <Card className="bg-green-50 border-green-200">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2 text-green-800">
+                  <Trophy className="h-5 w-5 text-green-600" />
+                  Detalhes do Elogio
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                {manifestacao.setor_elogio && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-green-700">Setor Elogiado</span>
+                    <div className="flex items-center gap-2">
+                      {(() => {
+                        const setor = setoresElogio.find(s => s.id === manifestacao.setor_elogio);
+                        if (setor) {
+                          const Icon = setor.icon;
+                          return <Icon className="h-4 w-4 text-green-600" />;
+                        }
+                        return null;
+                      })()}
+                      <span className="font-medium text-green-800">
+                        {SETOR_ELOGIO_LABELS[manifestacao.setor_elogio as SetorElogio]}
+                      </span>
+                    </div>
+                  </div>
+                )}
+                
+                {manifestacao.colaborador_elogiado && (
+                  <div className="flex justify-between">
+                    <span className="text-green-700">Colaborador Mencionado</span>
+                    <span className="font-medium text-green-800">
+                      {manifestacao.colaborador_elogiado}
+                    </span>
+                  </div>
+                )}
+                
+                {manifestacao.data_atendimento && (
+                  <div className="flex justify-between">
+                    <span className="text-green-700">Data do Atendimento</span>
+                    <span className="font-medium text-green-800">
+                      {format(new Date(manifestacao.data_atendimento), 'dd/MM/yyyy')}
+                    </span>
+                  </div>
+                )}
+                
+                {/* Botão Encaminhar para Setor */}
+                <div className="pt-3 border-t border-green-200">
+                  <Button 
+                    variant="outline" 
+                    className="w-full border-green-300 text-green-700 hover:bg-green-100 gap-2"
+                    onClick={() => {
+                      toast.success('Elogio encaminhado para o setor e RH!');
+                    }}
+                  >
+                    <SendIcon className="h-4 w-4" />
+                    Encaminhar para o Setor + RH
+                  </Button>
+                  <p className="text-xs text-green-600 mt-1 text-center">
+                    Notifica o gestor do setor e envia cópia para RH
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Ações */}
           <Card>

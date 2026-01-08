@@ -10,13 +10,16 @@ import {
   ThumbsUp,
   AlertCircle,
   Lightbulb,
-  Shield
+  Shield,
+  Trophy,
+  Star
 } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from "recharts";
-import { TIPO_MANIFESTACAO_LABELS, PRIORIDADE_LABELS } from "@/types/ouvidoria";
+import { TIPO_MANIFESTACAO_LABELS, PRIORIDADE_LABELS, SETOR_ELOGIO_LABELS, type SetorElogio } from "@/types/ouvidoria";
 import { ManifestacaoCard } from "@/components/ouvidoria/ManifestacaoCard";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
+import { mockEstatisticas } from "@/mocks/ouvidoria";
 
 const COLORS_TIPO = {
   reclamacao: "#f97316",
@@ -311,6 +314,58 @@ export default function OuvidoriaDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Card Elogios do Mês */}
+      <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Trophy className="h-5 w-5 text-green-600" />
+              <CardTitle className="text-lg text-green-800">Elogios do Mês</CardTitle>
+            </div>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="border-green-300 text-green-700 hover:bg-green-100"
+              onClick={() => navigate('/ouvidoria/manifestacoes?tipo=elogio')}
+            >
+              Ver todos
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-3 gap-4">
+            {/* Total de elogios */}
+            <div className="text-center">
+              <div className="text-3xl font-bold text-green-700">
+                {mockEstatisticas.elogios?.total_mes || 15}
+              </div>
+              <p className="text-sm text-green-600">Elogios recebidos</p>
+            </div>
+            
+            {/* Setor mais elogiado */}
+            <div className="text-center border-x border-green-200 px-4">
+              <div className="flex items-center justify-center gap-1 text-lg font-semibold text-green-700">
+                <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                {SETOR_ELOGIO_LABELS[(mockEstatisticas.elogios?.setor_mais_elogiado as SetorElogio) || 'atendimento']}
+              </div>
+              <p className="text-sm text-green-600">
+                Setor destaque ({mockEstatisticas.elogios?.setor_mais_elogiado_count || 8})
+              </p>
+            </div>
+            
+            {/* Colaborador destaque */}
+            <div className="text-center">
+              <div className="text-lg font-semibold text-green-700">
+                {mockEstatisticas.elogios?.colaborador_destaque || 'Ana Paula'}
+              </div>
+              <p className="text-sm text-green-600">
+                Mais mencionado ({mockEstatisticas.elogios?.colaborador_destaque_count || 4})
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Status Cards */}
       <div className="grid gap-4 md:grid-cols-4">

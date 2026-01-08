@@ -13,6 +13,19 @@ export type CategoriaManifestacao =
   | 'app' 
   | 'outro';
 
+export type SetorElogio = 
+  | 'atendimento'
+  | 'comercial'
+  | 'financeiro'
+  | 'sinistros'
+  | 'assistencia'
+  | 'monitoramento'
+  | 'instalacao'
+  | 'cadastro'
+  | 'juridico'
+  | 'diretoria'
+  | 'outro';
+
 export type CanalManifestacao = 'app' | 'whatsapp' | 'telefone' | 'email' | 'presencial';
 
 export type PrioridadeManifestacao = 'baixa' | 'normal' | 'alta' | 'urgente';
@@ -69,6 +82,10 @@ export interface Manifestacao {
   avaliacao_nota: number | null;
   avaliacao_comentario: string | null;
   vinculo_juridico_id: string | null;
+  // Campos específicos para elogio
+  setor_elogio?: SetorElogio | null;
+  colaborador_elogiado?: string | null;
+  data_atendimento?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -215,4 +232,18 @@ export const TIPO_INTERACAO_LABELS: Record<TipoInteracao, string> = {
   anexo: 'Anexo',
   status_change: 'Mudança de Status',
   resposta_ia: 'Resposta Automática (IA)',
+};
+
+export const SETOR_ELOGIO_LABELS: Record<SetorElogio, string> = {
+  atendimento: 'Atendimento ao Associado',
+  comercial: 'Comercial / Vendas',
+  financeiro: 'Financeiro',
+  sinistros: 'Sinistros',
+  assistencia: 'Assistência 24h',
+  monitoramento: 'Monitoramento',
+  instalacao: 'Instalação',
+  cadastro: 'Cadastro',
+  juridico: 'Jurídico',
+  diretoria: 'Diretoria',
+  outro: 'Outro Setor',
 };
