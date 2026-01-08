@@ -1,16 +1,18 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Car, Bike, Camera, ChevronDown, ChevronUp, Check } from 'lucide-react';
+import { ArrowLeft, Car, Bike, Camera, ChevronDown, ChevronUp, Check, X, Info, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { useAssociado } from '@/contexts/AssociadoContext';
 import { FotoRevistoriaUpload } from '@/components/app/FotoRevistoriaUpload';
 import { RevistoriaStatusCard, RevistoriaStatusType } from '@/components/app/RevistoriaStatusCard';
-import { getFotosConfig, TipoVeiculoRevistoria } from '@/data/revistoriaConfig';
+import { getFotosConfig, TipoVeiculoRevistoria, FOTOS_CARRO, FOTOS_MOTO } from '@/data/revistoriaConfig';
 import { cn } from '@/lib/utils';
+import { Link } from 'react-router-dom';
 
 export default function Revistoria() {
   const navigate = useNavigate();
@@ -21,6 +23,7 @@ export default function Revistoria() {
   const [fotos, setFotos] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [dicasOpen, setDicasOpen] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
 
   // Dados de revistoria do associado (mock)
   const revistoria = associado?.revistoria;
@@ -72,12 +75,160 @@ export default function Revistoria() {
     });
 
     setIsSubmitting(false);
-    
-    // Em modo teste, apenas mostra mensagem
-    // Em produção, atualizaria o status via API
   };
 
   const mostrarFormulario = status === 'revistoria_obrigatoria' || status === 'reprovada';
+  const mostrarEducativo = status === 'ativa' || status === 'suspensa_sem_revistoria';
+
+  // Componente de seção educativa
+  const SecaoEducativa = ({ colapsado = false }: { colapsado?: boolean }) => {
+    const content = (
+      <div className="flex flex-col gap-4">
+        {/* O que é Revistoria? */}
+        <Card className="border shadow-sm">
+          <CardContent className="p-4">
+            <h3 className="text-lg font-semibold">📋 O que é a Revistoria?</h3>
+            <p className="mt-2 text-sm text-muted-foreground">
+              A revistoria é uma atualização das fotos do seu veículo, necessária 
+              quando há atraso no pagamento superior a 5 dias.
+            </p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Serve para garantir que seu veículo continua nas mesmas condições, 
+              permitindo a reativação da sua proteção após a regularização.
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Quando é necessária? */}
+        <Card className="border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950">
+          <CardContent className="p-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-600" />
+              <div>
+                <h3 className="font-semibold text-amber-800 dark:text-amber-200">⚠️ Quando preciso fazer?</h3>
+                <ul className="mt-2 space-y-1 text-sm text-amber-700 dark:text-amber-300">
+                  <li>• Boleto vencido há mais de 5 dias</li>
+                  <li>• Após o 6º dia de atraso, a revistoria se torna obrigatória</li>
+                  <li>• Proteção só é reativada após aprovação das fotos + pagamento</li>
+                </ul>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Como funciona? */}
+        <Card className="border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950">
+          <CardContent className="p-4">
+            <h3 className="font-semibold text-blue-800 dark:text-blue-200">📸 Como funciona?</h3>
+            <ol className="mt-2 space-y-1 text-sm text-blue-700 dark:text-blue-300">
+              <li>1. Selecione o tipo: Carro ou Moto</li>
+              <li>2. Tire as fotos solicitadas (apenas pela câmera, na hora)</li>
+              <li>3. Envie para análise</li>
+              <li>4. Aguarde aprovação (até 24h)</li>
+              <li>5. Pague o boleto pendente</li>
+              <li>6. Proteção reativada!</li>
+            </ol>
+          </CardContent>
+        </Card>
+
+        {/* Fotos Necessárias - Tabs */}
+        <div>
+          <h3 className="mb-3 text-lg font-semibold">📷 Veja as fotos necessárias</h3>
+          <Tabs defaultValue="carro">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="carro">Carro (11 fotos)</TabsTrigger>
+              <TabsTrigger value="moto">Moto (7 fotos)</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="carro">
+              <Card>
+                <CardContent className="p-4">
+                  <ul className="space-y-2 text-sm">
+                    {FOTOS_CARRO.map(f => (
+                      <li key={f.id} className="flex items-start gap-2">
+                        <span className="font-bold text-purple-600">{f.ordem}.</span>
+                        <div>
+                          <span className="font-medium">{f.label}</span>
+                          <span className="text-muted-foreground"> - {f.descricao}</span>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+            </TabsContent>
+            
+            <TabsContent value="moto">
+              <Card>
+                <CardContent className="p-4">
+                  <ul className="space-y-2 text-sm">
+                    {FOTOS_MOTO.map(f => (
+                      <li key={f.id} className="flex items-start gap-2">
+                        <span className="font-bold text-purple-600">{f.ordem}.</span>
+                        <div>
+                          <span className="font-medium">{f.label}</span>
+                          <span className="text-muted-foreground"> - {f.descricao}</span>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </div>
+
+        {/* Dicas importantes */}
+        <Card className="bg-muted/50">
+          <CardContent className="p-4">
+            <h4 className="font-medium">💡 Dicas importantes</h4>
+            <ul className="mt-2 space-y-1 text-sm">
+              <li className="flex items-center gap-2 text-green-600">
+                <Check className="h-4 w-4" /> Fotos devem ser tiradas NA HORA (câmera do celular)
+              </li>
+              <li className="flex items-center gap-2 text-green-600">
+                <Check className="h-4 w-4" /> Boa iluminação (de preferência durante o dia)
+              </li>
+              <li className="flex items-center gap-2 text-green-600">
+                <Check className="h-4 w-4" /> Veículo limpo
+              </li>
+              <li className="flex items-center gap-2 text-green-600">
+                <Check className="h-4 w-4" /> Placas legíveis
+              </li>
+              <li className="flex items-center gap-2 text-red-600">
+                <X className="h-4 w-4" /> NÃO são aceitas fotos da galeria
+              </li>
+              <li className="flex items-center gap-2 text-red-600">
+                <X className="h-4 w-4" /> NÃO são aceitas fotos antigas
+              </li>
+            </ul>
+          </CardContent>
+        </Card>
+      </div>
+    );
+
+    if (colapsado) {
+      return (
+        <Collapsible open={infoOpen} onOpenChange={setInfoOpen}>
+          <CollapsibleTrigger asChild>
+            <button className="mt-4 flex w-full items-center justify-between rounded-lg border p-3 text-left hover:bg-muted/50">
+              <span className="font-medium">📖 Saiba mais sobre revistoria</span>
+              {infoOpen ? (
+                <ChevronUp className="h-5 w-5 text-muted-foreground" />
+              ) : (
+                <ChevronDown className="h-5 w-5 text-muted-foreground" />
+              )}
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="mt-4">
+            {content}
+          </CollapsibleContent>
+        </Collapsible>
+      );
+    }
+
+    return <div className="mt-4">{content}</div>;
+  };
 
   return (
     <div className="flex flex-col gap-4 pb-32">
@@ -98,7 +249,50 @@ export default function Revistoria() {
         dataLimite={revistoria?.dataLimiteRevistoria}
       />
 
-      {/* FORMULÁRIO DE REVISTORIA */}
+      {/* CENÁRIO A: EM DIA - Mostrar seções educativas */}
+      {status === 'ativa' && (
+        <SecaoEducativa />
+      )}
+
+      {/* CENÁRIO B: SUSPENSO SEM REVISTORIA (1-5 dias) */}
+      {status === 'suspensa_sem_revistoria' && (
+        <>
+          {/* Aviso que ainda não precisa de revistoria */}
+          <Card className="border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950">
+            <CardContent className="p-4">
+              <div className="flex items-start gap-3">
+                <Info className="mt-0.5 h-5 w-5 flex-shrink-0 text-blue-600" />
+                <div>
+                  <h3 className="font-semibold text-blue-800 dark:text-blue-200">ℹ️ Ainda não precisa de revistoria</h3>
+                  <p className="mt-1 text-sm text-blue-700 dark:text-blue-300">
+                    Se você pagar o boleto nos próximos {5 - (revistoria?.diasAtraso || 0)} dia(s), sua proteção 
+                    será reativada automaticamente sem necessidade de revistoria.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Timeline visual */}
+          <Card>
+            <CardContent className="p-4">
+              <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
+                <span>Hoje (dia {revistoria?.diasAtraso})</span>
+                <span>Dia 6 (revistoria)</span>
+              </div>
+              <Progress value={((revistoria?.diasAtraso || 0) / 6) * 100} className="h-3" />
+              <p className="mt-2 text-center text-sm font-medium text-amber-700 dark:text-amber-400">
+                Pague agora e evite a revistoria
+              </p>
+            </CardContent>
+          </Card>
+
+          {/* Seção educativa colapsada */}
+          <SecaoEducativa colapsado />
+        </>
+      )}
+
+      {/* CENÁRIO C & E: REVISTORIA OBRIGATÓRIA ou REPROVADA - Formulário de fotos */}
       {mostrarFormulario && (
         <>
           {/* SELEÇÃO DE TIPO DE VEÍCULO */}
@@ -113,10 +307,10 @@ export default function Revistoria() {
                 {/* CARRO */}
                 <button
                   onClick={() => setTipoVeiculo('carro')}
-                  className="flex flex-col items-center gap-3 rounded-xl border-2 border-blue-200 bg-blue-50 p-6 transition-colors hover:border-blue-500 hover:bg-blue-100"
+                  className="flex flex-col items-center gap-3 rounded-xl border-2 border-blue-200 bg-blue-50 p-6 transition-colors hover:border-blue-500 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950 dark:hover:border-blue-600"
                 >
-                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-200">
-                    <Car className="h-10 w-10 text-blue-700" />
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-200 dark:bg-blue-800">
+                    <Car className="h-10 w-10 text-blue-700 dark:text-blue-300" />
                   </div>
                   <div className="text-center">
                     <p className="font-semibold text-foreground">Carro</p>
@@ -127,10 +321,10 @@ export default function Revistoria() {
                 {/* MOTO */}
                 <button
                   onClick={() => setTipoVeiculo('moto')}
-                  className="flex flex-col items-center gap-3 rounded-xl border-2 border-purple-200 bg-purple-50 p-6 transition-colors hover:border-purple-500 hover:bg-purple-100"
+                  className="flex flex-col items-center gap-3 rounded-xl border-2 border-purple-200 bg-purple-50 p-6 transition-colors hover:border-purple-500 hover:bg-purple-100 dark:border-purple-800 dark:bg-purple-950 dark:hover:border-purple-600"
                 >
-                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-purple-200">
-                    <Bike className="h-10 w-10 text-purple-700" />
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-purple-200 dark:bg-purple-800">
+                    <Bike className="h-10 w-10 text-purple-700 dark:text-purple-300" />
                   </div>
                   <div className="text-center">
                     <p className="font-semibold text-foreground">Moto</p>
@@ -167,14 +361,14 @@ export default function Revistoria() {
               </div>
 
               {/* AVISO IMPORTANTE */}
-              <Card className="border-amber-200 bg-amber-50">
+              <Card className="border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950">
                 <CardContent className="flex items-center gap-3 p-3">
                   <Camera className="h-5 w-5 flex-shrink-0 text-amber-600" />
                   <div className="text-sm">
-                    <p className="font-medium text-amber-800">
+                    <p className="font-medium text-amber-800 dark:text-amber-200">
                       📸 ATENÇÃO: As fotos devem ser tiradas AGORA
                     </p>
-                    <p className="text-amber-700">
+                    <p className="text-amber-700 dark:text-amber-300">
                       Não são aceitas fotos da galeria ou fotos antigas
                     </p>
                   </div>
@@ -224,10 +418,10 @@ export default function Revistoria() {
                           <Check className="h-4 w-4" /> Para o painel: LIGUE o veículo e acelere
                         </li>
                         <li className="flex items-center gap-2 text-red-600">
-                          ✗ Não use fotos da galeria
+                          <X className="h-4 w-4" /> Não use fotos da galeria
                         </li>
                         <li className="flex items-center gap-2 text-red-600">
-                          ✗ Não use fotos antigas
+                          <X className="h-4 w-4" /> Não use fotos antigas
                         </li>
                       </ul>
                     </CardContent>
@@ -256,7 +450,7 @@ export default function Revistoria() {
       {/* HISTÓRICO */}
       {revistoria?.historico && revistoria.historico.length > 0 && (
         <div className="mt-4">
-          <h2 className="mb-3 text-lg font-semibold">Histórico</h2>
+          <h2 className="mb-3 text-lg font-semibold">📜 Histórico de Revistorias</h2>
           <div className="flex flex-col gap-2">
             {revistoria.historico.map((item) => (
               <Card key={item.id}>
@@ -280,8 +474,8 @@ export default function Revistoria() {
                     className={cn(
                       'rounded-full px-2 py-1 text-xs font-medium',
                       item.status === 'aprovada'
-                        ? 'bg-green-100 text-green-700'
-                        : 'bg-red-100 text-red-700'
+                        ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+                        : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
                     )}
                   >
                     {item.status === 'aprovada' ? 'Aprovada' : 'Reprovada'}
