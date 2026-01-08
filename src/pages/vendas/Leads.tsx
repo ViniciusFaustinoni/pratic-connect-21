@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus, MoreHorizontal, Loader2, ChevronLeft, ChevronRight, Edit, ArrowRight, XCircle, MessageCircle, Eye, Search, Filter, Trash2, X } from 'lucide-react';
+import { Plus, MoreHorizontal, Loader2, ChevronLeft, ChevronRight, Edit, ArrowRight, ArrowRightLeft, XCircle, MessageCircle, Eye, Search, Filter, Trash2, X } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
@@ -66,6 +66,7 @@ import { LeadKanbanCard } from '@/components/leads/LeadKanbanCard';
 import { LeadLossDialog } from '@/components/leads/LeadLossDialog';
 import { LeadMetricsBar } from '@/components/leads/LeadMetricsBar';
 import { LeadDetailDrawer } from '@/components/leads/LeadDetailDrawer';
+import { MoverEtapaModal } from '@/components/vendas/MoverEtapaModal';
 import { CotacaoFormDialog } from '@/components/cotacoes/CotacaoFormDialog';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -107,6 +108,10 @@ export default function Leads() {
   const [lossDialogLead, setLossDialogLead] = useState<Lead | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [drawerLeadId, setDrawerLeadId] = useState<string | null>(null);
+  const [moverLeadModal, setMoverLeadModal] = useState<{
+    open: boolean;
+    lead: Lead | null;
+  }>({ open: false, lead: null });
 
   // Estados do Sheet de filtros
   const [showFilters, setShowFilters] = useState(false);
@@ -191,7 +196,25 @@ export default function Leads() {
     }
   };
 
-  // Handlers de filtros
+  // Handler para mover lead via modal
+  const handleMoverEtapa = async (novaEtapa: EtapaLead, observacao: string, motivoPerda?: string) => {
+    if (!moverLeadModal.lead) return;
+    
+    try {
+      await changeEtapa.mutateAsync({
+        leadId: moverLeadModal.lead.id,
+        etapaAnterior: moverLeadModal.lead.etapa as EtapaLead,
+        etapaNova: novaEtapa,
+        motivoPerda,
+        observacaoPerda: observacao || undefined,
+      });
+      toast.success(`Lead movido para ${ETAPA_LABELS[novaEtapa]}`);
+      setMoverLeadModal({ open: false, lead: null });
+    } catch (error) {
+      toast.error('Erro ao mover lead');
+    }
+  };
+
   const handleApplyFilters = () => {
     setFilters(tempFilters);
     setPage(1);
@@ -529,6 +552,13 @@ export default function Leads() {
                                   handleCreateCotacao(lead.id);
                                 }}>
                                   Cotação
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={(e) => {
+                                  e.stopPropagation();
+                                  setMoverLeadModal({ open: true, lead });
+                                }}>
+                                  <ArrowRightLeft className="mr-2 h-4 w-4" />
+                                  Mover
                                 </DropdownMenuItem>
                                 
                                 {nextStages.length > 0 && (
@@ -872,6 +902,18 @@ export default function Leads() {
           etapaAtual={lossDialogLead.etapa as EtapaLead}
           open={!!lossDialogLead}
           onOpenChange={(open) => !open && setLossDialogLead(null)}
+        />
+      )}
+
+      {/* Modal de Mover Etapa */}
+      {moverLeadModal.lead && (
+        <MoverEtapaModal
+          open={moverLeadModal.open}
+          onOpenChange={(open) => setMoverLeadModal({ open, lead: open ? moverLeadModal.lead : null })}
+          leadNome={moverLeadModal.lead.nome}
+          etapaAtual={moverLeadModal.lead.etapa as EtapaLead}
+          onMover={handleMoverEtapa}
+          isMoving={changeEtapa.isPending}
         />
       )}
 
