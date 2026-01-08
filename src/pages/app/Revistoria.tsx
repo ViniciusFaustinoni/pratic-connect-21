@@ -80,130 +80,133 @@ export default function Revistoria() {
   const mostrarFormulario = status === 'revistoria_obrigatoria' || status === 'reprovada';
   const mostrarEducativo = status === 'ativa' || status === 'suspensa_sem_revistoria';
 
-  // Componente de seção educativa
+  // Estado para accordions
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
+  
+  const toggleSection = (id: string) => {
+    setOpenSections(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  // Componente de seção educativa compacta
   const SecaoEducativa = ({ colapsado = false }: { colapsado?: boolean }) => {
-    const content = (
-      <div className="flex flex-col gap-4">
-        {/* O que é Revistoria? */}
-        <Card className="border shadow-sm">
-          <CardContent className="p-4">
-            <h3 className="text-lg font-semibold">📋 O que é a Revistoria?</h3>
-            <p className="mt-2 text-sm text-muted-foreground">
-              A revistoria é uma atualização das fotos do seu veículo, necessária 
-              quando há atraso no pagamento superior a 5 dias.
-            </p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Serve para garantir que seu veículo continua nas mesmas condições, 
-              permitindo a reativação da sua proteção após a regularização.
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Quando é necessária? */}
-        <Card className="border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950">
-          <CardContent className="p-4">
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-600" />
-              <div>
-                <h3 className="font-semibold text-amber-800 dark:text-amber-200">⚠️ Quando preciso fazer?</h3>
-                <ul className="mt-2 space-y-1 text-sm text-amber-700 dark:text-amber-300">
-                  <li>• Boleto vencido há mais de 5 dias</li>
-                  <li>• Após o 6º dia de atraso, a revistoria se torna obrigatória</li>
-                  <li>• Proteção só é reativada após aprovação das fotos + pagamento</li>
-                </ul>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Como funciona? */}
-        <Card className="border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950">
-          <CardContent className="p-4">
-            <h3 className="font-semibold text-blue-800 dark:text-blue-200">📸 Como funciona?</h3>
-            <ol className="mt-2 space-y-1 text-sm text-blue-700 dark:text-blue-300">
-              <li>1. Selecione o tipo: Carro ou Moto</li>
-              <li>2. Tire as fotos solicitadas (apenas pela câmera, na hora)</li>
-              <li>3. Envie para análise</li>
-              <li>4. Aguarde aprovação (até 24h)</li>
-              <li>5. Pague o boleto pendente</li>
-              <li>6. Proteção reativada!</li>
-            </ol>
-          </CardContent>
-        </Card>
-
-        {/* Fotos Necessárias - Tabs */}
-        <div>
-          <h3 className="mb-3 text-lg font-semibold">📷 Veja as fotos necessárias</h3>
-          <Tabs defaultValue="carro">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="carro">Carro (11 fotos)</TabsTrigger>
-              <TabsTrigger value="moto">Moto (7 fotos)</TabsTrigger>
+    const items = [
+      {
+        id: 'oque',
+        icon: '📋',
+        title: 'O que é a Revistoria?',
+        content: (
+          <p className="text-sm text-muted-foreground">
+            Atualização das fotos do seu veículo quando há atraso no pagamento superior a 5 dias, 
+            para garantir que ele continua nas mesmas condições.
+          </p>
+        )
+      },
+      {
+        id: 'quando',
+        icon: '⚠️',
+        title: 'Quando preciso fazer?',
+        iconBg: 'bg-amber-100 dark:bg-amber-900',
+        content: (
+          <ul className="text-sm text-muted-foreground space-y-1">
+            <li>• Boleto vencido há mais de 5 dias</li>
+            <li>• A partir do 6º dia, é obrigatória</li>
+            <li>• Proteção reativada após fotos + pagamento</li>
+          </ul>
+        )
+      },
+      {
+        id: 'como',
+        icon: '📸',
+        title: 'Como funciona?',
+        iconBg: 'bg-blue-100 dark:bg-blue-900',
+        content: (
+          <div className="flex flex-wrap gap-2 text-xs">
+            {['1. Selecionar tipo', '2. Tirar fotos', '3. Enviar', '4. Aguardar (24h)', '5. Pagar boleto', '6. Reativado!'].map((step, i) => (
+              <span key={i} className="rounded-full bg-muted px-2 py-1">{step}</span>
+            ))}
+          </div>
+        )
+      },
+      {
+        id: 'fotos',
+        icon: '📷',
+        title: 'Fotos necessárias',
+        content: (
+          <Tabs defaultValue="carro" className="mt-1">
+            <TabsList className="grid w-full grid-cols-2 h-8">
+              <TabsTrigger value="carro" className="text-xs">Carro (11)</TabsTrigger>
+              <TabsTrigger value="moto" className="text-xs">Moto (7)</TabsTrigger>
             </TabsList>
-            
-            <TabsContent value="carro">
-              <Card>
-                <CardContent className="p-4">
-                  <ul className="space-y-2 text-sm">
-                    {FOTOS_CARRO.map(f => (
-                      <li key={f.id} className="flex items-start gap-2">
-                        <span className="font-bold text-purple-600">{f.ordem}.</span>
-                        <div>
-                          <span className="font-medium">{f.label}</span>
-                          <span className="text-muted-foreground"> - {f.descricao}</span>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </CardContent>
-              </Card>
+            <TabsContent value="carro" className="mt-2">
+              <div className="grid grid-cols-2 gap-1 text-xs">
+                {FOTOS_CARRO.map(f => (
+                  <div key={f.id} className="flex items-center gap-1 text-muted-foreground">
+                    <span className="font-bold text-purple-600">{f.ordem}.</span>
+                    <span className="truncate">{f.label}</span>
+                  </div>
+                ))}
+              </div>
             </TabsContent>
-            
-            <TabsContent value="moto">
-              <Card>
-                <CardContent className="p-4">
-                  <ul className="space-y-2 text-sm">
-                    {FOTOS_MOTO.map(f => (
-                      <li key={f.id} className="flex items-start gap-2">
-                        <span className="font-bold text-purple-600">{f.ordem}.</span>
-                        <div>
-                          <span className="font-medium">{f.label}</span>
-                          <span className="text-muted-foreground"> - {f.descricao}</span>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </CardContent>
-              </Card>
+            <TabsContent value="moto" className="mt-2">
+              <div className="grid grid-cols-2 gap-1 text-xs">
+                {FOTOS_MOTO.map(f => (
+                  <div key={f.id} className="flex items-center gap-1 text-muted-foreground">
+                    <span className="font-bold text-purple-600">{f.ordem}.</span>
+                    <span className="truncate">{f.label}</span>
+                  </div>
+                ))}
+              </div>
             </TabsContent>
           </Tabs>
-        </div>
+        )
+      },
+      {
+        id: 'dicas',
+        icon: '💡',
+        title: 'Dicas importantes',
+        content: (
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="flex items-center gap-1 text-green-600">
+              <Check className="h-3 w-3" /> Na hora
+            </div>
+            <div className="flex items-center gap-1 text-green-600">
+              <Check className="h-3 w-3" /> Boa luz
+            </div>
+            <div className="flex items-center gap-1 text-green-600">
+              <Check className="h-3 w-3" /> Veículo limpo
+            </div>
+            <div className="flex items-center gap-1 text-green-600">
+              <Check className="h-3 w-3" /> Placas visíveis
+            </div>
+            <div className="flex items-center gap-1 text-red-600">
+              <X className="h-3 w-3" /> Sem galeria
+            </div>
+            <div className="flex items-center gap-1 text-red-600">
+              <X className="h-3 w-3" /> Sem fotos antigas
+            </div>
+          </div>
+        )
+      }
+    ];
 
-        {/* Dicas importantes */}
-        <Card className="bg-muted/50">
-          <CardContent className="p-4">
-            <h4 className="font-medium">💡 Dicas importantes</h4>
-            <ul className="mt-2 space-y-1 text-sm">
-              <li className="flex items-center gap-2 text-green-600">
-                <Check className="h-4 w-4" /> Fotos devem ser tiradas NA HORA (câmera do celular)
-              </li>
-              <li className="flex items-center gap-2 text-green-600">
-                <Check className="h-4 w-4" /> Boa iluminação (de preferência durante o dia)
-              </li>
-              <li className="flex items-center gap-2 text-green-600">
-                <Check className="h-4 w-4" /> Veículo limpo
-              </li>
-              <li className="flex items-center gap-2 text-green-600">
-                <Check className="h-4 w-4" /> Placas legíveis
-              </li>
-              <li className="flex items-center gap-2 text-red-600">
-                <X className="h-4 w-4" /> NÃO são aceitas fotos da galeria
-              </li>
-              <li className="flex items-center gap-2 text-red-600">
-                <X className="h-4 w-4" /> NÃO são aceitas fotos antigas
-              </li>
-            </ul>
-          </CardContent>
-        </Card>
+    const accordionContent = (
+      <div className="flex flex-col gap-2">
+        {items.map(item => (
+          <Collapsible key={item.id} open={openSections[item.id]} onOpenChange={() => toggleSection(item.id)}>
+            <CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border bg-card p-3 text-left hover:bg-muted/50 transition-colors">
+              <div className="flex items-center gap-2">
+                <span className={cn("flex h-7 w-7 items-center justify-center rounded-full text-sm", item.iconBg || 'bg-muted')}>
+                  {item.icon}
+                </span>
+                <span className="text-sm font-medium">{item.title}</span>
+              </div>
+              <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", openSections[item.id] && "rotate-180")} />
+            </CollapsibleTrigger>
+            <CollapsibleContent className="px-3 py-2">
+              {item.content}
+            </CollapsibleContent>
+          </Collapsible>
+        ))}
       </div>
     );
 
@@ -212,22 +215,18 @@ export default function Revistoria() {
         <Collapsible open={infoOpen} onOpenChange={setInfoOpen}>
           <CollapsibleTrigger asChild>
             <button className="mt-4 flex w-full items-center justify-between rounded-lg border p-3 text-left hover:bg-muted/50">
-              <span className="font-medium">📖 Saiba mais sobre revistoria</span>
-              {infoOpen ? (
-                <ChevronUp className="h-5 w-5 text-muted-foreground" />
-              ) : (
-                <ChevronDown className="h-5 w-5 text-muted-foreground" />
-              )}
+              <span className="text-sm font-medium">📖 Saiba mais sobre revistoria</span>
+              <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", infoOpen && "rotate-180")} />
             </button>
           </CollapsibleTrigger>
-          <CollapsibleContent className="mt-4">
-            {content}
+          <CollapsibleContent className="mt-3">
+            {accordionContent}
           </CollapsibleContent>
         </Collapsible>
       );
     }
 
-    return <div className="mt-4">{content}</div>;
+    return <div className="mt-2">{accordionContent}</div>;
   };
 
   return (
