@@ -304,8 +304,15 @@ const configItems: MenuItem[] = [
 ];
 
 export function AppSidebar() {
-  const { state } = useSidebar();
+  const { state, setOpenMobile, isMobile } = useSidebar();
   const collapsed = state === 'collapsed';
+  
+  // Fecha o menu mobile após navegação
+  const handleNavigation = () => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  };
   const location = useLocation();
   const { profile } = useAuth();
   const permissions = usePermissions();
@@ -393,7 +400,7 @@ export function AppSidebar() {
                     isActive={isActive(item.url)}
                     tooltip={item.title}
                   >
-                    <NavLink to={item.url}>
+                    <NavLink to={item.url} onClick={handleNavigation}>
                       <item.icon className="h-4 w-4" />
                     </NavLink>
                   </SidebarMenuButton>
@@ -428,6 +435,7 @@ export function AppSidebar() {
                           <NavLink 
                             key={item.url} 
                             to={item.url}
+                            onClick={handleNavigation}
                             className={cn(
                               "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
                               "hover:bg-accent hover:text-accent-foreground",
@@ -452,7 +460,7 @@ export function AppSidebar() {
                     isActive={isActive(item.url)}
                     tooltip={item.title}
                   >
-                    <NavLink to={item.url}>
+                    <NavLink to={item.url} onClick={handleNavigation}>
                       <item.icon className="h-4 w-4" />
                     </NavLink>
                   </SidebarMenuButton>
@@ -477,7 +485,7 @@ export function AppSidebar() {
                           isActive={isActive(item.url)}
                           tooltip={item.title}
                         >
-                          <NavLink to={item.url}>
+                          <NavLink to={item.url} onClick={handleNavigation}>
                             <item.icon className="h-4 w-4" />
                             <span>{item.title}</span>
                           </NavLink>
@@ -518,7 +526,7 @@ export function AppSidebar() {
                               isActive={isActive(item.url)}
                               tooltip={item.title}
                             >
-                              <NavLink to={item.url}>
+                              <NavLink to={item.url} onClick={handleNavigation}>
                                 <item.icon className="h-4 w-4" />
                                 <span>{item.title}</span>
                               </NavLink>
@@ -547,7 +555,7 @@ export function AppSidebar() {
                     isActive={isActive(item.url)}
                     tooltip={item.title}
                   >
-                    <NavLink to={item.url}>
+                    <NavLink to={item.url} onClick={handleNavigation}>
                       <item.icon className="h-4 w-4 shrink-0" />
                       <span>{item.title}</span>
                     </NavLink>
