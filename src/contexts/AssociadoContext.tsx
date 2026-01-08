@@ -39,7 +39,7 @@ interface AssociadoContextType {
   marcarNotificacaoLida: (id: string) => void;
 }
 
-const AssociadoContext = createContext<AssociadoContextType | undefined>(undefined);
+export const AssociadoContext = createContext<AssociadoContextType | undefined>(undefined);
 
 // ============================================
 // PROVIDER
