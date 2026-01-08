@@ -267,7 +267,7 @@ export default function Leads() {
   const total = leadsData?.total || 0;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)]">
+    <div className="flex flex-col h-full overflow-hidden">
       {/* Header Fixo */}
       <div className="flex-shrink-0 space-y-4 pb-4">
         {/* Header */}
@@ -617,14 +617,14 @@ export default function Leads() {
 
       {/* Kanban View */}
       {view === 'kanban' && (
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-hidden">
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
           >
-            <div className="flex gap-4 h-full overflow-x-auto pb-4 px-1">
+            <div className="flex gap-4 h-full overflow-x-auto overflow-y-hidden pb-4 px-1">
               {ETAPAS_KANBAN_VENDAS.map((etapa) => {
                 const leadsInEtapa = (allLeads || []).filter((l) => l.etapa === etapa);
                 return (
