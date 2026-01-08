@@ -46,6 +46,7 @@ import {
   Link,
   PieChart,
   Key,
+  MessageCircle,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
@@ -274,6 +275,16 @@ const menuConfig: {
         { title: 'UTMs', url: '/marketing/utms', icon: Link },
         { title: 'Distribuição', url: '/marketing/distribuicao', icon: Users },
         { title: 'Relatórios', url: '/marketing/relatorios', icon: ClipboardList },
+      ],
+    },
+    {
+      id: 'ouvidoria',
+      label: 'Ouvidoria',
+      icon: MessageCircle,
+      permission: 'canManageOuvidoria',
+      items: [
+        { title: 'Dashboard', url: '/ouvidoria', icon: BarChart3 },
+        { title: 'Fila', url: '/ouvidoria/fila', icon: ClipboardList },
       ],
     },
     {

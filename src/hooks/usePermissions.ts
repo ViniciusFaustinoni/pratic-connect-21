@@ -35,7 +35,8 @@ export type PermissionKey =
   | 'canManageContabilidade'
   | 'canManageJuridico'
   | 'canManageRH'
-  | 'canManageMarketing';
+  | 'canManageMarketing'
+  | 'canManageOuvidoria';
 
 /**
  * Hook centralizado de permissões para verificar acessos de forma declarativa
@@ -86,6 +87,7 @@ export function usePermissions() {
     canManageJuridico: hasRole('diretor') || hasRole('gerente_comercial') || hasRole('analista_juridico'),
     canManageRH: hasRole('diretor') || hasRole('gerente_comercial'),
     canManageMarketing: hasRole('diretor') || hasRole('gerente_comercial') || hasRole('analista_marketing'),
+    canManageOuvidoria: hasRole('diretor') || hasRole('gerente_comercial') || hasRole('analista_cadastro') || isFuncionario(),
   };
 
   return {
