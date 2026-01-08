@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { 
   ArrowLeft, 
@@ -91,10 +91,20 @@ export default function NovaManifestacao() {
   const [setorElogio, setSetorElogio] = useState(setorParam);
   const [colaborador, setColaborador] = useState('');
   
-  // Modal de setores
-  const [showSetorModal, setShowSetorModal] = useState(false);
+  // Modal de setores - abrir automaticamente se for elogio sem setor
+  const [showSetorModal, setShowSetorModal] = useState(
+    tipoParam === 'elogio' && !setorParam
+  );
   
   const [etapa, setEtapa] = useState<'tipo' | 'formulario'>(tipoParam ? 'formulario' : 'tipo');
+
+  // Se fechar o modal sem selecionar setor, voltar para seleção de tipo
+  useEffect(() => {
+    if (tipo === 'elogio' && !setorElogio && !showSetorModal && etapa === 'formulario') {
+      setEtapa('tipo');
+      setTipo('');
+    }
+  }, [showSetorModal, tipo, setorElogio, etapa]);
 
   const tipoConfig = tipo ? tiposConfig[tipo] : null;
   
