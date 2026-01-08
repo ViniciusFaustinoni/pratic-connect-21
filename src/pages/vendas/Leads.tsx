@@ -662,21 +662,21 @@ export default function Leads() {
 
       {/* Kanban View */}
       {view === 'kanban' && (
-        <div className="flex-1 min-h-0 overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-hidden relative">
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
           >
-            <div className="flex gap-4 h-full overflow-x-auto overflow-y-hidden pb-4 px-1">
+            <div className="flex gap-3 h-full overflow-x-auto pb-4 px-1 scrollbar-thin">
               {ETAPAS_KANBAN_VENDAS.map((etapa) => {
                 const leadsInEtapa = (allLeads || []).filter((l) => l.etapa === etapa);
                 return (
                   <div 
                     key={etapa} 
                     id={etapa}
-                    className="flex-shrink-0 w-64 flex flex-col rounded-xl bg-muted/50 h-full"
+                    className="flex-shrink-0 w-[220px] min-w-[220px] flex flex-col rounded-xl bg-muted/50 h-full"
                   >
                     {/* Header da coluna com dot colorido */}
                     <div className="flex-shrink-0 bg-muted/50 px-3 py-2.5 border-b border-border/50 rounded-t-xl">
