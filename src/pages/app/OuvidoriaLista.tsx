@@ -8,10 +8,10 @@ import {
   Plus,
   Inbox,
   AlertCircle, 
+  AlertTriangle,
   Lightbulb, 
   ThumbsUp, 
   Shield, 
-  HelpCircle,
   LucideIcon
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -35,11 +35,11 @@ const statusConfig: Record<string, StatusConfig> = {
 };
 
 const tipoIcons: Record<string, { icon: LucideIcon; color: string; bgColor: string }> = {
-  reclamacao: { icon: AlertCircle, color: 'text-red-600', bgColor: 'bg-red-100' },
+  reclamacao: { icon: AlertCircle, color: 'text-orange-600', bgColor: 'bg-orange-100' },
+  reclamacao_urgente: { icon: AlertTriangle, color: 'text-red-600', bgColor: 'bg-red-100' },
   sugestao: { icon: Lightbulb, color: 'text-yellow-600', bgColor: 'bg-yellow-100' },
   elogio: { icon: ThumbsUp, color: 'text-green-600', bgColor: 'bg-green-100' },
   denuncia: { icon: Shield, color: 'text-purple-600', bgColor: 'bg-purple-100' },
-  duvida: { icon: HelpCircle, color: 'text-blue-600', bgColor: 'bg-blue-100' },
 };
 
 export default function OuvidoriaLista() {

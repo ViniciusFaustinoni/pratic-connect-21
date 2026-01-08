@@ -1,16 +1,14 @@
-import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useEstatisticasOuvidoria, useManifestacoes } from "@/hooks/useOuvidoria";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 import { 
   MessageSquare, 
   Clock, 
   CheckCircle, 
   AlertTriangle,
   ThumbsUp,
-  TrendingUp,
   AlertCircle,
-  HelpCircle,
   Lightbulb,
   Shield
 } from "lucide-react";
@@ -21,11 +19,11 @@ import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 
 const COLORS_TIPO = {
-  reclamacao: "#ef4444",
-  sugestao: "#3b82f6",
+  reclamacao: "#f97316",
+  reclamacao_urgente: "#ef4444",
+  sugestao: "#eab308",
   elogio: "#22c55e",
   denuncia: "#a855f7",
-  duvida: "#f59e0b",
 };
 
 const COLORS_PRIORIDADE = {
@@ -74,6 +72,85 @@ export default function OuvidoriaDashboard() {
         <Button onClick={() => navigate("/ouvidoria/manifestacoes")}>
           Ver todas as manifestações
         </Button>
+      </div>
+
+      {/* Seção Registrar Manifestação */}
+      <div className="space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold">Registrar Manifestação</h2>
+          <p className="text-muted-foreground text-sm">Selecione o tipo para abrir uma nova manifestação</p>
+        </div>
+        
+        <div className="grid grid-cols-5 gap-4">
+          {/* Card Reclamação */}
+          <Card 
+            className="bg-orange-50 border-2 border-orange-300 hover:border-orange-500 cursor-pointer hover:shadow-lg transition-all"
+            onClick={() => navigate('/ouvidoria/nova?tipo=reclamacao')}
+          >
+            <CardContent className="p-6 text-center space-y-3">
+              <AlertCircle className="h-12 w-12 text-orange-600 mx-auto" />
+              <p className="font-bold text-lg text-orange-800">Reclamação</p>
+              <p className="text-sm text-orange-700">Insatisfação com serviço</p>
+              <p className="text-xs text-orange-600">Resposta em 24h</p>
+            </CardContent>
+          </Card>
+
+          {/* Card Reclamação Urgente */}
+          <Card 
+            className="bg-red-50 border-2 border-red-300 hover:border-red-500 cursor-pointer hover:shadow-lg transition-all relative"
+            onClick={() => navigate('/ouvidoria/nova?tipo=reclamacao_urgente')}
+          >
+            <Badge className="absolute top-2 right-2 bg-red-600 text-white">URGENTE</Badge>
+            <CardContent className="p-6 text-center space-y-3">
+              <AlertTriangle className="h-12 w-12 text-red-600 mx-auto" />
+              <p className="font-bold text-lg text-red-800">Reclamação Urgente</p>
+              <p className="text-sm text-red-700">Problema crítico</p>
+              <p className="text-sm font-semibold text-red-600">Resposta em 4h</p>
+            </CardContent>
+          </Card>
+
+          {/* Card Denúncia */}
+          <Card 
+            className="bg-purple-50 border-2 border-purple-300 hover:border-purple-500 cursor-pointer hover:shadow-lg transition-all"
+            onClick={() => navigate('/ouvidoria/nova?tipo=denuncia')}
+          >
+            <CardContent className="p-6 text-center space-y-3">
+              <Shield className="h-12 w-12 text-purple-600 mx-auto" />
+              <p className="font-bold text-lg text-purple-800">Denúncia</p>
+              <p className="text-sm text-purple-700">Relatar irregularidade</p>
+              <div className="flex justify-center">
+                <Badge variant="outline" className="text-xs bg-purple-100 border-purple-300 text-purple-700">Sigiloso</Badge>
+              </div>
+              <p className="text-xs text-purple-600">Resposta em 24h</p>
+            </CardContent>
+          </Card>
+
+          {/* Card Sugestão */}
+          <Card 
+            className="bg-yellow-50 border-2 border-yellow-300 hover:border-yellow-500 cursor-pointer hover:shadow-lg transition-all"
+            onClick={() => navigate('/ouvidoria/nova?tipo=sugestao')}
+          >
+            <CardContent className="p-6 text-center space-y-3">
+              <Lightbulb className="h-12 w-12 text-yellow-600 mx-auto" />
+              <p className="font-bold text-lg text-yellow-800">Sugestão</p>
+              <p className="text-sm text-yellow-700">Ideias de melhoria</p>
+              <p className="text-xs text-yellow-600">Resposta em 24h</p>
+            </CardContent>
+          </Card>
+
+          {/* Card Elogio */}
+          <Card 
+            className="bg-green-50 border-2 border-green-300 hover:border-green-500 cursor-pointer hover:shadow-lg transition-all"
+            onClick={() => navigate('/ouvidoria/nova?tipo=elogio')}
+          >
+            <CardContent className="p-6 text-center space-y-3">
+              <ThumbsUp className="h-12 w-12 text-green-600 mx-auto" />
+              <p className="font-bold text-lg text-green-800">Elogio</p>
+              <p className="text-sm text-green-700">Reconhecer bom atendimento</p>
+              <p className="text-xs text-green-600">Resposta em 24h</p>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       {/* Cards de KPIs */}
