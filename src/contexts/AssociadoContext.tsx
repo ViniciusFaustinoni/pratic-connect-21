@@ -59,12 +59,12 @@ export function AssociadoProvider({ children }: AssociadoProviderProps) {
       try {
         const isTeste = localStorage.getItem(STORAGE_KEYS.TEST_MODE) === 'true';
         if (isTeste) {
-          const dataStr = localStorage.getItem(STORAGE_KEYS.TEST_DATA);
-          if (dataStr) {
-            const data = JSON.parse(dataStr) as AssociadoTeste;
-            setAssociado(data);
-            setIsTestMode(true);
-          }
+          // SEMPRE usar dados atualizados do ASSOCIADO_TESTE
+          // (ignora dados cacheados no localStorage para pegar alterações do código)
+          setAssociado(ASSOCIADO_TESTE);
+          setIsTestMode(true);
+          // Atualiza o cache com os dados mais recentes
+          localStorage.setItem(STORAGE_KEYS.TEST_DATA, JSON.stringify(ASSOCIADO_TESTE));
         }
       } catch (error) {
         console.error('Erro ao carregar sessão de teste:', error);
