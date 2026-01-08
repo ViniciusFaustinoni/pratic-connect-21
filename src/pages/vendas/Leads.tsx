@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Plus, MoreHorizontal, Loader2, ChevronLeft, ChevronRight, Edit, ArrowRight, ArrowRightLeft, XCircle, MessageCircle, Eye, Search, Filter, Trash2, X } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
@@ -63,6 +63,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { LeadFormDialog } from '@/components/leads/LeadFormDialog';
 import { LeadEditDialog } from '@/components/leads/LeadEditDialog';
 import { LeadKanbanCard } from '@/components/leads/LeadKanbanCard';
+import { KanbanBoard } from '@/components/leads/KanbanBoard';
 import { LeadLossDialog } from '@/components/leads/LeadLossDialog';
 import { LeadMetricsBar } from '@/components/leads/LeadMetricsBar';
 import { LeadDetailDrawer } from '@/components/leads/LeadDetailDrawer';
@@ -662,82 +663,14 @@ export default function Leads() {
 
       {/* Kanban View */}
       {view === 'kanban' && (
-        <div className="flex-1 min-h-0 overflow-hidden relative">
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
-          >
-            <div className="flex gap-3 h-full overflow-x-auto pb-4 px-1 scrollbar-thin">
-              {ETAPAS_KANBAN_VENDAS.map((etapa) => {
-                const leadsInEtapa = (allLeads || []).filter((l) => l.etapa === etapa);
-                return (
-                  <div 
-                    key={etapa} 
-                    id={etapa}
-                    className="flex-shrink-0 w-[220px] min-w-[220px] flex flex-col rounded-xl bg-muted/50 h-full"
-                  >
-                    {/* Header da coluna com dot colorido */}
-                    <div className="flex-shrink-0 bg-muted/50 px-3 py-2.5 border-b border-border/50 rounded-t-xl">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className={`w-2.5 h-2.5 rounded-full ${etapaDotColors[etapa]}`} />
-                          <span className="font-semibold text-sm text-foreground">
-                            {ETAPA_LABELS[etapa]}
-                          </span>
-                        </div>
-                        <span className="w-6 h-6 rounded-full bg-muted text-xs font-medium flex items-center justify-center">
-                          {leadsInEtapa.length}
-                        </span>
-                      </div>
-                    </div>
-                    {/* Cards com scroll vertical */}
-                    <SortableContext
-                      items={leadsInEtapa.map((l) => l.id)}
-                      strategy={verticalListSortingStrategy}
-                    >
-                      <div 
-                        className="flex flex-col gap-2 flex-1 p-2 overflow-y-auto"
-                        data-etapa={etapa}
-                      >
-                        {leadsInEtapa.map((lead) => (
-                          <LeadKanbanCard
-                            key={lead.id}
-                            lead={lead}
-                            onClick={() => setDrawerLeadId(lead.id)}
-                          />
-                        ))}
-                        {leadsInEtapa.length === 0 && (
-                          <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground py-8">
-                            Nenhum lead
-                        </div>
-                      )}
-                    </div>
-                  </SortableContext>
-                </div>
-              );
-            })}
-          </div>
-          <DragOverlay>
-            {activeLead ? (
-              <Card className="shadow-lg w-[220px]">
-                <CardContent className="p-2.5">
-                  <div className="flex items-center gap-2">
-                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">
-                      {activeLead.nome.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-medium text-sm truncate">{activeLead.nome}</p>
-                      <p className="text-xs text-muted-foreground">{activeLead.telefone}</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ) : null}
-          </DragOverlay>
-        </DndContext>
-        </div>
+        <KanbanBoard
+          allLeads={allLeads}
+          sensors={sensors}
+          handleDragStart={handleDragStart}
+          handleDragEnd={handleDragEnd}
+          activeLead={activeLead}
+          setDrawerLeadId={setDrawerLeadId}
+        />
       )}
 
       {/* Sheet de Filtros */}

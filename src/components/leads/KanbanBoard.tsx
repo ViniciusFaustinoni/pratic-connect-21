@@ -1,0 +1,163 @@
+import { useRef, useCallback } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ETAPA_LABELS, type EtapaLead } from '@/types/database';
+import { etapaDotColors, ETAPAS_KANBAN_VENDAS } from '@/lib/lead-transitions';
+import { LeadKanbanCard } from '@/components/leads/LeadKanbanCard';
+import {
+  DndContext,
+  DragEndEvent,
+  DragOverlay,
+  DragStartEvent,
+  closestCenter,
+  type SensorDescriptor,
+} from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import type { LeadWithVendedor } from '@/hooks/useLeads';
+
+interface KanbanBoardProps {
+  allLeads: LeadWithVendedor[] | undefined;
+  sensors: SensorDescriptor<any>[];
+  handleDragStart: (event: DragStartEvent) => void;
+  handleDragEnd: (event: DragEndEvent) => void;
+  activeLead: LeadWithVendedor | null;
+  setDrawerLeadId: (id: string) => void;
+}
+
+export function KanbanBoard({
+  allLeads,
+  sensors,
+  handleDragStart,
+  handleDragEnd,
+  activeLead,
+  setDrawerLeadId,
+}: KanbanBoardProps) {
+  const boardRef = useRef<HTMLDivElement>(null);
+
+  // Trello-like: convert vertical wheel to horizontal scroll
+  const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+    if (!boardRef.current) return;
+    
+    // If user is scrolling vertically (normal mouse wheel) and not holding shift
+    if (Math.abs(e.deltaY) > Math.abs(e.deltaX) && !e.shiftKey) {
+      e.preventDefault();
+      boardRef.current.scrollLeft += e.deltaY;
+    }
+  }, []);
+
+  const scrollBoard = useCallback((direction: 'left' | 'right') => {
+    if (!boardRef.current) return;
+    const scrollAmount = 250;
+    boardRef.current.scrollBy({
+      left: direction === 'left' ? -scrollAmount : scrollAmount,
+      behavior: 'smooth',
+    });
+  }, []);
+
+  return (
+    <div className="flex-1 min-h-0 overflow-hidden relative">
+      {/* Scroll buttons */}
+      <Button
+        variant="ghost"
+        size="icon"
+        className="absolute left-0 top-1/2 -translate-y-1/2 z-10 h-10 w-10 rounded-full bg-background/80 backdrop-blur-sm shadow-md hover:bg-background border"
+        onClick={() => scrollBoard('left')}
+      >
+        <ChevronLeft className="h-5 w-5" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="absolute right-0 top-1/2 -translate-y-1/2 z-10 h-10 w-10 rounded-full bg-background/80 backdrop-blur-sm shadow-md hover:bg-background border"
+        onClick={() => scrollBoard('right')}
+      >
+        <ChevronRight className="h-5 w-5" />
+      </Button>
+
+      {/* Edge fade indicators */}
+      <div className="absolute left-10 top-0 bottom-0 w-6 bg-gradient-to-r from-background to-transparent pointer-events-none z-[5]" />
+      <div className="absolute right-10 top-0 bottom-0 w-6 bg-gradient-to-l from-background to-transparent pointer-events-none z-[5]" />
+
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+      >
+        <div
+          ref={boardRef}
+          onWheel={handleWheel}
+          className="flex gap-3 h-full overflow-x-auto overflow-y-hidden pb-4 px-12 scrollbar-thin"
+          style={{ scrollbarGutter: 'stable' }}
+        >
+          {ETAPAS_KANBAN_VENDAS.map((etapa) => {
+            const leadsInEtapa = (allLeads || []).filter((l) => l.etapa === etapa);
+            return (
+              <div
+                key={etapa}
+                id={etapa}
+                className="flex-shrink-0 w-[220px] min-w-[220px] flex flex-col rounded-xl bg-muted/50 h-full"
+              >
+                {/* Header da coluna com dot colorido */}
+                <div className="flex-shrink-0 bg-muted/50 px-3 py-2.5 border-b border-border/50 rounded-t-xl">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2.5 h-2.5 rounded-full ${etapaDotColors[etapa]}`} />
+                      <span className="font-semibold text-sm text-foreground">
+                        {ETAPA_LABELS[etapa]}
+                      </span>
+                    </div>
+                    <span className="w-6 h-6 rounded-full bg-muted text-xs font-medium flex items-center justify-center">
+                      {leadsInEtapa.length}
+                    </span>
+                  </div>
+                </div>
+                {/* Cards com scroll vertical */}
+                <SortableContext
+                  items={leadsInEtapa.map((l) => l.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div
+                    className="flex flex-col gap-2 flex-1 p-2 overflow-y-auto scrollbar-thin"
+                    data-etapa={etapa}
+                  >
+                    {leadsInEtapa.map((lead) => (
+                      <LeadKanbanCard
+                        key={lead.id}
+                        lead={lead as any}
+                        onClick={() => setDrawerLeadId(lead.id)}
+                      />
+                    ))}
+                    {leadsInEtapa.length === 0 && (
+                      <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground py-8">
+                        Nenhum lead
+                      </div>
+                    )}
+                  </div>
+                </SortableContext>
+              </div>
+            );
+          })}
+        </div>
+        <DragOverlay>
+          {activeLead ? (
+            <Card className="shadow-lg w-[220px]">
+              <CardContent className="p-2.5">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">
+                    {activeLead.nome.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-medium text-sm truncate">{activeLead.nome}</p>
+                    <p className="text-xs text-muted-foreground">{activeLead.telefone}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
+    </div>
+  );
+}
