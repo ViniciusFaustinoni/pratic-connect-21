@@ -271,23 +271,24 @@ export default function Leads() {
       {/* Header Fixo */}
       <div className="flex-shrink-0 space-y-4 pb-4">
         {/* Header */}
-        <div className="flex items-start sm:items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold">Leads</h1>
-            <p className="text-muted-foreground">
+            <h1 className="text-xl sm:text-2xl font-bold">Leads</h1>
+            <p className="text-sm text-muted-foreground">
               {total} leads encontrados
             </p>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             <Tabs value={view} onValueChange={(v) => setView(v as 'table' | 'kanban')}>
-              <TabsList>
-                <TabsTrigger value="table">Lista</TabsTrigger>
-                <TabsTrigger value="kanban">Kanban</TabsTrigger>
+              <TabsList className="h-9">
+                <TabsTrigger value="table" className="text-xs sm:text-sm px-2 sm:px-3">Lista</TabsTrigger>
+                <TabsTrigger value="kanban" className="text-xs sm:text-sm px-2 sm:px-3">Kanban</TabsTrigger>
               </TabsList>
             </Tabs>
-            <Button className="gap-2" onClick={() => setShowLeadForm(true)}>
+            <Button size="sm" className="gap-1.5 h-9" onClick={() => setShowLeadForm(true)}>
               <Plus className="h-4 w-4" />
-              Novo Lead
+              <span className="hidden sm:inline">Novo Lead</span>
+              <span className="sm:hidden">Novo</span>
             </Button>
           </div>
         </div>
