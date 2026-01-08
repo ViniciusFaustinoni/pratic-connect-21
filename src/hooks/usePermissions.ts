@@ -74,7 +74,7 @@ export function usePermissions() {
     canManageApiSettings: hasRole('diretor') || hasRole('analista_marketing'),
     canManageInstalacoes: hasRole('coordenador_monitoramento') || hasRole('instalador_vistoriador') || isGerencia(),
     canManageRastreadores: hasRole('analista_plataforma') || hasRole('coordenador_monitoramento') || isGerencia(),
-    canViewDashboard: isFuncionario(),
+    canViewDashboard: profile?.tipo === 'funcionario',
     canAccessApp: profile?.tipo === 'associado',
     canManageCadastro: hasRole('analista_cadastro') || isGerencia(),
     canManageOficinas: hasRole('analista_cadastro') || isGerencia(),
