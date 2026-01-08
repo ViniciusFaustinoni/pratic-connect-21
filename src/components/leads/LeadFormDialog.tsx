@@ -6,10 +6,9 @@ import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from '@/components/ui/dialog';
 import {
   Form,
@@ -31,6 +30,7 @@ import {
 import { CpfInput, TelefoneInput, PlacaInput, CurrencyInput } from '@/components/inputs/MaskedInputs';
 import { leadSchema, type LeadFormData } from '@/lib/validations';
 import { useCreateLead } from '@/hooks/useLeads';
+import { useVendedores } from '@/hooks/useVendedores';
 import { ORIGEM_LABELS } from '@/types/database';
 import { toast } from 'sonner';
 import { useFipe } from '@/hooks/useFipe';
@@ -41,16 +41,24 @@ interface LeadFormDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
+const MARCAS = [
+  'Volkswagen', 'Chevrolet', 'Fiat', 'Ford', 'Hyundai',
+  'Toyota', 'Honda', 'Renault', 'Nissan', 'Jeep', 'Outra'
+];
+
 export function LeadFormDialog({ open, onOpenChange }: LeadFormDialogProps) {
-  const [step, setStep] = useState(1);
   const [placaConsultada, setPlacaConsultada] = useState(false);
+  const [marcaManual, setMarcaManual] = useState(false);
   const createLead = useCreateLead();
+  const { data: vendedores = [] } = useVendedores();
   const { loading: placaLoading, error: placaError, getByPlaca, clearError } = useFipe();
+  
   const form = useForm<LeadFormData>({
     resolver: zodResolver(leadSchema),
     defaultValues: {
       nome: '',
       telefone: '',
+      whatsapp: '',
       email: '',
       cpf: '',
       veiculo_marca: '',
@@ -59,21 +67,10 @@ export function LeadFormDialog({ open, onOpenChange }: LeadFormDialogProps) {
       veiculo_placa: '',
       veiculo_fipe: null,
       origem: 'telefone',
+      vendedor_id: '',
       observacoes: '',
     },
   });
-
-  // Campos por etapa para validação
-  const step1Fields: (keyof LeadFormData)[] = ['nome', 'telefone'];
-  const step2Fields: (keyof LeadFormData)[] = [];
-
-  const handleNextStep = async () => {
-    const fieldsToValidate = step === 1 ? step1Fields : step2Fields;
-    const isValid = await form.trigger(fieldsToValidate);
-    if (isValid) {
-      setStep(step + 1);
-    }
-  };
 
   // Consulta automática de placa via FIPE
   const handlePlacaLookup = async (placa: string) => {
@@ -88,7 +85,16 @@ export function LeadFormDialog({ open, onOpenChange }: LeadFormDialogProps) {
     const result = await getByPlaca(placa);
     
     if (result.success && result.vehicleData) {
-      form.setValue('veiculo_marca', result.vehicleData.marca || '');
+      const marcaFipe = result.vehicleData.marca || '';
+      // Verifica se a marca está na lista, senão permite input manual
+      if (MARCAS.includes(marcaFipe)) {
+        form.setValue('veiculo_marca', marcaFipe);
+        setMarcaManual(false);
+      } else {
+        form.setValue('veiculo_marca', marcaFipe);
+        setMarcaManual(true);
+      }
+      
       form.setValue('veiculo_modelo', result.vehicleData.modelo || '');
       
       const anoStr = result.vehicleData.ano;
@@ -120,14 +126,13 @@ export function LeadFormDialog({ open, onOpenChange }: LeadFormDialogProps) {
         veiculo_ano: data.veiculo_ano || null,
         veiculo_placa: data.veiculo_placa || null,
         veiculo_fipe: data.veiculo_fipe || null,
-        origem: data.origem as 'site', // Cast for Supabase compatibility
+        origem: data.origem as 'site',
+        vendedor_id: data.vendedor_id || null,
         observacoes: data.observacoes || null,
         etapa: 'novo',
       });
       toast.success('Lead criado com sucesso!');
-      form.reset();
-      setStep(1);
-      onOpenChange(false);
+      handleClose();
     } catch (error) {
       toast.error('Erro ao criar lead');
       console.error(error);
@@ -136,27 +141,39 @@ export function LeadFormDialog({ open, onOpenChange }: LeadFormDialogProps) {
 
   const handleClose = () => {
     form.reset();
-    setStep(1);
     setPlacaConsultada(false);
+    setMarcaManual(false);
     clearError();
     onOpenChange(false);
   };
 
+  const handleMarcaChange = (value: string) => {
+    if (value === 'Outra') {
+      setMarcaManual(true);
+      form.setValue('veiculo_marca', '');
+    } else {
+      setMarcaManual(false);
+      form.setValue('veiculo_marca', value);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Novo Lead</DialogTitle>
-          <DialogDescription>
-            Etapa {step} de 3 - {step === 1 ? 'Dados Pessoais' : step === 2 ? 'Veículo' : 'Origem'}
-          </DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            {/* Step 1: Dados Pessoais */}
-            {step === 1 && (
-              <>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            
+            {/* SEÇÃO 1 - DADOS PESSOAIS */}
+            <div className="space-y-4">
+              <h3 className="font-semibold text-sm text-muted-foreground border-b pb-2 uppercase tracking-wide">
+                Dados Pessoais
+              </h3>
+              
+              <div className="grid grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
                   name="nome"
@@ -165,34 +182,6 @@ export function LeadFormDialog({ open, onOpenChange }: LeadFormDialogProps) {
                       <FormLabel>Nome Completo *</FormLabel>
                       <FormControl>
                         <Input placeholder="Nome do cliente" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="telefone"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Telefone *</FormLabel>
-                      <FormControl>
-                        <TelefoneInput value={field.value} onChange={field.onChange} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>E-mail</FormLabel>
-                      <FormControl>
-                        <Input type="email" placeholder="email@exemplo.com" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -212,156 +201,221 @@ export function LeadFormDialog({ open, onOpenChange }: LeadFormDialogProps) {
                     </FormItem>
                   )}
                 />
-              </>
-            )}
+              </div>
 
-            {/* Step 2: Veículo */}
-            {step === 2 && (
-              <>
-                {/* Campo Placa com Consulta Automática */}
+              <div className="grid grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
-                  name="veiculo_placa"
+                  name="telefone"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="flex items-center gap-2">
-                        Placa
-                        {placaConsultada && (
-                          <Badge variant="secondary" className="text-xs font-normal">
-                            <CheckCircle2 className="h-3 w-3 mr-1 text-green-600" />
-                            FIPE consultada
-                          </Badge>
+                      <FormLabel>Telefone *</FormLabel>
+                      <FormControl>
+                        <TelefoneInput value={field.value} onChange={field.onChange} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="whatsapp"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>WhatsApp</FormLabel>
+                      <FormControl>
+                        <TelefoneInput value={field.value || ''} onChange={field.onChange} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>E-mail</FormLabel>
+                    <FormControl>
+                      <Input type="email" placeholder="email@exemplo.com" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            {/* SEÇÃO 2 - VEÍCULO */}
+            <div className="space-y-4">
+              <h3 className="font-semibold text-sm text-muted-foreground border-b pb-2 uppercase tracking-wide">
+                Veículo
+              </h3>
+
+              {/* Campo Placa com Consulta Automática */}
+              <FormField
+                control={form.control}
+                name="veiculo_placa"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center gap-2">
+                      Placa
+                      {placaConsultada && (
+                        <Badge variant="secondary" className="text-xs font-normal">
+                          <CheckCircle2 className="h-3 w-3 mr-1 text-green-600" />
+                          FIPE consultada
+                        </Badge>
+                      )}
+                    </FormLabel>
+                    <div className="flex gap-2">
+                      <FormControl>
+                        <PlacaInput 
+                          value={field.value || ''} 
+                          onChange={(value) => {
+                            field.onChange(value);
+                            setPlacaConsultada(false);
+                          }}
+                          className="flex-1"
+                        />
+                      </FormControl>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        disabled={placaLoading || !field.value || field.value.replace(/[^A-Za-z0-9]/g, '').length < 7}
+                        onClick={() => handlePlacaLookup(field.value || '')}
+                        title="Consultar placa na FIPE"
+                      >
+                        {placaLoading ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Search className="h-4 w-4" />
                         )}
-                      </FormLabel>
-                      <div className="flex gap-2">
+                      </Button>
+                    </div>
+                    {placaError && (
+                      <p className="text-xs text-orange-500 mt-1">
+                        {placaError} - Preencha manualmente
+                      </p>
+                    )}
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="veiculo_marca"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Marca *</FormLabel>
+                      {marcaManual || placaConsultada ? (
                         <FormControl>
-                          <PlacaInput 
-                            value={field.value || ''} 
-                            onChange={(value) => {
-                              field.onChange(value);
-                              setPlacaConsultada(false);
-                            }}
-                            className="flex-1"
+                          <Input 
+                            placeholder="Digite a marca" 
+                            {...field} 
+                            className={placaConsultada ? 'border-green-200 bg-green-50' : ''}
                           />
                         </FormControl>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="icon"
-                          disabled={placaLoading || !field.value || field.value.replace(/[^A-Za-z0-9]/g, '').length < 7}
-                          onClick={() => handlePlacaLookup(field.value || '')}
-                          title="Consultar placa na FIPE"
-                        >
-                          {placaLoading ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Search className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </div>
-                      {placaError && (
-                        <p className="text-xs text-orange-500 mt-1">
-                          {placaError} - Preencha manualmente
-                        </p>
+                      ) : (
+                        <Select onValueChange={handleMarcaChange} value={field.value || ''}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Selecione..." />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {MARCAS.map(marca => (
+                              <SelectItem key={marca} value={marca}>{marca}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       )}
                       <FormMessage />
                     </FormItem>
                   )}
                 />
 
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="veiculo_marca"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Marca</FormLabel>
-                        <FormControl>
-                          <Input 
-                            placeholder="Honda, Toyota..." 
-                            {...field} 
-                            className={placaConsultada ? 'border-green-200 bg-green-50' : ''}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                <FormField
+                  control={form.control}
+                  name="veiculo_modelo"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Modelo *</FormLabel>
+                      <FormControl>
+                        <Input 
+                          placeholder="Civic, Corolla..." 
+                          {...field} 
+                          className={placaConsultada ? 'border-green-200 bg-green-50' : ''}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
 
-                  <FormField
-                    control={form.control}
-                    name="veiculo_modelo"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Modelo</FormLabel>
-                        <FormControl>
-                          <Input 
-                            placeholder="Civic, Corolla..." 
-                            {...field} 
-                            className={placaConsultada ? 'border-green-200 bg-green-50' : ''}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="veiculo_ano"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Ano *</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          placeholder="2024" 
+                          value={field.value ?? ''} 
+                          onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : null)}
+                          className={placaConsultada ? 'border-green-200 bg-green-50' : ''}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="veiculo_ano"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Ano</FormLabel>
-                        <FormControl>
-                          <Input 
-                            type="number" 
-                            placeholder="2024" 
-                            value={field.value ?? ''} 
-                            onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : null)}
-                            className={placaConsultada ? 'border-green-200 bg-green-50' : ''}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                <FormField
+                  control={form.control}
+                  name="veiculo_fipe"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Valor FIPE</FormLabel>
+                      <FormControl>
+                        <CurrencyInput 
+                          value={field.value ?? 0} 
+                          onChange={field.onChange}
+                          className={placaConsultada ? 'border-green-200 bg-green-50' : ''}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
 
-                  <FormField
-                    control={form.control}
-                    name="veiculo_fipe"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Valor FIPE</FormLabel>
-                        <FormControl>
-                          <CurrencyInput 
-                            value={field.value ?? 0} 
-                            onChange={field.onChange}
-                            className={placaConsultada ? 'border-green-200 bg-green-50' : ''}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </>
-            )}
+            {/* SEÇÃO 3 - ATRIBUIÇÃO */}
+            <div className="space-y-4">
+              <h3 className="font-semibold text-sm text-muted-foreground border-b pb-2 uppercase tracking-wide">
+                Atribuição
+              </h3>
 
-            {/* Step 3: Origem */}
-            {step === 3 && (
-              <>
+              <div className="grid grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
                   name="origem"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Origem do Lead *</FormLabel>
+                      <FormLabel>Origem *</FormLabel>
                       <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder="Selecione a origem" />
+                            <SelectValue placeholder="Selecione..." />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
@@ -379,41 +433,57 @@ export function LeadFormDialog({ open, onOpenChange }: LeadFormDialogProps) {
 
                 <FormField
                   control={form.control}
-                  name="observacoes"
+                  name="vendedor_id"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Observações</FormLabel>
-                      <FormControl>
-                        <Textarea 
-                          placeholder="Informações adicionais sobre o lead..."
-                          className="resize-none"
-                          rows={4}
-                          {...field}
-                        />
-                      </FormControl>
+                      <FormLabel>Vendedor</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || ''}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Não atribuído" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="">Não atribuído</SelectItem>
+                          {vendedores.map(v => (
+                            <SelectItem key={v.id} value={v.id}>{v.nome}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-              </>
-            )}
+              </div>
+
+              <FormField
+                control={form.control}
+                name="observacoes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Observações</FormLabel>
+                    <FormControl>
+                      <Textarea 
+                        placeholder="Informações adicionais sobre o lead..."
+                        className="resize-none"
+                        rows={3}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
             <DialogFooter className="gap-2 sm:gap-0">
-              {step > 1 && (
-                <Button type="button" variant="outline" onClick={() => setStep(step - 1)}>
-                  Voltar
-                </Button>
-              )}
-              {step < 3 ? (
-                <Button type="button" onClick={handleNextStep}>
-                  Próximo
-                </Button>
-              ) : (
-                <Button type="submit" disabled={createLead.isPending}>
-                  {createLead.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Criar Lead
-                </Button>
-              )}
+              <Button type="button" variant="outline" onClick={handleClose}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={createLead.isPending}>
+                {createLead.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Salvar Lead
+              </Button>
             </DialogFooter>
           </form>
         </Form>
