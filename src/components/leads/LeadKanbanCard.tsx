@@ -40,9 +40,10 @@ export function LeadKanbanCard({ lead, onClick }: LeadKanbanCardProps) {
   } = useSortable({ id: lead.id });
 
   const style = {
-    transform: CSS.Transform.toString(transform),
+    transform: CSS.Translate.toString(transform),
     transition,
-    opacity: isDragging ? 0.5 : 1,
+    opacity: isDragging ? 0 : 1,
+    visibility: isDragging ? 'hidden' as const : 'visible' as const,
   };
 
   const formatCurrency = (value: number | null) => {
