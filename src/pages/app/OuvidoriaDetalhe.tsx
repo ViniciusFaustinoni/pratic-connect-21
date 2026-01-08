@@ -7,10 +7,10 @@ import {
   Send,
   Star,
   AlertCircle, 
+  AlertTriangle,
   Lightbulb, 
   ThumbsUp, 
   Shield, 
-  HelpCircle,
   LucideIcon,
   MessageSquare
 } from "lucide-react";
@@ -37,11 +37,11 @@ const statusConfig: Record<string, StatusConfig> = {
 };
 
 const tipoConfig: Record<string, { label: string; icon: LucideIcon; color: string; bgColor: string }> = {
-  reclamacao: { label: 'Reclamação', icon: AlertCircle, color: 'text-red-700', bgColor: 'bg-red-100' },
+  reclamacao: { label: 'Reclamação', icon: AlertCircle, color: 'text-orange-700', bgColor: 'bg-orange-100' },
+  reclamacao_urgente: { label: 'Reclamação Urgente', icon: AlertTriangle, color: 'text-red-700', bgColor: 'bg-red-100' },
   sugestao: { label: 'Sugestão', icon: Lightbulb, color: 'text-yellow-700', bgColor: 'bg-yellow-100' },
   elogio: { label: 'Elogio', icon: ThumbsUp, color: 'text-green-700', bgColor: 'bg-green-100' },
   denuncia: { label: 'Denúncia', icon: Shield, color: 'text-purple-700', bgColor: 'bg-purple-100' },
-  duvida: { label: 'Dúvida', icon: HelpCircle, color: 'text-blue-700', bgColor: 'bg-blue-100' },
 };
 
 const CATEGORIA_LABELS: Record<string, string> = {

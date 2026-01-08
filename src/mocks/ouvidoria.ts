@@ -96,15 +96,15 @@ export const mockManifestacoes = [
   {
     id: '5',
     protocolo: 'OUV-2026-00019',
-    tipo: 'duvida' as const,
-    categoria: 'financeiro' as const,
-    assunto: 'Como alterar data de vencimento',
-    descricao: 'Gostaria de saber como faço para alterar a data de vencimento da minha mensalidade para o dia 15.',
-    status: 'encerrado' as const,
-    prioridade: 'normal' as const,
-    canal: 'email' as const,
+    tipo: 'reclamacao_urgente' as const,
+    categoria: 'rastreamento' as const,
+    assunto: 'Veículo sem sinal há 3 dias - URGENTE',
+    descricao: 'Meu rastreador parou de funcionar há 3 dias e não consigo localizar meu veículo. Preciso de uma solução imediata!',
+    status: 'em_analise' as const,
+    prioridade: 'urgente' as const,
+    canal: 'app' as const,
     anonimo: false,
-    created_at: '2026-01-05T16:45:00Z',
+    created_at: '2026-01-08T08:00:00Z',
     associado: { 
       id: '5',
       nome: 'Roberto Alves', 
@@ -113,10 +113,9 @@ export const mockManifestacoes = [
       cpf: '***.***.***-89'
     },
     responsavel: { id: '3', nome: 'Maria Oliveira', email: 'maria@pratic.com' },
-    temRespostaNova: false,
-    sla: 'ok' as const,
-    data_limite: '2026-01-07T16:45:00Z',
-    avaliacao_nota: 4,
+    temRespostaNova: true,
+    sla: 'alerta' as const,
+    data_limite: '2026-01-08T12:00:00Z',
   },
 ];
 
@@ -170,9 +169,9 @@ export const mockEstatisticas = {
   nps: 72,
   por_tipo: {
     reclamacao: 45,
+    reclamacao_urgente: 15,
     sugestao: 25,
-    elogio: 15,
-    duvida: 10,
+    elogio: 10,
     denuncia: 5,
   },
   por_prioridade: {
