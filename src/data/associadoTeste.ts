@@ -173,7 +173,7 @@ export const ASSOCIADO_TESTE: AssociadoTeste = {
     cidade: 'São Paulo',
     estado: 'SP',
   },
-  status: 'ativo',
+  status: 'suspenso',
   associadoDesde: '2024-01-15',
   plano: 'Proteção Completa',
   valorMensalidade: 189.90,
@@ -324,16 +324,16 @@ export const ASSOCIADO_TESTE: AssociadoTeste = {
   //   diasAtraso: 10, necessaria: true, status: 'reprovada', motivosReprovacao: ['Foto do painel: veículo não estava ligado']
   //
   revistoria: {
-    // ATIVO: Cenário 3 - Revistoria Obrigatória (6+ dias)
-    diasAtraso: 6,
+    // ATIVO: Cenário 3 - Revistoria Obrigatória (6+ dias de atraso)
+    diasAtraso: 8,
     necessaria: true,
     status: 'pendente',
-    tipoVeiculo: null,
-    motivoSuspensao: 'Boleto vencido',
-    dataSuspensao: '2026-01-02',
-    dataLimiteRevistoria: '2026-01-07',
+    tipoVeiculo: 'carro',
+    motivoSuspensao: 'Boleto vencido há mais de 5 dias',
+    dataSuspensao: '2025-12-31',
+    dataLimiteRevistoria: '2026-01-05',
     dataEnvio: null,
-    ultimaRevistoria: null,
+    ultimaRevistoria: '2025-06-15',
     motivosReprovacao: [],
     historico: [
       { id: 'rev-001', data: '2025-06-15', tipo: 'carro', status: 'aprovada', fotos: 11 },
