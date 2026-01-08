@@ -50,6 +50,7 @@ const ROUTE_CONFIG: Record<string, RouteConfig> = {
   '/financeiro/faturamento': { label: 'Faturamento Mensal' },
   '/financeiro/contas-pagar': { label: 'Contas a Pagar' },
   '/financeiro/extrato': { label: 'Extrato' },
+  '/financeiro/extratos-bancarios': { label: 'Extratos Bancários' },
   
   // Cobrança
   '/cobranca': { label: 'Cobrança' },
@@ -196,6 +197,13 @@ const DYNAMIC_ROUTES: Record<string, RouteConfig> = {
   '/financeiro/cobrancas/:id': {
     label: 'Cobrança',
     resolver: async (id: string) => `Cobrança #${id.slice(0, 8)}`,
+  },
+  '/financeiro/extratos/:id': {
+    label: 'Extrato',
+    resolver: async (id: string) => {
+      const { data } = await supabase.from('extratos_bancarios').select('arquivo_nome').eq('id', id).single();
+      return data?.arquivo_nome || 'Extrato';
+    },
   },
   
   // Cobrança
