@@ -6565,6 +6565,304 @@ export type Database = {
           },
         ]
       }
+      ouvidoria_anexos: {
+        Row: {
+          created_at: string | null
+          id: string
+          manifestacao_id: string
+          nome_arquivo: string
+          tamanho_bytes: number | null
+          tipo_arquivo: string | null
+          url: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          manifestacao_id: string
+          nome_arquivo: string
+          tamanho_bytes?: number | null
+          tipo_arquivo?: string | null
+          url: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          manifestacao_id?: string
+          nome_arquivo?: string
+          tamanho_bytes?: number | null
+          tipo_arquivo?: string | null
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ouvidoria_anexos_manifestacao_id_fkey"
+            columns: ["manifestacao_id"]
+            isOneToOne: false
+            referencedRelation: "ouvidoria_manifestacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ouvidoria_config: {
+        Row: {
+          chave: string
+          descricao: string | null
+          id: string
+          updated_at: string | null
+          valor: string
+        }
+        Insert: {
+          chave: string
+          descricao?: string | null
+          id?: string
+          updated_at?: string | null
+          valor: string
+        }
+        Update: {
+          chave?: string
+          descricao?: string | null
+          id?: string
+          updated_at?: string | null
+          valor?: string
+        }
+        Relationships: []
+      }
+      ouvidoria_ia_logs: {
+        Row: {
+          confianca: number | null
+          created_at: string | null
+          departamento_sugerido: string | null
+          entrada: string | null
+          id: string
+          manifestacao_id: string
+          palavras_chave_detectadas: string[] | null
+          prioridade_sugerida: string | null
+          saida: string | null
+          sentimento: string | null
+          tempo_resposta_ms: number | null
+          tipo_acao: string
+          tokens_entrada: number | null
+          tokens_saida: number | null
+        }
+        Insert: {
+          confianca?: number | null
+          created_at?: string | null
+          departamento_sugerido?: string | null
+          entrada?: string | null
+          id?: string
+          manifestacao_id: string
+          palavras_chave_detectadas?: string[] | null
+          prioridade_sugerida?: string | null
+          saida?: string | null
+          sentimento?: string | null
+          tempo_resposta_ms?: number | null
+          tipo_acao: string
+          tokens_entrada?: number | null
+          tokens_saida?: number | null
+        }
+        Update: {
+          confianca?: number | null
+          created_at?: string | null
+          departamento_sugerido?: string | null
+          entrada?: string | null
+          id?: string
+          manifestacao_id?: string
+          palavras_chave_detectadas?: string[] | null
+          prioridade_sugerida?: string | null
+          saida?: string | null
+          sentimento?: string | null
+          tempo_resposta_ms?: number | null
+          tipo_acao?: string
+          tokens_entrada?: number | null
+          tokens_saida?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ouvidoria_ia_logs_manifestacao_id_fkey"
+            columns: ["manifestacao_id"]
+            isOneToOne: false
+            referencedRelation: "ouvidoria_manifestacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ouvidoria_interacoes: {
+        Row: {
+          anexo_url: string | null
+          created_at: string | null
+          id: string
+          manifestacao_id: string
+          mensagem: string
+          tipo: string
+          usuario_id: string | null
+          visivel_associado: boolean | null
+        }
+        Insert: {
+          anexo_url?: string | null
+          created_at?: string | null
+          id?: string
+          manifestacao_id: string
+          mensagem: string
+          tipo: string
+          usuario_id?: string | null
+          visivel_associado?: boolean | null
+        }
+        Update: {
+          anexo_url?: string | null
+          created_at?: string | null
+          id?: string
+          manifestacao_id?: string
+          mensagem?: string
+          tipo?: string
+          usuario_id?: string | null
+          visivel_associado?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ouvidoria_interacoes_manifestacao_id_fkey"
+            columns: ["manifestacao_id"]
+            isOneToOne: false
+            referencedRelation: "ouvidoria_manifestacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ouvidoria_interacoes_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ouvidoria_manifestacoes: {
+        Row: {
+          anonimo: boolean | null
+          associado_id: string | null
+          assunto: string
+          avaliacao_comentario: string | null
+          avaliacao_nota: number | null
+          canal: string
+          categoria: string | null
+          created_at: string | null
+          data_encerramento: string | null
+          data_limite: string | null
+          data_primeira_resposta: string | null
+          departamento: string | null
+          descricao: string
+          id: string
+          prioridade: string | null
+          protocolo: string
+          responsavel_id: string | null
+          status: string | null
+          tipo: string
+          updated_at: string | null
+          vinculo_juridico_id: string | null
+        }
+        Insert: {
+          anonimo?: boolean | null
+          associado_id?: string | null
+          assunto: string
+          avaliacao_comentario?: string | null
+          avaliacao_nota?: number | null
+          canal: string
+          categoria?: string | null
+          created_at?: string | null
+          data_encerramento?: string | null
+          data_limite?: string | null
+          data_primeira_resposta?: string | null
+          departamento?: string | null
+          descricao: string
+          id?: string
+          prioridade?: string | null
+          protocolo: string
+          responsavel_id?: string | null
+          status?: string | null
+          tipo: string
+          updated_at?: string | null
+          vinculo_juridico_id?: string | null
+        }
+        Update: {
+          anonimo?: boolean | null
+          associado_id?: string | null
+          assunto?: string
+          avaliacao_comentario?: string | null
+          avaliacao_nota?: number | null
+          canal?: string
+          categoria?: string | null
+          created_at?: string | null
+          data_encerramento?: string | null
+          data_limite?: string | null
+          data_primeira_resposta?: string | null
+          departamento?: string | null
+          descricao?: string
+          id?: string
+          prioridade?: string | null
+          protocolo?: string
+          responsavel_id?: string | null
+          status?: string | null
+          tipo?: string
+          updated_at?: string | null
+          vinculo_juridico_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ouvidoria_manifestacoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ouvidoria_manifestacoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "ouvidoria_manifestacoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "ouvidoria_manifestacoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "ouvidoria_manifestacoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "ouvidoria_manifestacoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "ouvidoria_manifestacoes_responsavel_id_fkey"
+            columns: ["responsavel_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ouvidoria_manifestacoes_vinculo_juridico_id_fkey"
+            columns: ["vinculo_juridico_id"]
+            isOneToOne: false
+            referencedRelation: "processos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       plano_contas: {
         Row: {
           aceita_lancamento: boolean | null
