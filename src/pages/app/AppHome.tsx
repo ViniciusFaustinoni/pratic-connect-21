@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Car, Receipt, MapPin, Phone, FileText, CheckCircle, ChevronRight, Shield, AlertTriangle } from 'lucide-react';
+import { Car, Receipt, MapPin, Phone, FileText, CheckCircle, ChevronRight, Shield, AlertTriangle, Camera } from 'lucide-react';
 import { useAssociado } from '@/contexts/AssociadoContext';
 import { RevistoriaBanner } from '@/components/app/RevistoriaBanner';
 
@@ -155,33 +155,52 @@ export default function AppHome() {
       {/* ATALHOS RÁPIDOS */}
       <div className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold text-foreground">Acesso Rápido</h2>
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           <Link to="/app/boletos" className="flex flex-col items-center gap-2 rounded-xl bg-muted/50 p-4 transition-colors hover:bg-muted">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-              <Receipt className="h-6 w-6 text-primary" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-100">
+              <Receipt className="h-6 w-6 text-blue-600" />
             </div>
             <span className="text-xs font-medium text-foreground">Boletos</span>
           </Link>
 
           <Link to="/app/rastreamento" className="flex flex-col items-center gap-2 rounded-xl bg-muted/50 p-4 transition-colors hover:bg-muted">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-              <MapPin className="h-6 w-6 text-primary" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
+              <MapPin className="h-6 w-6 text-green-600" />
             </div>
             <span className="text-xs font-medium text-foreground">Rastrear</span>
           </Link>
 
+          <Link to="/app/revistoria" className="relative flex flex-col items-center gap-2 rounded-xl bg-muted/50 p-4 transition-colors hover:bg-muted">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-purple-100">
+              <Camera className="h-6 w-6 text-purple-600" />
+            </div>
+            <span className="text-xs font-medium text-foreground">Revistoria</span>
+            {revistoria && revistoria.diasAtraso >= 6 && revistoria.status !== 'em_analise' && revistoria.status !== 'aprovada' && (
+              <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">
+                !
+              </span>
+            )}
+          </Link>
+
           <Link to="/app/assistencia" className="flex flex-col items-center gap-2 rounded-xl bg-muted/50 p-4 transition-colors hover:bg-muted">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-              <Phone className="h-6 w-6 text-primary" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-orange-100">
+              <Phone className="h-6 w-6 text-orange-600" />
             </div>
             <span className="text-xs font-medium text-foreground">Ajuda 24h</span>
           </Link>
 
           <Link to="/app/documentos" className="flex flex-col items-center gap-2 rounded-xl bg-muted/50 p-4 transition-colors hover:bg-muted">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-              <FileText className="h-6 w-6 text-primary" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-cyan-100">
+              <FileText className="h-6 w-6 text-cyan-600" />
             </div>
             <span className="text-xs font-medium text-foreground">Docs</span>
+          </Link>
+
+          <Link to="/app/sinistros" className="flex flex-col items-center gap-2 rounded-xl bg-muted/50 p-4 transition-colors hover:bg-muted">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
+              <AlertTriangle className="h-6 w-6 text-red-600" />
+            </div>
+            <span className="text-xs font-medium text-foreground">Sinistros</span>
           </Link>
         </div>
       </div>

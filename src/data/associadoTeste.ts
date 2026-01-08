@@ -303,9 +303,29 @@ export const ASSOCIADO_TESTE: AssociadoTeste = {
     },
   ],
 
-  // REVISTORIA - Simula 8 dias de atraso para testar fluxo completo
+  // ============================================
+  // REVISTORIA - CENÁRIOS DE TESTE
+  // ============================================
+  // Para testar outros cenários, troque os valores abaixo:
+  //
+  // CENÁRIO 1 - EM DIA (sem atraso):
+  //   diasAtraso: 0, necessaria: false, status: null
+  //
+  // CENÁRIO 2 - SUSPENSO SEM REVISTORIA (1-5 dias):
+  //   diasAtraso: 3, necessaria: false, status: null
+  //
+  // CENÁRIO 3 - REVISTORIA OBRIGATÓRIA (6+ dias):
+  //   diasAtraso: 6, necessaria: true, status: 'pendente'
+  //
+  // CENÁRIO 4 - EM ANÁLISE:
+  //   diasAtraso: 8, necessaria: true, status: 'em_analise', dataEnvio: '2026-01-07T14:30:00'
+  //
+  // CENÁRIO 5 - REPROVADA:
+  //   diasAtraso: 10, necessaria: true, status: 'reprovada', motivosReprovacao: ['Foto do painel: veículo não estava ligado']
+  //
   revistoria: {
-    diasAtraso: 6, // No 6º dia já precisa de revistoria (após 5 dias de atraso)
+    // ATIVO: Cenário 3 - Revistoria Obrigatória (6+ dias)
+    diasAtraso: 6,
     necessaria: true,
     status: 'pendente',
     tipoVeiculo: null,
