@@ -310,6 +310,16 @@ export default function ManifestacaoDetalhe() {
                   })}
                 </span>
               </div>
+              {manifestacao.data_contato && manifestacao.data_contato !== manifestacao.created_at && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Data do Contato</span>
+                  <span>
+                    {format(new Date(manifestacao.data_contato), "dd/MM/yyyy HH:mm", {
+                      locale: ptBR,
+                    })}
+                  </span>
+                </div>
+              )}
               {manifestacao.data_primeira_resposta && (
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">1ª Resposta</span>
@@ -324,6 +334,12 @@ export default function ManifestacaoDetalhe() {
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Responsável</span>
                   <span>{manifestacao.responsavel.nome}</span>
+                </div>
+              )}
+              {manifestacao.registrado_por_nome && (
+                <div className="flex justify-between border-t pt-2 mt-2">
+                  <span className="text-muted-foreground">Registrado por</span>
+                  <span className="font-medium">{manifestacao.registrado_por_nome}</span>
                 </div>
               )}
             </CardContent>

@@ -26,7 +26,16 @@ export type SetorElogio =
   | 'diretoria'
   | 'outro';
 
-export type CanalManifestacao = 'app' | 'whatsapp' | 'telefone' | 'email' | 'presencial';
+export type CanalManifestacao = 
+  | 'app' 
+  | 'whatsapp' 
+  | 'whatsapp_manual'
+  | 'telefone' 
+  | 'email' 
+  | 'presencial'
+  | 'carta'
+  | 'redes_sociais'
+  | 'outro';
 
 export type PrioridadeManifestacao = 'baixa' | 'normal' | 'alta' | 'urgente';
 
@@ -86,6 +95,11 @@ export interface Manifestacao {
   setor_elogio?: SetorElogio | null;
   colaborador_elogiado?: string | null;
   data_atendimento?: string | null;
+  // Campos para registro manual
+  registrado_por_id?: string | null;
+  registrado_por_nome?: string | null;
+  data_contato?: string | null;
+  observacao_interna?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -203,9 +217,13 @@ export const CATEGORIA_LABELS: Record<CategoriaManifestacao, string> = {
 export const CANAL_LABELS: Record<CanalManifestacao, string> = {
   app: 'Aplicativo',
   whatsapp: 'WhatsApp',
+  whatsapp_manual: 'WhatsApp (manual)',
   telefone: 'Telefone',
   email: 'E-mail',
   presencial: 'Presencial',
+  carta: 'Carta',
+  redes_sociais: 'Redes Sociais',
+  outro: 'Outro',
 };
 
 export const PRIORIDADE_LABELS: Record<PrioridadeManifestacao, string> = {
