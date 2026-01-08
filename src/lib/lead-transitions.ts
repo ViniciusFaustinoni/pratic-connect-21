@@ -173,8 +173,7 @@ export const ETAPAS_FUNIL: EtapaLead[] = [
 ];
 
 /**
- * Etapas do Kanban de VENDAS (7 etapas oficiais)
- * NÃO inclui etapas do módulo Monitoramento
+ * Etapas do Kanban de VENDAS (11 etapas oficiais conforme PRD)
  */
 export const ETAPAS_KANBAN_VENDAS: EtapaLead[] = [
   'novo',
@@ -182,6 +181,10 @@ export const ETAPAS_KANBAN_VENDAS: EtapaLead[] = [
   'qualificado',
   'cotacao_enviada',
   'negociacao',
+  'vistoria_agendada',
+  'contrato_enviado',
+  'contrato_assinado',
+  'instalacao_agendada',
   'ganho',
   'perdido',
 ];

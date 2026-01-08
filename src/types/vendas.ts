@@ -126,14 +126,19 @@ export const MOTIVO_PERDA_COLORS: Record<MotivoPerda, string> = {
 // ARRAYS DE CONSTANTES — ETAPAS
 // ============================================
 
-/** Etapas principais para exibição no Kanban */
+/** Etapas principais para exibição no Kanban (11 etapas conforme PRD) */
 export const ETAPAS_KANBAN: EtapaLead[] = [
   'novo',
   'contato',
   'qualificado',
   'cotacao_enviada',
   'negociacao',
+  'vistoria_agendada',
+  'contrato_enviado',
+  'contrato_assinado',
+  'instalacao_agendada',
   'ganho',
+  'perdido',
 ];
 
 /** Todas as etapas do funil para Selects */
