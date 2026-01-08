@@ -178,6 +178,7 @@ import OuvidoriaDetalheApp from "./pages/app/OuvidoriaDetalhe";
 import OuvidoriaDashboard from "./pages/ouvidoria/OuvidoriaDashboard";
 import OuvidoriaFila from "./pages/ouvidoria/ManifestacoesList";
 import OuvidoriaDetalhe from "./pages/ouvidoria/ManifestacaoDetalhe";
+import NovaManifestacao from "./pages/ouvidoria/NovaManifestacao";
 
 // Installer App Pages
 import InstaladorLogin from "./pages/instalador/InstaladorLogin";
