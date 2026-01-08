@@ -2770,6 +2770,54 @@ export type Database = {
           },
         ]
       }
+      contas_bancarias: {
+        Row: {
+          agencia: string
+          ativo: boolean | null
+          banco_codigo: string
+          banco_nome: string
+          conta: string
+          created_at: string | null
+          data_saldo: string | null
+          descricao: string | null
+          digito: string | null
+          id: string
+          saldo_atual: number | null
+          tipo: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          agencia: string
+          ativo?: boolean | null
+          banco_codigo: string
+          banco_nome: string
+          conta: string
+          created_at?: string | null
+          data_saldo?: string | null
+          descricao?: string | null
+          digito?: string | null
+          id?: string
+          saldo_atual?: number | null
+          tipo?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          agencia?: string
+          ativo?: boolean | null
+          banco_codigo?: string
+          banco_nome?: string
+          conta?: string
+          created_at?: string | null
+          data_saldo?: string | null
+          descricao?: string | null
+          digito?: string | null
+          id?: string
+          saldo_atual?: number | null
+          tipo?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       contas_pagar: {
         Row: {
           agencia: string | null
@@ -3507,6 +3555,81 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["veiculo_id"]
+          },
+        ]
+      }
+      extratos_bancarios: {
+        Row: {
+          arquivo_nome: string
+          arquivo_path: string | null
+          conta_bancaria_id: string | null
+          created_at: string | null
+          data_fim: string
+          data_inicio: string
+          erro_mensagem: string | null
+          id: string
+          importado_por: string | null
+          qtd_conciliados: number | null
+          qtd_lancamentos: number | null
+          saldo_final: number | null
+          saldo_inicial: number | null
+          status: string | null
+          total_creditos: number | null
+          total_debitos: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          arquivo_nome: string
+          arquivo_path?: string | null
+          conta_bancaria_id?: string | null
+          created_at?: string | null
+          data_fim: string
+          data_inicio: string
+          erro_mensagem?: string | null
+          id?: string
+          importado_por?: string | null
+          qtd_conciliados?: number | null
+          qtd_lancamentos?: number | null
+          saldo_final?: number | null
+          saldo_inicial?: number | null
+          status?: string | null
+          total_creditos?: number | null
+          total_debitos?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          arquivo_nome?: string
+          arquivo_path?: string | null
+          conta_bancaria_id?: string | null
+          created_at?: string | null
+          data_fim?: string
+          data_inicio?: string
+          erro_mensagem?: string | null
+          id?: string
+          importado_por?: string | null
+          qtd_conciliados?: number | null
+          qtd_lancamentos?: number | null
+          saldo_final?: number | null
+          saldo_inicial?: number | null
+          status?: string | null
+          total_creditos?: number | null
+          total_debitos?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "extratos_bancarios_conta_bancaria_id_fkey"
+            columns: ["conta_bancaria_id"]
+            isOneToOne: false
+            referencedRelation: "contas_bancarias"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "extratos_bancarios_importado_por_fkey"
+            columns: ["importado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -5402,6 +5525,113 @@ export type Database = {
             columns: ["vendedor_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      movimentacoes_bancarias: {
+        Row: {
+          categoria: string | null
+          cobranca_id: string | null
+          conciliado: boolean | null
+          conciliado_em: string | null
+          conciliado_por: string | null
+          conta_bancaria_id: string | null
+          created_at: string | null
+          data_lancamento: string
+          data_origem: string | null
+          descricao: string
+          documento: string | null
+          documento_pagador: string | null
+          extrato_id: string | null
+          hash_lancamento: string | null
+          id: string
+          nome_pagador: string | null
+          observacao_conciliacao: string | null
+          origem_pagamento: string | null
+          saldo_apos: number | null
+          subcategoria: string | null
+          tipo: string
+          updated_at: string | null
+          valor: number
+        }
+        Insert: {
+          categoria?: string | null
+          cobranca_id?: string | null
+          conciliado?: boolean | null
+          conciliado_em?: string | null
+          conciliado_por?: string | null
+          conta_bancaria_id?: string | null
+          created_at?: string | null
+          data_lancamento: string
+          data_origem?: string | null
+          descricao: string
+          documento?: string | null
+          documento_pagador?: string | null
+          extrato_id?: string | null
+          hash_lancamento?: string | null
+          id?: string
+          nome_pagador?: string | null
+          observacao_conciliacao?: string | null
+          origem_pagamento?: string | null
+          saldo_apos?: number | null
+          subcategoria?: string | null
+          tipo: string
+          updated_at?: string | null
+          valor: number
+        }
+        Update: {
+          categoria?: string | null
+          cobranca_id?: string | null
+          conciliado?: boolean | null
+          conciliado_em?: string | null
+          conciliado_por?: string | null
+          conta_bancaria_id?: string | null
+          created_at?: string | null
+          data_lancamento?: string
+          data_origem?: string | null
+          descricao?: string
+          documento?: string | null
+          documento_pagador?: string | null
+          extrato_id?: string | null
+          hash_lancamento?: string | null
+          id?: string
+          nome_pagador?: string | null
+          observacao_conciliacao?: string | null
+          origem_pagamento?: string | null
+          saldo_apos?: number | null
+          subcategoria?: string | null
+          tipo?: string
+          updated_at?: string | null
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "movimentacoes_bancarias_cobranca_id_fkey"
+            columns: ["cobranca_id"]
+            isOneToOne: false
+            referencedRelation: "cobrancas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "movimentacoes_bancarias_conciliado_por_fkey"
+            columns: ["conciliado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "movimentacoes_bancarias_conta_bancaria_id_fkey"
+            columns: ["conta_bancaria_id"]
+            isOneToOne: false
+            referencedRelation: "contas_bancarias"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "movimentacoes_bancarias_extrato_id_fkey"
+            columns: ["extrato_id"]
+            isOneToOne: false
+            referencedRelation: "extratos_bancarios"
             referencedColumns: ["id"]
           },
         ]
@@ -7735,6 +7965,42 @@ export type Database = {
           },
         ]
       }
+      regras_categorizacao: {
+        Row: {
+          ativo: boolean | null
+          categoria: string
+          created_at: string | null
+          id: string
+          origem_pagamento: string | null
+          padrao_texto: string
+          prioridade: number | null
+          subcategoria: string | null
+          tipo_match: string | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          categoria: string
+          created_at?: string | null
+          id?: string
+          origem_pagamento?: string | null
+          padrao_texto: string
+          prioridade?: number | null
+          subcategoria?: string | null
+          tipo_match?: string | null
+        }
+        Update: {
+          ativo?: boolean | null
+          categoria?: string
+          created_at?: string | null
+          id?: string
+          origem_pagamento?: string | null
+          padrao_texto?: string
+          prioridade?: number | null
+          subcategoria?: string | null
+          tipo_match?: string | null
+        }
+        Relationships: []
+      }
       regua_execucoes: {
         Row: {
           acao: string
@@ -9438,6 +9704,26 @@ export type Database = {
           },
         ]
       }
+      view_movimentacoes_diarias: {
+        Row: {
+          conta_bancaria_id: string | null
+          data_lancamento: string | null
+          qtd_conciliados: number | null
+          qtd_lancamentos: number | null
+          saldo_dia: number | null
+          total_creditos: number | null
+          total_debitos: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "movimentacoes_bancarias_conta_bancaria_id_fkey"
+            columns: ["conta_bancaria_id"]
+            isOneToOne: false
+            referencedRelation: "contas_bancarias"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       view_performance_canais: {
         Row: {
           conversoes: number | null
@@ -9539,6 +9825,16 @@ export type Database = {
       can_access_api_settings: { Args: { _user_id: string }; Returns: boolean }
       can_manage_juridico: { Args: { _user_id: string }; Returns: boolean }
       can_manage_marketing: { Args: { _user_id: string }; Returns: boolean }
+      gerar_hash_lancamento: {
+        Args: {
+          p_conta_id: string
+          p_data: string
+          p_descricao: string
+          p_documento: string
+          p_valor: number
+        }
+        Returns: string
+      }
       get_alertas_contagem: {
         Args: never
         Returns: {
