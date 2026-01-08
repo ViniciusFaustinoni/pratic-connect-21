@@ -200,6 +200,7 @@ const menuConfig: {
         { title: 'Contas a Pagar', url: '/financeiro/contas-pagar', icon: CreditCard },
         { title: 'Faturamento', url: '/financeiro/faturamento', icon: FileText },
         { title: 'Extrato', url: '/financeiro/extrato', icon: List },
+        { title: 'Extratos Bancários', url: '/financeiro/extratos-bancarios', icon: FileText },
       ],
     },
     {
