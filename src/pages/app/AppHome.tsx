@@ -47,10 +47,14 @@ export default function AppHome() {
   const nomeAssociado = isTestMode && associado ? associado.nome : MOCK_ASSOCIADO.nome;
   const primeiroNome = nomeAssociado.split(' ')[0];
   
-  // Mostrar banner de revistoria se houver pendência
+  // Mostrar banner de revistoria apenas a partir do 6° dia de atraso
   const mostrarBannerRevistoria = revistoria && (
-    revistoria.diasAtraso > 0 || revistoria.status === 'em_analise'
+    revistoria.diasAtraso >= 6 || revistoria.status === 'em_analise'
   );
+  
+  // Veículo desprotegido: após 1 dia de atraso na revistoria
+  const veiculoDesprotegido = revistoria && revistoria.diasAtraso >= 1 && 
+    revistoria.status !== 'em_analise' && revistoria.status !== 'aprovada';
 
   return (
     <div className="flex flex-col gap-6 pb-24">
@@ -73,7 +77,10 @@ export default function AppHome() {
         const statusAssociado = isTestMode && associado ? associado.status : MOCK_ASSOCIADO.status;
         const plano = isTestMode && associado ? associado.plano : MOCK_ASSOCIADO.plano;
         const desde = isTestMode && associado ? associado.associadoDesde?.split('-')[0] : MOCK_ASSOCIADO.desde;
-        const isAtivo = statusAssociado === 'ativo';
+        
+        // Veículo desprotegido sobrepõe o status ativo
+        const isDesprotegido = veiculoDesprotegido;
+        const isAtivo = !isDesprotegido && statusAssociado === 'ativo';
         const isSuspenso = statusAssociado === 'suspenso';
         
         return (
@@ -89,10 +96,10 @@ export default function AppHome() {
                   </div>
                   <div>
                     <p className={`text-sm ${isAtivo ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}`}>
-                      Sua proteção está
+                      {isDesprotegido ? 'Seu veículo está' : 'Sua proteção está'}
                     </p>
                     <p className={`text-lg font-bold ${isAtivo ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}`}>
-                      {isAtivo ? 'ATIVA' : isSuspenso ? 'SUSPENSA' : 'INATIVA'}
+                      {isAtivo ? 'ATIVA' : isDesprotegido ? 'DESPROTEGIDO' : isSuspenso ? 'SUSPENSA' : 'INATIVA'}
                     </p>
                   </div>
                 </div>
