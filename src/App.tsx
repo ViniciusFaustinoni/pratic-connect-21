@@ -57,6 +57,7 @@ import OrdensServicoList from "./pages/oficina/OrdensServicoList";
 import OrdemServicoDetalhePage from "./pages/oficina/OrdemServicoDetalhe";
 import Configuracoes from "./pages/Configuracoes";
 import Perfil from "./pages/Perfil";
+import Notificacoes from "./pages/Notificacoes";
 import NotFound from "./pages/NotFound";
 import AcessoNegado from "./pages/AcessoNegado";
 import AssistenciaDashboard from "./pages/assistencia/AssistenciaDashboard";
@@ -197,6 +198,7 @@ const App = () => (
             <Route element={<AppLayout />}>
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/perfil" element={<Perfil />} />
+              <Route path="/notificacoes" element={<Notificacoes />} />
               
               {/* Vendas */}
               <Route path="/vendas/dashboard" element={<DashboardVendas />} />

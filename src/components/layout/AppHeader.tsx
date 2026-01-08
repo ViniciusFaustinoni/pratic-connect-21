@@ -14,6 +14,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { ROLE_LABELS } from '@/types/database';
 import { UserAvatar } from '@/components/UserAvatar';
 import { GlobalBreadcrumb } from '@/components/layout/GlobalBreadcrumb';
+import { NotificationBell } from '@/components/layout/NotificationBell';
 
 export function AppHeader() {
   const navigate = useNavigate();
@@ -32,6 +33,9 @@ export function AppHeader() {
       <GlobalBreadcrumb />
 
       <div className="ml-auto flex items-center gap-2">
+        {/* Notifications */}
+        <NotificationBell variant="internal" />
+        
         {/* User Menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
