@@ -2,23 +2,15 @@ import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { ArrowRight } from 'lucide-react';
 import { 
   ETAPA_LABELS, 
   ETAPA_COLORS,
@@ -78,43 +70,41 @@ export function MoverEtapaModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Mover Lead de Etapa</DialogTitle>
-          <DialogDescription>
-            {leadNome}
-          </DialogDescription>
+          <DialogTitle>Mover Lead</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
-          {/* Visualização da transição */}
-          <div className="flex items-center justify-center gap-3">
-            <Badge className={ETAPA_COLORS[etapaAtual]}>
-              {ETAPA_LABELS[etapaAtual]}
-            </Badge>
-            <ArrowRight className="h-4 w-4 text-muted-foreground" />
-            {novaEtapa ? (
-              <Badge className={ETAPA_COLORS[novaEtapa]}>
-                {ETAPA_LABELS[novaEtapa]}
+        <div className="space-y-4 py-2">
+          {/* Info do lead com fundo destacado */}
+          <div className="bg-muted/50 rounded-lg p-4 space-y-2">
+            <p className="text-sm">
+              <span className="text-muted-foreground">Lead:</span>{' '}
+              <span className="font-medium">{leadNome}</span>
+            </p>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Etapa atual:</span>
+              <Badge className={ETAPA_COLORS[etapaAtual]}>
+                {ETAPA_LABELS[etapaAtual]}
               </Badge>
-            ) : (
-              <span className="text-sm text-muted-foreground">Selecione</span>
-            )}
+            </div>
           </div>
 
-          {/* Select nova etapa */}
-          <div className="space-y-2">
-            <Label>Nova etapa *</Label>
-            <Select value={novaEtapa} onValueChange={(v) => setNovaEtapa(v as EtapaLead)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione a nova etapa" />
-              </SelectTrigger>
-              <SelectContent>
-                {etapasDisponiveis.map((etapa) => (
-                  <SelectItem key={etapa} value={etapa}>
+          {/* RadioGroup para nova etapa */}
+          <div className="space-y-3">
+            <Label>Nova etapa:</Label>
+            <RadioGroup 
+              value={novaEtapa} 
+              onValueChange={(v) => setNovaEtapa(v as EtapaLead)}
+              className="space-y-2"
+            >
+              {etapasDisponiveis.map((etapa) => (
+                <div key={etapa} className="flex items-center space-x-3">
+                  <RadioGroupItem value={etapa} id={etapa} />
+                  <Label htmlFor={etapa} className="cursor-pointer font-normal">
                     {ETAPA_LABELS[etapa]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                  </Label>
+                </div>
+              ))}
+            </RadioGroup>
           </div>
 
           {/* Motivo da perda (condicional) */}
@@ -137,7 +127,7 @@ export function MoverEtapaModal({
           <div className="space-y-2">
             <Label>Observação (opcional)</Label>
             <Textarea
-              placeholder="Adicione uma observação sobre esta movimentação..."
+              placeholder="Ex: Cliente pediu mais tempo para pensar..."
               value={observacao}
               onChange={(e) => setObservacao(e.target.value)}
               rows={2}
@@ -153,7 +143,7 @@ export function MoverEtapaModal({
             onClick={handleMover} 
             disabled={!canSubmit || isMoving}
           >
-            {isMoving ? 'Movendo...' : 'Mover Lead'}
+            {isMoving ? 'Movendo...' : 'Mover'}
           </Button>
         </DialogFooter>
       </DialogContent>
