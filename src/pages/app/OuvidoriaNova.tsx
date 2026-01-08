@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { 
   ArrowLeft, 
@@ -59,6 +59,7 @@ export default function OuvidoriaNova() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const tipoParam = searchParams.get('tipo') || 'reclamacao';
+  const setorParam = searchParams.get('setor') || '';
   
   const [categoria, setCategoria] = useState('');
   const [assunto, setAssunto] = useState('');
@@ -68,16 +69,25 @@ export default function OuvidoriaNova() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Campos específicos para elogio
-  const [setorElogio, setSetorElogio] = useState('');
+  const [setorElogio, setSetorElogio] = useState(setorParam);
   const [colaborador, setColaborador] = useState('');
+
+  // Se for elogio e não tem setor, volta para o menu
+  useEffect(() => {
+    if (tipoParam === 'elogio' && !setorParam) {
+      navigate('/app/ouvidoria');
+    }
+  }, [tipoParam, setorParam, navigate]);
 
   const tipoConfig = tiposConfig[tipoParam] || tiposConfig.reclamacao;
   const Icon = tipoConfig.icon;
   
-  // Obter label do setor selecionado
-  const setorLabel = setorElogio 
-    ? setoresElogio.find(s => s.value === setorElogio)?.label 
+  // Obter label e ícone do setor selecionado
+  const setorConfig = setorElogio 
+    ? setoresElogio.find(s => s.value === setorElogio)
     : null;
+  const setorLabel = setorConfig?.label || null;
+  const SetorIcon = setorConfig?.icon || null;
 
   const handleAnexoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -140,35 +150,33 @@ export default function OuvidoriaNova() {
         {tipoConfig.label}
       </Badge>
 
+      {/* Badge do setor selecionado (para elogio) */}
+      {tipoParam === 'elogio' && setorLabel && SetorIcon && (
+        <Card className="bg-green-50 border-green-200">
+          <CardContent className="p-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <SetorIcon className="h-5 w-5 text-green-600" />
+              <span className="text-green-800 font-medium">Elogio para: {setorLabel}</span>
+            </div>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="text-green-700 hover:bg-green-100"
+              onClick={() => navigate('/app/ouvidoria')}
+            >
+              Trocar setor
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Formulário */}
       <form onSubmit={handleSubmit} className="space-y-4">
         
         {/* === CAMPOS ESPECÍFICOS PARA ELOGIO === */}
         {tipoParam === 'elogio' ? (
           <>
-            {/* 1. Setor do Profissional (obrigatório) */}
-            <div className="space-y-2">
-              <Label htmlFor="setor">Qual setor do profissional que você deseja elogiar? *</Label>
-              <Select value={setorElogio} onValueChange={setSetorElogio}>
-                <SelectTrigger className={setorElogio ? "border-green-500" : ""}>
-                  <SelectValue placeholder="Selecione o setor..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {setoresElogio.map(setor => (
-                    <SelectItem key={setor.value} value={setor.value}>
-                      {setor.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {setorLabel && (
-                <Badge variant="secondary" className="bg-green-100 text-green-700">
-                  {setorLabel}
-                </Badge>
-              )}
-            </div>
-
-            {/* 2. Nome do Profissional (opcional) */}
+            {/* 1. Nome do Profissional (opcional) */}
             <div className="space-y-2">
               <Label htmlFor="colaborador">Nome do Profissional (opcional)</Label>
               <Input
@@ -179,7 +187,7 @@ export default function OuvidoriaNova() {
               />
             </div>
 
-            {/* 3. Assunto (obrigatório) */}
+            {/* 2. Assunto (obrigatório) */}
             <div className="space-y-2">
               <Label htmlFor="assunto">Assunto *</Label>
               <Input
@@ -194,7 +202,7 @@ export default function OuvidoriaNova() {
               </p>
             </div>
 
-            {/* 4. Descrição (obrigatório) */}
+            {/* 3. Descrição (obrigatório) */}
             <div className="space-y-2">
               <Label htmlFor="descricao">Descrição *</Label>
               <Textarea
@@ -265,7 +273,7 @@ export default function OuvidoriaNova() {
           </>
         )}
 
-        {/* 5. Anexos (opcional) - para todos os tipos */}
+        {/* 4. Anexos (opcional) - para todos os tipos */}
         <div className="space-y-2">
           <Label>Anexos (opcional)</Label>
           <div className="border-2 border-dashed rounded-lg p-4">

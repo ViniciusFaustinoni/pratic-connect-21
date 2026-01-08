@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { 
   AlertCircle, 
@@ -15,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { SetorElogioModal } from "@/components/ouvidoria/SetorElogioModal";
 
 interface TipoItem {
   id: string;
@@ -42,9 +44,20 @@ const colorClasses: Record<string, { bg: string; border: string; text: string; i
 
 export default function OuvidoriaMenu() {
   const navigate = useNavigate();
+  const [showSetorModal, setShowSetorModal] = useState(false);
 
   const handleTipoClick = (tipoId: string) => {
-    navigate(`/app/ouvidoria/nova?tipo=${tipoId}`);
+    if (tipoId === 'elogio') {
+      // Abre o modal de seleção de setor
+      setShowSetorModal(true);
+    } else {
+      navigate(`/app/ouvidoria/nova?tipo=${tipoId}`);
+    }
+  };
+
+  const handleSetorSelect = (setorValue: string) => {
+    // Navega para o formulário já com o setor pré-selecionado
+    navigate(`/app/ouvidoria/nova?tipo=elogio&setor=${setorValue}`);
   };
 
   return (
@@ -132,6 +145,13 @@ export default function OuvidoriaMenu() {
           </a>
         </CardContent>
       </Card>
+
+      {/* Modal de seleção de setor para elogio */}
+      <SetorElogioModal
+        open={showSetorModal}
+        onClose={() => setShowSetorModal(false)}
+        onSelect={handleSetorSelect}
+      />
     </div>
   );
 }
