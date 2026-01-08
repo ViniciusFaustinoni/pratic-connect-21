@@ -1350,6 +1350,79 @@ export type Database = {
         }
         Relationships: []
       }
+      auth_tokens_primeiro_acesso: {
+        Row: {
+          associado_id: string
+          created_at: string | null
+          expira_em: string
+          id: string
+          token: string
+          usado: boolean | null
+          usado_em: string | null
+        }
+        Insert: {
+          associado_id: string
+          created_at?: string | null
+          expira_em: string
+          id?: string
+          token: string
+          usado?: boolean | null
+          usado_em?: string | null
+        }
+        Update: {
+          associado_id?: string
+          created_at?: string | null
+          expira_em?: string
+          id?: string
+          token?: string
+          usado?: boolean | null
+          usado_em?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "auth_tokens_primeiro_acesso_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "auth_tokens_primeiro_acesso_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "auth_tokens_primeiro_acesso_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "auth_tokens_primeiro_acesso_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "auth_tokens_primeiro_acesso_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "auth_tokens_primeiro_acesso_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+        ]
+      }
       avaliacoes: {
         Row: {
           avaliador_id: string

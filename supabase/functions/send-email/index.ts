@@ -282,6 +282,43 @@ const TEMPLATES: Record<string, {
       </html>
     `
   },
+  'primeiro-acesso': {
+    subject: '🔐 Crie sua senha - App PRATIC',
+    html: (data) => `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      </head>
+      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 0; background-color: #f4f4f5;">
+        <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+          <div style="background-color: #ffffff; border-radius: 8px; padding: 40px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <h1 style="color: #18181b; font-size: 24px; margin: 0 0 24px 0;">🎉 Olá, ${data.nome}!</h1>
+            <p style="color: #52525b; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">
+              Seu veículo está protegido pela <strong>PRATIC</strong>!
+            </p>
+            <p style="color: #52525b; font-size: 16px; line-height: 1.6; margin: 0 0 24px 0;">
+              Clique no botão abaixo para criar sua senha e acessar o App PRATIC:
+            </p>
+            <a href="${data.linkCriarSenha}" style="display: inline-block; background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 6px; font-weight: 600; font-size: 16px;">
+              🔐 Criar minha senha
+            </a>
+            <div style="background-color: #fef3c7; border-radius: 8px; padding: 16px; margin-top: 24px; border: 1px solid #fde68a;">
+              <p style="color: #92400e; font-size: 14px; margin: 0;">
+                ⏰ Este link é válido por 48 horas.
+              </p>
+            </div>
+            <hr style="border: none; border-top: 1px solid #e4e4e7; margin: 32px 0;">
+            <p style="color: #a1a1aa; font-size: 14px; margin: 0;">
+              PRATIC Proteção Veicular
+            </p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `
+  },
   'generico': {
     subject: (data) => String(data.assunto),
     html: (data) => `
