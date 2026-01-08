@@ -153,12 +153,15 @@ export function KanbanBoard({
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
         onDragMove={handleDragMove}
-        autoScroll={true}
+        autoScroll={{
+          threshold: { x: 0.1, y: 0.1 },
+          acceleration: 10,
+        }}
       >
         <div
           ref={boardRef}
           onWheelCapture={handleWheel}
-          className="flex gap-3 h-full overflow-x-auto overflow-y-hidden pb-4 px-12 scrollbar-thin overscroll-x-contain"
+          className="flex gap-3 h-full overflow-x-scroll overflow-y-hidden pb-4 px-12 scrollbar-thin overscroll-x-contain touch-pan-y"
           style={{ scrollbarGutter: 'stable' }}
         >
           {ETAPAS_KANBAN_VENDAS.map((etapa) => {
