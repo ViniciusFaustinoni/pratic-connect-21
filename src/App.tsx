@@ -168,6 +168,17 @@ import AppDocumentos from "./pages/app/AppDocumentos";
 import AppNotificacoes from "./pages/app/AppNotificacoes";
 import AppPlano from "./pages/app/AppPlano";
 
+// App Ouvidoria
+import OuvidoriaMenu from "./pages/app/OuvidoriaMenu";
+import OuvidoriaNova from "./pages/app/OuvidoriaNova";
+import OuvidoriaLista from "./pages/app/OuvidoriaLista";
+import OuvidoriaDetalheApp from "./pages/app/OuvidoriaDetalhe";
+
+// ERP Ouvidoria
+import OuvidoriaDashboard from "./pages/ouvidoria/OuvidoriaDashboard";
+import OuvidoriaFila from "./pages/ouvidoria/ManifestacoesList";
+import OuvidoriaDetalhe from "./pages/ouvidoria/ManifestacaoDetalhe";
+
 // Installer App Pages
 import InstaladorLogin from "./pages/instalador/InstaladorLogin";
 import InstaladorHome from "./pages/instalador/InstaladorHome";
@@ -338,6 +349,11 @@ const App = () => (
               <Route path="/ordens-servico" element={<OrdensServico />} />
               <Route path="/oficinas/ordens/:id" element={<OrdemServicoDetalhe />} />
               
+              {/* Ouvidoria ERP */}
+              <Route path="/ouvidoria" element={<OuvidoriaDashboard />} />
+              <Route path="/ouvidoria/fila" element={<OuvidoriaFila />} />
+              <Route path="/ouvidoria/:id" element={<OuvidoriaDetalhe />} />
+              
               {/* Config */}
               <Route path="/configuracoes" element={<Configuracoes />} />
             </Route>
@@ -364,6 +380,12 @@ const App = () => (
               <Route path="/app/configuracoes" element={<AppConfiguracoes />} />
               <Route path="/app/documentos" element={<AppDocumentos />} />
               <Route path="/app/notificacoes" element={<AppNotificacoes />} />
+              
+              {/* Ouvidoria App */}
+              <Route path="/app/ouvidoria" element={<OuvidoriaMenu />} />
+              <Route path="/app/ouvidoria/nova" element={<OuvidoriaNova />} />
+              <Route path="/app/ouvidoria/lista" element={<OuvidoriaLista />} />
+              <Route path="/app/ouvidoria/:id" element={<OuvidoriaDetalheApp />} />
             </Route>
             <Route path="/app" element={<Navigate to="/app/home" replace />} />
             
