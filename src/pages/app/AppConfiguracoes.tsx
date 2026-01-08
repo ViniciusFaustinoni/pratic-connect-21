@@ -40,33 +40,38 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useMyAssociado } from '@/hooks/useMyData';
-
+import { useNotificacoesPreferencias, useUpdateNotificacoesPreferencias } from '@/hooks/useNotificacoesPreferencias';
+import { CreditCard, Car, AlertTriangle as AlertTriangleIcon, Megaphone } from 'lucide-react';
 export default function AppConfiguracoes() {
   const { signOut, profile } = useAuth();
   const navigate = useNavigate();
   const { data: associado } = useMyAssociado();
   
-  // Notificações - carregar do profile
-  const [notificacoes, setNotificacoes] = useState({
-    push: true,
-    email: true,
-    whatsapp: true,
-    sms: false,
-  });
-
-  // Carregar preferências de notificação do profile
-  useEffect(() => {
-    if (profile) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const profileData = profile as any;
-      setNotificacoes({
-        push: profileData.notif_novos_leads ?? true,
-        email: profileData.notif_documentos_pendentes ?? true,
-        whatsapp: profileData.notif_resumo_diario ?? true,
-        sms: false,
-      });
+  // Notificações - usar hook de preferências
+  const { data: preferencias, isLoading: loadingPreferencias } = useNotificacoesPreferencias();
+  const updatePreferencias = useUpdateNotificacoesPreferencias();
+  
+  const handleUpdatePreferencia = async (key: string, value: boolean) => {
+    try {
+      await updatePreferencias.mutateAsync({ [key]: value });
+      toast.success(value ? 'Ativado' : 'Desativado');
+    } catch {
+      toast.error('Erro ao salvar preferência');
     }
-  }, [profile]);
+  };
+
+  const handleTogglePush = async (checked: boolean) => {
+    if (checked && 'Notification' in window) {
+      const permission = await Notification.requestPermission();
+      if (permission === 'granted') {
+        await handleUpdatePreferencia('push_ativo', true);
+      } else {
+        toast.error('Permissão de notificações negada');
+      }
+    } else {
+      await handleUpdatePreferencia('push_ativo', checked);
+    }
+  };
 
   // Segurança
   const [biometriaEnabled, setBiometriaEnabled] = useState(false);
@@ -89,24 +94,7 @@ export default function AppConfiguracoes() {
     toast.success('Você saiu da sua conta');
   };
 
-  const handleTogglePush = async (checked: boolean) => {
-    if (checked && 'Notification' in window) {
-      const permission = await Notification.requestPermission();
-      if (permission === 'granted') {
-        setNotificacoes({ ...notificacoes, push: true });
-        toast.success('Notificações push ativadas');
-      } else {
-        toast.error('Permissão de notificações negada');
-        setNotificacoes({ ...notificacoes, push: false });
-      }
-    } else {
-      setNotificacoes({ ...notificacoes, push: checked });
-      if (!checked) {
-        toast.info('Notificações push desativadas');
-      }
-    }
-  };
-
+  // Handler de senha mantido
   const handleAlterarSenha = () => {
     if (!senhaAtual || !novaSenha || !confirmarSenha) {
       toast.error('Preencha todos os campos');
@@ -183,7 +171,7 @@ export default function AppConfiguracoes() {
           </CardContent>
         </Card>
 
-        {/* Notificações */}
+        {/* Notificações - Canais */}
         <div>
           <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-1">
             Notificações
@@ -202,8 +190,9 @@ export default function AppConfiguracoes() {
                   </div>
                 </div>
                 <Switch
-                  checked={notificacoes.push}
+                  checked={preferencias?.push_ativo ?? true}
                   onCheckedChange={handleTogglePush}
+                  disabled={loadingPreferencias}
                 />
               </div>
               {/* E-mail */}
@@ -218,14 +207,9 @@ export default function AppConfiguracoes() {
                   </div>
                 </div>
                 <Switch
-                  checked={notificacoes.email}
-                  onCheckedChange={async (checked) => {
-                    setNotificacoes({ ...notificacoes, email: checked });
-                    if (profile?.id) {
-                      await supabase.from('profiles').update({ notif_documentos_pendentes: checked }).eq('id', profile.id);
-                      toast.success(checked ? 'E-mail ativado' : 'E-mail desativado');
-                    }
-                  }}
+                  checked={preferencias?.email_ativo ?? true}
+                  onCheckedChange={(checked) => handleUpdatePreferencia('email_ativo', checked)}
+                  disabled={loadingPreferencias}
                 />
               </div>
               {/* WhatsApp */}
@@ -240,33 +224,88 @@ export default function AppConfiguracoes() {
                   </div>
                 </div>
                 <Switch
-                  checked={notificacoes.whatsapp}
-                  onCheckedChange={async (checked) => {
-                    setNotificacoes({ ...notificacoes, whatsapp: checked });
-                    if (profile?.id) {
-                      await supabase.from('profiles').update({ notif_resumo_diario: checked }).eq('id', profile.id);
-                      toast.success(checked ? 'WhatsApp ativado' : 'WhatsApp desativado');
-                    }
-                  }}
+                  checked={preferencias?.whatsapp_ativo ?? false}
+                  onCheckedChange={(checked) => handleUpdatePreferencia('whatsapp_ativo', checked)}
+                  disabled={loadingPreferencias}
                 />
               </div>
-              {/* SMS */}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Notificações - Categorias */}
+        <div>
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-1">
+            Categorias
+          </h2>
+          <Card className="border-0 shadow-sm">
+            <CardContent className="p-0 divide-y">
+              {/* Financeiro */}
               <div className="flex items-center justify-between p-4">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-purple-100 rounded-lg">
-                    <Smartphone className="h-5 w-5 text-purple-600" />
+                  <div className="p-2 bg-green-100 rounded-lg">
+                    <CreditCard className="h-5 w-5 text-green-600" />
                   </div>
                   <div>
-                    <div className="font-medium text-foreground">SMS</div>
-                    <div className="text-sm text-muted-foreground">Alertas urgentes</div>
+                    <div className="font-medium text-foreground">Financeiro</div>
+                    <div className="text-sm text-muted-foreground">Boletos e pagamentos</div>
                   </div>
                 </div>
                 <Switch
-                  checked={notificacoes.sms}
-                  onCheckedChange={(checked) => {
-                    setNotificacoes({ ...notificacoes, sms: checked });
-                    toast.info('SMS será implementado em breve');
-                  }}
+                  checked={preferencias?.notif_financeiro ?? true}
+                  onCheckedChange={(checked) => handleUpdatePreferencia('notif_financeiro', checked)}
+                  disabled={loadingPreferencias}
+                />
+              </div>
+              {/* Veículo */}
+              <div className="flex items-center justify-between p-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <Car className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <div className="font-medium text-foreground">Veículo</div>
+                    <div className="text-sm text-muted-foreground">Instalação e rastreamento</div>
+                  </div>
+                </div>
+                <Switch
+                  checked={preferencias?.notif_veiculo ?? true}
+                  onCheckedChange={(checked) => handleUpdatePreferencia('notif_veiculo', checked)}
+                  disabled={loadingPreferencias}
+                />
+              </div>
+              {/* Comunicados */}
+              <div className="flex items-center justify-between p-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-purple-100 rounded-lg">
+                    <Megaphone className="h-5 w-5 text-purple-600" />
+                  </div>
+                  <div>
+                    <div className="font-medium text-foreground">Comunicados</div>
+                    <div className="text-sm text-muted-foreground">Avisos da associação</div>
+                  </div>
+                </div>
+                <Switch
+                  checked={preferencias?.notif_comunicados ?? true}
+                  onCheckedChange={(checked) => handleUpdatePreferencia('notif_comunicados', checked)}
+                  disabled={loadingPreferencias}
+                />
+              </div>
+              {/* Segurança - Sempre ativa */}
+              <div className="flex items-center justify-between p-4 bg-muted/30">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-red-100 rounded-lg">
+                    <AlertTriangleIcon className="h-5 w-5 text-red-600" />
+                  </div>
+                  <div>
+                    <div className="font-medium text-foreground">Segurança</div>
+                    <div className="text-sm text-muted-foreground">Assistência e sinistros</div>
+                    <div className="text-xs text-amber-600 mt-1">⚠️ Sempre ativa por segurança</div>
+                  </div>
+                </div>
+                <Switch
+                  checked={true}
+                  disabled={true}
                 />
               </div>
             </CardContent>

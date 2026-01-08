@@ -5811,43 +5811,73 @@ export type Database = {
       }
       notificacoes: {
         Row: {
+          canal_email: boolean | null
+          canal_push: boolean | null
+          canal_sistema: boolean | null
+          canal_whatsapp: boolean | null
+          categoria: string | null
           created_at: string
           data_expiracao: string | null
           destino: string | null
           destino_id: string | null
+          icone: string | null
           id: string
           lida: boolean
+          lida_em: string | null
           link: string | null
           mensagem: string
           modulo: string | null
+          prioridade: string | null
+          referencia_id: string | null
+          referencia_tipo: string | null
           tipo: string
           titulo: string
           user_id: string
         }
         Insert: {
+          canal_email?: boolean | null
+          canal_push?: boolean | null
+          canal_sistema?: boolean | null
+          canal_whatsapp?: boolean | null
+          categoria?: string | null
           created_at?: string
           data_expiracao?: string | null
           destino?: string | null
           destino_id?: string | null
+          icone?: string | null
           id?: string
           lida?: boolean
+          lida_em?: string | null
           link?: string | null
           mensagem: string
           modulo?: string | null
+          prioridade?: string | null
+          referencia_id?: string | null
+          referencia_tipo?: string | null
           tipo?: string
           titulo: string
           user_id: string
         }
         Update: {
+          canal_email?: boolean | null
+          canal_push?: boolean | null
+          canal_sistema?: boolean | null
+          canal_whatsapp?: boolean | null
+          categoria?: string | null
           created_at?: string
           data_expiracao?: string | null
           destino?: string | null
           destino_id?: string | null
+          icone?: string | null
           id?: string
           lida?: boolean
+          lida_em?: string | null
           link?: string | null
           mensagem?: string
           modulo?: string | null
+          prioridade?: string | null
+          referencia_id?: string | null
+          referencia_tipo?: string | null
           tipo?: string
           titulo?: string
           user_id?: string
@@ -5889,6 +5919,69 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      notificacoes_preferencias: {
+        Row: {
+          created_at: string | null
+          email_alertas_criticos: boolean | null
+          email_ativo: boolean | null
+          email_resumo_diario: boolean | null
+          horario_resumo: string | null
+          id: string
+          notif_comunicados: boolean | null
+          notif_financeiro: boolean | null
+          notif_veiculo: boolean | null
+          onboarding_completo: boolean | null
+          push_ativo: boolean | null
+          som_notificacao: boolean | null
+          tipo_usuario: string
+          updated_at: string | null
+          usuario_id: string
+          whatsapp_ativo: boolean | null
+          whatsapp_horario_fim: string | null
+          whatsapp_horario_inicio: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email_alertas_criticos?: boolean | null
+          email_ativo?: boolean | null
+          email_resumo_diario?: boolean | null
+          horario_resumo?: string | null
+          id?: string
+          notif_comunicados?: boolean | null
+          notif_financeiro?: boolean | null
+          notif_veiculo?: boolean | null
+          onboarding_completo?: boolean | null
+          push_ativo?: boolean | null
+          som_notificacao?: boolean | null
+          tipo_usuario?: string
+          updated_at?: string | null
+          usuario_id: string
+          whatsapp_ativo?: boolean | null
+          whatsapp_horario_fim?: string | null
+          whatsapp_horario_inicio?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email_alertas_criticos?: boolean | null
+          email_ativo?: boolean | null
+          email_resumo_diario?: boolean | null
+          horario_resumo?: string | null
+          id?: string
+          notif_comunicados?: boolean | null
+          notif_financeiro?: boolean | null
+          notif_veiculo?: boolean | null
+          onboarding_completo?: boolean | null
+          push_ativo?: boolean | null
+          som_notificacao?: boolean | null
+          tipo_usuario?: string
+          updated_at?: string | null
+          usuario_id?: string
+          whatsapp_ativo?: boolean | null
+          whatsapp_horario_fim?: string | null
+          whatsapp_horario_inicio?: string | null
+        }
+        Relationships: []
       }
       notificacoes_sistema: {
         Row: {
