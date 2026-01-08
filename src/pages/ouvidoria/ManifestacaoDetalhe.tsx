@@ -49,7 +49,7 @@ import {
   Trophy,
   Send as SendIcon,
 } from "lucide-react";
-import { CATEGORIA_LABELS, CANAL_LABELS, STATUS_LABELS, SETOR_ELOGIO_LABELS, type StatusManifestacao, type SetorElogio } from "@/types/ouvidoria";
+import { CATEGORIA_LABELS, CANAL_LABELS, STATUS_LABELS, type StatusManifestacao } from "@/types/ouvidoria";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { setoresElogio } from "@/constants/ouvidoria";
@@ -343,16 +343,8 @@ export default function ManifestacaoDetalhe() {
                   <div className="flex justify-between items-center">
                     <span className="text-green-700">Setor Elogiado</span>
                     <div className="flex items-center gap-2">
-                      {(() => {
-                        const setor = setoresElogio.find(s => s.id === manifestacao.setor_elogio);
-                        if (setor) {
-                          const Icon = setor.icon;
-                          return <Icon className="h-4 w-4 text-green-600" />;
-                        }
-                        return null;
-                      })()}
                       <span className="font-medium text-green-800">
-                        {SETOR_ELOGIO_LABELS[manifestacao.setor_elogio as SetorElogio]}
+                        {setoresElogio.find(s => s.value === manifestacao.setor_elogio)?.label || manifestacao.setor_elogio}
                       </span>
                     </div>
                   </div>

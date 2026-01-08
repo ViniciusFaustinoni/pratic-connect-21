@@ -1,35 +1,17 @@
-import {
-  Headphones,
-  Users,
-  DollarSign,
-  Car,
-  Truck,
-  MapPin,
-  Wrench,
-  FileText,
-  Scale,
-  Building,
-  MoreHorizontal,
-  LucideIcon,
-} from "lucide-react";
+// Setores disponíveis para elogio (ordem alfabética)
+export const setoresElogio = [
+  { value: 'assistencia_24h', label: 'Assistência 24h' },
+  { value: 'cadastro', label: 'Cadastro' },
+  { value: 'cobranca', label: 'Cobrança' },
+  { value: 'consultor', label: 'Consultor(a)' },
+  { value: 'contabilidade', label: 'Contabilidade' },
+  { value: 'eventos', label: 'Eventos' },
+  { value: 'financeiro', label: 'Financeiro' },
+  { value: 'juridico', label: 'Jurídico' },
+  { value: 'marketing', label: 'Marketing' },
+  { value: 'monitoramento', label: 'Monitoramento' },
+  { value: 'oficina', label: 'Oficina' },
+  { value: 'relacionamento', label: 'Relacionamento' },
+] as const;
 
-export interface SetorElogioConfig {
-  id: string;
-  icon: LucideIcon;
-  label: string;
-  desc: string;
-}
-
-export const setoresElogio: SetorElogioConfig[] = [
-  { id: 'atendimento', icon: Headphones, label: 'Atendimento ao Associado', desc: 'Central de atendimento, SAC, suporte' },
-  { id: 'comercial', icon: Users, label: 'Comercial / Vendas', desc: 'Vendedores, consultores, equipe comercial' },
-  { id: 'financeiro', icon: DollarSign, label: 'Financeiro', desc: 'Cobranças, boletos, pagamentos' },
-  { id: 'sinistros', icon: Car, label: 'Sinistros', desc: 'Regulação, análise de sinistros' },
-  { id: 'assistencia', icon: Truck, label: 'Assistência 24h', desc: 'Guincho, chaveiro, socorro' },
-  { id: 'monitoramento', icon: MapPin, label: 'Monitoramento', desc: 'Rastreamento, central de monitoramento' },
-  { id: 'instalacao', icon: Wrench, label: 'Instalação', desc: 'Instaladores, vistoriadores' },
-  { id: 'cadastro', icon: FileText, label: 'Cadastro', desc: 'Análise de documentos, aprovações' },
-  { id: 'juridico', icon: Scale, label: 'Jurídico', desc: 'Departamento jurídico' },
-  { id: 'diretoria', icon: Building, label: 'Diretoria', desc: 'Gestão, direção da empresa' },
-  { id: 'outro', icon: MoreHorizontal, label: 'Outro Setor', desc: 'Especificar no campo de descrição' },
-];
+export type SetorElogioValue = typeof setoresElogio[number]['value'];
