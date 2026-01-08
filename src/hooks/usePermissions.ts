@@ -5,6 +5,7 @@ export type PermissionKey =
   | 'isAssociado'
   | 'isPrestador'
   | 'isDiretor'
+  | 'isDiretorOnly'
   | 'isGerente'
   | 'isSupervisor'
   | 'isGerenciaOrSupervisor'
@@ -50,6 +51,7 @@ export function usePermissions() {
 
     // Verificações de perfil/role
     isDiretor: hasRole('diretor'),
+    isDiretorOnly: hasRole('diretor'), // Exclusivo para diretor (não inclui gerente)
     isGerente: hasRole('gerente_comercial'),
     isSupervisor: hasRole('supervisor_vendas'),
     isGerenciaOrSupervisor: isGerencia() || hasRole('supervisor_vendas'),

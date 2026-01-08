@@ -277,7 +277,7 @@ const menuConfig: {
       id: 'diretoria',
       label: 'Diretoria',
       icon: Building2,
-      permission: 'isGerencia',
+      permission: 'isDiretorOnly', // Exclusivo para diretores
       items: [
         { title: 'Dashboard', url: '/diretoria', icon: BarChart3 },
         { title: 'Produtos', url: '/diretoria/produtos', icon: Package },
