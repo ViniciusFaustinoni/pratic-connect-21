@@ -146,14 +146,16 @@ export const cepSchema = z.string()
 export const leadSchema = z.object({
   nome: z.string().min(3, 'Nome deve ter no mínimo 3 caracteres'),
   telefone: telefoneSchema,
+  whatsapp: z.string().optional(),
   email: emailSchema.optional(),
   cpf: z.string().optional().refine((val) => !val || val.length === 0 || validateCPF(val), 'CPF inválido'),
-  veiculo_marca: z.string().optional(),
-  veiculo_modelo: z.string().optional(),
-  veiculo_ano: z.number().min(1900).max(new Date().getFullYear() + 1).optional().nullable(),
+  veiculo_marca: z.string().min(1, 'Marca é obrigatória'),
+  veiculo_modelo: z.string().min(1, 'Modelo é obrigatório'),
+  veiculo_ano: z.number().min(2000, 'Ano mínimo: 2000').max(2026, 'Ano máximo: 2026'),
   veiculo_placa: z.string().optional(),
   veiculo_fipe: z.number().min(0).optional().nullable(),
   origem: z.enum(['indicacao', 'site', 'whatsapp', 'facebook', 'instagram', 'google', 'telefone', 'presencial', 'parceiro', 'outro', 'api']),
+  vendedor_id: z.string().optional().nullable(),
   observacoes: z.string().optional(),
 });
 
