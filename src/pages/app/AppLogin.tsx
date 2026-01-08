@@ -13,10 +13,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Shield, Eye, EyeOff, Loader2, AlertCircle, Lock, MessageCircle, CheckCircle, FlaskConical, Copy, Check, User } from 'lucide-react';
+import { Shield, Eye, EyeOff, Loader2, AlertCircle, Lock, CheckCircle, FlaskConical, Copy, Check, User } from 'lucide-react';
 import { z } from 'zod';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { PrimeiroAcessoModal } from '@/components/app/PrimeiroAcessoModal';
 import {
   isLocked,
   recordFailedAttempt,
@@ -466,75 +467,10 @@ export default function AppLogin() {
       </div>
 
       {/* Modal Primeiro Acesso */}
-      <Dialog open={modalPrimeiroAcesso} onOpenChange={setModalPrimeiroAcesso}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Primeiro Acesso</DialogTitle>
-            <DialogDescription>
-              Para criar sua senha, você precisa ter um contrato ativo com a PRATIC.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="py-4">
-            <div className="space-y-4">
-              <p className="text-sm font-medium text-foreground">
-                Como criar sua senha:
-              </p>
-              <ol className="space-y-3 text-sm text-muted-foreground">
-                <li className="flex items-start gap-3">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
-                    1
-                  </span>
-                  <span>Verifique se você já é associado PRATIC</span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
-                    2
-                  </span>
-                  <span>Entre em contato pelo WhatsApp</span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
-                    3
-                  </span>
-                  <span>Informe seu CPF</span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
-                    4
-                  </span>
-                  <span>Receba sua senha temporária</span>
-                </li>
-              </ol>
-            </div>
-
-            <Button
-              type="button"
-              className="mt-6 w-full gap-2"
-              onClick={() => {
-                window.open(
-                  'https://wa.me/5500000000000?text=Olá! Preciso criar minha senha de acesso ao app PRATIC.',
-                  '_blank'
-                );
-              }}
-            >
-              <MessageCircle className="h-5 w-5" />
-              Falar no WhatsApp
-            </Button>
-          </div>
-
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              onClick={() => setModalPrimeiroAcesso(false)}
-            >
-              Fechar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <PrimeiroAcessoModal 
+        open={modalPrimeiroAcesso} 
+        onClose={() => setModalPrimeiroAcesso(false)} 
+      />
 
       {/* Modal Conta de Teste */}
       <Dialog open={modalContaTeste} onOpenChange={setModalContaTeste}>
