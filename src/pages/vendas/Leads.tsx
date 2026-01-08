@@ -617,63 +617,67 @@ export default function Leads() {
 
       {/* Kanban View */}
       {view === 'kanban' && (
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 min-h-0">
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
           >
-            <div className="flex gap-4 h-full overflow-x-auto pb-4 px-1">
-              {ETAPAS_KANBAN_VENDAS.map((etapa) => {
-                const leadsInEtapa = (allLeads || []).filter((l) => l.etapa === etapa);
-                return (
-                  <div 
-                    key={etapa} 
-                    id={etapa}
-                    className="flex-shrink-0 w-64 flex flex-col rounded-xl bg-muted/50 h-full"
-                  >
-                    {/* Header da coluna com dot colorido */}
-                    <div className="flex-shrink-0 bg-muted/50 px-3 py-2.5 border-b border-border/50 rounded-t-xl">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className={`w-2.5 h-2.5 rounded-full ${etapaDotColors[etapa]}`} />
-                          <span className="font-semibold text-sm text-foreground">
-                            {ETAPA_LABELS[etapa]}
+            {/* Container com scroll horizontal */}
+            <div className="h-full overflow-x-auto overflow-y-hidden">
+              {/* Inner flex - min-w-max garante que não encolhe */}
+              <div className="flex gap-3 h-full min-w-max pb-2">
+                {ETAPAS_KANBAN_VENDAS.map((etapa) => {
+                  const leadsInEtapa = (allLeads || []).filter((l) => l.etapa === etapa);
+                  return (
+                    <div 
+                      key={etapa} 
+                      id={etapa}
+                      className="w-64 flex-shrink-0 flex flex-col rounded-xl bg-muted/50 h-full"
+                    >
+                      {/* Header da coluna com dot colorido */}
+                      <div className="flex-shrink-0 bg-muted/50 px-3 py-2.5 border-b border-border/50 rounded-t-xl">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className={`w-2.5 h-2.5 rounded-full ${etapaDotColors[etapa]}`} />
+                            <span className="font-semibold text-sm text-foreground">
+                              {ETAPA_LABELS[etapa]}
+                            </span>
+                          </div>
+                          <span className="w-6 h-6 rounded-full bg-muted text-xs font-medium flex items-center justify-center">
+                            {leadsInEtapa.length}
                           </span>
                         </div>
-                        <span className="w-6 h-6 rounded-full bg-muted text-xs font-medium flex items-center justify-center">
-                          {leadsInEtapa.length}
-                        </span>
                       </div>
-                    </div>
-                    {/* Cards com scroll vertical */}
-                    <SortableContext
-                      items={leadsInEtapa.map((l) => l.id)}
-                      strategy={verticalListSortingStrategy}
-                    >
-                      <div 
-                        className="flex flex-col gap-2 flex-1 p-2 overflow-y-auto"
-                        data-etapa={etapa}
+                      {/* Cards com scroll vertical */}
+                      <SortableContext
+                        items={leadsInEtapa.map((l) => l.id)}
+                        strategy={verticalListSortingStrategy}
                       >
-                        {leadsInEtapa.map((lead) => (
-                          <LeadKanbanCard
-                            key={lead.id}
-                            lead={lead}
-                            onClick={() => setDrawerLeadId(lead.id)}
-                          />
-                        ))}
-                        {leadsInEtapa.length === 0 && (
-                          <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground py-8">
-                            Nenhum lead
+                        <div 
+                          className="flex flex-col gap-2 flex-1 p-2 overflow-y-auto"
+                          data-etapa={etapa}
+                        >
+                          {leadsInEtapa.map((lead) => (
+                            <LeadKanbanCard
+                              key={lead.id}
+                              lead={lead}
+                              onClick={() => setDrawerLeadId(lead.id)}
+                            />
+                          ))}
+                          {leadsInEtapa.length === 0 && (
+                            <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground py-8">
+                              Nenhum lead
+                            </div>
+                          )}
                         </div>
-                      )}
+                      </SortableContext>
                     </div>
-                  </SortableContext>
-                </div>
-              );
-            })}
-          </div>
+                  );
+                })}
+              </div>
+            </div>
           <DragOverlay>
             {activeLead ? (
               <Card className="shadow-lg w-[220px]">
