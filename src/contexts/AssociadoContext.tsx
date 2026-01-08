@@ -11,6 +11,7 @@ import {
   ManifestacaoTeste,
   DocumentoTeste,
   NotificacaoTeste,
+  RevistoriaTeste,
 } from '@/data/associadoTeste';
 
 // ============================================
@@ -30,6 +31,7 @@ interface AssociadoContextType {
   documentos: DocumentoTeste[];
   notificacoes: NotificacaoTeste[];
   notificacoesNaoLidas: number;
+  revistoria: RevistoriaTeste | null;
   
   // Ações
   loginTeste: () => void;
@@ -118,6 +120,7 @@ export function AssociadoProvider({ children }: AssociadoProviderProps) {
   const documentos = associado?.documentos ?? [];
   const notificacoes = associado?.notificacoes ?? [];
   const notificacoesNaoLidas = notificacoes.filter(n => !n.lida).length;
+  const revistoria = associado?.revistoria ?? null;
 
   return (
     <AssociadoContext.Provider
@@ -133,6 +136,7 @@ export function AssociadoProvider({ children }: AssociadoProviderProps) {
         documentos,
         notificacoes,
         notificacoesNaoLidas,
+        revistoria,
         loginTeste,
         logout,
         marcarNotificacaoLida,

@@ -2,7 +2,9 @@ import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Car, Receipt, MapPin, Phone, FileText, CheckCircle, ChevronRight, Shield } from 'lucide-react';
+import { Car, Receipt, MapPin, Phone, FileText, CheckCircle, ChevronRight, Shield, AlertTriangle } from 'lucide-react';
+import { useAssociado } from '@/contexts/AssociadoContext';
+import { RevistoriaBanner } from '@/components/app/RevistoriaBanner';
 
 // MOCK DATA
 const MOCK_ASSOCIADO = {
@@ -39,7 +41,16 @@ const getGreeting = () => {
 };
 
 export default function AppHome() {
-  const primeiroNome = MOCK_ASSOCIADO.nome.split(' ')[0];
+  const { associado, isTestMode, revistoria } = useAssociado();
+  
+  // Usar dados do contexto de teste ou mock
+  const nomeAssociado = isTestMode && associado ? associado.nome : MOCK_ASSOCIADO.nome;
+  const primeiroNome = nomeAssociado.split(' ')[0];
+  
+  // Mostrar banner de revistoria se houver pendência
+  const mostrarBannerRevistoria = revistoria && (
+    revistoria.diasAtraso > 0 || revistoria.status === 'em_analise'
+  );
 
   return (
     <div className="flex flex-col gap-6 pb-24">
@@ -48,6 +59,14 @@ export default function AppHome() {
         <p className="text-sm text-muted-foreground">{getGreeting()},</p>
         <h1 className="text-2xl font-bold text-foreground">{primeiroNome}! 👋</h1>
       </div>
+
+      {/* BANNER REVISTORIA */}
+      {mostrarBannerRevistoria && revistoria && (
+        <RevistoriaBanner
+          diasAtraso={revistoria.diasAtraso}
+          status={revistoria.status}
+        />
+      )}
 
       {/* CARD DE SITUAÇÃO */}
       <Card className="border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950">

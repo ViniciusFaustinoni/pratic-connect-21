@@ -96,6 +96,28 @@ export interface NotificacaoTeste {
   lida: boolean;
 }
 
+export interface RevistoriaHistoricoTeste {
+  id: string;
+  data: string;
+  tipo: 'carro' | 'moto';
+  status: 'aprovada' | 'reprovada';
+  fotos: number;
+}
+
+export interface RevistoriaTeste {
+  diasAtraso: number;
+  necessaria: boolean;
+  status: 'pendente' | 'em_analise' | 'aprovada' | 'reprovada' | null;
+  tipoVeiculo: 'carro' | 'moto' | null;
+  motivoSuspensao: string | null;
+  dataSuspensao: string | null;
+  dataLimiteRevistoria: string | null;
+  dataEnvio: string | null;
+  ultimaRevistoria: string | null;
+  motivosReprovacao: string[];
+  historico: RevistoriaHistoricoTeste[];
+}
+
 export interface AssociadoTeste {
   id: string;
   codigo: string;
@@ -118,6 +140,7 @@ export interface AssociadoTeste {
   manifestacoes: ManifestacaoTeste[];
   documentos: DocumentoTeste[];
   notificacoes: NotificacaoTeste[];
+  revistoria: RevistoriaTeste;
 }
 
 // ============================================
@@ -279,6 +302,23 @@ export const ASSOCIADO_TESTE: AssociadoTeste = {
       lida: true,
     },
   ],
+
+  // REVISTORIA - Simula 8 dias de atraso para testar fluxo completo
+  revistoria: {
+    diasAtraso: 8,
+    necessaria: true,
+    status: 'pendente',
+    tipoVeiculo: null,
+    motivoSuspensao: 'Boleto vencido',
+    dataSuspensao: '2026-01-02',
+    dataLimiteRevistoria: '2026-01-07',
+    dataEnvio: null,
+    ultimaRevistoria: null,
+    motivosReprovacao: [],
+    historico: [
+      { id: 'rev-001', data: '2025-06-15', tipo: 'carro', status: 'aprovada', fotos: 11 },
+    ]
+  },
 };
 
 // ============================================

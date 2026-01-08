@@ -168,6 +168,7 @@ import AppConfiguracoes from "./pages/app/AppConfiguracoes";
 import AppDocumentos from "./pages/app/AppDocumentos";
 import AppNotificacoes from "./pages/app/AppNotificacoes";
 import AppPlano from "./pages/app/AppPlano";
+import Revistoria from "./pages/app/Revistoria";
 
 // App Ouvidoria
 import OuvidoriaMenu from "./pages/app/OuvidoriaMenu";
@@ -383,6 +384,7 @@ const App = () => (
               <Route path="/app/configuracoes" element={<AppConfiguracoes />} />
               <Route path="/app/documentos" element={<AppDocumentos />} />
               <Route path="/app/notificacoes" element={<AppNotificacoes />} />
+              <Route path="/app/revistoria" element={<Revistoria />} />
               
               {/* Ouvidoria App */}
               <Route path="/app/ouvidoria" element={<OuvidoriaMenu />} />
