@@ -305,7 +305,7 @@ export const ASSOCIADO_TESTE: AssociadoTeste = {
 
   // REVISTORIA - Simula 8 dias de atraso para testar fluxo completo
   revistoria: {
-    diasAtraso: 8,
+    diasAtraso: 6, // No 6º dia já precisa de revistoria (após 5 dias de atraso)
     necessaria: true,
     status: 'pendente',
     tipoVeiculo: null,
