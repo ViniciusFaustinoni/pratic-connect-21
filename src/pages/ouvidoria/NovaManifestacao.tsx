@@ -6,11 +6,8 @@ import {
   AlertTriangle,
   Lightbulb, 
   ThumbsUp, 
-  Shield, 
-  Upload,
-  X,
-  LucideIcon,
-  ChevronLeft
+  Shield,
+  LucideIcon
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,9 +24,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { SetorElogioSelector } from "@/components/ouvidoria/SetorElogioSelector";
 import { setoresElogio } from "@/constants/ouvidoria";
-import { SETOR_ELOGIO_LABELS, CATEGORIA_LABELS, type SetorElogio, type CategoriaManifestacao } from "@/types/ouvidoria";
+import { CATEGORIA_LABELS } from "@/types/ouvidoria";
 
 interface TipoConfig {
   label: string;
@@ -90,40 +86,37 @@ export default function NovaManifestacao() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Campos específicos para elogio
-  const [setorElogio, setSetorElogio] = useState<string | null>(null);
+  const [setorElogio, setSetorElogio] = useState('');
   const [colaborador, setColaborador] = useState('');
-  const [dataAtendimento, setDataAtendimento] = useState('');
-  const [etapa, setEtapa] = useState<'tipo' | 'setor' | 'formulario'>(
-    tipoParam === 'elogio' ? 'setor' : tipoParam ? 'formulario' : 'tipo'
-  );
+  
+  const [etapa, setEtapa] = useState<'tipo' | 'formulario'>(tipoParam ? 'formulario' : 'tipo');
 
   const tipoConfig = tipo ? tiposConfig[tipo] : null;
   
-  // Obter dados do setor selecionado
-  const setorSelecionado = setorElogio 
-    ? setoresElogio.find(s => s.id === setorElogio) 
+  // Obter label do setor selecionado
+  const setorLabel = setorElogio 
+    ? setoresElogio.find(s => s.value === setorElogio)?.label 
     : null;
 
   const handleTipoSelect = (selectedTipo: string) => {
     setTipo(selectedTipo);
-    if (selectedTipo === 'elogio') {
-      setEtapa('setor');
-    } else {
-      setEtapa('formulario');
-    }
+    setEtapa('formulario');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!tipo || !categoria || !assunto || descricao.length < 20) {
-      toast.error('Preencha todos os campos obrigatórios');
-      return;
-    }
-    
-    if (tipo === 'elogio' && !setorElogio) {
-      toast.error('Selecione o setor do elogio');
-      return;
+    // Validação para elogio
+    if (tipo === 'elogio') {
+      if (!setorElogio || !assunto || descricao.length < 20) {
+        toast.error('Preencha todos os campos obrigatórios');
+        return;
+      }
+    } else {
+      if (!tipo || !categoria || !assunto || descricao.length < 20) {
+        toast.error('Preencha todos os campos obrigatórios');
+        return;
+      }
     }
 
     setIsSubmitting(true);
@@ -136,6 +129,11 @@ export default function NovaManifestacao() {
     toast.success(`Manifestação criada! Protocolo: ${protocolo}`);
     navigate('/ouvidoria/manifestacoes');
   };
+
+  // Verifica se o formulário está válido
+  const isFormValid = tipo === 'elogio'
+    ? setorElogio && assunto && descricao.length >= 20
+    : categoria && assunto && descricao.length >= 20;
 
   // Etapa 1: Seleção de Tipo
   if (etapa === 'tipo') {
@@ -172,64 +170,11 @@ export default function NovaManifestacao() {
     );
   }
 
-  // Etapa 2: Seleção de Setor (apenas para elogio)
-  if (etapa === 'setor' && tipo === 'elogio') {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => setEtapa('tipo')}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Novo Elogio</h1>
-            <p className="text-muted-foreground">Selecione o setor que deseja elogiar</p>
-          </div>
-        </div>
-
-        <Badge className="bg-green-100 text-green-700 border-0 gap-2">
-          <ThumbsUp className="h-4 w-4" />
-          Elogio
-        </Badge>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Para qual setor é o elogio?</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <SetorElogioSelector
-              selectedSetor={setorElogio}
-              onSelect={setSetorElogio}
-            />
-            
-            <Button 
-              className="w-full bg-green-600 hover:bg-green-700" 
-              size="lg"
-              disabled={!setorElogio}
-              onClick={() => setEtapa('formulario')}
-            >
-              Continuar
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  // Etapa 3: Formulário
+  // Etapa 2: Formulário
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <Button 
-          variant="ghost" 
-          size="icon" 
-          onClick={() => {
-            if (tipo === 'elogio') {
-              setEtapa('setor');
-            } else {
-              setEtapa('tipo');
-            }
-          }}
-        >
+        <Button variant="ghost" size="icon" onClick={() => setEtapa('tipo')}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div>
@@ -248,27 +193,6 @@ export default function NovaManifestacao() {
         </Badge>
       )}
 
-      {/* Badge do setor selecionado (se elogio) */}
-      {tipo === 'elogio' && setorSelecionado && (
-        <div className="flex items-center justify-between bg-green-50 rounded-lg p-3 border border-green-200">
-          <div className="flex items-center gap-2">
-            <setorSelecionado.icon className="h-5 w-5 text-green-600" />
-            <span className="text-green-800 font-medium">
-              {SETOR_ELOGIO_LABELS[setorElogio as SetorElogio]}
-            </span>
-          </div>
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={() => setEtapa('setor')}
-            className="text-green-700 gap-1"
-          >
-            <ChevronLeft className="h-4 w-4" />
-            Trocar setor
-          </Button>
-        </div>
-      )}
-
       <div className="grid gap-6 md:grid-cols-2">
         {/* Formulário */}
         <Card>
@@ -277,54 +201,128 @@ export default function NovaManifestacao() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Categoria */}
-              <div className="space-y-2">
-                <Label htmlFor="categoria">Categoria *</Label>
-                <Select value={categoria} onValueChange={setCategoria}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione uma categoria" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(CATEGORIA_LABELS).map(([value, label]) => (
-                      <SelectItem key={value} value={value}>
-                        {label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              
+              {/* === CAMPOS ESPECÍFICOS PARA ELOGIO === */}
+              {tipo === 'elogio' ? (
+                <>
+                  {/* 1. Setor do Profissional (obrigatório) */}
+                  <div className="space-y-2">
+                    <Label htmlFor="setor">Qual setor do profissional que você deseja elogiar? *</Label>
+                    <Select value={setorElogio} onValueChange={setSetorElogio}>
+                      <SelectTrigger className={setorElogio ? "border-green-500" : ""}>
+                        <SelectValue placeholder="Selecione o setor..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {setoresElogio.map(setor => (
+                          <SelectItem key={setor.value} value={setor.value}>
+                            {setor.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {setorLabel && (
+                      <Badge variant="secondary" className="bg-green-100 text-green-700">
+                        {setorLabel}
+                      </Badge>
+                    )}
+                  </div>
 
-              {/* Assunto */}
-              <div className="space-y-2">
-                <Label htmlFor="assunto">Assunto *</Label>
-                <Input
-                  id="assunto"
-                  placeholder="Resuma em poucas palavras"
-                  value={assunto}
-                  onChange={(e) => setAssunto(e.target.value.slice(0, 100))}
-                  maxLength={100}
-                />
-                <p className="text-xs text-muted-foreground text-right">
-                  {assunto.length}/100
-                </p>
-              </div>
+                  {/* 2. Nome do Profissional (opcional) */}
+                  <div className="space-y-2">
+                    <Label htmlFor="colaborador">Nome do Profissional (opcional)</Label>
+                    <Input
+                      id="colaborador"
+                      placeholder="Se souber, informe o nome"
+                      value={colaborador}
+                      onChange={(e) => setColaborador(e.target.value)}
+                    />
+                  </div>
 
-              {/* Descrição */}
-              <div className="space-y-2">
-                <Label htmlFor="descricao">Descrição *</Label>
-                <Textarea
-                  id="descricao"
-                  placeholder="Descreva a manifestação em detalhes..."
-                  value={descricao}
-                  onChange={(e) => setDescricao(e.target.value.slice(0, 2000))}
-                  rows={6}
-                  className="resize-none"
-                />
-                <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>{descricao.length < 20 && descricao.length > 0 ? 'Mínimo 20 caracteres' : ''}</span>
-                  <span>{descricao.length}/2000</span>
-                </div>
-              </div>
+                  {/* 3. Assunto (obrigatório) */}
+                  <div className="space-y-2">
+                    <Label htmlFor="assunto">Assunto *</Label>
+                    <Input
+                      id="assunto"
+                      placeholder="Resuma em poucas palavras"
+                      value={assunto}
+                      onChange={(e) => setAssunto(e.target.value.slice(0, 100))}
+                      maxLength={100}
+                    />
+                    <p className="text-xs text-muted-foreground text-right">
+                      {assunto.length}/100
+                    </p>
+                  </div>
+
+                  {/* 4. Descrição (obrigatório) */}
+                  <div className="space-y-2">
+                    <Label htmlFor="descricao">Descrição *</Label>
+                    <Textarea
+                      id="descricao"
+                      placeholder="Descreva o elogio em detalhes..."
+                      value={descricao}
+                      onChange={(e) => setDescricao(e.target.value.slice(0, 2000))}
+                      rows={6}
+                      className="resize-none"
+                    />
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>{descricao.length < 20 && descricao.length > 0 ? 'Mínimo 20 caracteres' : ''}</span>
+                      <span>{descricao.length}/2000</span>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* === CAMPOS PARA OUTROS TIPOS === */}
+                  {/* Categoria */}
+                  <div className="space-y-2">
+                    <Label htmlFor="categoria">Categoria *</Label>
+                    <Select value={categoria} onValueChange={setCategoria}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione uma categoria" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(CATEGORIA_LABELS).map(([value, label]) => (
+                          <SelectItem key={value} value={value}>
+                            {label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Assunto */}
+                  <div className="space-y-2">
+                    <Label htmlFor="assunto">Assunto *</Label>
+                    <Input
+                      id="assunto"
+                      placeholder="Resuma em poucas palavras"
+                      value={assunto}
+                      onChange={(e) => setAssunto(e.target.value.slice(0, 100))}
+                      maxLength={100}
+                    />
+                    <p className="text-xs text-muted-foreground text-right">
+                      {assunto.length}/100
+                    </p>
+                  </div>
+
+                  {/* Descrição */}
+                  <div className="space-y-2">
+                    <Label htmlFor="descricao">Descrição *</Label>
+                    <Textarea
+                      id="descricao"
+                      placeholder="Descreva a manifestação em detalhes..."
+                      value={descricao}
+                      onChange={(e) => setDescricao(e.target.value.slice(0, 2000))}
+                      rows={6}
+                      className="resize-none"
+                    />
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>{descricao.length < 20 && descricao.length > 0 ? 'Mínimo 20 caracteres' : ''}</span>
+                      <span>{descricao.length}/2000</span>
+                    </div>
+                  </div>
+                </>
+              )}
 
               {/* Opção anônimo (só para denúncia) */}
               {tipo === 'denuncia' && (
@@ -345,7 +343,7 @@ export default function NovaManifestacao() {
                 type="submit" 
                 className={tipo === 'elogio' ? "w-full bg-green-600 hover:bg-green-700" : "w-full"} 
                 size="lg"
-                disabled={isSubmitting || !categoria || !assunto || descricao.length < 20}
+                disabled={isSubmitting || !isFormValid}
               >
                 {isSubmitting ? 'Criando...' : 'Criar Manifestação'}
               </Button>
@@ -353,40 +351,29 @@ export default function NovaManifestacao() {
           </CardContent>
         </Card>
 
-        {/* Campos adicionais para elogio */}
-        {tipo === 'elogio' && (
-          <Card className="bg-green-50 border-green-200">
+        {/* Preview do setor selecionado (apenas para elogio) */}
+        {tipo === 'elogio' && setorLabel && (
+          <Card className="bg-green-50 border-green-200 h-fit">
             <CardHeader>
-              <CardTitle className="text-green-800">Informações do Elogio</CardTitle>
+              <CardTitle className="text-green-800">Resumo do Elogio</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Campo Colaborador */}
-              <div className="space-y-2">
-                <Label>Colaborador mencionado (opcional)</Label>
-                <Input
-                  placeholder="Nome do funcionário"
-                  value={colaborador}
-                  onChange={(e) => setColaborador(e.target.value)}
-                  className="bg-white"
-                />
-                <p className="text-xs text-green-700">
-                  Se souber o nome, isso ajuda a reconhecer a pessoa certa!
-                </p>
+            <CardContent className="space-y-3">
+              <div className="flex justify-between">
+                <span className="text-green-700">Setor:</span>
+                <Badge className="bg-green-100 text-green-700">{setorLabel}</Badge>
               </div>
-              
-              {/* Campo Data Atendimento */}
-              <div className="space-y-2">
-                <Label>Data do atendimento (opcional)</Label>
-                <Input
-                  type="date"
-                  value={dataAtendimento}
-                  onChange={(e) => setDataAtendimento(e.target.value)}
-                  className="bg-white"
-                />
-                <p className="text-xs text-green-700">
-                  Aproximadamente, para identificar melhor
-                </p>
-              </div>
+              {colaborador && (
+                <div className="flex justify-between">
+                  <span className="text-green-700">Profissional:</span>
+                  <span className="font-medium text-green-800">{colaborador}</span>
+                </div>
+              )}
+              {assunto && (
+                <div className="flex justify-between">
+                  <span className="text-green-700">Assunto:</span>
+                  <span className="font-medium text-green-800 text-right max-w-[200px] truncate">{assunto}</span>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}

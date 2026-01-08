@@ -9,8 +9,7 @@ import {
   Shield, 
   Upload,
   X,
-  LucideIcon,
-  ChevronLeft
+  LucideIcon
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -27,9 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { SetorElogioSelector } from "@/components/ouvidoria/SetorElogioSelector";
 import { setoresElogio } from "@/constants/ouvidoria";
-import { SETOR_ELOGIO_LABELS, type SetorElogio } from "@/types/ouvidoria";
 
 interface TipoConfig {
   label: string;
@@ -71,19 +68,15 @@ export default function OuvidoriaNova() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Campos específicos para elogio
-  const [setorElogio, setSetorElogio] = useState<string | null>(null);
+  const [setorElogio, setSetorElogio] = useState('');
   const [colaborador, setColaborador] = useState('');
-  const [dataAtendimento, setDataAtendimento] = useState('');
-  const [etapa, setEtapa] = useState<'setor' | 'formulario'>(
-    tipoParam === 'elogio' ? 'setor' : 'formulario'
-  );
 
   const tipoConfig = tiposConfig[tipoParam] || tiposConfig.reclamacao;
   const Icon = tipoConfig.icon;
   
-  // Obter dados do setor selecionado
-  const setorSelecionado = setorElogio 
-    ? setoresElogio.find(s => s.id === setorElogio) 
+  // Obter label do setor selecionado
+  const setorLabel = setorElogio 
+    ? setoresElogio.find(s => s.value === setorElogio)?.label 
     : null;
 
   const handleAnexoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -102,14 +95,17 @@ export default function OuvidoriaNova() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!categoria || !assunto || descricao.length < 20) {
-      toast.error('Preencha todos os campos obrigatórios');
-      return;
-    }
-    
-    if (tipoParam === 'elogio' && !setorElogio) {
-      toast.error('Selecione o setor do elogio');
-      return;
+    // Validação para elogio
+    if (tipoParam === 'elogio') {
+      if (!setorElogio || !assunto || descricao.length < 20) {
+        toast.error('Preencha todos os campos obrigatórios');
+        return;
+      }
+    } else {
+      if (!categoria || !assunto || descricao.length < 20) {
+        toast.error('Preencha todos os campos obrigatórios');
+        return;
+      }
     }
 
     setIsSubmitting(true);
@@ -123,51 +119,10 @@ export default function OuvidoriaNova() {
     navigate('/app/ouvidoria/lista');
   };
 
-  // Se for elogio e estiver na etapa de seleção de setor
-  if (tipoParam === 'elogio' && etapa === 'setor') {
-    return (
-      <div className="p-4 space-y-6 pb-24">
-        {/* Header */}
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/app/ouvidoria')}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <h1 className="text-xl font-semibold">Novo Elogio</h1>
-        </div>
-
-        {/* Badge do tipo */}
-        <Badge className="bg-green-100 text-green-700 border-0 gap-2">
-          <ThumbsUp className="h-4 w-4" />
-          Elogio
-        </Badge>
-
-        {/* Seleção de Setor */}
-        <div className="space-y-4">
-          <div>
-            <h2 className="text-lg font-semibold">Para qual setor é seu elogio?</h2>
-            <p className="text-muted-foreground text-sm">
-              Selecione o departamento que você deseja elogiar
-            </p>
-          </div>
-          
-          <SetorElogioSelector
-            selectedSetor={setorElogio}
-            onSelect={setSetorElogio}
-            compact
-          />
-          
-          <Button 
-            className="w-full bg-green-600 hover:bg-green-700" 
-            size="lg"
-            disabled={!setorElogio}
-            onClick={() => setEtapa('formulario')}
-          >
-            Continuar
-          </Button>
-        </div>
-      </div>
-    );
-  }
+  // Verifica se o formulário está válido
+  const isFormValid = tipoParam === 'elogio'
+    ? setorElogio && assunto && descricao.length >= 20
+    : categoria && assunto && descricao.length >= 20;
 
   return (
     <div className="p-4 space-y-6 pb-24">
@@ -185,114 +140,132 @@ export default function OuvidoriaNova() {
         {tipoConfig.label}
       </Badge>
 
-      {/* Badge do setor selecionado (se elogio) */}
-      {tipoParam === 'elogio' && setorSelecionado && (
-        <div className="flex items-center justify-between bg-green-50 rounded-lg p-3 border border-green-200">
-          <div className="flex items-center gap-2">
-            <setorSelecionado.icon className="h-5 w-5 text-green-600" />
-            <span className="text-green-800 font-medium">
-              {SETOR_ELOGIO_LABELS[setorElogio as SetorElogio]}
-            </span>
-          </div>
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={() => setEtapa('setor')}
-            className="text-green-700 gap-1"
-          >
-            <ChevronLeft className="h-4 w-4" />
-            Trocar setor
-          </Button>
-        </div>
-      )}
-
       {/* Formulário */}
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Categoria */}
-        <div className="space-y-2">
-          <Label htmlFor="categoria">Categoria *</Label>
-          <Select value={categoria} onValueChange={setCategoria}>
-            <SelectTrigger>
-              <SelectValue placeholder="Selecione uma categoria" />
-            </SelectTrigger>
-            <SelectContent>
-              {categorias.map(cat => (
-                <SelectItem key={cat.value} value={cat.value}>
-                  {cat.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        
+        {/* === CAMPOS ESPECÍFICOS PARA ELOGIO === */}
+        {tipoParam === 'elogio' ? (
+          <>
+            {/* 1. Setor do Profissional (obrigatório) */}
+            <div className="space-y-2">
+              <Label htmlFor="setor">Qual setor do profissional que você deseja elogiar? *</Label>
+              <Select value={setorElogio} onValueChange={setSetorElogio}>
+                <SelectTrigger className={setorElogio ? "border-green-500" : ""}>
+                  <SelectValue placeholder="Selecione o setor..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {setoresElogio.map(setor => (
+                    <SelectItem key={setor.value} value={setor.value}>
+                      {setor.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {setorLabel && (
+                <Badge variant="secondary" className="bg-green-100 text-green-700">
+                  {setorLabel}
+                </Badge>
+              )}
+            </div>
 
-        {/* Assunto */}
-        <div className="space-y-2">
-          <Label htmlFor="assunto">Assunto *</Label>
-          <Input
-            id="assunto"
-            placeholder="Resuma em poucas palavras"
-            value={assunto}
-            onChange={(e) => setAssunto(e.target.value.slice(0, 100))}
-            maxLength={100}
-          />
-          <p className="text-xs text-muted-foreground text-right">
-            {assunto.length}/100
-          </p>
-        </div>
+            {/* 2. Nome do Profissional (opcional) */}
+            <div className="space-y-2">
+              <Label htmlFor="colaborador">Nome do Profissional (opcional)</Label>
+              <Input
+                id="colaborador"
+                placeholder="Se souber, informe o nome"
+                value={colaborador}
+                onChange={(e) => setColaborador(e.target.value)}
+              />
+            </div>
 
-        {/* Descrição */}
-        <div className="space-y-2">
-          <Label htmlFor="descricao">Descrição *</Label>
-          <Textarea
-            id="descricao"
-            placeholder="Conte o que aconteceu..."
-            value={descricao}
-            onChange={(e) => setDescricao(e.target.value.slice(0, 2000))}
-            rows={6}
-            className="resize-none"
-          />
-          <div className="flex justify-between text-xs text-muted-foreground">
-            <span>{descricao.length < 20 && descricao.length > 0 ? 'Mínimo 20 caracteres' : ''}</span>
-            <span>{descricao.length}/2000</span>
-          </div>
-        </div>
+            {/* 3. Assunto (obrigatório) */}
+            <div className="space-y-2">
+              <Label htmlFor="assunto">Assunto *</Label>
+              <Input
+                id="assunto"
+                placeholder="Resuma em poucas palavras"
+                value={assunto}
+                onChange={(e) => setAssunto(e.target.value.slice(0, 100))}
+                maxLength={100}
+              />
+              <p className="text-xs text-muted-foreground text-right">
+                {assunto.length}/100
+              </p>
+            </div>
 
-        {/* Campos específicos para elogio */}
-        {tipoParam === 'elogio' && (
-          <Card className="bg-green-50 border-green-200">
-            <CardContent className="p-4 space-y-4">
-              {/* Campo Colaborador */}
-              <div className="space-y-2">
-                <Label>Deseja mencionar algum colaborador específico?</Label>
-                <Input
-                  placeholder="Nome do funcionário que te atendeu (opcional)"
-                  value={colaborador}
-                  onChange={(e) => setColaborador(e.target.value)}
-                  className="bg-white"
-                />
-                <p className="text-xs text-green-700">
-                  Se souber o nome, isso nos ajuda a reconhecer a pessoa certa!
-                </p>
+            {/* 4. Descrição (obrigatório) */}
+            <div className="space-y-2">
+              <Label htmlFor="descricao">Descrição *</Label>
+              <Textarea
+                id="descricao"
+                placeholder="Conte o que aconteceu..."
+                value={descricao}
+                onChange={(e) => setDescricao(e.target.value.slice(0, 2000))}
+                rows={6}
+                className="resize-none"
+              />
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>{descricao.length < 20 && descricao.length > 0 ? 'Mínimo 20 caracteres' : ''}</span>
+                <span>{descricao.length}/2000</span>
               </div>
-              
-              {/* Campo Data Atendimento */}
-              <div className="space-y-2">
-                <Label>Quando foi o atendimento?</Label>
-                <Input
-                  type="date"
-                  value={dataAtendimento}
-                  onChange={(e) => setDataAtendimento(e.target.value)}
-                  className="bg-white"
-                />
-                <p className="text-xs text-green-700">
-                  Aproximadamente, para identificarmos melhor
-                </p>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* === CAMPOS PARA OUTROS TIPOS === */}
+            {/* Categoria */}
+            <div className="space-y-2">
+              <Label htmlFor="categoria">Categoria *</Label>
+              <Select value={categoria} onValueChange={setCategoria}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione uma categoria" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categorias.map(cat => (
+                    <SelectItem key={cat.value} value={cat.value}>
+                      {cat.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Assunto */}
+            <div className="space-y-2">
+              <Label htmlFor="assunto">Assunto *</Label>
+              <Input
+                id="assunto"
+                placeholder="Resuma em poucas palavras"
+                value={assunto}
+                onChange={(e) => setAssunto(e.target.value.slice(0, 100))}
+                maxLength={100}
+              />
+              <p className="text-xs text-muted-foreground text-right">
+                {assunto.length}/100
+              </p>
+            </div>
+
+            {/* Descrição */}
+            <div className="space-y-2">
+              <Label htmlFor="descricao">Descrição *</Label>
+              <Textarea
+                id="descricao"
+                placeholder="Conte o que aconteceu..."
+                value={descricao}
+                onChange={(e) => setDescricao(e.target.value.slice(0, 2000))}
+                rows={6}
+                className="resize-none"
+              />
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>{descricao.length < 20 && descricao.length > 0 ? 'Mínimo 20 caracteres' : ''}</span>
+                <span>{descricao.length}/2000</span>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </>
         )}
 
-        {/* Anexos */}
+        {/* 5. Anexos (opcional) - para todos os tipos */}
         <div className="space-y-2">
           <Label>Anexos (opcional)</Label>
           <div className="border-2 border-dashed rounded-lg p-4">
@@ -363,7 +336,7 @@ export default function OuvidoriaNova() {
           type="submit" 
           className={tipoParam === 'elogio' ? "w-full bg-green-600 hover:bg-green-700" : "w-full"} 
           size="lg"
-          disabled={isSubmitting || !categoria || !assunto || descricao.length < 20}
+          disabled={isSubmitting || !isFormValid}
         >
           {isSubmitting ? 'Enviando...' : 'Enviar'}
         </Button>
