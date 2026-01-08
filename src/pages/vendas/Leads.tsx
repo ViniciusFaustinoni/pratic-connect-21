@@ -267,9 +267,9 @@ export default function Leads() {
   const total = leadsData?.total || 0;
 
   return (
-    <div className="flex flex-col">
-      {/* Header Sticky */}
-      <div className="sticky top-0 z-20 -mx-6 px-6 pt-2 pb-4 space-y-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border/50">
+    <div className="flex flex-col h-[calc(100vh-4rem)]">
+      {/* Header Fixo */}
+      <div className="flex-shrink-0 space-y-4 pb-4">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="min-w-0">
