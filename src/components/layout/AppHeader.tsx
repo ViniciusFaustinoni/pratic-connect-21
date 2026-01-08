@@ -39,8 +39,8 @@ export function AppHeader() {
             <Button variant="ghost" className="h-auto gap-3 px-2 py-1.5">
               <UserAvatar src={profile?.avatar_url} name={profile?.nome} size="sm" />
               <div className="hidden flex-col items-start sm:flex">
-                <span className="text-sm font-medium">
-                  {profile?.nome}
+                <span className="text-sm font-medium truncate max-w-[150px]">
+                  {profile?.nome || profile?.email?.split('@')[0] || 'Usuário'}
                 </span>
                 <span className="text-xs text-muted-foreground">
                   {profile?.email}
@@ -51,7 +51,7 @@ export function AppHeader() {
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>
               <div className="flex flex-col">
-                <span>{profile?.nome}</span>
+                <span className="truncate max-w-[180px]">{profile?.nome || profile?.email?.split('@')[0] || 'Usuário'}</span>
                 <span className="text-xs font-normal text-muted-foreground">
                   {profile?.email}
                 </span>
