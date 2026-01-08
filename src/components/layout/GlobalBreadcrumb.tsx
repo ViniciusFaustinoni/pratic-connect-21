@@ -10,29 +10,135 @@ interface RouteConfig {
 }
 
 const ROUTE_CONFIG: Record<string, RouteConfig> = {
+  // Dashboard
   '/dashboard': { label: 'Dashboard' },
+  
+  // Vendas
   '/vendas': { label: 'Vendas' },
-  '/vendas/dashboard': { label: 'Dashboard de Vendas' },
+  '/vendas/dashboard': { label: 'Dashboard' },
   '/vendas/leads': { label: 'Leads' },
   '/vendas/acompanhamento': { label: 'Acompanhamento' },
-  '/vendas/cotacoes': { label: 'Cotador' },
+  '/vendas/cotacoes': { label: 'Cotações' },
+  '/vendas/cotador': { label: 'Cotador' },
   '/vendas/contratos': { label: 'Contratos' },
   '/vendas/metas': { label: 'Metas' },
   '/vendas/relatorios': { label: 'Relatórios' },
+  '/vendas/distribuicao': { label: 'Distribuição' },
+  
+  // Cadastro
   '/cadastro': { label: 'Cadastro' },
   '/cadastro/associados': { label: 'Associados' },
   '/cadastro/veiculos': { label: 'Veículos' },
   '/cadastro/documentos': { label: 'Documentos' },
+  '/cadastro/fila-documentos': { label: 'Fila de Documentos' },
+  
+  // Eventos
+  '/eventos': { label: 'Eventos' },
+  '/eventos/dashboard': { label: 'Dashboard' },
+  '/eventos/sinistros': { label: 'Sinistros' },
+  
+  // Assistência 24h
+  '/assistencia': { label: 'Assistência 24h' },
+  '/assistencia/dashboard': { label: 'Dashboard' },
+  '/assistencia/chamados': { label: 'Chamados' },
+  '/assistencia/prestadores': { label: 'Prestadores' },
+  
+  // Financeiro
+  '/financeiro': { label: 'Financeiro' },
+  '/financeiro/dashboard': { label: 'Dashboard' },
+  '/financeiro/cobrancas': { label: 'Cobranças' },
+  '/financeiro/faturamento': { label: 'Faturamento Mensal' },
+  '/financeiro/contas-pagar': { label: 'Contas a Pagar' },
+  '/financeiro/extrato': { label: 'Extrato' },
+  
+  // Cobrança
+  '/cobranca': { label: 'Cobrança' },
+  '/cobranca/dashboard': { label: 'Dashboard' },
+  '/cobranca/fila': { label: 'Fila de Trabalho' },
+  '/cobranca/inadimplentes': { label: 'Inadimplentes' },
+  '/cobranca/regua': { label: 'Régua de Cobrança' },
+  '/cobranca/negativacao': { label: 'Negativação' },
+  '/cobranca/acordos': { label: 'Acordos' },
+  '/cobranca/acordos/novo': { label: 'Novo Acordo' },
+  
+  // Contabilidade
+  '/contabilidade': { label: 'Contabilidade' },
+  '/contabilidade/dashboard': { label: 'Dashboard' },
+  '/contabilidade/plano-contas': { label: 'Plano de Contas' },
+  '/contabilidade/lancamentos': { label: 'Lançamentos' },
+  '/contabilidade/lancamentos/novo': { label: 'Novo Lançamento' },
+  '/contabilidade/balancete': { label: 'Balancete' },
+  '/contabilidade/dre': { label: 'DRE' },
+  '/contabilidade/fechamentos': { label: 'Fechamentos' },
+  '/contabilidade/razao': { label: 'Razão' },
+  
+  // Jurídico
+  '/juridico': { label: 'Jurídico' },
+  '/juridico/dashboard': { label: 'Dashboard' },
+  '/juridico/processos': { label: 'Processos' },
+  '/juridico/processos/novo': { label: 'Novo Processo' },
+  '/juridico/prazos': { label: 'Prazos' },
+  '/juridico/audiencias': { label: 'Audiências' },
+  '/juridico/advogados': { label: 'Advogados' },
+  '/juridico/consultas': { label: 'Consultas' },
+  
+  // RH
+  '/rh': { label: 'RH' },
+  '/rh/dashboard': { label: 'Dashboard' },
+  '/rh/funcionarios': { label: 'Funcionários' },
+  '/rh/funcionarios/novo': { label: 'Novo Funcionário' },
+  '/rh/ponto': { label: 'Controle de Ponto' },
+  '/rh/ferias': { label: 'Férias' },
+  '/rh/organograma': { label: 'Organograma' },
+  '/rh/departamentos': { label: 'Departamentos' },
+  '/rh/beneficios': { label: 'Benefícios' },
+  
+  // Monitoramento
   '/monitoramento': { label: 'Monitoramento' },
   '/monitoramento/instalacoes': { label: 'Instalações' },
   '/monitoramento/rotas': { label: 'Rotas' },
   '/monitoramento/estoque': { label: 'Estoque' },
   '/monitoramento/rastreadores': { label: 'Rastreadores' },
+  '/monitoramento/mapa': { label: 'Mapa' },
+  '/monitoramento/config-plataformas': { label: 'Plataformas' },
+  '/monitoramento/credenciais': { label: 'Credenciais' },
+  '/monitoramento/calendario': { label: 'Calendário' },
+  
+  // Marketing
+  '/marketing': { label: 'Marketing' },
+  '/marketing/dashboard': { label: 'Dashboard' },
+  '/marketing/campanhas': { label: 'Campanhas' },
+  '/marketing/campanhas/nova': { label: 'Nova Campanha' },
+  '/marketing/canais': { label: 'Canais' },
+  '/marketing/indicacoes': { label: 'Indicações' },
+  '/marketing/utms': { label: 'UTMs' },
+  '/marketing/relatorios': { label: 'Relatórios' },
+  
+  // Diretoria
+  '/diretoria': { label: 'Diretoria' },
+  '/diretoria/dashboard': { label: 'Dashboard' },
+  '/diretoria/produtos': { label: 'Produtos' },
+  '/diretoria/precos': { label: 'Tabela de Preços' },
+  '/diretoria/rateios': { label: 'Rateios' },
+  '/diretoria/indicadores': { label: 'Indicadores' },
+  '/diretoria/configuracoes': { label: 'Configurações' },
+  '/diretoria/perfis': { label: 'Perfis de Acesso' },
+  '/diretoria/usuarios': { label: 'Usuários' },
+  '/diretoria/logs': { label: 'Logs de Auditoria' },
+  '/diretoria/relatorios': { label: 'Relatórios' },
+  
+  // Oficinas
+  '/oficinas': { label: 'Oficinas' },
+  '/oficinas/lista': { label: 'Lista' },
+  '/oficinas/ordens': { label: 'Ordens de Serviço' },
+  
+  // Configurações
   '/configuracoes': { label: 'Configurações' },
 };
 
 // Rotas com IDs dinâmicos
 const DYNAMIC_ROUTES: Record<string, RouteConfig> = {
+  // Vendas
   '/vendas/leads/:id': {
     label: 'Lead',
     resolver: async (id: string) => {
@@ -40,11 +146,136 @@ const DYNAMIC_ROUTES: Record<string, RouteConfig> = {
       return data?.nome || 'Lead';
     },
   },
+  '/vendas/cotacoes/:id': {
+    label: 'Cotação',
+    resolver: async (id: string) => `Cotação #${id.slice(0, 8)}`,
+  },
+  '/vendas/contratos/:id': {
+    label: 'Contrato',
+    resolver: async (id: string) => {
+      const { data } = await supabase.from('contratos').select('numero').eq('id', id).single();
+      return data?.numero || 'Contrato';
+    },
+  },
+  
+  // Cadastro
   '/cadastro/associados/:id': {
     label: 'Associado',
     resolver: async (id: string) => {
       const { data } = await supabase.from('associados').select('nome').eq('id', id).single();
       return data?.nome || 'Associado';
+    },
+  },
+  
+  // Eventos
+  '/eventos/sinistros/:id': {
+    label: 'Sinistro',
+    resolver: async (id: string) => {
+      const { data } = await supabase.from('sinistros').select('protocolo').eq('id', id).single();
+      return data?.protocolo || 'Sinistro';
+    },
+  },
+  
+  // Assistência
+  '/assistencia/chamados/:id': {
+    label: 'Chamado',
+    resolver: async (id: string) => {
+      const { data } = await supabase.from('chamados_assistencia').select('protocolo').eq('id', id).single();
+      return data?.protocolo || 'Chamado';
+    },
+  },
+  '/assistencia/prestadores/:id': {
+    label: 'Prestador',
+    resolver: async (id: string) => {
+      const { data } = await supabase.from('prestadores_assistencia').select('razao_social').eq('id', id).single();
+      return data?.razao_social || 'Prestador';
+    },
+  },
+  
+  // Financeiro
+  '/financeiro/cobrancas/:id': {
+    label: 'Cobrança',
+    resolver: async (id: string) => `Cobrança #${id.slice(0, 8)}`,
+  },
+  
+  // Cobrança
+  '/cobranca/inadimplentes/:id': {
+    label: 'Inadimplente',
+    resolver: async (id: string) => {
+      const { data } = await supabase.from('associados').select('nome').eq('id', id).single();
+      return data?.nome || 'Inadimplente';
+    },
+  },
+  '/cobranca/acordos/:id': {
+    label: 'Acordo',
+    resolver: async (id: string) => `Acordo #${id.slice(0, 8)}`,
+  },
+  
+  // Contabilidade
+  '/contabilidade/lancamentos/:id': {
+    label: 'Lançamento',
+    resolver: async (id: string) => `Lançamento #${id.slice(0, 8)}`,
+  },
+  '/contabilidade/razao/:id': {
+    label: 'Razão',
+    resolver: async (id: string) => `Razão #${id.slice(0, 8)}`,
+  },
+  
+  // Jurídico
+  '/juridico/processos/:id': {
+    label: 'Processo',
+    resolver: async (id: string) => {
+      const { data } = await supabase.from('processos').select('numero').eq('id', id).single();
+      return data?.numero || 'Processo';
+    },
+  },
+  
+  // RH
+  '/rh/funcionarios/:id': {
+    label: 'Funcionário',
+    resolver: async (id: string) => {
+      const { data } = await supabase.from('funcionarios').select('nome_completo').eq('id', id).single();
+      return data?.nome_completo || 'Funcionário';
+    },
+  },
+  
+  // Monitoramento
+  '/monitoramento/instalacoes/:id': {
+    label: 'Instalação',
+    resolver: async (id: string) => `Instalação #${id.slice(0, 8)}`,
+  },
+  
+  // Marketing
+  '/marketing/campanhas/:id': {
+    label: 'Campanha',
+    resolver: async (id: string) => {
+      const { data } = await supabase.from('campanhas').select('nome').eq('id', id).single();
+      return data?.nome || 'Campanha';
+    },
+  },
+  
+  // Diretoria
+  '/diretoria/produtos/:id': {
+    label: 'Produto',
+    resolver: async (id: string) => {
+      const { data } = await supabase.from('planos').select('nome').eq('id', id).single();
+      return data?.nome || 'Produto';
+    },
+  },
+  '/diretoria/usuarios/:id': {
+    label: 'Usuário',
+    resolver: async (id: string) => {
+      const { data } = await supabase.from('profiles').select('nome').eq('id', id).single();
+      return data?.nome || 'Usuário';
+    },
+  },
+  
+  // Oficinas
+  '/oficinas/ordens/:id': {
+    label: 'OS',
+    resolver: async (id: string) => {
+      const { data } = await supabase.from('ordens_servico').select('numero').eq('id', id).single();
+      return data?.numero ? `OS #${data.numero}` : 'Ordem de Serviço';
     },
   },
 };
