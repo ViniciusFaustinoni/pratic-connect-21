@@ -10,7 +10,9 @@ import {
   DragEndEvent,
   DragOverlay,
   DragStartEvent,
+  DragMoveEvent,
   closestCenter,
+  useDroppable,
   type SensorDescriptor,
 } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -23,6 +25,46 @@ interface KanbanBoardProps {
   handleDragEnd: (event: DragEndEvent) => void;
   activeLead: LeadWithVendedor | null;
   setDrawerLeadId: (id: string) => void;
+}
+
+// Droppable column component
+function DroppableColumn({
+  etapa,
+  children,
+  leadsCount,
+}: {
+  etapa: EtapaLead;
+  children: React.ReactNode;
+  leadsCount: number;
+}) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: etapa,
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`flex-shrink-0 w-[220px] min-w-[220px] flex flex-col rounded-xl bg-muted/50 h-full transition-colors ${
+        isOver ? 'ring-2 ring-primary/50 bg-primary/5' : ''
+      }`}
+    >
+      {/* Header da coluna com dot colorido */}
+      <div className="flex-shrink-0 bg-muted/50 px-3 py-2.5 border-b border-border/50 rounded-t-xl">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className={`w-2.5 h-2.5 rounded-full ${etapaDotColors[etapa]}`} />
+            <span className="font-semibold text-sm text-foreground">
+              {ETAPA_LABELS[etapa]}
+            </span>
+          </div>
+          <span className="w-6 h-6 rounded-full bg-muted text-xs font-medium flex items-center justify-center">
+            {leadsCount}
+          </span>
+        </div>
+      </div>
+      {children}
+    </div>
+  );
 }
 
 export function KanbanBoard({
@@ -42,6 +84,7 @@ export function KanbanBoard({
     // If user is scrolling vertically (normal mouse wheel) and not holding shift
     if (Math.abs(e.deltaY) > Math.abs(e.deltaX) && !e.shiftKey) {
       e.preventDefault();
+      e.stopPropagation();
       boardRef.current.scrollLeft += e.deltaY;
     }
   }, []);
@@ -53,6 +96,31 @@ export function KanbanBoard({
       left: direction === 'left' ? -scrollAmount : scrollAmount,
       behavior: 'smooth',
     });
+  }, []);
+
+  // Auto-scroll during drag when near edges (Trello-like)
+  const handleDragMove = useCallback((event: DragMoveEvent) => {
+    if (!boardRef.current) return;
+    
+    const { activatorEvent } = event;
+    if (!activatorEvent || !('clientX' in activatorEvent)) return;
+    
+    const clientX = (activatorEvent as MouseEvent).clientX;
+    const rect = boardRef.current.getBoundingClientRect();
+    
+    const triggerZone = 80; // px from edge
+    const speed = 16; // scroll speed
+    
+    // Near right edge
+    if (clientX > rect.right - triggerZone) {
+      const intensity = 1 - (rect.right - clientX) / triggerZone;
+      boardRef.current.scrollLeft += speed * intensity;
+    }
+    // Near left edge
+    else if (clientX < rect.left + triggerZone) {
+      const intensity = 1 - (clientX - rect.left) / triggerZone;
+      boardRef.current.scrollLeft -= speed * intensity;
+    }
   }, []);
 
   return (
@@ -84,35 +152,19 @@ export function KanbanBoard({
         collisionDetection={closestCenter}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
+        onDragMove={handleDragMove}
+        autoScroll={true}
       >
         <div
           ref={boardRef}
-          onWheel={handleWheel}
-          className="flex gap-3 h-full overflow-x-auto overflow-y-hidden pb-4 px-12 scrollbar-thin"
+          onWheelCapture={handleWheel}
+          className="flex gap-3 h-full overflow-x-auto overflow-y-hidden pb-4 px-12 scrollbar-thin overscroll-x-contain"
           style={{ scrollbarGutter: 'stable' }}
         >
           {ETAPAS_KANBAN_VENDAS.map((etapa) => {
             const leadsInEtapa = (allLeads || []).filter((l) => l.etapa === etapa);
             return (
-              <div
-                key={etapa}
-                id={etapa}
-                className="flex-shrink-0 w-[220px] min-w-[220px] flex flex-col rounded-xl bg-muted/50 h-full"
-              >
-                {/* Header da coluna com dot colorido */}
-                <div className="flex-shrink-0 bg-muted/50 px-3 py-2.5 border-b border-border/50 rounded-t-xl">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className={`w-2.5 h-2.5 rounded-full ${etapaDotColors[etapa]}`} />
-                      <span className="font-semibold text-sm text-foreground">
-                        {ETAPA_LABELS[etapa]}
-                      </span>
-                    </div>
-                    <span className="w-6 h-6 rounded-full bg-muted text-xs font-medium flex items-center justify-center">
-                      {leadsInEtapa.length}
-                    </span>
-                  </div>
-                </div>
+              <DroppableColumn key={etapa} etapa={etapa} leadsCount={leadsInEtapa.length}>
                 {/* Cards com scroll vertical */}
                 <SortableContext
                   items={leadsInEtapa.map((l) => l.id)}
@@ -136,7 +188,7 @@ export function KanbanBoard({
                     )}
                   </div>
                 </SortableContext>
-              </div>
+              </DroppableColumn>
             );
           })}
         </div>
