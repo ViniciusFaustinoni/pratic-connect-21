@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { AssociadoProvider } from "@/contexts/AssociadoContext";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { AppLayout as AssociadoAppLayout } from "@/components/app/AppLayout";
 import { InstaladorLayout } from "@/components/instalador/InstaladorLayout";
@@ -191,10 +192,11 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
       <AuthProvider>
-        <TooltipProvider>
-          <Toaster />
-        <Sonner />
-        <BrowserRouter>
+        <AssociadoProvider>
+          <TooltipProvider>
+            <Toaster />
+          <Sonner />
+          <BrowserRouter>
           <Routes>
             {/* Auth */}
             <Route path="/auth" element={<Auth />} />
@@ -405,6 +407,7 @@ const App = () => (
           </Routes>
         </BrowserRouter>
         </TooltipProvider>
+        </AssociadoProvider>
       </AuthProvider>
     </ThemeProvider>
   </QueryClientProvider>

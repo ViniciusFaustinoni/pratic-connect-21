@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useAssociado } from '@/contexts/AssociadoContext';
+import { TEST_CREDENTIALS } from '@/data/associadoTeste';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -119,6 +121,7 @@ export default function AppLogin() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, profile, signIn, loading: authLoading } = useAuth();
+  const { isTestMode, loginTeste } = useAssociado();
 
   // Form state
   const [cpf, setCpf] = useState('');
@@ -161,13 +164,17 @@ export default function AppLogin() {
     return () => clearInterval(interval);
   }, [cpfKey]);
 
-  // Redirect if already logged in as associado
+  // Redirect if already logged in as associado or test mode
   useEffect(() => {
+    if (isTestMode) {
+      navigate('/app/home', { replace: true });
+      return;
+    }
     if (user && profile?.tipo === 'associado') {
       const from = (location.state as any)?.from?.pathname || '/app/home';
       navigate(from, { replace: true });
     }
-  }, [user, profile, navigate, location]);
+  }, [user, profile, navigate, location, isTestMode]);
 
   const formatLockTime = (seconds: number): string => {
     const minutes = Math.floor(seconds / 60);
@@ -189,6 +196,14 @@ export default function AppLogin() {
     setError(null);
 
     const rawCPF = unformatCPF(cpf);
+
+    // 1. VERIFICAR LOGIN DE TESTE
+    if (rawCPF === TEST_CREDENTIALS.cpf && password === TEST_CREDENTIALS.password) {
+      loginTeste();
+      toast.success('Login de teste realizado!');
+      navigate('/app/home');
+      return;
+    }
 
     const cpfResult = cpfSchema.safeParse(rawCPF);
     if (!cpfResult.success || !isValidCPF(rawCPF)) {
@@ -436,6 +451,31 @@ export default function AppLogin() {
             Primeiro acesso
           </Button>
 
+          {/* Credenciais de Teste */}
+          <div className="mt-6 rounded-lg border-2 border-dashed border-yellow-400 bg-yellow-50 p-4 dark:border-yellow-600 dark:bg-yellow-950/30">
+            <div className="flex items-center gap-2 text-yellow-700 dark:text-yellow-400">
+              <FlaskConical className="h-4 w-4" />
+              <span className="text-sm font-medium">ACESSO DE TESTE</span>
+            </div>
+            <div className="mt-2 space-y-1 text-sm text-yellow-800 dark:text-yellow-300">
+              <p><strong>CPF:</strong> {TEST_CREDENTIALS.cpfFormatted}</p>
+              <p><strong>Senha:</strong> {TEST_CREDENTIALS.password}</p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-3 w-full border-yellow-500 text-yellow-700 hover:bg-yellow-100 dark:border-yellow-600 dark:text-yellow-400 dark:hover:bg-yellow-950"
+              onClick={() => {
+                setCpf(TEST_CREDENTIALS.cpfFormatted);
+                setPassword(TEST_CREDENTIALS.password);
+                toast.success('Credenciais preenchidas!');
+              }}
+            >
+              Usar credenciais de teste
+            </Button>
+          </div>
+
           {/* Botão Conta de Teste - Apenas em desenvolvimento */}
           {isDev && (
             <Button
@@ -445,7 +485,7 @@ export default function AppLogin() {
               onClick={() => setModalContaTeste(true)}
             >
               <FlaskConical className="mr-2 h-4 w-4" />
-              Criar Conta de Teste
+              Criar Conta de Teste (Supabase)
             </Button>
           )}
 

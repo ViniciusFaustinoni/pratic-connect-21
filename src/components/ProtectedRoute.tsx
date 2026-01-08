@@ -11,16 +11,24 @@ interface ProtectedRouteProps {
   allowedTipos?: ('funcionario' | 'associado' | 'prestador')[];
   /** URL de redirect quando não autenticado */
   authRedirect?: string;
+  /** Pular autenticação (usado para modo de teste) */
+  skipAuth?: boolean;
 }
 
 export function ProtectedRoute({ 
   children, 
   allowedRoles,
   allowedTipos,
-  authRedirect = '/auth'
+  authRedirect = '/auth',
+  skipAuth = false,
 }: ProtectedRouteProps) {
   const { user, profile, loading, initialized, canAccess } = useAuth();
   const location = useLocation();
+
+  // Se skipAuth está ativo (modo de teste), permite acesso direto
+  if (skipAuth) {
+    return <>{children}</>;
+  }
 
   // Loading state
   if (!initialized || loading) {
