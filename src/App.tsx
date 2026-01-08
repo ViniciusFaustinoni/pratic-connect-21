@@ -56,6 +56,7 @@ import OficinaDetalhe from "./pages/oficina/OficinaDetalhe";
 import OrdensServicoList from "./pages/oficina/OrdensServicoList";
 import OrdemServicoDetalhePage from "./pages/oficina/OrdemServicoDetalhe";
 import Configuracoes from "./pages/Configuracoes";
+import Perfil from "./pages/Perfil";
 import NotFound from "./pages/NotFound";
 import AcessoNegado from "./pages/AcessoNegado";
 import AssistenciaDashboard from "./pages/assistencia/AssistenciaDashboard";
@@ -192,6 +193,7 @@ const App = () => (
             {/* Protected routes with internal layout */}
             <Route element={<AppLayout />}>
               <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/perfil" element={<Perfil />} />
               
               {/* Vendas */}
               <Route path="/vendas/dashboard" element={<DashboardVendas />} />
