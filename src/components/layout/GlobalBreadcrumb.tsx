@@ -51,6 +51,7 @@ const ROUTE_CONFIG: Record<string, RouteConfig> = {
   '/financeiro/contas-pagar': { label: 'Contas a Pagar' },
   '/financeiro/extrato': { label: 'Extrato' },
   '/financeiro/extratos-bancarios': { label: 'Extratos Bancários' },
+  '/financeiro/contas-bancarias': { label: 'Contas Bancárias' },
   
   // Cobrança
   '/cobranca': { label: 'Cobrança' },

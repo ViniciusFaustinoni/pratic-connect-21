@@ -85,6 +85,7 @@ import ContasPagar from "./pages/financeiro/ContasPagar";
 import Extrato from "./pages/financeiro/Extrato";
 import ExtratosBancarios from "./pages/financeiro/ExtratosBancarios";
 import ExtratoDetalhe from "./pages/financeiro/ExtratoDetalhe";
+import ContasBancarias from "./pages/financeiro/ContasBancarias";
 
 // Contabilidade
 import ContabilidadeDashboard from "./pages/contabilidade/ContabilidadeDashboard";
@@ -241,6 +242,7 @@ const App = () => (
               <Route path="/financeiro/extrato" element={<Extrato />} />
               <Route path="/financeiro/extratos-bancarios" element={<ExtratosBancarios />} />
               <Route path="/financeiro/extratos/:id" element={<ExtratoDetalhe />} />
+              <Route path="/financeiro/contas-bancarias" element={<ContasBancarias />} />
               
               {/* Cobrança */}
               <Route path="/cobranca" element={<CobrancaDashboard />} />

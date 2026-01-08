@@ -201,6 +201,7 @@ const menuConfig: {
         { title: 'Faturamento', url: '/financeiro/faturamento', icon: FileText },
         { title: 'Extrato', url: '/financeiro/extrato', icon: List },
         { title: 'Extratos Bancários', url: '/financeiro/extratos-bancarios', icon: FileText },
+        { title: 'Contas Bancárias', url: '/financeiro/contas-bancarias', icon: Building2 },
       ],
     },
     {
