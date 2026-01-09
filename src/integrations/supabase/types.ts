@@ -10436,6 +10436,7 @@ export type Database = {
         | "parceiro"
         | "outro"
         | "api"
+        | "whatsapp"
       periodo_instalacao: "manha" | "tarde" | "noite"
       status_associado:
         | "em_analise"
@@ -10738,6 +10739,7 @@ export const Constants = {
         "parceiro",
         "outro",
         "api",
+        "whatsapp",
       ],
       periodo_instalacao: ["manha", "tarde", "noite"],
       status_associado: [
