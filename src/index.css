@@ -5,13 +5,89 @@
 @tailwind components;
 @tailwind utilities;
 
-/* PRATIC 2.0 - Design System Premium Dark
+/* PRATIC 2.0 - Design System
+   Modo Claro + Modo Escuro
    Cores: Azul profundo + Vermelho destaque
    All colors MUST be HSL.
 */
 
 @layer base {
+  /* ===== MODO CLARO (padrão) ===== */
   :root {
+    /* Fundo principal - branco azulado suave */
+    --background: 210 40% 98%;
+    --foreground: 222 47% 11%;
+
+    /* Cards e painéis - branco */
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --card-hover: 210 40% 96%;
+
+    /* Popover */
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    /* Azul primário */
+    --primary: 218 67% 36%;
+    --primary-foreground: 0 0% 100%;
+    --primary-dark: 218 80% 28%;
+
+    /* Cinza neutro para secundário */
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+
+    /* Muted */
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+    --text-dark: 215 16% 35%;
+
+    /* Vermelho destaque (CTAs) - #e31837 */
+    --accent: 351 84% 49%;
+    --accent-foreground: 0 0% 100%;
+    --accent-hover: 350 84% 42%;
+
+    /* Destructive */
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Bordas - cinza claro */
+    --border: 214 32% 91%;
+    --border-hover: 214 32% 85%;
+    --input: 214 32% 91%;
+    --ring: 218 67% 36%;
+
+    --radius: 0.5rem;
+
+    /* Sidebar - branco/cinza claro */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 222 47% 11%;
+    --sidebar-primary: 351 84% 49%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 210 40% 96%;
+    --sidebar-accent-foreground: 222 47% 11%;
+    --sidebar-border: 214 32% 91%;
+    --sidebar-ring: 351 84% 49%;
+
+    /* Cores de status */
+    --success: 160 84% 39%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    --info: 199 89% 48%;
+    --info-foreground: 0 0% 100%;
+
+    /* Etapas do funil */
+    --etapa-novo: 199 89% 48%;
+    --etapa-contato: 262 83% 58%;
+    --etapa-apresentacao: 38 92% 50%;
+    --etapa-cotacao: 217 91% 40%;
+    --etapa-negociacao: 280 68% 60%;
+    --etapa-ganho: 160 84% 39%;
+    --etapa-perdido: 0 84% 60%;
+  }
+
+  /* ===== MODO ESCURO ===== */
+  .dark {
     /* Fundo principal - #040d1a */
     --background: 214 63% 6%;
     --foreground: 0 0% 100%;
@@ -45,7 +121,7 @@
     --accent-hover: 350 84% 42%;
 
     /* Destructive */
-    --destructive: 0 84% 60%;
+    --destructive: 0 63% 31%;
     --destructive-foreground: 0 0% 100%;
 
     /* Bordas - #1a2d4a / #1a3a6e */
@@ -53,8 +129,6 @@
     --border-hover: 217 62% 26%;
     --input: 213 49% 20%;
     --ring: 218 67% 36%;
-
-    --radius: 0.5rem;
 
     /* Sidebar - Azul escuro */
     --sidebar-background: 215 65% 9%;
@@ -82,49 +156,6 @@
     --etapa-negociacao: 280 68% 60%;
     --etapa-ganho: 160 84% 39%;
     --etapa-perdido: 0 84% 60%;
-  }
-
-  /* Dark mode is now the default - no .dark class needed */
-  .dark {
-    --background: 214 63% 6%;
-    --foreground: 0 0% 100%;
-
-    --card: 215 65% 9%;
-    --card-foreground: 0 0% 100%;
-    --card-hover: 216 63% 14%;
-
-    --popover: 215 65% 9%;
-    --popover-foreground: 0 0% 100%;
-
-    --primary: 218 67% 36%;
-    --primary-foreground: 0 0% 100%;
-    --primary-dark: 218 80% 24%;
-
-    --secondary: 216 63% 14%;
-    --secondary-foreground: 0 0% 100%;
-
-    --muted: 216 63% 14%;
-    --muted-foreground: 215 16% 65%;
-
-    --accent: 351 84% 49%;
-    --accent-foreground: 0 0% 100%;
-
-    --destructive: 0 63% 31%;
-    --destructive-foreground: 0 0% 100%;
-
-    --border: 213 49% 20%;
-    --border-hover: 217 62% 26%;
-    --input: 213 49% 20%;
-    --ring: 218 67% 36%;
-
-    --sidebar-background: 215 65% 9%;
-    --sidebar-foreground: 0 0% 100%;
-    --sidebar-primary: 351 84% 49%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 218 80% 24%;
-    --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 213 49% 20%;
-    --sidebar-ring: 351 84% 49%;
   }
 }
 
