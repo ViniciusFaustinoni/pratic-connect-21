@@ -15,7 +15,7 @@ import {
   MapPin,
   Package,
   Radio,
-  Kanban,
+  Rocket,
   TrendingUp,
   BarChart3,
   ClipboardList,
@@ -137,7 +137,7 @@ const menuConfig: {
       color: MENU_COLORS.vendas,
       items: [
         { title: 'Leads', url: '/vendas/leads', icon: UserPlus },
-        { title: 'Kanban', url: '/vendas/kanban', icon: Kanban },
+        { title: 'Ativações', url: '/vendas/ativacoes', icon: Rocket },
         { title: 'Cotação', url: '/vendas/cotacao', icon: Calculator },
         { title: 'Contratos', url: '/vendas/contratos', icon: FileText },
         { title: 'Planos e Benefícios', url: '/vendas/planos-beneficios', icon: BookOpen },
