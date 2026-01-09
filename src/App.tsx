@@ -230,7 +230,7 @@ const App = () => (
               <Route path="/vendas/leads" element={<LeadsUnificado />} />
               <Route path="/vendas/leads/:id" element={<LeadDetalhe />} />
               <Route path="/vendas/leads/:id/editar" element={<LeadEditar />} />
-              <Route path="/vendas/kanban" element={<Acompanhamento />} />
+              <Route path="/vendas/ativacoes" element={<Acompanhamento />} />
               <Route path="/vendas/cotacao" element={<Cotacao />} />
               <Route path="/vendas/cotacoes" element={<Cotacoes />} />
               <Route path="/vendas/cotacoes/:id" element={<CotacaoDetalhe />} />
