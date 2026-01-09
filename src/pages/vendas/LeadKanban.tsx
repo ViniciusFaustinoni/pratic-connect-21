@@ -63,17 +63,22 @@ function DroppableColumn({ etapa, children, count }: DroppableColumnProps) {
   return (
     <div
       ref={setNodeRef}
-      className={`flex flex-col rounded-lg bg-muted/50 p-3 min-h-[calc(100vh-320px)] transition-colors ${
-        isOver ? 'bg-primary/10 ring-2 ring-primary/50' : ''
-      }`}
+      className={cn(
+        "w-[280px] min-w-[280px] flex-shrink-0 flex flex-col rounded-lg bg-muted/50 min-h-[calc(100vh-320px)] transition-colors",
+        isOver && "bg-primary/10 ring-2 ring-primary/50"
+      )}
     >
-      <div className="mb-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      <div className="p-3 border-b border-border/50">
+        <div className="flex items-center justify-between">
           <Badge className={etapaColors[etapa]}>{ETAPA_LABELS[etapa]}</Badge>
-          <span className="text-sm text-muted-foreground font-medium">{count}</span>
+          <span className="w-6 h-6 rounded-full bg-muted text-xs font-medium flex items-center justify-center">
+            {count}
+          </span>
         </div>
       </div>
-      {children}
+      <div className="flex-1 p-2 overflow-y-auto scrollbar-thin">
+        {children}
+      </div>
     </div>
   );
 }
@@ -278,33 +283,44 @@ export default function LeadKanban() {
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <div className="grid auto-cols-[260px] grid-flow-col gap-3 overflow-x-auto pb-4">
-          {ETAPAS_FUNIL.map((etapa) => {
-            const leadsInEtapa = (leads || []).filter((l) => l.etapa === etapa);
-            return (
-              <DroppableColumn key={etapa} etapa={etapa} count={leadsInEtapa.length}>
-                <SortableContext
-                  items={leadsInEtapa.map((l) => l.id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  <div className="flex flex-col gap-2 flex-1">
-                    {leadsInEtapa.map((lead) => (
-                      <LeadKanbanCard
-                        key={lead.id}
-                        lead={lead}
-                        onClick={() => setSelectedLeadId(lead.id)}
-                      />
-                    ))}
-                    {leadsInEtapa.length === 0 && (
-                      <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm min-h-[100px]">
-                        Arraste leads para cá
+        {/* Container externo - overflow hidden */}
+        <div className="overflow-hidden rounded-lg">
+          {/* Container do scroll horizontal */}
+          <div className="overflow-x-auto kanban-scroll pb-4">
+            {/* Container das colunas - inline-flex para forçar largura */}
+            <div className="inline-flex gap-3 min-w-max p-1">
+              {ETAPAS_FUNIL.map((etapa) => {
+                const leadsInEtapa = (leads || []).filter((l) => l.etapa === etapa);
+                return (
+                  <DroppableColumn key={etapa} etapa={etapa} count={leadsInEtapa.length}>
+                    <SortableContext
+                      items={leadsInEtapa.map((l) => l.id)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      <div className="flex flex-col gap-2">
+                        {leadsInEtapa.map((lead) => (
+                          <LeadKanbanCard
+                            key={lead.id}
+                            lead={lead}
+                            onClick={() => setSelectedLeadId(lead.id)}
+                          />
+                        ))}
+                        {leadsInEtapa.length === 0 && (
+                          <div className="flex items-center justify-center text-muted-foreground text-sm min-h-[100px]">
+                            Arraste leads para cá
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                </SortableContext>
-              </DroppableColumn>
-            );
-          })}
+                    </SortableContext>
+                  </DroppableColumn>
+                );
+              })}
+            </div>
+          </div>
+          {/* Indicador de scroll mobile */}
+          <p className="text-xs text-muted-foreground text-center mt-2 md:hidden">
+            ← Arraste para ver mais colunas →
+          </p>
         </div>
 
         <DragOverlay>

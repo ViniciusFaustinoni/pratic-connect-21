@@ -226,22 +226,28 @@ export default function Acompanhamento() {
       </div>
 
       {/* Kanban */}
-      <div className="overflow-x-auto pb-4 -mx-6 px-6">
-        <div className="flex gap-4" style={{ minWidth: "max-content" }}>
-          {isLoading ? (
-            fases.map((fase) => (
-              <KanbanColumnSkeleton key={fase.id} />
-            ))
-          ) : (
-            fases.map((fase) => (
-              <KanbanColumn 
-                key={fase.id} 
-                fase={fase} 
-                items={itemsPorFase[fase.id] || []} 
-              />
-            ))
-          )}
+      <div className="overflow-hidden rounded-lg -mx-6 px-6">
+        <div className="overflow-x-auto kanban-scroll pb-4">
+          <div className="inline-flex gap-4 min-w-max">
+            {isLoading ? (
+              fases.map((fase) => (
+                <KanbanColumnSkeleton key={fase.id} />
+              ))
+            ) : (
+              fases.map((fase) => (
+                <KanbanColumn 
+                  key={fase.id} 
+                  fase={fase} 
+                  items={itemsPorFase[fase.id] || []} 
+                />
+              ))
+            )}
+          </div>
         </div>
+        {/* Indicador de scroll mobile */}
+        <p className="text-xs text-muted-foreground text-center mt-2 md:hidden">
+          ← Arraste para ver mais colunas →
+        </p>
       </div>
     </div>
   );

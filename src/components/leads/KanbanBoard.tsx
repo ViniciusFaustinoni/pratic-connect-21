@@ -44,7 +44,7 @@ function DroppableColumn({
   return (
     <div
       ref={setNodeRef}
-      className={`flex-shrink-0 w-[220px] min-w-[220px] flex flex-col rounded-xl bg-muted/50 h-full transition-colors ${
+      className={`flex-shrink-0 w-[280px] min-w-[280px] flex flex-col rounded-xl bg-muted/50 h-full transition-colors ${
         isOver ? 'ring-2 ring-primary/50 bg-primary/5' : ''
       }`}
     >
@@ -161,7 +161,7 @@ export function KanbanBoard({
         <div
           ref={boardRef}
           onWheelCapture={handleWheel}
-          className="flex gap-3 h-full overflow-x-scroll overflow-y-hidden pb-4 px-12 scrollbar-thin overscroll-x-contain touch-pan-y"
+          className="flex gap-3 h-full overflow-x-scroll overflow-y-hidden pb-4 px-12 kanban-scroll overscroll-x-contain touch-pan-y"
           style={{ scrollbarGutter: 'stable' }}
         >
           {ETAPAS_KANBAN_VENDAS.map((etapa) => {
@@ -197,7 +197,7 @@ export function KanbanBoard({
         </div>
         <DragOverlay>
           {activeLead ? (
-            <Card className="shadow-lg w-[220px]">
+            <Card className="shadow-lg w-[280px]">
               <CardContent className="p-2.5">
                 <div className="flex items-center gap-2">
                   <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">
