@@ -34,7 +34,7 @@ export interface PlanoResumo {
   badge?: string;
   coberturaFipe: number;
   anoMinimo: number;
-  cotaPasesio: string;
+  cotaPasesio?: string;
   cotaPasesioDesagio?: string;
   cotaApp?: string;
   niveis?: string[];
@@ -436,7 +436,6 @@ export const PLANOS_RESUMO: PlanoResumo[] = [
     anoMinimo: 2005,
     cotaPasesio: '6% (mín R$1.200)',
     cotaPasesioDesagio: '8% (mín R$2.000)',
-    cotaApp: '8% (mín R$3.000)',
     cor: 'from-blue-500 to-blue-600',
     linha: 'select',
     beneficios: [
@@ -458,7 +457,6 @@ export const PLANOS_RESUMO: PlanoResumo[] = [
     anoMinimo: 2005,
     cotaPasesio: '6% (mín R$1.200)',
     cotaPasesioDesagio: '8% (mín R$2.000)',
-    cotaApp: '8% (mín R$3.000)',
     adicional: '+R$30/mês',
     cor: 'from-blue-600 to-blue-700',
     linha: 'select',
@@ -654,7 +652,6 @@ export const PLANOS_RESUMO: PlanoResumo[] = [
     nome: 'ADVANCED',
     coberturaFipe: 0,
     anoMinimo: 2005,
-    cotaPasesio: '10% (mín R$1.500)',
     destaque: 'Honda e Yamaha (20 anos)',
     cor: 'from-red-500 to-rose-600',
     linha: 'advanced',
