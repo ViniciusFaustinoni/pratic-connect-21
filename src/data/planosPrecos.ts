@@ -40,6 +40,8 @@ export interface PlanoResumo {
   niveis?: string[];
   destaque?: string;
   cor: string;
+  beneficios: string[];
+  adicional?: string;
 }
 
 export interface BeneficioNivel {
@@ -424,7 +426,7 @@ export const BENEFICIOS_ADICIONAIS_COMPLETO = [
 // RESUMO DOS PLANOS (para cards da Visão Geral)
 // ============================================
 export const PLANOS_RESUMO: PlanoResumo[] = [
-  // SELECT - 3 níveis
+  // SELECT BASIC
   {
     id: 'select-basic',
     nome: 'SELECT BASIC',
@@ -434,9 +436,19 @@ export const PLANOS_RESUMO: PlanoResumo[] = [
     cotaPasesio: '6% (mín R$1.200)',
     cotaPasesioDesagio: '8% (mín R$2.000)',
     cotaApp: '8% (mín R$3.000)',
-    destaque: 'Rastreador/Monitoramento (acima de R$30mil)',
     cor: 'from-blue-500 to-blue-600',
+    beneficios: [
+      'Roubo e Furto',
+      'Colisão',
+      'Perda Total',
+      'Incêndio',
+      'Alagamento',
+      'Chuva de Granizo',
+      'Assistência 24h 400km',
+      'Rastreador/Monitoramento (acima de R$30mil)',
+    ],
   },
+  // SELECT PREMIUM
   {
     id: 'select-premium',
     nome: 'SELECT PREMIUM',
@@ -445,9 +457,24 @@ export const PLANOS_RESUMO: PlanoResumo[] = [
     cotaPasesio: '6% (mín R$1.200)',
     cotaPasesioDesagio: '8% (mín R$2.000)',
     cotaApp: '8% (mín R$3.000)',
-    destaque: '+R$30/mês | 1000km Reboque, Danos Terceiros R$40mil, Vidros e Faróis (após 120 dias), Reboque Excedente',
+    adicional: '+R$30/mês',
     cor: 'from-blue-600 to-blue-700',
+    beneficios: [
+      'Roubo e Furto',
+      'Colisão',
+      'Perda Total',
+      'Incêndio',
+      'Alagamento',
+      'Chuva de Granizo',
+      'Assistência 24h 400km',
+      'Rastreador/Monitoramento (acima de R$30mil)',
+      '1000km Reboque',
+      'Danos Terceiros R$40mil',
+      'Vidros e Faróis (após 120 dias)',
+      'Reboque Excedente (1x a cada 6 meses)',
+    ],
   },
+  // SELECT EXCLUSIVE
   {
     id: 'select-exclusive',
     nome: 'SELECT EXCLUSIVE',
@@ -457,8 +484,24 @@ export const PLANOS_RESUMO: PlanoResumo[] = [
     cotaPasesio: '6% (mín R$1.200)',
     cotaPasesioDesagio: '8% (mín R$2.000)',
     cotaApp: '8% (mín R$3.000)',
-    destaque: '+R$60/mês | Tudo do Premium + Kit Gás, 100% FIPE APP + Carro Reserva (somente em colisão)',
+    adicional: '+R$60/mês',
     cor: 'from-blue-700 to-indigo-800',
+    beneficios: [
+      'Roubo e Furto',
+      'Colisão',
+      'Perda Total',
+      'Incêndio',
+      'Alagamento',
+      'Chuva de Granizo',
+      'Assistência 24h 400km',
+      'Rastreador/Monitoramento (acima de R$30mil)',
+      '1000km Reboque',
+      'Danos Terceiros R$40mil',
+      'Vidros e Faróis (após 120 dias)',
+      'Reboque Excedente (1x a cada 6 meses)',
+      'Kit Gás',
+      '100% FIPE APP + Carro Reserva (somente em colisão)',
+    ],
   },
   // SELECT ONE
   {
@@ -470,8 +513,21 @@ export const PLANOS_RESUMO: PlanoResumo[] = [
     cotaPasesio: '6% (mín R$1.200)',
     cotaPasesioDesagio: '8% (mín R$2.000)',
     cotaApp: '8% (mín R$3.000)',
-    destaque: 'Danos 100mil, Kit Gás, Carro Reserva (somente em colisão), Clube Gás',
     cor: 'from-emerald-500 to-green-600',
+    beneficios: [
+      'Roubo e Furto',
+      'Colisão',
+      'Perda Total',
+      'Incêndio',
+      'Alagamento',
+      'Chuva de Granizo',
+      'Assistência 24h 400km',
+      'Rastreador/Monitoramento (acima de R$30mil)',
+      'Danos Terceiros R$100mil',
+      'Kit Gás',
+      'Carro Reserva (somente em colisão)',
+      'Clube Gás (10% desconto)',
+    ],
   },
   // ESPECIAL
   {
@@ -481,8 +537,12 @@ export const PLANOS_RESUMO: PlanoResumo[] = [
     anoMinimo: 2002,
     cotaPasesio: '6% (mín R$1.200)',
     cotaPasesioDesagio: '8% (mín R$2.000)',
-    destaque: 'Apenas Roubo/Furto + Assistência 400km + Rastreador/Monitoramento obrigatório',
     cor: 'from-orange-500 to-amber-600',
+    beneficios: [
+      'Roubo e Furto',
+      'Assistência 24h 400km',
+      'Rastreador/Monitoramento (obrigatório)',
+    ],
   },
   // ESPECIAL PLUS
   {
@@ -491,10 +551,17 @@ export const PLANOS_RESUMO: PlanoResumo[] = [
     coberturaFipe: 80,
     anoMinimo: 2002,
     cotaPasesio: '10% (mín R$3.000)',
-    destaque: 'Roubo/Furto + Colisão + PT + Incêndio + Alagamento + Rastreador/Monitoramento (acima de R$30mil)',
     cor: 'from-amber-500 to-orange-600',
+    beneficios: [
+      'Roubo e Furto',
+      'Colisão',
+      'Perda Total',
+      'Incêndio',
+      'Alagamento',
+      'Rastreador/Monitoramento (acima de R$30mil)',
+    ],
   },
-  // LANÇAMENTO - 3 níveis
+  // LANÇAMENTO BASIC
   {
     id: 'lancamento-basic',
     nome: 'LANÇAMENTO BASIC',
@@ -502,37 +569,85 @@ export const PLANOS_RESUMO: PlanoResumo[] = [
     coberturaFipe: 100,
     anoMinimo: 2024,
     cotaPasesio: '10% (mín R$3.000)',
-    destaque: 'Rastreador/Monitoramento (acima de R$30mil). Sem alteração com deságio',
+    destaque: 'Sem alteração com deságio',
     cor: 'from-violet-500 to-purple-600',
+    beneficios: [
+      'Roubo e Furto',
+      'Colisão',
+      'Perda Total',
+      'Incêndio',
+      'Alagamento',
+      'Chuva de Granizo',
+      'Assistência 24h 400km',
+      'Rastreador/Monitoramento (acima de R$30mil)',
+    ],
   },
+  // LANÇAMENTO PREMIUM
   {
     id: 'lancamento-premium',
     nome: 'LANÇAMENTO PREMIUM',
     coberturaFipe: 100,
     anoMinimo: 2024,
     cotaPasesio: '10% (mín R$3.000)',
-    destaque: 'Benefícios Premium inclusos. Sem alteração com deságio',
+    destaque: 'Sem alteração com deságio',
     cor: 'from-violet-600 to-purple-700',
+    beneficios: [
+      'Roubo e Furto',
+      'Colisão',
+      'Perda Total',
+      'Incêndio',
+      'Alagamento',
+      'Chuva de Granizo',
+      'Assistência 24h 400km',
+      'Rastreador/Monitoramento (acima de R$30mil)',
+      '1000km Reboque',
+      'Danos Terceiros R$40mil',
+      'Vidros e Faróis (após 120 dias)',
+      'Reboque Excedente (1x a cada 6 meses)',
+    ],
   },
+  // LANÇAMENTO EXCLUSIVE
   {
     id: 'lancamento-exclusive',
     nome: 'LANÇAMENTO EXCLUSIVE',
     coberturaFipe: 100,
     anoMinimo: 2024,
     cotaPasesio: '10% (mín R$3.000)',
-    destaque: 'Todos benefícios inclusos. Sem alteração com deságio',
+    destaque: 'Sem alteração com deságio',
     cor: 'from-violet-700 to-purple-800',
+    beneficios: [
+      'Roubo e Furto',
+      'Colisão',
+      'Perda Total',
+      'Incêndio',
+      'Alagamento',
+      'Chuva de Granizo',
+      'Assistência 24h 400km',
+      'Rastreador/Monitoramento (acima de R$30mil)',
+      '1000km Reboque',
+      'Danos Terceiros R$40mil',
+      'Vidros e Faróis (após 120 dias)',
+      'Reboque Excedente (1x a cada 6 meses)',
+      'Kit Gás',
+      '100% FIPE APP + Carro Reserva (somente em colisão)',
+    ],
   },
-  // ADVANCED (Motos) - 2 níveis
+  // ADVANCED (Motos)
   {
     id: 'advanced',
     nome: 'ADVANCED',
     coberturaFipe: 0,
     anoMinimo: 2005,
     cotaPasesio: '10% (mín R$1.500)',
-    destaque: 'Motos Honda e Yamaha (20 anos). Roubo/Furto + Assistência 400km + Monitoramento (acima de R$9mil)',
+    destaque: 'Honda e Yamaha (20 anos)',
     cor: 'from-red-500 to-rose-600',
+    beneficios: [
+      'Roubo e Furto',
+      'Assistência 24h 400km',
+      'Monitoramento/Rastreador (acima de R$9mil)',
+    ],
   },
+  // ADVANCED+
   {
     id: 'advanced-plus',
     nome: 'ADVANCED+',
@@ -540,8 +655,15 @@ export const PLANOS_RESUMO: PlanoResumo[] = [
     coberturaFipe: 0,
     anoMinimo: 2005,
     cotaPasesio: '10% (mín R$1.500)',
-    destaque: 'Motos Honda e Yamaha. Roubo/Furto + Assistência 600km + Colisão (10%) + Terceiros R$10mil (participação R$750)',
+    destaque: 'Honda e Yamaha (20 anos)',
     cor: 'from-red-600 to-rose-700',
+    beneficios: [
+      'Roubo e Furto',
+      'Assistência 24h 600km',
+      'Monitoramento/Rastreador (acima de R$9mil)',
+      'Colisão (cota 10%)',
+      'Danos Terceiros R$10mil (participação R$750)',
+    ],
   },
 ];
 

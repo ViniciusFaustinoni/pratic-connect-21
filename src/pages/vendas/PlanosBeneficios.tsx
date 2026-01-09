@@ -3,9 +3,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import { 
   Shield, Car, Zap, Bike, Star, Check, AlertTriangle, 
-  Umbrella, Flame, CloudRain, Users, Wrench, Phone, MapPin, Fuel
+  Umbrella, Flame, CloudRain, Users, Wrench, Phone, MapPin, Fuel,
+  ChevronDown, ChevronUp
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -32,11 +34,16 @@ const formatCurrency = (value: number) => {
   }).format(value);
 };
 
-// Card de Plano para Visão Geral
+// Card de Plano com benefícios e "Ver mais"
 function PlanoCard({ plano }: { plano: typeof PLANOS_RESUMO[0] }) {
+  const [expanded, setExpanded] = useState(false);
+  const BENEFICIOS_VISIVEIS = 4;
+  const temMaisBeneficios = plano.beneficios.length > BENEFICIOS_VISIVEIS;
+  const beneficiosExibidos = expanded ? plano.beneficios : plano.beneficios.slice(0, BENEFICIOS_VISIVEIS);
+
   return (
     <Card className={cn(
-      'relative overflow-hidden transition-all hover:shadow-lg h-full',
+      'relative overflow-hidden transition-all hover:shadow-lg h-full flex flex-col',
       plano.badge && 'ring-2 ring-primary'
     )}>
       <div className={cn('h-2 bg-gradient-to-r', plano.cor)} />
@@ -48,7 +55,14 @@ function PlanoCard({ plano }: { plano: typeof PLANOS_RESUMO[0] }) {
       )}
 
       <CardHeader className="pb-2">
-        <CardTitle className="text-lg">{plano.nome}</CardTitle>
+        <div className="flex items-center gap-2">
+          <CardTitle className="text-lg">{plano.nome}</CardTitle>
+          {plano.adicional && (
+            <Badge variant="secondary" className="text-xs">
+              {plano.adicional}
+            </Badge>
+          )}
+        </div>
         <div className="flex items-center gap-2 mt-1 flex-wrap">
           {plano.coberturaFipe > 0 ? (
             <Badge className={cn(
@@ -70,7 +84,7 @@ function PlanoCard({ plano }: { plano: typeof PLANOS_RESUMO[0] }) {
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-3 text-sm">
+      <CardContent className="space-y-3 text-sm flex-1 flex flex-col">
         <div>
           <p className="text-xs text-muted-foreground">Cota Passeio:</p>
           <p className="font-medium">{plano.cotaPasesio}</p>
@@ -87,6 +101,40 @@ function PlanoCard({ plano }: { plano: typeof PLANOS_RESUMO[0] }) {
             <p className="font-medium">{plano.cotaApp}</p>
           </div>
         )}
+
+        {/* Benefícios */}
+        <div className="flex-1">
+          <p className="text-xs text-muted-foreground mb-2">Benefícios inclusos:</p>
+          <div className="space-y-1">
+            {beneficiosExibidos.map((beneficio, index) => (
+              <div key={index} className="flex items-start gap-2">
+                <Check className="h-3.5 w-3.5 text-green-500 mt-0.5 shrink-0" />
+                <span className="text-xs">{beneficio}</span>
+              </div>
+            ))}
+          </div>
+          
+          {temMaisBeneficios && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full mt-2 text-xs h-7"
+              onClick={() => setExpanded(!expanded)}
+            >
+              {expanded ? (
+                <>
+                  <ChevronUp className="h-3 w-3 mr-1" />
+                  Ver menos
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="h-3 w-3 mr-1" />
+                  +{plano.beneficios.length - BENEFICIOS_VISIVEIS} benefícios
+                </>
+              )}
+            </Button>
+          )}
+        </div>
 
         {plano.destaque && (
           <p className="text-xs text-muted-foreground italic border-t pt-2">
