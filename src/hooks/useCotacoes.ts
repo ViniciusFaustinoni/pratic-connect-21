@@ -41,8 +41,8 @@ export function useCotacoes() {
         .from('cotacoes')
         .select(`
           *,
-          leads (*),
-          planos (*)
+          leads:leads!fk_cotacoes_lead_id(*),
+          planos(*)
         `)
         .order('created_at', { ascending: false });
       
@@ -81,8 +81,8 @@ export function useCotacao(id: string | undefined) {
         .from('cotacoes')
         .select(`
           *,
-          leads (*),
-          planos (*)
+          leads:leads!fk_cotacoes_lead_id(*),
+          planos(*)
         `)
         .eq('id', id)
         .single();
