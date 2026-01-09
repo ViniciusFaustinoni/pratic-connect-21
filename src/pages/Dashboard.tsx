@@ -143,7 +143,13 @@ function KPICard({ titulo, valor, variacao, emoji, loading }: KPICardProps) {
 // ============================================
 // COMPONENTE: BANNER DE BOAS-VINDAS
 // ============================================
-function WelcomeBanner({ nome }: { nome: string }) {
+interface WelcomeBannerProps {
+  nome: string;
+  onRefresh?: () => void;
+  lastUpdate?: Date;
+}
+
+function WelcomeBanner({ nome, onRefresh, lastUpdate }: WelcomeBannerProps) {
   const getSaudacao = () => {
     const hora = new Date().getHours();
     if (hora < 12) return 'Bom dia';
@@ -161,13 +167,35 @@ function WelcomeBanner({ nome }: { nome: string }) {
         <Shield className="h-32 w-32 text-foreground" />
       </div>
       
-      <div className="relative z-10">
-        <h1 className="text-2xl font-bold text-white">
-          {getSaudacao()}, {nome}! 👋
-        </h1>
-        <p className="text-white/80 mt-1">
-          Aqui está o resumo das atividades de hoje.
-        </p>
+      <div className="relative z-10 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-white">
+            {getSaudacao()}, {nome}! 👋
+          </h1>
+          <p className="text-white/80 mt-1">
+            Aqui está o resumo das atividades de hoje.
+          </p>
+        </div>
+        
+        {/* Botão Atualizar integrado */}
+        {onRefresh && (
+          <div className="flex items-center gap-2 shrink-0">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="bg-white/10 border-white/20 text-white hover:bg-white/20 hover:border-white/30"
+              onClick={onRefresh}
+            >
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Atualizar
+            </Button>
+            {lastUpdate && (
+              <span className="text-sm text-white/60">
+                {lastUpdate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -442,26 +470,12 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      {/* BANNER + REFRESH */}
-      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-        <div className="flex-1">
-          <WelcomeBanner nome={profile?.nome?.split(' ')[0] || 'Usuário'} />
-        </div>
-        <div className="flex items-center gap-2 self-start lg:self-center">
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="border-border hover:border-border-hover hover:bg-card-hover"
-            onClick={handleRefresh}
-          >
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Atualizar
-          </Button>
-          <span className="text-xs text-muted-foreground">
-            {lastUpdate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-          </span>
-        </div>
-      </div>
+      {/* BANNER */}
+      <WelcomeBanner 
+        nome={profile?.nome?.split(' ')[0] || 'Usuário'} 
+        onRefresh={handleRefresh}
+        lastUpdate={lastUpdate}
+      />
 
       {/* ALERTAS */}
       <AlertaBanner alertas={alertas} />
