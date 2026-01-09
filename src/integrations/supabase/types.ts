@@ -3205,69 +3205,108 @@ export type Database = {
       }
       cotacoes: {
         Row: {
+          adicionais_selecionados: Json | null
+          categoria: string | null
+          cidade: string | null
           codigo_fipe: string | null
+          combustivel: string | null
           created_at: string
+          dados_extras: Json | null
+          desagio_aplicado: number | null
           id: string
           lead_id: string | null
           numero: string
           plano_id: string
+          regiao: string | null
           status: Database["public"]["Enums"]["status_cotacao"]
           taxa_administrativa: number
+          token_publico: string | null
           updated_at: string
+          uso_aplicativo: boolean | null
           validade_dias: number
           valor_adesao: number
+          valor_adesao_original: number | null
           valor_assistencia: number | null
           valor_cota: number
           valor_fipe: number
+          valor_mensal_original: number | null
           valor_rastreamento: number
           valor_total_mensal: number
           veiculo_ano: number | null
+          veiculo_combustivel: string | null
           veiculo_marca: string | null
           veiculo_modelo: string | null
+          veiculo_placa: string | null
           vendedor_id: string | null
         }
         Insert: {
+          adicionais_selecionados?: Json | null
+          categoria?: string | null
+          cidade?: string | null
           codigo_fipe?: string | null
+          combustivel?: string | null
           created_at?: string
+          dados_extras?: Json | null
+          desagio_aplicado?: number | null
           id?: string
           lead_id?: string | null
           numero: string
           plano_id: string
+          regiao?: string | null
           status?: Database["public"]["Enums"]["status_cotacao"]
           taxa_administrativa?: number
+          token_publico?: string | null
           updated_at?: string
+          uso_aplicativo?: boolean | null
           validade_dias?: number
           valor_adesao: number
+          valor_adesao_original?: number | null
           valor_assistencia?: number | null
           valor_cota: number
           valor_fipe: number
+          valor_mensal_original?: number | null
           valor_rastreamento?: number
           valor_total_mensal: number
           veiculo_ano?: number | null
+          veiculo_combustivel?: string | null
           veiculo_marca?: string | null
           veiculo_modelo?: string | null
+          veiculo_placa?: string | null
           vendedor_id?: string | null
         }
         Update: {
+          adicionais_selecionados?: Json | null
+          categoria?: string | null
+          cidade?: string | null
           codigo_fipe?: string | null
+          combustivel?: string | null
           created_at?: string
+          dados_extras?: Json | null
+          desagio_aplicado?: number | null
           id?: string
           lead_id?: string | null
           numero?: string
           plano_id?: string
+          regiao?: string | null
           status?: Database["public"]["Enums"]["status_cotacao"]
           taxa_administrativa?: number
+          token_publico?: string | null
           updated_at?: string
+          uso_aplicativo?: boolean | null
           validade_dias?: number
           valor_adesao?: number
+          valor_adesao_original?: number | null
           valor_assistencia?: number | null
           valor_cota?: number
           valor_fipe?: number
+          valor_mensal_original?: number | null
           valor_rastreamento?: number
           valor_total_mensal?: number
           veiculo_ano?: number | null
+          veiculo_combustivel?: string | null
           veiculo_marca?: string | null
           veiculo_modelo?: string | null
+          veiculo_placa?: string | null
           vendedor_id?: string | null
         }
         Relationships: [
