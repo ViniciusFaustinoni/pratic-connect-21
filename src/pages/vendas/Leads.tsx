@@ -318,7 +318,7 @@ export default function Leads() {
   const total = leadsData?.total || 0;
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex flex-col h-full min-h-0">
       {/* Header Fixo */}
       <div className="flex-shrink-0 space-y-4 pb-4">
         {/* Header */}

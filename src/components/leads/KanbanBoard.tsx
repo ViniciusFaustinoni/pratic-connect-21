@@ -124,7 +124,7 @@ export function KanbanBoard({
   }, []);
 
   return (
-    <div className="flex-1 min-h-0 overflow-visible relative">
+    <div className="flex-1 min-h-0 relative w-full overflow-hidden">
       {/* Scroll buttons */}
       <Button
         variant="ghost"
@@ -161,9 +161,13 @@ export function KanbanBoard({
         <div
           ref={boardRef}
           onWheelCapture={handleWheel}
-          className="flex gap-3 h-full overflow-x-auto overflow-y-hidden pb-6 px-12 kanban-scroll overscroll-x-contain touch-pan-y scroll-smooth"
+          className="h-full overflow-x-scroll overflow-y-hidden pb-6 kanban-scroll overscroll-x-contain touch-pan-x"
           style={{ scrollbarGutter: 'stable' }}
         >
+          <div 
+            className="flex gap-3 px-12 h-full"
+            style={{ minWidth: `${ETAPAS_KANBAN_VENDAS.length * 295}px` }}
+          >
           {ETAPAS_KANBAN_VENDAS.map((etapa) => {
             const leadsInEtapa = (allLeads || []).filter((l) => l.etapa === etapa);
             return (
@@ -194,6 +198,7 @@ export function KanbanBoard({
               </DroppableColumn>
             );
           })}
+          </div>
         </div>
         <DragOverlay>
           {activeLead ? (
