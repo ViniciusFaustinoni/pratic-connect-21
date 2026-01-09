@@ -137,6 +137,13 @@ function PlanoCard({ plano }: { plano: typeof PLANOS_RESUMO[0] }) {
           )}
         </div>
 
+        {plano.alertaDesagio && (
+          <div className="flex items-start gap-1.5 p-2 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 mt-2">
+            <AlertTriangle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+            <span className="text-xs text-amber-700 dark:text-amber-300">{plano.alertaDesagio}</span>
+          </div>
+        )}
+
         {plano.destaque && (
           <p className="text-xs text-muted-foreground italic border-t pt-2">
             {plano.destaque}

@@ -43,6 +43,7 @@ export interface PlanoResumo {
   beneficios: string[];
   adicional?: string;
   linha: 'select' | 'select-one' | 'especial' | 'lancamento' | 'advanced' | 'eletricos';
+  alertaDesagio?: string;
 }
 
 export interface BeneficioNivel {
@@ -438,6 +439,7 @@ export const PLANOS_RESUMO: PlanoResumo[] = [
     cotaPasesioDesagio: '8% (mín R$2.000)',
     cor: 'from-blue-500 to-blue-600',
     linha: 'select',
+    alertaDesagio: 'Deságio de leilão: sem cobertura de incêndio',
     beneficios: [
       'Roubo e Furto',
       'Colisão',
@@ -460,6 +462,7 @@ export const PLANOS_RESUMO: PlanoResumo[] = [
     adicional: '+R$30/mês',
     cor: 'from-blue-600 to-blue-700',
     linha: 'select',
+    alertaDesagio: 'Deságio de leilão: sem cobertura de incêndio',
     beneficios: [
       'Roubo e Furto',
       'Colisão',
@@ -488,6 +491,7 @@ export const PLANOS_RESUMO: PlanoResumo[] = [
     adicional: '+R$60/mês',
     cor: 'from-blue-700 to-indigo-800',
     linha: 'select',
+    alertaDesagio: 'Deságio de leilão: sem cobertura de incêndio',
     beneficios: [
       'Roubo e Furto',
       'Colisão',
@@ -517,6 +521,7 @@ export const PLANOS_RESUMO: PlanoResumo[] = [
     cotaApp: '8% (mín R$3.000)',
     cor: 'from-emerald-500 to-green-600',
     linha: 'select-one',
+    alertaDesagio: 'Deságio de leilão: sem cobertura de incêndio',
     beneficios: [
       'Roubo e Furto',
       'Colisão',
@@ -559,6 +564,7 @@ export const PLANOS_RESUMO: PlanoResumo[] = [
     cotaPasesio: '10% (mín R$3.000)',
     cor: 'from-amber-500 to-orange-600',
     linha: 'especial',
+    alertaDesagio: 'Deságio de leilão: sem cobertura de incêndio',
     beneficios: [
       'Roubo e Furto',
       'Colisão',
@@ -581,6 +587,7 @@ export const PLANOS_RESUMO: PlanoResumo[] = [
     destaque: 'Sem alteração com deságio',
     cor: 'from-violet-500 to-purple-600',
     linha: 'lancamento',
+    alertaDesagio: 'Deságio de leilão: sem cobertura de incêndio',
     beneficios: [
       'Roubo e Furto',
       'Colisão',
@@ -603,6 +610,7 @@ export const PLANOS_RESUMO: PlanoResumo[] = [
     adicional: '+R$30/mês',
     cor: 'from-violet-600 to-purple-700',
     linha: 'lancamento',
+    alertaDesagio: 'Deságio de leilão: sem cobertura de incêndio',
     beneficios: [
       'Roubo e Furto',
       'Colisão',
@@ -629,6 +637,7 @@ export const PLANOS_RESUMO: PlanoResumo[] = [
     adicional: '+R$60/mês',
     cor: 'from-violet-700 to-purple-800',
     linha: 'lancamento',
+    alertaDesagio: 'Deságio de leilão: sem cobertura de incêndio',
     beneficios: [
       'Roubo e Furto',
       'Colisão',
