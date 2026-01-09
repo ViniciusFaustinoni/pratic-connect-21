@@ -72,8 +72,20 @@ serve(async (req) => {
         
         await supabase
           .from("contratos")
-          .update({ status: "assinado" })
+          .update({ 
+            status: "assinado",
+            data_assinatura: new Date().toISOString(),
+            autentique_status: "signed",
+          })
           .eq("id", contrato.id);
+
+        // Registrar histórico do contrato
+        await supabase.from("contratos_historico").insert({
+          contrato_id: contrato.id,
+          evento: "documento_assinado",
+          descricao: `Contrato assinado eletronicamente via Autentique`,
+          dados: { signed_at: new Date().toISOString() },
+        });
 
         if (contrato.lead_id) {
           await supabase.from("leads_historico").insert({
@@ -102,9 +114,36 @@ serve(async (req) => {
         }
         break;
 
+      case "signer.link_opened":
+        // Cliente visualizou o documento
+        console.log("Cliente visualizou documento");
+        
+        await supabase
+          .from("contratos")
+          .update({ 
+            data_visualizacao: new Date().toISOString(),
+            autentique_status: "viewed",
+          })
+          .eq("id", contrato.id);
+
+        await supabase.from("contratos_historico").insert({
+          contrato_id: contrato.id,
+          evento: "documento_visualizado",
+          descricao: `${payload.signature?.name || "Cliente"} visualizou o documento`,
+          dados: { viewed_at: new Date().toISOString(), viewer: payload.signature?.name },
+        });
+        break;
+
       case "signer.signed":
         // Um signatário assinou (útil para múltiplos signatários)
         console.log("Signatário assinou:", payload.signature?.name);
+        
+        await supabase.from("contratos_historico").insert({
+          contrato_id: contrato.id,
+          evento: "assinatura_parcial",
+          descricao: `${payload.signature?.name} assinou o contrato`,
+          dados: { signer: payload.signature?.name, signed_at: payload.signature?.signed_at },
+        });
         
         if (contrato.lead_id) {
           await supabase.from("leads_historico").insert({
@@ -118,6 +157,13 @@ serve(async (req) => {
       case "signer.rejected":
         // Signatário rejeitou
         console.log("Signatário rejeitou:", payload.signature?.rejection_reason);
+        
+        await supabase.from("contratos_historico").insert({
+          contrato_id: contrato.id,
+          evento: "assinatura_rejeitada",
+          descricao: `${payload.signature?.name} rejeitou o contrato: ${payload.signature?.rejection_reason || "Sem motivo"}`,
+          dados: { signer: payload.signature?.name, reason: payload.signature?.rejection_reason },
+        });
         
         if (contrato.lead_id) {
           await supabase.from("leads_historico").insert({
@@ -142,6 +188,20 @@ serve(async (req) => {
       case "document.deadline":
         // Prazo expirado
         console.log("Prazo do documento expirado");
+        
+        await supabase
+          .from("contratos")
+          .update({ 
+            status: "expirado",
+            autentique_status: "expired",
+          })
+          .eq("id", contrato.id);
+
+        await supabase.from("contratos_historico").insert({
+          contrato_id: contrato.id,
+          evento: "prazo_expirado",
+          descricao: "Prazo para assinatura expirou",
+        });
         
         if (contrato.vendedor_id) {
           await supabase.from("notificacoes").insert({
