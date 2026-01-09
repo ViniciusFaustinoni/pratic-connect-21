@@ -114,7 +114,7 @@ const menuConfig: {
       items: [
         { title: 'Leads', url: '/vendas/leads', icon: UserPlus },
         { title: 'Kanban', url: '/vendas/kanban', icon: Kanban },
-        { title: 'Cotador', url: '/vendas/cotador', icon: Calculator },
+        { title: 'Cotação', url: '/vendas/cotacao', icon: Calculator },
         { title: 'Contratos', url: '/vendas/contratos', icon: FileText },
         { title: 'Planos e Benefícios', url: '/vendas/planos-beneficios', icon: BookOpen },
       ],
