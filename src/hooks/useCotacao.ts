@@ -226,7 +226,7 @@ export function useCotacoesFiltradas(filtros?: {
         .from('cotacoes')
         .select(`
           *,
-          lead:leads(id, nome, telefone, email),
+          lead:leads!fk_cotacoes_lead_id(id, nome, telefone, email),
           plano:planos(id, codigo, nome)
         `)
         .order('created_at', { ascending: false });
@@ -291,7 +291,7 @@ export function useCotacaoDetalhe(id: string | undefined) {
         .from('cotacoes')
         .select(`
           *,
-          lead:leads(id, nome, telefone, email, cpf),
+          lead:leads!fk_cotacoes_lead_id(id, nome, telefone, email, cpf),
           plano:planos(*)
         `)
         .eq('id', id)
