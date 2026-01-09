@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
   Phone, 
@@ -10,7 +10,8 @@ import {
   ExternalLink, 
   Calculator, 
   XCircle,
-  FileText 
+  FileText,
+  CalendarClock 
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -26,6 +27,7 @@ import { useCotacoesByLead } from '@/hooks/useCotacoesByLead';
 import { useContratoByLead } from '@/hooks/useContratos';
 import { LeadTimeline } from '@/components/leads/LeadTimeline';
 import { LeadLossDialog } from '@/components/leads/LeadLossDialog';
+import { AgendarFollowupDialog } from '@/components/leads/AgendarFollowupDialog';
 import { ETAPA_LABELS, ORIGEM_LABELS, type EtapaLead } from '@/types/database';
 import { etapaColors, origemColors } from '@/lib/lead-transitions';
 
@@ -55,6 +57,7 @@ const STATUS_CONTRATO_COLORS: Record<string, string> = {
 export function LeadDetailDrawer({ leadId, open, onClose }: LeadDetailDrawerProps) {
   const navigate = useNavigate();
   const [showLossDialog, setShowLossDialog] = useState(false);
+  const [showFollowupDialog, setShowFollowupDialog] = useState(false);
   
   const { data: lead, isLoading } = useLead(leadId || undefined);
   const { data: cotacoes } = useCotacoesByLead(leadId || undefined);
@@ -155,10 +158,18 @@ export function LeadDetailDrawer({ leadId, open, onClose }: LeadDetailDrawerProp
                     <Calculator className="h-4 w-4" />
                     Nova Cotação
                   </Button>
+                  <Button 
+                    variant="outline" 
+                    className="gap-2 justify-start"
+                    onClick={() => setShowFollowupDialog(true)}
+                  >
+                    <CalendarClock className="h-4 w-4 text-orange-600" />
+                    {lead.data_proxima_acao ? 'Reagendar' : 'Agendar'}
+                  </Button>
                   {lead.etapa !== 'perdido' && lead.etapa !== 'ganho' && (
                     <Button 
                       variant="outline" 
-                      className="gap-2 justify-start text-destructive hover:text-destructive"
+                      className="gap-2 justify-start text-destructive hover:text-destructive col-span-2"
                       onClick={() => setShowLossDialog(true)}
                     >
                       <XCircle className="h-4 w-4" />
@@ -166,6 +177,18 @@ export function LeadDetailDrawer({ leadId, open, onClose }: LeadDetailDrawerProp
                     </Button>
                   )}
                 </div>
+
+                {/* Próxima ação agendada */}
+                {lead.data_proxima_acao && (
+                  <div className="p-3 rounded-lg bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800">
+                    <p className="text-xs text-orange-600 dark:text-orange-400 font-medium uppercase tracking-wide mb-1">
+                      Próximo Contato
+                    </p>
+                    <p className="text-sm font-medium">
+                      {format(new Date(lead.data_proxima_acao), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                    </p>
+                  </div>
+                )}
               </div>
 
               <Separator />
@@ -330,6 +353,16 @@ export function LeadDetailDrawer({ leadId, open, onClose }: LeadDetailDrawerProp
             setShowLossDialog(false);
             onClose();
           }}
+        />
+      )}
+
+      {lead && showFollowupDialog && (
+        <AgendarFollowupDialog
+          open={showFollowupDialog}
+          onOpenChange={setShowFollowupDialog}
+          leadId={lead.id}
+          leadNome={lead.nome}
+          dataAtual={lead.data_proxima_acao}
         />
       )}
     </>

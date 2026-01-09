@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Phone, Mail, Car, Edit, MessageSquare, Loader2, 
   FileText, ArrowRightLeft, Trash2, User, Clock, Calendar, 
-  Tag, DollarSign, MoreVertical, MapPin, StickyNote 
+  Tag, DollarSign, MoreVertical, MapPin, StickyNote, CalendarClock 
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -36,6 +36,7 @@ import { LeadTimeline } from '@/components/leads/LeadTimeline';
 import { LeadFunnelProgress } from '@/components/leads/LeadFunnelProgress';
 import { LeadQuickStats } from '@/components/leads/LeadQuickStats';
 import { MoverEtapaModal } from '@/components/vendas/MoverEtapaModal';
+import { AgendarFollowupDialog } from '@/components/leads/AgendarFollowupDialog';
 import { toast } from 'sonner';
 import { format, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -98,6 +99,7 @@ export default function LeadDetalhe() {
   const [showCotacaoForm, setShowCotacaoForm] = useState(false);
   const [showMoverModal, setShowMoverModal] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showFollowupDialog, setShowFollowupDialog] = useState(false);
 
   const handleMoverEtapa = async (novaEtapa: EtapaLead, observacao: string, motivoPerda?: string) => {
     if (!lead) return;
@@ -269,7 +271,27 @@ export default function LeadDetalhe() {
               <FileText className="mr-2 h-4 w-4" />
               Nova Cotação
             </Button>
+            <Button 
+              variant="outline"
+              onClick={() => setShowFollowupDialog(true)}
+              className="shadow-md"
+            >
+              <CalendarClock className="mr-2 h-4 w-4 text-orange-600" />
+              {lead.data_proxima_acao ? 'Reagendar' : 'Agendar Contato'}
+            </Button>
           </div>
+
+          {/* Próxima ação agendada */}
+          {lead.data_proxima_acao && (
+            <div className="mt-4 p-3 rounded-lg bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800">
+              <p className="text-xs text-orange-600 dark:text-orange-400 font-medium uppercase tracking-wide mb-1">
+                Próximo Contato Agendado
+              </p>
+              <p className="text-sm font-medium">
+                {format(new Date(lead.data_proxima_acao), "EEEE, dd 'de' MMMM 'às' HH:mm", { locale: ptBR })}
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -520,6 +542,14 @@ export default function LeadDetalhe() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AgendarFollowupDialog
+        open={showFollowupDialog}
+        onOpenChange={setShowFollowupDialog}
+        leadId={lead.id}
+        leadNome={lead.nome}
+        dataAtual={lead.data_proxima_acao}
+      />
     </div>
   );
 }

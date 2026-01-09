@@ -20,6 +20,7 @@ import {
   Pie,
 } from 'recharts';
 import { useVendasMetricas, type Periodo } from '@/hooks/useVendasMetricas';
+import { FollowupWidget } from '@/components/vendas/FollowupWidget';
 
 const periodos: { value: Periodo; label: string }[] = [
   { value: 'hoje', label: 'Hoje' },
@@ -66,23 +67,31 @@ export default function DashboardVendas() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold">Dashboard de Vendas</h1>
-        <p className="text-muted-foreground">Visão geral do desempenho comercial</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Dashboard de Vendas</h1>
+          <p className="text-muted-foreground">Visão geral do desempenho comercial</p>
+        </div>
       </div>
 
-      {/* Filtro de período */}
-      <div className="flex gap-2">
-        {periodos.map((p) => (
-          <Button
-            key={p.value}
-            variant={periodo === p.value ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setPeriodo(p.value)}
-          >
-            {p.label}
-          </Button>
-        ))}
+      {/* Widget de Follow-ups + Filtro de período */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2">
+          {/* Filtro de período */}
+          <div className="flex gap-2 mb-4">
+            {periodos.map((p) => (
+              <Button
+                key={p.value}
+                variant={periodo === p.value ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setPeriodo(p.value)}
+              >
+                {p.label}
+              </Button>
+            ))}
+          </div>
+        </div>
+        <FollowupWidget maxItems={4} />
       </div>
 
       {/* KPIs */}
