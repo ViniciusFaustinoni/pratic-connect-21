@@ -124,7 +124,7 @@ export function KanbanBoard({
   }, []);
 
   return (
-    <div className="flex-1 min-h-0 overflow-hidden relative">
+    <div className="flex-1 min-h-0 overflow-visible relative">
       {/* Scroll buttons */}
       <Button
         variant="ghost"
@@ -161,7 +161,7 @@ export function KanbanBoard({
         <div
           ref={boardRef}
           onWheelCapture={handleWheel}
-          className="flex gap-3 h-full overflow-x-scroll overflow-y-hidden pb-4 px-12 kanban-scroll overscroll-x-contain touch-pan-y"
+          className="flex gap-3 h-full overflow-x-auto overflow-y-hidden pb-6 px-12 kanban-scroll overscroll-x-contain touch-pan-y scroll-smooth"
           style={{ scrollbarGutter: 'stable' }}
         >
           {ETAPAS_KANBAN_VENDAS.map((etapa) => {
