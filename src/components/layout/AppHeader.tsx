@@ -1,7 +1,6 @@
 import { useNavigate } from 'react-router-dom';
-import { LogOut, Settings, User, Search, Bell } from 'lucide-react';
+import { LogOut, Settings, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,21 +25,10 @@ export function AppHeader() {
   };
 
   return (
-    <header className="sticky top-0 z-40 flex h-[60px] items-center gap-4 border-b border-border bg-card px-4">
+    <header className="sticky top-0 z-40 flex h-[60px] items-center justify-between border-b border-border bg-card px-4">
       <SidebarTrigger className="-ml-2 text-muted-foreground hover:text-foreground" />
 
-      {/* Search Field */}
-      <div className="hidden md:flex flex-1 max-w-md">
-        <div className="relative w-full">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input 
-            placeholder="Buscar associado, placa..." 
-            className="pl-9 bg-card-hover border-border focus:border-border-hover"
-          />
-        </div>
-      </div>
-
-      <div className="ml-auto flex items-center gap-4">
+      <div className="flex items-center gap-4">
         {/* Notifications */}
         <NotificationBell variant="internal" />
         
