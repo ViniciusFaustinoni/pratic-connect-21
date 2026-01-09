@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { CotacaoStepper } from '@/components/cotacao/CotacaoStepper';
@@ -6,8 +6,7 @@ import { EtapaConsultaFipe } from '@/components/cotacao/EtapaConsultaFipe';
 import { EtapaCategoriaVeiculo } from '@/components/cotacao/EtapaCategoriaVeiculo';
 import { EtapaDadosVeiculo } from '@/components/cotacao/EtapaDadosVeiculo';
 import { EtapaResultado } from '@/components/cotacao/EtapaResultado';
-import { useCalcularCotacao } from '@/hooks/useCalcularCotacao';
-import { TipoUsoVeiculo, PlanoCalculado as PlanoCalculadoAPI, COBERTURAS_POR_PLANO } from '@/types/cotacaoPublica';
+import { usePlanosOficiais, type PlanoOficial } from '@/hooks/usePlanosOficiais';
 
 // ============================================
 // INTERFACES
@@ -22,19 +21,6 @@ interface VeiculoEncontrado {
   combustivel?: string;
   codigoFipe?: string;
   valorFipe?: number;
-}
-
-interface PlanoCalculado {
-  id: string;
-  idReal: string;
-  codigo: string;
-  nome: string;
-  descricao: string;
-  coberturas: string[];
-  naoInclui: string[];
-  valorAdesao: number;
-  valorMensal: number;
-  destaque: boolean;
 }
 
 // ============================================
@@ -52,35 +38,6 @@ const calcularFipeMock = (marca: string, _modelo: string, ano: number): number =
   const idadeVeiculo = anoAtual - ano;
   valor *= Math.max(0.5, 1 - (idadeVeiculo * 0.07));
   return Math.round(valor / 100) * 100;
-};
-
-// Mapeia os planos da API para o formato da interface
-const mapearPlanosAPI = (planosAPI: PlanoCalculadoAPI[]): PlanoCalculado[] => {
-  const descricoes: Record<string, string> = {
-    'Básico': 'Proteção essencial para seu veículo',
-    'Completo': 'O mais vendido - melhor custo-benefício',
-    'Premium': 'Proteção máxima com todos os benefícios',
-  };
-
-  const naoIncluiMap: Record<string, string[]> = {
-    'Básico': ['Vidros laterais', 'Carro reserva', 'APP Invalidez'],
-    'Completo': ['APP Invalidez', 'Danos Morais'],
-    'Premium': [],
-  };
-
-  return planosAPI.map((plano) => ({
-    id: plano.categoria.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''),
-    idReal: plano.categoria,
-    codigo: plano.categoria.toUpperCase(),
-    nome: `Proteção ${plano.categoria}`,
-    descricao: descricoes[plano.categoria] || '',
-    coberturas: plano.coberturas,
-    naoInclui: naoIncluiMap[plano.categoria] || [],
-    valorAdesao: plano.valor_adesao,
-    valorMensal: plano.valor_mensal,
-    destaque: plano.destaque || false,
-    tag: plano.tag,
-  }));
 };
 
 // ============================================
@@ -113,21 +70,17 @@ export default function CotacaoPage() {
   
   // Etapa 4 - Resultado
   const [isCalculando, setIsCalculando] = useState(false);
-  const [planoSelecionado, setPlanoSelecionado] = useState<PlanoCalculado | null>(null);
-  const [planos, setPlanos] = useState<PlanoCalculado[]>([]);
-  const [isLoadingPlanos, setIsLoadingPlanos] = useState(false);
+  const [planoSelecionado, setPlanoSelecionado] = useState<PlanoOficial | null>(null);
 
-  // Hook de cálculo de cotação
-  const { calcular, isLoading: isLoadingCalculo, resultado } = useCalcularCotacao();
-
-  // Atualiza planos quando o resultado muda
-  useEffect(() => {
-    if (resultado && resultado.planos.length > 0) {
-      const planosMapeados = mapearPlanosAPI(resultado.planos);
-      setPlanos(planosMapeados);
-      setIsLoadingPlanos(false);
-    }
-  }, [resultado]);
+  // Hook de planos oficiais - calcula automaticamente baseado nos parâmetros
+  const { planos: planosOficiais, isLoading: isLoadingPlanos } = usePlanosOficiais({
+    valorFipe: valorFipe || 0,
+    regiao: regiao || 'rio_de_janeiro',
+    combustivel: combustivel || 'gasolina',
+    categoria: categoria || 'passeio',
+    anoVeiculo: ano ? parseInt(ano) : undefined,
+    tipoVeiculo: 'carro',
+  });
 
   // ============================================
   // HANDLERS DE NAVEGAÇÃO
@@ -176,7 +129,6 @@ export default function CotacaoPage() {
   // Etapa 3 -> 4 (Calcular)
   const handleCalcular = useCallback(async () => {
     setIsCalculando(true);
-    setIsLoadingPlanos(true);
     
     // Se não tem valor FIPE, calcular mock
     let fipeParaCalculo = valorFipe;
@@ -185,22 +137,14 @@ export default function CotacaoPage() {
       setValorFipe(fipeParaCalculo);
     }
     
-    if (fipeParaCalculo) {
-      try {
-        const tipoUso: TipoUsoVeiculo = usoApp ? 'aplicativo' : 'particular';
-        await calcular({ valor_fipe: fipeParaCalculo, tipo_uso: tipoUso });
-        toast.success('Cotação calculada com sucesso!');
-      } catch (error) {
-        console.error('Erro ao calcular cotação:', error);
-        toast.error('Erro ao calcular cotação. Tente novamente.');
-        setIsLoadingPlanos(false);
-      }
-    }
+    // Os planos são calculados automaticamente pelo hook usePlanosOficiais
+    // Apenas precisamos avançar para a próxima etapa
     
+    toast.success('Cotação calculada com sucesso!');
     setIsCalculando(false);
     marcarEtapaCompleta(3);
     setEtapaAtual(4);
-  }, [marca, modelo, ano, valorFipe, usoApp, marcarEtapaCompleta, calcular]);
+  }, [marca, modelo, ano, valorFipe, marcarEtapaCompleta]);
 
   // Etapa 3 <- Voltar
   const handleEtapa3Back = useCallback(() => {
@@ -227,7 +171,6 @@ export default function CotacaoPage() {
     setCombustivel('');
     setRegiao('');
     setPlanoSelecionado(null);
-    setPlanos([]);
   }, []);
 
   // Gerar PDF
@@ -331,13 +274,14 @@ export default function CotacaoPage() {
             placa={placa}
             categoria={categoria}
             regiao={regiao}
-            planos={planos}
+            combustivel={combustivel}
+            planos={planosOficiais}
             planoSelecionado={planoSelecionado}
             setPlanoSelecionado={setPlanoSelecionado}
             onNovaCotacao={handleNovaCotacao}
             onGerarPDF={handleGerarPDF}
             onIniciarCadastro={handleIniciarCadastro}
-            isLoading={isLoadingPlanos || isLoadingCalculo}
+            isLoading={isCalculando || isLoadingPlanos}
           />
         )}
       </div>

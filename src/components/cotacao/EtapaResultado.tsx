@@ -12,11 +12,13 @@ import {
   ChevronDown,
   ChevronUp,
   Car,
-  Loader2
+  Loader2,
+  Fuel
 } from 'lucide-react';
 import { CATEGORIAS_VEICULO } from '@/components/cotador/VehicleCategorySelect';
 import { PlanoCardCotacao } from './PlanoCardCotacao';
 import { cn } from '@/lib/utils';
+import type { PlanoOficial } from '@/hooks/usePlanosOficiais';
 
 interface VeiculoEncontrado {
   placa: string;
@@ -29,20 +31,6 @@ interface VeiculoEncontrado {
   valorFipe?: number;
 }
 
-interface PlanoCalculado {
-  id: string;
-  idReal: string;
-  codigo: string;
-  nome: string;
-  descricao: string;
-  coberturas: string[];
-  naoInclui: string[];
-  valorAdesao: number;
-  valorMensal: number;
-  destaque: boolean;
-  tag?: string;
-}
-
 interface EtapaResultadoProps {
   veiculoFipe: VeiculoEncontrado | null;
   marca: string;
@@ -52,9 +40,10 @@ interface EtapaResultadoProps {
   placa: string;
   categoria: string | null;
   regiao: string;
-  planos: PlanoCalculado[];
-  planoSelecionado: PlanoCalculado | null;
-  setPlanoSelecionado: (plano: PlanoCalculado | null) => void;
+  combustivel?: string;
+  planos: PlanoOficial[];
+  planoSelecionado: PlanoOficial | null;
+  setPlanoSelecionado: (plano: PlanoOficial | null) => void;
   onNovaCotacao: () => void;
   onGerarPDF: () => void;
   onIniciarCadastro: () => void;
@@ -90,6 +79,7 @@ export function EtapaResultado({
   placa,
   categoria,
   regiao,
+  combustivel,
   planos,
   planoSelecionado,
   setPlanoSelecionado,
@@ -108,7 +98,7 @@ export function EtapaResultado({
   const planosVisiveis = showAllPlanos ? planos : planos.slice(0, 3);
   const planoBasico = planos[0];
 
-  const handleSelectPlano = (plano: any) => {
+  const handleSelectPlano = (plano: PlanoOficial) => {
     setPlanoSelecionado(plano);
   };
 

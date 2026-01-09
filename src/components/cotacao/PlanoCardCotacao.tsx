@@ -3,25 +3,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Check, X, Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
-interface PlanoCalculado {
-  id: string;
-  idReal: string;
-  codigo: string;
-  nome: string;
-  descricao: string;
-  coberturas: string[];
-  naoInclui: string[];
-  valorAdesao: number;
-  valorMensal: number;
-  destaque: boolean;
-  tag?: string;
-}
+import type { PlanoOficial } from '@/hooks/usePlanosOficiais';
 
 interface PlanoCardCotacaoProps {
-  plano: PlanoCalculado;
-  onSelect: (plano: PlanoCalculado) => void;
-  planoBasico?: PlanoCalculado;
+  plano: PlanoOficial;
+  onSelect: (plano: PlanoOficial) => void;
+  planoBasico?: PlanoOficial;
   isSelected?: boolean;
 }
 
@@ -91,7 +78,7 @@ export function PlanoCardCotacao({
 
         {/* Info rápida */}
         <div className="text-xs text-muted-foreground text-center">
-          Cobertura 100% FIPE • Cota 6% (mín R$1.200)
+          Cobertura {plano.coberturaFipe}% FIPE • {plano.cota}
         </div>
 
         {/* Coberturas */}
