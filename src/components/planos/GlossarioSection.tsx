@@ -65,24 +65,26 @@ export function RegrasImportantes() {
       
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {REGRAS_IMPORTANTES.map((regra, index) => (
-          <Alert 
+          <Card 
             key={index}
-            className="border-l-4 border-l-primary"
+            className="overflow-hidden border-l-4 border-l-primary"
           >
-            <AlertTitle className="flex items-center gap-2 text-sm font-semibold">
-              <span className="text-xl">{regra.icone}</span>
-              {regra.titulo}
-            </AlertTitle>
-            <AlertDescription>
-              <ul className="mt-2 space-y-1">
+            <CardHeader className="pb-2 bg-muted/50">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <span className="text-xl shrink-0">{regra.icone}</span>
+                <span className="truncate">{regra.titulo}</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-3">
+              <ul className="space-y-1.5">
                 {regra.itens.map((item, i) => (
-                  <li key={i} className="text-xs text-muted-foreground">
+                  <li key={i} className="text-xs text-muted-foreground leading-relaxed">
                     • {item}
                   </li>
                 ))}
               </ul>
-            </AlertDescription>
-          </Alert>
+            </CardContent>
+          </Card>
         ))}
       </div>
     </div>

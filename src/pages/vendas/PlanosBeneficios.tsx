@@ -19,6 +19,7 @@ import { GlossarioTermos, RegrasImportantes, TabelaCotasTaxas } from '@/componen
 import { ContatosInline } from '@/components/planos/ContatosRapidos';
 import { BuscaPlanos } from '@/components/planos/BuscaPlanos';
 import { ComparadorNiveisSelect, ComparadorNiveisMotos } from '@/components/planos/ComparadorNiveis';
+import { RankingPlanos } from '@/components/planos/RankingPlanos';
 
 // Dados
 import { 
@@ -179,7 +180,10 @@ export default function PlanosBeneficios() {
     <div className="container mx-auto p-6 space-y-6 pb-20">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <h1 className="text-3xl font-bold tracking-tight">Planos e Benefícios</h1>
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Planos e Benefícios</h1>
+          <p className="text-muted-foreground">Guia do Consultor v11 - Outubro 2025</p>
+        </div>
         <div className="flex items-center gap-2">
           <BuscaPlanos onSearch={handleSearch} />
           <CalculadoraPreco />
@@ -188,12 +192,13 @@ export default function PlanosBeneficios() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3 lg:grid-cols-6 lg:w-auto">
+        <TabsList className="grid w-full grid-cols-4 lg:grid-cols-7 lg:w-auto">
           <TabsTrigger value="visao-geral">Visão Geral</TabsTrigger>
           <TabsTrigger value="carros">Carros</TabsTrigger>
           <TabsTrigger value="motos">Motos</TabsTrigger>
           <TabsTrigger value="eletricos">Elétricos</TabsTrigger>
           <TabsTrigger value="adicionais">Adicionais</TabsTrigger>
+          <TabsTrigger value="ranking">Ranking</TabsTrigger>
           <TabsTrigger value="glossario">Glossário</TabsTrigger>
         </TabsList>
 
@@ -395,6 +400,11 @@ export default function PlanosBeneficios() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Tab Ranking */}
+        <TabsContent value="ranking" className="space-y-8">
+          <RankingPlanos />
         </TabsContent>
 
         {/* Tab Glossário */}
