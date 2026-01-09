@@ -78,13 +78,31 @@ export function KanbanBoard({
   const boardRef = useRef<HTMLDivElement>(null);
 
   // Trello-like: convert vertical wheel to horizontal scroll
+  // BUT: do not hijack wheel when the pointer is over a vertically scrollable column.
   const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
     if (!boardRef.current) return;
-    
-    // If user is scrolling vertically (normal mouse wheel) and not holding shift
+
+    const target = e.target as HTMLElement | null;
+    if (!target) return;
+
+    // If the user is scrolling over an element that can scroll vertically,
+    // let the default vertical scrolling happen (prevents the "scroll travado" feeling).
+    let el: HTMLElement | null = target;
+    while (el && el !== boardRef.current) {
+      const style = window.getComputedStyle(el);
+      const overflowY = style.overflowY;
+      const canScrollY =
+        (overflowY === 'auto' || overflowY === 'scroll') &&
+        el.scrollHeight > el.clientHeight;
+
+      if (canScrollY) return;
+      el = el.parentElement;
+    }
+
+    // If user is scrolling vertically (normal mouse wheel) and not holding shift,
+    // convert it into horizontal scroll on the kanban board.
     if (Math.abs(e.deltaY) > Math.abs(e.deltaX) && !e.shiftKey) {
       e.preventDefault();
-      e.stopPropagation();
       boardRef.current.scrollLeft += e.deltaY;
     }
   }, []);
@@ -160,7 +178,7 @@ export function KanbanBoard({
       >
         <div
           ref={boardRef}
-          onWheelCapture={handleWheel}
+          onWheel={handleWheel}
           className="h-full overflow-x-scroll overflow-y-hidden pb-6 kanban-scroll overscroll-x-contain touch-pan-x"
           style={{ scrollbarGutter: 'stable' }}
         >
