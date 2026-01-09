@@ -1,11 +1,11 @@
 import { useState, useMemo } from 'react';
-import { PlanoCard } from '@/components/vendas/PlanoCard';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 import {
   Select,
   SelectContent,
@@ -16,7 +16,6 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
 import { 
   Car, 
   Calculator, 
@@ -29,12 +28,22 @@ import {
   ChevronsUpDown,
   X,
   ChevronRight,
+  Search,
+  Edit,
+  Check,
+  CheckCircle,
+  Star,
+  Mail,
+  Printer,
+  XCircle,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
+import { useFipe } from '@/hooks/useFipe';
+import { cn } from '@/lib/utils';
 
 // ============================================
-// INTERFACE LEAD
+// INTERFACES
 // ============================================
 
 interface Lead {
@@ -50,8 +59,30 @@ interface Lead {
   };
 }
 
+interface VeiculoEncontrado {
+  placa: string;
+  marca: string;
+  modelo: string;
+  ano: string;
+  cor?: string;
+  combustivel?: string;
+  codigoFipe?: string;
+  valorFipe?: number;
+}
+
+interface Plano {
+  id: string;
+  nome: string;
+  descricao: string;
+  coberturas: string[];
+  naoInclui: string[];
+  valorAdesao: number;
+  valorMensal: number;
+  destaque: boolean;
+}
+
 // ============================================
-// DADOS MOCK DE LEADS
+// DADOS MOCK
 // ============================================
 
 const mockLeads: Lead[] = [
@@ -64,9 +95,6 @@ const mockLeads: Lead[] = [
   { id: '7', nome: 'Rafael Almeida', telefone: '(71) 93333-7777', email: 'rafael@email.com', veiculo: { marca: 'Honda', modelo: 'Civic', ano: 2019 } },
   { id: '8', nome: 'Fernanda Lima', telefone: '(81) 92222-8888', email: 'fernanda@email.com', veiculo: { marca: 'Nissan', modelo: 'Kicks', ano: 2022, placa: 'JKL-3456' } },
 ];
-// ============================================
-// DADOS MOCK
-// ============================================
 
 const MARCAS = [
   'Volkswagen', 'Chevrolet', 'Fiat', 'Ford', 'Hyundai', 
@@ -87,92 +115,98 @@ const MODELOS_POR_MARCA: Record<string, string[]> = {
   Outras: ['Outro modelo'],
 };
 
-// Gerar anos de 2026 até 2010
 const ANOS = Array.from({ length: 17 }, (_, i) => 2026 - i);
 
-// Valores FIPE mock baseados em marca/modelo/ano
+// ============================================
+// FUNÇÕES AUXILIARES
+// ============================================
+
+const formatCurrency = (value: number) => {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(value);
+};
+
+const formatPlaca = (value: string): string => {
+  const cleaned = value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+  if (cleaned.length <= 3) return cleaned;
+  if (cleaned.length <= 7) return `${cleaned.slice(0, 3)}-${cleaned.slice(3)}`;
+  return `${cleaned.slice(0, 3)}-${cleaned.slice(3, 7)}`;
+};
+
 const calcularFipeMock = (marca: string, _modelo: string, ano: number): number => {
-  // Base: 30.000
   let valor = 30000;
-  
-  // Ajuste por marca
   const ajusteMarca: Record<string, number> = {
-    Toyota: 1.3,
-    Honda: 1.25,
-    Hyundai: 1.15,
-    Volkswagen: 1.1,
-    Chevrolet: 1.05,
-    Fiat: 1.0,
-    Renault: 0.95,
-    Nissan: 1.1,
-    Jeep: 1.4,
-    Ford: 1.0,
-    Outras: 1.0,
+    Toyota: 1.3, Honda: 1.25, Hyundai: 1.15, Volkswagen: 1.1, Chevrolet: 1.05,
+    Fiat: 1.0, Renault: 0.95, Nissan: 1.1, Jeep: 1.4, Ford: 1.0, Outras: 1.0,
   };
-  
   valor *= ajusteMarca[marca] || 1.0;
-  
-  // Ajuste por ano (mais novo = mais caro)
   const anoAtual = new Date().getFullYear();
   const idadeVeiculo = anoAtual - ano;
   valor *= Math.max(0.5, 1 - (idadeVeiculo * 0.07));
-  
-  // Arredondar para centenas
   return Math.round(valor / 100) * 100;
 };
 
-// Planos mock
-const calcularPlanos = (valorFipe: number, usoApp: boolean) => {
+const calcularPlanos = (valorFipe: number, usoApp: boolean): Plano[] => {
   const multiplicadorApp = usoApp ? 1.3 : 1.0;
   
   return [
     {
       id: 'basico',
-      nome: 'Plano Básico',
-      descricao: 'Cobertura até 100% FIPE',
+      nome: 'Básico',
+      descricao: 'Proteção essencial para seu veículo',
       coberturas: [
-        'Proteção contra roubo/furto',
-        'Proteção contra colisão',
-        'Proteção contra incêndio',
-        'Assistência 24h',
+        'Colisão (100% FIPE)',
+        'Roubo e Furto (100% FIPE)',
+        'Incêndio Total',
+        'Perda Total',
+        'Assistência 24h básica',
       ],
-      valorAdesao: 350 * multiplicadorApp,
+      naoInclui: ['Vidros', 'App de rastreamento', 'Carro reserva'],
+      valorAdesao: Math.round(350 * multiplicadorApp),
       valorMensal: Math.round((valorFipe * 0.004) * multiplicadorApp * 100) / 100,
       destaque: false,
     },
     {
       id: 'completo',
-      nome: 'Plano Completo',
-      descricao: '100% FIPE + Vidros + App Rastreamento',
+      nome: 'Completo',
+      descricao: 'O mais vendido - melhor custo-benefício',
       coberturas: [
-        'Proteção contra roubo/furto',
-        'Proteção contra colisão',
-        'Proteção contra incêndio',
-        'Assistência 24h',
-        'Proteção de vidros',
-        'App de rastreamento',
-        'Carro reserva (7 dias)',
+        'Colisão (100% FIPE)',
+        'Roubo e Furto (100% FIPE)',
+        'Incêndio Total',
+        'Perda Total',
+        'Vidros completos',
+        'App de Rastreamento 24h',
+        'Assistência 24h completa',
+        'Reboque ilimitado',
       ],
-      valorAdesao: 450 * multiplicadorApp,
+      naoInclui: ['Carro reserva', 'Proteção para terceiros'],
+      valorAdesao: Math.round(450 * multiplicadorApp),
       valorMensal: Math.round((valorFipe * 0.0055) * multiplicadorApp * 100) / 100,
       destaque: true,
     },
     {
       id: 'premium',
-      nome: 'Plano Premium',
-      descricao: 'Cobertura total + benefícios exclusivos',
+      nome: 'Premium',
+      descricao: 'Proteção máxima com todos os benefícios',
       coberturas: [
-        'Proteção contra roubo/furto',
-        'Proteção contra colisão',
-        'Proteção contra incêndio',
-        'Assistência 24h Premium',
-        'Proteção de vidros',
-        'App de rastreamento',
-        'Carro reserva (15 dias)',
+        'Colisão (100% FIPE)',
+        'Roubo e Furto (100% FIPE)',
+        'Incêndio Total',
+        'Perda Total',
+        'Vidros completos',
+        'App de Rastreamento 24h',
+        'Assistência 24h VIP',
+        'Reboque ilimitado',
+        'Carro reserva (7 dias)',
         'Proteção para terceiros',
-        'Desconto em rede credenciada',
+        'Faróis e lanternas',
+        'Retrovisores',
       ],
-      valorAdesao: 600 * multiplicadorApp,
+      naoInclui: [],
+      valorAdesao: Math.round(550 * multiplicadorApp),
       valorMensal: Math.round((valorFipe * 0.007) * multiplicadorApp * 100) / 100,
       destaque: false,
     },
@@ -184,22 +218,32 @@ const calcularPlanos = (valorFipe: number, usoApp: boolean) => {
 // ============================================
 
 export default function CotadorPage() {
-  // Estado do formulário
+  // Busca por placa
+  const [placaBusca, setPlacaBusca] = useState('');
+  const [buscandoPlaca, setBuscandoPlaca] = useState(false);
+  const [modoManual, setModoManual] = useState(false);
+  const [veiculoEncontrado, setVeiculoEncontrado] = useState<VeiculoEncontrado | null>(null);
+
+  // Formulário veículo
   const [marca, setMarca] = useState('');
   const [modelo, setModelo] = useState('');
   const [ano, setAno] = useState('');
   const [usoApp, setUsoApp] = useState(false);
-  
-  // Estado da cotação
   const [valorFipe, setValorFipe] = useState<number | null>(null);
-  const [isCalculando, setIsCalculando] = useState(false);
-  const [cotacaoCalculada, setCotacaoCalculada] = useState(false);
-  const [planoSelecionado, setPlanoSelecionado] = useState<string | null>(null);
 
-  // Estado do lead
+  // Lead
   const [leadSelecionado, setLeadSelecionado] = useState<Lead | null>(null);
   const [buscaLead, setBuscaLead] = useState('');
   const [comboboxAberto, setComboboxAberto] = useState(false);
+
+  // Cotação
+  const [isCalculando, setIsCalculando] = useState(false);
+  const [cotacaoCalculada, setCotacaoCalculada] = useState(false);
+  const [planoSelecionadoTab, setPlanoSelecionadoTab] = useState<string>('completo');
+  const [planoFinalSelecionado, setPlanoFinalSelecionado] = useState<Plano | null>(null);
+
+  // Hook FIPE
+  const { getByPlaca, loading: loadingFipe } = useFipe();
 
   // Filtro de leads
   const leadsFiltrados = useMemo(() => {
@@ -214,67 +258,11 @@ export default function CotadorPage() {
     );
   }, [buscaLead]);
 
-  // Selecionar lead
-  const handleSelecionarLead = (lead: Lead) => {
-    setLeadSelecionado(lead);
-    setComboboxAberto(false);
-    setBuscaLead('');
-    
-    // Auto-preencher campos do veículo se existirem
-    if (lead.veiculo) {
-      setMarca(lead.veiculo.marca);
-      setModelo(lead.veiculo.modelo);
-      setAno(lead.veiculo.ano.toString());
-      // Calcular FIPE automaticamente
-      const fipe = calcularFipeMock(lead.veiculo.marca, lead.veiculo.modelo, lead.veiculo.ano);
-      setValorFipe(fipe);
-      setCotacaoCalculada(false);
-      setPlanoSelecionado(null);
-      toast.success('Dados do veículo preenchidos automaticamente');
-    }
-  };
-
-  // Limpar lead
-  const handleLimparLead = () => {
-    setLeadSelecionado(null);
-    // Manter os dados do veículo
-  };
-
-  // Modelos disponíveis baseado na marca
+  // Modelos disponíveis
   const modelosDisponiveis = useMemo(() => {
     if (!marca) return [];
     return MODELOS_POR_MARCA[marca] || [];
   }, [marca]);
-
-  // Quando marca muda, limpar modelo
-  const handleMarcaChange = (novaMarca: string) => {
-    setMarca(novaMarca);
-    setModelo('');
-    setValorFipe(null);
-    setCotacaoCalculada(false);
-    setPlanoSelecionado(null);
-  };
-
-  // Verificar se pode calcular
-  const podeCalcular = marca && modelo && ano;
-
-  // Calcular cotação
-  const handleCalcular = async () => {
-    if (!podeCalcular) return;
-
-    setIsCalculando(true);
-    
-    // Simular delay de API
-    await new Promise(resolve => setTimeout(resolve, 800));
-    
-    const fipe = calcularFipeMock(marca, modelo, parseInt(ano));
-    setValorFipe(fipe);
-    setCotacaoCalculada(true);
-    setPlanoSelecionado(null);
-    setIsCalculando(false);
-    
-    toast.success('Cotação calculada com sucesso!');
-  };
 
   // Planos calculados
   const planos = useMemo(() => {
@@ -282,39 +270,168 @@ export default function CotadorPage() {
     return calcularPlanos(valorFipe, usoApp);
   }, [valorFipe, usoApp]);
 
-  // Format currency
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-    }).format(value);
+  // Plano atual selecionado nas tabs
+  const planoAtual = useMemo(() => {
+    return planos.find(p => p.id === planoSelecionadoTab) || null;
+  }, [planos, planoSelecionadoTab]);
+
+  // Verificar se pode calcular
+  const podeCalcular = marca && modelo && ano;
+
+  // ============================================
+  // HANDLERS
+  // ============================================
+
+  const handleBuscarPlaca = async () => {
+    if (!placaBusca || placaBusca.length < 7) {
+      toast.error('Digite uma placa válida');
+      return;
+    }
+
+    setBuscandoPlaca(true);
+    
+    try {
+      const result = await getByPlaca(placaBusca.replace(/[^A-Za-z0-9]/g, ''));
+      
+      if (result.success && result.vehicleData) {
+        const { vehicleData, fipeData } = result;
+        
+        setVeiculoEncontrado({
+          placa: vehicleData.placa,
+          marca: vehicleData.marca,
+          modelo: vehicleData.modelo,
+          ano: vehicleData.ano,
+          cor: vehicleData.cor,
+          combustivel: vehicleData.combustivel,
+          codigoFipe: fipeData?.codigo,
+          valorFipe: fipeData?.valor,
+        });
+
+        // Preencher campos
+        setMarca(vehicleData.marca);
+        setModelo(vehicleData.modelo);
+        setAno(vehicleData.ano);
+        
+        if (fipeData?.valor) {
+          setValorFipe(fipeData.valor);
+        } else {
+          // Calcular mock se não tiver FIPE
+          const anoNum = parseInt(vehicleData.ano) || new Date().getFullYear();
+          setValorFipe(calcularFipeMock(vehicleData.marca, vehicleData.modelo, anoNum));
+        }
+
+        setModoManual(false);
+        setCotacaoCalculada(false);
+        setPlanoFinalSelecionado(null);
+        
+        toast.success(`Veículo encontrado! ${vehicleData.marca} ${vehicleData.modelo} ${vehicleData.ano}`);
+      } else {
+        toast.error(result.error || 'Veículo não encontrado. Preencha manualmente.');
+        setModoManual(true);
+      }
+    } catch (error) {
+      console.error('Erro ao buscar placa:', error);
+      toast.error('Erro ao buscar placa. Tente novamente ou preencha manualmente.');
+      setModoManual(true);
+    } finally {
+      setBuscandoPlaca(false);
+    }
   };
 
-  // Enviar WhatsApp
-  const handleEnviarWhatsApp = () => {
-    if (!planoSelecionado || !valorFipe) return;
+  const handleModoManual = () => {
+    setModoManual(true);
+    setVeiculoEncontrado(null);
+    setPlacaBusca('');
+  };
+
+  const handleMarcaChange = (novaMarca: string) => {
+    setMarca(novaMarca);
+    setModelo('');
+    setValorFipe(null);
+    setCotacaoCalculada(false);
+    setPlanoFinalSelecionado(null);
+  };
+
+  const handleSelecionarLead = (lead: Lead) => {
+    setLeadSelecionado(lead);
+    setComboboxAberto(false);
+    setBuscaLead('');
     
-    const plano = planos.find(p => p.id === planoSelecionado);
-    if (!plano) return;
+    if (lead.veiculo) {
+      setMarca(lead.veiculo.marca);
+      setModelo(lead.veiculo.modelo);
+      setAno(lead.veiculo.ano.toString());
+      if (lead.veiculo.placa) {
+        setPlacaBusca(lead.veiculo.placa);
+      }
+      const fipe = calcularFipeMock(lead.veiculo.marca, lead.veiculo.modelo, lead.veiculo.ano);
+      setValorFipe(fipe);
+      setCotacaoCalculada(false);
+      setPlanoFinalSelecionado(null);
+      toast.success('Dados do veículo preenchidos automaticamente');
+    }
+  };
 
+  const handleLimparLead = () => {
+    setLeadSelecionado(null);
+  };
+
+  const handleCalcular = async () => {
+    if (!podeCalcular) return;
+
+    setIsCalculando(true);
+    await new Promise(resolve => setTimeout(resolve, 600));
+    
+    if (!valorFipe) {
+      const fipe = calcularFipeMock(marca, modelo, parseInt(ano));
+      setValorFipe(fipe);
+    }
+    
+    setCotacaoCalculada(true);
+    setPlanoSelecionadoTab('completo');
+    setPlanoFinalSelecionado(null);
+    setIsCalculando(false);
+    
+    toast.success('Cotação calculada com sucesso!');
+  };
+
+  const handleSelecionarPlano = (plano: Plano) => {
+    setPlanoFinalSelecionado(plano);
+    toast.success(`Plano ${plano.nome} selecionado!`);
+  };
+
+  const handleEnviarWhatsApp = () => {
+    if (!planoFinalSelecionado || !valorFipe) return;
+    
     const nomeCliente = leadSelecionado ? `\n*Cliente:* ${leadSelecionado.nome}` : '';
+    const placaInfo = veiculoEncontrado?.placa ? `\n*Placa:* ${veiculoEncontrado.placa}` : '';
+    
     const mensagem = `
-🚗 *COTAÇÃO DE PROTEÇÃO VEICULAR*${nomeCliente}
+🚗 *COTAÇÃO DE PROTEÇÃO VEICULAR*${nomeCliente}${placaInfo}
 
-*Veículo:* ${marca} ${modelo} ${ano}
+*Veículo:* ${marca} ${modelo} ${ano}${veiculoEncontrado?.cor ? ` ${veiculoEncontrado.cor}` : ''}
 *Valor FIPE:* ${formatCurrency(valorFipe)}
+*Uso para App:* ${usoApp ? 'Sim' : 'Não'}
 
-*Plano:* ${plano.nome}
-*Adesão:* ${formatCurrency(plano.valorAdesao)}
-*Mensalidade:* ${formatCurrency(plano.valorMensal)}
+━━━━━━━━━━━━━━━━━━━━
+📋 *PLANO ${planoFinalSelecionado.nome.toUpperCase()}*
+━━━━━━━━━━━━━━━━━━━━
 
 *Coberturas:*
-${plano.coberturas.map(c => `✓ ${c}`).join('\n')}
+${planoFinalSelecionado.coberturas.map(c => `✅ ${c}`).join('\n')}
+
+${planoFinalSelecionado.naoInclui.length > 0 ? `*Não incluído:*\n${planoFinalSelecionado.naoInclui.map(c => `❌ ${c}`).join('\n')}\n` : ''}
+━━━━━━━━━━━━━━━━━━━━
+💰 *VALORES*
+━━━━━━━━━━━━━━━━━━━━
+
+*Adesão:* ${formatCurrency(planoFinalSelecionado.valorAdesao)}
+*Mensalidade:* ${formatCurrency(planoFinalSelecionado.valorMensal)}
+*1ª Parcela:* ${formatCurrency(planoFinalSelecionado.valorAdesao + planoFinalSelecionado.valorMensal)}
 
 _Cotação válida por 7 dias_
     `.trim();
 
-    // Se tiver lead, usa o telefone dele
     const telefone = leadSelecionado?.telefone.replace(/\D/g, '') || '';
     const url = telefone 
       ? `https://wa.me/55${telefone}?text=${encodeURIComponent(mensagem)}`
@@ -324,6 +441,14 @@ _Cotação válida por 7 dias_
     toast.success('Cotação preparada para envio!');
   };
 
+  const handleEnviarEmail = () => {
+    toast.info('Funcionalidade de email será implementada em breve');
+  };
+
+  const handleImprimir = () => {
+    window.print();
+  };
+
   // ============================================
   // RENDER
   // ============================================
@@ -331,7 +456,6 @@ _Cotação válida por 7 dias_
     <div className="space-y-6">
       {/* HEADER */}
       <div>
-        {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
           <Link to="/" className="hover:text-foreground transition-colors">Home</Link>
           <ChevronRight className="h-4 w-4" />
@@ -339,9 +463,61 @@ _Cotação válida por 7 dias_
           <ChevronRight className="h-4 w-4" />
           <span className="text-foreground font-medium">Cotador</span>
         </div>
-        <h1 className="text-2xl font-bold tracking-tight">Cotador</h1>
-        <p className="text-muted-foreground">Gere cotações rapidamente para seus leads</p>
+        <h1 className="text-2xl font-bold tracking-tight">Cotador Rápido</h1>
+        <p className="text-muted-foreground">Gere cotações em menos de 30 segundos</p>
       </div>
+
+      {/* SEÇÃO: BUSCA RÁPIDA */}
+      <Card className="border-primary/30 bg-gradient-to-r from-primary/5 to-primary/10">
+        <CardContent className="py-4">
+          <div className="flex flex-col sm:flex-row items-center gap-4">
+            {/* Busca por placa */}
+            <div className="flex items-center gap-2 flex-1 w-full">
+              <Search className="h-5 w-5 text-primary shrink-0" />
+              <span className="text-sm font-medium whitespace-nowrap">Busca rápida:</span>
+              <Input
+                placeholder="Digite a placa: ABC-1234"
+                value={placaBusca}
+                onChange={(e) => setPlacaBusca(formatPlaca(e.target.value))}
+                onKeyDown={(e) => e.key === 'Enter' && handleBuscarPlaca()}
+                className="max-w-[180px] uppercase font-mono"
+                maxLength={8}
+              />
+              <Button
+                onClick={handleBuscarPlaca}
+                disabled={buscandoPlaca || loadingFipe || placaBusca.length < 7}
+                size="sm"
+              >
+                {buscandoPlaca || loadingFipe ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <>
+                    <Search className="h-4 w-4 mr-1" />
+                    Buscar
+                  </>
+                )}
+              </Button>
+            </div>
+
+            {/* Separador */}
+            <div className="flex items-center gap-2">
+              <div className="h-px w-8 bg-border sm:h-8 sm:w-px" />
+              <span className="text-sm text-muted-foreground">ou</span>
+              <div className="h-px w-8 bg-border sm:h-8 sm:w-px" />
+            </div>
+
+            {/* Preencher manual */}
+            <Button
+              variant="outline"
+              onClick={handleModoManual}
+              className="whitespace-nowrap"
+            >
+              <Edit className="h-4 w-4 mr-2" />
+              Preencher manualmente
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* GRID PRINCIPAL */}
       <div className="grid gap-6 lg:grid-cols-2">
@@ -349,16 +525,27 @@ _Cotação válida por 7 dias_
         {/* CARD ESQUERDO - DADOS DO VEÍCULO */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Car className="h-5 w-5" />
-              Dados do Veículo
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <Car className="h-5 w-5" />
+                Dados do Veículo
+              </CardTitle>
+              {(veiculoEncontrado || (marca && modelo && ano)) && (
+                <Badge variant="default" className="bg-green-600">
+                  <Check className="h-3 w-3 mr-1" />
+                  Dados preenchidos
+                </Badge>
+              )}
+            </div>
             <CardDescription>
-              Informe os dados para calcular a cotação
+              {veiculoEncontrado 
+                ? `Placa ${veiculoEncontrado.placa} identificada`
+                : 'Informe os dados para calcular a cotação'
+              }
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Campo Vincular Lead (opcional) */}
+            {/* Vincular Lead */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label className="flex items-center gap-2">
@@ -379,7 +566,6 @@ _Cotação válida por 7 dias_
               </div>
 
               {leadSelecionado ? (
-                // Lead selecionado - mostrar card resumo
                 <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/50">
                   <Avatar className="h-10 w-10">
                     <AvatarFallback className="bg-primary/10 text-primary font-medium">
@@ -397,7 +583,6 @@ _Cotação válida por 7 dias_
                   )}
                 </div>
               ) : (
-                // Combobox de busca
                 <Popover open={comboboxAberto} onOpenChange={setComboboxAberto}>
                   <PopoverTrigger asChild>
                     <Button
@@ -466,91 +651,114 @@ _Cotação válida por 7 dias_
 
             <div className="border-t pt-4" />
 
-            {/* Marca */}
-            <div className="space-y-2">
-              <Label>Marca *</Label>
-              <Select value={marca} onValueChange={handleMarcaChange}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione a marca" />
-                </SelectTrigger>
-                <SelectContent>
-                  {MARCAS.map((m) => (
-                    <SelectItem key={m} value={m}>{m}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            {/* Grid de campos */}
+            <div className="grid grid-cols-2 gap-4">
+              {/* Marca */}
+              <div className="space-y-2">
+                <Label>Marca *</Label>
+                <Select value={marca} onValueChange={handleMarcaChange}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MARCAS.map((m) => (
+                      <SelectItem key={m} value={m}>{m}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Modelo */}
+              <div className="space-y-2">
+                <Label>Modelo *</Label>
+                <Select
+                  value={modelo}
+                  onValueChange={(v) => {
+                    setModelo(v);
+                    setValorFipe(null);
+                    setCotacaoCalculada(false);
+                  }}
+                  disabled={!marca}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {modelosDisponiveis.map((m) => (
+                      <SelectItem key={m} value={m}>{m}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Ano */}
+              <div className="space-y-2">
+                <Label>Ano *</Label>
+                <Select
+                  value={ano}
+                  onValueChange={(v) => {
+                    setAno(v);
+                    setValorFipe(null);
+                    setCotacaoCalculada(false);
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ANOS.map((a) => (
+                      <SelectItem key={a} value={String(a)}>{a}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Cor (se veio da busca) */}
+              {veiculoEncontrado?.cor && (
+                <div className="space-y-2">
+                  <Label>Cor</Label>
+                  <Input value={veiculoEncontrado.cor} readOnly className="bg-muted" />
+                </div>
+              )}
             </div>
 
-            {/* Modelo */}
-            <div className="space-y-2">
-              <Label>Modelo *</Label>
-              <Select
-                value={modelo}
-                onValueChange={(v) => {
-                  setModelo(v);
-                  setValorFipe(null);
-                  setCotacaoCalculada(false);
-                }}
-                disabled={!marca}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o modelo" />
-                </SelectTrigger>
-                <SelectContent>
-                  {modelosDisponiveis.map((m) => (
-                    <SelectItem key={m} value={m}>{m}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Ano */}
-            <div className="space-y-2">
-              <Label>Ano *</Label>
-              <Select
-                value={ano}
-                onValueChange={(v) => {
-                  setAno(v);
-                  setValorFipe(null);
-                  setCotacaoCalculada(false);
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o ano" />
-                </SelectTrigger>
-                <SelectContent>
-                  {ANOS.map((a) => (
-                    <SelectItem key={a} value={String(a)}>{a}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Valor FIPE */}
-            <div className="space-y-2">
-              <Label>Valor FIPE</Label>
-              <div className="relative">
-                <Input
-                  readOnly
-                  value={valorFipe ? formatCurrency(valorFipe) : ''}
-                  placeholder="Calculado automaticamente"
-                  className="pr-10"
-                />
+            {/* Box Valor FIPE */}
+            <div className="rounded-lg border-2 border-green-200 bg-green-50 dark:bg-green-950/20 dark:border-green-900 p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Valor FIPE</p>
+                  {valorFipe ? (
+                    <p className="text-2xl font-bold text-green-700 dark:text-green-400">
+                      {formatCurrency(valorFipe)}
+                    </p>
+                  ) : (
+                    <p className="text-lg text-muted-foreground">
+                      Preencha marca, modelo e ano
+                    </p>
+                  )}
+                </div>
                 {valorFipe && (
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-green-500">✓</span>
+                  <div className="flex items-center gap-1 text-green-600">
+                    <CheckCircle className="h-5 w-5" />
+                    <span className="text-sm font-medium">Consultado</span>
+                  </div>
                 )}
               </div>
+              {veiculoEncontrado?.codigoFipe && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Código FIPE: {veiculoEncontrado.codigoFipe}
+                </p>
+              )}
             </div>
 
             {/* Uso para aplicativo */}
             <div className="space-y-2">
-              <Label>Uso para aplicativo?</Label>
+              <Label>Uso para aplicativo? (Uber, 99, etc)</Label>
               <RadioGroup
                 value={usoApp ? 'sim' : 'nao'}
                 onValueChange={(v) => {
                   setUsoApp(v === 'sim');
                   if (cotacaoCalculada) {
-                    // Recalcular planos se já calculou
                     setCotacaoCalculada(true);
                   }
                 }}
@@ -570,7 +778,7 @@ _Cotação válida por 7 dias_
                 <Alert variant="default" className="mt-2">
                   <AlertTriangle className="h-4 w-4" />
                   <AlertDescription>
-                    Valores podem ser maiores para veículos de aplicativo
+                    Veículos de aplicativo têm condições especiais. Os valores podem ser ajustados.
                   </AlertDescription>
                 </Alert>
               )}
@@ -614,50 +822,211 @@ _Cotação válida por 7 dias_
           </CardHeader>
           <CardContent>
             {!cotacaoCalculada ? (
-              // Estado inicial
               <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
                 <FileSearch className="h-16 w-16 mb-4 opacity-20" />
-                <p className="text-sm">
-                  Preencha os dados do veículo
-                  <br />
-                  e clique em Calcular Cotação
+                <p className="font-medium">Nenhuma cotação gerada</p>
+                <p className="text-sm mt-1">
+                  Preencha os dados do veículo e clique em "Calcular Cotação" para ver os planos disponíveis
                 </p>
               </div>
             ) : (
-              // Planos
               <div className="space-y-4">
-                {planos.map((plano) => (
-                  <PlanoCard
-                    key={plano.id}
-                    plano={plano}
-                    selecionado={planoSelecionado === plano.id}
-                    onSelecionar={() => setPlanoSelecionado(plano.id)}
-                  />
-                ))}
+                {/* Tabs de planos */}
+                <div className="flex border-b">
+                  {planos.map((plano) => (
+                    <button
+                      key={plano.id}
+                      onClick={() => setPlanoSelecionadoTab(plano.id)}
+                      className={cn(
+                        "flex-1 py-3 px-4 text-sm font-medium border-b-2 transition-colors relative",
+                        planoSelecionadoTab === plano.id
+                          ? "border-primary text-primary bg-primary/5"
+                          : "border-transparent text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      {plano.nome}
+                      {plano.id === 'completo' && (
+                        <Badge 
+                          variant="secondary" 
+                          className="absolute -top-1 -right-1 text-[10px] px-1.5 py-0"
+                        >
+                          Popular
+                        </Badge>
+                      )}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Detalhes do plano */}
+                {planoAtual && (
+                  <div className="space-y-4">
+                    {/* Header do plano */}
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-lg font-semibold">{planoAtual.nome}</h3>
+                          {planoAtual.destaque && (
+                            <Badge className="bg-amber-500 text-white">
+                              <Star className="h-3 w-3 mr-1" />
+                              Recomendado
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-sm text-muted-foreground">{planoAtual.descricao}</p>
+                      </div>
+                    </div>
+
+                    {/* Coberturas */}
+                    <div className="space-y-3">
+                      <p className="text-sm font-medium">Coberturas incluídas:</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {planoAtual.coberturas.map((cobertura, i) => (
+                          <div key={i} className="flex items-center gap-2 text-sm">
+                            <Check className="h-4 w-4 text-green-500 shrink-0" />
+                            <span>{cobertura}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {planoAtual.naoInclui.length > 0 && (
+                        <>
+                          <p className="text-sm font-medium mt-4">Não incluído:</p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {planoAtual.naoInclui.map((item, i) => (
+                              <div key={i} className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <XCircle className="h-4 w-4 text-red-400 shrink-0" />
+                                <span>{item}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Preços */}
+                    <div className="rounded-lg border bg-muted/30 p-4">
+                      <div className="grid grid-cols-3 gap-4 text-center">
+                        <div>
+                          <p className="text-xs text-muted-foreground uppercase">Adesão</p>
+                          <p className="text-lg font-bold">{formatCurrency(planoAtual.valorAdesao)}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground uppercase">Mensal</p>
+                          <p className="text-lg font-bold">{formatCurrency(planoAtual.valorMensal)}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground uppercase">1ª Parcela</p>
+                          <p className="text-lg font-bold text-primary">
+                            {formatCurrency(planoAtual.valorAdesao + planoAtual.valorMensal)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Botão selecionar */}
+                    <Button 
+                      onClick={() => handleSelecionarPlano(planoAtual)}
+                      className="w-full"
+                      size="lg"
+                      variant={planoFinalSelecionado?.id === planoAtual.id ? "default" : "outline"}
+                    >
+                      {planoFinalSelecionado?.id === planoAtual.id ? (
+                        <>
+                          <Check className="h-4 w-4 mr-2" />
+                          Plano Selecionado
+                        </>
+                      ) : (
+                        <>
+                          <Check className="h-4 w-4 mr-2" />
+                          Selecionar este plano
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </CardContent>
         </Card>
       </div>
 
-      {/* BOTÃO ENVIAR WHATSAPP */}
-      {cotacaoCalculada && (
-        <Card>
-          <CardContent className="py-4">
-            <Button
-              onClick={handleEnviarWhatsApp}
-              disabled={!planoSelecionado}
-              className="w-full bg-green-600 hover:bg-green-700 text-white"
-              size="lg"
-            >
-              <MessageSquare className="h-4 w-4 mr-2" />
-              Enviar Cotação por WhatsApp
-            </Button>
-            {!planoSelecionado && (
-              <p className="text-center text-sm text-muted-foreground mt-2">
-                Selecione um plano para enviar a cotação
-              </p>
-            )}
+      {/* SEÇÃO: RESUMO DA COTAÇÃO */}
+      {planoFinalSelecionado && (
+        <Card className="border-primary/30">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Receipt className="h-5 w-5" />
+              Resumo da Cotação
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Grid de informações */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <p className="text-xs text-muted-foreground uppercase">Cliente</p>
+                <p className="font-medium">{leadSelecionado?.nome || 'Não vinculado'}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground uppercase">Veículo</p>
+                <p className="font-medium">{marca} {modelo} {ano}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground uppercase">Placa</p>
+                <p className="font-medium">{veiculoEncontrado?.placa || 'N/A'}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground uppercase">Plano</p>
+                <p className="font-medium">{planoFinalSelecionado.nome}</p>
+              </div>
+            </div>
+
+            {/* Box de valores */}
+            <div className="rounded-lg border-2 border-primary/30 bg-primary/5 p-4">
+              <div className="grid grid-cols-3 gap-4 text-center">
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase">Adesão</p>
+                  <p className="text-xl font-bold">{formatCurrency(planoFinalSelecionado.valorAdesao)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase">Mensal</p>
+                  <p className="text-xl font-bold">{formatCurrency(planoFinalSelecionado.valorMensal)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase">1ª Parcela</p>
+                  <p className="text-2xl font-bold text-primary">
+                    {formatCurrency(planoFinalSelecionado.valorAdesao + planoFinalSelecionado.valorMensal)}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Botões de ação */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Button
+                onClick={handleEnviarWhatsApp}
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                size="lg"
+              >
+                <MessageSquare className="h-4 w-4 mr-2" />
+                Enviar por WhatsApp
+              </Button>
+              <Button
+                onClick={handleEnviarEmail}
+                variant="outline"
+                className="flex-1"
+                size="lg"
+              >
+                <Mail className="h-4 w-4 mr-2" />
+                Enviar por Email
+              </Button>
+              <Button
+                onClick={handleImprimir}
+                variant="ghost"
+                size="lg"
+              >
+                <Printer className="h-4 w-4" />
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}
