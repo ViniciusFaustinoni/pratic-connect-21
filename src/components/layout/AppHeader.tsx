@@ -40,15 +40,15 @@ export function AppHeader() {
         </div>
       </div>
 
-      <div className="ml-auto flex items-center gap-2">
+      <div className="ml-auto flex items-center gap-4">
         {/* Notifications */}
         <NotificationBell variant="internal" />
         
         {/* User Menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="h-auto gap-3 px-2 py-1.5 hover:bg-card-hover">
-              <UserAvatar src={profile?.avatar_url} name={profile?.nome} size="sm" />
+            <Button variant="ghost" className="h-auto gap-3 px-3 py-2 hover:bg-card-hover">
+              <UserAvatar src={profile?.avatar_url} name={profile?.nome} size="md" />
               <div className="hidden flex-col items-start lg:flex">
                 <span className="text-sm font-medium truncate max-w-[150px] text-foreground">
                   {profile?.nome || profile?.email?.split('@')[0] || 'Usuário'}
