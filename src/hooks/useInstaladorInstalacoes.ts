@@ -103,7 +103,69 @@ export function useConcluirInstalacao() {
     mutationFn: async (id: string) => {
       const { error } = await supabase
         .from('instalacoes')
-        .update({ status: 'concluida' })
+        .update({ 
+          status: 'concluida',
+          concluida_em: new Date().toISOString()
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['instalador-instalacoes'] });
+      queryClient.invalidateQueries({ queryKey: ['instalacao-detalhes'] });
+      queryClient.invalidateQueries({ queryKey: ['instalacoes'] });
+    },
+  });
+}
+
+// Hook para salvar checklist e quilometragem durante a instalação
+export function useSalvarChecklistInstalacao() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ 
+      id, 
+      checklist_data, 
+      quilometragem 
+    }: { 
+      id: string; 
+      checklist_data: Record<string, any>;
+      quilometragem?: number;
+    }) => {
+      const updateData: Record<string, any> = {
+        checklist_data,
+      };
+      
+      if (quilometragem !== undefined) {
+        updateData.quilometragem = quilometragem;
+      }
+
+      const { error } = await supabase
+        .from('instalacoes')
+        .update(updateData)
+        .eq('id', id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['instalacao-detalhes'] });
+    },
+  });
+}
+
+// Hook para iniciar instalação com timestamp
+export function useIniciarInstalacaoComTimestamp() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('instalacoes')
+        .update({ 
+          status: 'em_andamento',
+          iniciada_em: new Date().toISOString()
+        })
         .eq('id', id);
 
       if (error) throw error;

@@ -4828,16 +4828,22 @@ export type Database = {
           associado_id: string
           bairro: string | null
           cep: string | null
+          checklist_data: Json | null
           cidade: string | null
           complemento: string | null
+          concluida_em: string | null
           created_at: string
           data_agendada: string
+          hora_agendada: string | null
           id: string
+          iniciada_em: string | null
           instalador_id: string | null
+          lead_id: string | null
           logradouro: string | null
           numero: string | null
           observacoes: string | null
           periodo: Database["public"]["Enums"]["periodo_instalacao"]
+          quilometragem: number | null
           rastreador_id: string | null
           rota_id: string | null
           status: Database["public"]["Enums"]["status_instalacao"]
@@ -4850,16 +4856,22 @@ export type Database = {
           associado_id: string
           bairro?: string | null
           cep?: string | null
+          checklist_data?: Json | null
           cidade?: string | null
           complemento?: string | null
+          concluida_em?: string | null
           created_at?: string
           data_agendada: string
+          hora_agendada?: string | null
           id?: string
+          iniciada_em?: string | null
           instalador_id?: string | null
+          lead_id?: string | null
           logradouro?: string | null
           numero?: string | null
           observacoes?: string | null
           periodo?: Database["public"]["Enums"]["periodo_instalacao"]
+          quilometragem?: number | null
           rastreador_id?: string | null
           rota_id?: string | null
           status?: Database["public"]["Enums"]["status_instalacao"]
@@ -4872,16 +4884,22 @@ export type Database = {
           associado_id?: string
           bairro?: string | null
           cep?: string | null
+          checklist_data?: Json | null
           cidade?: string | null
           complemento?: string | null
+          concluida_em?: string | null
           created_at?: string
           data_agendada?: string
+          hora_agendada?: string | null
           id?: string
+          iniciada_em?: string | null
           instalador_id?: string | null
+          lead_id?: string | null
           logradouro?: string | null
           numero?: string | null
           observacoes?: string | null
           periodo?: Database["public"]["Enums"]["periodo_instalacao"]
+          quilometragem?: number | null
           rastreador_id?: string | null
           rota_id?: string | null
           status?: Database["public"]["Enums"]["status_instalacao"]
@@ -4938,6 +4956,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "instalacoes_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "instalacoes_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["lead_id"]
           },
           {
             foreignKeyName: "instalacoes_rastreador_id_fkey"

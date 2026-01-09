@@ -1,10 +1,17 @@
 import { useRastreadoresMetricas } from "@/hooks/useRastreadores";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Package, CheckCircle, Wrench, XCircle } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Package, CheckCircle, Wrench, XCircle, AlertTriangle } from "lucide-react";
+
+// Limite mínimo de estoque para alertas
+const ESTOQUE_MINIMO = 10;
 
 export function EstoqueMetricas() {
   const { data: metricas, isLoading } = useRastreadoresMetricas();
+
+  const estoqueAtual = metricas?.estoque ?? 0;
+  const estoqueBaixo = estoqueAtual < ESTOQUE_MINIMO;
 
   const cards = [
     {
@@ -12,8 +19,9 @@ export function EstoqueMetricas() {
       titulo: "Em Estoque",
       subtitulo: "Disponíveis para instalação",
       icone: Package,
-      cor: "text-blue-600",
-      bg: "bg-blue-100",
+      cor: estoqueBaixo ? "text-orange-600" : "text-blue-600",
+      bg: estoqueBaixo ? "bg-orange-100" : "bg-blue-100",
+      alerta: estoqueBaixo,
     },
     {
       key: "instalados" as const,
@@ -22,6 +30,7 @@ export function EstoqueMetricas() {
       icone: CheckCircle,
       cor: "text-green-600",
       bg: "bg-green-100",
+      alerta: false,
     },
     {
       key: "manutencao" as const,
@@ -30,6 +39,7 @@ export function EstoqueMetricas() {
       icone: Wrench,
       cor: "text-yellow-600",
       bg: "bg-yellow-100",
+      alerta: false,
     },
     {
       key: "baixados" as const,
@@ -38,6 +48,7 @@ export function EstoqueMetricas() {
       icone: XCircle,
       cor: "text-red-600",
       bg: "bg-red-100",
+      alerta: false,
     },
   ];
 
@@ -68,16 +79,34 @@ export function EstoqueMetricas() {
         const valor = metricas?.[card.key] ?? 0;
 
         return (
-          <Card key={card.key} className="hover:shadow-md transition-shadow">
+          <Card 
+            key={card.key} 
+            className={`hover:shadow-md transition-shadow ${
+              card.alerta ? 'border-orange-500 border-2' : ''
+            }`}
+          >
             <CardContent className="pt-6">
               <div className="flex items-start gap-4">
                 <div className={`p-3 rounded-lg ${card.bg}`}>
                   <Icone className={`h-6 w-6 ${card.cor}`} />
                 </div>
-                <div>
-                  <p className="text-2xl font-bold">{valor}</p>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="text-2xl font-bold">{valor}</p>
+                    {card.alerta && (
+                      <Badge variant="destructive" className="bg-orange-500 text-xs">
+                        <AlertTriangle className="h-3 w-3 mr-1" />
+                        Baixo
+                      </Badge>
+                    )}
+                  </div>
                   <p className="text-sm font-medium">{card.titulo}</p>
-                  <p className="text-xs text-muted-foreground">{card.subtitulo}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {card.alerta 
+                      ? `Mínimo recomendado: ${ESTOQUE_MINIMO}` 
+                      : card.subtitulo
+                    }
+                  </p>
                 </div>
               </div>
             </CardContent>
