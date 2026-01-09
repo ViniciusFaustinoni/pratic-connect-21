@@ -287,40 +287,39 @@ export default function LeadKanban() {
       </div>
 
       {/* Kanban Board */}
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-      >
-        {/* Container externo com posição relativa para botões */}
-        <div className="relative overflow-hidden rounded-lg">
-          {/* Botão de scroll esquerda */}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="absolute left-0 top-1/2 -translate-y-1/2 z-10 h-10 w-10 rounded-full bg-background/80 backdrop-blur-sm shadow-md hover:bg-background border"
-            onClick={() => scrollBoard('left')}
-          >
-            <ChevronLeft className="h-5 w-5" />
-          </Button>
+      <div className="relative overflow-hidden rounded-lg">
+        {/* Botão de scroll esquerda - FORA do DndContext */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="absolute left-0 top-1/2 -translate-y-1/2 z-20 h-10 w-10 rounded-full bg-background/80 backdrop-blur-sm shadow-md hover:bg-background border"
+          onClick={() => scrollBoard('left')}
+        >
+          <ChevronLeft className="h-5 w-5" />
+        </Button>
 
-          {/* Botão de scroll direita */}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="absolute right-0 top-1/2 -translate-y-1/2 z-10 h-10 w-10 rounded-full bg-background/80 backdrop-blur-sm shadow-md hover:bg-background border"
-            onClick={() => scrollBoard('right')}
-          >
-            <ChevronRight className="h-5 w-5" />
-          </Button>
+        {/* Botão de scroll direita - FORA do DndContext */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="absolute right-0 top-1/2 -translate-y-1/2 z-20 h-10 w-10 rounded-full bg-background/80 backdrop-blur-sm shadow-md hover:bg-background border"
+          onClick={() => scrollBoard('right')}
+        >
+          <ChevronRight className="h-5 w-5" />
+        </Button>
 
-          {/* Indicadores de fade nas bordas */}
-          <div className="absolute left-10 top-0 bottom-0 w-6 bg-gradient-to-r from-background to-transparent pointer-events-none z-[5]" />
-          <div className="absolute right-10 top-0 bottom-0 w-6 bg-gradient-to-l from-background to-transparent pointer-events-none z-[5]" />
+        {/* Indicadores de fade nas bordas */}
+        <div className="absolute left-10 top-0 bottom-0 w-6 bg-gradient-to-r from-background to-transparent pointer-events-none z-[5]" />
+        <div className="absolute right-10 top-0 bottom-0 w-6 bg-gradient-to-l from-background to-transparent pointer-events-none z-[5]" />
 
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        >
           {/* Container do scroll horizontal */}
-          <div ref={boardRef} className="overflow-x-auto kanban-scroll pb-4 px-12">
+          <div ref={boardRef} className="overflow-x-scroll overflow-y-hidden kanban-scroll pb-4 px-12">
             {/* Container das colunas - inline-flex para forçar largura */}
             <div className="inline-flex gap-3 min-w-max p-1">
               {ETAPAS_FUNIL.map((etapa) => {
@@ -351,27 +350,28 @@ export default function LeadKanban() {
               })}
             </div>
           </div>
-          {/* Indicador de scroll mobile */}
-          <p className="text-xs text-muted-foreground text-center mt-2 md:hidden">
-            ← Arraste ou use as setas para navegar →
-          </p>
-        </div>
 
-        <DragOverlay>
-          {activeLead ? (
-            <Card className="shadow-lg rotate-3">
-              <CardContent className="p-3">
-                <div className="flex items-center gap-2">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
-                    {activeLead.nome.charAt(0)}
+          <DragOverlay>
+            {activeLead ? (
+              <Card className="shadow-lg rotate-3">
+                <CardContent className="p-3">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
+                      {activeLead.nome.charAt(0)}
+                    </div>
+                    <span className="font-medium">{activeLead.nome}</span>
                   </div>
-                  <span className="font-medium">{activeLead.nome}</span>
-                </div>
-              </CardContent>
-            </Card>
-          ) : null}
-        </DragOverlay>
-      </DndContext>
+                </CardContent>
+              </Card>
+            ) : null}
+          </DragOverlay>
+        </DndContext>
+
+        {/* Indicador de scroll mobile */}
+        <p className="text-xs text-muted-foreground text-center mt-2 md:hidden">
+          ← Arraste ou use as setas para navegar →
+        </p>
+      </div>
 
       <LeadFormDialog open={showLeadForm} onOpenChange={setShowLeadForm} />
       
