@@ -28,7 +28,9 @@ import {
   Users,
   ChevronsUpDown,
   X,
+  ChevronRight,
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 
 // ============================================
@@ -329,6 +331,14 @@ _Cotação válida por 7 dias_
     <div className="space-y-6">
       {/* HEADER */}
       <div>
+        {/* Breadcrumb */}
+        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+          <Link to="/" className="hover:text-foreground transition-colors">Home</Link>
+          <ChevronRight className="h-4 w-4" />
+          <Link to="/vendas" className="hover:text-foreground transition-colors">Vendas</Link>
+          <ChevronRight className="h-4 w-4" />
+          <span className="text-foreground font-medium">Cotador</span>
+        </div>
         <h1 className="text-2xl font-bold tracking-tight">Cotador</h1>
         <p className="text-muted-foreground">Gere cotações rapidamente para seus leads</p>
       </div>
@@ -637,7 +647,7 @@ _Cotação válida por 7 dias_
             <Button
               onClick={handleEnviarWhatsApp}
               disabled={!planoSelecionado}
-              className="w-full"
+              className="w-full bg-green-600 hover:bg-green-700 text-white"
               size="lg"
             >
               <MessageSquare className="h-4 w-4 mr-2" />
