@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Car, Receipt, MapPin, Phone, FileText, CheckCircle, ChevronRight, Shield, AlertTriangle, Camera } from 'lucide-react';
+import { Car, Receipt, MapPin, Phone, MessageCircle, CheckCircle, ChevronRight, Shield, AlertTriangle, Camera } from 'lucide-react';
 import { useAssociado } from '@/contexts/AssociadoContext';
 import { RevistoriaBanner } from '@/components/app/RevistoriaBanner';
 
@@ -41,7 +41,10 @@ const getGreeting = () => {
 };
 
 export default function AppHome() {
-  const { associado, isTestMode, revistoria } = useAssociado();
+  const { associado, isTestMode, revistoria, manifestacoes } = useAssociado();
+  
+  // Contar manifestações com resposta não lida
+  const manifestacoesNaoLidas = manifestacoes?.filter(m => m.status === 'respondido').length || 0;
   
   // Usar dados do contexto de teste ou mock
   const nomeAssociado = isTestMode && associado ? associado.nome : MOCK_ASSOCIADO.nome;
@@ -217,18 +220,23 @@ export default function AppHome() {
             <span className="text-xs font-medium text-foreground">Ajuda 24h</span>
           </Link>
 
-          <Link to="/app/documentos" className="flex flex-col items-center gap-2 rounded-xl bg-muted/50 p-4 transition-colors hover:bg-muted">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-cyan-100">
-              <FileText className="h-6 w-6 text-cyan-600" />
-            </div>
-            <span className="text-xs font-medium text-foreground">Docs</span>
-          </Link>
-
           <Link to="/app/sinistros" className="flex flex-col items-center gap-2 rounded-xl bg-muted/50 p-4 transition-colors hover:bg-muted">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
               <AlertTriangle className="h-6 w-6 text-red-600" />
             </div>
             <span className="text-xs font-medium text-foreground">Sinistros</span>
+          </Link>
+
+          <Link to="/app/ouvidoria" className="relative flex flex-col items-center gap-2 rounded-xl bg-muted/50 p-4 transition-colors hover:bg-muted">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-cyan-100">
+              <MessageCircle className="h-6 w-6 text-cyan-600" />
+            </div>
+            <span className="text-xs font-medium text-foreground">Ouvidoria</span>
+            {manifestacoesNaoLidas > 0 && (
+              <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-blue-500 text-xs font-bold text-white">
+                {manifestacoesNaoLidas}
+              </span>
+            )}
           </Link>
         </div>
       </div>
