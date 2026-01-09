@@ -317,7 +317,7 @@ export function LeadFormDialog({ open, onOpenChange }: LeadFormDialogProps) {
                           <Input 
                             placeholder="Digite a marca" 
                             {...field} 
-                            className={placaConsultada ? 'border-green-200 bg-green-50' : ''}
+                            className={placaConsultada ? 'border-green-500 bg-green-50 dark:bg-green-950/30 dark:border-green-700 dark:text-foreground' : ''}
                           />
                         </FormControl>
                       ) : (
@@ -349,7 +349,7 @@ export function LeadFormDialog({ open, onOpenChange }: LeadFormDialogProps) {
                         <Input 
                           placeholder="Civic, Corolla..." 
                           {...field} 
-                          className={placaConsultada ? 'border-green-200 bg-green-50' : ''}
+                          className={placaConsultada ? 'border-green-500 bg-green-50 dark:bg-green-950/30 dark:border-green-700 dark:text-foreground' : ''}
                         />
                       </FormControl>
                       <FormMessage />
@@ -371,7 +371,7 @@ export function LeadFormDialog({ open, onOpenChange }: LeadFormDialogProps) {
                           placeholder="2024" 
                           value={field.value ?? ''} 
                           onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : null)}
-                          className={placaConsultada ? 'border-green-200 bg-green-50' : ''}
+                          className={placaConsultada ? 'border-green-500 bg-green-50 dark:bg-green-950/30 dark:border-green-700 dark:text-foreground' : ''}
                         />
                       </FormControl>
                       <FormMessage />
@@ -389,7 +389,7 @@ export function LeadFormDialog({ open, onOpenChange }: LeadFormDialogProps) {
                         <CurrencyInput 
                           value={field.value ?? 0} 
                           onChange={field.onChange}
-                          className={placaConsultada ? 'border-green-200 bg-green-50' : ''}
+                          className={placaConsultada ? 'border-green-500 bg-green-50 dark:bg-green-950/30 dark:border-green-700 dark:text-foreground' : ''}
                         />
                       </FormControl>
                       <FormMessage />
