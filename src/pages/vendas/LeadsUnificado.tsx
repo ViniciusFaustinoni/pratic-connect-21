@@ -209,9 +209,9 @@ export default function LeadsUnificado() {
       </div>
 
       {/* Content Area */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 flex flex-col min-h-0">
         {viewMode === 'list' ? (
-          <div className="px-6 py-4">
+          <div className="px-6 py-4 overflow-auto">
             <LeadsTable
               leads={filteredLeads}
               isLoading={isLoading}
@@ -221,7 +221,7 @@ export default function LeadsUnificado() {
             />
           </div>
         ) : (
-          <div className="pt-4">
+          <div className="flex-1 min-h-0">
             <LeadsKanbanNew
               leads={filteredLeads}
               isLoading={isLoading}
