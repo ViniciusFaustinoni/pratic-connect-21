@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Plus, MoreHorizontal, Loader2, ChevronLeft, ChevronRight, Edit, ArrowRight, ArrowRightLeft, XCircle, MessageCircle, Eye, Search, Filter, Trash2, X } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Plus, MoreHorizontal, Loader2, ChevronLeft, ChevronRight, Edit, ArrowRight, ArrowRightLeft, XCircle, MessageCircle, Eye, Search, Filter, Trash2, X, CalendarClock, AlertTriangle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
@@ -71,6 +71,7 @@ import { MoverEtapaModal } from '@/components/vendas/MoverEtapaModal';
 import { CotacaoFormDialog } from '@/components/cotacoes/CotacaoFormDialog';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { useFollowupStats } from '@/hooks/useFollowups';
 import {
   DndContext,
   DragEndEvent,
@@ -98,8 +99,12 @@ const ORIGENS_TODAS: OrigemLead[] = [
 
 export default function Leads() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { hasPermission } = usePermissions();
   const [filters, setFilters] = useState<LeadFiltersType>({});
+  const [followupFilter, setFollowupFilter] = useState<'all' | 'hoje' | 'atrasado'>(
+    (searchParams.get('followup') as 'all' | 'hoje' | 'atrasado') || 'all'
+  );
   const [page, setPage] = useState(1);
   const [view, setView] = useState<'table' | 'kanban'>('table');
   const [showLeadForm, setShowLeadForm] = useState(false);
@@ -153,6 +158,7 @@ export default function Leads() {
   const changeEtapa = useChangeLeadEtapa();
   const { excluirLead, isDeleting } = useLeadActions();
   const { data: vendedores } = useVendedores();
+  const { data: followupStats } = useFollowupStats();
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -331,6 +337,47 @@ export default function Leads() {
 
         {/* Metrics - Barra compacta para Kanban */}
         {view === 'kanban' && <LeadMetricsBar leads={allLeads || []} />}
+
+        {/* Filtros rápidos de Follow-up */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-muted-foreground uppercase tracking-wide">Follow-up:</span>
+          <Button
+            variant={followupFilter === 'all' ? 'secondary' : 'ghost'}
+            size="sm"
+            className="h-7 text-xs"
+            onClick={() => setFollowupFilter('all')}
+          >
+            Todos
+          </Button>
+          <Button
+            variant={followupFilter === 'hoje' ? 'secondary' : 'ghost'}
+            size="sm"
+            className="h-7 text-xs gap-1"
+            onClick={() => setFollowupFilter('hoje')}
+          >
+            <CalendarClock className="h-3 w-3" />
+            Hoje
+            {(followupStats?.hoje || 0) > 0 && (
+              <Badge variant="outline" className="ml-1 h-4 px-1 text-[10px]">
+                {followupStats?.hoje}
+              </Badge>
+            )}
+          </Button>
+          <Button
+            variant={followupFilter === 'atrasado' ? 'destructive' : 'ghost'}
+            size="sm"
+            className={cn("h-7 text-xs gap-1", followupFilter !== 'atrasado' && (followupStats?.atrasados || 0) > 0 && 'text-destructive')}
+            onClick={() => setFollowupFilter('atrasado')}
+          >
+            <AlertTriangle className="h-3 w-3" />
+            Atrasados
+            {(followupStats?.atrasados || 0) > 0 && (
+              <Badge variant="destructive" className="ml-1 h-4 px-1 text-[10px]">
+                {followupStats?.atrasados}
+              </Badge>
+            )}
+          </Button>
+        </div>
 
         {/* Barra de busca e filtros */}
         <div className="flex items-center gap-3">
