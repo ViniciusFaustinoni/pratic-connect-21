@@ -180,9 +180,9 @@ export default function LeadsUnificado() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-background">
+    <div className="flex flex-col h-full bg-background overflow-hidden">
       {/* Fixed Header Section */}
-      <div className="sticky top-0 z-10 bg-background border-b border-border px-6 py-5 space-y-5">
+      <div className="shrink-0 z-10 bg-background border-b border-border px-6 py-5 space-y-5">
         {/* Title & Actions */}
         <LeadsHeader
           onNovoLead={() => setShowNewLeadDialog(true)}
@@ -209,9 +209,9 @@ export default function LeadsUnificado() {
       </div>
 
       {/* Content Area */}
-      <div className="flex-1 flex flex-col min-h-0">
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
         {viewMode === 'list' ? (
-          <div className="px-6 py-4 overflow-auto">
+          <div className="flex-1 px-6 py-4 overflow-auto">
             <LeadsTable
               leads={filteredLeads}
               isLoading={isLoading}
@@ -221,7 +221,7 @@ export default function LeadsUnificado() {
             />
           </div>
         ) : (
-          <div className="flex-1 min-h-0">
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden px-6 pt-4">
             <LeadsKanbanNew
               leads={filteredLeads}
               isLoading={isLoading}

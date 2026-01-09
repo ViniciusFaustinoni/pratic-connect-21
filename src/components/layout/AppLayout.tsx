@@ -33,7 +33,7 @@ export function AppLayout() {
             <AppSidebar />
             <SidebarInset className="flex flex-1 flex-col">
               <AppHeader />
-              <main className="flex-1 overflow-auto bg-background p-6">
+              <main className="flex-1 flex flex-col overflow-hidden bg-background">
                 <Outlet />
               </main>
             </SidebarInset>
