@@ -60,7 +60,7 @@ import { useChangeLeadEtapa } from '@/hooks/useLeadHistorico';
 import { useLeadActions } from '@/hooks/useLeadActions';
 import { useVendedores } from '@/hooks/useVendedores';
 import { usePermissions } from '@/hooks/usePermissions';
-import { LeadFormDialog } from '@/components/leads/LeadFormDialog';
+import { NewLeadAdvancedModal } from '@/components/leads/NewLeadAdvancedModal';
 import { LeadEditDialog } from '@/components/leads/LeadEditDialog';
 import { LeadKanbanCard } from '@/components/leads/LeadKanbanCard';
 import { KanbanBoard } from '@/components/leads/KanbanBoard';
@@ -874,7 +874,7 @@ export default function Leads() {
       </AlertDialog>
 
       {/* Dialogs */}
-      <LeadFormDialog open={showLeadForm} onOpenChange={setShowLeadForm} />
+      <NewLeadAdvancedModal open={showLeadForm} onOpenChange={setShowLeadForm} />
       
       {editingLead && (
         <LeadEditDialog
