@@ -1,7 +1,15 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Phone, MoreHorizontal, MessageCircle, Eye, Trash2 } from 'lucide-react';
+import {
+  Phone,
+  MoreHorizontal,
+  MessageCircle,
+  Eye,
+  Trash2,
+  Calculator,
+  ArrowUpDown,
+} from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -16,9 +24,11 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { LeadsEmptyState } from './LeadsEmptyState';
 import { ETAPA_LABELS, ORIGEM_LABELS, type EtapaLead } from '@/types/database';
 import { cn } from '@/lib/utils';
 
@@ -62,6 +72,7 @@ interface LeadsTableProps {
   isLoading?: boolean;
   onSelectLead: (lead: Lead) => void;
   onDeleteLead: (id: string) => void;
+  onNewLead?: () => void;
 }
 
 export function LeadsTable({
@@ -69,6 +80,7 @@ export function LeadsTable({
   isLoading,
   onSelectLead,
   onDeleteLead,
+  onNewLead,
 }: LeadsTableProps) {
   const [sortColumn, setSortColumn] = useState<string>('created_at');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
@@ -105,6 +117,11 @@ export function LeadsTable({
     return phone;
   };
 
+  const handleWhatsApp = (e: React.MouseEvent, phone: string) => {
+    e.stopPropagation();
+    window.open(`https://wa.me/55${phone.replace(/\D/g, '')}`, '_blank');
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -113,83 +130,119 @@ export function LeadsTable({
     );
   }
 
+  if (leads.length === 0) {
+    return <LeadsEmptyState onNewLead={onNewLead} />;
+  }
+
   return (
-    <ScrollArea className="h-[calc(100vh-280px)]">
+    <ScrollArea className="h-[calc(100vh-340px)]">
       <Table>
         <TableHeader className="sticky top-0 bg-background z-10">
-          <TableRow className="hover:bg-transparent">
+          <TableRow className="hover:bg-transparent border-border">
             <TableHead
-              className="w-[200px] cursor-pointer"
+              className="w-[220px] cursor-pointer group"
               onClick={() => handleSort('nome')}
             >
-              Nome {sortColumn === 'nome' && (sortDirection === 'asc' ? '↑' : '↓')}
+              <div className="flex items-center gap-2">
+                Nome
+                <ArrowUpDown
+                  className={cn(
+                    'h-4 w-4 text-muted-foreground transition-colors',
+                    sortColumn === 'nome' && 'text-foreground'
+                  )}
+                />
+              </div>
             </TableHead>
-            <TableHead className="w-[140px]">Telefone</TableHead>
-            <TableHead className="w-[100px]">Origem</TableHead>
-            <TableHead className="w-[120px]">Status</TableHead>
-            <TableHead className="w-[100px]">Responsável</TableHead>
+            <TableHead className="w-[180px]">Telefone</TableHead>
+            <TableHead className="w-[120px]">Origem</TableHead>
+            <TableHead className="w-[140px]">Status</TableHead>
+            <TableHead className="w-[120px]">Responsável</TableHead>
             <TableHead
-              className="w-[80px] cursor-pointer"
+              className="w-[100px] cursor-pointer"
               onClick={() => handleSort('created_at')}
             >
-              Data {sortColumn === 'created_at' && (sortDirection === 'asc' ? '↑' : '↓')}
+              <div className="flex items-center gap-2">
+                Data
+                <ArrowUpDown
+                  className={cn(
+                    'h-4 w-4 text-muted-foreground transition-colors',
+                    sortColumn === 'created_at' && 'text-foreground'
+                  )}
+                />
+              </div>
             </TableHead>
-            <TableHead className="w-[60px] text-right">Ações</TableHead>
+            <TableHead className="w-[80px] text-right">Ações</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {sortedLeads.length === 0 ? (
-            <TableRow>
-              <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
-                Nenhum lead encontrado
-              </TableCell>
-            </TableRow>
-          ) : (
-            sortedLeads.map((lead) => (
-              <TableRow
-                key={lead.id}
-                className="cursor-pointer hover:bg-muted/50"
-                onClick={() => onSelectLead(lead)}
-              >
-                <TableCell className="font-medium">{lead.nome}</TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    <Phone className="h-3 w-3 text-muted-foreground" />
-                    <span className="text-sm">{formatPhone(lead.telefone)}</span>
-                    <a
-                      href={`https://wa.me/55${lead.telefone.replace(/\D/g, '')}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="text-green-500 hover:text-green-400"
-                    >
-                      <MessageCircle className="h-4 w-4" />
-                    </a>
+          {sortedLeads.map((lead) => (
+            <TableRow
+              key={lead.id}
+              className="cursor-pointer hover:bg-muted/50 transition-colors"
+              onClick={() => onSelectLead(lead)}
+            >
+              <TableCell>
+                <div className="flex items-center gap-3">
+                  <div
+                    className={cn(
+                      'flex items-center justify-center h-9 w-9 rounded-full text-sm font-semibold flex-shrink-0',
+                      'bg-primary/10 text-primary'
+                    )}
+                  >
+                    {lead.nome.charAt(0).toUpperCase()}
                   </div>
-                </TableCell>
-                <TableCell>
-                  <Badge
-                    variant="outline"
-                    className={cn('font-normal', ORIGEM_COLORS[lead.origem])}
+                  <span className="font-medium">{lead.nome}</span>
+                </div>
+              </TableCell>
+              <TableCell>
+                <div className="flex items-center gap-2">
+                  <Phone className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-sm">{formatPhone(lead.telefone)}</span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-green-500 hover:text-green-400 hover:bg-green-500/10"
+                    onClick={(e) => handleWhatsApp(e, lead.telefone)}
                   >
-                    {ORIGEM_LABELS[lead.origem as keyof typeof ORIGEM_LABELS] || lead.origem}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <Badge
-                    variant="outline"
-                    className={cn('font-normal', STATUS_COLORS[lead.etapa])}
+                    <MessageCircle className="h-4 w-4" />
+                  </Button>
+                </div>
+              </TableCell>
+              <TableCell>
+                <Badge
+                  variant="outline"
+                  className={cn('font-normal', ORIGEM_COLORS[lead.origem])}
+                >
+                  {ORIGEM_LABELS[lead.origem as keyof typeof ORIGEM_LABELS] || lead.origem}
+                </Badge>
+              </TableCell>
+              <TableCell>
+                <Badge
+                  variant="outline"
+                  className={cn('font-normal', STATUS_COLORS[lead.etapa])}
+                >
+                  {ETAPA_LABELS[lead.etapa as EtapaLead] || lead.etapa}
+                </Badge>
+              </TableCell>
+              <TableCell className="text-sm text-muted-foreground">
+                {lead.vendedor?.nome || '—'}
+              </TableCell>
+              <TableCell className="text-sm text-muted-foreground">
+                {format(new Date(lead.created_at), 'dd/MM/yy', { locale: ptBR })}
+              </TableCell>
+              <TableCell className="text-right">
+                <div className="flex items-center justify-end gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-primary"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      // Open quote
+                    }}
                   >
-                    {ETAPA_LABELS[lead.etapa as EtapaLead] || lead.etapa}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-sm text-muted-foreground">
-                  {lead.vendedor?.nome || '—'}
-                </TableCell>
-                <TableCell className="text-sm text-muted-foreground">
-                  {format(new Date(lead.created_at), 'dd/MM', { locale: ptBR })}
-                </TableCell>
-                <TableCell className="text-right">
+                    <Calculator className="h-4 w-4" />
+                  </Button>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                       <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -201,6 +254,7 @@ export function LeadsTable({
                         <Eye className="h-4 w-4 mr-2" />
                         Ver detalhes
                       </DropdownMenuItem>
+                      <DropdownMenuSeparator />
                       <DropdownMenuItem
                         className="text-destructive focus:text-destructive"
                         onClick={(e) => {
@@ -213,10 +267,10 @@ export function LeadsTable({
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
-                </TableCell>
-              </TableRow>
-            ))
-          )}
+                </div>
+              </TableCell>
+            </TableRow>
+          ))}
         </TableBody>
       </Table>
     </ScrollArea>

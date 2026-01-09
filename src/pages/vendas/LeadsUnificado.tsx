@@ -1,8 +1,11 @@
 import { useState, useMemo } from 'react';
 import { toast } from 'sonner';
 import type { DateRange } from 'react-day-picker';
+import { differenceInDays } from 'date-fns';
 
 import { LeadsHeader } from '@/components/leads/LeadsHeader';
+import { LeadMetricsCards } from '@/components/leads/LeadMetricsCards';
+import { LeadsFiltersBar, type QuickFilter } from '@/components/leads/LeadsFiltersBar';
 import { LeadsTable } from '@/components/leads/LeadsTable';
 import { LeadsKanbanNew } from '@/components/leads/LeadsKanbanNew';
 import { LeadsFiltersPanel } from '@/components/leads/LeadsFiltersPanel';
@@ -41,7 +44,8 @@ interface Lead {
 
 export default function LeadsUnificado() {
   // View state
-  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('kanban');
+  const [quickFilter, setQuickFilter] = useState<QuickFilter>('all');
   const [showFilters, setShowFilters] = useState(false);
   const [showNewLeadDialog, setShowNewLeadDialog] = useState(false);
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
@@ -75,32 +79,52 @@ export default function LeadsUnificado() {
 
   const { atualizarLead, excluirLead } = useLeadActions();
 
-  // Filter leads by etapa if specified (for list view)
+  // Filter leads based on quick filter and advanced filters
   const filteredLeads = useMemo(() => {
     let result = allLeads as Lead[];
 
+    // Apply etapa filter
     if (filters.etapa) {
       result = result.filter((lead) => lead.etapa === filters.etapa);
     }
 
+    // Apply quick filters
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (quickFilter === 'today') {
+      result = result.filter((lead) => {
+        const createdAt = new Date(lead.created_at);
+        createdAt.setHours(0, 0, 0, 0);
+        return createdAt.getTime() === today.getTime();
+      });
+    } else if (quickFilter === 'overdue') {
+      result = result.filter((lead) => {
+        const daysWithoutUpdate = differenceInDays(new Date(), new Date(lead.updated_at));
+        return (
+          daysWithoutUpdate > 3 &&
+          lead.etapa !== 'ganho' &&
+          lead.etapa !== 'perdido'
+        );
+      });
+    }
+
     return result;
-  }, [allLeads, filters.etapa]);
+  }, [allLeads, filters.etapa, quickFilter]);
 
-  // Calculate metrics
-  const metrics = useMemo(() => {
-    const leads = allLeads as Lead[];
-    const total = leads.length;
-    const novos = leads.filter((l) => l.etapa === 'novo').length;
-    // "Quentes" = em negociação ou cotação enviada
-    const quentes = leads.filter((l) =>
-      ['cotacao_enviada', 'negociacao', 'qualificado'].includes(l.etapa)
-    ).length;
-
-    return { total, novos, quentes };
+  // Calculate overdue count for badge
+  const overdueCount = useMemo(() => {
+    return (allLeads as Lead[]).filter((lead) => {
+      const daysWithoutUpdate = differenceInDays(new Date(), new Date(lead.updated_at));
+      return (
+        daysWithoutUpdate > 3 &&
+        lead.etapa !== 'ganho' &&
+        lead.etapa !== 'perdido'
+      );
+    }).length;
   }, [allLeads]);
 
   const hasActiveFilters = !!(
-    filters.search ||
     filters.etapa ||
     filters.origem ||
     filters.vendedor ||
@@ -151,19 +175,38 @@ export default function LeadsUnificado() {
     }
   };
 
+  const handleSearchChange = (value: string) => {
+    setFilters((prev) => ({ ...prev, search: value }));
+  };
+
   return (
-    <div className="flex flex-col h-full">
-      {/* Fixed Header */}
-      <LeadsHeader
-        totalLeads={metrics.total}
-        novosLeads={metrics.novos}
-        leadsQuentes={metrics.quentes}
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
-        onNovoLead={() => setShowNewLeadDialog(true)}
-        onOpenFilters={() => setShowFilters(true)}
-        filtersActive={hasActiveFilters}
-      />
+    <div className="flex flex-col h-full bg-background">
+      {/* Fixed Header Section */}
+      <div className="sticky top-0 z-10 bg-background border-b border-border px-6 py-5 space-y-5">
+        {/* Title & Actions */}
+        <LeadsHeader
+          onNovoLead={() => setShowNewLeadDialog(true)}
+          onImport={() => {
+            toast.info('Funcionalidade de importação em desenvolvimento');
+          }}
+        />
+
+        {/* Metrics Cards */}
+        <LeadMetricsCards leads={allLeads} />
+
+        {/* Filters Bar */}
+        <LeadsFiltersBar
+          search={filters.search}
+          onSearchChange={handleSearchChange}
+          quickFilter={quickFilter}
+          onQuickFilterChange={setQuickFilter}
+          overdueCount={overdueCount}
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+          onOpenFilters={() => setShowFilters(true)}
+          filtersActive={hasActiveFilters}
+        />
+      </div>
 
       {/* Content Area */}
       <div className="flex-1 overflow-hidden">
@@ -174,15 +217,20 @@ export default function LeadsUnificado() {
               isLoading={isLoading}
               onSelectLead={handleSelectLead}
               onDeleteLead={handleDeleteLead}
+              onNewLead={() => setShowNewLeadDialog(true)}
             />
           </div>
         ) : (
-          <LeadsKanbanNew
-            leads={filteredLeads}
-            isLoading={isLoading}
-            onLeadClick={handleSelectLead}
-            onLeadMove={handleLeadMove}
-          />
+          <div className="pt-4">
+            <LeadsKanbanNew
+              leads={filteredLeads}
+              isLoading={isLoading}
+              onLeadClick={handleSelectLead}
+              onLeadMove={handleLeadMove}
+              onLeadDelete={handleDeleteLead}
+              onAddLead={() => setShowNewLeadDialog(true)}
+            />
+          </div>
         )}
       </div>
 
@@ -237,7 +285,10 @@ export default function LeadsUnificado() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDeleteLead} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogAction
+              onClick={confirmDeleteLead}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
               Excluir
             </AlertDialogAction>
           </AlertDialogFooter>
