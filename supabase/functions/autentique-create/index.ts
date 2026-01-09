@@ -930,13 +930,26 @@ serve(async (req) => {
       .update({
         autentique_documento_id: document.id,
         autentique_url: signatureLink,
-        status: "enviado",
+        autentique_status: "pending",
+        status: "pendente_assinatura",
+        data_envio: new Date().toISOString(),
       })
       .eq("id", contratoId);
 
     if (updateError) {
       console.error("Erro ao atualizar contrato:", updateError);
     }
+
+    // Registrar no histórico do contrato
+    await supabase.from("contratos_historico").insert({
+      contrato_id: contratoId,
+      evento: "enviado_assinatura",
+      descricao: `Contrato enviado para assinatura via Autentique`,
+      dados: { 
+        autentique_id: document.id, 
+        link: signatureLink 
+      },
+    });
 
     // Registrar no histórico do lead
     if (contrato.lead_id) {

@@ -118,13 +118,25 @@ serve(async (req) => {
         // Cliente visualizou o documento
         console.log("Cliente visualizou documento");
         
-        await supabase
-          .from("contratos")
-          .update({ 
-            data_visualizacao: new Date().toISOString(),
-            autentique_status: "viewed",
-          })
-          .eq("id", contrato.id);
+        // Só atualiza para 'visualizado' se ainda estiver pendente
+        if (contrato.status === "pendente_assinatura" || contrato.status === "enviado") {
+          await supabase
+            .from("contratos")
+            .update({ 
+              status: "visualizado",
+              data_visualizacao: new Date().toISOString(),
+              autentique_status: "viewed",
+            })
+            .eq("id", contrato.id);
+        } else {
+          await supabase
+            .from("contratos")
+            .update({ 
+              data_visualizacao: new Date().toISOString(),
+              autentique_status: "viewed",
+            })
+            .eq("id", contrato.id);
+        }
 
         await supabase.from("contratos_historico").insert({
           contrato_id: contrato.id,
