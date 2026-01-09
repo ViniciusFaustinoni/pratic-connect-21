@@ -181,9 +181,6 @@ export default function PlanosBeneficios() {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Planos e Benefícios</h1>
-          <p className="text-muted-foreground">
-            Guia do Consultor v11 - Outubro 2025
-          </p>
         </div>
         <div className="flex items-center gap-2">
           <BuscaPlanos onSearch={handleSearch} />
