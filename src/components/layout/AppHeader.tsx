@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { LogOut, Settings, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -15,10 +15,14 @@ import { ROLE_LABELS } from '@/types/database';
 import { UserAvatar } from '@/components/UserAvatar';
 import { NotificationBell } from '@/components/layout/NotificationBell';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
+import { GlobalSearch } from '@/components/layout/GlobalSearch';
 
 export function AppHeader() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { profile, roles, signOut } = useAuth();
+  
+  const isDashboard = location.pathname === '/dashboard';
 
   const handleSignOut = async () => {
     await signOut();
@@ -27,7 +31,10 @@ export function AppHeader() {
 
   return (
     <header className="sticky top-0 z-40 flex h-[60px] items-center justify-between border-b border-border bg-card px-4">
-      <SidebarTrigger className="-ml-2 text-muted-foreground hover:text-foreground" />
+      <div className="flex items-center gap-2">
+        <SidebarTrigger className="-ml-2 text-muted-foreground hover:text-foreground" />
+        {isDashboard && <GlobalSearch />}
+      </div>
 
       <div className="flex items-center gap-3">
         {/* Theme Toggle */}
