@@ -5214,6 +5214,7 @@ export type Database = {
       leads: {
         Row: {
           associado_id: string | null
+          ativo: boolean
           campanha_id: string | null
           codigo_fipe: string | null
           cpf: string | null
@@ -5249,6 +5250,7 @@ export type Database = {
         }
         Insert: {
           associado_id?: string | null
+          ativo?: boolean
           campanha_id?: string | null
           codigo_fipe?: string | null
           cpf?: string | null
@@ -5284,6 +5286,7 @@ export type Database = {
         }
         Update: {
           associado_id?: string | null
+          ativo?: boolean
           campanha_id?: string | null
           codigo_fipe?: string | null
           cpf?: string | null
