@@ -254,7 +254,7 @@ export default function CotacaoPublica() {
               <div className="flex justify-between items-center">
                 <span className="text-muted-foreground">Mensalidade:</span>
                 <span className="font-bold text-2xl text-primary">
-                  {formatarMoeda(cotacao.valor_cotacao || 0)}
+                  {formatarMoeda(cotacao.valor_cota || 0)}
                 </span>
               </div>
               {cotacao.desagio_aplicado && cotacao.desagio_aplicado > 0 && (
