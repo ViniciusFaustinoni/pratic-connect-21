@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Plus, Loader2, Calendar, X } from 'lucide-react';
+import { useState, useRef, useCallback } from 'react';
+import { Plus, Loader2, Calendar, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
@@ -90,10 +90,20 @@ export default function LeadKanban() {
   const [lossDialogLead, setLossDialogLead] = useState<Lead | null>(null);
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({});
+  const boardRef = useRef<HTMLDivElement>(null);
 
   const { data: leads, isLoading } = useAllLeads(filters);
   const { data: vendedores } = useVendedores();
   const changeEtapa = useChangeLeadEtapa();
+
+  const scrollBoard = useCallback((direction: 'left' | 'right') => {
+    if (!boardRef.current) return;
+    const scrollAmount = 300;
+    boardRef.current.scrollBy({
+      left: direction === 'left' ? -scrollAmount : scrollAmount,
+      behavior: 'smooth',
+    });
+  }, []);
 
   const handleDateRangeChange = (range: { from?: Date; to?: Date }) => {
     setDateRange(range);
@@ -283,10 +293,34 @@ export default function LeadKanban() {
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        {/* Container externo - overflow hidden */}
-        <div className="overflow-hidden rounded-lg">
+        {/* Container externo com posição relativa para botões */}
+        <div className="relative overflow-hidden rounded-lg">
+          {/* Botão de scroll esquerda */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute left-0 top-1/2 -translate-y-1/2 z-10 h-10 w-10 rounded-full bg-background/80 backdrop-blur-sm shadow-md hover:bg-background border"
+            onClick={() => scrollBoard('left')}
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </Button>
+
+          {/* Botão de scroll direita */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute right-0 top-1/2 -translate-y-1/2 z-10 h-10 w-10 rounded-full bg-background/80 backdrop-blur-sm shadow-md hover:bg-background border"
+            onClick={() => scrollBoard('right')}
+          >
+            <ChevronRight className="h-5 w-5" />
+          </Button>
+
+          {/* Indicadores de fade nas bordas */}
+          <div className="absolute left-10 top-0 bottom-0 w-6 bg-gradient-to-r from-background to-transparent pointer-events-none z-[5]" />
+          <div className="absolute right-10 top-0 bottom-0 w-6 bg-gradient-to-l from-background to-transparent pointer-events-none z-[5]" />
+
           {/* Container do scroll horizontal */}
-          <div className="overflow-x-auto kanban-scroll pb-4">
+          <div ref={boardRef} className="overflow-x-auto kanban-scroll pb-4 px-12">
             {/* Container das colunas - inline-flex para forçar largura */}
             <div className="inline-flex gap-3 min-w-max p-1">
               {ETAPAS_FUNIL.map((etapa) => {
@@ -319,7 +353,7 @@ export default function LeadKanban() {
           </div>
           {/* Indicador de scroll mobile */}
           <p className="text-xs text-muted-foreground text-center mt-2 md:hidden">
-            ← Arraste para ver mais colunas →
+            ← Arraste ou use as setas para navegar →
           </p>
         </div>
 
