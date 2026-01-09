@@ -16,6 +16,7 @@ interface LeadFunnelProgressProps {
 
 export function LeadFunnelProgress({ etapaAtual }: LeadFunnelProgressProps) {
   const currentIndex = ETAPAS.findIndex(e => e.value === etapaAtual);
+  const currentLabel = ETAPAS[currentIndex]?.label || etapaAtual;
 
   return (
     <Card>
@@ -25,49 +26,44 @@ export function LeadFunnelProgress({ etapaAtual }: LeadFunnelProgressProps) {
           Progresso no Funil
         </CardTitle>
       </CardHeader>
-      <CardContent>
-        <div className="relative">
-          {/* Progress Line */}
-          <div className="absolute top-3 left-3 right-3 h-0.5 bg-muted" />
-          <div 
-            className="absolute top-3 left-3 h-0.5 bg-primary transition-all duration-500"
-            style={{ width: `${(currentIndex / (ETAPAS.length - 1)) * 100}%` }}
-          />
-          
-          {/* Etapas */}
-          <div className="relative flex justify-between">
-            {ETAPAS.map((etapa, index) => {
-              const isCompleted = index < currentIndex;
-              const isCurrent = index === currentIndex;
-              const isPending = index > currentIndex;
-              
-              return (
-                <div key={etapa.value} className="flex flex-col items-center">
-                  <div
-                    className={cn(
-                      "w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium transition-all duration-300 border-2",
-                      isCompleted && "bg-primary border-primary text-primary-foreground",
-                      isCurrent && "bg-primary border-primary text-primary-foreground ring-4 ring-primary/20",
-                      isPending && "bg-background border-muted-foreground/30 text-muted-foreground"
-                    )}
-                  >
-                    {isCompleted ? "✓" : index + 1}
-                  </div>
-                  <span
-                    className={cn(
-                      "text-xs mt-2 text-center max-w-[60px]",
-                      isCurrent && "font-semibold text-primary",
-                      isPending && "text-muted-foreground",
-                      isCompleted && "text-muted-foreground"
-                    )}
-                  >
-                    {etapa.label}
-                  </span>
+      <CardContent className="space-y-4">
+        {/* Círculos das etapas */}
+        <div className="flex items-center justify-between">
+          {ETAPAS.map((etapa, index) => {
+            const isCompleted = index < currentIndex;
+            const isCurrent = index === currentIndex;
+            const isPending = index > currentIndex;
+            
+            return (
+              <div key={etapa.value} className="flex flex-col items-center flex-1">
+                <div
+                  className={cn(
+                    "w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold transition-all duration-300 border-2",
+                    isCompleted && "bg-primary border-primary text-primary-foreground",
+                    isCurrent && "bg-primary border-primary text-primary-foreground ring-4 ring-primary/20 scale-110",
+                    isPending && "bg-muted border-muted-foreground/20 text-muted-foreground"
+                  )}
+                >
+                  {isCompleted ? "✓" : index + 1}
                 </div>
-              );
-            })}
-          </div>
+              </div>
+            );
+          })}
         </div>
+
+        {/* Barra de progresso */}
+        <div className="h-2 bg-muted rounded-full overflow-hidden">
+          <div 
+            className="h-full bg-primary rounded-full transition-all duration-500"
+            style={{ width: `${((currentIndex + 1) / ETAPAS.length) * 100}%` }}
+          />
+        </div>
+
+        {/* Label da etapa atual */}
+        <p className="text-sm text-center">
+          <span className="text-muted-foreground">Etapa {currentIndex + 1} de {ETAPAS.length}:</span>{' '}
+          <span className="font-semibold text-primary">{currentLabel}</span>
+        </p>
       </CardContent>
     </Card>
   );

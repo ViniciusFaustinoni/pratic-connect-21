@@ -163,15 +163,7 @@ export default function LeadDetalhe() {
   return (
     <div className="space-y-6 p-4 md:p-6">
       {/* Navegação */}
-      <Button 
-        variant="ghost" 
-        size="sm" 
-        onClick={() => navigate('/vendas/leads')}
-        className="gap-2 text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Voltar para Leads
-      </Button>
+        {/* Navegação via browser back ou header */}
 
       {/* HEADER HERO */}
       <Card className="border-primary/20 bg-gradient-to-br from-primary/5 via-transparent to-transparent overflow-hidden">
@@ -246,13 +238,17 @@ export default function LeadDetalhe() {
 
               {/* Badges */}
               <div className="flex flex-wrap gap-2">
-                <Badge className={`${ETAPA_COLORS[lead.etapa as EtapaLead]} border`}>
+                <Badge 
+                  className={`${ETAPA_COLORS[lead.etapa as EtapaLead]} border cursor-pointer hover:opacity-80 transition-opacity`}
+                  onClick={() => setShowMoverModal(true)}
+                  title="Clique para mover etapa"
+                >
                   {ETAPA_LABELS[lead.etapa as EtapaLead]}
                 </Badge>
-                <Badge variant="outline" className="gap-1">
+                <Badge variant="outline" className="gap-1 pointer-events-none">
                   {ORIGEM_ICONS[lead.origem] || '📌'} {ORIGEM_LABELS[lead.origem]}
                 </Badge>
-                <Badge variant="secondary" className="gap-1">
+                <Badge variant="secondary" className="gap-1 pointer-events-none">
                   <Clock className="h-3 w-3" />
                   {diasNoFunil} {diasNoFunil === 1 ? 'dia' : 'dias'} no funil
                 </Badge>
