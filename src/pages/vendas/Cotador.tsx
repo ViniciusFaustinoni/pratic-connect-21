@@ -451,7 +451,7 @@ export default function CotadorPage() {
       if (leadSelecionado?.id) {
         await atualizarLead.mutateAsync({
           id: leadSelecionado.id,
-          data: { etapa: 'cotacao_enviada' }
+          etapa: 'cotacao_enviada'
         });
       }
 
