@@ -14,6 +14,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { ROLE_LABELS } from '@/types/database';
 import { UserAvatar } from '@/components/UserAvatar';
 import { NotificationBell } from '@/components/layout/NotificationBell';
+import { ThemeToggle } from '@/components/ui/theme-toggle';
 
 export function AppHeader() {
   const navigate = useNavigate();
@@ -28,7 +29,10 @@ export function AppHeader() {
     <header className="sticky top-0 z-40 flex h-[60px] items-center justify-between border-b border-border bg-card px-4">
       <SidebarTrigger className="-ml-2 text-muted-foreground hover:text-foreground" />
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3">
+        {/* Theme Toggle */}
+        <ThemeToggle />
+        
         {/* Notifications */}
         <NotificationBell variant="internal" />
         
