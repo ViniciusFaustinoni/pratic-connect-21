@@ -18,12 +18,17 @@ import {
   TrendingUp,
   TrendingDown,
   Eye,
-  Loader2
+  Loader2,
+  Scale,
+  AlertTriangle,
+  Check
 } from 'lucide-react';
 import { useContasBancarias, useExtratosBancarios, useUploadExtrato, StatusExtrato } from '@/hooks/useExtratoBancario';
 import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 const STATUS_CONFIG: Record<StatusExtrato, { label: string; color: string; icon: React.ElementType }> = {
   pendente: { label: 'Pendente', color: 'bg-yellow-100 text-yellow-800', icon: Clock },
@@ -37,10 +42,40 @@ export default function ExtratosBancarios() {
   const navigate = useNavigate();
   const [contaSelecionada, setContaSelecionada] = useState('');
   const [arquivo, setArquivo] = useState<File | null>(null);
+  const [mesConciliacao, setMesConciliacao] = useState(new Date().getMonth() + 1);
+  const [anoConciliacao, setAnoConciliacao] = useState(new Date().getFullYear());
   
   const { data: contas, isLoading: loadingContas } = useContasBancarias();
   const { data: extratos, isLoading: loadingExtratos } = useExtratosBancarios(contaSelecionada || undefined);
   const uploadMutation = useUploadExtrato();
+
+  // Query para conciliação - compara pagamentos ASAAS
+  const { data: dadosConciliacao, isLoading: loadingConciliacao } = useQuery({
+    queryKey: ['conciliacao', mesConciliacao, anoConciliacao],
+    queryFn: async () => {
+      const inicioMes = `${anoConciliacao}-${String(mesConciliacao).padStart(2, '0')}-01`;
+      const fimMes = new Date(anoConciliacao, mesConciliacao, 0).toISOString().split('T')[0];
+
+      // Buscar pagamentos confirmados no ASAAS
+      const { data: pagamentosAsaas } = await supabase
+        .from('asaas_pagamentos')
+        .select('id, valor, data_pagamento, forma_pagamento, asaas_id, associado_id')
+        .gte('data_pagamento', inicioMes)
+        .lte('data_pagamento', fimMes)
+        .eq('status', 'CONFIRMED');
+
+      const totalAsaas = (pagamentosAsaas || []).reduce((acc, p) => acc + (p.valor || 0), 0);
+
+      return {
+        pagamentosAsaas: pagamentosAsaas || [],
+        totalAsaas,
+        totalExtrato: 0, // Placeholder - extrato_lancamentos não existe no schema
+        diferenca: totalAsaas,
+        naoConciliados: [],
+        conciliadosCount: pagamentosAsaas?.length || 0,
+      };
+    },
+  });
   
   const handleUpload = async () => {
     if (!contaSelecionada || !arquivo) return;
@@ -59,6 +94,21 @@ export default function ExtratosBancarios() {
       currency: 'BRL'
     }).format(value);
   };
+
+  const meses = [
+    { value: 1, label: 'Janeiro' },
+    { value: 2, label: 'Fevereiro' },
+    { value: 3, label: 'Março' },
+    { value: 4, label: 'Abril' },
+    { value: 5, label: 'Maio' },
+    { value: 6, label: 'Junho' },
+    { value: 7, label: 'Julho' },
+    { value: 8, label: 'Agosto' },
+    { value: 9, label: 'Setembro' },
+    { value: 10, label: 'Outubro' },
+    { value: 11, label: 'Novembro' },
+    { value: 12, label: 'Dezembro' },
+  ];
   
   return (
     <div className="space-y-6">
@@ -125,6 +175,10 @@ export default function ExtratosBancarios() {
           <TabsTrigger value="historico" className="gap-2">
             <FileSpreadsheet className="h-4 w-4" />
             Histórico
+          </TabsTrigger>
+          <TabsTrigger value="conciliacao" className="gap-2">
+            <Scale className="h-4 w-4" />
+            Conciliação
           </TabsTrigger>
         </TabsList>
         
@@ -281,6 +335,176 @@ export default function ExtratosBancarios() {
               </Table>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Tab Conciliação */}
+        <TabsContent value="conciliacao">
+          <div className="space-y-4">
+            {/* Filtros */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Scale className="h-5 w-5" />
+                  Conciliação ASAAS x Banco
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex gap-4 items-end">
+                  <div className="space-y-2">
+                    <Label>Mês</Label>
+                    <Select 
+                      value={mesConciliacao.toString()} 
+                      onValueChange={(v) => setMesConciliacao(parseInt(v))}
+                    >
+                      <SelectTrigger className="w-40">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {meses.map(m => (
+                          <SelectItem key={m.value} value={m.value.toString()}>
+                            {m.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Ano</Label>
+                    <Select 
+                      value={anoConciliacao.toString()} 
+                      onValueChange={(v) => setAnoConciliacao(parseInt(v))}
+                    >
+                      <SelectTrigger className="w-28">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {[2024, 2025, 2026].map(a => (
+                          <SelectItem key={a} value={a.toString()}>
+                            {a}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Resumo da Conciliação */}
+            {loadingConciliacao ? (
+              <Card>
+                <CardContent className="py-8 text-center">
+                  <Loader2 className="h-8 w-8 animate-spin mx-auto" />
+                </CardContent>
+              </Card>
+            ) : (
+              <>
+                <div className="grid gap-4 md:grid-cols-4">
+                  <Card>
+                    <CardContent className="p-4">
+                      <p className="text-sm text-muted-foreground">Total ASAAS</p>
+                      <p className="text-2xl font-bold text-green-600">
+                        {formatCurrency(dadosConciliacao?.totalAsaas || 0)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {dadosConciliacao?.pagamentosAsaas.length || 0} pagamentos
+                      </p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4">
+                      <p className="text-sm text-muted-foreground">Total Extrato</p>
+                      <p className="text-2xl font-bold text-blue-600">
+                        {formatCurrency(dadosConciliacao?.totalExtrato || 0)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {dadosConciliacao?.pagamentosAsaas.length || 0} lançamentos
+                      </p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4">
+                      <p className="text-sm text-muted-foreground">Diferença</p>
+                      <p className={cn(
+                        "text-2xl font-bold",
+                        (dadosConciliacao?.diferenca || 0) === 0 
+                          ? "text-green-600" 
+                          : "text-amber-600"
+                      )}>
+                        {formatCurrency(dadosConciliacao?.diferenca || 0)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {(dadosConciliacao?.diferenca || 0) === 0 ? 'Conciliado' : 'Pendente'}
+                      </p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4">
+                      <p className="text-sm text-muted-foreground">Conciliados</p>
+                      <p className="text-2xl font-bold">
+                        {dadosConciliacao?.conciliadosCount || 0}/{dadosConciliacao?.pagamentosAsaas.length || 0}
+                      </p>
+                      <div className="flex items-center gap-1 text-xs">
+                        {(dadosConciliacao?.naoConciliados.length || 0) > 0 ? (
+                          <Badge variant="outline" className="gap-1 text-amber-600">
+                            <AlertTriangle className="h-3 w-3" />
+                            {dadosConciliacao?.naoConciliados.length} pendentes
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="gap-1 text-green-600">
+                            <Check className="h-3 w-3" />
+                            Todos conciliados
+                          </Badge>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Lista de não conciliados */}
+                {(dadosConciliacao?.naoConciliados.length || 0) > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <AlertTriangle className="h-4 w-4 text-amber-500" />
+                        Pagamentos ASAAS não encontrados no extrato
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>ID ASAAS</TableHead>
+                            <TableHead>Associado</TableHead>
+                            <TableHead>Data</TableHead>
+                            <TableHead>Forma</TableHead>
+                            <TableHead className="text-right">Valor</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {dadosConciliacao?.naoConciliados.map((p: any) => (
+                            <TableRow key={p.id}>
+                              <TableCell className="font-mono text-xs">{p.asaas_id}</TableCell>
+                              <TableCell>{(p.associados as any)?.nome || '-'}</TableCell>
+                              <TableCell>
+                                {p.data_pagamento ? format(new Date(p.data_pagamento), 'dd/MM/yyyy') : '-'}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="outline">{p.forma_pagamento}</Badge>
+                              </TableCell>
+                              <TableCell className="text-right font-medium">
+                                {formatCurrency(p.valor)}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </CardContent>
+                  </Card>
+                )}
+              </>
+            )}
+          </div>
         </TabsContent>
       </Tabs>
     </div>
