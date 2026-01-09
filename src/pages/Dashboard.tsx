@@ -167,33 +167,30 @@ function WelcomeBanner({ nome, onRefresh, lastUpdate }: WelcomeBannerProps) {
         <Shield className="h-32 w-32 text-foreground" />
       </div>
       
-      <div className="relative z-10 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-white">
-            {getSaudacao()}, {nome}! 👋
-          </h1>
-          <p className="text-white/80 mt-1">
-            Aqui está o resumo das atividades de hoje.
-          </p>
-        </div>
+      <div className="relative z-10">
+        <h1 className="text-2xl font-bold text-white">
+          {getSaudacao()}, {nome}! 👋
+        </h1>
+        <p className="text-white/80 mt-1">
+          Aqui está o resumo das atividades de hoje.
+        </p>
         
-        {/* Botão Atualizar integrado */}
+        {/* Link discreto de atualização */}
         {onRefresh && (
-          <div className="flex items-center gap-2 shrink-0">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="bg-white/10 border-white/20 text-white hover:bg-white/20 hover:border-white/30"
-              onClick={onRefresh}
-            >
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Atualizar
-            </Button>
+          <div className="flex items-center gap-2 mt-3 text-white/50 text-sm">
             {lastUpdate && (
-              <span className="text-sm text-white/60">
-                {lastUpdate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+              <span>
+                Última atualização: {lastUpdate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
               </span>
             )}
+            <span>•</span>
+            <button 
+              onClick={onRefresh}
+              className="text-white/70 hover:text-white flex items-center gap-1 transition-colors"
+            >
+              <RefreshCw className="h-3 w-3" />
+              atualizar dados
+            </button>
           </div>
         )}
       </div>
