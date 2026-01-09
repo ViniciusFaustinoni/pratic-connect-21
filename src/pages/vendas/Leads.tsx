@@ -149,6 +149,15 @@ export default function Leads() {
     setSearchInput(filters.search || '');
   }, [filters.search]);
 
+  // Detectar parâmetro ?novo=true para abrir modal automaticamente
+  useEffect(() => {
+    if (searchParams.get('novo') === 'true') {
+      setShowLeadForm(true);
+      searchParams.delete('novo');
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
   // Para tabela com paginação
   const { data: leadsData, isLoading } = useLeads({ filters, page, perPage: 20 });
   
