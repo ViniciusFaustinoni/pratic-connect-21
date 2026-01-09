@@ -179,12 +179,7 @@ export default function PlanosBeneficios() {
     <div className="container mx-auto p-6 space-y-6 pb-20">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Planos e Benefícios</h1>
-          <p className="text-muted-foreground">
-            Guia do Consultor v11 - Outubro 2025
-          </p>
-        </div>
+        <h1 className="text-3xl font-bold tracking-tight">Planos e Benefícios</h1>
         <div className="flex items-center gap-2">
           <BuscaPlanos onSearch={handleSearch} />
           <CalculadoraPreco />
