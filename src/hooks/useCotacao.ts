@@ -390,6 +390,7 @@ export function useCriarCotacao() {
         valor_adesao: resultado.valores.valor_adesao,
         status: 'rascunho' as const,
         validade_dias: 7,
+        categoria: payload.categoria_veiculo,
       };
 
       const { data, error } = await supabase

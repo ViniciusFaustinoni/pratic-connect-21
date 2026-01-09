@@ -175,4 +175,5 @@ export interface CriarCotacaoPayload {
   codigo_fipe?: string;
   valor_fipe: number;
   uso_aplicativo: boolean;
+  categoria_veiculo?: string;
 }
