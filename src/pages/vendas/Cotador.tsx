@@ -16,6 +16,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Skeleton } from '@/components/ui/skeleton';
 import { 
   Car, 
   Calculator, 
@@ -80,6 +81,8 @@ interface Plano {
   valorMensal: number;
   destaque: boolean;
 }
+
+type ModoEntrada = 'busca_placa' | 'manual';
 
 // ============================================
 // DADOS MOCK
@@ -218,16 +221,20 @@ const calcularPlanos = (valorFipe: number, usoApp: boolean): Plano[] => {
 // ============================================
 
 export default function CotadorPage() {
+  // Modo de entrada
+  const [modo, setModo] = useState<ModoEntrada>('busca_placa');
+  
   // Busca por placa
   const [placaBusca, setPlacaBusca] = useState('');
   const [buscandoPlaca, setBuscandoPlaca] = useState(false);
-  const [modoManual, setModoManual] = useState(false);
   const [veiculoEncontrado, setVeiculoEncontrado] = useState<VeiculoEncontrado | null>(null);
+  const [erroBusca, setErroBusca] = useState<string | null>(null);
 
-  // Formulário veículo
+  // Formulário veículo (modo manual)
   const [marca, setMarca] = useState('');
   const [modelo, setModelo] = useState('');
   const [ano, setAno] = useState('');
+  const [cor, setCor] = useState('');
   const [usoApp, setUsoApp] = useState(false);
   const [valorFipe, setValorFipe] = useState<number | null>(null);
 
@@ -276,11 +283,28 @@ export default function CotadorPage() {
   }, [planos, planoSelecionadoTab]);
 
   // Verificar se pode calcular
-  const podeCalcular = marca && modelo && ano;
+  const podeCalcular = modo === 'busca_placa' 
+    ? veiculoEncontrado !== null 
+    : marca && modelo && ano;
 
   // ============================================
   // HANDLERS
   // ============================================
+
+  const handleModoChange = (novoModo: ModoEntrada) => {
+    setModo(novoModo);
+    // Limpar estados ao trocar modo
+    setVeiculoEncontrado(null);
+    setErroBusca(null);
+    setPlacaBusca('');
+    setMarca('');
+    setModelo('');
+    setAno('');
+    setCor('');
+    setValorFipe(null);
+    setCotacaoCalculada(false);
+    setPlanoFinalSelecionado(null);
+  };
 
   const handleBuscarPlaca = async () => {
     if (!placaBusca || placaBusca.length < 7) {
@@ -289,6 +313,7 @@ export default function CotadorPage() {
     }
 
     setBuscandoPlaca(true);
+    setErroBusca(null);
     
     try {
       const result = await getByPlaca(placaBusca.replace(/[^A-Za-z0-9]/g, ''));
@@ -311,37 +336,30 @@ export default function CotadorPage() {
         setMarca(vehicleData.marca);
         setModelo(vehicleData.modelo);
         setAno(vehicleData.ano);
+        setCor(vehicleData.cor || '');
         
         if (fipeData?.valor) {
           setValorFipe(fipeData.valor);
         } else {
-          // Calcular mock se não tiver FIPE
           const anoNum = parseInt(vehicleData.ano) || new Date().getFullYear();
           setValorFipe(calcularFipeMock(vehicleData.marca, vehicleData.modelo, anoNum));
         }
 
-        setModoManual(false);
         setCotacaoCalculada(false);
         setPlanoFinalSelecionado(null);
         
         toast.success(`Veículo encontrado! ${vehicleData.marca} ${vehicleData.modelo} ${vehicleData.ano}`);
       } else {
-        toast.error(result.error || 'Veículo não encontrado. Preencha manualmente.');
-        setModoManual(true);
+        setErroBusca(result.error || 'Veículo não encontrado');
+        toast.error('Veículo não encontrado. Tente preencher manualmente.');
       }
     } catch (error) {
       console.error('Erro ao buscar placa:', error);
+      setErroBusca('Erro ao consultar. Tente novamente.');
       toast.error('Erro ao buscar placa. Tente novamente ou preencha manualmente.');
-      setModoManual(true);
     } finally {
       setBuscandoPlaca(false);
     }
-  };
-
-  const handleModoManual = () => {
-    setModoManual(true);
-    setVeiculoEncontrado(null);
-    setPlacaBusca('');
   };
 
   const handleMarcaChange = (novaMarca: string) => {
@@ -382,7 +400,7 @@ export default function CotadorPage() {
     setIsCalculando(true);
     await new Promise(resolve => setTimeout(resolve, 600));
     
-    if (!valorFipe) {
+    if (!valorFipe && marca && modelo && ano) {
       const fipe = calcularFipeMock(marca, modelo, parseInt(ano));
       setValorFipe(fipe);
     }
@@ -409,7 +427,7 @@ export default function CotadorPage() {
     const mensagem = `
 🚗 *COTAÇÃO DE PROTEÇÃO VEICULAR*${nomeCliente}${placaInfo}
 
-*Veículo:* ${marca} ${modelo} ${ano}${veiculoEncontrado?.cor ? ` ${veiculoEncontrado.cor}` : ''}
+*Veículo:* ${marca} ${modelo} ${ano}${cor ? ` ${cor}` : ''}
 *Valor FIPE:* ${formatCurrency(valorFipe)}
 *Uso para App:* ${usoApp ? 'Sim' : 'Não'}
 
@@ -467,54 +485,52 @@ _Cotação válida por 7 dias_
         <p className="text-muted-foreground">Gere cotações em menos de 30 segundos</p>
       </div>
 
-      {/* SEÇÃO: BUSCA RÁPIDA */}
-      <Card className="border-primary/30 bg-gradient-to-r from-primary/5 to-primary/10">
+      {/* SELETOR DE MODO */}
+      <Card className="bg-muted/30">
         <CardContent className="py-4">
-          <div className="flex flex-col sm:flex-row items-center gap-4">
-            {/* Busca por placa */}
-            <div className="flex items-center gap-2 flex-1 w-full">
-              <Search className="h-5 w-5 text-primary shrink-0" />
-              <span className="text-sm font-medium whitespace-nowrap">Busca rápida:</span>
-              <Input
-                placeholder="Digite a placa: ABC-1234"
-                value={placaBusca}
-                onChange={(e) => setPlacaBusca(formatPlaca(e.target.value))}
-                onKeyDown={(e) => e.key === 'Enter' && handleBuscarPlaca()}
-                className="max-w-[180px] uppercase font-mono"
-                maxLength={8}
-              />
-              <Button
-                onClick={handleBuscarPlaca}
-                disabled={buscandoPlaca || loadingFipe || placaBusca.length < 7}
-                size="sm"
-              >
-                {buscandoPlaca || loadingFipe ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <>
-                    <Search className="h-4 w-4 mr-1" />
-                    Buscar
-                  </>
-                )}
-              </Button>
-            </div>
-
-            {/* Separador */}
-            <div className="flex items-center gap-2">
-              <div className="h-px w-8 bg-border sm:h-8 sm:w-px" />
-              <span className="text-sm text-muted-foreground">ou</span>
-              <div className="h-px w-8 bg-border sm:h-8 sm:w-px" />
-            </div>
-
-            {/* Preencher manual */}
-            <Button
-              variant="outline"
-              onClick={handleModoManual}
-              className="whitespace-nowrap"
+          <p className="font-medium text-foreground mb-4">
+            Como deseja informar o veículo?
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Card Busca por Placa */}
+            <div
+              onClick={() => handleModoChange('busca_placa')}
+              className={cn(
+                "p-4 rounded-lg cursor-pointer transition-all",
+                modo === 'busca_placa'
+                  ? "border-2 border-primary bg-background shadow-sm"
+                  : "border border-border bg-background hover:border-muted-foreground/50"
+              )}
             >
-              <Edit className="h-4 w-4 mr-2" />
-              Preencher manualmente
-            </Button>
+              <Search className={cn(
+                "h-8 w-8 mb-2",
+                modo === 'busca_placa' ? "text-primary" : "text-muted-foreground"
+              )} />
+              <p className="font-semibold">Buscar por Placa</p>
+              <p className="text-sm text-muted-foreground">
+                Consulta automática FIPE + dados do veículo
+              </p>
+            </div>
+            
+            {/* Card Manual */}
+            <div
+              onClick={() => handleModoChange('manual')}
+              className={cn(
+                "p-4 rounded-lg cursor-pointer transition-all",
+                modo === 'manual'
+                  ? "border-2 border-primary bg-background shadow-sm"
+                  : "border border-border bg-background hover:border-muted-foreground/50"
+              )}
+            >
+              <Edit className={cn(
+                "h-8 w-8 mb-2",
+                modo === 'manual' ? "text-primary" : "text-muted-foreground"
+              )} />
+              <p className="font-semibold">Preencher Manual</p>
+              <p className="text-sm text-muted-foreground">
+                Selecione marca, modelo e ano manualmente
+              </p>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -530,21 +546,251 @@ _Cotação válida por 7 dias_
                 <Car className="h-5 w-5" />
                 Dados do Veículo
               </CardTitle>
-              {(veiculoEncontrado || (marca && modelo && ano)) && (
-                <Badge variant="default" className="bg-green-600">
-                  <Check className="h-3 w-3 mr-1" />
-                  Dados preenchidos
-                </Badge>
-              )}
+              <Badge variant={modo === 'busca_placa' ? 'default' : 'secondary'}>
+                {modo === 'busca_placa' ? (
+                  <>
+                    <Search className="h-3 w-3 mr-1" />
+                    Busca por Placa
+                  </>
+                ) : (
+                  <>
+                    <Edit className="h-3 w-3 mr-1" />
+                    Manual
+                  </>
+                )}
+              </Badge>
             </div>
             <CardDescription>
-              {veiculoEncontrado 
-                ? `Placa ${veiculoEncontrado.placa} identificada`
-                : 'Informe os dados para calcular a cotação'
+              {modo === 'busca_placa' 
+                ? 'Digite a placa para buscar automaticamente'
+                : 'Selecione marca, modelo e ano do veículo'
               }
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            
+            {/* CONTEÚDO CONDICIONAL POR MODO */}
+            {modo === 'busca_placa' ? (
+              <>
+                {/* Input de Placa + Botão Buscar */}
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Digite a placa: ABC-1234"
+                    value={placaBusca}
+                    onChange={(e) => {
+                      setPlacaBusca(formatPlaca(e.target.value));
+                      setErroBusca(null);
+                    }}
+                    onKeyDown={(e) => e.key === 'Enter' && handleBuscarPlaca()}
+                    className="flex-1 uppercase font-mono text-lg"
+                    maxLength={8}
+                  />
+                  <Button
+                    onClick={handleBuscarPlaca}
+                    disabled={buscandoPlaca || loadingFipe || placaBusca.length < 7}
+                  >
+                    {buscandoPlaca || loadingFipe ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <>
+                        <Search className="h-4 w-4 mr-1" />
+                        Buscar
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+                {/* Estado: Buscando */}
+                {buscandoPlaca && (
+                  <div className="rounded-lg border bg-muted/50 p-4 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                      <span className="text-sm text-muted-foreground">Consultando veículo...</span>
+                    </div>
+                    <Skeleton className="h-6 w-3/4" />
+                    <Skeleton className="h-4 w-1/2" />
+                    <Skeleton className="h-8 w-1/3" />
+                  </div>
+                )}
+
+                {/* Estado: Veículo Encontrado */}
+                {!buscandoPlaca && veiculoEncontrado && (
+                  <div className="rounded-lg border-2 border-green-200 bg-green-50 dark:bg-green-950/20 dark:border-green-900 p-4">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <p className="font-semibold text-lg text-foreground">
+                          {veiculoEncontrado.marca} {veiculoEncontrado.modelo} {veiculoEncontrado.ano}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {veiculoEncontrado.cor && `Cor: ${veiculoEncontrado.cor} • `}
+                          Placa: {veiculoEncontrado.placa}
+                        </p>
+                        <div className="mt-3">
+                          <p className="text-sm text-muted-foreground">Valor FIPE</p>
+                          <p className="text-2xl font-bold text-green-700 dark:text-green-400">
+                            {veiculoEncontrado.valorFipe ? formatCurrency(veiculoEncontrado.valorFipe) : formatCurrency(valorFipe || 0)}
+                          </p>
+                          {veiculoEncontrado.codigoFipe && (
+                            <p className="text-xs text-muted-foreground">
+                              Código: {veiculoEncontrado.codigoFipe}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <CheckCircle className="h-6 w-6 text-green-600 shrink-0" />
+                    </div>
+                  </div>
+                )}
+
+                {/* Estado: Erro */}
+                {!buscandoPlaca && erroBusca && (
+                  <div className="rounded-lg border-2 border-red-200 bg-red-50 dark:bg-red-950/20 dark:border-red-900 p-4">
+                    <div className="flex items-start gap-3">
+                      <XCircle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-medium text-red-700 dark:text-red-400">
+                          Veículo não encontrado
+                        </p>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {erroBusca}
+                        </p>
+                        <Button
+                          variant="link"
+                          onClick={() => handleModoChange('manual')}
+                          className="h-auto p-0 mt-2 text-primary"
+                        >
+                          <Edit className="h-3 w-3 mr-1" />
+                          Preencher manualmente
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Estado: Aguardando */}
+                {!buscandoPlaca && !veiculoEncontrado && !erroBusca && (
+                  <div className="rounded-lg border border-dashed bg-muted/30 p-4 text-center">
+                    <Search className="h-8 w-8 mx-auto text-muted-foreground/50 mb-2" />
+                    <p className="text-sm text-muted-foreground">
+                      Digite a placa e clique em Buscar para consultar o veículo
+                    </p>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                {/* MODO MANUAL: Selects */}
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Marca */}
+                  <div className="space-y-2">
+                    <Label>Marca *</Label>
+                    <Select value={marca} onValueChange={handleMarcaChange}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {MARCAS.map((m) => (
+                          <SelectItem key={m} value={m}>{m}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Modelo */}
+                  <div className="space-y-2">
+                    <Label>Modelo *</Label>
+                    <Select
+                      value={modelo}
+                      onValueChange={(v) => {
+                        setModelo(v);
+                        setValorFipe(null);
+                        setCotacaoCalculada(false);
+                      }}
+                      disabled={!marca}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {modelosDisponiveis.map((m) => (
+                          <SelectItem key={m} value={m}>{m}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Ano */}
+                  <div className="space-y-2">
+                    <Label>Ano *</Label>
+                    <Select
+                      value={ano}
+                      onValueChange={(v) => {
+                        setAno(v);
+                        // Calcular FIPE automaticamente ao preencher todos
+                        if (marca && modelo && v) {
+                          const fipe = calcularFipeMock(marca, modelo, parseInt(v));
+                          setValorFipe(fipe);
+                        }
+                        setCotacaoCalculada(false);
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ANOS.map((a) => (
+                          <SelectItem key={a} value={String(a)}>{a}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Cor */}
+                  <div className="space-y-2">
+                    <Label>Cor (opcional)</Label>
+                    <Input
+                      value={cor}
+                      onChange={(e) => setCor(e.target.value)}
+                      placeholder="Ex: Prata"
+                    />
+                  </div>
+                </div>
+
+                {/* Card FIPE (modo manual) */}
+                <div className={cn(
+                  "rounded-lg border-2 p-4",
+                  valorFipe 
+                    ? "border-green-200 bg-green-50 dark:bg-green-950/20 dark:border-green-900"
+                    : "border-muted bg-muted/30"
+                )}>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Valor FIPE</p>
+                      {valorFipe ? (
+                        <p className="text-2xl font-bold text-green-700 dark:text-green-400">
+                          {formatCurrency(valorFipe)}
+                        </p>
+                      ) : (
+                        <p className="text-muted-foreground">
+                          Selecione marca, modelo e ano
+                        </p>
+                      )}
+                    </div>
+                    {valorFipe && (
+                      <div className="flex items-center gap-1 text-green-600">
+                        <CheckCircle className="h-5 w-5" />
+                        <span className="text-sm font-medium">Consultado</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+
+            <div className="border-t pt-4" />
+
+            {/* CAMPOS COMUNS (ambos os modos) */}
+            
             {/* Vincular Lead */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
@@ -647,108 +893,6 @@ _Cotação válida por 7 dias_
               <p className="text-xs text-muted-foreground">
                 Vincule a um lead para manter histórico e facilitar conversão
               </p>
-            </div>
-
-            <div className="border-t pt-4" />
-
-            {/* Grid de campos */}
-            <div className="grid grid-cols-2 gap-4">
-              {/* Marca */}
-              <div className="space-y-2">
-                <Label>Marca *</Label>
-                <Select value={marca} onValueChange={handleMarcaChange}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {MARCAS.map((m) => (
-                      <SelectItem key={m} value={m}>{m}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Modelo */}
-              <div className="space-y-2">
-                <Label>Modelo *</Label>
-                <Select
-                  value={modelo}
-                  onValueChange={(v) => {
-                    setModelo(v);
-                    setValorFipe(null);
-                    setCotacaoCalculada(false);
-                  }}
-                  disabled={!marca}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {modelosDisponiveis.map((m) => (
-                      <SelectItem key={m} value={m}>{m}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Ano */}
-              <div className="space-y-2">
-                <Label>Ano *</Label>
-                <Select
-                  value={ano}
-                  onValueChange={(v) => {
-                    setAno(v);
-                    setValorFipe(null);
-                    setCotacaoCalculada(false);
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ANOS.map((a) => (
-                      <SelectItem key={a} value={String(a)}>{a}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Cor (se veio da busca) */}
-              {veiculoEncontrado?.cor && (
-                <div className="space-y-2">
-                  <Label>Cor</Label>
-                  <Input value={veiculoEncontrado.cor} readOnly className="bg-muted" />
-                </div>
-              )}
-            </div>
-
-            {/* Box Valor FIPE */}
-            <div className="rounded-lg border-2 border-green-200 bg-green-50 dark:bg-green-950/20 dark:border-green-900 p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Valor FIPE</p>
-                  {valorFipe ? (
-                    <p className="text-2xl font-bold text-green-700 dark:text-green-400">
-                      {formatCurrency(valorFipe)}
-                    </p>
-                  ) : (
-                    <p className="text-lg text-muted-foreground">
-                      Preencha marca, modelo e ano
-                    </p>
-                  )}
-                </div>
-                {valorFipe && (
-                  <div className="flex items-center gap-1 text-green-600">
-                    <CheckCircle className="h-5 w-5" />
-                    <span className="text-sm font-medium">Consultado</span>
-                  </div>
-                )}
-              </div>
-              {veiculoEncontrado?.codigoFipe && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  Código FIPE: {veiculoEncontrado.codigoFipe}
-                </p>
-              )}
             </div>
 
             {/* Uso para aplicativo */}
