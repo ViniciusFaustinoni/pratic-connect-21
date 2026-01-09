@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useCotacao, useCotacaoActions } from '@/hooks/useCotacoes';
 import { Button } from '@/components/ui/button';
@@ -31,6 +32,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BotaoGerarPdf } from '@/components/cotacoes/BotaoGerarPdf';
+import { EnviarEmailModal } from '@/components/cotacoes/EnviarEmailModal';
 import {
   STATUS_COTACAO_LABELS,
   STATUS_COTACAO_COLORS,
@@ -122,6 +124,7 @@ const COBERTURAS_POR_PLANO: Record<string, string[]> = {
 export default function CotacaoDetalhe() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [showEmailModal, setShowEmailModal] = useState(false);
 
   const { data: cotacao, isLoading, error } = useCotacao(id);
   const { reenviarCotacao, atualizarStatus, isReenviando, isAtualizando } = useCotacaoActions();
@@ -310,6 +313,10 @@ Ficou com alguma dúvida? Estou à disposição!
               <Button variant="outline" size="sm" onClick={handleWhatsApp}>
                 <MessageSquare className="mr-2 h-4 w-4" />
                 WhatsApp
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setShowEmailModal(true)}>
+                <Mail className="mr-2 h-4 w-4" />
+                Email
               </Button>
               {cotacao.status === 'aceita' && (
                 <Button
@@ -500,6 +507,15 @@ Ficou com alguma dúvida? Estou à disposição!
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* Modal de Email */}
+      {cotacao && (
+        <EnviarEmailModal
+          open={showEmailModal}
+          onOpenChange={setShowEmailModal}
+          cotacao={cotacao}
+        />
       )}
     </div>
   );
