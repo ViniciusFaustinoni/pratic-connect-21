@@ -166,7 +166,7 @@ export default function LeadDetalhe() {
         {/* Navegação via browser back ou header */}
 
       {/* HEADER HERO */}
-      <Card className="border-primary/20 bg-gradient-to-br from-primary/5 via-transparent to-transparent overflow-hidden">
+      <Card className="border-primary/30 bg-gradient-to-br from-primary/5 via-background to-background overflow-hidden shadow-lg">
         <CardContent className="pt-6 pb-6">
           <div className="flex flex-col md:flex-row md:items-start gap-6">
             {/* Avatar */}
@@ -279,8 +279,8 @@ export default function LeadDetalhe() {
         <div className="lg:col-span-2 space-y-6">
           {/* Veículo */}
           {hasVeiculo && (
-            <Card>
-              <CardHeader className="pb-4">
+            <Card className="shadow-sm">
+              <CardHeader className="pb-4 bg-muted/50 rounded-t-lg border-b">
                 <CardTitle className="flex items-center gap-2 text-lg">
                   <Car className="h-5 w-5 text-primary" />
                   Veículo
@@ -326,8 +326,8 @@ export default function LeadDetalhe() {
           )}
 
           {/* Cotações */}
-          <Card>
-            <CardHeader className="pb-4">
+          <Card className="shadow-sm">
+            <CardHeader className="pb-4 bg-muted/50 rounded-t-lg border-b">
               <div className="flex items-center justify-between">
                 <CardTitle className="flex items-center gap-2 text-lg">
                   <FileText className="h-5 w-5 text-primary" />
@@ -353,7 +353,7 @@ export default function LeadDetalhe() {
                   {cotacoes.map((cotacao) => (
                     <div
                       key={cotacao.id}
-                      className="group flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-muted/50 hover:border-primary/30 cursor-pointer transition-all"
+                      className="group flex items-center justify-between p-4 rounded-lg border-2 border-slate-200 dark:border-slate-700 bg-card hover:bg-primary/5 hover:border-primary/50 hover:shadow-md cursor-pointer transition-all"
                       onClick={() => navigate(`/vendas/cotacoes`)}
                     >
                       <div className="space-y-1">
@@ -395,8 +395,8 @@ export default function LeadDetalhe() {
           </Card>
 
           {/* Timeline/Histórico */}
-          <Card>
-            <CardHeader className="pb-4">
+          <Card className="shadow-sm bg-muted/30">
+            <CardHeader className="pb-4 bg-muted/50 rounded-t-lg border-b">
               <CardTitle className="text-lg">Histórico</CardTitle>
             </CardHeader>
             <CardContent>
@@ -421,13 +421,13 @@ export default function LeadDetalhe() {
         </div>
 
         {/* SIDEBAR (1/3) */}
-        <div className="space-y-6">
+        <div className="space-y-4 lg:bg-slate-50/50 lg:dark:bg-slate-900/30 lg:p-4 lg:rounded-xl lg:-m-2">
           {/* Progresso no Funil */}
           <LeadFunnelProgress etapaAtual={lead.etapa} />
 
           {/* Vendedor */}
-          <Card>
-            <CardHeader className="pb-3">
+          <Card className="shadow-sm">
+            <CardHeader className="pb-3 bg-muted/50 rounded-t-lg border-b">
               <CardTitle className="text-base flex items-center gap-2">
                 <User className="h-4 w-4 text-primary" />
                 Vendedor Responsável

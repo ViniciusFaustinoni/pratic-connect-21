@@ -21,10 +21,11 @@ export function LeadFunnelProgress({ etapaAtual }: LeadFunnelProgressProps) {
 
   return (
     <Card className={cn(
+      "shadow-sm",
       isPerdido && "border-destructive/50 bg-destructive/5",
       isGanho && "border-green-500/50 bg-green-50 dark:bg-green-950/20"
     )}>
-      <CardHeader className="pb-3">
+      <CardHeader className="pb-3 bg-primary/5 rounded-t-lg border-b">
         <CardTitle className="text-base flex items-center gap-2">
           <TrendingUp className={cn(
             "h-4 w-4",
@@ -36,16 +37,16 @@ export function LeadFunnelProgress({ etapaAtual }: LeadFunnelProgressProps) {
       <CardContent className="space-y-4">
         {/* Se PERDIDO - Mostrar indicador especial */}
         {isPerdido ? (
-          <div className="text-center py-2">
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-destructive/10 text-destructive mb-2">
-              <X className="h-6 w-6" />
+          <div className="text-center py-4">
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-destructive/20 text-destructive mb-3 shadow-inner">
+              <X className="h-7 w-7" />
             </div>
-            <p className="font-semibold text-destructive">Lead Perdido</p>
+            <p className="font-bold text-destructive text-lg">Lead Perdido</p>
           </div>
         ) : (
           <>
             {/* Indicadores visuais das etapas (barras de progresso) */}
-            <div className="flex items-center justify-between gap-1">
+            <div className="flex items-center justify-between gap-1.5">
               {etapasProgresso.map((etapa, index) => {
                 const isCompleted = index < currentIndex;
                 const isCurrent = index === currentIndex;
@@ -54,10 +55,10 @@ export function LeadFunnelProgress({ etapaAtual }: LeadFunnelProgressProps) {
                   <div
                     key={etapa}
                     className={cn(
-                      "h-2 flex-1 rounded-full transition-all",
-                      isCompleted && "bg-primary",
-                      isCurrent && "bg-primary ring-2 ring-primary/30",
-                      !isCompleted && !isCurrent && "bg-muted"
+                      "h-3 flex-1 rounded-full transition-all border",
+                      isCompleted && "bg-primary border-primary shadow-sm",
+                      isCurrent && "bg-primary border-primary ring-2 ring-primary/40 shadow-md",
+                      !isCompleted && !isCurrent && "bg-slate-200 dark:bg-slate-700 border-slate-300 dark:border-slate-600"
                     )}
                     title={ETAPA_LABELS[etapa]}
                   />
@@ -66,12 +67,12 @@ export function LeadFunnelProgress({ etapaAtual }: LeadFunnelProgressProps) {
             </div>
 
             {/* Texto da etapa atual */}
-            <div className="text-center space-y-1">
-              <p className="text-sm text-muted-foreground">
+            <div className="text-center space-y-1.5 pt-2">
+              <p className="text-sm text-muted-foreground font-medium">
                 Etapa {currentIndex + 1} de {etapasProgresso.length}
               </p>
               <p className={cn(
-                "font-semibold text-lg",
+                "font-bold text-xl",
                 isGanho ? "text-green-600" : "text-primary"
               )}>
                 {isGanho && <Check className="inline h-5 w-5 mr-1" />}

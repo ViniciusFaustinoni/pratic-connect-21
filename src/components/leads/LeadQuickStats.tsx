@@ -20,42 +20,42 @@ export function LeadQuickStats({ totalCotacoes, diasNoFunil, ultimaAtividade }: 
       icon: FileText,
       label: "Cotações",
       value: totalCotacoes.toString(),
-      color: "text-blue-500",
-      bgColor: "bg-blue-500/10",
+      color: "text-blue-600",
+      bgColor: "bg-blue-100 dark:bg-blue-900/40",
     },
     {
       icon: Clock,
       label: "Dias no funil",
       value: diasNoFunil.toString(),
-      color: "text-amber-500",
-      bgColor: "bg-amber-500/10",
+      color: "text-amber-600",
+      bgColor: "bg-amber-100 dark:bg-amber-900/40",
     },
     {
       icon: Activity,
       label: "Última atividade",
       value: ultimaAtividadeFormatada,
-      color: "text-green-500",
-      bgColor: "bg-green-500/10",
+      color: "text-green-600",
+      bgColor: "bg-green-100 dark:bg-green-900/40",
     },
   ];
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
+    <Card className="shadow-sm">
+      <CardHeader className="pb-3 bg-muted/50 rounded-t-lg border-b">
         <CardTitle className="text-base flex items-center gap-2">
           <BarChart3 className="h-4 w-4 text-primary" />
           Estatísticas
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="pt-4 divide-y divide-border">
         {stats.map((stat) => (
-          <div key={stat.label} className="flex items-center gap-3">
-            <div className={`p-2 rounded-lg ${stat.bgColor}`}>
+          <div key={stat.label} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
+            <div className={`p-2.5 rounded-lg ${stat.bgColor} shadow-sm`}>
               <stat.icon className={`h-4 w-4 ${stat.color}`} />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs text-muted-foreground">{stat.label}</p>
-              <p className="font-medium text-sm truncate">{stat.value}</p>
+              <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{stat.label}</p>
+              <p className="font-semibold text-sm truncate">{stat.value}</p>
             </div>
           </div>
         ))}
