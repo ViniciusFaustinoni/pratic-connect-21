@@ -437,14 +437,17 @@ export function LeadFormDialog({ open, onOpenChange }: LeadFormDialogProps) {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Vendedor</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value || ''}>
+                      <Select 
+                        onValueChange={(value) => field.onChange(value === '_none' ? null : value)} 
+                        value={field.value || '_none'}
+                      >
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Não atribuído" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="">Não atribuído</SelectItem>
+                          <SelectItem value="_none">Não atribuído</SelectItem>
                           {vendedores.map(v => (
                             <SelectItem key={v.id} value={v.id}>{v.nome}</SelectItem>
                           ))}
