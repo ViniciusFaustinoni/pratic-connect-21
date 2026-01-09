@@ -15,11 +15,10 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Plus, Inbox, Users, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Inbox, Users, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { LeadCard } from './LeadCard';
 import { LeadsEmptyState } from './LeadsEmptyState';
 import { ETAPA_LABELS, type EtapaLead } from '@/types/database';
@@ -100,7 +99,6 @@ interface DroppableColumnProps {
   leads: Lead[];
   onLeadClick: (lead: Lead) => void;
   onLeadDelete?: (id: string) => void;
-  onAddLead?: (etapa: EtapaLead) => void;
 }
 
 function DroppableColumn({
@@ -108,14 +106,13 @@ function DroppableColumn({
   leads,
   onLeadClick,
   onLeadDelete,
-  onAddLead,
 }: DroppableColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: etapa });
 
   return (
     <Card
       className={cn(
-        'flex flex-col w-[280px] min-w-[280px] max-w-[280px] h-full border-t-4',
+        'flex flex-col w-72 min-w-[288px] max-w-[288px] h-full border-t-4',
         'bg-card/50 backdrop-blur-sm',
         ETAPA_COLORS[etapa],
         isOver && 'ring-2 ring-primary ring-offset-2 ring-offset-background'
@@ -139,45 +136,32 @@ function DroppableColumn({
         </div>
       </div>
 
-      {/* Column Body with Cards */}
-      <ScrollArea className="flex-1 min-h-0" data-scroll-vertical="true">
-        <div ref={setNodeRef} className="p-2 space-y-2 min-h-[100px]">
-          <SortableContext
-            items={leads.map((l) => l.id)}
-            strategy={verticalListSortingStrategy}
-          >
-            {leads.map((lead) => (
-              <LeadCard
-                key={lead.id}
-                lead={lead}
-                onClick={() => onLeadClick(lead)}
-                onDelete={onLeadDelete}
-              />
-            ))}
-          </SortableContext>
-          {leads.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-6 text-center">
-              <Inbox className="h-6 w-6 text-muted-foreground/50 mb-2" />
-              <p className="text-xs text-muted-foreground">Nenhum lead</p>
-            </div>
-          )}
-        </div>
-      </ScrollArea>
-
-      {/* Column Footer */}
-      {onAddLead && (
-        <div className="p-2 border-t border-border shrink-0">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-full gap-2 text-muted-foreground hover:text-foreground text-xs h-8"
-            onClick={() => onAddLead(etapa)}
-          >
-            <Plus className="h-3 w-3" />
-            Adicionar
-          </Button>
-        </div>
-      )}
+      {/* Column Body - NATIVE SCROLL instead of ScrollArea */}
+      <div
+        ref={setNodeRef}
+        className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-2 space-y-2"
+        data-scroll-vertical="true"
+      >
+        <SortableContext
+          items={leads.map((l) => l.id)}
+          strategy={verticalListSortingStrategy}
+        >
+          {leads.map((lead) => (
+            <LeadCard
+              key={lead.id}
+              lead={lead}
+              onClick={() => onLeadClick(lead)}
+              onDelete={onLeadDelete}
+            />
+          ))}
+        </SortableContext>
+        {leads.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-6 text-center">
+            <Inbox className="h-6 w-6 text-muted-foreground/50 mb-2" />
+            <p className="text-xs text-muted-foreground">Nenhum lead</p>
+          </div>
+        )}
+      </div>
     </Card>
   );
 }
@@ -202,7 +186,7 @@ export function LeadsKanbanNew({
   const [activeId, setActiveId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(true);
+  const [canScrollRight, setCanScrollRight] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -215,34 +199,42 @@ export function LeadsKanbanNew({
 
   // Update scroll button visibility
   const updateScrollButtons = useCallback(() => {
-    if (!scrollRef.current) return;
-    const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
-    setCanScrollLeft(scrollLeft > 10);
-    setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 10);
+    const el = scrollRef.current;
+    if (!el) return;
+    
+    const { scrollLeft, scrollWidth, clientWidth } = el;
+    setCanScrollLeft(scrollLeft > 5);
+    setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 5);
   }, []);
 
+  // Setup resize observer and initial state
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
     
-    // Initial check with delay to ensure layout is complete
-    const timer = setTimeout(updateScrollButtons, 100);
+    // Initial check after layout
+    requestAnimationFrame(() => {
+      updateScrollButtons();
+    });
     
-    el.addEventListener('scroll', updateScrollButtons);
-    window.addEventListener('resize', updateScrollButtons);
+    // ResizeObserver for reliable size tracking
+    const resizeObserver = new ResizeObserver(() => {
+      requestAnimationFrame(updateScrollButtons);
+    });
+    resizeObserver.observe(el);
     
     return () => {
-      clearTimeout(timer);
-      el.removeEventListener('scroll', updateScrollButtons);
-      window.removeEventListener('resize', updateScrollButtons);
+      resizeObserver.disconnect();
     };
   }, [updateScrollButtons, leads]);
 
   // Scroll board programmatically
   const scrollBoard = useCallback((direction: 'left' | 'right') => {
-    if (!scrollRef.current) return;
-    const amount = 300; // column width
-    scrollRef.current.scrollBy({
+    const el = scrollRef.current;
+    if (!el) return;
+    
+    const amount = 300;
+    el.scrollBy({
       left: direction === 'left' ? -amount : amount,
       behavior: 'smooth',
     });
@@ -250,33 +242,37 @@ export function LeadsKanbanNew({
 
   // Smart wheel handler - convert vertical to horizontal when appropriate
   const handleWheel = useCallback((e: React.WheelEvent) => {
-    if (!scrollRef.current) return;
+    const container = scrollRef.current;
+    if (!container) return;
     
     // If Shift is pressed, let native horizontal scroll work
     if (e.shiftKey) return;
     
     // Check if pointer is over an element that can scroll vertically
     const target = e.target as HTMLElement;
-    const scrollableParent = target.closest('[data-scroll-vertical="true"]');
+    const scrollableParent = target.closest('[data-scroll-vertical="true"]') as HTMLElement | null;
     
     if (scrollableParent) {
-      const el = scrollableParent as HTMLElement;
-      const atTop = el.scrollTop <= 0;
-      const atBottom = el.scrollTop >= el.scrollHeight - el.clientHeight - 1;
+      const { scrollTop, scrollHeight, clientHeight } = scrollableParent;
+      const canScrollUp = scrollTop > 0;
+      const canScrollDown = scrollTop < scrollHeight - clientHeight - 1;
       
-      // If scrolling up and not at top, or scrolling down and not at bottom, let it scroll
-      if ((e.deltaY < 0 && !atTop) || (e.deltaY > 0 && !atBottom)) {
-        return; // Let vertical scroll happen naturally
+      // If element can scroll in wheel direction, let it scroll vertically
+      if ((e.deltaY < 0 && canScrollUp) || (e.deltaY > 0 && canScrollDown)) {
+        return;
       }
     }
+    
+    // Check if horizontal scroll is available
+    const { scrollWidth, clientWidth } = container;
+    if (scrollWidth <= clientWidth) return;
     
     // Convert vertical wheel to horizontal scroll
     if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
       e.preventDefault();
-      scrollRef.current.scrollLeft += e.deltaY;
-      updateScrollButtons();
+      container.scrollLeft += e.deltaY;
     }
-  }, [updateScrollButtons]);
+  }, []);
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
@@ -327,40 +323,49 @@ export function LeadsKanbanNew({
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      {/* Kanban Container - fills parent height */}
+      {/* Kanban Container */}
       <div className="relative h-full flex flex-col">
-        {/* Left scroll button */}
-        {canScrollLeft && (
-          <Button
-            variant="secondary"
-            size="icon"
-            className="absolute left-0 top-1/2 -translate-y-1/2 z-20 h-10 w-10 rounded-full shadow-lg bg-background/95 backdrop-blur-sm hover:bg-background border"
-            onClick={() => scrollBoard('left')}
-          >
-            <ChevronLeft className="h-5 w-5" />
-          </Button>
-        )}
+        {/* Left scroll button - always visible, disabled when can't scroll */}
+        <Button
+          variant="secondary"
+          size="icon"
+          className={cn(
+            'absolute left-0 top-1/2 -translate-y-1/2 z-20 h-10 w-10 rounded-full shadow-lg',
+            'bg-background/95 backdrop-blur-sm hover:bg-background border',
+            'transition-opacity duration-200',
+            !canScrollLeft && 'opacity-30 cursor-not-allowed pointer-events-none'
+          )}
+          onClick={() => scrollBoard('left')}
+          disabled={!canScrollLeft}
+        >
+          <ChevronLeft className="h-5 w-5" />
+        </Button>
 
-        {/* Right scroll button */}
-        {canScrollRight && (
-          <Button
-            variant="secondary"
-            size="icon"
-            className="absolute right-0 top-1/2 -translate-y-1/2 z-20 h-10 w-10 rounded-full shadow-lg bg-background/95 backdrop-blur-sm hover:bg-background border"
-            onClick={() => scrollBoard('right')}
-          >
-            <ChevronRight className="h-5 w-5" />
-          </Button>
-        )}
+        {/* Right scroll button - always visible, disabled when can't scroll */}
+        <Button
+          variant="secondary"
+          size="icon"
+          className={cn(
+            'absolute right-0 top-1/2 -translate-y-1/2 z-20 h-10 w-10 rounded-full shadow-lg',
+            'bg-background/95 backdrop-blur-sm hover:bg-background border',
+            'transition-opacity duration-200',
+            !canScrollRight && 'opacity-30 cursor-not-allowed pointer-events-none'
+          )}
+          onClick={() => scrollBoard('right')}
+          disabled={!canScrollRight}
+        >
+          <ChevronRight className="h-5 w-5" />
+        </Button>
 
-        {/* Scrollable board - THE key container */}
+        {/* Scrollable board container */}
         <div
           ref={scrollRef}
           onWheel={handleWheel}
           onScroll={updateScrollButtons}
-          className="flex-1 overflow-x-scroll overflow-y-hidden pb-4 kanban-scroll"
+          className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden kanban-scroll"
+          style={{ touchAction: 'pan-x' }}
         >
-          {/* Inner container with forced min-width */}
+          {/* Inner container - FORCES min-width to enable horizontal scroll */}
           <div className="inline-flex gap-3 h-full min-w-max py-1 px-1">
             {ETAPAS_KANBAN.map((etapa) => (
               <DroppableColumn
@@ -369,7 +374,6 @@ export function LeadsKanbanNew({
                 leads={leadsByEtapa[etapa] || []}
                 onLeadClick={onLeadClick}
                 onLeadDelete={onLeadDelete}
-                onAddLead={onAddLead}
               />
             ))}
           </div>
