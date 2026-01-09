@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { CotacaoStepper } from '@/components/cotacao/CotacaoStepper';
@@ -6,7 +6,8 @@ import { EtapaConsultaFipe } from '@/components/cotacao/EtapaConsultaFipe';
 import { EtapaCategoriaVeiculo } from '@/components/cotacao/EtapaCategoriaVeiculo';
 import { EtapaDadosVeiculo } from '@/components/cotacao/EtapaDadosVeiculo';
 import { EtapaResultado } from '@/components/cotacao/EtapaResultado';
-import { usePlanosCotacao } from '@/hooks/useCotacao';
+import { useCalcularCotacao } from '@/hooks/useCalcularCotacao';
+import { TipoUsoVeiculo, PlanoCalculado as PlanoCalculadoAPI, COBERTURAS_POR_PLANO } from '@/types/cotacaoPublica';
 
 // ============================================
 // INTERFACES
@@ -53,129 +54,33 @@ const calcularFipeMock = (marca: string, _modelo: string, ano: number): number =
   return Math.round(valor / 100) * 100;
 };
 
-const mapearPlanosParaExibicao = (
-  planosDB: any[],
-  valorFipe: number,
-  usoApp: boolean
-): PlanoCalculado[] => {
-  const multiplicadorApp = usoApp ? 1.3 : 1.0;
-  
-  const planosOrdenados = [...planosDB].sort((a, b) => 
-    (a.valor_adesao || 0) - (b.valor_adesao || 0)
-  );
+// Mapeia os planos da API para o formato da interface
+const mapearPlanosAPI = (planosAPI: PlanoCalculadoAPI[]): PlanoCalculado[] => {
+  const descricoes: Record<string, string> = {
+    'Básico': 'Proteção essencial para seu veículo',
+    'Completo': 'O mais vendido - melhor custo-benefício',
+    'Premium': 'Proteção máxima com todos os benefícios',
+  };
 
-  return planosOrdenados.map((plano, index) => {
-    const basePercentual = index === 0 ? 0.004 : index === 1 ? 0.0055 : 0.007;
-    const valorMensal = Math.round((valorFipe * basePercentual) * multiplicadorApp * 100) / 100;
-    const valorAdesao = Math.round((plano.valor_adesao || 350) * multiplicadorApp);
+  const naoIncluiMap: Record<string, string[]> = {
+    'Básico': ['Vidros laterais', 'Carro reserva', 'APP Invalidez'],
+    'Completo': ['APP Invalidez', 'Danos Morais'],
+    'Premium': [],
+  };
 
-    const isBasico = plano.codigo === 'BASICO';
-    const isCompleto = plano.codigo === 'TOTAL';
-    const isPremium = plano.codigo === 'PREMIUM';
-
-    const coberturas = plano.coberturas?.length > 0 ? plano.coberturas : [
-      'Colisão (100% FIPE)',
-      'Roubo e Furto (100% FIPE)',
-      'Incêndio Total',
-      'Perda Total',
-      ...(isCompleto || isPremium ? ['Vidros completos', 'App de Rastreamento 24h'] : []),
-      ...(isPremium ? ['Carro reserva (7 dias)', 'Proteção para terceiros'] : []),
-      isBasico ? 'Assistência 24h básica' : 'Assistência 24h completa',
-    ];
-
-    const naoInclui = isBasico 
-      ? ['Vidros', 'App de rastreamento', 'Carro reserva']
-      : isCompleto 
-        ? ['Carro reserva', 'Proteção para terceiros']
-        : [];
-
-    return {
-      id: plano.codigo?.toLowerCase() || `plano-${index}`,
-      idReal: plano.id,
-      codigo: plano.codigo || '',
-      nome: plano.nome || `Plano ${index + 1}`,
-      descricao: plano.descricao || 
-        (isBasico ? 'Proteção essencial para seu veículo' :
-         isCompleto ? 'O mais vendido - melhor custo-benefício' :
-         'Proteção máxima com todos os benefícios'),
-      coberturas,
-      naoInclui,
-      valorAdesao,
-      valorMensal,
-      destaque: isCompleto,
-    };
-  });
-};
-
-// Planos mock caso não tenha dados do banco
-const calcularPlanosMock = (valorFipe: number, usoApp: boolean): PlanoCalculado[] => {
-  const multiplicador = usoApp ? 1.3 : 1.0;
-  
-  return [
-    {
-      id: 'basico',
-      idReal: 'mock-basico',
-      codigo: 'BASICO',
-      nome: 'Select Basic',
-      descricao: 'Proteção essencial para seu veículo',
-      coberturas: [
-        'Colisão (100% FIPE)',
-        'Roubo e Furto (100% FIPE)',
-        'Incêndio Total',
-        'Perda Total',
-        'Assistência 24h (400km)',
-      ],
-      naoInclui: ['Vidros', 'App de rastreamento', 'Carro reserva'],
-      valorAdesao: Math.round(350 * multiplicador),
-      valorMensal: Math.round(valorFipe * 0.004 * multiplicador * 100) / 100,
-      destaque: false,
-    },
-    {
-      id: 'total',
-      idReal: 'mock-total',
-      codigo: 'TOTAL',
-      nome: 'Select Premium',
-      descricao: 'O mais vendido - melhor custo-benefício',
-      coberturas: [
-        'Colisão (100% FIPE)',
-        'Roubo e Furto (100% FIPE)',
-        'Incêndio Total',
-        'Perda Total',
-        'Vidros completos',
-        'App de Rastreamento 24h',
-        'Assistência 24h (1000km)',
-        'Danos a Terceiros R$40mil',
-      ],
-      naoInclui: ['Carro reserva'],
-      valorAdesao: Math.round(450 * multiplicador),
-      valorMensal: Math.round(valorFipe * 0.0055 * multiplicador * 100) / 100,
-      destaque: true,
-    },
-    {
-      id: 'premium',
-      idReal: 'mock-premium',
-      codigo: 'PREMIUM',
-      nome: 'Select Exclusive',
-      descricao: 'Proteção máxima com todos os benefícios',
-      coberturas: [
-        'Colisão (100% FIPE)',
-        'Roubo e Furto (100% FIPE)',
-        'Incêndio Total',
-        'Perda Total',
-        'Vidros completos',
-        'App de Rastreamento 24h',
-        'Assistência 24h Ilimitada',
-        'Danos a Terceiros R$60mil',
-        'Carro reserva (7 dias)',
-        'Kit Gás protegido',
-        '100% FIPE para APP',
-      ],
-      naoInclui: [],
-      valorAdesao: Math.round(550 * multiplicador),
-      valorMensal: Math.round(valorFipe * 0.007 * multiplicador * 100) / 100,
-      destaque: false,
-    },
-  ];
+  return planosAPI.map((plano) => ({
+    id: plano.categoria.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''),
+    idReal: plano.categoria,
+    codigo: plano.categoria.toUpperCase(),
+    nome: `Proteção ${plano.categoria}`,
+    descricao: descricoes[plano.categoria] || '',
+    coberturas: plano.coberturas,
+    naoInclui: naoIncluiMap[plano.categoria] || [],
+    valorAdesao: plano.valor_adesao,
+    valorMensal: plano.valor_mensal,
+    destaque: plano.destaque || false,
+    tag: plano.tag,
+  }));
 };
 
 // ============================================
@@ -209,20 +114,20 @@ export default function CotacaoPage() {
   // Etapa 4 - Resultado
   const [isCalculando, setIsCalculando] = useState(false);
   const [planoSelecionado, setPlanoSelecionado] = useState<PlanoCalculado | null>(null);
+  const [planos, setPlanos] = useState<PlanoCalculado[]>([]);
+  const [isLoadingPlanos, setIsLoadingPlanos] = useState(false);
 
-  // Dados do banco
-  const { data: planosDB } = usePlanosCotacao();
+  // Hook de cálculo de cotação
+  const { calcular, isLoading: isLoadingCalculo, resultado } = useCalcularCotacao();
 
-  // Calcular planos disponíveis
-  const planos = useMemo(() => {
-    if (!valorFipe) return [];
-    
-    if (planosDB && planosDB.length > 0) {
-      return mapearPlanosParaExibicao(planosDB, valorFipe, usoApp);
+  // Atualiza planos quando o resultado muda
+  useEffect(() => {
+    if (resultado && resultado.planos.length > 0) {
+      const planosMapeados = mapearPlanosAPI(resultado.planos);
+      setPlanos(planosMapeados);
+      setIsLoadingPlanos(false);
     }
-    
-    return calcularPlanosMock(valorFipe, usoApp);
-  }, [valorFipe, usoApp, planosDB]);
+  }, [resultado]);
 
   // ============================================
   // HANDLERS DE NAVEGAÇÃO
@@ -271,21 +176,31 @@ export default function CotacaoPage() {
   // Etapa 3 -> 4 (Calcular)
   const handleCalcular = useCallback(async () => {
     setIsCalculando(true);
-    
-    // Simular delay de cálculo
-    await new Promise(resolve => setTimeout(resolve, 600));
+    setIsLoadingPlanos(true);
     
     // Se não tem valor FIPE, calcular mock
-    if (!valorFipe && marca && modelo && ano) {
-      const fipeMock = calcularFipeMock(marca, modelo, parseInt(ano));
-      setValorFipe(fipeMock);
+    let fipeParaCalculo = valorFipe;
+    if (!fipeParaCalculo && marca && modelo && ano) {
+      fipeParaCalculo = calcularFipeMock(marca, modelo, parseInt(ano));
+      setValorFipe(fipeParaCalculo);
+    }
+    
+    if (fipeParaCalculo) {
+      try {
+        const tipoUso: TipoUsoVeiculo = usoApp ? 'aplicativo' : 'particular';
+        await calcular({ valor_fipe: fipeParaCalculo, tipo_uso: tipoUso });
+        toast.success('Cotação calculada com sucesso!');
+      } catch (error) {
+        console.error('Erro ao calcular cotação:', error);
+        toast.error('Erro ao calcular cotação. Tente novamente.');
+        setIsLoadingPlanos(false);
+      }
     }
     
     setIsCalculando(false);
     marcarEtapaCompleta(3);
     setEtapaAtual(4);
-    toast.success('Cotação calculada com sucesso!');
-  }, [marca, modelo, ano, valorFipe, marcarEtapaCompleta]);
+  }, [marca, modelo, ano, valorFipe, usoApp, marcarEtapaCompleta, calcular]);
 
   // Etapa 3 <- Voltar
   const handleEtapa3Back = useCallback(() => {
@@ -312,6 +227,7 @@ export default function CotacaoPage() {
     setCombustivel('');
     setRegiao('');
     setPlanoSelecionado(null);
+    setPlanos([]);
   }, []);
 
   // Gerar PDF
@@ -421,6 +337,7 @@ export default function CotacaoPage() {
             onNovaCotacao={handleNovaCotacao}
             onGerarPDF={handleGerarPDF}
             onIniciarCadastro={handleIniciarCadastro}
+            isLoading={isLoadingPlanos || isLoadingCalculo}
           />
         )}
       </div>
