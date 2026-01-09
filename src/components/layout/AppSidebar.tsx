@@ -609,8 +609,19 @@ export function AppSidebar() {
       </SidebarContent>
 
       {!collapsed && (
-        <SidebarFooter className="p-3">
-          <UserCard />
+        <SidebarFooter className="p-3 border-t border-border">
+          <NavLink 
+            to="/configuracoes" 
+            onClick={handleNavigation}
+            className={cn(
+              "flex items-center gap-3 rounded-lg p-3 transition-colors",
+              "text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/50",
+              isActive('/configuracoes') && "bg-sidebar-primary text-sidebar-primary-foreground"
+            )}
+          >
+            <Settings className="h-5 w-5" />
+            <span className="text-sm font-medium">Configurações</span>
+          </NavLink>
         </SidebarFooter>
       )}
     </Sidebar>
