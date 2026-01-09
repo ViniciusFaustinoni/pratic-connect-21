@@ -131,6 +131,7 @@ import Indicacoes from "./pages/marketing/Indicacoes";
 import UTMs from "./pages/marketing/UTMs";
 import RelatoriosMarketing from "./pages/marketing/RelatoriosMarketing";
 import DistribuicaoConfig from "./pages/vendas/DistribuicaoConfig";
+import PlanosBeneficios from "./pages/vendas/PlanosBeneficios";
 
 // Diretoria
 import DiretoriaDashboard from "./pages/diretoria/DiretoriaDashboard";
@@ -235,6 +236,7 @@ const App = () => (
               <Route path="/vendas/cotacoes/:id" element={<CotacaoDetalhe />} />
               <Route path="/vendas/contratos" element={<Contratos />} />
               <Route path="/vendas/contratos/:id" element={<ContratoDetalhe />} />
+              <Route path="/vendas/planos-beneficios" element={<PlanosBeneficios />} />
               
               {/* Cadastro */}
               <Route path="/cadastro/associados" element={<Associados />} />
