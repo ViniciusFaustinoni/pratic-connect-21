@@ -3347,6 +3347,317 @@ export type Database = {
           },
         ]
       }
+      cotacoes_publicas: {
+        Row: {
+          adicionais_selecionados: Json | null
+          asaas_boleto_url: string | null
+          asaas_charge_id: string | null
+          asaas_customer_id: string | null
+          asaas_pix_copiacola: string | null
+          asaas_pix_qrcode: string | null
+          codigo_fipe: string | null
+          concluido_em: string | null
+          created_at: string | null
+          dados_cnh: Json | null
+          dados_comprovante: Json | null
+          dados_crlv: Json | null
+          doc_cnh_frente: string | null
+          doc_cnh_verso: string | null
+          doc_comprovante: string | null
+          doc_crlv: string | null
+          doc_selfie: string | null
+          documentos_ok_em: string | null
+          expires_at: string | null
+          face_aprovada: boolean | null
+          face_match_score: number | null
+          face_verificada_em: string | null
+          id: string
+          ip_address: string | null
+          lead_id: string | null
+          pagamento_confirmado_em: string | null
+          pagamento_metodo: string | null
+          pagamento_status: string | null
+          pendencias: Json | null
+          pendencias_observacoes: string | null
+          plano_escolhido: string | null
+          plano_escolhido_em: string | null
+          proposta_aceita_em: string | null
+          rastreador_agendado_para: string | null
+          rastreador_id: string | null
+          rastreador_instalado_em: string | null
+          selfie_ok_em: string | null
+          status: string | null
+          termos_aceitos: boolean | null
+          termos_aceitos_em: string | null
+          tipo_vistoria: string | null
+          token: string
+          updated_at: string | null
+          user_agent: string | null
+          uso_aplicativo: boolean | null
+          uso_definido_em: string | null
+          valor_adesao_final: number | null
+          valor_fipe: number | null
+          valor_mensal_final: number | null
+          valor_primeira_parcela: number | null
+          veiculo_ano: number | null
+          veiculo_combustivel: string | null
+          veiculo_cor: string | null
+          veiculo_marca: string | null
+          veiculo_modelo: string | null
+          veiculo_placa: string | null
+          vendedor_id: string | null
+          vistoria_agendada_para: string | null
+          vistoria_concluida_em: string | null
+          vistoria_endereco: string | null
+          vistoria_observacoes: string | null
+          vistoria_ok_em: string | null
+          visualizado_em: string | null
+        }
+        Insert: {
+          adicionais_selecionados?: Json | null
+          asaas_boleto_url?: string | null
+          asaas_charge_id?: string | null
+          asaas_customer_id?: string | null
+          asaas_pix_copiacola?: string | null
+          asaas_pix_qrcode?: string | null
+          codigo_fipe?: string | null
+          concluido_em?: string | null
+          created_at?: string | null
+          dados_cnh?: Json | null
+          dados_comprovante?: Json | null
+          dados_crlv?: Json | null
+          doc_cnh_frente?: string | null
+          doc_cnh_verso?: string | null
+          doc_comprovante?: string | null
+          doc_crlv?: string | null
+          doc_selfie?: string | null
+          documentos_ok_em?: string | null
+          expires_at?: string | null
+          face_aprovada?: boolean | null
+          face_match_score?: number | null
+          face_verificada_em?: string | null
+          id?: string
+          ip_address?: string | null
+          lead_id?: string | null
+          pagamento_confirmado_em?: string | null
+          pagamento_metodo?: string | null
+          pagamento_status?: string | null
+          pendencias?: Json | null
+          pendencias_observacoes?: string | null
+          plano_escolhido?: string | null
+          plano_escolhido_em?: string | null
+          proposta_aceita_em?: string | null
+          rastreador_agendado_para?: string | null
+          rastreador_id?: string | null
+          rastreador_instalado_em?: string | null
+          selfie_ok_em?: string | null
+          status?: string | null
+          termos_aceitos?: boolean | null
+          termos_aceitos_em?: string | null
+          tipo_vistoria?: string | null
+          token?: string
+          updated_at?: string | null
+          user_agent?: string | null
+          uso_aplicativo?: boolean | null
+          uso_definido_em?: string | null
+          valor_adesao_final?: number | null
+          valor_fipe?: number | null
+          valor_mensal_final?: number | null
+          valor_primeira_parcela?: number | null
+          veiculo_ano?: number | null
+          veiculo_combustivel?: string | null
+          veiculo_cor?: string | null
+          veiculo_marca?: string | null
+          veiculo_modelo?: string | null
+          veiculo_placa?: string | null
+          vendedor_id?: string | null
+          vistoria_agendada_para?: string | null
+          vistoria_concluida_em?: string | null
+          vistoria_endereco?: string | null
+          vistoria_observacoes?: string | null
+          vistoria_ok_em?: string | null
+          visualizado_em?: string | null
+        }
+        Update: {
+          adicionais_selecionados?: Json | null
+          asaas_boleto_url?: string | null
+          asaas_charge_id?: string | null
+          asaas_customer_id?: string | null
+          asaas_pix_copiacola?: string | null
+          asaas_pix_qrcode?: string | null
+          codigo_fipe?: string | null
+          concluido_em?: string | null
+          created_at?: string | null
+          dados_cnh?: Json | null
+          dados_comprovante?: Json | null
+          dados_crlv?: Json | null
+          doc_cnh_frente?: string | null
+          doc_cnh_verso?: string | null
+          doc_comprovante?: string | null
+          doc_crlv?: string | null
+          doc_selfie?: string | null
+          documentos_ok_em?: string | null
+          expires_at?: string | null
+          face_aprovada?: boolean | null
+          face_match_score?: number | null
+          face_verificada_em?: string | null
+          id?: string
+          ip_address?: string | null
+          lead_id?: string | null
+          pagamento_confirmado_em?: string | null
+          pagamento_metodo?: string | null
+          pagamento_status?: string | null
+          pendencias?: Json | null
+          pendencias_observacoes?: string | null
+          plano_escolhido?: string | null
+          plano_escolhido_em?: string | null
+          proposta_aceita_em?: string | null
+          rastreador_agendado_para?: string | null
+          rastreador_id?: string | null
+          rastreador_instalado_em?: string | null
+          selfie_ok_em?: string | null
+          status?: string | null
+          termos_aceitos?: boolean | null
+          termos_aceitos_em?: string | null
+          tipo_vistoria?: string | null
+          token?: string
+          updated_at?: string | null
+          user_agent?: string | null
+          uso_aplicativo?: boolean | null
+          uso_definido_em?: string | null
+          valor_adesao_final?: number | null
+          valor_fipe?: number | null
+          valor_mensal_final?: number | null
+          valor_primeira_parcela?: number | null
+          veiculo_ano?: number | null
+          veiculo_combustivel?: string | null
+          veiculo_cor?: string | null
+          veiculo_marca?: string | null
+          veiculo_modelo?: string | null
+          veiculo_placa?: string | null
+          vendedor_id?: string | null
+          vistoria_agendada_para?: string | null
+          vistoria_concluida_em?: string | null
+          vistoria_endereco?: string | null
+          vistoria_observacoes?: string | null
+          vistoria_ok_em?: string | null
+          visualizado_em?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cotacoes_publicas_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cotacoes_publicas_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["lead_id"]
+          },
+          {
+            foreignKeyName: "cotacoes_publicas_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cotacoes_publicas_fotos: {
+        Row: {
+          aprovada: boolean | null
+          cotacao_id: string
+          created_at: string | null
+          descricao: string | null
+          id: string
+          latitude: number | null
+          longitude: number | null
+          motivo_rejeicao: string | null
+          tipo: string
+          url: string
+        }
+        Insert: {
+          aprovada?: boolean | null
+          cotacao_id: string
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          motivo_rejeicao?: string | null
+          tipo: string
+          url: string
+        }
+        Update: {
+          aprovada?: boolean | null
+          cotacao_id?: string
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          motivo_rejeicao?: string | null
+          tipo?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cotacoes_publicas_fotos_cotacao_id_fkey"
+            columns: ["cotacao_id"]
+            isOneToOne: false
+            referencedRelation: "cotacoes_publicas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cotacoes_publicas_historico: {
+        Row: {
+          acao: string
+          cotacao_id: string
+          created_at: string | null
+          detalhes: Json | null
+          id: string
+          ip_address: string | null
+          status_anterior: string | null
+          status_novo: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          acao: string
+          cotacao_id: string
+          created_at?: string | null
+          detalhes?: Json | null
+          id?: string
+          ip_address?: string | null
+          status_anterior?: string | null
+          status_novo?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          acao?: string
+          cotacao_id?: string
+          created_at?: string | null
+          detalhes?: Json | null
+          id?: string
+          ip_address?: string | null
+          status_anterior?: string | null
+          status_novo?: string | null
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cotacoes_publicas_historico_cotacao_id_fkey"
+            columns: ["cotacao_id"]
+            isOneToOne: false
+            referencedRelation: "cotacoes_publicas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       departamentos: {
         Row: {
           ativo: boolean | null
@@ -9237,6 +9548,39 @@ export type Database = {
           },
         ]
       }
+      tabelas_preco_adesao: {
+        Row: {
+          categoria: string
+          created_at: string | null
+          fipe_max: number
+          fipe_min: number
+          id: string
+          is_active: boolean | null
+          tipo_uso: string
+          valor_adesao: number
+        }
+        Insert: {
+          categoria: string
+          created_at?: string | null
+          fipe_max: number
+          fipe_min: number
+          id?: string
+          is_active?: boolean | null
+          tipo_uso: string
+          valor_adesao: number
+        }
+        Update: {
+          categoria?: string
+          created_at?: string | null
+          fipe_max?: number
+          fipe_min?: number
+          id?: string
+          is_active?: boolean | null
+          tipo_uso?: string
+          valor_adesao?: number
+        }
+        Relationships: []
+      }
       tabelas_preco_historico: {
         Row: {
           created_at: string | null
@@ -9280,6 +9624,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      tabelas_preco_mensalidade: {
+        Row: {
+          categoria: string
+          created_at: string | null
+          fipe_max: number
+          fipe_min: number
+          id: string
+          is_active: boolean | null
+          regiao: string | null
+          tipo_uso: string
+          valor_mensal: number
+        }
+        Insert: {
+          categoria: string
+          created_at?: string | null
+          fipe_max: number
+          fipe_min: number
+          id?: string
+          is_active?: boolean | null
+          regiao?: string | null
+          tipo_uso: string
+          valor_mensal: number
+        }
+        Update: {
+          categoria?: string
+          created_at?: string | null
+          fipe_max?: number
+          fipe_min?: number
+          id?: string
+          is_active?: boolean | null
+          regiao?: string | null
+          tipo_uso?: string
+          valor_mensal?: number
+        }
+        Relationships: []
       }
       treinamentos: {
         Row: {
