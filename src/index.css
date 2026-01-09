@@ -216,18 +216,20 @@
 
   .kanban-scroll::-webkit-scrollbar {
     height: 14px;
+    display: block !important;
   }
 
   .kanban-scroll::-webkit-scrollbar-track {
     background: hsl(var(--muted));
     border-radius: 7px;
-    margin: 0 48px;
+    margin: 0 16px;
   }
 
   .kanban-scroll::-webkit-scrollbar-thumb {
     background-color: hsl(var(--muted-foreground) / 0.5);
     border-radius: 7px;
     border: 3px solid hsl(var(--muted));
+    min-width: 40px;
   }
 
   .kanban-scroll::-webkit-scrollbar-thumb:hover {

@@ -1,12 +1,13 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Phone, Car, FileCheck, Calendar, User, Clock, MessageCircle, AlertCircle } from "lucide-react";
+import { Phone, Car, FileCheck, Calendar, User, Clock, MessageCircle, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAcompanhamento } from "@/hooks/useAcompanhamento";
-
+import { useRef, useCallback, useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
 interface TransformedItem {
   id: string;
   nome: string;
@@ -177,6 +178,60 @@ const KanbanColumnSkeleton = () => (
 
 export default function Acompanhamento() {
   const { data: items, isLoading, error } = useAcompanhamento();
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  // Check scroll state
+  const updateScrollState = useCallback(() => {
+    if (!scrollRef.current) return;
+    const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
+    setCanScrollLeft(scrollLeft > 10);
+    setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 10);
+  }, []);
+
+  useEffect(() => {
+    updateScrollState();
+    window.addEventListener('resize', updateScrollState);
+    return () => window.removeEventListener('resize', updateScrollState);
+  }, [updateScrollState, isLoading]);
+
+  // Scroll by buttons
+  const scrollBoard = useCallback((direction: 'left' | 'right') => {
+    if (!scrollRef.current) return;
+    const amount = 320;
+    scrollRef.current.scrollBy({
+      left: direction === 'left' ? -amount : amount,
+      behavior: 'smooth'
+    });
+  }, []);
+
+  // Smart wheel handler: convert vertical scroll to horizontal,
+  // but only if not over a vertically scrollable element (ScrollArea columns)
+  const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+    if (!scrollRef.current) return;
+
+    const target = e.target as HTMLElement | null;
+    if (!target) return;
+
+    // Check if pointer is over a vertically scrollable element
+    let el: HTMLElement | null = target;
+    while (el && el !== scrollRef.current) {
+      const style = window.getComputedStyle(el);
+      const overflowY = style.overflowY;
+      const canScrollY =
+        (overflowY === 'auto' || overflowY === 'scroll') &&
+        el.scrollHeight > el.clientHeight;
+      if (canScrollY) return; // Let vertical scroll happen naturally
+      el = el.parentElement;
+    }
+
+    // Convert vertical scroll to horizontal (if not holding shift)
+    if (Math.abs(e.deltaY) > Math.abs(e.deltaX) && !e.shiftKey) {
+      e.preventDefault();
+      scrollRef.current.scrollLeft += e.deltaY;
+    }
+  }, []);
 
   // Transformar dados da VIEW para o formato do card
   const transformedItems: TransformedItem[] = items?.map(item => ({
@@ -216,19 +271,50 @@ export default function Acompanhamento() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 h-full flex flex-col min-h-0">
       {/* Header */}
-      <div>
+      <div className="flex-shrink-0">
         <h1 className="text-2xl font-bold">Acompanhamento</h1>
         <p className="text-muted-foreground">
           Acompanhe o progresso dos leads após fecharem contrato
         </p>
       </div>
 
-      {/* Kanban */}
-      <div className="overflow-hidden rounded-lg -mx-6 px-6">
-        <div className="overflow-x-auto kanban-scroll pb-4">
-          <div className="inline-flex gap-4 min-w-max">
+      {/* Kanban with scroll controls */}
+      <div className="relative flex-1 min-h-0 -mx-6">
+        {/* Left scroll button */}
+        {canScrollLeft && (
+          <Button
+            variant="secondary"
+            size="icon"
+            className="absolute left-2 top-1/2 -translate-y-1/2 z-10 h-10 w-10 rounded-full shadow-lg opacity-90 hover:opacity-100"
+            onClick={() => scrollBoard('left')}
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </Button>
+        )}
+
+        {/* Right scroll button */}
+        {canScrollRight && (
+          <Button
+            variant="secondary"
+            size="icon"
+            className="absolute right-2 top-1/2 -translate-y-1/2 z-10 h-10 w-10 rounded-full shadow-lg opacity-90 hover:opacity-100"
+            onClick={() => scrollBoard('right')}
+          >
+            <ChevronRight className="h-5 w-5" />
+          </Button>
+        )}
+
+        {/* Horizontal scroll container */}
+        <div
+          ref={scrollRef}
+          onWheel={handleWheel}
+          onScroll={updateScrollState}
+          className="h-full overflow-x-scroll overflow-y-hidden pb-6 px-6 kanban-scroll overscroll-x-contain touch-pan-x"
+          style={{ scrollbarGutter: 'stable' }}
+        >
+          <div className="inline-flex gap-4 min-w-max h-full">
             {isLoading ? (
               fases.map((fase) => (
                 <KanbanColumnSkeleton key={fase.id} />
@@ -244,8 +330,9 @@ export default function Acompanhamento() {
             )}
           </div>
         </div>
-        {/* Indicador de scroll mobile */}
-        <p className="text-xs text-muted-foreground text-center mt-2 md:hidden">
+
+        {/* Mobile indicator */}
+        <p className="text-xs text-muted-foreground text-center mt-2 md:hidden px-6">
           ← Arraste para ver mais colunas →
         </p>
       </div>
