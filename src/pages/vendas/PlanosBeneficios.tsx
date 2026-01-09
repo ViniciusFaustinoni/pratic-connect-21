@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { 
   Shield, Car, Zap, Bike, Calendar, Star, Check, 
   AlertTriangle, Umbrella, Flame, CloudRain, Users,
-  Wrench, Phone, MapPin, Key, Fuel, Clock, Plus
+  Wrench, Phone, MapPin, Key, Fuel, Clock, Plus, ChevronUp
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -424,6 +424,11 @@ const formatCurrency = (value: number) => {
 
 // Componente Card de Plano
 function PlanoCard({ plano }: { plano: Plano }) {
+  const [expanded, setExpanded] = useState(false);
+  
+  const coberturasVisiveis = expanded ? plano.coberturas : plano.coberturas.slice(0, 6);
+  const temMaisCoberturas = plano.coberturas.length > 6;
+
   return (
     <Card className={cn(
       'relative overflow-hidden transition-all hover:shadow-lg',
@@ -480,17 +485,30 @@ function PlanoCard({ plano }: { plano: Plano }) {
         <div className="space-y-1.5">
           <p className="text-sm font-medium text-muted-foreground">Coberturas inclusas:</p>
           <div className="grid gap-1">
-            {plano.coberturas.slice(0, 6).map((cobertura) => (
+            {coberturasVisiveis.map((cobertura) => (
               <div key={cobertura} className="flex items-center gap-2 text-sm">
                 <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
                 <span>{cobertura}</span>
               </div>
             ))}
-            {plano.coberturas.length > 6 && (
-              <div className="flex items-center gap-2 text-sm text-primary">
-                <Plus className="h-4 w-4 flex-shrink-0" />
-                <span>+{plano.coberturas.length - 6} coberturas</span>
-              </div>
+            {temMaisCoberturas && (
+              <button
+                type="button"
+                onClick={() => setExpanded(!expanded)}
+                className="flex items-center gap-2 text-sm text-primary hover:underline cursor-pointer mt-1 transition-colors"
+              >
+                {expanded ? (
+                  <>
+                    <ChevronUp className="h-4 w-4 flex-shrink-0" />
+                    <span>Ver menos</span>
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4 flex-shrink-0" />
+                    <span>+{plano.coberturas.length - 6} coberturas</span>
+                  </>
+                )}
+              </button>
             )}
           </div>
         </div>
