@@ -162,10 +162,10 @@ function WelcomeBanner({ nome }: { nome: string }) {
       </div>
       
       <div className="relative z-10">
-        <h1 className="text-2xl font-bold text-foreground">
+        <h1 className="text-2xl font-bold text-white">
           {getSaudacao()}, {nome}! 👋
         </h1>
-        <p className="text-muted-foreground mt-1">
+        <p className="text-white/80 mt-1">
           Aqui está o resumo das atividades de hoje.
         </p>
       </div>
