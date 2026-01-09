@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, 
@@ -12,12 +12,15 @@ import {
   CheckCircle2,
   Loader2,
   AlertCircle,
-  Phone
+  Phone,
+  Gauge
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { useInstalacaoDetalhes, useConcluirInstalacao } from '@/hooks/useInstaladorInstalacoes';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useInstalacaoDetalhes, useConcluirInstalacao, useSalvarChecklistInstalacao } from '@/hooks/useInstaladorInstalacoes';
 import { useInstalacaoFotos, useUploadInstalacaoFoto, FOTOS_INSTALACAO } from '@/hooks/useInstalacaoFotos';
 import { useSaveAssinatura } from '@/hooks/useAssinatura';
 import { ChecklistItem, type ChecklistStatus } from '@/components/instalador/ChecklistItem';
@@ -53,6 +56,7 @@ export default function InstaladorChecklist() {
   const [checklist, setChecklist] = useState<ChecklistState>(() => 
     CHECKLIST_ITEMS.reduce((acc, item) => ({ ...acc, [item.id]: { status: 'pendente' as ChecklistStatus } }), {})
   );
+  const [quilometragem, setQuilometragem] = useState<string>('');
   const [uploadingFoto, setUploadingFoto] = useState<string | null>(null);
   const [assinaturaUrl, setAssinaturaUrl] = useState<string | null>(null);
 
@@ -61,8 +65,25 @@ export default function InstaladorChecklist() {
   const uploadFotoMutation = useUploadInstalacaoFoto();
   const saveAssinaturaMutation = useSaveAssinatura();
   const concluirMutation = useConcluirInstalacao();
+  const salvarChecklistMutation = useSalvarChecklistInstalacao();
 
   const progresso = (etapaAtual / ETAPAS.length) * 100;
+
+  // Carregar checklist e quilometragem salvos
+  useEffect(() => {
+    if (instalacao) {
+      // Restaurar checklist do banco se existir
+      const savedChecklist = (instalacao as any).checklist_data;
+      if (savedChecklist && typeof savedChecklist === 'object' && Object.keys(savedChecklist).length > 0) {
+        setChecklist(savedChecklist);
+      }
+      // Restaurar quilometragem
+      const savedKm = (instalacao as any).quilometragem;
+      if (savedKm) {
+        setQuilometragem(String(savedKm));
+      }
+    }
+  }, [instalacao]);
 
   const checklistCompleto = useMemo(() => 
     CHECKLIST_ITEMS.every(item => checklist[item.id]?.status === 'ok'),
@@ -133,8 +154,21 @@ export default function InstaladorChecklist() {
     }
   };
 
-  const avancar = () => {
+  const avancar = async () => {
     if (etapaAtual < ETAPAS.length && podeAvancar()) {
+      // Salvar checklist e quilometragem ao sair da etapa 2
+      if (etapaAtual === 2 && id) {
+        try {
+          await salvarChecklistMutation.mutateAsync({
+            id,
+            checklist_data: checklist,
+            quilometragem: quilometragem ? parseInt(quilometragem) : undefined,
+          });
+        } catch (err) {
+          toast.error('Erro ao salvar checklist');
+          return;
+        }
+      }
       setEtapaAtual(etapaAtual + 1);
     }
   };
@@ -268,10 +302,36 @@ export default function InstaladorChecklist() {
 
         {/* Etapa 2: Checklist */}
         {etapaAtual === 2 && (
-          <div className="space-y-3">
+          <div className="space-y-4">
             <p className="text-sm text-slate-400">
               Verifique todos os itens antes de iniciar a instalação:
             </p>
+            
+            {/* Campo de Quilometragem */}
+            <Card className="border-slate-700 bg-slate-800">
+              <CardContent className="pt-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-blue-500/20">
+                    <Gauge className="h-5 w-5 text-blue-400" />
+                  </div>
+                  <div className="flex-1">
+                    <Label htmlFor="quilometragem" className="text-white text-sm">
+                      Quilometragem do Veículo
+                    </Label>
+                    <Input
+                      id="quilometragem"
+                      type="number"
+                      placeholder="Ex: 45000"
+                      value={quilometragem}
+                      onChange={(e) => setQuilometragem(e.target.value)}
+                      className="mt-1 bg-slate-700 border-slate-600 text-white"
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Itens do Checklist */}
             {CHECKLIST_ITEMS.map((item) => (
               <ChecklistItem
                 key={item.id}
@@ -379,6 +439,12 @@ export default function InstaladorChecklist() {
                 <span className="text-slate-400">Veículo</span>
                 <span className="text-white">{instalacao.veiculos?.placa}</span>
               </div>
+              {quilometragem && (
+                <div className="flex justify-between rounded-lg bg-slate-800 p-3">
+                  <span className="text-slate-400">Quilometragem</span>
+                  <span className="text-white">{parseInt(quilometragem).toLocaleString('pt-BR')} km</span>
+                </div>
+              )}
               <div className="flex justify-between rounded-lg bg-slate-800 p-3">
                 <span className="text-slate-400">Fotos capturadas</span>
                 <span className="text-white">{fotos.length}</span>

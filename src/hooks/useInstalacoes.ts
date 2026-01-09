@@ -501,12 +501,15 @@ export function useInstalacaoActions() {
     onError: () => toast.error('Erro ao iniciar rota'),
   });
 
-  // Iniciar instalação
+  // Iniciar instalação (com timestamp)
   const iniciarInstalacao = useMutation({
     mutationFn: async (instalacaoId: string) => {
       const { error } = await supabase
         .from('instalacoes')
-        .update({ status: 'em_andamento' })
+        .update({ 
+          status: 'em_andamento',
+          iniciada_em: new Date().toISOString()
+        })
         .eq('id', instalacaoId);
       if (error) throw error;
     },
@@ -517,7 +520,7 @@ export function useInstalacaoActions() {
     onError: () => toast.error('Erro ao iniciar instalação'),
   });
 
-  // Concluir instalação
+  // Concluir instalação (com timestamp)
   const concluirInstalacao = useMutation({
     mutationFn: async ({ 
       instalacao_id, 
@@ -528,7 +531,10 @@ export function useInstalacaoActions() {
       rastreador_id: string;
       observacoes?: string;
     }) => {
-      const updateData: InstalacaoUpdate = { status: 'concluida' };
+      const updateData: InstalacaoUpdate = { 
+        status: 'concluida',
+        concluida_em: new Date().toISOString()
+      };
       if (observacoes) updateData.observacoes = observacoes;
 
       const { error: errInst } = await supabase
