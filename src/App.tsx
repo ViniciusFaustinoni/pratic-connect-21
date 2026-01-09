@@ -189,6 +189,7 @@ import InstaladorChecklist from "./pages/instalador/InstaladorChecklist";
 
 // Public Pages
 import CotacaoPublicaPage from "./pages/public/CotacaoPublica";
+import CotacaoPublicaCompleta from "./pages/public/CotacaoPublicaCompleta";
 
 const queryClient = new QueryClient();
 
@@ -212,6 +213,7 @@ const App = () => (
             
             {/* Public Quote Page */}
             <Route path="/cotacao/:token" element={<CotacaoPublicaPage />} />
+            <Route path="/q/:token" element={<CotacaoPublicaCompleta />} />
             
             {/* Redirect root to dashboard */}
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
