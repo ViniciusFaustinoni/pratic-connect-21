@@ -37,28 +37,22 @@ import {
   Mail,
   Printer,
   XCircle,
+  FileText,
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useFipe } from '@/hooks/useFipe';
 import { cn } from '@/lib/utils';
+import { useAllLeads, useUpdateLead } from '@/hooks/useLeads';
+import { usePlanosCotacao, useCriarCotacao } from '@/hooks/useCotacao';
+import { supabase } from '@/integrations/supabase/client';
+import type { Tables } from '@/integrations/supabase/types';
 
 // ============================================
 // INTERFACES
 // ============================================
 
-interface Lead {
-  id: string;
-  nome: string;
-  telefone: string;
-  email?: string;
-  veiculo?: {
-    marca: string;
-    modelo: string;
-    ano: number;
-    placa?: string;
-  };
-}
+type LeadDB = Tables<'leads'>;
 
 interface VeiculoEncontrado {
   placa: string;
@@ -71,8 +65,10 @@ interface VeiculoEncontrado {
   valorFipe?: number;
 }
 
-interface Plano {
+interface PlanoCalculado {
   id: string;
+  idReal: string; // ID real do plano no banco
+  codigo: string;
   nome: string;
   descricao: string;
   coberturas: string[];
@@ -85,36 +81,33 @@ interface Plano {
 type ModoEntrada = 'busca_placa' | 'manual';
 
 // ============================================
-// DADOS MOCK
+// DADOS DE REFERÊNCIA
 // ============================================
-
-const mockLeads: Lead[] = [
-  { id: '1', nome: 'João Silva', telefone: '(11) 99999-1111', email: 'joao@email.com', veiculo: { marca: 'Volkswagen', modelo: 'Gol', ano: 2020, placa: 'ABC-1234' } },
-  { id: '2', nome: 'Maria Oliveira', telefone: '(21) 98888-2222', email: 'maria@email.com', veiculo: { marca: 'Hyundai', modelo: 'HB20', ano: 2021 } },
-  { id: '3', nome: 'Pedro Costa', telefone: '(31) 97777-3333', email: 'pedro@email.com', veiculo: { marca: 'Chevrolet', modelo: 'Onix', ano: 2022, placa: 'DEF-5678' } },
-  { id: '4', nome: 'Ana Souza', telefone: '(41) 96666-4444', email: 'ana@email.com', veiculo: { marca: 'Fiat', modelo: 'Argo', ano: 2021 } },
-  { id: '5', nome: 'Lucas Ferreira', telefone: '(51) 95555-5555', email: 'lucas@email.com', veiculo: { marca: 'Toyota', modelo: 'Corolla', ano: 2020, placa: 'GHI-9012' } },
-  { id: '6', nome: 'Carla Mendes', telefone: '(61) 94444-6666', email: 'carla@email.com' },
-  { id: '7', nome: 'Rafael Almeida', telefone: '(71) 93333-7777', email: 'rafael@email.com', veiculo: { marca: 'Honda', modelo: 'Civic', ano: 2019 } },
-  { id: '8', nome: 'Fernanda Lima', telefone: '(81) 92222-8888', email: 'fernanda@email.com', veiculo: { marca: 'Nissan', modelo: 'Kicks', ano: 2022, placa: 'JKL-3456' } },
-];
 
 const MARCAS = [
   'Volkswagen', 'Chevrolet', 'Fiat', 'Ford', 'Hyundai', 
-  'Toyota', 'Honda', 'Renault', 'Nissan', 'Jeep', 'Outras'
+  'Toyota', 'Honda', 'Renault', 'Nissan', 'Jeep', 
+  'Peugeot', 'Citroën', 'Mitsubishi', 'Kia', 'BYD', 'Caoa Chery', 'RAM', 'Outras'
 ];
 
 const MODELOS_POR_MARCA: Record<string, string[]> = {
-  Volkswagen: ['Gol', 'Voyage', 'Polo', 'Virtus', 'T-Cross', 'Nivus', 'Taos', 'Saveiro'],
-  Chevrolet: ['Onix', 'Onix Plus', 'Tracker', 'S10', 'Spin', 'Montana', 'Cruze'],
-  Fiat: ['Uno', 'Mobi', 'Argo', 'Cronos', 'Strada', 'Toro', 'Pulse', 'Fastback'],
-  Ford: ['Ka', 'Ka Sedan', 'EcoSport', 'Ranger', 'Territory', 'Bronco Sport'],
-  Hyundai: ['HB20', 'HB20S', 'Creta', 'Tucson', 'Santa Fe'],
-  Toyota: ['Corolla', 'Corolla Cross', 'Yaris', 'Hilux', 'SW4', 'RAV4'],
-  Honda: ['Civic', 'City', 'HR-V', 'CR-V', 'Fit', 'WR-V'],
-  Renault: ['Kwid', 'Sandero', 'Logan', 'Duster', 'Captur', 'Oroch'],
-  Nissan: ['Versa', 'Kicks', 'Frontier', 'Sentra'],
-  Jeep: ['Renegade', 'Compass', 'Commander', 'Gladiator'],
+  Volkswagen: ['Gol', 'Voyage', 'Polo', 'Polo Track', 'Virtus', 'Nivus', 'T-Cross', 'Taos', 'Amarok', 'Saveiro', 'Fox', 'Up'],
+  Chevrolet: ['Onix', 'Onix Plus', 'Tracker', 'S10', 'Spin', 'Cruze', 'Montana', 'Equinox', 'Trailblazer'],
+  Fiat: ['Uno', 'Mobi', 'Argo', 'Cronos', 'Strada', 'Toro', 'Pulse', 'Fastback', 'Fiorino', 'Ducato'],
+  Ford: ['Ka', 'Ka Sedan', 'EcoSport', 'Ranger', 'Territory', 'Bronco Sport', 'Maverick'],
+  Hyundai: ['HB20', 'HB20S', 'HB20X', 'Creta', 'Tucson', 'Santa Fe', 'i30'],
+  Toyota: ['Corolla', 'Corolla Cross', 'Yaris', 'Yaris Sedan', 'Hilux', 'SW4', 'RAV4', 'Camry'],
+  Honda: ['Civic', 'City', 'HR-V', 'CR-V', 'Fit', 'WR-V', 'Accord'],
+  Renault: ['Kwid', 'Sandero', 'Logan', 'Duster', 'Captur', 'Oroch', 'Master'],
+  Nissan: ['Versa', 'Sentra', 'Kicks', 'Frontier', 'March'],
+  Jeep: ['Renegade', 'Compass', 'Commander', 'Wrangler', 'Gladiator'],
+  Peugeot: ['208', '2008', '3008', 'Partner', 'Expert'],
+  Citroën: ['C3', 'C4 Cactus', 'Jumpy', 'Berlingo'],
+  Mitsubishi: ['L200', 'Outlander', 'Eclipse Cross', 'Pajero Sport'],
+  Kia: ['Sportage', 'Seltos', 'Cerato', 'Sorento', 'Carnival'],
+  BYD: ['Dolphin', 'Seal', 'Song Plus', 'Yuan Plus', 'Han'],
+  'Caoa Chery': ['Tiggo 5x', 'Tiggo 7', 'Tiggo 8', 'Arrizo 6'],
+  RAM: ['Rampage', '1500', '2500', '3500'],
   Outras: ['Outro modelo'],
 };
 
@@ -151,69 +144,64 @@ const calcularFipeMock = (marca: string, _modelo: string, ano: number): number =
   return Math.round(valor / 100) * 100;
 };
 
-const calcularPlanos = (valorFipe: number, usoApp: boolean): Plano[] => {
+// Mapear planos do banco para interface de exibição
+const mapearPlanosParaExibicao = (
+  planosDB: any[],
+  valorFipe: number,
+  usoApp: boolean
+): PlanoCalculado[] => {
   const multiplicadorApp = usoApp ? 1.3 : 1.0;
   
-  return [
-    {
-      id: 'basico',
-      nome: 'Básico',
-      descricao: 'Proteção essencial para seu veículo',
-      coberturas: [
-        'Colisão (100% FIPE)',
-        'Roubo e Furto (100% FIPE)',
-        'Incêndio Total',
-        'Perda Total',
-        'Assistência 24h básica',
-      ],
-      naoInclui: ['Vidros', 'App de rastreamento', 'Carro reserva'],
-      valorAdesao: Math.round(350 * multiplicadorApp),
-      valorMensal: Math.round((valorFipe * 0.004) * multiplicadorApp * 100) / 100,
-      destaque: false,
-    },
-    {
-      id: 'completo',
-      nome: 'Completo',
-      descricao: 'O mais vendido - melhor custo-benefício',
-      coberturas: [
-        'Colisão (100% FIPE)',
-        'Roubo e Furto (100% FIPE)',
-        'Incêndio Total',
-        'Perda Total',
-        'Vidros completos',
-        'App de Rastreamento 24h',
-        'Assistência 24h completa',
-        'Reboque ilimitado',
-      ],
-      naoInclui: ['Carro reserva', 'Proteção para terceiros'],
-      valorAdesao: Math.round(450 * multiplicadorApp),
-      valorMensal: Math.round((valorFipe * 0.0055) * multiplicadorApp * 100) / 100,
-      destaque: true,
-    },
-    {
-      id: 'premium',
-      nome: 'Premium',
-      descricao: 'Proteção máxima com todos os benefícios',
-      coberturas: [
-        'Colisão (100% FIPE)',
-        'Roubo e Furto (100% FIPE)',
-        'Incêndio Total',
-        'Perda Total',
-        'Vidros completos',
-        'App de Rastreamento 24h',
-        'Assistência 24h VIP',
-        'Reboque ilimitado',
-        'Carro reserva (7 dias)',
-        'Proteção para terceiros',
-        'Faróis e lanternas',
-        'Retrovisores',
-      ],
-      naoInclui: [],
-      valorAdesao: Math.round(550 * multiplicadorApp),
-      valorMensal: Math.round((valorFipe * 0.007) * multiplicadorApp * 100) / 100,
-      destaque: false,
-    },
-  ];
+  // Ordenar por valor de adesão (basico, completo, premium)
+  const planosOrdenados = [...planosDB].sort((a, b) => 
+    (a.valor_adesao || 0) - (b.valor_adesao || 0)
+  );
+
+  return planosOrdenados.map((plano, index) => {
+    // Calcular valor mensal baseado no FIPE
+    const basePercentual = index === 0 ? 0.004 : index === 1 ? 0.0055 : 0.007;
+    const valorMensal = Math.round((valorFipe * basePercentual) * multiplicadorApp * 100) / 100;
+    const valorAdesao = Math.round((plano.valor_adesao || 350) * multiplicadorApp);
+
+    // Identificar tipo de plano
+    const isBasico = plano.codigo === 'BASICO';
+    const isCompleto = plano.codigo === 'TOTAL';
+    const isPremium = plano.codigo === 'PREMIUM';
+
+    // Coberturas do banco ou padrão
+    const coberturas = plano.coberturas?.length > 0 ? plano.coberturas : [
+      'Colisão (100% FIPE)',
+      'Roubo e Furto (100% FIPE)',
+      'Incêndio Total',
+      'Perda Total',
+      ...(isCompleto || isPremium ? ['Vidros completos', 'App de Rastreamento 24h'] : []),
+      ...(isPremium ? ['Carro reserva (7 dias)', 'Proteção para terceiros'] : []),
+      isBasico ? 'Assistência 24h básica' : 'Assistência 24h completa',
+    ];
+
+    // Itens não incluídos
+    const naoInclui = isBasico 
+      ? ['Vidros', 'App de rastreamento', 'Carro reserva']
+      : isCompleto 
+        ? ['Carro reserva', 'Proteção para terceiros']
+        : [];
+
+    return {
+      id: plano.codigo?.toLowerCase() || `plano-${index}`,
+      idReal: plano.id,
+      codigo: plano.codigo || '',
+      nome: plano.nome || `Plano ${index + 1}`,
+      descricao: plano.descricao || 
+        (isBasico ? 'Proteção essencial para seu veículo' :
+         isCompleto ? 'O mais vendido - melhor custo-benefício' :
+         'Proteção máxima com todos os benefícios'),
+      coberturas,
+      naoInclui,
+      valorAdesao,
+      valorMensal,
+      destaque: isCompleto,
+    };
+  });
 };
 
 // ============================================
@@ -221,6 +209,8 @@ const calcularPlanos = (valorFipe: number, usoApp: boolean): Plano[] => {
 // ============================================
 
 export default function CotadorPage() {
+  const navigate = useNavigate();
+  
   // Modo de entrada
   const [modo, setModo] = useState<ModoEntrada>('busca_placa');
   
@@ -239,31 +229,41 @@ export default function CotadorPage() {
   const [valorFipe, setValorFipe] = useState<number | null>(null);
 
   // Lead
-  const [leadSelecionado, setLeadSelecionado] = useState<Lead | null>(null);
+  const [leadSelecionado, setLeadSelecionado] = useState<LeadDB | null>(null);
   const [buscaLead, setBuscaLead] = useState('');
   const [comboboxAberto, setComboboxAberto] = useState(false);
 
   // Cotação
   const [isCalculando, setIsCalculando] = useState(false);
   const [cotacaoCalculada, setCotacaoCalculada] = useState(false);
-  const [planoSelecionadoTab, setPlanoSelecionadoTab] = useState<string>('completo');
-  const [planoFinalSelecionado, setPlanoFinalSelecionado] = useState<Plano | null>(null);
+  const [planoSelecionadoTab, setPlanoSelecionadoTab] = useState<string>('total');
+  const [planoFinalSelecionado, setPlanoFinalSelecionado] = useState<PlanoCalculado | null>(null);
+  const [cotacaoSalva, setCotacaoSalva] = useState<any>(null);
+  const [salvandoCotacao, setSalvandoCotacao] = useState(false);
 
   // Hook FIPE
   const { getByPlaca, loading: loadingFipe } = useFipe();
 
+  // Hooks Supabase
+  const { data: leadsData, isLoading: loadingLeads } = useAllLeads();
+  const { data: planosDB, isLoading: loadingPlanos } = usePlanosCotacao();
+  const criarCotacao = useCriarCotacao();
+  const atualizarLead = useUpdateLead();
+
+  // Lista de leads
+  const leads = leadsData || [];
+
   // Filtro de leads
   const leadsFiltrados = useMemo(() => {
     const termo = buscaLead.toLowerCase();
-    if (!termo) return mockLeads;
-    return mockLeads.filter(lead => 
-      lead.nome.toLowerCase().includes(termo) ||
-      lead.telefone.includes(termo) ||
+    if (!termo) return leads.slice(0, 15);
+    return leads.filter(lead => 
+      lead.nome?.toLowerCase().includes(termo) ||
+      lead.telefone?.includes(termo) ||
       lead.email?.toLowerCase().includes(termo) ||
-      lead.veiculo?.modelo.toLowerCase().includes(termo) ||
-      lead.veiculo?.placa?.toLowerCase().includes(termo)
-    );
-  }, [buscaLead]);
+      lead.veiculo_placa?.toLowerCase().includes(termo)
+    ).slice(0, 15);
+  }, [buscaLead, leads]);
 
   // Modelos disponíveis
   const modelosDisponiveis = useMemo(() => {
@@ -273,13 +273,17 @@ export default function CotadorPage() {
 
   // Planos calculados
   const planos = useMemo(() => {
-    if (!valorFipe) return [];
-    return calcularPlanos(valorFipe, usoApp);
-  }, [valorFipe, usoApp]);
+    if (!valorFipe || !planosDB || planosDB.length === 0) {
+      // Fallback para planos mock se não tiver dados do banco
+      if (!valorFipe) return [];
+      return calcularPlanosMock(valorFipe, usoApp);
+    }
+    return mapearPlanosParaExibicao(planosDB, valorFipe, usoApp);
+  }, [valorFipe, usoApp, planosDB]);
 
   // Plano atual selecionado nas tabs
   const planoAtual = useMemo(() => {
-    return planos.find(p => p.id === planoSelecionadoTab) || null;
+    return planos.find(p => p.id === planoSelecionadoTab || p.codigo?.toLowerCase() === planoSelecionadoTab) || planos[1] || planos[0] || null;
   }, [planos, planoSelecionadoTab]);
 
   // Verificar se pode calcular
@@ -293,7 +297,6 @@ export default function CotadorPage() {
 
   const handleModoChange = (novoModo: ModoEntrada) => {
     setModo(novoModo);
-    // Limpar estados ao trocar modo
     setVeiculoEncontrado(null);
     setErroBusca(null);
     setPlacaBusca('');
@@ -304,6 +307,7 @@ export default function CotadorPage() {
     setValorFipe(null);
     setCotacaoCalculada(false);
     setPlanoFinalSelecionado(null);
+    setCotacaoSalva(null);
   };
 
   const handleBuscarPlaca = async () => {
@@ -332,7 +336,6 @@ export default function CotadorPage() {
           valorFipe: fipeData?.valor,
         });
 
-        // Preencher campos
         setMarca(vehicleData.marca);
         setModelo(vehicleData.modelo);
         setAno(vehicleData.ano);
@@ -347,6 +350,7 @@ export default function CotadorPage() {
 
         setCotacaoCalculada(false);
         setPlanoFinalSelecionado(null);
+        setCotacaoSalva(null);
         
         toast.success(`Veículo encontrado! ${vehicleData.marca} ${vehicleData.modelo} ${vehicleData.ano}`);
       } else {
@@ -368,24 +372,29 @@ export default function CotadorPage() {
     setValorFipe(null);
     setCotacaoCalculada(false);
     setPlanoFinalSelecionado(null);
+    setCotacaoSalva(null);
   };
 
-  const handleSelecionarLead = (lead: Lead) => {
+  const handleSelecionarLead = (lead: LeadDB) => {
     setLeadSelecionado(lead);
     setComboboxAberto(false);
     setBuscaLead('');
     
-    if (lead.veiculo) {
-      setMarca(lead.veiculo.marca);
-      setModelo(lead.veiculo.modelo);
-      setAno(lead.veiculo.ano.toString());
-      if (lead.veiculo.placa) {
-        setPlacaBusca(lead.veiculo.placa);
-      }
-      const fipe = calcularFipeMock(lead.veiculo.marca, lead.veiculo.modelo, lead.veiculo.ano);
+    if (lead.veiculo_marca && lead.veiculo_modelo) {
+      setMarca(lead.veiculo_marca);
+      setModelo(lead.veiculo_modelo);
+      if (lead.veiculo_ano) setAno(String(lead.veiculo_ano));
+      if (lead.veiculo_placa) setPlacaBusca(lead.veiculo_placa);
+      
+      const fipe = calcularFipeMock(
+        lead.veiculo_marca, 
+        lead.veiculo_modelo, 
+        lead.veiculo_ano || new Date().getFullYear()
+      );
       setValorFipe(fipe);
       setCotacaoCalculada(false);
       setPlanoFinalSelecionado(null);
+      setCotacaoSalva(null);
       toast.success('Dados do veículo preenchidos automaticamente');
     }
   };
@@ -406,26 +415,54 @@ export default function CotadorPage() {
     }
     
     setCotacaoCalculada(true);
-    setPlanoSelecionadoTab('completo');
+    setPlanoSelecionadoTab(planosDB?.find(p => p.codigo === 'TOTAL')?.codigo?.toLowerCase() || 'total');
     setPlanoFinalSelecionado(null);
     setIsCalculando(false);
     
     toast.success('Cotação calculada com sucesso!');
   };
 
-  const handleSelecionarPlano = (plano: Plano) => {
+  const handleSelecionarPlano = (plano: PlanoCalculado) => {
     setPlanoFinalSelecionado(plano);
     toast.success(`Plano ${plano.nome} selecionado!`);
   };
 
-  const handleEnviarWhatsApp = () => {
+  const handleSalvarEEnviarWhatsApp = async () => {
     if (!planoFinalSelecionado || !valorFipe) return;
     
-    const nomeCliente = leadSelecionado ? `\n*Cliente:* ${leadSelecionado.nome}` : '';
-    const placaInfo = veiculoEncontrado?.placa ? `\n*Placa:* ${veiculoEncontrado.placa}` : '';
+    setSalvandoCotacao(true);
     
-    const mensagem = `
-🚗 *COTAÇÃO DE PROTEÇÃO VEICULAR*${nomeCliente}${placaInfo}
+    try {
+      // Salvar cotação no banco
+      const cotacaoData = await criarCotacao.mutateAsync({
+        lead_id: leadSelecionado?.id || null,
+        plano_id: planoFinalSelecionado.idReal,
+        veiculo_marca: marca,
+        veiculo_modelo: modelo,
+        veiculo_ano: parseInt(ano),
+        valor_fipe: valorFipe,
+        codigo_fipe: veiculoEncontrado?.codigoFipe,
+        uso_aplicativo: usoApp,
+      });
+
+      setCotacaoSalva(cotacaoData);
+
+      // Atualizar etapa do lead se vinculado
+      if (leadSelecionado?.id) {
+        await atualizarLead.mutateAsync({
+          id: leadSelecionado.id,
+          data: { etapa: 'cotacao_enviada' }
+        });
+      }
+
+      // Preparar e enviar mensagem WhatsApp
+      const nomeCliente = leadSelecionado ? `\n*Cliente:* ${leadSelecionado.nome}` : '';
+      const placaInfo = veiculoEncontrado?.placa ? `\n*Placa:* ${veiculoEncontrado.placa}` : '';
+      const numeroCotacao = cotacaoData?.numero || `COT-${Date.now().toString().slice(-6)}`;
+      
+      const mensagem = `
+🚗 *COTAÇÃO DE PROTEÇÃO VEICULAR*
+📋 *Nº ${numeroCotacao}*${nomeCliente}${placaInfo}
 
 *Veículo:* ${marca} ${modelo} ${ano}${cor ? ` ${cor}` : ''}
 *Valor FIPE:* ${formatCurrency(valorFipe)}
@@ -448,15 +485,35 @@ ${planoFinalSelecionado.naoInclui.length > 0 ? `*Não incluído:*\n${planoFinalS
 *1ª Parcela:* ${formatCurrency(planoFinalSelecionado.valorAdesao + planoFinalSelecionado.valorMensal)}
 
 _Cotação válida por 7 dias_
-    `.trim();
 
-    const telefone = leadSelecionado?.telefone.replace(/\D/g, '') || '';
-    const url = telefone 
-      ? `https://wa.me/55${telefone}?text=${encodeURIComponent(mensagem)}`
-      : `https://wa.me/?text=${encodeURIComponent(mensagem)}`;
-    window.open(url, '_blank');
-    
-    toast.success('Cotação preparada para envio!');
+✨ *Benefícios exclusivos PRATIC:*
+• Cobertura 100% da tabela FIPE
+• Sem análise de perfil
+• Aprovação em até 24h
+• App exclusivo para associados
+      `.trim();
+
+      const telefone = leadSelecionado?.telefone?.replace(/\D/g, '') || '';
+      const url = telefone 
+        ? `https://wa.me/55${telefone}?text=${encodeURIComponent(mensagem)}`
+        : `https://wa.me/?text=${encodeURIComponent(mensagem)}`;
+      window.open(url, '_blank');
+
+      // Atualizar status da cotação para enviada
+      if (cotacaoData?.id) {
+        await supabase
+          .from('cotacoes')
+          .update({ status: 'enviada' })
+          .eq('id', cotacaoData.id);
+      }
+      
+      toast.success('Cotação salva e enviada com sucesso!');
+    } catch (error) {
+      console.error('Erro ao salvar cotação:', error);
+      toast.error('Erro ao salvar cotação. Tente novamente.');
+    } finally {
+      setSalvandoCotacao(false);
+    }
   };
 
   const handleEnviarEmail = () => {
@@ -465,6 +522,14 @@ _Cotação válida por 7 dias_
 
   const handleImprimir = () => {
     window.print();
+  };
+
+  const handleGerarContrato = () => {
+    if (!cotacaoSalva) {
+      toast.error('Salve a cotação primeiro antes de gerar o contrato');
+      return;
+    }
+    navigate(`/vendas/contratos/novo?cotacao=${cotacaoSalva.id}`);
   };
 
   // ============================================
@@ -481,8 +546,15 @@ _Cotação válida por 7 dias_
           <ChevronRight className="h-4 w-4" />
           <span className="text-foreground font-medium">Cotador</span>
         </div>
-        <h1 className="text-2xl font-bold tracking-tight">Cotador Rápido</h1>
-        <p className="text-muted-foreground">Gere cotações em menos de 30 segundos</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Cotador Rápido</h1>
+            <p className="text-muted-foreground">Gere cotações em menos de 30 segundos</p>
+          </div>
+          <Button variant="outline" asChild>
+            <Link to="/vendas/cotacoes">Ver Histórico</Link>
+          </Button>
+        </div>
       </div>
 
       {/* SELETOR DE MODO */}
@@ -726,7 +798,6 @@ _Cotação válida por 7 dias_
                       value={ano}
                       onValueChange={(v) => {
                         setAno(v);
-                        // Calcular FIPE automaticamente ao preencher todos
                         if (marca && modelo && v) {
                           const fipe = calcularFipeMock(marca, modelo, parseInt(v));
                           setValorFipe(fipe);
@@ -815,16 +886,16 @@ _Cotação válida por 7 dias_
                 <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/50">
                   <Avatar className="h-10 w-10">
                     <AvatarFallback className="bg-primary/10 text-primary font-medium">
-                      {leadSelecionado.nome.charAt(0)}
+                      {leadSelecionado.nome?.charAt(0) || '?'}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium truncate">{leadSelecionado.nome}</p>
                     <p className="text-sm text-muted-foreground">{leadSelecionado.telefone}</p>
                   </div>
-                  {leadSelecionado.veiculo && (
+                  {leadSelecionado.veiculo_modelo && (
                     <Badge variant="secondary">
-                      {leadSelecionado.veiculo.modelo} {leadSelecionado.veiculo.ano}
+                      {leadSelecionado.veiculo_modelo} {leadSelecionado.veiculo_ano}
                     </Badge>
                   )}
                 </div>
@@ -836,8 +907,16 @@ _Cotação válida por 7 dias_
                       role="combobox"
                       aria-expanded={comboboxAberto}
                       className="w-full justify-between font-normal text-muted-foreground"
+                      disabled={loadingLeads}
                     >
-                      Buscar lead por nome, telefone ou placa...
+                      {loadingLeads ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                          Carregando leads...
+                        </>
+                      ) : (
+                        'Buscar lead por nome, telefone ou placa...'
+                      )}
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
@@ -865,19 +944,19 @@ _Cotação válida por 7 dias_
                               <div className="flex items-center gap-3 w-full">
                                 <Avatar className="h-8 w-8">
                                   <AvatarFallback className="text-xs">
-                                    {lead.nome.charAt(0)}
+                                    {lead.nome?.charAt(0) || '?'}
                                   </AvatarFallback>
                                 </Avatar>
                                 <div className="flex-1 min-w-0">
                                   <p className="font-medium truncate">{lead.nome}</p>
                                   <p className="text-xs text-muted-foreground">
                                     {lead.telefone}
-                                    {lead.veiculo && ` • ${lead.veiculo.modelo} ${lead.veiculo.ano}`}
+                                    {lead.veiculo_modelo && ` • ${lead.veiculo_modelo} ${lead.veiculo_ano || ''}`}
                                   </p>
                                 </div>
-                                {lead.veiculo?.placa && (
+                                {lead.veiculo_placa && (
                                   <Badge variant="outline" className="text-xs">
-                                    {lead.veiculo.placa}
+                                    {lead.veiculo_placa}
                                   </Badge>
                                 )}
                               </div>
@@ -931,7 +1010,7 @@ _Cotação válida por 7 dias_
             {/* Botão Calcular */}
             <Button
               onClick={handleCalcular}
-              disabled={!podeCalcular || isCalculando}
+              disabled={!podeCalcular || isCalculando || loadingPlanos}
               className="w-full"
               size="lg"
             >
@@ -989,7 +1068,7 @@ _Cotação válida por 7 dias_
                       )}
                     >
                       {plano.nome}
-                      {plano.id === 'completo' && (
+                      {plano.destaque && (
                         <Badge 
                           variant="secondary" 
                           className="absolute -top-1 -right-1 text-[10px] px-1.5 py-0"
@@ -1101,6 +1180,11 @@ _Cotação válida por 7 dias_
             <CardTitle className="flex items-center gap-2">
               <Receipt className="h-5 w-5" />
               Resumo da Cotação
+              {cotacaoSalva && (
+                <Badge variant="secondary" className="ml-auto">
+                  #{cotacaoSalva.numero}
+                </Badge>
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -1116,7 +1200,7 @@ _Cotação válida por 7 dias_
               </div>
               <div>
                 <p className="text-xs text-muted-foreground uppercase">Placa</p>
-                <p className="font-medium">{veiculoEncontrado?.placa || 'N/A'}</p>
+                <p className="font-medium">{veiculoEncontrado?.placa || placaBusca || 'N/A'}</p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground uppercase">Plano</p>
@@ -1147,21 +1231,40 @@ _Cotação válida por 7 dias_
             {/* Botões de ação */}
             <div className="flex flex-col sm:flex-row gap-3">
               <Button
-                onClick={handleEnviarWhatsApp}
+                onClick={handleSalvarEEnviarWhatsApp}
                 className="flex-1 bg-green-600 hover:bg-green-700 text-white"
                 size="lg"
+                disabled={salvandoCotacao}
               >
-                <MessageSquare className="h-4 w-4 mr-2" />
-                Enviar por WhatsApp
+                {salvandoCotacao ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Salvando...
+                  </>
+                ) : (
+                  <>
+                    <MessageSquare className="h-4 w-4 mr-2" />
+                    {cotacaoSalva ? 'Reenviar WhatsApp' : 'Salvar e Enviar WhatsApp'}
+                  </>
+                )}
               </Button>
+              {cotacaoSalva && (
+                <Button
+                  onClick={handleGerarContrato}
+                  variant="outline"
+                  className="flex-1"
+                  size="lg"
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  Gerar Contrato
+                </Button>
+              )}
               <Button
                 onClick={handleEnviarEmail}
                 variant="outline"
-                className="flex-1"
                 size="lg"
               >
-                <Mail className="h-4 w-4 mr-2" />
-                Enviar por Email
+                <Mail className="h-4 w-4" />
               </Button>
               <Button
                 onClick={handleImprimir}
@@ -1176,4 +1279,76 @@ _Cotação válida por 7 dias_
       )}
     </div>
   );
+}
+
+// Fallback para planos mock se não houver dados do banco
+function calcularPlanosMock(valorFipe: number, usoApp: boolean): PlanoCalculado[] {
+  const multiplicadorApp = usoApp ? 1.3 : 1.0;
+  
+  return [
+    {
+      id: 'basico',
+      idReal: '',
+      codigo: 'BASICO',
+      nome: 'Básico',
+      descricao: 'Proteção essencial para seu veículo',
+      coberturas: [
+        'Colisão (100% FIPE)',
+        'Roubo e Furto (100% FIPE)',
+        'Incêndio Total',
+        'Perda Total',
+        'Assistência 24h básica',
+      ],
+      naoInclui: ['Vidros', 'App de rastreamento', 'Carro reserva'],
+      valorAdesao: Math.round(350 * multiplicadorApp),
+      valorMensal: Math.round((valorFipe * 0.004) * multiplicadorApp * 100) / 100,
+      destaque: false,
+    },
+    {
+      id: 'total',
+      idReal: '',
+      codigo: 'TOTAL',
+      nome: 'Completo',
+      descricao: 'O mais vendido - melhor custo-benefício',
+      coberturas: [
+        'Colisão (100% FIPE)',
+        'Roubo e Furto (100% FIPE)',
+        'Incêndio Total',
+        'Perda Total',
+        'Vidros completos',
+        'App de Rastreamento 24h',
+        'Assistência 24h completa',
+        'Reboque ilimitado',
+      ],
+      naoInclui: ['Carro reserva', 'Proteção para terceiros'],
+      valorAdesao: Math.round(450 * multiplicadorApp),
+      valorMensal: Math.round((valorFipe * 0.0055) * multiplicadorApp * 100) / 100,
+      destaque: true,
+    },
+    {
+      id: 'premium',
+      idReal: '',
+      codigo: 'PREMIUM',
+      nome: 'Premium',
+      descricao: 'Proteção máxima com todos os benefícios',
+      coberturas: [
+        'Colisão (100% FIPE)',
+        'Roubo e Furto (100% FIPE)',
+        'Incêndio Total',
+        'Perda Total',
+        'Vidros completos',
+        'App de Rastreamento 24h',
+        'Assistência 24h VIP',
+        'Reboque ilimitado',
+        'Carro reserva (7 dias)',
+        'Proteção para terceiros',
+        'Faróis e lanternas',
+        'Retrovisores',
+      ],
+      naoInclui: [],
+      valorAdesao: Math.round(550 * multiplicadorApp),
+      valorMensal: Math.round((valorFipe * 0.007) * multiplicadorApp * 100) / 100,
+      destaque: false,
+    },
+  ];
 }
