@@ -217,20 +217,16 @@ const App = () => (
               <Route path="/notificacoes" element={<Notificacoes />} />
               
               {/* Vendas */}
-              <Route path="/vendas" element={<VendasDashboard />} />
-              <Route path="/vendas/dashboard" element={<VendasDashboard />} />
+              <Route path="/vendas" element={<Navigate to="/vendas/leads" replace />} />
               <Route path="/vendas/leads" element={<Leads />} />
               <Route path="/vendas/leads/:id" element={<LeadDetalhe />} />
               <Route path="/vendas/leads/:id/editar" element={<LeadEditar />} />
-              <Route path="/vendas/acompanhamento" element={<Acompanhamento />} />
+              <Route path="/vendas/kanban" element={<Acompanhamento />} />
+              <Route path="/vendas/cotador" element={<Cotador />} />
               <Route path="/vendas/cotacoes" element={<Cotacoes />} />
               <Route path="/vendas/cotacoes/:id" element={<CotacaoDetalhe />} />
               <Route path="/vendas/contratos" element={<Contratos />} />
               <Route path="/vendas/contratos/:id" element={<ContratoDetalhe />} />
-              <Route path="/vendas/relatorios" element={<RelatoriosVendas />} />
-              <Route path="/vendas/metas" element={<Metas />} />
-              <Route path="/vendas/cotador" element={<Cotador />} />
-              <Route path="/vendas/distribuicao" element={<DistribuicaoConfig />} />
               
               {/* Cadastro */}
               <Route path="/cadastro/associados" element={<Associados />} />

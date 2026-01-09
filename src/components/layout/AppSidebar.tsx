@@ -110,13 +110,10 @@ const menuConfig: {
       icon: TrendingUp,
       permission: 'canManageLeads',
       items: [
-        { title: 'Dashboard', url: '/vendas/dashboard', icon: BarChart3 },
         { title: 'Leads', url: '/vendas/leads', icon: UserPlus },
-        { title: 'Acompanhamento', url: '/vendas/acompanhamento', icon: Kanban },
-        { title: 'Cotador', url: '/vendas/cotacoes', icon: Calculator },
+        { title: 'Kanban', url: '/vendas/kanban', icon: Kanban },
+        { title: 'Cotador', url: '/vendas/cotador', icon: Calculator },
         { title: 'Contratos', url: '/vendas/contratos', icon: FileText },
-        { title: 'Metas', url: '/vendas/metas', icon: Target },
-        { title: 'Relatórios', url: '/vendas/relatorios', icon: ClipboardList },
       ],
     },
     {
