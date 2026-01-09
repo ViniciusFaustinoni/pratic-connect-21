@@ -42,6 +42,7 @@ export interface PlanoResumo {
   cor: string;
   beneficios: string[];
   adicional?: string;
+  linha: 'select' | 'select-one' | 'especial' | 'lancamento' | 'advanced' | 'eletricos';
 }
 
 export interface BeneficioNivel {
@@ -437,6 +438,7 @@ export const PLANOS_RESUMO: PlanoResumo[] = [
     cotaPasesioDesagio: '8% (mín R$2.000)',
     cotaApp: '8% (mín R$3.000)',
     cor: 'from-blue-500 to-blue-600',
+    linha: 'select',
     beneficios: [
       'Roubo e Furto',
       'Colisão',
@@ -459,6 +461,7 @@ export const PLANOS_RESUMO: PlanoResumo[] = [
     cotaApp: '8% (mín R$3.000)',
     adicional: '+R$30/mês',
     cor: 'from-blue-600 to-blue-700',
+    linha: 'select',
     beneficios: [
       'Roubo e Furto',
       'Colisão',
@@ -486,6 +489,7 @@ export const PLANOS_RESUMO: PlanoResumo[] = [
     cotaApp: '8% (mín R$3.000)',
     adicional: '+R$60/mês',
     cor: 'from-blue-700 to-indigo-800',
+    linha: 'select',
     beneficios: [
       'Roubo e Furto',
       'Colisão',
@@ -514,6 +518,7 @@ export const PLANOS_RESUMO: PlanoResumo[] = [
     cotaPasesioDesagio: '8% (mín R$2.000)',
     cotaApp: '8% (mín R$3.000)',
     cor: 'from-emerald-500 to-green-600',
+    linha: 'select-one',
     beneficios: [
       'Roubo e Furto',
       'Colisão',
@@ -521,9 +526,11 @@ export const PLANOS_RESUMO: PlanoResumo[] = [
       'Incêndio',
       'Alagamento',
       'Chuva de Granizo',
-      'Assistência 24h 400km',
+      'Assistência 24h 1000km',
       'Rastreador/Monitoramento (acima de R$30mil)',
       'Danos Terceiros R$100mil',
+      'Vidros e Faróis (após 120 dias)',
+      'Reboque Excedente (1x a cada 6 meses)',
       'Kit Gás',
       'Carro Reserva (somente em colisão)',
       'Clube Gás (10% desconto)',
@@ -538,6 +545,7 @@ export const PLANOS_RESUMO: PlanoResumo[] = [
     cotaPasesio: '6% (mín R$1.200)',
     cotaPasesioDesagio: '8% (mín R$2.000)',
     cor: 'from-orange-500 to-amber-600',
+    linha: 'especial',
     beneficios: [
       'Roubo e Furto',
       'Assistência 24h 400km',
@@ -552,12 +560,15 @@ export const PLANOS_RESUMO: PlanoResumo[] = [
     anoMinimo: 2002,
     cotaPasesio: '10% (mín R$3.000)',
     cor: 'from-amber-500 to-orange-600',
+    linha: 'especial',
     beneficios: [
       'Roubo e Furto',
       'Colisão',
       'Perda Total',
       'Incêndio',
       'Alagamento',
+      'Chuva de Granizo',
+      'Assistência 24h 400km',
       'Rastreador/Monitoramento (acima de R$30mil)',
     ],
   },
@@ -571,6 +582,7 @@ export const PLANOS_RESUMO: PlanoResumo[] = [
     cotaPasesio: '10% (mín R$3.000)',
     destaque: 'Sem alteração com deságio',
     cor: 'from-violet-500 to-purple-600',
+    linha: 'lancamento',
     beneficios: [
       'Roubo e Furto',
       'Colisão',
@@ -590,7 +602,9 @@ export const PLANOS_RESUMO: PlanoResumo[] = [
     anoMinimo: 2024,
     cotaPasesio: '10% (mín R$3.000)',
     destaque: 'Sem alteração com deságio',
+    adicional: '+R$30/mês',
     cor: 'from-violet-600 to-purple-700',
+    linha: 'lancamento',
     beneficios: [
       'Roubo e Furto',
       'Colisão',
@@ -614,7 +628,9 @@ export const PLANOS_RESUMO: PlanoResumo[] = [
     anoMinimo: 2024,
     cotaPasesio: '10% (mín R$3.000)',
     destaque: 'Sem alteração com deságio',
+    adicional: '+R$60/mês',
     cor: 'from-violet-700 to-purple-800',
+    linha: 'lancamento',
     beneficios: [
       'Roubo e Furto',
       'Colisão',
@@ -641,6 +657,7 @@ export const PLANOS_RESUMO: PlanoResumo[] = [
     cotaPasesio: '10% (mín R$1.500)',
     destaque: 'Honda e Yamaha (20 anos)',
     cor: 'from-red-500 to-rose-600',
+    linha: 'advanced',
     beneficios: [
       'Roubo e Furto',
       'Assistência 24h 400km',
@@ -657,12 +674,38 @@ export const PLANOS_RESUMO: PlanoResumo[] = [
     cotaPasesio: '10% (mín R$1.500)',
     destaque: 'Honda e Yamaha (20 anos)',
     cor: 'from-red-600 to-rose-700',
+    linha: 'advanced',
     beneficios: [
       'Roubo e Furto',
       'Assistência 24h 600km',
       'Monitoramento/Rastreador (acima de R$9mil)',
       'Colisão (cota 10%)',
       'Danos Terceiros R$10mil (participação R$750)',
+    ],
+  },
+  // ELÉTRICOS
+  {
+    id: 'eletricos',
+    nome: 'ELÉTRICOS',
+    badge: 'Proteção Especializada',
+    coberturaFipe: 100,
+    anoMinimo: 2020,
+    cotaPasesio: '10% (sem mínimo)',
+    destaque: 'Veículos elétricos e híbridos',
+    cor: 'from-teal-500 to-cyan-600',
+    linha: 'eletricos',
+    beneficios: [
+      'Roubo e Furto',
+      'Colisão',
+      'Perda Total',
+      'Incêndio',
+      'Alagamento',
+      'Chuva de Granizo',
+      'Assistência 24h 1000km',
+      'Danos Terceiros R$40mil',
+      '30 dias Carro Reserva (somente em colisão)',
+      'Reboque Excedente (1x a cada 6 meses)',
+      'Cobertura APP 100%',
     ],
   },
 ];
