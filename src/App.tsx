@@ -30,7 +30,7 @@ import ContratoDetalhe from "./pages/vendas/ContratoDetalhe";
 import VendasDashboard from "./pages/vendas/VendasDashboard";
 import RelatoriosVendas from "./pages/vendas/RelatoriosVendas";
 import Metas from "./pages/vendas/Metas";
-import Cotador from "./pages/vendas/Cotador";
+import Cotacao from "./pages/vendas/Cotacao";
 import Associados from "./pages/cadastro/Associados";
 import AssociadoDetalhe from "./pages/cadastro/AssociadoDetalhe";
 import Veiculos from "./pages/cadastro/Veiculos";
@@ -231,7 +231,7 @@ const App = () => (
               <Route path="/vendas/leads/:id" element={<LeadDetalhe />} />
               <Route path="/vendas/leads/:id/editar" element={<LeadEditar />} />
               <Route path="/vendas/kanban" element={<Acompanhamento />} />
-              <Route path="/vendas/cotador" element={<Cotador />} />
+              <Route path="/vendas/cotacao" element={<Cotacao />} />
               <Route path="/vendas/cotacoes" element={<Cotacoes />} />
               <Route path="/vendas/cotacoes/:id" element={<CotacaoDetalhe />} />
               <Route path="/vendas/contratos" element={<Contratos />} />
