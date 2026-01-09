@@ -15,6 +15,7 @@ interface PlanoCalculado {
   valorAdesao: number;
   valorMensal: number;
   destaque: boolean;
+  tag?: string;
 }
 
 interface PlanoCardCotacaoProps {
@@ -50,12 +51,12 @@ export function PlanoCardCotacao({
         !plano.destaque && !isSelected && "border-border hover:border-primary/50"
       )}
     >
-      {/* Badge Recomendado */}
-      {plano.destaque && (
+      {/* Badge Recomendado ou Tag */}
+      {(plano.destaque || plano.tag) && (
         <div className="absolute -top-3 left-1/2 -translate-x-1/2">
           <Badge className="bg-primary text-primary-foreground shadow-lg px-3 py-1">
             <Star className="w-3 h-3 mr-1 fill-current" />
-            RECOMENDADO
+            {plano.tag || 'RECOMENDADO'}
           </Badge>
         </div>
       )}

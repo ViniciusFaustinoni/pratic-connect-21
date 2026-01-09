@@ -11,7 +11,8 @@ import {
   UserPlus,
   ChevronDown,
   ChevronUp,
-  Car
+  Car,
+  Loader2
 } from 'lucide-react';
 import { CATEGORIAS_VEICULO } from '@/components/cotador/VehicleCategorySelect';
 import { PlanoCardCotacao } from './PlanoCardCotacao';
@@ -39,6 +40,7 @@ interface PlanoCalculado {
   valorAdesao: number;
   valorMensal: number;
   destaque: boolean;
+  tag?: string;
 }
 
 interface EtapaResultadoProps {
@@ -56,6 +58,7 @@ interface EtapaResultadoProps {
   onNovaCotacao: () => void;
   onGerarPDF: () => void;
   onIniciarCadastro: () => void;
+  isLoading?: boolean;
 }
 
 const formatCurrency = (value: number) => {
@@ -93,6 +96,7 @@ export function EtapaResultado({
   onNovaCotacao,
   onGerarPDF,
   onIniciarCadastro,
+  isLoading = false,
 }: EtapaResultadoProps) {
   const [showAllPlanos, setShowAllPlanos] = useState(false);
 
@@ -104,9 +108,25 @@ export function EtapaResultado({
   const planosVisiveis = showAllPlanos ? planos : planos.slice(0, 3);
   const planoBasico = planos[0];
 
-  const handleSelectPlano = (plano: PlanoCalculado) => {
+  const handleSelectPlano = (plano: any) => {
     setPlanoSelecionado(plano);
   };
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <Card className="border-border bg-card">
+          <CardContent className="py-12">
+            <div className="flex flex-col items-center justify-center gap-4">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p className="text-muted-foreground">Calculando planos disponíveis...</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
