@@ -14,8 +14,8 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import { useState } from 'react';
-import { Plus, Inbox, Users } from 'lucide-react';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { Plus, Inbox, Users, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -122,7 +122,7 @@ function DroppableColumn({
       </div>
 
       {/* Column Body with Cards */}
-      <ScrollArea className="flex-1 max-h-[calc(100vh-420px)]">
+      <ScrollArea className="flex-1 max-h-[45vh]">
         <div ref={setNodeRef} className="p-3 space-y-3 min-h-[120px]">
           <SortableContext
             items={leads.map((l) => l.id)}
@@ -182,6 +182,9 @@ export function LeadsKanbanNew({
   isLoading,
 }: LeadsKanbanNewProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(true);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -191,6 +194,73 @@ export function LeadsKanbanNew({
     }),
     useSensor(KeyboardSensor)
   );
+
+  // Update scroll button visibility
+  const updateScrollButtons = useCallback(() => {
+    if (!scrollRef.current) return;
+    const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
+    setCanScrollLeft(scrollLeft > 10);
+    setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 10);
+  }, []);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    
+    updateScrollButtons();
+    el.addEventListener('scroll', updateScrollButtons);
+    window.addEventListener('resize', updateScrollButtons);
+    
+    return () => {
+      el.removeEventListener('scroll', updateScrollButtons);
+      window.removeEventListener('resize', updateScrollButtons);
+    };
+  }, [updateScrollButtons, leads]);
+
+  // Scroll board programmatically
+  const scrollBoard = useCallback((direction: 'left' | 'right') => {
+    if (!scrollRef.current) return;
+    const amount = 320; // column width
+    scrollRef.current.scrollBy({
+      left: direction === 'left' ? -amount : amount,
+      behavior: 'smooth',
+    });
+  }, []);
+
+  // Smart wheel handler - convert vertical to horizontal when appropriate
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    if (!scrollRef.current) return;
+    
+    // If Shift is pressed, let native horizontal scroll work
+    if (e.shiftKey) return;
+    
+    // Check if pointer is over an element that can scroll vertically
+    let target = e.target as HTMLElement | null;
+    while (target && target !== scrollRef.current) {
+      const style = window.getComputedStyle(target);
+      const isScrollable = 
+        (style.overflowY === 'auto' || style.overflowY === 'scroll') &&
+        target.scrollHeight > target.clientHeight;
+      
+      if (isScrollable) {
+        // Check if we're at scroll boundaries
+        const atTop = target.scrollTop <= 0;
+        const atBottom = target.scrollTop >= target.scrollHeight - target.clientHeight - 1;
+        
+        // If scrolling up and not at top, or scrolling down and not at bottom, let it scroll
+        if ((e.deltaY < 0 && !atTop) || (e.deltaY > 0 && !atBottom)) {
+          return; // Let vertical scroll happen naturally
+        }
+      }
+      target = target.parentElement;
+    }
+    
+    // Convert vertical wheel to horizontal scroll
+    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+      e.preventDefault();
+      scrollRef.current.scrollLeft += e.deltaY;
+    }
+  }, []);
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
@@ -241,18 +311,50 @@ export function LeadsKanbanNew({
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      {/* Kanban Container with horizontal scroll */}
-      <div className="flex gap-4 overflow-x-auto overflow-y-hidden pb-4 px-6 h-[calc(100vh-320px)] kanban-scroll">
-        {ETAPAS_KANBAN.map((etapa) => (
-          <DroppableColumn
-            key={etapa}
-            etapa={etapa}
-            leads={leadsByEtapa[etapa] || []}
-            onLeadClick={onLeadClick}
-            onLeadDelete={onLeadDelete}
-            onAddLead={onAddLead}
-          />
-        ))}
+      {/* Kanban Container */}
+      <div className="relative h-full">
+        {/* Left scroll button */}
+        {canScrollLeft && (
+          <Button
+            variant="secondary"
+            size="icon"
+            className="absolute left-2 top-1/2 -translate-y-1/2 z-20 h-10 w-10 rounded-full shadow-lg bg-background/90 backdrop-blur-sm hover:bg-background"
+            onClick={() => scrollBoard('left')}
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </Button>
+        )}
+
+        {/* Right scroll button */}
+        {canScrollRight && (
+          <Button
+            variant="secondary"
+            size="icon"
+            className="absolute right-2 top-1/2 -translate-y-1/2 z-20 h-10 w-10 rounded-full shadow-lg bg-background/90 backdrop-blur-sm hover:bg-background"
+            onClick={() => scrollBoard('right')}
+          >
+            <ChevronRight className="h-5 w-5" />
+          </Button>
+        )}
+
+        {/* Scrollable board */}
+        <div
+          ref={scrollRef}
+          onWheel={handleWheel}
+          className="flex gap-4 overflow-x-scroll overflow-y-hidden pb-6 px-6 h-full kanban-scroll"
+          style={{ scrollbarGutter: 'stable' }}
+        >
+          {ETAPAS_KANBAN.map((etapa) => (
+            <DroppableColumn
+              key={etapa}
+              etapa={etapa}
+              leads={leadsByEtapa[etapa] || []}
+              onLeadClick={onLeadClick}
+              onLeadDelete={onLeadDelete}
+              onAddLead={onAddLead}
+            />
+          ))}
+        </div>
       </div>
 
       {/* Drag Overlay */}
