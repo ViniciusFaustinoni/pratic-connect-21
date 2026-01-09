@@ -180,38 +180,40 @@ export default function LeadsUnificado() {
   };
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Fixed Header Section */}
-      <div className="shrink-0 z-10 bg-background border-b border-border px-6 py-5 space-y-5">
-        {/* Title & Actions */}
-        <LeadsHeader
-          onNovoLead={() => setShowNewLeadDialog(true)}
-          onImport={() => {
-            toast.info('Funcionalidade de importação em desenvolvimento');
-          }}
-        />
+    <div className="flex flex-col h-full bg-background">
+      {/* Fixed Header Section with subtle gradient */}
+      <div className="shrink-0 z-10 bg-gradient-to-b from-muted/50 to-background border-b border-border/50">
+        <div className="px-6 py-6 space-y-6">
+          {/* Title & Actions */}
+          <LeadsHeader
+            onNovoLead={() => setShowNewLeadDialog(true)}
+            onImport={() => {
+              toast.info('Funcionalidade de importação em desenvolvimento');
+            }}
+          />
 
-        {/* Metrics Cards */}
-        <LeadMetricsCards leads={allLeads} />
+          {/* Metrics Cards */}
+          <LeadMetricsCards leads={allLeads} />
 
-        {/* Filters Bar */}
-        <LeadsFiltersBar
-          search={filters.search}
-          onSearchChange={handleSearchChange}
-          quickFilter={quickFilter}
-          onQuickFilterChange={setQuickFilter}
-          overdueCount={overdueCount}
-          viewMode={viewMode}
-          onViewModeChange={setViewMode}
-          onOpenFilters={() => setShowFilters(true)}
-          filtersActive={hasActiveFilters}
-        />
+          {/* Filters Bar */}
+          <LeadsFiltersBar
+            search={filters.search}
+            onSearchChange={handleSearchChange}
+            quickFilter={quickFilter}
+            onQuickFilterChange={setQuickFilter}
+            overdueCount={overdueCount}
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+            onOpenFilters={() => setShowFilters(true)}
+            filtersActive={hasActiveFilters}
+          />
+        </div>
       </div>
 
       {/* Content Area - flex-1 min-h-0 is KEY for proper flex layout */}
-      <div className="flex-1 min-h-0 flex flex-col">
+      <div className="flex-1 min-h-0 flex flex-col bg-muted/20">
         {viewMode === 'list' ? (
-          <div className="flex-1 min-h-0 overflow-auto px-6 py-4">
+          <div className="flex-1 min-h-0 overflow-auto px-6 py-5">
             <LeadsTable
               leads={filteredLeads}
               isLoading={isLoading}
@@ -221,7 +223,7 @@ export default function LeadsUnificado() {
             />
           </div>
         ) : (
-          <div className="flex-1 min-h-0 px-6 py-4">
+          <div className="flex-1 min-h-0 px-6 py-5">
             <LeadsKanbanNew
               leads={filteredLeads}
               isLoading={isLoading}
@@ -276,7 +278,7 @@ export default function LeadsUnificado() {
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={!!leadToDelete} onOpenChange={() => setLeadToDelete(null)}>
-        <AlertDialogContent>
+        <AlertDialogContent className="border-border/50">
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
             <AlertDialogDescription>
