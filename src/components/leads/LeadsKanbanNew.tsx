@@ -14,8 +14,8 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import { useState, useRef, useCallback, useEffect } from 'react';
-import { Inbox, Users } from 'lucide-react';
+import { useState, useRef, useCallback } from 'react';
+import { Inbox, Users, Sparkles } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 
@@ -40,45 +40,45 @@ const ETAPAS_KANBAN: EtapaLead[] = [
 ];
 
 const ETAPA_COLORS: Record<string, string> = {
-  novo: 'border-t-blue-500 bg-blue-500/5',
-  contato: 'border-t-yellow-500 bg-yellow-500/5',
-  qualificado: 'border-t-purple-500 bg-purple-500/5',
-  cotacao_enviada: 'border-t-orange-500 bg-orange-500/5',
-  negociacao: 'border-t-pink-500 bg-pink-500/5',
-  vistoria_agendada: 'border-t-teal-500 bg-teal-500/5',
-  contrato_enviado: 'border-t-indigo-500 bg-indigo-500/5',
-  contrato_assinado: 'border-t-emerald-500 bg-emerald-500/5',
-  instalacao_agendada: 'border-t-cyan-500 bg-cyan-500/5',
-  ganho: 'border-t-green-500 bg-green-500/5',
-  perdido: 'border-t-red-500 bg-red-500/5',
+  novo: 'border-t-blue-500',
+  contato: 'border-t-yellow-500',
+  qualificado: 'border-t-purple-500',
+  cotacao_enviada: 'border-t-orange-500',
+  negociacao: 'border-t-pink-500',
+  vistoria_agendada: 'border-t-teal-500',
+  contrato_enviado: 'border-t-indigo-500',
+  contrato_assinado: 'border-t-emerald-500',
+  instalacao_agendada: 'border-t-cyan-500',
+  ganho: 'border-t-green-500',
+  perdido: 'border-t-red-500',
 };
 
 const ETAPA_HEADER_COLORS: Record<string, string> = {
-  novo: 'text-blue-400',
-  contato: 'text-yellow-400',
-  qualificado: 'text-purple-400',
-  cotacao_enviada: 'text-orange-400',
-  negociacao: 'text-pink-400',
-  vistoria_agendada: 'text-teal-400',
-  contrato_enviado: 'text-indigo-400',
-  contrato_assinado: 'text-emerald-400',
-  instalacao_agendada: 'text-cyan-400',
-  ganho: 'text-green-400',
-  perdido: 'text-red-400',
+  novo: 'text-blue-500',
+  contato: 'text-yellow-500',
+  qualificado: 'text-purple-500',
+  cotacao_enviada: 'text-orange-500',
+  negociacao: 'text-pink-500',
+  vistoria_agendada: 'text-teal-500',
+  contrato_enviado: 'text-indigo-500',
+  contrato_assinado: 'text-emerald-500',
+  instalacao_agendada: 'text-cyan-500',
+  ganho: 'text-green-500',
+  perdido: 'text-red-500',
 };
 
-const ETAPA_BADGE_COLORS: Record<string, string> = {
-  novo: 'bg-blue-500/20 text-blue-400',
-  contato: 'bg-yellow-500/20 text-yellow-400',
-  qualificado: 'bg-purple-500/20 text-purple-400',
-  cotacao_enviada: 'bg-orange-500/20 text-orange-400',
-  negociacao: 'bg-pink-500/20 text-pink-400',
-  vistoria_agendada: 'bg-teal-500/20 text-teal-400',
-  contrato_enviado: 'bg-indigo-500/20 text-indigo-400',
-  contrato_assinado: 'bg-emerald-500/20 text-emerald-400',
-  instalacao_agendada: 'bg-cyan-500/20 text-cyan-400',
-  ganho: 'bg-green-500/20 text-green-400',
-  perdido: 'bg-red-500/20 text-red-400',
+const ETAPA_BADGE_BG: Record<string, string> = {
+  novo: 'bg-blue-500/15 text-blue-600 dark:text-blue-400',
+  contato: 'bg-yellow-500/15 text-yellow-600 dark:text-yellow-400',
+  qualificado: 'bg-purple-500/15 text-purple-600 dark:text-purple-400',
+  cotacao_enviada: 'bg-orange-500/15 text-orange-600 dark:text-orange-400',
+  negociacao: 'bg-pink-500/15 text-pink-600 dark:text-pink-400',
+  vistoria_agendada: 'bg-teal-500/15 text-teal-600 dark:text-teal-400',
+  contrato_enviado: 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400',
+  contrato_assinado: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
+  instalacao_agendada: 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-400',
+  ganho: 'bg-green-500/15 text-green-600 dark:text-green-400',
+  perdido: 'bg-red-500/15 text-red-600 dark:text-red-400',
 };
 
 interface Lead {
@@ -112,24 +112,30 @@ function DroppableColumn({
   return (
     <Card
       className={cn(
-        'flex flex-col w-72 min-w-[288px] max-w-[288px] h-full border-t-4',
-        'bg-card/50 backdrop-blur-sm',
+        'flex flex-col w-[280px] min-w-[280px] max-w-[280px] h-full',
+        'rounded-xl border-t-[3px] border-border/50',
+        'bg-card/80 backdrop-blur-sm shadow-sm',
+        'transition-all duration-200',
+        'hover:shadow-md',
         ETAPA_COLORS[etapa],
-        isOver && 'ring-2 ring-primary ring-offset-2 ring-offset-background'
+        isOver && 'ring-2 ring-primary/50 ring-offset-2 ring-offset-background shadow-lg scale-[1.01]'
       )}
     >
       {/* Column Header */}
-      <div className="flex flex-col gap-1 p-3 border-b border-border shrink-0">
+      <div className="flex flex-col gap-1 px-3 py-3 border-b border-border/30 shrink-0 bg-muted/20">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Users className={cn('h-4 w-4', ETAPA_HEADER_COLORS[etapa])} />
-            <span className="font-semibold text-xs truncate max-w-[180px]">
+            <span className="font-semibold text-sm truncate max-w-[160px]">
               {ETAPA_LABELS[etapa]}
             </span>
           </div>
           <Badge
             variant="secondary"
-            className={cn('text-xs font-medium shrink-0', ETAPA_BADGE_COLORS[etapa])}
+            className={cn(
+              'text-xs font-semibold shrink-0 border-0',
+              ETAPA_BADGE_BG[etapa]
+            )}
           >
             {leads.length}
           </Badge>
@@ -139,7 +145,7 @@ function DroppableColumn({
       {/* Column Body - NATIVE SCROLL instead of ScrollArea */}
       <div
         ref={setNodeRef}
-        className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-2 space-y-2"
+        className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-2 space-y-2 scrollbar-thin"
         data-scroll-vertical="true"
       >
         <SortableContext
@@ -156,9 +162,12 @@ function DroppableColumn({
           ))}
         </SortableContext>
         {leads.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-6 text-center">
-            <Inbox className="h-6 w-6 text-muted-foreground/50 mb-2" />
-            <p className="text-xs text-muted-foreground">Nenhum lead</p>
+          <div className="flex flex-col items-center justify-center py-8 text-center">
+            <div className="h-12 w-12 rounded-full bg-muted/50 flex items-center justify-center mb-3">
+              <Inbox className="h-5 w-5 text-muted-foreground/50" />
+            </div>
+            <p className="text-xs text-muted-foreground font-medium">Nenhum lead</p>
+            <p className="text-xs text-muted-foreground/60 mt-0.5">Arraste leads para cá</p>
           </div>
         )}
       </div>
@@ -262,7 +271,12 @@ export function LeadsKanbanNew({
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <p className="text-muted-foreground">Carregando leads...</p>
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center animate-pulse">
+            <Sparkles className="h-5 w-5 text-primary" />
+          </div>
+          <p className="text-muted-foreground text-sm">Carregando leads...</p>
+        </div>
       </div>
     );
   }
@@ -282,11 +296,11 @@ export function LeadsKanbanNew({
       <div
         ref={scrollRef}
         onWheel={handleWheel}
-        className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden kanban-scroll"
+        className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden kanban-scroll rounded-lg"
         style={{ touchAction: 'pan-x' }}
       >
         {/* Inner container - FORCES min-width to enable horizontal scroll */}
-        <div className="inline-flex gap-3 h-full min-w-max py-1 px-1">
+        <div className="inline-flex gap-4 h-full min-w-max py-2 px-1">
           {ETAPAS_KANBAN.map((etapa) => (
             <DroppableColumn
               key={etapa}
@@ -302,7 +316,7 @@ export function LeadsKanbanNew({
       {/* Drag Overlay */}
       <DragOverlay>
         {activeLead && (
-          <div className="opacity-90 rotate-3 shadow-2xl scale-105">
+          <div className="opacity-95 rotate-2 shadow-2xl scale-105">
             <LeadCard lead={activeLead} onClick={() => {}} />
           </div>
         )}

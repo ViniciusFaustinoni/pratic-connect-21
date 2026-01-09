@@ -11,7 +11,6 @@ import {
   MoreHorizontal,
   Eye,
   Trash2,
-  Car,
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -48,25 +47,27 @@ interface LeadCardProps {
 }
 
 const ORIGEM_COLORS: Record<string, string> = {
-  site: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
-  telefone: 'bg-green-500/10 text-green-400 border-green-500/20',
-  whatsapp: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-  indicacao: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
-  instagram: 'bg-pink-500/10 text-pink-400 border-pink-500/20',
-  facebook: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20',
-  evento: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
-  parceiro: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
-  outro: 'bg-gray-500/10 text-gray-400 border-gray-500/20',
+  site: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
+  telefone: 'bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20',
+  whatsapp: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
+  indicacao: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20',
+  instagram: 'bg-pink-500/10 text-pink-600 dark:text-pink-400 border-pink-500/20',
+  facebook: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20',
+  evento: 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20',
+  parceiro: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20',
+  outro: 'bg-muted text-muted-foreground border-border',
 };
 
-const ETAPA_BORDER_COLORS: Record<string, string> = {
-  novo: 'border-l-blue-500',
-  contato: 'border-l-yellow-500',
-  qualificado: 'border-l-purple-500',
-  cotacao_enviada: 'border-l-orange-500',
-  negociacao: 'border-l-pink-500',
-  ganho: 'border-l-green-500',
-  perdido: 'border-l-red-500',
+const AVATAR_COLORS: Record<string, string> = {
+  site: 'bg-blue-500/15 text-blue-600 dark:text-blue-400',
+  telefone: 'bg-green-500/15 text-green-600 dark:text-green-400',
+  whatsapp: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
+  indicacao: 'bg-purple-500/15 text-purple-600 dark:text-purple-400',
+  instagram: 'bg-pink-500/15 text-pink-600 dark:text-pink-400',
+  facebook: 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400',
+  evento: 'bg-orange-500/15 text-orange-600 dark:text-orange-400',
+  parceiro: 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-400',
+  outro: 'bg-muted text-muted-foreground',
 };
 
 export function LeadCard({ lead, onClick, onDelete, onQuote }: LeadCardProps) {
@@ -115,31 +116,33 @@ export function LeadCard({ lead, onClick, onDelete, onQuote }: LeadCardProps) {
       {...attributes}
       {...listeners}
       className={cn(
-        'relative p-3 cursor-grab transition-all duration-200',
-        'border-l-4 bg-card hover:bg-card-hover',
-        'hover:shadow-lg hover:-translate-y-0.5',
-        ETAPA_BORDER_COLORS[lead.etapa] || 'border-l-gray-500',
-        isDragging && 'opacity-50 shadow-xl rotate-2 cursor-grabbing',
-        isStale && 'ring-1 ring-orange-500/30'
+        'relative p-3 cursor-grab',
+        'bg-card border-border/50 rounded-lg',
+        'transition-all duration-200 ease-out',
+        'hover:shadow-md hover:-translate-y-0.5 hover:border-border',
+        isDragging && 'opacity-50 shadow-xl rotate-2 cursor-grabbing scale-105',
+        isStale && 'ring-1 ring-orange-500/40 bg-orange-500/5'
       )}
       onClick={onClick}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
       {/* Header */}
-      <div className="flex items-start justify-between gap-2 mb-2">
+      <div className="flex items-start justify-between gap-2 mb-2.5">
         <div className="flex items-center gap-2.5 min-w-0 flex-1">
           <div
             className={cn(
               'flex items-center justify-center h-9 w-9 rounded-full text-sm font-semibold flex-shrink-0',
-              'bg-primary/10 text-primary'
+              'transition-transform duration-200',
+              AVATAR_COLORS[lead.origem] || AVATAR_COLORS.outro,
+              isHovered && 'scale-105'
             )}
           >
             {lead.nome.charAt(0).toUpperCase()}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="font-medium text-sm truncate">{lead.nome}</p>
-            <p className="text-xs text-muted-foreground">
+            <p className="font-medium text-sm truncate leading-tight">{lead.nome}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
               {formatDistanceToNow(new Date(lead.created_at), {
                 addSuffix: true,
                 locale: ptBR,
@@ -149,7 +152,7 @@ export function LeadCard({ lead, onClick, onDelete, onQuote }: LeadCardProps) {
         </div>
         <div className="flex items-center gap-1">
           {isStale && (
-            <span title="Lead parado há mais de 3 dias">
+            <span title="Lead parado há mais de 3 dias" className="animate-pulse">
               <AlertTriangle className="h-4 w-4 text-orange-500" />
             </span>
           )}
@@ -158,8 +161,10 @@ export function LeadCard({ lead, onClick, onDelete, onQuote }: LeadCardProps) {
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7 opacity-0 group-hover:opacity-100 hover:opacity-100 data-[state=open]:opacity-100"
-                style={{ opacity: isHovered ? 1 : 0 }}
+                className={cn(
+                  'h-7 w-7 transition-opacity duration-200',
+                  isHovered ? 'opacity-100' : 'opacity-0'
+                )}
               >
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
@@ -198,22 +203,22 @@ export function LeadCard({ lead, onClick, onDelete, onQuote }: LeadCardProps) {
       </div>
 
       {/* Phone */}
-      <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
-        <Phone className="h-3.5 w-3.5" />
-        <span>{formatPhone(lead.telefone)}</span>
+      <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2.5">
+        <Phone className="h-3.5 w-3.5 flex-shrink-0" />
+        <span className="truncate">{formatPhone(lead.telefone)}</span>
       </div>
 
       {/* Origin & Seller */}
-      <div className="flex items-center justify-between pt-2 border-t border-border">
+      <div className="flex items-center justify-between pt-2.5 border-t border-border/50">
         <Badge
           variant="outline"
-          className={cn('text-xs font-normal', ORIGEM_COLORS[lead.origem])}
+          className={cn('text-xs font-medium px-2 py-0.5', ORIGEM_COLORS[lead.origem] || ORIGEM_COLORS.outro)}
         >
           {ORIGEM_LABELS[lead.origem as keyof typeof ORIGEM_LABELS] || lead.origem}
         </Badge>
-        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <User className="h-3 w-3" />
-          <span className="truncate max-w-[80px]">
+          <span className="truncate max-w-[70px]">
             {lead.vendedor?.nome || 'Não atribuído'}
           </span>
         </div>
@@ -222,15 +227,16 @@ export function LeadCard({ lead, onClick, onDelete, onQuote }: LeadCardProps) {
       {/* Quick Actions (shown on hover) */}
       <div
         className={cn(
-          'absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-card via-card to-transparent',
-          'flex items-center justify-center gap-2 transition-opacity duration-200',
-          isHovered ? 'opacity-100' : 'opacity-0 pointer-events-none'
+          'absolute -bottom-1 left-2 right-2',
+          'flex items-center justify-center gap-1.5',
+          'transition-all duration-200 ease-out',
+          isHovered ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'
         )}
       >
         <Button
           size="sm"
-          variant="outline"
-          className="h-7 text-xs gap-1.5 bg-card"
+          variant="secondary"
+          className="h-7 text-xs gap-1.5 shadow-md bg-card border border-border"
           onClick={handleWhatsApp}
         >
           <MessageCircle className="h-3.5 w-3.5 text-green-500" />
@@ -238,8 +244,8 @@ export function LeadCard({ lead, onClick, onDelete, onQuote }: LeadCardProps) {
         </Button>
         <Button
           size="sm"
-          variant="outline"
-          className="h-7 text-xs gap-1.5 bg-card"
+          variant="secondary"
+          className="h-7 text-xs gap-1.5 shadow-md bg-card border border-border"
           onClick={handleQuote}
         >
           <Calculator className="h-3.5 w-3.5 text-primary" />

@@ -50,29 +50,33 @@ export function LeadMetricsCards({ leads }: LeadMetricsCardsProps) {
       value: leadsHoje,
       subtitle: 'novos leads',
       icon: Calendar,
-      gradient: 'from-blue-500 to-blue-600',
+      iconColor: 'text-blue-500',
+      bgColor: 'bg-blue-500/10',
     },
     {
       title: 'Negociação',
       value: emNegociacao,
       subtitle: 'em andamento',
       icon: MessageSquare,
-      gradient: 'from-purple-500 to-purple-600',
+      iconColor: 'text-purple-500',
+      bgColor: 'bg-purple-500/10',
     },
     {
       title: 'Conversões',
       value: conversoesMes,
       subtitle: 'este mês',
       icon: TrendingUp,
-      gradient: 'from-green-500 to-green-600',
+      iconColor: 'text-green-500',
+      bgColor: 'bg-green-500/10',
     },
     {
       title: 'Taxa',
       value: `${taxaConversao.toFixed(1)}%`,
-      subtitle: taxaConversao >= 15 ? '+2.3%' : '-1.2%',
+      subtitle: taxaConversao >= 15 ? '+2.3% vs mês ant.' : '-1.2% vs mês ant.',
       subtitleTrend: taxaConversao >= 15 ? 'up' : 'down',
       icon: Target,
-      gradient: 'from-orange-500 to-orange-600',
+      iconColor: 'text-orange-500',
+      bgColor: 'bg-orange-500/10',
     },
   ];
 
@@ -82,37 +86,42 @@ export function LeadMetricsCards({ leads }: LeadMetricsCardsProps) {
         <Card
           key={metric.title}
           className={cn(
-            'relative overflow-hidden border-0',
-            'bg-gradient-to-br',
-            metric.gradient
+            'relative overflow-hidden',
+            'border-border/50 bg-card/80 backdrop-blur-sm',
+            'hover:border-border hover:shadow-sm transition-all duration-200'
           )}
         >
           <CardContent className="p-4">
             <div className="flex items-start justify-between">
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-white/80">{metric.title}</p>
-                <p className="text-2xl font-bold text-white">{metric.value}</p>
+              <div className="space-y-1.5">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  {metric.title}
+                </p>
+                <p className="text-2xl font-bold tracking-tight">{metric.value}</p>
                 <div className="flex items-center gap-1">
                   {metric.subtitleTrend === 'up' && (
-                    <ArrowUp className="h-3 w-3 text-green-200" />
+                    <ArrowUp className="h-3 w-3 text-green-500" />
                   )}
                   {metric.subtitleTrend === 'down' && (
-                    <ArrowDown className="h-3 w-3 text-red-200" />
+                    <ArrowDown className="h-3 w-3 text-red-500" />
                   )}
                   <p
                     className={cn(
                       'text-xs',
-                      metric.subtitleTrend === 'up' && 'text-green-200',
-                      metric.subtitleTrend === 'down' && 'text-red-200',
-                      !metric.subtitleTrend && 'text-white/60'
+                      metric.subtitleTrend === 'up' && 'text-green-600 dark:text-green-400',
+                      metric.subtitleTrend === 'down' && 'text-red-600 dark:text-red-400',
+                      !metric.subtitleTrend && 'text-muted-foreground'
                     )}
                   >
                     {metric.subtitle}
                   </p>
                 </div>
               </div>
-              <div className="flex items-center justify-center h-12 w-12 rounded-xl bg-white/10">
-                <metric.icon className="h-6 w-6 text-white/80" />
+              <div className={cn(
+                'flex items-center justify-center h-11 w-11 rounded-xl',
+                metric.bgColor
+              )}>
+                <metric.icon className={cn('h-5 w-5', metric.iconColor)} />
               </div>
             </div>
           </CardContent>
