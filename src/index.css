@@ -58,6 +58,10 @@
 
     --radius: 0.5rem;
 
+    /* Brand colors - PRATIC */
+    --brand-blue: 218 82% 24%;
+    --brand-red: 350 84% 49%;
+
     /* Sidebar - branco/cinza claro */
     --sidebar-background: 0 0% 100%;
     --sidebar-foreground: 222 47% 11%;
@@ -129,6 +133,10 @@
     --border-hover: 217 62% 26%;
     --input: 213 49% 20%;
     --ring: 218 67% 36%;
+
+    /* Brand colors - PRATIC */
+    --brand-blue: 218 82% 24%;
+    --brand-red: 350 84% 49%;
 
     /* Sidebar - Azul escuro */
     --sidebar-background: 215 65% 9%;
