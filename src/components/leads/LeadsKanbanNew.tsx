@@ -15,10 +15,13 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { useState } from 'react';
+import { Plus, Inbox, Users } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { LeadCardSimple } from './LeadCardSimple';
+import { LeadCard } from './LeadCard';
+import { LeadsEmptyState } from './LeadsEmptyState';
 import { ETAPA_LABELS, type EtapaLead } from '@/types/database';
 import { cn } from '@/lib/utils';
 
@@ -34,13 +37,23 @@ const ETAPAS_KANBAN: EtapaLead[] = [
 ];
 
 const ETAPA_COLORS: Record<string, string> = {
-  novo: 'border-t-blue-500',
-  contato: 'border-t-yellow-500',
-  qualificado: 'border-t-purple-500',
-  cotacao_enviada: 'border-t-orange-500',
-  negociacao: 'border-t-pink-500',
-  ganho: 'border-t-green-500',
-  perdido: 'border-t-red-500',
+  novo: 'border-t-blue-500 bg-blue-500/5',
+  contato: 'border-t-yellow-500 bg-yellow-500/5',
+  qualificado: 'border-t-purple-500 bg-purple-500/5',
+  cotacao_enviada: 'border-t-orange-500 bg-orange-500/5',
+  negociacao: 'border-t-pink-500 bg-pink-500/5',
+  ganho: 'border-t-green-500 bg-green-500/5',
+  perdido: 'border-t-red-500 bg-red-500/5',
+};
+
+const ETAPA_HEADER_COLORS: Record<string, string> = {
+  novo: 'text-blue-400',
+  contato: 'text-yellow-400',
+  qualificado: 'text-purple-400',
+  cotacao_enviada: 'text-orange-400',
+  negociacao: 'text-pink-400',
+  ganho: 'text-green-400',
+  perdido: 'text-red-400',
 };
 
 const ETAPA_BADGE_COLORS: Record<string, string> = {
@@ -70,46 +83,83 @@ interface DroppableColumnProps {
   etapa: EtapaLead;
   leads: Lead[];
   onLeadClick: (lead: Lead) => void;
+  onLeadDelete?: (id: string) => void;
+  onAddLead?: (etapa: EtapaLead) => void;
 }
 
-function DroppableColumn({ etapa, leads, onLeadClick }: DroppableColumnProps) {
+function DroppableColumn({
+  etapa,
+  leads,
+  onLeadClick,
+  onLeadDelete,
+  onAddLead,
+}: DroppableColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: etapa });
 
   return (
     <Card
       className={cn(
-        'flex flex-col min-w-[280px] max-w-[280px] flex-shrink-0 border-t-4 bg-card',
+        'flex flex-col min-w-[300px] max-w-[300px] flex-shrink-0 border-t-4',
+        'bg-card/50 backdrop-blur-sm',
         ETAPA_COLORS[etapa],
-        isOver && 'ring-2 ring-primary ring-offset-2'
+        isOver && 'ring-2 ring-primary ring-offset-2 ring-offset-background'
       )}
     >
       {/* Column Header */}
-      <div className="flex items-center justify-between p-3 border-b border-border">
-        <span className="font-medium text-sm">{ETAPA_LABELS[etapa]}</span>
-        <Badge variant="secondary" className={cn('text-xs', ETAPA_BADGE_COLORS[etapa])}>
-          {leads.length}
-        </Badge>
+      <div className="flex flex-col gap-1 p-4 border-b border-border">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Users className={cn('h-4 w-4', ETAPA_HEADER_COLORS[etapa])} />
+            <span className="font-semibold text-sm">{ETAPA_LABELS[etapa]}</span>
+          </div>
+          <Badge
+            variant="secondary"
+            className={cn('text-xs font-medium', ETAPA_BADGE_COLORS[etapa])}
+          >
+            {leads.length}
+          </Badge>
+        </div>
       </div>
 
       {/* Column Body with Cards */}
-      <ScrollArea className="flex-1 max-h-[calc(100vh-360px)]">
-        <div ref={setNodeRef} className="p-2 space-y-2 min-h-[100px]">
-          <SortableContext items={leads.map((l) => l.id)} strategy={verticalListSortingStrategy}>
+      <ScrollArea className="flex-1 max-h-[calc(100vh-420px)]">
+        <div ref={setNodeRef} className="p-3 space-y-3 min-h-[120px]">
+          <SortableContext
+            items={leads.map((l) => l.id)}
+            strategy={verticalListSortingStrategy}
+          >
             {leads.map((lead) => (
-              <LeadCardSimple
+              <LeadCard
                 key={lead.id}
                 lead={lead}
                 onClick={() => onLeadClick(lead)}
+                onDelete={onLeadDelete}
               />
             ))}
           </SortableContext>
           {leads.length === 0 && (
-            <div className="flex items-center justify-center h-20 text-sm text-muted-foreground">
-              Nenhum lead
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <Inbox className="h-8 w-8 text-muted-foreground/50 mb-2" />
+              <p className="text-sm text-muted-foreground">Nenhum lead</p>
             </div>
           )}
         </div>
       </ScrollArea>
+
+      {/* Column Footer */}
+      {onAddLead && (
+        <div className="p-3 border-t border-border">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full gap-2 text-muted-foreground hover:text-foreground"
+            onClick={() => onAddLead(etapa)}
+          >
+            <Plus className="h-4 w-4" />
+            Adicionar lead
+          </Button>
+        </div>
+      )}
     </Card>
   );
 }
@@ -118,6 +168,8 @@ interface LeadsKanbanNewProps {
   leads: Lead[];
   onLeadClick: (lead: Lead) => void;
   onLeadMove: (leadId: string, newEtapa: EtapaLead) => void;
+  onLeadDelete?: (id: string) => void;
+  onAddLead?: (etapa?: EtapaLead) => void;
   isLoading?: boolean;
 }
 
@@ -125,6 +177,8 @@ export function LeadsKanbanNew({
   leads,
   onLeadClick,
   onLeadMove,
+  onLeadDelete,
+  onAddLead,
   isLoading,
 }: LeadsKanbanNewProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -176,6 +230,10 @@ export function LeadsKanbanNew({
     );
   }
 
+  if (leads.length === 0) {
+    return <LeadsEmptyState onNewLead={onAddLead ? () => onAddLead() : undefined} />;
+  }
+
   return (
     <DndContext
       sensors={sensors}
@@ -184,13 +242,15 @@ export function LeadsKanbanNew({
       onDragEnd={handleDragEnd}
     >
       {/* Kanban Container with horizontal scroll */}
-      <div className="flex gap-4 overflow-x-auto overflow-y-hidden pb-4 px-6 h-[calc(100vh-260px)]">
+      <div className="flex gap-4 overflow-x-auto overflow-y-hidden pb-4 px-6 h-[calc(100vh-320px)] kanban-scroll">
         {ETAPAS_KANBAN.map((etapa) => (
           <DroppableColumn
             key={etapa}
             etapa={etapa}
             leads={leadsByEtapa[etapa] || []}
             onLeadClick={onLeadClick}
+            onLeadDelete={onLeadDelete}
+            onAddLead={onAddLead}
           />
         ))}
       </div>
@@ -198,8 +258,8 @@ export function LeadsKanbanNew({
       {/* Drag Overlay */}
       <DragOverlay>
         {activeLead && (
-          <div className="opacity-80 rotate-3 shadow-2xl">
-            <LeadCardSimple lead={activeLead} onClick={() => {}} />
+          <div className="opacity-90 rotate-3 shadow-2xl scale-105">
+            <LeadCard lead={activeLead} onClick={() => {}} />
           </div>
         )}
       </DragOverlay>
