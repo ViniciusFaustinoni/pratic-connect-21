@@ -37,6 +37,7 @@ import { LeadFunnelProgress } from '@/components/leads/LeadFunnelProgress';
 import { LeadQuickStats } from '@/components/leads/LeadQuickStats';
 import { MoverEtapaModal } from '@/components/vendas/MoverEtapaModal';
 import { AgendarFollowupDialog } from '@/components/leads/AgendarFollowupDialog';
+import { VeiculoPerfilAlert } from '@/components/leads/VeiculoPerfilAlert';
 import { toast } from 'sonner';
 import { format, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -160,7 +161,7 @@ export default function LeadDetalhe() {
     );
   }
 
-  const hasVeiculo = lead.veiculo_marca || lead.veiculo_modelo || lead.veiculo_ano || lead.veiculo_placa;
+  const hasVeiculo = Boolean(lead.veiculo_marca || lead.veiculo_modelo || lead.veiculo_ano || lead.veiculo_placa);
 
   return (
     <div className="space-y-6 p-4 md:p-6">
@@ -343,6 +344,12 @@ export default function LeadDetalhe() {
                     </p>
                   </div>
                 )}
+                {/* Alerta de veículo fora do perfil */}
+                <VeiculoPerfilAlert 
+                  anoVeiculo={lead.veiculo_ano} 
+                  valorFipe={lead.veiculo_fipe}
+                  className="mt-4 space-y-2"
+                />
               </CardContent>
             </Card>
           )}
@@ -518,6 +525,7 @@ export default function LeadDetalhe() {
         etapaAtual={lead.etapa as EtapaLead}
         onMover={handleMoverEtapa}
         isMoving={changeEtapa.isPending}
+        hasVeiculo={hasVeiculo}
       />
 
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>

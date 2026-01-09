@@ -58,6 +58,7 @@ export interface TransitionRequirement {
   requiresContrato?: boolean;
   requiresInstalacao?: boolean;
   requiresMotivoPerda?: boolean;
+  requiresVeiculo?: boolean;
 }
 
 export function getTransitionRequirements(
@@ -75,6 +76,18 @@ export function getTransitionRequirements(
   // Verificar requisitos específicos
   const normalizedFrom = normalizeEtapa(from);
   const normalizedTo = normalizeEtapa(to);
+
+  // novo/contato → qualificado: precisa de dados do veículo
+  if (
+    (normalizedFrom === 'novo' || normalizedFrom === 'contato' || normalizedFrom === 'contato_inicial') &&
+    normalizedTo === 'qualificado'
+  ) {
+    return {
+      canProceed: true, // UI deve verificar veículo
+      requiresVeiculo: true,
+      message: 'É necessário preencher os dados do veículo antes de qualificar',
+    };
+  }
 
   // qualificado → cotacao_enviada: precisa de cotação
   if (

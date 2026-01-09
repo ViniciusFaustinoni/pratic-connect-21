@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, FileText, Calculator, Send, Check, X, Loader2, MessageCircle, ChevronDown, FileDown } from 'lucide-react';
+import { Plus, Search, FileText, Calculator, Send, Check, X, Loader2, MessageCircle, ChevronDown, FileDown, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -31,6 +31,7 @@ import type { StatusCotacao } from '@/types/database';
 import { useCotacoes, useUpdateCotacao, type CotacaoWithRelations } from '@/hooks/useCotacoes';
 import { CotacaoFormDialog } from '@/components/cotacoes/CotacaoFormDialog';
 import { ContratoWizard } from '@/components/contratos/ContratoWizard';
+import { EnviarEmailModal } from '@/components/cotacoes/EnviarEmailModal';
 import { gerarPdfCotacao } from '@/lib/gerarPdfCotacao';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -51,6 +52,8 @@ export default function Cotacoes() {
   const [showCotacaoForm, setShowCotacaoForm] = useState(false);
   const [showContratoWizard, setShowContratoWizard] = useState(false);
   const [selectedCotacaoId, setSelectedCotacaoId] = useState<string>('');
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [selectedCotacaoEmail, setSelectedCotacaoEmail] = useState<CotacaoWithRelations | null>(null);
 
   const { data: cotacoes, isLoading } = useCotacoes();
   const updateCotacao = useUpdateCotacao();
@@ -111,6 +114,11 @@ export default function Cotacoes() {
   const handleOpenContratoWizard = (cotacaoId: string) => {
     setSelectedCotacaoId(cotacaoId);
     setShowContratoWizard(true);
+  };
+
+  const handleOpenEmailModal = (cotacao: CotacaoWithRelations) => {
+    setSelectedCotacaoEmail(cotacao);
+    setShowEmailModal(true);
   };
 
   const enviarWhatsApp = (cotacao: CotacaoWithRelations) => {
@@ -336,6 +344,10 @@ export default function Cotacoes() {
                                   <MessageCircle className="h-4 w-4 mr-2 text-green-600" />
                                   WhatsApp
                                 </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleOpenEmailModal(cotacao)}>
+                                  <Mail className="h-4 w-4 mr-2 text-blue-600" />
+                                  Email
+                                </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem onClick={() => handleBaixarPdf(cotacao)}>
                                   <FileDown className="h-4 w-4 mr-2" />
@@ -390,6 +402,14 @@ export default function Cotacoes() {
         onOpenChange={setShowContratoWizard} 
         cotacaoId={selectedCotacaoId}
       />
+      {selectedCotacaoEmail && (
+        <EnviarEmailModal
+          open={showEmailModal}
+          onOpenChange={setShowEmailModal}
+          cotacao={selectedCotacaoEmail}
+          onSuccess={() => handleMarkAsEnviada(selectedCotacaoEmail.id, selectedCotacaoEmail.lead_id)}
+        />
+      )}
     </div>
   );
 }

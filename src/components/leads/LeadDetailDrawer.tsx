@@ -28,6 +28,7 @@ import { useContratoByLead } from '@/hooks/useContratos';
 import { LeadTimeline } from '@/components/leads/LeadTimeline';
 import { LeadLossDialog } from '@/components/leads/LeadLossDialog';
 import { AgendarFollowupDialog } from '@/components/leads/AgendarFollowupDialog';
+import { VeiculoPerfilAlert } from '@/components/leads/VeiculoPerfilAlert';
 import { ETAPA_LABELS, ORIGEM_LABELS, type EtapaLead } from '@/types/database';
 import { etapaColors, origemColors } from '@/lib/lead-transitions';
 
@@ -243,6 +244,12 @@ export function LeadDetailDrawer({ leadId, open, onClose }: LeadDetailDrawerProp
                       <span className="text-sm text-muted-foreground">FIPE:</span>
                       <span className="font-medium">{formatCurrency(lead.veiculo_fipe)}</span>
                     </div>
+                    {/* Alerta de veículo fora do perfil */}
+                    <VeiculoPerfilAlert 
+                      anoVeiculo={lead.veiculo_ano} 
+                      valorFipe={lead.veiculo_fipe}
+                      className="mt-2 space-y-2"
+                    />
                   </div>
                 ) : (
                   <p className="text-muted-foreground text-sm">Nenhum veículo cadastrado</p>

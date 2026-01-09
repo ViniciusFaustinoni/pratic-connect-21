@@ -25,6 +25,7 @@ interface MoverEtapaModalProps {
   etapaAtual: EtapaLead;
   onMover: (novaEtapa: EtapaLead, observacao: string, motivoPerda?: string) => Promise<void>;
   isMoving?: boolean;
+  hasVeiculo?: boolean;
 }
 
 export function MoverEtapaModal({
@@ -34,6 +35,7 @@ export function MoverEtapaModal({
   etapaAtual,
   onMover,
   isMoving = false,
+  hasVeiculo = false,
 }: MoverEtapaModalProps) {
   const [novaEtapa, setNovaEtapa] = useState<EtapaLead | ''>('');
   const [observacao, setObservacao] = useState('');
@@ -51,8 +53,12 @@ export function MoverEtapaModal({
   // Etapas disponíveis (exceto a atual)
   const etapasDisponiveis = ETAPAS_TODAS.filter(e => e !== etapaAtual);
 
+  // Verificar se etapa requer veículo
+  const isQualificadoSemVeiculo = novaEtapa === 'qualificado' && !hasVeiculo;
+
   const handleMover = async () => {
     if (!novaEtapa) return;
+    if (isQualificadoSemVeiculo) return;
     await onMover(novaEtapa, observacao, novaEtapa === 'perdido' ? motivoPerda : undefined);
   };
 
@@ -64,7 +70,7 @@ export function MoverEtapaModal({
   };
 
   const isPerdido = novaEtapa === 'perdido';
-  const canSubmit = novaEtapa && (!isPerdido || motivoPerda.length >= 10);
+  const canSubmit = novaEtapa && (!isPerdido || motivoPerda.length >= 10) && !isQualificadoSemVeiculo;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -106,6 +112,15 @@ export function MoverEtapaModal({
               ))}
             </RadioGroup>
           </div>
+
+          {/* Alerta: precisa de veículo para qualificar */}
+          {isQualificadoSemVeiculo && (
+            <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
+              <p className="text-sm text-amber-800 dark:text-amber-200">
+                ⚠️ Para mover para <strong>Qualificado</strong>, é necessário preencher os dados do veículo primeiro.
+              </p>
+            </div>
+          )}
 
           {/* Motivo da perda (condicional) */}
           {isPerdido && (
