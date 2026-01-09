@@ -6976,6 +6976,7 @@ export type Database = {
           ano_fabricacao_maximo: number | null
           ano_fabricacao_minimo: number | null
           ativo: boolean
+          coberturas: string[] | null
           codigo: string
           created_at: string
           descricao: string | null
@@ -6995,6 +6996,7 @@ export type Database = {
           ano_fabricacao_maximo?: number | null
           ano_fabricacao_minimo?: number | null
           ativo?: boolean
+          coberturas?: string[] | null
           codigo: string
           created_at?: string
           descricao?: string | null
@@ -7014,6 +7016,7 @@ export type Database = {
           ano_fabricacao_maximo?: number | null
           ano_fabricacao_minimo?: number | null
           ativo?: boolean
+          coberturas?: string[] | null
           codigo?: string
           created_at?: string
           descricao?: string | null
