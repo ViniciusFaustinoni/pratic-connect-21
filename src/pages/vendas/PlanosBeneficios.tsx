@@ -32,11 +32,11 @@ const formatCurrency = (value: number) => {
   }).format(value);
 };
 
-// Card de Plano para Visão Geral
-function PlanoResumoCard({ plano }: { plano: typeof PLANOS_RESUMO[0] }) {
+// Card de Plano Detalhado para Visão Geral
+function PlanoDetalhadoCard({ plano }: { plano: typeof PLANOS_RESUMO[0] }) {
   return (
     <Card className={cn(
-      'relative overflow-hidden transition-all hover:shadow-lg h-full',
+      'relative overflow-hidden transition-all hover:shadow-lg h-full flex flex-col',
       plano.badge && 'ring-2 ring-primary'
     )}>
       <div className={cn('h-2 bg-gradient-to-r', plano.cor)} />
@@ -47,12 +47,12 @@ function PlanoResumoCard({ plano }: { plano: typeof PLANOS_RESUMO[0] }) {
         </Badge>
       )}
 
-      <CardHeader className="pb-2">
-        <CardTitle className="text-lg">{plano.nome}</CardTitle>
-        <div className="flex items-center gap-2 mt-1 flex-wrap">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-xl font-bold">{plano.nome}</CardTitle>
+        <div className="flex items-center gap-2 mt-2 flex-wrap">
           {plano.coberturaFipe > 0 ? (
             <Badge className={cn(
-              'text-xs',
+              'text-sm px-3 py-1',
               plano.coberturaFipe === 100 
                 ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100' 
                 : 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100'
@@ -60,48 +60,57 @@ function PlanoResumoCard({ plano }: { plano: typeof PLANOS_RESUMO[0] }) {
               {plano.coberturaFipe}% FIPE
             </Badge>
           ) : (
-            <Badge className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100">
+            <Badge className="text-sm px-3 py-1 bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100">
               Roubo/Furto
             </Badge>
           )}
-          <Badge variant="outline" className="text-xs">
-            &gt; {plano.anoMinimo}
+          <Badge variant="outline" className="text-sm px-3 py-1">
+            Acima de {plano.anoMinimo}
           </Badge>
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-3 text-sm">
-        <div>
-          <p className="text-xs text-muted-foreground">Cota Passeio:</p>
-          <p className="font-medium">{plano.cotaPasesio}</p>
+      <CardContent className="space-y-4 flex-1 flex flex-col">
+        {/* Cota Passeio */}
+        <div className="space-y-1">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Cota Passeio</p>
+          <p className="font-bold text-lg">{plano.cotaPasesio}</p>
           {plano.cotaPasesioDesagio && (
-            <p className="text-xs text-green-600 dark:text-green-400">
-              Com Deságio: {plano.cotaPasesioDesagio}
+            <p className="text-sm text-green-600 dark:text-green-400 font-medium">
+              📍 Com Deságio: {plano.cotaPasesioDesagio}
             </p>
           )}
         </div>
 
+        {/* Cota APP */}
         {plano.cotaApp && (
-          <div>
-            <p className="text-xs text-muted-foreground">Cota APP:</p>
-            <p className="font-medium">{plano.cotaApp}</p>
+          <div className="space-y-1">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Cota APP</p>
+            <p className="font-bold text-lg">{plano.cotaApp}</p>
           </div>
         )}
 
-        {plano.niveis && (
-          <div className="flex flex-wrap gap-1">
-            {plano.niveis.map((nivel) => (
-              <Badge key={nivel} variant="secondary" className="text-xs">
-                {nivel}
-              </Badge>
-            ))}
+        {/* Níveis do Plano */}
+        {plano.niveis && plano.niveis.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Níveis</p>
+            <div className="flex flex-wrap gap-2">
+              {plano.niveis.map((nivel) => (
+                <Badge key={nivel} variant="secondary" className="text-xs font-medium">
+                  {nivel}
+                </Badge>
+              ))}
+            </div>
           </div>
         )}
 
+        {/* Rastreador/Monitoramento e Destaque */}
         {plano.destaque && (
-          <p className="text-xs text-muted-foreground italic">
-            {plano.destaque}
-          </p>
+          <div className="mt-auto pt-3 border-t border-border/50">
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              📋 {plano.destaque}
+            </p>
+          </div>
         )}
       </CardContent>
     </Card>
@@ -168,10 +177,10 @@ export default function PlanosBeneficios() {
         <TabsContent value="visao-geral" className="space-y-8">
           {/* Cards de Planos */}
           <section>
-            <h2 className="text-xl font-semibold mb-4">Resumo dos Planos</h2>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <h2 className="text-xl font-semibold mb-4">Todos os Planos</h2>
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {PLANOS_RESUMO.map((plano) => (
-                <PlanoResumoCard key={plano.id} plano={plano} />
+                <PlanoDetalhadoCard key={plano.id} plano={plano} />
               ))}
             </div>
           </section>
