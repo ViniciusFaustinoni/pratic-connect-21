@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef } from 'react';
 import { Plus, Loader2, Calendar, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -96,14 +96,22 @@ export default function LeadKanban() {
   const { data: vendedores } = useVendedores();
   const changeEtapa = useChangeLeadEtapa();
 
-  const scrollBoard = useCallback((direction: 'left' | 'right') => {
-    if (!boardRef.current) return;
-    const scrollAmount = 300;
-    boardRef.current.scrollBy({
-      left: direction === 'left' ? -scrollAmount : scrollAmount,
-      behavior: 'smooth',
-    });
-  }, []);
+  const scrollBoard = (direction: 'left' | 'right') => {
+    const container = boardRef.current;
+    if (!container) return;
+    const scrollAmount = 280;
+    const newLeft = container.scrollLeft + (direction === 'left' ? -scrollAmount : scrollAmount);
+    container.scrollTo({ left: newLeft, behavior: 'smooth' });
+  };
+
+  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    const container = boardRef.current;
+    if (!container) return;
+    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+      e.preventDefault();
+      container.scrollLeft += e.deltaY;
+    }
+  };
 
   const handleDateRangeChange = (range: { from?: Date; to?: Date }) => {
     setDateRange(range);
@@ -287,30 +295,27 @@ export default function LeadKanban() {
       </div>
 
       {/* Kanban Board */}
-      <div className="relative overflow-hidden rounded-lg">
-        {/* Botão de scroll esquerda - FORA do DndContext */}
+      <div className="relative">
+        {/* Scroll buttons - outside DndContext */}
         <Button
           variant="ghost"
           size="icon"
           className="absolute left-0 top-1/2 -translate-y-1/2 z-20 h-10 w-10 rounded-full bg-background/80 backdrop-blur-sm shadow-md hover:bg-background border"
+          onPointerDown={(e) => e.stopPropagation()}
           onClick={() => scrollBoard('left')}
         >
           <ChevronLeft className="h-5 w-5" />
         </Button>
 
-        {/* Botão de scroll direita - FORA do DndContext */}
         <Button
           variant="ghost"
           size="icon"
           className="absolute right-0 top-1/2 -translate-y-1/2 z-20 h-10 w-10 rounded-full bg-background/80 backdrop-blur-sm shadow-md hover:bg-background border"
+          onPointerDown={(e) => e.stopPropagation()}
           onClick={() => scrollBoard('right')}
         >
           <ChevronRight className="h-5 w-5" />
         </Button>
-
-        {/* Indicadores de fade nas bordas */}
-        <div className="absolute left-10 top-0 bottom-0 w-6 bg-gradient-to-r from-background to-transparent pointer-events-none z-[5]" />
-        <div className="absolute right-10 top-0 bottom-0 w-6 bg-gradient-to-l from-background to-transparent pointer-events-none z-[5]" />
 
         <DndContext
           sensors={sensors}
@@ -318,37 +323,39 @@ export default function LeadKanban() {
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
-          {/* Container do scroll horizontal */}
-          <div ref={boardRef} className="overflow-x-scroll overflow-y-hidden kanban-scroll pb-4 px-12">
-            {/* Container das colunas - inline-flex para forçar largura */}
-            <div className="inline-flex gap-3 min-w-max p-1">
-              {ETAPAS_FUNIL.map((etapa) => {
-                const leadsInEtapa = (leads || []).filter((l) => l.etapa === etapa);
-                return (
-                  <DroppableColumn key={etapa} etapa={etapa} count={leadsInEtapa.length}>
-                    <SortableContext
-                      items={leadsInEtapa.map((l) => l.id)}
-                      strategy={verticalListSortingStrategy}
-                    >
-                      <div className="flex flex-col gap-2">
-                        {leadsInEtapa.map((lead) => (
-                          <LeadKanbanCard
-                            key={lead.id}
-                            lead={lead}
-                            onClick={() => setSelectedLeadId(lead.id)}
-                          />
-                        ))}
-                        {leadsInEtapa.length === 0 && (
-                          <div className="flex items-center justify-center text-muted-foreground text-sm min-h-[100px]">
-                            Arraste leads para cá
-                          </div>
-                        )}
-                      </div>
-                    </SortableContext>
-                  </DroppableColumn>
-                );
-              })}
-            </div>
+          {/* Scroll container - flex layout for reliable horizontal scroll */}
+          <div
+            ref={boardRef}
+            className="flex gap-3 overflow-x-auto overflow-y-hidden pb-4 px-12 overscroll-x-contain touch-pan-y"
+            onWheelCapture={handleWheel}
+            style={{ scrollbarGutter: 'stable' }}
+          >
+            {ETAPAS_FUNIL.map((etapa) => {
+              const leadsInEtapa = (leads || []).filter((l) => l.etapa === etapa);
+              return (
+                <DroppableColumn key={etapa} etapa={etapa} count={leadsInEtapa.length}>
+                  <SortableContext
+                    items={leadsInEtapa.map((l) => l.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className="flex flex-col gap-2">
+                      {leadsInEtapa.map((lead) => (
+                        <LeadKanbanCard
+                          key={lead.id}
+                          lead={lead}
+                          onClick={() => setSelectedLeadId(lead.id)}
+                        />
+                      ))}
+                      {leadsInEtapa.length === 0 && (
+                        <div className="flex items-center justify-center text-muted-foreground text-sm min-h-[100px]">
+                          Arraste leads para cá
+                        </div>
+                      )}
+                    </div>
+                  </SortableContext>
+                </DroppableColumn>
+              );
+            })}
           </div>
 
           <DragOverlay>
@@ -366,11 +373,6 @@ export default function LeadKanban() {
             ) : null}
           </DragOverlay>
         </DndContext>
-
-        {/* Indicador de scroll mobile */}
-        <p className="text-xs text-muted-foreground text-center mt-2 md:hidden">
-          ← Arraste ou use as setas para navegar →
-        </p>
       </div>
 
       <LeadFormDialog open={showLeadForm} onOpenChange={setShowLeadForm} />
