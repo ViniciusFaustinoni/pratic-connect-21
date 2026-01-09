@@ -29,11 +29,11 @@ export function AppLayout() {
     <ProtectedRoute allowedTipos={['funcionario']}>
       <SessionTimeoutProvider variant="internal">
         <SidebarProvider>
-          <div className="flex min-h-screen w-full overflow-hidden">
+          <div className="flex min-h-screen w-full overflow-hidden bg-background">
             <AppSidebar />
             <SidebarInset className="flex flex-1 flex-col">
               <AppHeader />
-              <main className="flex-1 overflow-hidden bg-muted/30 p-6">
+              <main className="flex-1 overflow-auto bg-background p-6">
                 <Outlet />
               </main>
             </SidebarInset>

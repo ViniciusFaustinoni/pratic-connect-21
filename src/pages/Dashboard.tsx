@@ -27,6 +27,7 @@ import {
   CheckCircle,
   Wrench,
   Plus,
+  Shield,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLeads } from '@/hooks/useLeads';
@@ -44,14 +45,14 @@ import { cn } from '@/lib/utils';
 // CONFIGURAÇÕES E MAPEAMENTOS
 // ============================================
 const etapaConfig: Record<string, { label: string; cor: string }> = {
-  novo: { label: 'Novo', cor: 'bg-blue-500' },
-  contato_inicial: { label: 'Contato', cor: 'bg-yellow-500' },
+  novo: { label: 'Novo', cor: 'bg-info' },
+  contato_inicial: { label: 'Contato', cor: 'bg-warning' },
   apresentacao: { label: 'Apresentação', cor: 'bg-purple-500' },
-  cotacao_enviada: { label: 'Cotação', cor: 'bg-orange-500' },
+  cotacao_enviada: { label: 'Cotação', cor: 'bg-primary' },
   negociacao: { label: 'Negociação', cor: 'bg-pink-500' },
   contrato_enviado: { label: 'Contrato Env.', cor: 'bg-indigo-500' },
-  ganho: { label: 'Ganho', cor: 'bg-green-500' },
-  perdido: { label: 'Perdido', cor: 'bg-red-500' },
+  ganho: { label: 'Ganho', cor: 'bg-success' },
+  perdido: { label: 'Perdido', cor: 'bg-destructive' },
 };
 
 const statusInstalacaoLabels: Record<string, string> = {
@@ -67,38 +68,36 @@ const statusInstalacaoLabels: Record<string, string> = {
 // COMPONENTE: BADGE DE ETAPA
 // ============================================
 function BadgeEtapa({ etapa }: { etapa: string }) {
-  const config = etapaConfig[etapa] || { label: etapa, cor: 'bg-gray-500' };
+  const config = etapaConfig[etapa] || { label: etapa, cor: 'bg-muted' };
   return (
-    <Badge className={cn(config.cor, 'text-white')}>
+    <Badge className={cn(config.cor, 'text-white border-0')}>
       {config.label}
     </Badge>
   );
 }
 
 // ============================================
-// COMPONENTE: CARD DE KPI
+// COMPONENTE: CARD DE KPI PREMIUM
 // ============================================
 interface KPICardProps {
   titulo: string;
   valor: number | string;
   variacao?: number;
-  icone: React.ReactNode;
-  cor: string;
+  emoji: string;
   loading?: boolean;
 }
 
-function KPICard({ titulo, valor, variacao, icone, cor, loading }: KPICardProps) {
+function KPICard({ titulo, valor, variacao, emoji, loading }: KPICardProps) {
   if (loading) {
     return (
-      <Card>
+      <Card className="border-border bg-card hover:border-border-hover transition-all duration-200">
         <CardContent className="p-6">
-          <div className="flex items-center justify-between">
+          <div className="flex items-start justify-between">
             <div className="space-y-2 flex-1">
-              <Skeleton className="h-4 w-24" />
-              <Skeleton className="h-8 w-16" />
-              <Skeleton className="h-4 w-20" />
+              <Skeleton className="h-4 w-24 bg-muted" />
+              <Skeleton className="h-8 w-16 bg-muted" />
             </div>
-            <Skeleton className="h-12 w-12 rounded-lg" />
+            <Skeleton className="h-8 w-8 rounded bg-muted" />
           </div>
         </CardContent>
       </Card>
@@ -106,41 +105,71 @@ function KPICard({ titulo, valor, variacao, icone, cor, loading }: KPICardProps)
   }
 
   return (
-    <Card>
+    <Card className="border-border bg-card hover:border-border-hover transition-all duration-200 group">
       <CardContent className="p-6">
         <div className="flex items-start justify-between">
           <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="text-2xl">{emoji}</span>
+              {variacao !== undefined && (
+                <Badge 
+                  variant="outline" 
+                  className={cn(
+                    "text-xs border-0",
+                    variacao > 0 && "bg-success/20 text-success",
+                    variacao < 0 && "bg-destructive/20 text-destructive",
+                    variacao === 0 && "bg-muted text-muted-foreground"
+                  )}
+                >
+                  {variacao > 0 ? (
+                    <><TrendingUp className="h-3 w-3 mr-1" />+{variacao}%</>
+                  ) : variacao < 0 ? (
+                    <><TrendingDown className="h-3 w-3 mr-1" />{variacao}%</>
+                  ) : (
+                    <><Minus className="h-3 w-3 mr-1" />0%</>
+                  )}
+                </Badge>
+              )}
+            </div>
             <p className="text-sm text-muted-foreground">{titulo}</p>
-            <p className="text-2xl font-bold">{valor}</p>
-            
-            {variacao !== undefined && (
-              <div className="flex items-center gap-1 text-sm">
-                {variacao > 0 ? (
-                  <>
-                    <TrendingUp className="h-4 w-4 text-green-500" />
-                    <span className="text-green-500">+{variacao}%</span>
-                  </>
-                ) : variacao < 0 ? (
-                  <>
-                    <TrendingDown className="h-4 w-4 text-red-500" />
-                    <span className="text-red-500">{variacao}%</span>
-                  </>
-                ) : (
-                  <>
-                    <Minus className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-muted-foreground">0%</span>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-
-          <div className={cn('p-3 rounded-lg', cor)}>
-            {icone}
+            <p className="text-2xl font-bold text-foreground">{valor}</p>
           </div>
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+// ============================================
+// COMPONENTE: BANNER DE BOAS-VINDAS
+// ============================================
+function WelcomeBanner({ nome }: { nome: string }) {
+  const getSaudacao = () => {
+    const hora = new Date().getHours();
+    if (hora < 12) return 'Bom dia';
+    if (hora < 18) return 'Boa tarde';
+    return 'Boa noite';
+  };
+
+  return (
+    <div className="relative overflow-hidden rounded-2xl border border-border-hover bg-gradient-to-r from-primary-dark via-pratic-dark-700 to-primary-dark p-6">
+      {/* Glow effect */}
+      <div className="absolute top-0 right-0 w-64 h-64 bg-accent/10 rounded-full blur-3xl animate-glow-pulse" />
+      
+      {/* Decorative shield */}
+      <div className="absolute right-8 top-1/2 -translate-y-1/2 opacity-10">
+        <Shield className="h-32 w-32 text-foreground" />
+      </div>
+      
+      <div className="relative z-10">
+        <h1 className="text-2xl font-bold text-foreground">
+          {getSaudacao()}, {nome}! 👋
+        </h1>
+        <p className="text-muted-foreground mt-1">
+          Aqui está o resumo das atividades de hoje.
+        </p>
+      </div>
+    </div>
   );
 }
 
@@ -176,16 +205,17 @@ function AlertaBanner({ alertas }: { alertas: Alerta[] }) {
           : 'text-primary';
 
         return (
-          <Alert key={alerta.id} className={bgColor}>
+          <Alert key={alerta.id} className={cn(bgColor, "border")}>
             <AlertTriangle className={cn('h-4 w-4', iconColor)} />
             <AlertDescription className="flex items-center justify-between">
               <div>
-                <span className="font-medium">{alerta.titulo}</span>
+                <span className="font-medium text-foreground">{alerta.titulo}</span>
                 <span className="text-muted-foreground ml-2">{alerta.descricao}</span>
               </div>
               <Button 
                 variant="ghost" 
                 size="sm" 
+                className="text-foreground hover:bg-card-hover"
                 onClick={() => navigate(alerta.acao)}
               >
                 Ver <ArrowRight className="ml-1 h-4 w-4" />
@@ -215,17 +245,17 @@ function FunilVendas({ dados, loading }: { dados: FunilItem[]; loading: boolean 
 
   if (loading) {
     return (
-      <Card>
+      <Card className="border-border bg-card">
         <CardHeader>
-          <Skeleton className="h-6 w-40" />
-          <Skeleton className="h-4 w-60" />
+          <Skeleton className="h-6 w-40 bg-muted" />
+          <Skeleton className="h-4 w-60 bg-muted" />
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
             {[1, 2, 3, 4, 5].map(i => (
               <div key={i} className="space-y-2">
-                <Skeleton className="h-4 w-24" />
-                <Skeleton className="h-2 w-full" />
+                <Skeleton className="h-4 w-24 bg-muted" />
+                <Skeleton className="h-2 w-full bg-muted" />
               </div>
             ))}
           </div>
@@ -235,17 +265,22 @@ function FunilVendas({ dados, loading }: { dados: FunilItem[]; loading: boolean 
   }
 
   return (
-    <Card>
+    <Card className="border-border bg-card">
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 text-foreground">
               <TrendingUp className="h-5 w-5 text-primary" />
               Funil de Vendas
             </CardTitle>
             <CardDescription>Distribuição de leads por etapa</CardDescription>
           </div>
-          <Button variant="outline" size="sm" onClick={() => navigate('/vendas/kanban')}>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="border-border hover:border-border-hover hover:bg-card-hover"
+            onClick={() => navigate('/vendas/kanban')}
+          >
             Ver Kanban <ArrowRight className="ml-1 h-4 w-4" />
           </Button>
         </div>
@@ -253,18 +288,18 @@ function FunilVendas({ dados, loading }: { dados: FunilItem[]; loading: boolean 
       <CardContent>
         <div className="space-y-4">
           {dados.filter(item => item.etapa !== 'perdido').map((item) => {
-            const config = etapaConfig[item.etapa] || { label: item.etapa, cor: 'bg-gray-500' };
+            const config = etapaConfig[item.etapa] || { label: item.etapa, cor: 'bg-muted' };
             const percentual = totalLeads > 0 ? Math.round((item.count / totalLeads) * 100) : 0;
             
             return (
               <div key={item.etapa} className="space-y-1">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">{config.label}</span>
-                  <span className="font-medium">{item.count}</span>
+                  <span className="font-medium text-foreground">{item.count}</span>
                 </div>
                 <Progress 
                   value={percentual} 
-                  className="h-2" 
+                  className="h-2 bg-muted" 
                   indicatorClassName={config.cor}
                 />
               </div>
@@ -272,14 +307,69 @@ function FunilVendas({ dados, loading }: { dados: FunilItem[]; loading: boolean 
           })}
         </div>
         
-        <div className="mt-4 pt-4 border-t flex items-center justify-between text-sm">
+        <div className="mt-4 pt-4 border-t border-border flex items-center justify-between text-sm">
           <span className="text-muted-foreground">Total de leads: {totalLeads}</span>
-          <Badge variant="outline" className="text-green-600 border-green-600">
+          <Badge variant="outline" className="text-success border-success">
             Taxa de conversão: {taxaConversao}%
           </Badge>
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+// ============================================
+// COMPONENTE: AÇÕES RÁPIDAS
+// ============================================
+function QuickActions() {
+  const navigate = useNavigate();
+  
+  const actions = [
+    { 
+      label: 'Nova Cotação', 
+      emoji: '📊', 
+      url: '/vendas/cotador',
+      primary: true 
+    },
+    { 
+      label: 'Novo Lead', 
+      emoji: '👤', 
+      url: '/vendas/leads?novo=true',
+      primary: false 
+    },
+    { 
+      label: 'Agendar', 
+      emoji: '🔧', 
+      url: '/monitoramento/instalacoes?agendar=true',
+      primary: false 
+    },
+    { 
+      label: 'Documentos', 
+      emoji: '📄', 
+      url: '/cadastro/documentos',
+      primary: false 
+    },
+  ];
+
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      {actions.map((action) => (
+        <Button
+          key={action.label}
+          variant="outline"
+          className={cn(
+            "h-auto py-4 flex flex-col gap-2 transition-all duration-200 hover:scale-105",
+            action.primary 
+              ? "bg-gradient-to-r from-accent to-accent-hover border-accent text-white hover:shadow-[0_0_20px_hsl(351,84%,49%,0.3)]" 
+              : "bg-gradient-to-r from-primary-dark to-primary border-primary text-white hover:shadow-[0_0_20px_hsl(218,67%,36%,0.3)]"
+          )}
+          onClick={() => navigate(action.url)}
+        >
+          <span className="text-2xl">{action.emoji}</span>
+          <span className="text-sm font-medium">{action.label}</span>
+        </Button>
+      ))}
+    </div>
   );
 }
 
@@ -308,14 +398,6 @@ export default function Dashboard() {
   const handleRefresh = () => {
     queryClient.invalidateQueries();
     setLastUpdate(new Date());
-  };
-
-  // Saudação dinâmica
-  const getSaudacao = () => {
-    const hora = new Date().getHours();
-    if (hora < 12) return 'Bom dia';
-    if (hora < 18) return 'Boa tarde';
-    return 'Boa noite';
   };
 
   // Calcular dados do funil
@@ -360,23 +442,23 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      {/* HEADER */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">
-            {getSaudacao()}, {profile?.nome?.split(' ')[0]}! 👋
-          </h1>
-          <p className="text-muted-foreground">
-            Aqui está o resumo das atividades de hoje.
-          </p>
+      {/* BANNER + REFRESH */}
+      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+        <div className="flex-1">
+          <WelcomeBanner nome={profile?.nome?.split(' ')[0] || 'Usuário'} />
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={handleRefresh}>
+        <div className="flex items-center gap-2 self-start lg:self-center">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="border-border hover:border-border-hover hover:bg-card-hover"
+            onClick={handleRefresh}
+          >
             <RefreshCw className="mr-2 h-4 w-4" />
             Atualizar
           </Button>
           <span className="text-xs text-muted-foreground">
-            Última atualização: {lastUpdate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+            {lastUpdate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
           </span>
         </div>
       </div>
@@ -384,46 +466,36 @@ export default function Dashboard() {
       {/* ALERTAS */}
       <AlertaBanner alertas={alertas} />
 
-      {/* KPIs - Grid de 5 */}
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+      {/* KPIs - Grid de 4 */}
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         <KPICard
-          titulo="Leads Novos"
-          valor={leads.filter(l => l.etapa === 'novo').length}
-          icone={<UserPlus className="h-6 w-6 text-blue-600" />}
-          cor="bg-blue-100 dark:bg-blue-900/30"
-          loading={leadsLoading}
-        />
-        <KPICard
-          titulo="Cotações Enviadas"
-          valor={cotacoes?.filter(c => c.status === 'enviada').length || 0}
-          icone={<Calculator className="h-6 w-6 text-purple-600" />}
-          cor="bg-purple-100 dark:bg-purple-900/30"
-          loading={cotacoesLoading}
-        />
-        <KPICard
-          titulo="Contratos Ativos"
+          titulo="Associados Ativos"
           valor={contratos?.filter(c => c.status === 'ativo').length || 0}
-          icone={<FileText className="h-6 w-6 text-green-600" />}
-          cor="bg-green-100 dark:bg-green-900/30"
+          emoji="👥"
           loading={contratosLoading}
         />
         <KPICard
-          titulo="Docs Pendentes"
-          valor={docsContagem?.pendente || pendingDocs?.length || 0}
-          icone={<Clock className="h-6 w-6 text-warning" />}
-          cor="bg-yellow-100 dark:bg-yellow-900/30"
-          loading={docsLoading}
+          titulo="Leads do Mês"
+          valor={leads.length}
+          emoji="📊"
+          variacao={12}
+          loading={leadsLoading}
         />
         <KPICard
-          titulo="Instalações Hoje"
-          valor={instalacoesDia?.length || 0}
-          icone={<Car className="h-6 w-6 text-orange-600" />}
-          cor="bg-orange-100 dark:bg-orange-900/30"
+          titulo="Instalações/Mês"
+          valor={instMetricas?.concluidas || 0}
+          emoji="🔧"
           loading={instalacoesLoading}
+        />
+        <KPICard
+          titulo="Receita Mensal"
+          valor={`R$ ${(contratos?.filter(c => c.status === 'ativo').reduce((acc, c) => acc + (c.valor_mensal || 0), 0) || 0).toLocaleString('pt-BR')}`}
+          emoji="💰"
+          loading={contratosLoading}
         />
       </div>
 
-      {/* GRID PRINCIPAL - 3 colunas */}
+      {/* GRID PRINCIPAL - 2/3 + 1/3 */}
       <div className="grid gap-6 lg:grid-cols-3">
         {/* COLUNA 1-2: Funil + Leads */}
         <div className="lg:col-span-2 space-y-6">
@@ -431,17 +503,22 @@ export default function Dashboard() {
           <FunilVendas dados={funnelData} loading={leadsLoading} />
 
           {/* ÚLTIMOS LEADS */}
-          <Card>
+          <Card className="border-border bg-card">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="flex items-center gap-2">
+                  <CardTitle className="flex items-center gap-2 text-foreground">
                     <UserPlus className="h-5 w-5 text-primary" />
                     Últimos Leads
                   </CardTitle>
                   <CardDescription>Leads mais recentes do funil de vendas</CardDescription>
                 </div>
-                <Button variant="outline" size="sm" onClick={() => navigate('/vendas/leads')}>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="border-border hover:border-border-hover hover:bg-card-hover"
+                  onClick={() => navigate('/vendas/leads')}
+                >
                   Ver Todos <ArrowRight className="ml-1 h-4 w-4" />
                 </Button>
               </div>
@@ -450,7 +527,7 @@ export default function Dashboard() {
               {leadsLoading ? (
                 <div className="space-y-4">
                   {[1, 2, 3].map((i) => (
-                    <Skeleton key={i} className="h-16 w-full" />
+                    <Skeleton key={i} className="h-16 w-full bg-muted" />
                   ))}
                 </div>
               ) : leads.length === 0 ? (
@@ -463,15 +540,15 @@ export default function Dashboard() {
                   {leads.slice(0, 5).map((lead) => (
                     <div
                       key={lead.id}
-                      className="flex items-center justify-between rounded-lg border p-3 hover:bg-muted/50 transition-colors cursor-pointer"
+                      className="flex items-center justify-between rounded-lg border border-border p-3 hover:bg-card-hover hover:border-border-hover transition-all duration-200 cursor-pointer"
                       onClick={() => navigate(`/vendas/leads/${lead.id}`)}
                     >
                       <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-sm font-medium text-primary">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/20 text-sm font-medium text-primary">
                           {lead.nome.charAt(0)}
                         </div>
                         <div>
-                          <p className="font-medium">{lead.nome}</p>
+                          <p className="font-medium text-foreground">{lead.nome}</p>
                           <p className="text-sm text-muted-foreground">
                             {lead.veiculo_marca} {lead.veiculo_modelo}
                           </p>
@@ -486,7 +563,7 @@ export default function Dashboard() {
                           <Button 
                             variant="ghost" 
                             size="icon" 
-                            className="h-8 w-8"
+                            className="h-8 w-8 hover:bg-card-hover"
                             onClick={(e) => {
                               e.stopPropagation();
                               window.open(`tel:${lead.telefone}`, '_blank');
@@ -497,7 +574,7 @@ export default function Dashboard() {
                           <Button 
                             variant="ghost" 
                             size="icon" 
-                            className="h-8 w-8"
+                            className="h-8 w-8 hover:bg-card-hover"
                             onClick={(e) => {
                               e.stopPropagation();
                               window.open(`https://wa.me/55${lead.telefone?.replace(/\D/g, '')}`, '_blank');
@@ -518,43 +595,12 @@ export default function Dashboard() {
         {/* COLUNA 3: Ações Rápidas + Widgets */}
         <div className="space-y-6">
           {/* AÇÕES RÁPIDAS */}
-          <Card>
+          <Card className="border-border bg-card">
             <CardHeader>
-              <CardTitle className="text-lg">Ações Rápidas</CardTitle>
+              <CardTitle className="text-lg text-foreground">Ações Rápidas</CardTitle>
             </CardHeader>
-            <CardContent className="grid grid-cols-2 gap-2">
-              <Button 
-                variant="outline" 
-                className="h-auto py-3 flex flex-col gap-1"
-                onClick={() => navigate('/vendas/leads?novo=true')}
-              >
-                <Plus className="h-5 w-5" />
-                <span className="text-xs">Novo Lead</span>
-              </Button>
-              <Button 
-                variant="outline" 
-                className="h-auto py-3 flex flex-col gap-1"
-                onClick={() => navigate('/vendas/cotador')}
-              >
-                <Calculator className="h-5 w-5" />
-                <span className="text-xs">Nova Cotação</span>
-              </Button>
-              <Button 
-                variant="outline" 
-                className="h-auto py-3 flex flex-col gap-1"
-                onClick={() => navigate('/monitoramento/instalacoes?agendar=true')}
-              >
-                <Wrench className="h-5 w-5" />
-                <span className="text-xs">Agendar Instalação</span>
-              </Button>
-              <Button 
-                variant="outline" 
-                className="h-auto py-3 flex flex-col gap-1"
-                onClick={() => navigate('/cadastro/fila-documentos')}
-              >
-                <FileText className="h-5 w-5" />
-                <span className="text-xs">Analisar Docs</span>
-              </Button>
+            <CardContent>
+              <QuickActions />
             </CardContent>
           </Card>
 
@@ -562,24 +608,24 @@ export default function Dashboard() {
           <FollowupWidget maxItems={3} />
 
           {/* DOCUMENTOS PENDENTES */}
-          <Card>
+          <Card className="border-border bg-card">
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2 text-lg">
+                <CardTitle className="flex items-center gap-2 text-lg text-foreground">
                   <Clock className="h-5 w-5 text-warning" />
                   Documentos Pendentes
                 </CardTitle>
-                <Badge variant="secondary">{docsContagem?.pendente || 0}</Badge>
+                <Badge variant="secondary" className="bg-muted text-muted-foreground">{docsContagem?.pendente || 0}</Badge>
               </div>
             </CardHeader>
             <CardContent>
               {docsLoading ? (
                 <div className="space-y-3">
-                  {[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full" />)}
+                  {[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full bg-muted" />)}
                 </div>
               ) : !pendingDocs || pendingDocs.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-6 text-center">
-                  <CheckCircle className="h-8 w-8 text-green-500" />
+                  <CheckCircle className="h-8 w-8 text-success" />
                   <p className="mt-2 text-sm text-muted-foreground">Nenhum documento pendente</p>
                 </div>
               ) : (
@@ -587,7 +633,7 @@ export default function Dashboard() {
                   {pendingDocs.slice(0, 3).map((doc) => (
                     <div key={doc.id} className="flex items-center justify-between">
                       <div>
-                        <p className="font-medium text-sm">{doc.associados?.nome || 'Desconhecido'}</p>
+                        <p className="font-medium text-sm text-foreground">{doc.associados?.nome || 'Desconhecido'}</p>
                         <p className="text-xs text-muted-foreground">{doc.tipo}</p>
                       </div>
                       <span className="text-xs text-muted-foreground">
@@ -599,7 +645,7 @@ export default function Dashboard() {
               )}
               <Button 
                 variant="ghost" 
-                className="w-full mt-3" 
+                className="w-full mt-3 hover:bg-card-hover" 
                 size="sm"
                 onClick={() => navigate('/cadastro/documentos')}
               >
@@ -609,20 +655,20 @@ export default function Dashboard() {
           </Card>
 
           {/* INSTALAÇÕES HOJE */}
-          <Card>
+          <Card className="border-border bg-card">
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <Car className="h-5 w-5 text-orange-500" />
+                <CardTitle className="flex items-center gap-2 text-lg text-foreground">
+                  <Car className="h-5 w-5 text-warning" />
                   Instalações Hoje
                 </CardTitle>
-                <Badge variant="secondary">{instalacoesDia?.length || 0}</Badge>
+                <Badge variant="secondary" className="bg-muted text-muted-foreground">{instalacoesDia?.length || 0}</Badge>
               </div>
             </CardHeader>
             <CardContent>
               {instalacoesLoading ? (
                 <div className="space-y-3">
-                  {[1, 2, 3].map(i => <Skeleton key={i} className="h-14 w-full" />)}
+                  {[1, 2, 3].map(i => <Skeleton key={i} className="h-14 w-full bg-muted" />)}
                 </div>
               ) : !instalacoesDia || instalacoesDia.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-6 text-center">
@@ -634,14 +680,21 @@ export default function Dashboard() {
                   {instalacoesDia.slice(0, 3).map((inst) => (
                     <div key={inst.id} className="space-y-1">
                       <div className="flex items-center justify-between">
-                        <span className="font-medium text-sm">
+                        <span className="font-medium text-sm text-foreground">
                           {inst.periodo === 'manha' ? '🌅 Manhã' : inst.periodo === 'tarde' ? '☀️ Tarde' : '🌙 Noite'}
                         </span>
-                        <Badge variant={inst.status === 'em_andamento' || inst.status === 'em_rota' ? 'default' : 'outline'}>
+                        <Badge 
+                          variant={inst.status === 'em_andamento' || inst.status === 'em_rota' ? 'default' : 'outline'}
+                          className={cn(
+                            inst.status === 'em_andamento' || inst.status === 'em_rota' 
+                              ? "bg-primary" 
+                              : "border-border"
+                          )}
+                        >
                           {statusInstalacaoLabels[inst.status] || inst.status}
                         </Badge>
                       </div>
-                      <p className="text-sm">{inst.associados?.nome}</p>
+                      <p className="text-sm text-foreground">{inst.associados?.nome}</p>
                       <p className="text-xs text-muted-foreground">
                         {inst.veiculos?.marca} {inst.veiculos?.modelo} • {inst.veiculos?.placa}
                       </p>
@@ -651,7 +704,7 @@ export default function Dashboard() {
               )}
               <Button 
                 variant="ghost" 
-                className="w-full mt-3" 
+                className="w-full mt-3 hover:bg-card-hover" 
                 size="sm"
                 onClick={() => navigate('/monitoramento/instalacoes')}
               >
