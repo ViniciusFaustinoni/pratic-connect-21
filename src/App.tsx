@@ -59,6 +59,12 @@ import OrdemServicoDetalhePage from "./pages/oficina/OrdemServicoDetalhe";
 import Configuracoes from "./pages/Configuracoes";
 import Perfil from "./pages/Perfil";
 import Notificacoes from "./pages/Notificacoes";
+
+// Configurações Module (Part 1)
+import { ConfiguracoesLayout } from "./pages/configuracoes/ConfiguracoesLayout";
+import MeuPerfil from "./pages/configuracoes/MeuPerfil";
+import Seguranca from "./pages/configuracoes/Seguranca";
+import NotificacoesConfig from "./pages/configuracoes/Notificacoes";
 import NotFound from "./pages/NotFound";
 import AcessoNegado from "./pages/AcessoNegado";
 import AssistenciaDashboard from "./pages/assistencia/AssistenciaDashboard";
@@ -366,7 +372,14 @@ const App = () => (
               <Route path="/ouvidoria/:id" element={<OuvidoriaDetalhe />} />
               
               {/* Config */}
-              <Route path="/configuracoes" element={<Configuracoes />} />
+              {/* Configurações - Nova estrutura modular */}
+              <Route path="/configuracoes" element={<ConfiguracoesLayout />}>
+                <Route index element={<Navigate to="meu-perfil" replace />} />
+                <Route path="meu-perfil" element={<MeuPerfil />} />
+                <Route path="seguranca" element={<Seguranca />} />
+                <Route path="notificacoes" element={<NotificacoesConfig />} />
+                {/* Parte 2 adicionará: usuarios, perfis, logs, empresa, integracoes, sistema */}
+              </Route>
             </Route>
             
             {/* Associate App Routes */}
