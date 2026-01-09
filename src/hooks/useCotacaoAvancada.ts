@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { Database } from '@/integrations/supabase/types';
 import {
   calcularCotacao,
   gerarTokenCotacao,
@@ -84,17 +85,25 @@ export function useCotacaoAvancada() {
         .eq('codigo', categoriaParaPlano[dados.categoria])
         .single();
 
+      if (!plano?.id) {
+        throw new Error('Plano não encontrado para a categoria selecionada');
+      }
+
+      const valorMensal = cotacao.precoFinal.mensal;
+      const valorTotalMensal = valorMensal + cotacao.valorAdicionais;
+
       const cotacaoData = {
+        numero: '', // Será gerado pelo trigger
         lead_id: dados.leadId || null,
-        plano_id: plano?.id || null,
-        status: 'pendente' as const,
+        plano_id: plano.id,
+        status: 'pendente' as Database['public']['Enums']['status_cotacao'],
         
         // Veículo
-        veiculo_marca: dados.veiculoMarca,
-        veiculo_modelo: dados.veiculoModelo,
-        veiculo_ano: dados.veiculoAno,
-        veiculo_placa: dados.veiculoPlaca,
-        veiculo_combustivel: dados.veiculoCombustivel,
+        veiculo_marca: dados.veiculoMarca || null,
+        veiculo_modelo: dados.veiculoModelo || null,
+        veiculo_ano: dados.veiculoAno || null,
+        veiculo_placa: dados.veiculoPlaca || null,
+        veiculo_combustivel: dados.veiculoCombustivel || null,
         valor_fipe: dados.valorFipe,
         
         // Cotação avançada
@@ -104,9 +113,12 @@ export function useCotacaoAvancada() {
         uso_aplicativo: dados.usoAplicativo,
         desagio_aplicado: dados.desagio,
         
-        // Valores
+        // Valores - usando nomes corretos das colunas
         valor_adesao: cotacao.precoFinal.adesao,
-        valor_mensal: cotacao.precoFinal.mensal,
+        valor_cota: valorMensal,
+        valor_total_mensal: valorTotalMensal,
+        taxa_administrativa: 0,
+        valor_rastreamento: 0,
         valor_adesao_original: cotacao.precoBase.adesao,
         valor_mensal_original: cotacao.precoBase.mensal,
         
