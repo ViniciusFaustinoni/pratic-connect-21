@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, FileText, Calculator, Send, Check, X, Loader2, MessageCircle, ChevronDown } from 'lucide-react';
+import { Plus, Search, FileText, Calculator, Send, Check, X, Loader2, MessageCircle, ChevronDown, FileDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -24,13 +24,17 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import type { StatusCotacao } from '@/types/database';
 import { useCotacoes, useUpdateCotacao, type CotacaoWithRelations } from '@/hooks/useCotacoes';
 import { CotacaoFormDialog } from '@/components/cotacoes/CotacaoFormDialog';
 import { ContratoWizard } from '@/components/contratos/ContratoWizard';
+import { gerarPdfCotacao } from '@/lib/gerarPdfCotacao';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
+import { useQueryClient } from '@tanstack/react-query';
 
 const statusConfig: Record<StatusCotacao, { label: string; color: string; icon: typeof FileText }> = {
   rascunho: { label: 'Rascunho', color: 'bg-muted text-muted-foreground', icon: FileText },
@@ -50,6 +54,7 @@ export default function Cotacoes() {
 
   const { data: cotacoes, isLoading } = useCotacoes();
   const updateCotacao = useUpdateCotacao();
+  const queryClient = useQueryClient();
 
   const filteredCotacoes = (cotacoes || []).filter((cotacao) => {
     const matchesSearch =
@@ -74,12 +79,32 @@ export default function Cotacoes() {
     }).format(value);
   };
 
-  const handleMarkAsEnviada = async (id: string) => {
+  const handleMarkAsEnviada = async (id: string, leadId?: string | null) => {
     try {
       await updateCotacao.mutateAsync({ id, status: 'enviada' });
+      
+      // Atualizar etapa do lead para 'cotacao_enviada'
+      if (leadId) {
+        await supabase
+          .from('leads')
+          .update({ etapa: 'cotacao_enviada', updated_at: new Date().toISOString() })
+          .eq('id', leadId);
+        
+        queryClient.invalidateQueries({ queryKey: ['leads'] });
+      }
+      
       toast.success('Cotação marcada como enviada');
     } catch (error) {
       toast.error('Erro ao atualizar cotação');
+    }
+  };
+
+  const handleBaixarPdf = (cotacao: CotacaoWithRelations) => {
+    try {
+      gerarPdfCotacao(cotacao);
+      toast.success('PDF gerado com sucesso!');
+    } catch (error) {
+      toast.error('Erro ao gerar PDF');
     }
   };
 
@@ -114,8 +139,8 @@ export default function Cotacoes() {
 
     window.open(`https://wa.me/55${telefone}?text=${mensagem}`, '_blank');
     
-    // Marca como enviada após abrir WhatsApp
-    handleMarkAsEnviada(cotacao.id);
+    // Marca como enviada e atualiza etapa do lead após abrir WhatsApp
+    handleMarkAsEnviada(cotacao.id, cotacao.lead_id);
   };
 
   // Stats
@@ -311,15 +336,40 @@ export default function Cotacoes() {
                                   <MessageCircle className="h-4 w-4 mr-2 text-green-600" />
                                   WhatsApp
                                 </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => handleBaixarPdf(cotacao)}>
+                                  <FileDown className="h-4 w-4 mr-2" />
+                                  Baixar PDF
+                                </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
                           )}
                           {cotacao.status === 'enviada' && (
+                            <div className="flex gap-1">
+                              <Button 
+                                size="sm"
+                                onClick={() => handleOpenContratoWizard(cotacao.id)}
+                              >
+                                Aceitar
+                              </Button>
+                              <Button 
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleBaixarPdf(cotacao)}
+                                title="Baixar PDF"
+                              >
+                                <FileDown className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          )}
+                          {(cotacao.status === 'aceita' || cotacao.status === 'recusada' || cotacao.status === 'expirada') && (
                             <Button 
                               size="sm"
-                              onClick={() => handleOpenContratoWizard(cotacao.id)}
+                              variant="ghost"
+                              onClick={() => handleBaixarPdf(cotacao)}
+                              title="Baixar PDF"
                             >
-                              Aceitar
+                              <FileDown className="h-4 w-4" />
                             </Button>
                           )}
                         </div>

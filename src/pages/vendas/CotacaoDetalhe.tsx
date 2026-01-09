@@ -30,6 +30,7 @@ import {
   Clock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { BotaoGerarPdf } from '@/components/cotacoes/BotaoGerarPdf';
 import {
   STATUS_COTACAO_LABELS,
   STATUS_COTACAO_COLORS,
@@ -125,8 +126,8 @@ export default function CotacaoDetalhe() {
   const { data: cotacao, isLoading, error } = useCotacao(id);
   const { reenviarCotacao, atualizarStatus, isReenviando, isAtualizando } = useCotacaoActions();
 
-  // Handler WhatsApp
-  const handleWhatsApp = () => {
+  // Handler WhatsApp - agora também atualiza status e etapa do lead
+  const handleWhatsApp = async () => {
     if (!cotacao) return;
     
     const mensagem = `
@@ -152,6 +153,20 @@ Ficou com alguma dúvida? Estou à disposição!
       : `https://wa.me/?text=${encodeURIComponent(mensagem)}`;
     
     window.open(url, '_blank');
+    
+    // Atualizar status da cotação para 'enviada' e etapa do lead
+    if (cotacao.status === 'rascunho') {
+      atualizarStatus({ id: cotacao.id, status: 'enviada' });
+      
+      // Atualizar etapa do lead para 'cotacao_enviada'
+      if (cotacao.lead_id) {
+        const { supabase } = await import('@/integrations/supabase/client');
+        await supabase
+          .from('leads')
+          .update({ etapa: 'cotacao_enviada', updated_at: new Date().toISOString() })
+          .eq('id', cotacao.lead_id);
+      }
+    }
   };
 
   // Handler mudar status
@@ -282,6 +297,7 @@ Ficou com alguma dúvida? Estou à disposição!
 
             {/* Ações */}
             <div className="flex flex-wrap gap-2">
+              <BotaoGerarPdf cotacao={cotacao} />
               <Button
                 variant="outline"
                 size="sm"
