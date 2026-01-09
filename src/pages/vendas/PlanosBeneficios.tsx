@@ -189,7 +189,6 @@ export default function PlanosBeneficios() {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Planos e Benefícios</h1>
-          <p className="text-muted-foreground">Guia do Consultor v11 - Outubro 2025</p>
         </div>
         <div className="flex items-center gap-2">
           <BuscaPlanos onSearch={handleSearch} />
@@ -199,11 +198,10 @@ export default function PlanosBeneficios() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4 lg:grid-cols-7 lg:w-auto">
+        <TabsList className="grid w-full grid-cols-3 lg:grid-cols-6 lg:w-auto">
           <TabsTrigger value="visao-geral">Visão Geral</TabsTrigger>
           <TabsTrigger value="carros">Carros</TabsTrigger>
           <TabsTrigger value="motos">Motos</TabsTrigger>
-          <TabsTrigger value="eletricos">Elétricos</TabsTrigger>
           <TabsTrigger value="adicionais">Adicionais</TabsTrigger>
           <TabsTrigger value="ranking">Ranking</TabsTrigger>
           <TabsTrigger value="glossario">Glossário</TabsTrigger>
@@ -276,18 +274,6 @@ export default function PlanosBeneficios() {
             </div>
           </section>
 
-          {/* Fileira 6 - Elétricos */}
-          <section>
-            <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-              <Zap className="h-5 w-5 text-teal-600" />
-              Elétricos
-            </h2>
-            <div className="grid gap-4">
-              {PLANOS_RESUMO.filter(p => p.linha === 'eletricos').map((plano) => (
-                <PlanoCard key={plano.id} plano={plano} />
-              ))}
-            </div>
-          </section>
 
           {/* Coberturas Principais */}
           <section>
@@ -330,49 +316,6 @@ export default function PlanosBeneficios() {
           <VeiculosAceitosMotos />
         </TabsContent>
 
-        {/* Tab Elétricos */}
-        <TabsContent value="eletricos" className="space-y-8">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <Zap className="h-5 w-5 text-teal-500" />
-                <CardTitle>Plano Elétricos</CardTitle>
-              </div>
-              <CardDescription>
-                Proteção especializada para veículos elétricos com cobertura completa
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <h4 className="font-semibold mb-3">Benefícios Inclusos:</h4>
-                  <div className="space-y-2">
-                    {BENEFICIOS_ELETRICOS.map((beneficio) => (
-                      <div key={beneficio} className="flex items-center gap-2 text-sm">
-                        <Check className="h-4 w-4 text-green-500" />
-                        <span>{beneficio}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div className="space-y-4">
-                  <div className="p-4 bg-muted rounded-lg">
-                    <p className="text-sm text-muted-foreground">Cota de Participação</p>
-                    <p className="text-2xl font-bold text-primary">10% FIPE</p>
-                    <p className="text-xs text-muted-foreground">Sem valor mínimo</p>
-                  </div>
-                  <Alert>
-                    <Zap className="h-4 w-4" />
-                    <AlertDescription className="text-sm">
-                      Plano sem alteração com deságio. Ideal para veículos elétricos de todas as marcas.
-                    </AlertDescription>
-                  </Alert>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <TabelaPrecosEletricos />
-        </TabsContent>
 
         {/* Tab Adicionais */}
         <TabsContent value="adicionais" className="space-y-4">
