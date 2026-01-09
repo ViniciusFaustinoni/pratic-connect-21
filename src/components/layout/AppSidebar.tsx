@@ -78,11 +78,32 @@ import { cn } from '@/lib/utils';
 import { UserAvatar } from '@/components/UserAvatar';
 import { ROLE_LABELS } from '@/types/database';
 
+// Mapeamento de cores por grupo/item
+const MENU_COLORS: Record<string, string> = {
+  dashboard: '#3b82f6',      // Azul
+  vendas: '#10b981',         // Verde
+  cadastro: '#8b5cf6',       // Roxo
+  monitoramento: '#f97316',  // Laranja
+  eventos: '#ef4444',        // Vermelho
+  assistencia: '#dc2626',    // Vermelho vivo
+  oficinas: '#6b7280',       // Cinza escuro
+  financeiro: '#eab308',     // Amarelo/Dourado
+  cobranca: '#d97706',       // Marrom/Bronze
+  contabilidade: '#ec4899',  // Rosa
+  juridico: '#1e40af',       // Azul escuro
+  rh: '#22c55e',             // Verde claro
+  marketing: '#d946ef',      // Magenta
+  ouvidoria: '#38bdf8',      // Azul claro
+  diretoria: '#fbbf24',      // Dourado
+  configuracoes: '#94a3b8',  // Cinza
+};
+
 interface MenuItem {
   title: string;
   url: string;
   icon: LucideIcon;
   permission?: PermissionKey;
+  color?: string;
 }
 
 interface MenuGroup {
@@ -91,6 +112,7 @@ interface MenuGroup {
   icon: LucideIcon;
   permission?: PermissionKey;
   items: MenuItem[];
+  color?: string;
 }
 
 const menuConfig: {
@@ -103,6 +125,7 @@ const menuConfig: {
       url: '/dashboard', 
       icon: LayoutDashboard,
       permission: 'canViewDashboard',
+      color: MENU_COLORS.dashboard,
     },
   ],
   groups: [
@@ -111,6 +134,7 @@ const menuConfig: {
       label: 'Vendas',
       icon: TrendingUp,
       permission: 'canManageLeads',
+      color: MENU_COLORS.vendas,
       items: [
         { title: 'Leads', url: '/vendas/leads', icon: UserPlus },
         { title: 'Kanban', url: '/vendas/kanban', icon: Kanban },
@@ -124,6 +148,7 @@ const menuConfig: {
       label: 'Cadastro',
       icon: FileText,
       permission: 'canManageCadastro',
+      color: MENU_COLORS.cadastro,
       items: [
         { title: 'Associados', url: '/cadastro/associados', icon: Users },
         { title: 'Veículos', url: '/cadastro/veiculos', icon: Car },
@@ -135,6 +160,7 @@ const menuConfig: {
       label: 'Monitoramento',
       icon: MapPin,
       permission: 'canManageInstalacoes',
+      color: MENU_COLORS.monitoramento,
       items: [
         { title: 'Instalações', url: '/monitoramento/instalacoes', icon: Wrench },
         { title: 'Rotas', url: '/monitoramento/rotas', icon: MapPin },
@@ -164,6 +190,7 @@ const menuConfig: {
       label: 'Eventos',
       icon: AlertTriangle,
       permission: 'canManageSinistros',
+      color: MENU_COLORS.eventos,
       items: [
         { title: 'Dashboard', url: '/eventos/dashboard', icon: BarChart3 },
         { title: 'Sinistros', url: '/eventos/sinistros', icon: AlertTriangle },
@@ -174,6 +201,7 @@ const menuConfig: {
       label: 'Assistência 24h',
       icon: Phone,
       permission: 'canManageSinistros',
+      color: MENU_COLORS.assistencia,
       items: [
         { title: 'Dashboard', url: '/assistencia', icon: BarChart3 },
         { title: 'Fila de Chamados', url: '/assistencia/chamados', icon: ClipboardList },
@@ -185,6 +213,7 @@ const menuConfig: {
       label: 'Oficinas',
       icon: Wrench,
       permission: 'canManageOficinas',
+      color: MENU_COLORS.oficinas,
       items: [
         { title: 'Oficinas', url: '/oficinas', icon: Building2 },
         { title: 'Ordens de Serviço', url: '/ordens-servico', icon: ClipboardList },
@@ -195,6 +224,7 @@ const menuConfig: {
       label: 'Financeiro',
       icon: DollarSign,
       permission: 'isGerencia',
+      color: MENU_COLORS.financeiro,
       items: [
         { title: 'Dashboard', url: '/financeiro', icon: BarChart3 },
         { title: 'Cobranças', url: '/financeiro/cobrancas', icon: Receipt },
@@ -210,6 +240,7 @@ const menuConfig: {
       label: 'Cobrança',
       icon: UserX,
       permission: 'isGerencia',
+      color: MENU_COLORS.cobranca,
       items: [
         { title: 'Dashboard', url: '/cobranca', icon: BarChart3 },
         { title: 'Inadimplentes', url: '/cobranca/inadimplentes', icon: UserX },
@@ -224,6 +255,7 @@ const menuConfig: {
       label: 'Contabilidade',
       icon: BookOpen,
       permission: 'canManageContabilidade',
+      color: MENU_COLORS.contabilidade,
       items: [
         { title: 'Dashboard', url: '/contabilidade', icon: BarChart3 },
         { title: 'Plano de Contas', url: '/contabilidade/plano-contas', icon: List },
@@ -238,6 +270,7 @@ const menuConfig: {
       label: 'Jurídico',
       icon: Scale,
       permission: 'canManageJuridico',
+      color: MENU_COLORS.juridico,
       items: [
         { title: 'Dashboard', url: '/juridico', icon: BarChart3 },
         { title: 'Processos', url: '/juridico/processos', icon: FileText },
@@ -252,6 +285,7 @@ const menuConfig: {
       label: 'Recursos Humanos',
       icon: UserCheck,
       permission: 'canManageRH',
+      color: MENU_COLORS.rh,
       items: [
         { title: 'Dashboard', url: '/rh', icon: BarChart3 },
         { title: 'Funcionários', url: '/rh/funcionarios', icon: Users },
@@ -267,6 +301,7 @@ const menuConfig: {
       label: 'Marketing',
       icon: Megaphone,
       permission: 'canManageMarketing',
+      color: MENU_COLORS.marketing,
       items: [
         { title: 'Dashboard', url: '/marketing', icon: BarChart3 },
         { title: 'Campanhas', url: '/marketing/campanhas', icon: Target },
@@ -282,6 +317,7 @@ const menuConfig: {
       label: 'Ouvidoria',
       icon: MessageCircle,
       permission: 'canManageOuvidoria',
+      color: MENU_COLORS.ouvidoria,
       items: [
         { title: 'Dashboard', url: '/ouvidoria', icon: BarChart3 },
         { title: 'Fila', url: '/ouvidoria/fila', icon: ClipboardList },
@@ -292,6 +328,7 @@ const menuConfig: {
       label: 'Diretoria',
       icon: Building2,
       permission: 'isDiretorOnly',
+      color: MENU_COLORS.diretoria,
       items: [
         { title: 'Dashboard', url: '/diretoria', icon: BarChart3 },
         { title: 'Produtos', url: '/diretoria/produtos', icon: Package },
@@ -313,6 +350,7 @@ const configItems: MenuItem[] = [
     url: '/configuracoes', 
     icon: Settings,
     permission: 'canViewDashboard',
+    color: MENU_COLORS.configuracoes,
   },
 ];
 
@@ -449,7 +487,10 @@ export function AppSidebar() {
                     )}
                   >
                     <NavLink to={item.url} onClick={handleNavigation}>
-                      <item.icon className="h-4 w-4" />
+                      <item.icon 
+                        className="h-4 w-4" 
+                        style={{ color: isActive(item.url) ? 'inherit' : item.color }}
+                      />
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -469,7 +510,10 @@ export function AppSidebar() {
                         )}
                         tooltip={group.label}
                       >
-                        <group.icon className="h-4 w-4" />
+                        <group.icon 
+                          className="h-4 w-4" 
+                          style={{ color: isGroupActive(group.items) ? 'inherit' : group.color }}
+                        />
                       </SidebarMenuButton>
                     </PopoverTrigger>
                     <PopoverContent 
@@ -479,7 +523,10 @@ export function AppSidebar() {
                       className="w-52 p-2 bg-card border-border"
                     >
                       <div className="mb-2 flex items-center gap-2 px-2 text-sm font-semibold text-foreground">
-                        <group.icon className="h-4 w-4" />
+                        <group.icon 
+                          className="h-4 w-4" 
+                          style={{ color: group.color }}
+                        />
                         {group.label}
                       </div>
                       <div className="space-y-0.5">
@@ -494,7 +541,10 @@ export function AppSidebar() {
                               isActive(item.url) && "bg-sidebar-primary text-sidebar-primary-foreground font-medium"
                             )}
                           >
-                            <item.icon className="h-4 w-4" />
+                            <item.icon 
+                              className="h-4 w-4" 
+                              style={{ color: isActive(item.url) ? 'inherit' : group.color }}
+                            />
                             {item.title}
                           </NavLink>
                         ))}
@@ -518,7 +568,10 @@ export function AppSidebar() {
                     )}
                   >
                     <NavLink to={item.url} onClick={handleNavigation}>
-                      <item.icon className="h-4 w-4" />
+                      <item.icon 
+                        className="h-4 w-4" 
+                        style={{ color: isActive(item.url) ? 'inherit' : item.color }}
+                      />
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -546,7 +599,10 @@ export function AppSidebar() {
                           )}
                         >
                           <NavLink to={item.url} onClick={handleNavigation}>
-                            <item.icon className="h-4 w-4" />
+                            <item.icon 
+                              className="h-4 w-4" 
+                              style={{ color: isActive(item.url) ? 'inherit' : item.color }}
+                            />
                             <span>{item.title}</span>
                           </NavLink>
                         </SidebarMenuButton>
@@ -570,7 +626,10 @@ export function AppSidebar() {
                     className="cursor-pointer hover:bg-sidebar-accent/50 transition-colors text-muted-foreground hover:text-foreground"
                   >
                     <CollapsibleTrigger className="flex w-full items-center gap-2">
-                      <group.icon className="h-4 w-4" />
+                      <group.icon 
+                        className="h-4 w-4" 
+                        style={{ color: group.color }}
+                      />
                       <span className="flex-1 text-left">{group.label}</span>
                       <ChevronDown className="h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
                     </CollapsibleTrigger>
@@ -592,7 +651,10 @@ export function AppSidebar() {
                               )}
                             >
                               <NavLink to={item.url} onClick={handleNavigation}>
-                                <item.icon className="h-4 w-4" />
+                                <item.icon 
+                                  className="h-4 w-4" 
+                                  style={{ color: isActive(item.url) ? 'inherit' : group.color }}
+                                />
                                 <span>{item.title}</span>
                               </NavLink>
                             </SidebarMenuButton>
@@ -619,7 +681,10 @@ export function AppSidebar() {
               isActive('/configuracoes') && "bg-sidebar-primary text-sidebar-primary-foreground"
             )}
           >
-            <Settings className="h-5 w-5" />
+            <Settings 
+              className="h-5 w-5" 
+              style={{ color: isActive('/configuracoes') ? 'inherit' : MENU_COLORS.configuracoes }}
+            />
             <span className="text-sm font-medium">Configurações</span>
           </NavLink>
         </SidebarFooter>
