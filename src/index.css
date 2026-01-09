@@ -208,37 +208,29 @@
     background-color: hsl(var(--muted-foreground) / 0.5);
   }
 
-  /* Kanban scroll horizontal - FORÇAR SCROLL VISÍVEL */
+  /* Kanban horizontal scroll - clean and reliable */
   .kanban-scroll {
-    scrollbar-width: auto;
-    scrollbar-color: hsl(var(--muted-foreground) / 0.5) hsl(var(--muted));
-    -webkit-overflow-scrolling: touch;
     scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-gutter: stable;
   }
 
   .kanban-scroll::-webkit-scrollbar {
-    height: 12px;
-    display: block !important;
+    height: 10px;
   }
 
   .kanban-scroll::-webkit-scrollbar-track {
     background: hsl(var(--muted));
-    border-radius: 6px;
+    border-radius: 5px;
   }
 
   .kanban-scroll::-webkit-scrollbar-thumb {
-    background-color: hsl(var(--muted-foreground) / 0.5);
-    border-radius: 6px;
-    border: 2px solid hsl(var(--muted));
-    min-width: 60px;
+    background: hsl(var(--muted-foreground) / 0.3);
+    border-radius: 5px;
   }
 
   .kanban-scroll::-webkit-scrollbar-thumb:hover {
-    background-color: hsl(var(--muted-foreground) / 0.7);
-  }
-
-  .kanban-scroll::-webkit-scrollbar-thumb:active {
-    background-color: hsl(var(--muted-foreground) / 0.8);
+    background: hsl(var(--muted-foreground) / 0.5);
   }
 
   /* Safe area for iPhones with notch */
