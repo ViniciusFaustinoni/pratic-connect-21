@@ -7405,19 +7405,30 @@ export type Database = {
       }
       planos: {
         Row: {
+          adicional_mensal: number | null
           ano_fabricacao_maximo: number | null
           ano_fabricacao_minimo: number | null
+          ano_minimo_veiculo: number | null
           ativo: boolean
+          categoria: string | null
+          cobertura_fipe: number | null
           coberturas: string[] | null
           codigo: string
+          cota_desagio: number | null
+          cota_minima: number | null
+          cota_minima_desagio: number | null
+          cota_participacao: number | null
           created_at: string
           descricao: string | null
           destaque: boolean | null
           fipe_maxima: number | null
           fipe_minima: number | null
           id: string
+          linha: string | null
+          nivel: string | null
           nome: string
           ordem: number | null
+          ordem_exibicao: number | null
           tipo_uso: string
           tipo_veiculo: string | null
           updated_at: string
@@ -7425,19 +7436,30 @@ export type Database = {
           valor_adesao: number
         }
         Insert: {
+          adicional_mensal?: number | null
           ano_fabricacao_maximo?: number | null
           ano_fabricacao_minimo?: number | null
+          ano_minimo_veiculo?: number | null
           ativo?: boolean
+          categoria?: string | null
+          cobertura_fipe?: number | null
           coberturas?: string[] | null
           codigo: string
+          cota_desagio?: number | null
+          cota_minima?: number | null
+          cota_minima_desagio?: number | null
+          cota_participacao?: number | null
           created_at?: string
           descricao?: string | null
           destaque?: boolean | null
           fipe_maxima?: number | null
           fipe_minima?: number | null
           id?: string
+          linha?: string | null
+          nivel?: string | null
           nome: string
           ordem?: number | null
+          ordem_exibicao?: number | null
           tipo_uso?: string
           tipo_veiculo?: string | null
           updated_at?: string
@@ -7445,19 +7467,30 @@ export type Database = {
           valor_adesao: number
         }
         Update: {
+          adicional_mensal?: number | null
           ano_fabricacao_maximo?: number | null
           ano_fabricacao_minimo?: number | null
+          ano_minimo_veiculo?: number | null
           ativo?: boolean
+          categoria?: string | null
+          cobertura_fipe?: number | null
           coberturas?: string[] | null
           codigo?: string
+          cota_desagio?: number | null
+          cota_minima?: number | null
+          cota_minima_desagio?: number | null
+          cota_participacao?: number | null
           created_at?: string
           descricao?: string | null
           destaque?: boolean | null
           fipe_maxima?: number | null
           fipe_minima?: number | null
           id?: string
+          linha?: string | null
+          nivel?: string | null
           nome?: string
           ordem?: number | null
+          ordem_exibicao?: number | null
           tipo_uso?: string
           tipo_veiculo?: string | null
           updated_at?: string
@@ -7465,6 +7498,47 @@ export type Database = {
           valor_adesao?: number
         }
         Relationships: []
+      }
+      planos_beneficios: {
+        Row: {
+          beneficio: string
+          created_at: string | null
+          descricao: string | null
+          id: string
+          incluso: boolean | null
+          observacao: string | null
+          ordem: number | null
+          plano_id: string
+        }
+        Insert: {
+          beneficio: string
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          incluso?: boolean | null
+          observacao?: string | null
+          ordem?: number | null
+          plano_id: string
+        }
+        Update: {
+          beneficio?: string
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          incluso?: boolean | null
+          observacao?: string | null
+          ordem?: number | null
+          plano_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planos_beneficios_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "planos"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       planos_coberturas: {
         Row: {
@@ -7513,6 +7587,44 @@ export type Database = {
           },
           {
             foreignKeyName: "planos_coberturas_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "planos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      planos_restricoes: {
+        Row: {
+          categoria_veiculo: string
+          cobertura_removida: string | null
+          created_at: string | null
+          id: string
+          mensagem_alerta: string | null
+          plano_id: string
+          tipo_restricao: string
+        }
+        Insert: {
+          categoria_veiculo: string
+          cobertura_removida?: string | null
+          created_at?: string | null
+          id?: string
+          mensagem_alerta?: string | null
+          plano_id: string
+          tipo_restricao: string
+        }
+        Update: {
+          categoria_veiculo?: string
+          cobertura_removida?: string | null
+          created_at?: string | null
+          id?: string
+          mensagem_alerta?: string | null
+          plano_id?: string
+          tipo_restricao?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planos_restricoes_plano_id_fkey"
             columns: ["plano_id"]
             isOneToOne: false
             referencedRelation: "planos"
@@ -9489,6 +9601,7 @@ export type Database = {
           id: string
           nome: string | null
           plano_id: string
+          regiao: string | null
           taxa_administrativa: number
           taxa_aplicativo: number | null
           taxa_comercial: number | null
@@ -9508,6 +9621,7 @@ export type Database = {
           id?: string
           nome?: string | null
           plano_id: string
+          regiao?: string | null
           taxa_administrativa?: number
           taxa_aplicativo?: number | null
           taxa_comercial?: number | null
@@ -9527,6 +9641,7 @@ export type Database = {
           id?: string
           nome?: string | null
           plano_id?: string
+          regiao?: string | null
           taxa_administrativa?: number
           taxa_aplicativo?: number | null
           taxa_comercial?: number | null
