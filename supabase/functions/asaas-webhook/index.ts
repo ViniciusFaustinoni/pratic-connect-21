@@ -161,6 +161,54 @@ serve(async (req) => {
                 console.error('[asaas-webhook] Erro ao enviar email:', emailError);
               }
             }
+
+            // CORREÇÃO 7.5.6: Verificar se associado suspenso deve ser reativado
+            const { data: associadoStatus } = await supabase
+              .from('associados')
+              .select('id, status')
+              .eq('id', cobranca.associado_id)
+              .single();
+
+            if (associadoStatus?.status === 'suspenso') {
+              // Verificar se ainda há cobranças pendentes/vencidas
+              const { count: cobrancasPendentes } = await supabase
+                .from('asaas_cobrancas')
+                .select('*', { count: 'exact', head: true })
+                .eq('associado_id', cobranca.associado_id)
+                .in('status', ['PENDING', 'OVERDUE']);
+
+              if (cobrancasPendentes === 0) {
+                // Reativar associado
+                await supabase
+                  .from('associados')
+                  .update({ 
+                    status: 'ativo',
+                    bloqueado: false,
+                    motivo_bloqueio: null,
+                    data_bloqueio: null,
+                  })
+                  .eq('id', cobranca.associado_id);
+
+                // Notificar reativação
+                await supabase.from('notificacoes').insert({
+                  user_id: cobranca.associado_id,
+                  titulo: 'Conta Reativada',
+                  mensagem: 'Sua conta foi reativada após quitação das pendências financeiras.',
+                  tipo: 'sucesso',
+                });
+
+                // Registrar no histórico
+                await supabase.from('associados_historico').insert({
+                  associado_id: cobranca.associado_id,
+                  tipo: 'status_alterado',
+                  descricao: 'Associado reativado automaticamente após quitação de débitos',
+                  dados_anteriores: { status: 'suspenso' },
+                  dados_novos: { status: 'ativo' },
+                });
+
+                console.log(`[asaas-webhook] Associado ${cobranca.associado_id} reativado automaticamente`);
+              }
+            }
           }
           break;
 
