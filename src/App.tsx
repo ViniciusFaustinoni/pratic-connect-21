@@ -187,6 +187,9 @@ import InstaladorLogin from "./pages/instalador/InstaladorLogin";
 import InstaladorHome from "./pages/instalador/InstaladorHome";
 import InstaladorChecklist from "./pages/instalador/InstaladorChecklist";
 
+// Public Pages
+import CotacaoPublicaPage from "./pages/public/CotacaoPublica";
+
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -206,6 +209,9 @@ const App = () => (
             <Route path="/login" element={<Login />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/auth/reset-password" element={<ResetPassword />} />
+            
+            {/* Public Quote Page */}
+            <Route path="/cotacao/:token" element={<CotacaoPublicaPage />} />
             
             {/* Redirect root to dashboard */}
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
