@@ -181,6 +181,9 @@ export default function PlanosBeneficios() {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Planos e Benefícios</h1>
+          <p className="text-muted-foreground">
+            Guia do Consultor v11 - Outubro 2025
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <BuscaPlanos onSearch={handleSearch} />
@@ -201,11 +204,79 @@ export default function PlanosBeneficios() {
 
         {/* Tab Visão Geral */}
         <TabsContent value="visao-geral" className="space-y-8">
-          {/* Cards de Planos */}
+          {/* Fileira 1 - Linha Select */}
           <section>
-            <h2 className="text-xl font-semibold mb-4">Todos os Planos</h2>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {PLANOS_RESUMO.map((plano) => (
+            <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+              <Car className="h-5 w-5 text-blue-600" />
+              Linha Select
+            </h2>
+            <div className="grid gap-4 md:grid-cols-3">
+              {PLANOS_RESUMO.filter(p => p.linha === 'select').map((plano) => (
+                <PlanoCard key={plano.id} plano={plano} />
+              ))}
+            </div>
+          </section>
+
+          {/* Fileira 2 - Select One */}
+          <section>
+            <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+              <Star className="h-5 w-5 text-emerald-600" />
+              Select One
+            </h2>
+            <div className="grid gap-4">
+              {PLANOS_RESUMO.filter(p => p.linha === 'select-one').map((plano) => (
+                <PlanoCard key={plano.id} plano={plano} />
+              ))}
+            </div>
+          </section>
+
+          {/* Fileira 3 - Linha Especial */}
+          <section>
+            <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+              <Shield className="h-5 w-5 text-orange-600" />
+              Linha Especial
+            </h2>
+            <div className="grid gap-4 md:grid-cols-2">
+              {PLANOS_RESUMO.filter(p => p.linha === 'especial').map((plano) => (
+                <PlanoCard key={plano.id} plano={plano} />
+              ))}
+            </div>
+          </section>
+
+          {/* Fileira 4 - Linha Lançamento */}
+          <section>
+            <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+              <Zap className="h-5 w-5 text-violet-600" />
+              Linha Lançamento
+            </h2>
+            <div className="grid gap-4 md:grid-cols-3">
+              {PLANOS_RESUMO.filter(p => p.linha === 'lancamento').map((plano) => (
+                <PlanoCard key={plano.id} plano={plano} />
+              ))}
+            </div>
+          </section>
+
+          {/* Fileira 5 - Linha Advanced (Motos) */}
+          <section>
+            <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+              <Bike className="h-5 w-5 text-red-600" />
+              Linha Advanced (Motos)
+            </h2>
+            <div className="grid gap-4 md:grid-cols-2">
+              {PLANOS_RESUMO.filter(p => p.linha === 'advanced').map((plano) => (
+                <PlanoCard key={plano.id} plano={plano} />
+              ))}
+            </div>
+          </section>
+
+          {/* Fileira 6 - Elétricos */}
+          <section>
+            <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+              <Zap className="h-5 w-5 text-teal-600" />
+              Elétricos
+            </h2>
+            <div className="grid gap-4">
+              {PLANOS_RESUMO.filter(p => p.linha === 'eletricos').map((plano) => (
                 <PlanoCard key={plano.id} plano={plano} />
               ))}
             </div>
