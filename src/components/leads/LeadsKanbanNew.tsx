@@ -312,7 +312,7 @@ export function LeadsKanbanNew({
       onDragEnd={handleDragEnd}
     >
       {/* Kanban Container */}
-      <div className="relative h-full">
+      <div className="relative flex flex-col flex-1 min-h-0 overflow-hidden">
         {/* Left scroll button */}
         {canScrollLeft && (
           <Button
@@ -341,8 +341,7 @@ export function LeadsKanbanNew({
         <div
           ref={scrollRef}
           onWheel={handleWheel}
-          className="flex gap-4 overflow-x-scroll overflow-y-hidden pb-6 px-6 h-full kanban-scroll"
-          style={{ scrollbarGutter: 'stable' }}
+          className="flex flex-1 gap-4 overflow-x-auto overflow-y-hidden pb-6 kanban-scroll"
         >
           {ETAPAS_KANBAN.map((etapa) => (
             <DroppableColumn
