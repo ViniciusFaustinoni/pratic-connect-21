@@ -174,13 +174,13 @@ export const BENEFICIOS_NIVEL: BeneficioNivel[] = [
   { nome: 'Alagamento', basic: true, premium: true, exclusive: true },
   { nome: 'Chuva de Granizo', basic: true, premium: true, exclusive: true },
   { nome: 'Assistência 24h 400km', basic: true, premium: true, exclusive: true },
-  { nome: 'Rastreador (>R$30mil)', basic: true, premium: true, exclusive: true },
+  { nome: 'Rastreador/Monitoramento (acima de R$30mil)', basic: true, premium: true, exclusive: true },
   { nome: '1000km Reboque', basic: false, premium: true, exclusive: true },
   { nome: 'Danos Terceiros R$40mil', basic: false, premium: true, exclusive: true },
-  { nome: 'Vidros e Faróis', basic: false, premium: true, exclusive: true },
-  { nome: 'Reboque Excedente', basic: false, premium: true, exclusive: true },
+  { nome: 'Vidros e Faróis (após 120 dias)', basic: false, premium: true, exclusive: true },
+  { nome: 'Reboque Excedente (1 utilização a cada 6 meses)', basic: false, premium: true, exclusive: true },
   { nome: 'Kit Gás', basic: false, premium: false, exclusive: true },
-  { nome: '100% FIPE APP + Carro Reserva', basic: false, premium: false, exclusive: true },
+  { nome: '100% FIPE APP + Carro Reserva (somente em casos de colisão)', basic: false, premium: false, exclusive: true },
 ];
 
 export const ADICIONAL_NIVEL = {
@@ -194,11 +194,11 @@ export const ADICIONAL_NIVEL = {
 // ============================================
 export const BENEFICIOS_MOTOS = [
   { nome: 'Roubo e Furto', advanced: true, advancedPlus: true },
-  { nome: 'Monitoramento (>R$9mil)', advanced: true, advancedPlus: true },
-  { nome: 'Assistência 24h 400km', advanced: true, advancedPlus: true },
+  { nome: 'Monitoramento/Rastreador (acima de R$9mil)', advanced: true, advancedPlus: true },
+  { nome: 'Assistência 24h 400km', advanced: true, advancedPlus: false },
+  { nome: 'Assistência 24h 600km', advanced: false, advancedPlus: true },
   { nome: 'Colisão (cota 10%)', advanced: false, advancedPlus: true },
-  { nome: 'Danos Terceiros R$10mil', advanced: false, advancedPlus: true },
-  { nome: 'Assistência 600km', advanced: false, advancedPlus: true },
+  { nome: 'Danos Terceiros R$10mil (participação R$750)', advanced: false, advancedPlus: true },
 ];
 
 // ============================================
@@ -410,14 +410,14 @@ export const BENEFICIOS_ADICIONAIS_COMPLETO = [
   { categoria: 'Terceiros', nome: 'Danos Terceiros 100mil', preco: 40.00, descricao: 'Cobertura máxima' },
   { categoria: 'Vidros', nome: 'Vidros e Faróis', preco: 9.90, descricao: '60% do reparo (carência 120 dias)' },
   { categoria: 'Kit', nome: 'Kit Gás', preco: 9.90, descricao: 'Até R$2.200 em caso de roubo' },
-  { categoria: 'Reboque', nome: 'Reboque Excedente', preco: 2.90, descricao: '2x/ano (intervalo 6 meses)' },
+  { categoria: 'Reboque', nome: 'Reboque Excedente', preco: 2.90, descricao: '1 utilização a cada 6 meses (máx 2x/ano)' },
   { categoria: 'Combustível', nome: 'Clube Gás', preco: 10.00, descricao: 'Até 10% desconto combustível' },
   { categoria: 'Passageiros', nome: 'Proteção Passageiros', preco: 4.90, descricao: 'APP exclusivo' },
   { categoria: 'Rastreador', nome: 'Rastreador', preco: 30.00, descricao: 'Monitoramento em tempo real' },
-  { categoria: 'Reserva', nome: 'Carro Reserva 7 dias', preco: 7.90, descricao: 'Reembolso locação' },
-  { categoria: 'Reserva', nome: 'Carro Reserva 15 dias', preco: 15.90, descricao: 'Reembolso locação' },
-  { categoria: 'Reserva', nome: 'Carro Reserva 30 dias', preco: 35.90, descricao: 'Reembolso até R$2.200' },
-  { categoria: 'Combo', nome: '100% FIPE APP + Carro 30d', preco: 35.90, descricao: 'Combo exclusivo APP' },
+  { categoria: 'Reserva', nome: 'Carro Reserva 7 dias', preco: 7.90, descricao: 'Reembolso locação (somente em casos de colisão)' },
+  { categoria: 'Reserva', nome: 'Carro Reserva 15 dias', preco: 15.90, descricao: 'Reembolso locação (somente em casos de colisão)' },
+  { categoria: 'Reserva', nome: 'Carro Reserva 30 dias', preco: 35.90, descricao: 'Reembolso até R$2.200 (somente em casos de colisão)' },
+  { categoria: 'Combo', nome: '100% FIPE APP + Carro 30d', preco: 35.90, descricao: 'Combo exclusivo APP (carro reserva somente em casos de colisão)' },
 ];
 
 // ============================================
@@ -434,6 +434,7 @@ export const PLANOS_RESUMO: PlanoResumo[] = [
     cotaPasesioDesagio: '8% (mín R$2.000)',
     cotaApp: '8% (mín R$3.000)',
     niveis: ['Basic', 'Premium (+R$30)', 'Exclusive (+R$60)'],
+    destaque: 'Rastreador/Monitoramento (acima de R$30mil)',
     cor: 'from-blue-500 to-blue-600',
   },
   {
@@ -445,7 +446,7 @@ export const PLANOS_RESUMO: PlanoResumo[] = [
     cotaPasesio: '6% (mín R$1.200)',
     cotaPasesioDesagio: '8% (mín R$2.000)',
     cotaApp: '8% (mín R$3.000)',
-    destaque: 'Tudo incluído (Danos 100mil, Kit Gás, Carro Reserva, Clube Gás)',
+    destaque: 'Tudo incluído (Danos 100mil, Kit Gás, Carro Reserva somente em colisão, Clube Gás)',
     cor: 'from-emerald-500 to-green-600',
   },
   {
@@ -453,8 +454,9 @@ export const PLANOS_RESUMO: PlanoResumo[] = [
     nome: 'ESPECIAL',
     coberturaFipe: 80,
     anoMinimo: 2002,
-    cotaPasesio: '—',
-    destaque: 'Apenas Roubo/Furto + Assistência 400km. Rastreador obrigatório.',
+    cotaPasesio: '6% (mín R$1.200)',
+    cotaPasesioDesagio: '8% (mín R$2.000)',
+    destaque: 'Roubo/Furto + Assistência 400km + Rastreador/Monitoramento',
     cor: 'from-orange-500 to-amber-600',
   },
   {
@@ -463,7 +465,7 @@ export const PLANOS_RESUMO: PlanoResumo[] = [
     coberturaFipe: 80,
     anoMinimo: 2002,
     cotaPasesio: '10% (mín R$3.000)',
-    destaque: 'Roubo/Furto + Colisão + PT + Incêndio + Alagamento',
+    destaque: 'Roubo/Furto + Colisão + PT + Incêndio + Alagamento + Rastreador/Monitoramento (acima de R$30mil)',
     cor: 'from-amber-500 to-orange-600',
   },
   {
@@ -474,17 +476,17 @@ export const PLANOS_RESUMO: PlanoResumo[] = [
     anoMinimo: 2024,
     cotaPasesio: '10% (mín R$3.000)',
     niveis: ['Basic', 'Premium', 'Exclusive'],
-    destaque: 'Sem alteração com deságio',
+    destaque: 'Rastreador/Monitoramento (acima de R$30mil). Sem alteração com deságio',
     cor: 'from-violet-500 to-purple-600',
   },
   {
     id: 'advanced',
     nome: 'ADVANCED (Motos)',
-    coberturaFipe: 100,
+    coberturaFipe: 0,
     anoMinimo: 2005,
     cotaPasesio: '10% (mín R$1.500)',
-    niveis: ['Advanced', 'Advanced+ (+Colisão 10% + Terceiros R$750)'],
-    destaque: 'Honda e Yamaha (20 anos)',
+    niveis: ['Advanced (Assist. 400km)', 'Advanced+ (Assist. 600km + Colisão 10% + Terceiros R$750)'],
+    destaque: 'Roubo/Furto. Honda e Yamaha (20 anos). Monitoramento/Rastreador (acima de R$9mil)',
     cor: 'from-red-500 to-rose-600',
   },
 ];

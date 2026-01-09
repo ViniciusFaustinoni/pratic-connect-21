@@ -49,15 +49,21 @@ function PlanoResumoCard({ plano }: { plano: typeof PLANOS_RESUMO[0] }) {
 
       <CardHeader className="pb-2">
         <CardTitle className="text-lg">{plano.nome}</CardTitle>
-        <div className="flex items-center gap-2 mt-1">
-          <Badge className={cn(
-            'text-xs',
-            plano.coberturaFipe === 100 
-              ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100' 
-              : 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100'
-          )}>
-            {plano.coberturaFipe}% FIPE
-          </Badge>
+        <div className="flex items-center gap-2 mt-1 flex-wrap">
+          {plano.coberturaFipe > 0 ? (
+            <Badge className={cn(
+              'text-xs',
+              plano.coberturaFipe === 100 
+                ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100' 
+                : 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100'
+            )}>
+              {plano.coberturaFipe}% FIPE
+            </Badge>
+          ) : (
+            <Badge className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100">
+              Roubo/Furto
+            </Badge>
+          )}
           <Badge variant="outline" className="text-xs">
             &gt; {plano.anoMinimo}
           </Badge>
