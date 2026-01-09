@@ -25,13 +25,17 @@ import { LeadsEmptyState } from './LeadsEmptyState';
 import { ETAPA_LABELS, type EtapaLead } from '@/types/database';
 import { cn } from '@/lib/utils';
 
-// Simplified stages for pre-sale kanban
+// All stages for pre-sale kanban (11 stages)
 const ETAPAS_KANBAN: EtapaLead[] = [
   'novo',
   'contato',
   'qualificado',
   'cotacao_enviada',
   'negociacao',
+  'vistoria_agendada',
+  'contrato_enviado',
+  'contrato_assinado',
+  'instalacao_agendada',
   'ganho',
   'perdido',
 ];
@@ -42,6 +46,10 @@ const ETAPA_COLORS: Record<string, string> = {
   qualificado: 'border-t-purple-500 bg-purple-500/5',
   cotacao_enviada: 'border-t-orange-500 bg-orange-500/5',
   negociacao: 'border-t-pink-500 bg-pink-500/5',
+  vistoria_agendada: 'border-t-teal-500 bg-teal-500/5',
+  contrato_enviado: 'border-t-indigo-500 bg-indigo-500/5',
+  contrato_assinado: 'border-t-emerald-500 bg-emerald-500/5',
+  instalacao_agendada: 'border-t-cyan-500 bg-cyan-500/5',
   ganho: 'border-t-green-500 bg-green-500/5',
   perdido: 'border-t-red-500 bg-red-500/5',
 };
@@ -52,6 +60,10 @@ const ETAPA_HEADER_COLORS: Record<string, string> = {
   qualificado: 'text-purple-400',
   cotacao_enviada: 'text-orange-400',
   negociacao: 'text-pink-400',
+  vistoria_agendada: 'text-teal-400',
+  contrato_enviado: 'text-indigo-400',
+  contrato_assinado: 'text-emerald-400',
+  instalacao_agendada: 'text-cyan-400',
   ganho: 'text-green-400',
   perdido: 'text-red-400',
 };
@@ -62,6 +74,10 @@ const ETAPA_BADGE_COLORS: Record<string, string> = {
   qualificado: 'bg-purple-500/20 text-purple-400',
   cotacao_enviada: 'bg-orange-500/20 text-orange-400',
   negociacao: 'bg-pink-500/20 text-pink-400',
+  vistoria_agendada: 'bg-teal-500/20 text-teal-400',
+  contrato_enviado: 'bg-indigo-500/20 text-indigo-400',
+  contrato_assinado: 'bg-emerald-500/20 text-emerald-400',
+  instalacao_agendada: 'bg-cyan-500/20 text-cyan-400',
   ganho: 'bg-green-500/20 text-green-400',
   perdido: 'bg-red-500/20 text-red-400',
 };
@@ -99,22 +115,24 @@ function DroppableColumn({
   return (
     <Card
       className={cn(
-        'flex flex-col min-w-[300px] max-w-[300px] flex-shrink-0 border-t-4',
+        'flex flex-col w-[280px] min-w-[280px] max-w-[280px] h-full border-t-4',
         'bg-card/50 backdrop-blur-sm',
         ETAPA_COLORS[etapa],
         isOver && 'ring-2 ring-primary ring-offset-2 ring-offset-background'
       )}
     >
       {/* Column Header */}
-      <div className="flex flex-col gap-1 p-4 border-b border-border">
+      <div className="flex flex-col gap-1 p-3 border-b border-border shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Users className={cn('h-4 w-4', ETAPA_HEADER_COLORS[etapa])} />
-            <span className="font-semibold text-sm">{ETAPA_LABELS[etapa]}</span>
+            <span className="font-semibold text-xs truncate max-w-[180px]">
+              {ETAPA_LABELS[etapa]}
+            </span>
           </div>
           <Badge
             variant="secondary"
-            className={cn('text-xs font-medium', ETAPA_BADGE_COLORS[etapa])}
+            className={cn('text-xs font-medium shrink-0', ETAPA_BADGE_COLORS[etapa])}
           >
             {leads.length}
           </Badge>
@@ -122,8 +140,8 @@ function DroppableColumn({
       </div>
 
       {/* Column Body with Cards */}
-      <ScrollArea className="flex-1 max-h-[45vh]">
-        <div ref={setNodeRef} className="p-3 space-y-3 min-h-[120px]">
+      <ScrollArea className="flex-1 min-h-0" data-scroll-vertical="true">
+        <div ref={setNodeRef} className="p-2 space-y-2 min-h-[100px]">
           <SortableContext
             items={leads.map((l) => l.id)}
             strategy={verticalListSortingStrategy}
@@ -138,9 +156,9 @@ function DroppableColumn({
             ))}
           </SortableContext>
           {leads.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-8 text-center">
-              <Inbox className="h-8 w-8 text-muted-foreground/50 mb-2" />
-              <p className="text-sm text-muted-foreground">Nenhum lead</p>
+            <div className="flex flex-col items-center justify-center py-6 text-center">
+              <Inbox className="h-6 w-6 text-muted-foreground/50 mb-2" />
+              <p className="text-xs text-muted-foreground">Nenhum lead</p>
             </div>
           )}
         </div>
@@ -148,15 +166,15 @@ function DroppableColumn({
 
       {/* Column Footer */}
       {onAddLead && (
-        <div className="p-3 border-t border-border">
+        <div className="p-2 border-t border-border shrink-0">
           <Button
             variant="ghost"
             size="sm"
-            className="w-full gap-2 text-muted-foreground hover:text-foreground"
+            className="w-full gap-2 text-muted-foreground hover:text-foreground text-xs h-8"
             onClick={() => onAddLead(etapa)}
           >
-            <Plus className="h-4 w-4" />
-            Adicionar lead
+            <Plus className="h-3 w-3" />
+            Adicionar
           </Button>
         </div>
       )}
@@ -207,11 +225,14 @@ export function LeadsKanbanNew({
     const el = scrollRef.current;
     if (!el) return;
     
-    updateScrollButtons();
+    // Initial check with delay to ensure layout is complete
+    const timer = setTimeout(updateScrollButtons, 100);
+    
     el.addEventListener('scroll', updateScrollButtons);
     window.addEventListener('resize', updateScrollButtons);
     
     return () => {
+      clearTimeout(timer);
       el.removeEventListener('scroll', updateScrollButtons);
       window.removeEventListener('resize', updateScrollButtons);
     };
@@ -220,7 +241,7 @@ export function LeadsKanbanNew({
   // Scroll board programmatically
   const scrollBoard = useCallback((direction: 'left' | 'right') => {
     if (!scrollRef.current) return;
-    const amount = 320; // column width
+    const amount = 300; // column width
     scrollRef.current.scrollBy({
       left: direction === 'left' ? -amount : amount,
       behavior: 'smooth',
@@ -235,32 +256,27 @@ export function LeadsKanbanNew({
     if (e.shiftKey) return;
     
     // Check if pointer is over an element that can scroll vertically
-    let target = e.target as HTMLElement | null;
-    while (target && target !== scrollRef.current) {
-      const style = window.getComputedStyle(target);
-      const isScrollable = 
-        (style.overflowY === 'auto' || style.overflowY === 'scroll') &&
-        target.scrollHeight > target.clientHeight;
+    const target = e.target as HTMLElement;
+    const scrollableParent = target.closest('[data-scroll-vertical="true"]');
+    
+    if (scrollableParent) {
+      const el = scrollableParent as HTMLElement;
+      const atTop = el.scrollTop <= 0;
+      const atBottom = el.scrollTop >= el.scrollHeight - el.clientHeight - 1;
       
-      if (isScrollable) {
-        // Check if we're at scroll boundaries
-        const atTop = target.scrollTop <= 0;
-        const atBottom = target.scrollTop >= target.scrollHeight - target.clientHeight - 1;
-        
-        // If scrolling up and not at top, or scrolling down and not at bottom, let it scroll
-        if ((e.deltaY < 0 && !atTop) || (e.deltaY > 0 && !atBottom)) {
-          return; // Let vertical scroll happen naturally
-        }
+      // If scrolling up and not at top, or scrolling down and not at bottom, let it scroll
+      if ((e.deltaY < 0 && !atTop) || (e.deltaY > 0 && !atBottom)) {
+        return; // Let vertical scroll happen naturally
       }
-      target = target.parentElement;
     }
     
     // Convert vertical wheel to horizontal scroll
     if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
       e.preventDefault();
       scrollRef.current.scrollLeft += e.deltaY;
+      updateScrollButtons();
     }
-  }, []);
+  }, [updateScrollButtons]);
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
@@ -311,14 +327,14 @@ export function LeadsKanbanNew({
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      {/* Kanban Container */}
-      <div className="relative flex flex-col flex-1 min-h-0 overflow-hidden">
+      {/* Kanban Container - fills parent height */}
+      <div className="relative h-full flex flex-col">
         {/* Left scroll button */}
         {canScrollLeft && (
           <Button
             variant="secondary"
             size="icon"
-            className="absolute left-2 top-1/2 -translate-y-1/2 z-20 h-10 w-10 rounded-full shadow-lg bg-background/90 backdrop-blur-sm hover:bg-background"
+            className="absolute left-0 top-1/2 -translate-y-1/2 z-20 h-10 w-10 rounded-full shadow-lg bg-background/95 backdrop-blur-sm hover:bg-background border"
             onClick={() => scrollBoard('left')}
           >
             <ChevronLeft className="h-5 w-5" />
@@ -330,29 +346,33 @@ export function LeadsKanbanNew({
           <Button
             variant="secondary"
             size="icon"
-            className="absolute right-2 top-1/2 -translate-y-1/2 z-20 h-10 w-10 rounded-full shadow-lg bg-background/90 backdrop-blur-sm hover:bg-background"
+            className="absolute right-0 top-1/2 -translate-y-1/2 z-20 h-10 w-10 rounded-full shadow-lg bg-background/95 backdrop-blur-sm hover:bg-background border"
             onClick={() => scrollBoard('right')}
           >
             <ChevronRight className="h-5 w-5" />
           </Button>
         )}
 
-        {/* Scrollable board */}
+        {/* Scrollable board - THE key container */}
         <div
           ref={scrollRef}
           onWheel={handleWheel}
-          className="flex flex-1 gap-4 overflow-x-auto overflow-y-hidden pb-6 kanban-scroll"
+          onScroll={updateScrollButtons}
+          className="flex-1 overflow-x-scroll overflow-y-hidden pb-4 kanban-scroll"
         >
-          {ETAPAS_KANBAN.map((etapa) => (
-            <DroppableColumn
-              key={etapa}
-              etapa={etapa}
-              leads={leadsByEtapa[etapa] || []}
-              onLeadClick={onLeadClick}
-              onLeadDelete={onLeadDelete}
-              onAddLead={onAddLead}
-            />
-          ))}
+          {/* Inner container with forced min-width */}
+          <div className="inline-flex gap-3 h-full min-w-max py-1 px-1">
+            {ETAPAS_KANBAN.map((etapa) => (
+              <DroppableColumn
+                key={etapa}
+                etapa={etapa}
+                leads={leadsByEtapa[etapa] || []}
+                onLeadClick={onLeadClick}
+                onLeadDelete={onLeadDelete}
+                onAddLead={onAddLead}
+              />
+            ))}
+          </div>
         </div>
       </div>
 
