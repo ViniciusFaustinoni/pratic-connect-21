@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Phone, Mail, Car, Edit, MessageSquare, Loader2, FileText, ArrowRightLeft, Trash2, User, Clock, Calendar, Tag, DollarSign } from 'lucide-react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Phone, Mail, Car, Edit, MessageSquare, Loader2, FileText, ArrowRightLeft, Trash2, User, Clock, Calendar, Tag, DollarSign, MoreVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,13 +16,12 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from '@/components/ui/breadcrumb';
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useLead } from '@/hooks/useLeads';
 import { useCotacoesByLead } from '@/hooks/useCotacoesByLead';
 import { ETAPA_LABELS, ORIGEM_LABELS, ETAPA_COLORS, ORIGEM_COLORS, type EtapaLead } from '@/types/vendas';
@@ -138,84 +137,94 @@ export default function LeadDetalhe() {
 
   return (
     <div className="space-y-6">
-      {/* Breadcrumb */}
-      <Breadcrumb>
-        <BreadcrumbList>
-          <BreadcrumbItem>
-            <BreadcrumbLink asChild>
-              <Link to="/">Home</Link>
-            </BreadcrumbLink>
-          </BreadcrumbItem>
-          <BreadcrumbSeparator />
-          <BreadcrumbItem>
-            <BreadcrumbLink asChild>
-              <Link to="/vendas/leads">Leads</Link>
-            </BreadcrumbLink>
-          </BreadcrumbItem>
-          <BreadcrumbSeparator />
-          <BreadcrumbItem>
-            <BreadcrumbPage>{lead.nome}</BreadcrumbPage>
-          </BreadcrumbItem>
-        </BreadcrumbList>
-      </Breadcrumb>
-
-      {/* Botão Voltar */}
-      <Button variant="ghost" size="sm" onClick={() => navigate('/vendas/leads')}>
+      {/* Navegação */}
+      <Button 
+        variant="ghost" 
+        size="sm" 
+        onClick={() => navigate('/vendas/leads')}
+        className="text-muted-foreground hover:text-foreground"
+      >
         <ArrowLeft className="mr-2 h-4 w-4" />
-        Voltar
+        Voltar para Leads
       </Button>
 
-      {/* Header Card */}
+      {/* Header Card - Redesenhado */}
       <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-col md:flex-row md:items-center gap-4">
-            {/* Avatar + Info */}
-            <div className="flex items-center gap-4 flex-1">
-              <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
-                <span className="text-2xl font-semibold text-primary">
-                  {lead.nome.charAt(0).toUpperCase()}
-                </span>
-              </div>
-              <div>
-                <div className="flex items-center gap-3">
-                  <h1 className="text-2xl font-bold">{lead.nome}</h1>
-                  <Badge className={ETAPA_COLORS[lead.etapa as EtapaLead]}>
-                    {ETAPA_LABELS[lead.etapa as EtapaLead]}
-                  </Badge>
-                </div>
-                <p className="text-muted-foreground">
-                  Lead criado em {formatDate(lead.created_at)}
-                </p>
+        <CardContent className="pt-6 pb-6">
+          {/* Linha 1: Identificação do Lead */}
+          <div className="flex items-start gap-4 mb-6">
+            <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+              <span className="text-2xl font-semibold text-primary">
+                {lead.nome.charAt(0).toUpperCase()}
+              </span>
+            </div>
+            
+            <div className="flex-1 min-w-0">
+              <h1 className="text-2xl font-bold truncate">{lead.nome}</h1>
+              <p className="text-sm text-muted-foreground">
+                Lead criado em {formatDate(lead.created_at)}
+              </p>
+              <div className="flex flex-wrap gap-2 mt-2">
+                <Badge className={ETAPA_COLORS[lead.etapa as EtapaLead]}>
+                  {ETAPA_LABELS[lead.etapa as EtapaLead]}
+                </Badge>
+                <Badge variant="outline" className={ORIGEM_COLORS[lead.origem]}>
+                  {ORIGEM_LABELS[lead.origem]}
+                </Badge>
                 {diasNaEtapa > 0 && (
-                  <p className="text-sm text-muted-foreground flex items-center gap-1">
+                  <Badge variant="secondary" className="gap-1">
                     <Clock className="h-3 w-3" />
-                    {diasNaEtapa} {diasNaEtapa === 1 ? 'dia' : 'dias'} na etapa atual
-                  </p>
+                    {diasNaEtapa} {diasNaEtapa === 1 ? 'dia' : 'dias'} na etapa
+                  </Badge>
                 )}
               </div>
             </div>
 
-            {/* Actions */}
-            <div className="flex flex-wrap gap-2">
-              <Button variant="outline" size="sm" onClick={() => navigate(`/vendas/leads/${id}/editar`)}>
-                <Edit className="mr-2 h-4 w-4" />
-                Editar
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => setShowMoverModal(true)}>
-                <ArrowRightLeft className="mr-2 h-4 w-4" />
-                Mover Etapa
-              </Button>
-              <Button variant="outline" size="sm" onClick={handleWhatsApp}>
+            {/* Menu de Opções (mais ações) */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="flex-shrink-0">
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem onClick={() => navigate(`/vendas/leads/${id}/editar`)}>
+                  <Edit className="mr-2 h-4 w-4" />
+                  Editar Lead
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setShowMoverModal(true)}>
+                  <ArrowRightLeft className="mr-2 h-4 w-4" />
+                  Mover Etapa
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem 
+                  onClick={() => setShowDeleteDialog(true)}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Excluir Lead
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+
+          {/* Linha 2: Ações Principais */}
+          <div className="flex flex-col sm:flex-row gap-3">
+            {/* Ações de Comunicação (destaque) */}
+            <div className="flex gap-2 flex-1">
+              <Button 
+                onClick={handleWhatsApp}
+                className="bg-green-600 hover:bg-green-700 text-white flex-1 sm:flex-none"
+              >
                 <MessageSquare className="mr-2 h-4 w-4" />
                 WhatsApp
               </Button>
-              <Button size="sm" onClick={() => setShowCotacaoForm(true)}>
+              <Button 
+                onClick={() => setShowCotacaoForm(true)}
+                className="flex-1 sm:flex-none"
+              >
                 <FileText className="mr-2 h-4 w-4" />
                 Criar Cotação
-              </Button>
-              <Button variant="destructive" size="sm" onClick={() => setShowDeleteDialog(true)}>
-                <Trash2 className="mr-2 h-4 w-4" />
-                Excluir
               </Button>
             </div>
           </div>
