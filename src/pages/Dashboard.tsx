@@ -483,7 +483,7 @@ export default function Dashboard() {
         />
         <KPICard
           titulo="Instalações/Mês"
-          valor={instMetricas?.concluidas || 0}
+          valor={instMetricas?.concluidasHoje || 0}
           emoji="🔧"
           loading={instalacoesLoading}
         />
