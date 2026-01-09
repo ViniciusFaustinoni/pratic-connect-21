@@ -38,6 +38,7 @@ import {
   Printer,
   XCircle,
   FileText,
+  AlertCircle,
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -45,6 +46,7 @@ import { useFipe } from '@/hooks/useFipe';
 import { cn } from '@/lib/utils';
 import { useAllLeads, useUpdateLead } from '@/hooks/useLeads';
 import { usePlanosCotacao, useCriarCotacao } from '@/hooks/useCotacao';
+import { VehicleCategorySelect, CATEGORIAS_VEICULO } from '@/components/cotador/VehicleCategorySelect';
 import { supabase } from '@/integrations/supabase/client';
 import type { Tables } from '@/integrations/supabase/types';
 
@@ -227,6 +229,8 @@ export default function CotadorPage() {
   const [cor, setCor] = useState('');
   const [usoApp, setUsoApp] = useState(false);
   const [valorFipe, setValorFipe] = useState<number | null>(null);
+  const [categoriaVeiculo, setCategoriaVeiculo] = useState<string | null>(null);
+  const [erroCategoriaVeiculo, setErroCategoriaVeiculo] = useState(false);
 
   // Lead
   const [leadSelecionado, setLeadSelecionado] = useState<LeadDB | null>(null);
@@ -287,9 +291,9 @@ export default function CotadorPage() {
   }, [planos, planoSelecionadoTab]);
 
   // Verificar se pode calcular
-  const podeCalcular = modo === 'busca_placa' 
+  const podeCalcular = (modo === 'busca_placa' 
     ? veiculoEncontrado !== null 
-    : marca && modelo && ano;
+    : marca && modelo && ano) && categoriaVeiculo;
 
   // ============================================
   // HANDLERS
@@ -308,6 +312,8 @@ export default function CotadorPage() {
     setCotacaoCalculada(false);
     setPlanoFinalSelecionado(null);
     setCotacaoSalva(null);
+    setCategoriaVeiculo(null);
+    setErroCategoriaVeiculo(false);
   };
 
   const handleBuscarPlaca = async () => {
@@ -404,6 +410,17 @@ export default function CotadorPage() {
   };
 
   const handleCalcular = async () => {
+    // Validar categoria obrigatória
+    if (!categoriaVeiculo) {
+      setErroCategoriaVeiculo(true);
+      toast.error('Selecione a categoria do veículo para continuar');
+      document.getElementById('categoria-veiculo-select')?.scrollIntoView({ 
+        behavior: 'smooth', 
+        block: 'center' 
+      });
+      return;
+    }
+
     if (!podeCalcular) return;
 
     setIsCalculando(true);
@@ -443,6 +460,7 @@ export default function CotadorPage() {
         valor_fipe: valorFipe,
         codigo_fipe: veiculoEncontrado?.codigoFipe,
         uso_aplicativo: usoApp,
+        categoria_veiculo: categoriaVeiculo || undefined,
       });
 
       setCotacaoSalva(cotacaoData);
@@ -1004,6 +1022,38 @@ _Cotação válida por 7 dias_
                     Veículos de aplicativo têm condições especiais. Os valores podem ser ajustados.
                   </AlertDescription>
                 </Alert>
+              )}
+            </div>
+
+            {/* Categoria / Situação do Veículo */}
+            <div className="space-y-2">
+              <VehicleCategorySelect
+                value={categoriaVeiculo}
+                onChange={(value) => {
+                  setCategoriaVeiculo(value);
+                  setErroCategoriaVeiculo(false);
+                  // Regras de negócio
+                  if (value === 'leilao') {
+                    toast.warning('Veículos de leilão não possuem cobertura de incêndio em nenhum plano.');
+                  }
+                  if (value === 'aplicativo') {
+                    setUsoApp(true);
+                    toast.info('Uso para aplicativo selecionado automaticamente.');
+                  }
+                  if (value === 'taxi' || value === 'ex_taxi') {
+                    toast.info('Táxis têm condições especiais de cobertura.');
+                  }
+                  if (value === 'chassi_remarcado') {
+                    toast.info('Chassi remarcado requer análise adicional.');
+                  }
+                }}
+                error={erroCategoriaVeiculo}
+              />
+              {erroCategoriaVeiculo && (
+                <p className="text-sm text-destructive flex items-center gap-1">
+                  <AlertCircle className="h-3 w-3" />
+                  Selecione a categoria do veículo para continuar
+                </p>
               )}
             </div>
 
