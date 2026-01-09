@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, FileText, Calculator, Send, Check, X, Loader2, MessageCircle, ChevronDown, FileDown, Mail } from 'lucide-react';
+import { Plus, Search, FileText, Calculator, Send, Check, X, Loader2, MessageCircle, ChevronDown, FileDown, Mail, FileSignature, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -29,6 +29,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import type { StatusCotacao } from '@/types/database';
 import { useCotacoes, useUpdateCotacao, type CotacaoWithRelations } from '@/hooks/useCotacoes';
+import { useGerarContrato } from '@/hooks/useContratos';
+import { useAuth } from '@/contexts/AuthContext';
 import { CotacaoFormDialog } from '@/components/cotacoes/CotacaoFormDialog';
 import { ContratoWizard } from '@/components/contratos/ContratoWizard';
 import { EnviarEmailModal } from '@/components/cotacoes/EnviarEmailModal';
@@ -57,6 +59,8 @@ export default function Cotacoes() {
 
   const { data: cotacoes, isLoading } = useCotacoes();
   const updateCotacao = useUpdateCotacao();
+  const gerarContrato = useGerarContrato();
+  const { profile } = useAuth();
   const queryClient = useQueryClient();
 
   const filteredCotacoes = (cotacoes || []).filter((cotacao) => {
@@ -374,7 +378,34 @@ export default function Cotacoes() {
                               </Button>
                             </div>
                           )}
-                          {(cotacao.status === 'aceita' || cotacao.status === 'recusada' || cotacao.status === 'expirada') && (
+                          {cotacao.status === 'aceita' && (
+                            <div className="flex gap-1">
+                              <Button 
+                                size="sm"
+                                onClick={() => gerarContrato.mutate({ 
+                                  cotacaoId: cotacao.id, 
+                                  vendedorId: profile?.id 
+                                })}
+                                disabled={gerarContrato.isPending}
+                              >
+                                {gerarContrato.isPending ? (
+                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                ) : (
+                                  <FileSignature className="h-4 w-4 mr-2" />
+                                )}
+                                {gerarContrato.isPending ? 'Gerando...' : 'Gerar Contrato'}
+                              </Button>
+                              <Button 
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleBaixarPdf(cotacao)}
+                                title="Baixar PDF"
+                              >
+                                <FileDown className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          )}
+                          {(cotacao.status === 'recusada' || cotacao.status === 'expirada') && (
                             <Button 
                               size="sm"
                               variant="ghost"

@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useCotacao, useCotacaoActions } from '@/hooks/useCotacoes';
+import { useGerarContrato } from '@/hooks/useContratos';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -29,6 +31,8 @@ import {
   ChevronDown,
   ExternalLink,
   Clock,
+  FileSignature,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BotaoGerarPdf } from '@/components/cotacoes/BotaoGerarPdf';
@@ -128,6 +132,8 @@ export default function CotacaoDetalhe() {
 
   const { data: cotacao, isLoading, error } = useCotacao(id);
   const { reenviarCotacao, atualizarStatus, isReenviando, isAtualizando } = useCotacaoActions();
+  const gerarContrato = useGerarContrato();
+  const { profile } = useAuth();
 
   // Handler WhatsApp - agora também atualiza status e etapa do lead
   const handleWhatsApp = async () => {
@@ -321,10 +327,18 @@ Ficou com alguma dúvida? Estou à disposição!
               {cotacao.status === 'aceita' && (
                 <Button
                   size="sm"
-                  onClick={() => navigate(`/vendas/contratos/novo?cotacao=${cotacao.id}`)}
+                  onClick={() => gerarContrato.mutate({ 
+                    cotacaoId: cotacao.id, 
+                    vendedorId: profile?.id 
+                  })}
+                  disabled={gerarContrato.isPending}
                 >
-                  <FileText className="mr-2 h-4 w-4" />
-                  Gerar Contrato
+                  {gerarContrato.isPending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <FileSignature className="mr-2 h-4 w-4" />
+                  )}
+                  {gerarContrato.isPending ? 'Gerando...' : 'Gerar Contrato'}
                 </Button>
               )}
               <DropdownMenu>
