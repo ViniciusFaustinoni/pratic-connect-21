@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useInstalacoes, useInstalacoesContagem, useInstalacaoActions, InstalacaoFilters, InstalacaoWithRelations } from '@/hooks/useInstalacoes';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,12 +17,22 @@ const formatDate = (d: string) => new Date(d + 'T12:00:00').toLocaleDateString('
 
 export default function InstalacoesList() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusInstalacao | ''>('');
   const [periodoFilter, setPeriodoFilter] = useState<'hoje' | 'amanha' | 'semana' | ''>('');
   const [page, setPage] = useState(1);
 
   const [searchDebounced, setSearchDebounced] = useState('');
+  
+  // Detectar parâmetro ?agendar=true para navegar ao agendamento
+  useEffect(() => {
+    if (searchParams.get('agendar') === 'true') {
+      searchParams.delete('agendar');
+      setSearchParams(searchParams, { replace: true });
+      navigate('/monitoramento/instalacoes/agendar');
+    }
+  }, [searchParams, setSearchParams, navigate]);
   
   useEffect(() => {
     const timer = setTimeout(() => setSearchDebounced(search), 300);

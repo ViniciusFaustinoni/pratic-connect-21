@@ -526,7 +526,7 @@ export default function Dashboard() {
               <Button 
                 variant="outline" 
                 className="h-auto py-3 flex flex-col gap-1"
-                onClick={() => navigate('/vendas/leads')}
+                onClick={() => navigate('/vendas/leads?novo=true')}
               >
                 <Plus className="h-5 w-5" />
                 <span className="text-xs">Novo Lead</span>
@@ -542,7 +542,7 @@ export default function Dashboard() {
               <Button 
                 variant="outline" 
                 className="h-auto py-3 flex flex-col gap-1"
-                onClick={() => navigate('/monitoramento/instalacoes')}
+                onClick={() => navigate('/monitoramento/instalacoes?agendar=true')}
               >
                 <Wrench className="h-5 w-5" />
                 <span className="text-xs">Agendar Instalação</span>
@@ -550,7 +550,7 @@ export default function Dashboard() {
               <Button 
                 variant="outline" 
                 className="h-auto py-3 flex flex-col gap-1"
-                onClick={() => navigate('/cadastro/documentos')}
+                onClick={() => navigate('/cadastro/fila-documentos')}
               >
                 <FileText className="h-5 w-5" />
                 <span className="text-xs">Analisar Docs</span>
