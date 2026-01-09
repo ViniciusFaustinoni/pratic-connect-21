@@ -155,14 +155,38 @@
     background-color: hsl(var(--muted-foreground) / 0.5);
   }
 
-  /* Safe area for iPhones with notch */
-.pb-safe {
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-}
+  /* Kanban scroll horizontal estilizado */
+  .kanban-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.4) hsl(var(--muted));
+  }
 
-.h-safe-area-inset-bottom {
-  height: env(safe-area-inset-bottom, 0px);
-}
+  .kanban-scroll::-webkit-scrollbar {
+    height: 8px;
+  }
+
+  .kanban-scroll::-webkit-scrollbar-track {
+    background: hsl(var(--muted));
+    border-radius: 4px;
+  }
+
+  .kanban-scroll::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--muted-foreground) / 0.4);
+    border-radius: 4px;
+  }
+
+  .kanban-scroll::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--muted-foreground) / 0.6);
+  }
+
+  /* Safe area for iPhones with notch */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .h-safe-area-inset-bottom {
+    height: env(safe-area-inset-bottom, 0px);
+  }
 }
 
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
