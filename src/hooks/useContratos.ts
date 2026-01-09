@@ -329,3 +329,52 @@ export function useAtivarContrato() {
     },
   });
 }
+
+// Hook para buscar histórico do contrato
+export function useContratoHistorico(contratoId: string | undefined) {
+  return useQuery({
+    queryKey: ['contratos-historico', contratoId],
+    queryFn: async () => {
+      if (!contratoId) return [];
+
+      const { data, error } = await supabase
+        .from('contratos_historico')
+        .select(`
+          *,
+          usuario:profiles (id, nome)
+        `)
+        .eq('contrato_id', contratoId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!contratoId,
+  });
+}
+
+// Hook para gerar contrato a partir de cotação (via Edge Function)
+export function useGerarContrato() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ cotacaoId, vendedorId }: { cotacaoId: string; vendedorId?: string }) => {
+      const { data, error } = await supabase.functions.invoke('contrato-gerar', {
+        body: { cotacao_id: cotacaoId, vendedor_id: vendedorId },
+      });
+
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error);
+      
+      return data.contrato;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contratos'] });
+      queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
+      toast.success('Contrato gerado com sucesso!');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Erro ao gerar contrato');
+    },
+  });
+}

@@ -2994,18 +2994,28 @@ export type Database = {
         Row: {
           associado_id: string | null
           autentique_documento_id: string | null
+          autentique_status: string | null
           autentique_url: string | null
           cotacao_id: string | null
           created_at: string
+          created_by: string | null
+          data_assinatura: string | null
+          data_ativacao: string | null
+          data_cancelamento: string | null
+          data_envio: string | null
           data_fim: string | null
           data_inicio: string
+          data_visualizacao: string | null
           dia_vencimento: number | null
           id: string
           lead_id: string | null
           numero: string
+          pdf_assinado_url: string | null
+          pdf_url: string | null
           plano_id: string
           status: Database["public"]["Enums"]["status_contrato"]
           updated_at: string
+          validade_link: string | null
           valor_adesao: number
           valor_mensal: number
           vendedor_id: string | null
@@ -3013,18 +3023,28 @@ export type Database = {
         Insert: {
           associado_id?: string | null
           autentique_documento_id?: string | null
+          autentique_status?: string | null
           autentique_url?: string | null
           cotacao_id?: string | null
           created_at?: string
+          created_by?: string | null
+          data_assinatura?: string | null
+          data_ativacao?: string | null
+          data_cancelamento?: string | null
+          data_envio?: string | null
           data_fim?: string | null
           data_inicio?: string
+          data_visualizacao?: string | null
           dia_vencimento?: number | null
           id?: string
           lead_id?: string | null
           numero: string
+          pdf_assinado_url?: string | null
+          pdf_url?: string | null
           plano_id: string
           status?: Database["public"]["Enums"]["status_contrato"]
           updated_at?: string
+          validade_link?: string | null
           valor_adesao: number
           valor_mensal: number
           vendedor_id?: string | null
@@ -3032,18 +3052,28 @@ export type Database = {
         Update: {
           associado_id?: string | null
           autentique_documento_id?: string | null
+          autentique_status?: string | null
           autentique_url?: string | null
           cotacao_id?: string | null
           created_at?: string
+          created_by?: string | null
+          data_assinatura?: string | null
+          data_ativacao?: string | null
+          data_cancelamento?: string | null
+          data_envio?: string | null
           data_fim?: string | null
           data_inicio?: string
+          data_visualizacao?: string | null
           dia_vencimento?: number | null
           id?: string
           lead_id?: string | null
           numero?: string
+          pdf_assinado_url?: string | null
+          pdf_url?: string | null
           plano_id?: string
           status?: Database["public"]["Enums"]["status_contrato"]
           updated_at?: string
+          validade_link?: string | null
           valor_adesao?: number
           valor_mensal?: number
           vendedor_id?: string | null
@@ -3054,6 +3084,13 @@ export type Database = {
             columns: ["cotacao_id"]
             isOneToOne: false
             referencedRelation: "cotacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contratos_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
@@ -3118,6 +3155,51 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["associado_id"]
+          },
+        ]
+      }
+      contratos_historico: {
+        Row: {
+          contrato_id: string
+          created_at: string | null
+          dados: Json | null
+          descricao: string | null
+          evento: string
+          id: string
+          usuario_id: string | null
+        }
+        Insert: {
+          contrato_id: string
+          created_at?: string | null
+          dados?: Json | null
+          descricao?: string | null
+          evento: string
+          id?: string
+          usuario_id?: string | null
+        }
+        Update: {
+          contrato_id?: string
+          created_at?: string | null
+          dados?: Json | null
+          descricao?: string | null
+          evento?: string
+          id?: string
+          usuario_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contratos_historico_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "contratos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contratos_historico_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -10519,6 +10601,9 @@ export type Database = {
         | "ativo"
         | "suspenso"
         | "cancelado"
+        | "visualizado"
+        | "expirado"
+        | "pendente_assinatura"
       status_cotacao:
         | "rascunho"
         | "enviada"
@@ -10825,6 +10910,9 @@ export const Constants = {
         "ativo",
         "suspenso",
         "cancelado",
+        "visualizado",
+        "expirado",
+        "pendente_assinatura",
       ],
       status_cotacao: ["rascunho", "enviada", "aceita", "recusada", "expirada"],
       status_documento: [
