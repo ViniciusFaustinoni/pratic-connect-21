@@ -331,7 +331,7 @@ function PraticLogo({ collapsed }: { collapsed: boolean }) {
       {!collapsed && (
         <div className="flex flex-col">
           <div className="flex items-baseline">
-            <span className="pratic-logo-text text-lg text-foreground">pratic</span>
+            <span className="pratic-logo-text text-lg text-sidebar-foreground font-semibold">pratic</span>
           </div>
           {/* Red line */}
           <div className="h-0.5 w-full bg-accent mb-0.5" />
