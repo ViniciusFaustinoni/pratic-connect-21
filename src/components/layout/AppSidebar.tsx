@@ -323,21 +323,14 @@ function PraticLogo({ collapsed }: { collapsed: boolean }) {
       "flex items-center",
       collapsed ? "justify-center" : "gap-3"
     )}>
-      {/* Shield with gradient */}
-      <div className="relative flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-accent to-primary">
-        <Shield className="h-5 w-5 text-white" />
-      </div>
-      
-      {!collapsed && (
-        <div className="flex flex-col">
-          <div className="flex items-baseline">
-            <span className="pratic-logo-text text-lg text-white">pratic</span>
-          </div>
-          {/* Red line */}
-          <div className="h-0.5 w-full bg-accent mb-0.5" />
-          <span className="text-xs font-medium text-pratic-red-light">car</span>
-        </div>
-      )}
+      <img 
+        src="/pratic-logo.png" 
+        alt="PRATIC Car" 
+        className={cn(
+          "object-contain transition-all duration-200",
+          collapsed ? "h-10 w-10" : "h-12"
+        )}
+      />
     </div>
   );
 }

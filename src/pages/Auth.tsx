@@ -323,9 +323,11 @@ export default function Auth() {
       <div className="w-full max-w-md">
         {/* Logo e Título */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
-            <Lock className="w-8 h-8 text-primary" />
-          </div>
+          <img 
+            src="/pratic-logo.png" 
+            alt="PRATIC Car" 
+            className="h-20 mx-auto mb-4"
+          />
           <h1 className="text-2xl font-bold text-foreground">SGA PRATIC 2.0</h1>
           <p className="text-muted-foreground mt-1">Sistema de Gestão de Associados</p>
         </div>
