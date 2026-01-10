@@ -1,8 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { 
   Check, X, Info, Search, ChevronDown, ChevronUp, Grid3X3, Settings2,
   Crown, Briefcase, FileText, Radio, Megaphone, Scale, Smartphone,
-  Shield, Users, Clock, Eye, Pencil
+  Shield, Users, Clock, Eye, Pencil, Save
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -17,8 +17,10 @@ import { GerenciarRolesTab } from '@/components/configuracoes/GerenciarRolesTab'
 import { SolicitacoesTab } from '@/components/configuracoes/SolicitacoesTab';
 import { AreaSection } from '@/components/configuracoes/AreaSection';
 import { PerfilSheet } from '@/components/configuracoes/PerfilSheet';
+import { PermissionSelect } from '@/components/configuracoes/PermissionSelect';
 import { Perfil } from '@/components/configuracoes/PerfilCard';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 // 10 módulos do sistema
 const modulos = [
@@ -101,7 +103,7 @@ const areas = ['Diretoria', 'Comercial', 'Cadastro', 'Monitoramento', 'Marketing
 type PermValue = boolean | 'read' | 'own';
 
 // Matriz de permissões
-const matriz: Record<string, Record<string, PermValue>> = {
+const matrizInicial: Record<string, Record<string, PermValue>> = {
   desenvolvedor: { dashboard: true, vendas: true, cadastro: true, monitoramento: true, eventos: true, financeiro: true, cobranca: true, assistencia: true, relatorios: true, configuracoes: true },
   diretor: { dashboard: true, vendas: true, cadastro: true, monitoramento: true, eventos: true, financeiro: true, cobranca: true, assistencia: true, relatorios: true, configuracoes: true },
   admin_master: { dashboard: true, vendas: true, cadastro: true, monitoramento: true, eventos: true, financeiro: true, cobranca: true, assistencia: true, relatorios: true, configuracoes: true },
@@ -126,7 +128,7 @@ const Cell = ({ value }: { value: PermValue }) => {
 };
 
 export default function Perfis() {
-  const { canManagePermissions, canApprovePermissionChanges } = usePermissions();
+  const { canManagePermissions, canApprovePermissionChanges, isDesenvolvedor, isDiretor } = usePermissions();
   const { contagemPorPerfil, useUsuariosPorPerfil } = usePerfilUsuarios();
   
   const [activeTab, setActiveTab] = useState('perfis');
@@ -143,6 +145,11 @@ export default function Perfis() {
   const [selectedPerfil, setSelectedPerfil] = useState<Perfil | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [showMatriz, setShowMatriz] = useState(false);
+  
+  // Estado para edição de permissões
+  const [matriz, setMatriz] = useState(matrizInicial);
+  const [editedPermissions, setEditedPermissions] = useState<Record<string, Record<string, PermValue>>>({});
+  const [hasChanges, setHasChanges] = useState(false);
 
   // Busca usuários do perfil selecionado
   const { data: usuariosDoPerfil = [] } = useUsuariosPorPerfil(selectedPerfil?.id || '');
@@ -184,6 +191,63 @@ export default function Perfis() {
     setSelectedPerfil(perfil);
     setSheetOpen(true);
   };
+
+  // Handler para alterar permissão na matriz
+  const handlePermissionChange = useCallback((perfilId: string, moduloId: string, newValue: PermValue) => {
+    if (!canManagePermissions) return;
+    
+    setEditedPermissions(prev => ({
+      ...prev,
+      [perfilId]: {
+        ...prev[perfilId],
+        [moduloId]: newValue
+      }
+    }));
+    setHasChanges(true);
+  }, [canManagePermissions]);
+
+  // Handler para salvar alterações
+  const handleSaveChanges = useCallback(() => {
+    // Aplicar alterações na matriz
+    setMatriz(prev => {
+      const updated = { ...prev };
+      Object.entries(editedPermissions).forEach(([perfilId, modulos]) => {
+        if (!updated[perfilId]) updated[perfilId] = {};
+        Object.entries(modulos).forEach(([moduloId, value]) => {
+          updated[perfilId][moduloId] = value;
+        });
+      });
+      return updated;
+    });
+
+    // Limpar estado de edição
+    setEditedPermissions({});
+    setHasChanges(false);
+
+    // Feedback
+    if (isDesenvolvedor || isDiretor) {
+      toast.success('Permissões atualizadas com sucesso!');
+    } else {
+      toast.success('Solicitação de alteração enviada para aprovação!');
+    }
+  }, [editedPermissions, isDesenvolvedor, isDiretor]);
+
+  // Handler para descartar alterações
+  const handleDiscardChanges = useCallback(() => {
+    setEditedPermissions({});
+    setHasChanges(false);
+    toast.info('Alterações descartadas');
+  }, []);
+
+  // Obter valor atual (editado ou original)
+  const getPermValue = useCallback((perfilId: string, moduloId: string): PermValue => {
+    return editedPermissions[perfilId]?.[moduloId] ?? matriz[perfilId]?.[moduloId] ?? false;
+  }, [editedPermissions, matriz]);
+
+  // Verificar se célula foi editada
+  const isCellEdited = useCallback((perfilId: string, moduloId: string): boolean => {
+    return editedPermissions[perfilId]?.[moduloId] !== undefined;
+  }, [editedPermissions]);
 
   return (
     <div className="space-y-6">
@@ -296,27 +360,48 @@ export default function Perfis() {
           {showMatriz && (
             <Card className="border-border/50">
               <CardHeader className="pb-4">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <CardTitle className="text-base">Matriz de Permissões</CardTitle>
-                  <div className="flex flex-wrap items-center gap-4 text-xs">
-                    <div className="flex items-center gap-1.5">
-                      <Check className="w-3.5 h-3.5 text-green-500" />
-                      <span className="text-muted-foreground">Total</span>
+                  <div className="flex flex-wrap items-center gap-4">
+                    {/* Legenda */}
+                    <div className="flex flex-wrap items-center gap-4 text-xs">
+                      <div className="flex items-center gap-1.5">
+                        <Check className="w-3.5 h-3.5 text-green-500" />
+                        <span className="text-muted-foreground">Total</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-blue-400 bg-blue-500/10 px-1 rounded text-[10px] font-medium">R</span>
+                        <span className="text-muted-foreground">Leitura</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-amber-400 bg-amber-500/10 px-1 rounded text-[10px] font-medium">P</span>
+                        <span className="text-muted-foreground">Próprios</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <X className="w-3.5 h-3.5 text-muted-foreground/30" />
+                        <span className="text-muted-foreground">Sem acesso</span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-blue-400 bg-blue-500/10 px-1 rounded text-[10px] font-medium">R</span>
-                      <span className="text-muted-foreground">Leitura</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-amber-400 bg-amber-500/10 px-1 rounded text-[10px] font-medium">P</span>
-                      <span className="text-muted-foreground">Próprios</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <X className="w-3.5 h-3.5 text-muted-foreground/30" />
-                      <span className="text-muted-foreground">Sem acesso</span>
-                    </div>
+                    {/* Botões de salvar/descartar */}
+                    {canManagePermissions && hasChanges && (
+                      <div className="flex items-center gap-2">
+                        <Button variant="ghost" size="sm" onClick={handleDiscardChanges}>
+                          Descartar
+                        </Button>
+                        <Button size="sm" onClick={handleSaveChanges} className="gap-1.5">
+                          <Save className="w-3.5 h-3.5" />
+                          Salvar
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </div>
+                {canManagePermissions && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    <Pencil className="w-3 h-3 inline mr-1" />
+                    Clique em qualquer célula para alterar a permissão
+                  </p>
+                )}
               </CardHeader>
               <CardContent className="p-0">
                 <ScrollArea className="w-full">
@@ -366,13 +451,30 @@ export default function Perfis() {
                             <td className="p-4 font-medium text-foreground sticky left-0 bg-inherit z-10">
                               {m.label}
                             </td>
-                            {perfis.map((p) => (
-                              <td key={p.id} className="p-3 text-center">
-                                <div className="flex justify-center">
-                                  <Cell value={matriz[p.id]?.[m.id] ?? false} />
-                                </div>
-                              </td>
-                            ))}
+                            {perfis.map((p) => {
+                              const currentValue = getPermValue(p.id, m.id);
+                              const isEdited = isCellEdited(p.id, m.id);
+                              
+                              return (
+                                <td key={p.id} className="p-2 text-center">
+                                  {canManagePermissions ? (
+                                    <div className={cn(
+                                      "flex justify-center rounded-md p-1 transition-all",
+                                      isEdited && "bg-amber-500/10 ring-1 ring-amber-500/30"
+                                    )}>
+                                      <PermissionSelect
+                                        value={currentValue}
+                                        onChange={(newValue) => handlePermissionChange(p.id, m.id, newValue)}
+                                      />
+                                    </div>
+                                  ) : (
+                                    <div className="flex justify-center">
+                                      <Cell value={currentValue} />
+                                    </div>
+                                  )}
+                                </td>
+                              );
+                            })}
                           </tr>
                         ))}
                       </tbody>
@@ -424,6 +526,7 @@ export default function Perfis() {
         modulos={modulos}
         matriz={matriz}
         usuarios={usuariosDoPerfil.map(u => ({ id: u.id, nome: u.nome || '', email: u.email || '' }))}
+        onPermissionChange={handlePermissionChange}
       />
     </div>
   );

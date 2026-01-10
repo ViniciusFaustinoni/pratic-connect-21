@@ -1,4 +1,5 @@
-import { Check, X, Users, ArrowRight, Eye, Pencil } from 'lucide-react';
+import { useState, useCallback } from 'react';
+import { Check, X, Users, ArrowRight, Eye, Pencil, Save } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -7,6 +8,9 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { Perfil } from './PerfilCard';
+import { PermissionSelect } from './PermissionSelect';
+import { usePermissions } from '@/hooks/usePermissions';
+import { toast } from 'sonner';
 
 interface Modulo {
   id: string;
@@ -23,6 +27,7 @@ interface PerfilSheetProps {
   matriz: Record<string, Record<string, PermValue>>;
   usuarios: Array<{ id: string; nome: string; email: string }>;
   onUsuarioClick?: (userId: string) => void;
+  onPermissionChange?: (perfilId: string, moduloId: string, value: PermValue) => void;
 }
 
 const PermBadge = ({ value }: { value: PermValue }) => {
@@ -65,21 +70,75 @@ export function PerfilSheet({
   modulos, 
   matriz,
   usuarios,
-  onUsuarioClick 
+  onUsuarioClick,
+  onPermissionChange
 }: PerfilSheetProps) {
+  const { canManagePermissions, isDesenvolvedor, isDiretor } = usePermissions();
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedPermissions, setEditedPermissions] = useState<Record<string, PermValue>>({});
+  
   if (!perfil) return null;
 
   const perfilPermissoes = matriz[perfil.id] || {};
   const permissoesAtivas = modulos.filter(m => perfilPermissoes[m.id] && perfilPermissoes[m.id] !== false);
 
+  const handleStartEdit = () => {
+    setIsEditing(true);
+    setEditedPermissions({});
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setEditedPermissions({});
+  };
+
+  const handlePermChange = (moduloId: string, value: PermValue) => {
+    setEditedPermissions(prev => ({ ...prev, [moduloId]: value }));
+  };
+
+  const handleSave = () => {
+    // Aplicar alterações via callback se fornecido
+    Object.entries(editedPermissions).forEach(([moduloId, value]) => {
+      onPermissionChange?.(perfil.id, moduloId, value);
+    });
+    
+    setIsEditing(false);
+    setEditedPermissions({});
+    
+    if (isDesenvolvedor || isDiretor) {
+      toast.success('Permissões atualizadas!');
+    } else {
+      toast.success('Solicitação enviada para aprovação!');
+    }
+  };
+
+  const hasChanges = Object.keys(editedPermissions).length > 0;
+  const getPermValue = (moduloId: string): PermValue => {
+    return editedPermissions[moduloId] ?? perfilPermissoes[moduloId] ?? false;
+  };
+
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet open={open} onOpenChange={(o) => {
+      if (!o) {
+        setIsEditing(false);
+        setEditedPermissions({});
+      }
+      onOpenChange(o);
+    }}>
       <SheetContent side="right" className="w-full sm:max-w-lg p-0 flex flex-col">
         <div className="p-6 border-b border-border/50 bg-gradient-to-br from-muted/30 to-background">
           <SheetHeader>
-            <div className="flex items-center gap-3">
-              <div className={cn("w-4 h-4 rounded-full ring-2 ring-offset-2 ring-offset-background ring-primary/30", perfil.color)} />
-              <SheetTitle className="text-xl">{perfil.label}</SheetTitle>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className={cn("w-4 h-4 rounded-full ring-2 ring-offset-2 ring-offset-background ring-primary/30", perfil.color)} />
+                <SheetTitle className="text-xl">{perfil.label}</SheetTitle>
+              </div>
+              {canManagePermissions && !isEditing && (
+                <Button variant="outline" size="sm" onClick={handleStartEdit} className="gap-1.5">
+                  <Pencil className="w-3.5 h-3.5" />
+                  Editar
+                </Button>
+              )}
             </div>
             <SheetDescription className="text-left mt-2">
               {perfil.descricao}
@@ -101,17 +160,25 @@ export function PerfilSheet({
               <h4 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
                 <div className="w-1.5 h-1.5 rounded-full bg-primary" />
                 Permissões ({permissoesAtivas.length}/{modulos.length} módulos)
+                {isEditing && (
+                  <Badge variant="secondary" className="ml-auto text-xs">
+                    Editando
+                  </Badge>
+                )}
               </h4>
               <div className="space-y-2">
                 {modulos.map(m => {
-                  const perm = perfilPermissoes[m.id];
+                  const perm = getPermValue(m.id);
                   const hasAccess = perm === true || perm === 'read' || perm === 'own';
+                  const isModified = editedPermissions[m.id] !== undefined;
+                  
                   return (
                     <div 
                       key={m.id} 
                       className={cn(
                         "flex items-center justify-between p-3 rounded-lg transition-colors",
-                        hasAccess ? "bg-muted/50" : "bg-muted/20"
+                        hasAccess ? "bg-muted/50" : "bg-muted/20",
+                        isModified && "ring-1 ring-amber-500/30 bg-amber-500/5"
                       )}
                     >
                       <span className={cn(
@@ -120,7 +187,14 @@ export function PerfilSheet({
                       )}>
                         {m.label}
                       </span>
-                      <PermBadge value={perm || false} />
+                      {isEditing ? (
+                        <PermissionSelect
+                          value={perm}
+                          onChange={(value) => handlePermChange(m.id, value)}
+                        />
+                      ) : (
+                        <PermBadge value={perm || false} />
+                      )}
                     </div>
                   );
                 })}
@@ -169,9 +243,25 @@ export function PerfilSheet({
         </ScrollArea>
 
         <div className="p-4 border-t border-border/50 bg-muted/30">
-          <Button variant="outline" className="w-full" onClick={() => onOpenChange(false)}>
-            Fechar
-          </Button>
+          {isEditing ? (
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={handleCancelEdit}>
+                Cancelar
+              </Button>
+              <Button 
+                className="flex-1 gap-1.5" 
+                onClick={handleSave}
+                disabled={!hasChanges}
+              >
+                <Save className="w-4 h-4" />
+                Salvar Alterações
+              </Button>
+            </div>
+          ) : (
+            <Button variant="outline" className="w-full" onClick={() => onOpenChange(false)}>
+              Fechar
+            </Button>
+          )}
         </div>
       </SheetContent>
     </Sheet>
