@@ -1,7 +1,15 @@
-// Configurações Module - Part 1/2
+// Configurações Module - Complete (Parts 1 & 2)
 // This file re-exports the layout and pages for the settings module
 
 export { ConfiguracoesLayout } from './ConfiguracoesLayout';
 export { default as MeuPerfil } from './MeuPerfil';
 export { default as Seguranca } from './Seguranca';
 export { default as NotificacoesConfig } from './Notificacoes';
+// Part 2
+export { default as Usuarios } from './Usuarios';
+export { default as UsuarioForm } from './UsuarioForm';
+export { default as Perfis } from './Perfis';
+export { default as Empresa } from './Empresa';
+export { default as Integracoes } from './Integracoes';
+export { default as Logs } from './Logs';
+export { default as Sistema } from './Sistema';
