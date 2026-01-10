@@ -1,8 +1,6 @@
 import { Outlet, useLocation, Navigate } from 'react-router-dom';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { ConfiguracoesSidebar } from './components/ConfiguracoesSidebar';
 import { ConfiguracoesMobileNav } from './components/ConfiguracoesMobileNav';
-import { ConfiguracoesHeader } from './components/ConfiguracoesHeader';
 
 export function ConfiguracoesLayout() {
   const location = useLocation();
@@ -13,30 +11,26 @@ export function ConfiguracoesLayout() {
   }
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 bg-background">
-      {/* Header with breadcrumb and actions */}
-      <ConfiguracoesHeader />
+    <div className="min-h-screen bg-background">
+      <div className="max-w-6xl mx-auto flex">
+        {/* Sidebar Desktop */}
+        <aside className="w-60 shrink-0 hidden lg:block border-r min-h-screen">
+          <div className="sticky top-0 p-6 pt-8">
+            <h1 className="text-lg font-semibold text-foreground mb-8">Configurações</h1>
+            <ConfiguracoesSidebar />
+          </div>
+        </aside>
 
-      {/* Mobile Navigation */}
-      <ConfiguracoesMobileNav />
-
-      {/* Main Content Area */}
-      <div className="flex-1 flex min-h-0">
-        <div className="w-full max-w-7xl mx-auto flex gap-8 p-4 sm:p-6 lg:p-8">
-          {/* Desktop Sidebar */}
-          <ConfiguracoesSidebar />
-
+        {/* Main Content */}
+        <main className="flex-1 min-w-0">
+          {/* Mobile Navigation */}
+          <ConfiguracoesMobileNav />
+          
           {/* Content */}
-          <main className="flex-1 min-w-0">
-            <ScrollArea className="h-[calc(100vh-160px)]">
-              <div className="pr-4 pb-8">
-                <div className="animate-fade-in">
-                  <Outlet />
-                </div>
-              </div>
-            </ScrollArea>
-          </main>
-        </div>
+          <div className="p-6 lg:p-8">
+            <Outlet />
+          </div>
+        </main>
       </div>
     </div>
   );
