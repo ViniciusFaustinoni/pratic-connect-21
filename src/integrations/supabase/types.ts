@@ -9542,6 +9542,54 @@ export type Database = {
           },
         ]
       }
+      solicitacoes_permissao: {
+        Row: {
+          aprovado_em: string | null
+          aprovador_id: string | null
+          created_at: string | null
+          dados: Json | null
+          expira_em: string | null
+          id: string
+          motivo: string | null
+          motivo_rejeicao: string | null
+          perfil_alvo: string | null
+          solicitante_id: string
+          status: string | null
+          tipo: string
+          usuario_alvo_id: string | null
+        }
+        Insert: {
+          aprovado_em?: string | null
+          aprovador_id?: string | null
+          created_at?: string | null
+          dados?: Json | null
+          expira_em?: string | null
+          id?: string
+          motivo?: string | null
+          motivo_rejeicao?: string | null
+          perfil_alvo?: string | null
+          solicitante_id: string
+          status?: string | null
+          tipo: string
+          usuario_alvo_id?: string | null
+        }
+        Update: {
+          aprovado_em?: string | null
+          aprovador_id?: string | null
+          created_at?: string | null
+          dados?: Json | null
+          expira_em?: string | null
+          id?: string
+          motivo?: string | null
+          motivo_rejeicao?: string | null
+          perfil_alvo?: string | null
+          solicitante_id?: string
+          status?: string | null
+          tipo?: string
+          usuario_alvo_id?: string | null
+        }
+        Relationships: []
+      }
       tabela_precos: {
         Row: {
           ativo: boolean | null
@@ -10957,6 +11005,7 @@ export type Database = {
       can_access_api_settings: { Args: { _user_id: string }; Returns: boolean }
       can_manage_juridico: { Args: { _user_id: string }; Returns: boolean }
       can_manage_marketing: { Args: { _user_id: string }; Returns: boolean }
+      can_manage_permissions: { Args: { _user_id: string }; Returns: boolean }
       gerar_hash_lancamento: {
         Args: {
           p_conta_id: string
@@ -11032,7 +11081,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_admin_master: { Args: { _user_id: string }; Returns: boolean }
       is_associado: { Args: { _user_id: string }; Returns: boolean }
+      is_desenvolvedor: { Args: { _user_id: string }; Returns: boolean }
+      is_diretor: { Args: { _user_id: string }; Returns: boolean }
       is_funcionario: { Args: { _user_id: string }; Returns: boolean }
       is_gerencia: { Args: { _user_id: string }; Returns: boolean }
       is_prestador: { Args: { _user_id: string }; Returns: boolean }
@@ -11070,6 +11122,8 @@ export type Database = {
         | "associado"
         | "analista_marketing"
         | "analista_juridico"
+        | "desenvolvedor"
+        | "admin_master"
       etapa_lead:
         | "novo"
         | "contato_inicial"
@@ -11373,6 +11427,8 @@ export const Constants = {
         "associado",
         "analista_marketing",
         "analista_juridico",
+        "desenvolvedor",
+        "admin_master",
       ],
       etapa_lead: [
         "novo",
