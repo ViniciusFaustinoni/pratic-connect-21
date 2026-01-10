@@ -60,11 +60,18 @@ import Configuracoes from "./pages/Configuracoes";
 import Perfil from "./pages/Perfil";
 import Notificacoes from "./pages/Notificacoes";
 
-// Configurações Module (Part 1)
+// Configurações Module
 import { ConfiguracoesLayout } from "./pages/configuracoes/ConfiguracoesLayout";
 import MeuPerfil from "./pages/configuracoes/MeuPerfil";
 import Seguranca from "./pages/configuracoes/Seguranca";
 import NotificacoesConfig from "./pages/configuracoes/Notificacoes";
+import Usuarios from "./pages/configuracoes/Usuarios";
+import UsuarioForm from "./pages/configuracoes/UsuarioForm";
+import Perfis from "./pages/configuracoes/Perfis";
+import Empresa from "./pages/configuracoes/Empresa";
+import Integracoes from "./pages/configuracoes/Integracoes";
+import Sistema from "./pages/configuracoes/Sistema";
+import Logs from "./pages/configuracoes/Logs";
 import NotFound from "./pages/NotFound";
 import AcessoNegado from "./pages/AcessoNegado";
 import AssistenciaDashboard from "./pages/assistencia/AssistenciaDashboard";
@@ -372,13 +379,20 @@ const App = () => (
               <Route path="/ouvidoria/:id" element={<OuvidoriaDetalhe />} />
               
               {/* Config */}
-              {/* Configurações - Nova estrutura modular */}
+              {/* Configurações - Estrutura modular completa */}
               <Route path="/configuracoes" element={<ConfiguracoesLayout />}>
                 <Route index element={<Navigate to="meu-perfil" replace />} />
                 <Route path="meu-perfil" element={<MeuPerfil />} />
                 <Route path="seguranca" element={<Seguranca />} />
                 <Route path="notificacoes" element={<NotificacoesConfig />} />
-                {/* Parte 2 adicionará: usuarios, perfis, logs, empresa, integracoes, sistema */}
+                <Route path="usuarios" element={<Usuarios />} />
+                <Route path="usuarios/novo" element={<UsuarioForm />} />
+                <Route path="usuarios/:id" element={<UsuarioForm />} />
+                <Route path="perfis" element={<Perfis />} />
+                <Route path="empresa" element={<Empresa />} />
+                <Route path="integracoes" element={<Integracoes />} />
+                <Route path="sistema" element={<Sistema />} />
+                <Route path="logs" element={<Logs />} />
               </Route>
             </Route>
             
