@@ -124,14 +124,14 @@ export function GerenciarRolesTab({ perfis }: GerenciarRolesTabProps) {
             <DialogTrigger asChild>
               <Button className="gap-2">
                 <Plus className="w-4 h-4" />
-                Nova Role
+                Novo Perfil
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Criar Nova Role</DialogTitle>
+                <DialogTitle>Criar Novo Perfil</DialogTitle>
                 <DialogDescription>
-                  Crie uma nova role personalizada para o sistema.
+                  Crie um novo perfil de acesso para o sistema.
                   {!isDesenvolvedor && !isDiretor && (
                     <span className="block mt-2 text-amber-400">
                       ⚠️ Sua solicitação precisará de aprovação de um Diretor.
@@ -141,7 +141,7 @@ export function GerenciarRolesTab({ perfis }: GerenciarRolesTabProps) {
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
-                  <Label htmlFor="roleName">Nome da Role</Label>
+                  <Label htmlFor="roleName">Nome do Perfil</Label>
                   <Input
                     id="roleName"
                     placeholder="ex: analista_financeiro"
@@ -167,7 +167,7 @@ export function GerenciarRolesTab({ perfis }: GerenciarRolesTabProps) {
                   Cancelar
                 </Button>
                 <Button onClick={handleCreateRole} disabled={!newRoleName.trim()}>
-                  {isDesenvolvedor || isDiretor ? 'Criar Role' : 'Solicitar Criação'}
+                  {isDesenvolvedor || isDiretor ? 'Criar Perfil' : 'Solicitar Criação'}
                 </Button>
               </DialogFooter>
             </DialogContent>
