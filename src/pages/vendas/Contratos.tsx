@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   Search, FileText, CheckCircle, XCircle, Clock, Loader2, 
   Send, MoreHorizontal, Edit, Trash, RefreshCw, Link, 
@@ -28,7 +28,7 @@ import {
 import type { StatusContrato } from '@/types/database';
 import { useContratos, useUpdateContrato, useAtivarContrato } from '@/hooks/useContratos';
 import { useSendToAutentique, useResendAutentique, useCancelAutentique, getWhatsAppLink } from '@/hooks/useAutentique';
-import { ContratoFormDialog } from '@/components/contratos/ContratoFormDialog';
+import { ContratoFormDialog, type PrefilledCotacaoData } from '@/components/contratos/ContratoFormDialog';
 import { ContratoDetailDrawer } from '@/components/contratos/ContratoDetailDrawer';
 import { toast } from 'sonner';
 
@@ -46,10 +46,12 @@ type TabValue = 'all' | StatusContrato;
 
 export default function Contratos() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<TabValue>('all');
   const [formDialogOpen, setFormDialogOpen] = useState(false);
   const [drawerContratoId, setDrawerContratoId] = useState<string | null>(null);
+  const [prefilledData, setPrefilledData] = useState<PrefilledCotacaoData | null>(null);
 
   const { data: contratos, isLoading } = useContratos();
   const updateContrato = useUpdateContrato();
@@ -57,6 +59,17 @@ export default function Contratos() {
   const sendToAutentique = useSendToAutentique();
   const resendAutentique = useResendAutentique();
   const cancelAutentique = useCancelAutentique();
+
+  // Abrir modal automaticamente se vier da cotação
+  useEffect(() => {
+    const state = location.state as { fromCotacao?: boolean; dadosCotacao?: PrefilledCotacaoData } | null;
+    if (state?.fromCotacao && state?.dadosCotacao) {
+      setPrefilledData(state.dadosCotacao);
+      setFormDialogOpen(true);
+      // Limpar state para não reabrir em refresh
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
 
   const filteredContratos = (contratos || []).filter((contrato) => {
     const matchesSearch =
@@ -482,7 +495,11 @@ export default function Contratos() {
       {/* Dialog e Drawer */}
       <ContratoFormDialog 
         open={formDialogOpen} 
-        onOpenChange={setFormDialogOpen} 
+        onOpenChange={(open) => {
+          setFormDialogOpen(open);
+          if (!open) setPrefilledData(null);
+        }}
+        prefilledData={prefilledData}
       />
 
       <ContratoDetailDrawer

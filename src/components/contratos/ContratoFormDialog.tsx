@@ -59,12 +59,33 @@ const formSchema = z.object({
 
 type FormData = z.infer<typeof formSchema>;
 
+// Dados pré-preenchidos vindos da cotação
+export interface PrefilledCotacaoData {
+  veiculo?: {
+    placa?: string;
+    marca?: string;
+    modelo?: string;
+    ano?: string;
+    valorFipe?: number | null;
+  };
+  plano?: {
+    id?: string;
+    nome?: string;
+    valorAdesao?: number;
+    valorMensal?: number;
+  };
+  categoria?: string | null;
+  regiao?: string;
+  usoApp?: boolean;
+}
+
 interface ContratoFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  prefilledData?: PrefilledCotacaoData | null;
 }
 
-export function ContratoFormDialog({ open, onOpenChange }: ContratoFormDialogProps) {
+export function ContratoFormDialog({ open, onOpenChange, prefilledData }: ContratoFormDialogProps) {
   const [leadSearchOpen, setLeadSearchOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -122,12 +143,27 @@ export function ContratoFormDialog({ open, onOpenChange }: ContratoFormDialogPro
     }
   }, [cotacaoPrioritaria, form]);
 
-  // Update values when plano changes (se não tiver cotação)
+  // Update values when plano changes (se não tiver cotação nem dados pré-preenchidos)
   useEffect(() => {
-    if (selectedPlano && !cotacaoPrioritaria) {
+    if (selectedPlano && !cotacaoPrioritaria && !prefilledData?.plano) {
       form.setValue('valor_adesao', selectedPlano.valor_adesao);
     }
-  }, [selectedPlano, cotacaoPrioritaria, form]);
+  }, [selectedPlano, cotacaoPrioritaria, prefilledData, form]);
+
+  // Auto-preencher quando receber dados da cotação (prefilledData)
+  useEffect(() => {
+    if (open && prefilledData?.plano) {
+      if (prefilledData.plano.id) {
+        form.setValue('plano_id', prefilledData.plano.id);
+      }
+      if (prefilledData.plano.valorAdesao) {
+        form.setValue('valor_adesao', prefilledData.plano.valorAdesao);
+      }
+      if (prefilledData.plano.valorMensal) {
+        form.setValue('valor_mensal', prefilledData.plano.valorMensal);
+      }
+    }
+  }, [open, prefilledData, form]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
