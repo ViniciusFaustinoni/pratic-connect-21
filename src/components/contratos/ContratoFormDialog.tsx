@@ -139,17 +139,6 @@ export function ContratoFormDialog({ open, onOpenChange }: ContratoFormDialogPro
   const onSubmit = async (data: FormData) => {
     setIsSubmitting(true);
     try {
-      // Dados do veículo: priorizar cotação, depois lead
-      const veiculoData = {
-        veiculo_placa: selectedLead?.veiculo_placa || null,
-        veiculo_marca: cotacaoPrioritaria?.veiculo_marca || selectedLead?.veiculo_marca || null,
-        veiculo_modelo: cotacaoPrioritaria?.veiculo_modelo || selectedLead?.veiculo_modelo || null,
-        veiculo_ano: selectedLead?.veiculo_ano || null,
-        veiculo_valor_fipe: cotacaoPrioritaria?.valor_fipe 
-          ? Number(cotacaoPrioritaria.valor_fipe) 
-          : selectedLead?.veiculo_fipe || null,
-      };
-
       await createContrato.mutateAsync({
         lead_id: data.lead_id,
         plano_id: data.plano_id,
@@ -159,7 +148,6 @@ export function ContratoFormDialog({ open, onOpenChange }: ContratoFormDialogPro
         data_inicio: new Date().toISOString().split('T')[0],
         status: 'rascunho',
         cotacao_id: cotacaoPrioritaria?.id || null,
-        ...veiculoData,
       });
 
       toast.success('Contrato criado como rascunho');
