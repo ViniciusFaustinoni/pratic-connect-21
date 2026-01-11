@@ -30,7 +30,7 @@ export function useContratos() {
           *,
           planos (*),
           cotacoes (*),
-          associado:associados!contratos_associado_id_fkey (*),
+          associado:associados!fk_contratos_associado (*),
           leads (*)
         `)
         .order('created_at', { ascending: false });
@@ -57,7 +57,7 @@ export function useContrato(id: string | undefined) {
           *,
           planos (*),
           cotacoes (*),
-          associado:associados!contratos_associado_id_fkey (*),
+          associado:associados!fk_contratos_associado (*),
           leads (*)
         `)
         .eq('id', id)
