@@ -3754,7 +3754,7 @@ export type Database = {
           id: string
           lead_id: string
           motivo: string | null
-          vendedor_id: string
+          vendedor_id: string | null
         }
         Insert: {
           atribuido_automaticamente?: boolean | null
@@ -3762,7 +3762,7 @@ export type Database = {
           id?: string
           lead_id: string
           motivo?: string | null
-          vendedor_id: string
+          vendedor_id?: string | null
         }
         Update: {
           atribuido_automaticamente?: boolean | null
@@ -3770,7 +3770,7 @@ export type Database = {
           id?: string
           lead_id?: string
           motivo?: string | null
-          vendedor_id?: string
+          vendedor_id?: string | null
         }
         Relationships: [
           {
@@ -3786,13 +3786,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_acompanhamento"
             referencedColumns: ["lead_id"]
-          },
-          {
-            foreignKeyName: "distribuicao_historico_vendedor_id_fkey"
-            columns: ["vendedor_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
           },
         ]
       }
@@ -3833,15 +3826,7 @@ export type Database = {
           updated_at?: string | null
           vendedor_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "distribuicao_vendedores_vendedor_id_fkey"
-            columns: ["vendedor_id"]
-            isOneToOne: true
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       documentos: {
         Row: {
