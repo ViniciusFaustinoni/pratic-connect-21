@@ -291,10 +291,15 @@ export function useNewLeadFlow() {
   };
 
   // Criar lead e cotação pública
-  const createLead = async (): Promise<{ leadId: string; token?: string } | null> => {
+  const createLead = async (currentUserId?: string): Promise<{ leadId: string; token?: string } | null> => {
     setIsSubmitting(true);
 
     try {
+      // Determina o vendedor_id correto:
+      // - Se selectedVendedor está preenchido, usa ele (diretor/gerência atribuiu manualmente)
+      // - Senão, null (trigger do banco pode auto-atribuir se for vendedor)
+      const vendedorId = state.selectedVendedor || null;
+
       // 1. Criar o lead
       const leadData = {
         nome: state.personalData?.nome || 'Lead sem nome',
@@ -307,7 +312,7 @@ export function useNewLeadFlow() {
         veiculo_placa: state.vehicleData?.placa || null,
         veiculo_fipe: state.fipeData?.valor || null,
         origem: state.origem as 'whatsapp',
-        vendedor_id: state.selectedVendedor || null,
+        vendedor_id: vendedorId,
         etapa: 'novo' as const,
         observacoes: state.isWorkVehicle ? 'Veículo de trabalho (APP)' : null,
       };
