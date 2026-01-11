@@ -34,8 +34,10 @@ export function AppLayout() {
             <SidebarInset className="flex flex-1 flex-col min-w-0 min-h-0">
               <AppHeader />
               {/* Main content - pages control their own scroll */}
-              <main className="flex-1 flex flex-col min-h-0">
-                <Outlet />
+              <main className="flex-1 flex flex-col min-h-0 overflow-auto">
+                <div className="flex-1 px-4 py-6 lg:px-6 xl:px-8 max-w-screen-2xl mx-auto w-full">
+                  <Outlet />
+                </div>
               </main>
             </SidebarInset>
           </div>
