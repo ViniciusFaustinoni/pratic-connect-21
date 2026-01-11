@@ -5,6 +5,9 @@ import {
   Send, MoreHorizontal, Edit, Trash, RefreshCw, Link, 
   ExternalLink, Pause, Eye, PlayCircle, Plus 
 } from 'lucide-react';
+import { usePermissions } from '@/hooks/usePermissions';
+import { supabase } from '@/integrations/supabase/client';
+import { useQueryClient } from '@tanstack/react-query';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -47,11 +50,15 @@ type TabValue = 'all' | StatusContrato;
 export default function Contratos() {
   const navigate = useNavigate();
   const location = useLocation();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<TabValue>('all');
   const [formDialogOpen, setFormDialogOpen] = useState(false);
   const [drawerContratoId, setDrawerContratoId] = useState<string | null>(null);
   const [prefilledData, setPrefilledData] = useState<PrefilledCotacaoData | null>(null);
+
+  const { isDiretor, isDesenvolvedor, isAdminMaster } = usePermissions();
+  const canDeleteContratos = isDiretor || isDesenvolvedor || isAdminMaster;
 
   const { data: contratos, isLoading } = useContratos();
   const updateContrato = useUpdateContrato();
@@ -478,6 +485,41 @@ export default function Contratos() {
                                 >
                                   <XCircle className="mr-2 h-4 w-4" /> Cancelar
                                 </DropdownMenuItem>
+                              </>
+                            )}
+                            {/* Cancelado */}
+                            {contrato.status === 'cancelado' && (
+                              <>
+                                <DropdownMenuItem onClick={() => setDrawerContratoId(contrato.id)}>
+                                  <Eye className="mr-2 h-4 w-4" /> Ver Detalhes
+                                </DropdownMenuItem>
+                                {canDeleteContratos && (
+                                  <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem 
+                                      className="text-destructive"
+                                      onClick={async () => {
+                                        if (!confirm('Tem certeza que deseja excluir este contrato definitivamente? Esta ação não pode ser desfeita.')) {
+                                          return;
+                                        }
+                                        try {
+                                          const { error } = await supabase
+                                            .from('contratos')
+                                            .delete()
+                                            .eq('id', contrato.id);
+                                          if (error) throw error;
+                                          toast.success('Contrato excluído com sucesso');
+                                          queryClient.invalidateQueries({ queryKey: ['contratos'] });
+                                        } catch (error) {
+                                          console.error('Erro ao excluir contrato:', error);
+                                          toast.error('Erro ao excluir contrato');
+                                        }
+                                      }}
+                                    >
+                                      <Trash className="mr-2 h-4 w-4" /> Excluir
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
                               </>
                             )}
                           </DropdownMenuContent>
