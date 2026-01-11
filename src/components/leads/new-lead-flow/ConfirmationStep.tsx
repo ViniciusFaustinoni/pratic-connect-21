@@ -211,7 +211,7 @@ export function ConfirmationStep({ state, updateState, onBack, onSubmit, isSubmi
               <SelectContent>
                 <SelectItem value="_none">Não atribuído</SelectItem>
                 {vendedores.map(v => (
-                  <SelectItem key={v.id} value={v.id}>{v.nome}</SelectItem>
+                  <SelectItem key={v.id} value={v.user_id}>{v.nome}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
