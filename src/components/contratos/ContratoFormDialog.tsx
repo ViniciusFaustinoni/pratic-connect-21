@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Loader2, Search, User, Check } from 'lucide-react';
+import { Loader2, Search, User, Check, FileCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -45,6 +45,7 @@ import { CurrencyInput } from '@/components/inputs/MaskedInputs';
 import { useAllLeads } from '@/hooks/useLeads';
 import { usePlanos } from '@/hooks/usePlanos';
 import { useCreateContrato } from '@/hooks/useContratos';
+import { useCotacoesByLead } from '@/hooks/useCotacoesByLead';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -93,12 +94,40 @@ export function ContratoFormDialog({ open, onOpenChange }: ContratoFormDialogPro
   const selectedLead = availableLeads.find(l => l.id === selectedLeadId);
   const selectedPlano = planos?.find(p => p.id === selectedPlanoId);
 
-  // Update values when plano changes
+  // Buscar cotações do lead selecionado
+  const { data: cotacoesLead } = useCotacoesByLead(selectedLeadId || undefined);
+
+  // Priorizar cotação: aceita > enviada > mais recente (não expirada)
+  const cotacaoPrioritaria = useMemo(() => {
+    if (!cotacoesLead?.length) return null;
+    
+    return cotacoesLead.find(c => c.status === 'aceita')
+      || cotacoesLead.find(c => c.status === 'enviada')
+      || cotacoesLead.find(c => c.status !== 'expirada')
+      || null;
+  }, [cotacoesLead]);
+
+  // Auto-preencher valores quando encontrar cotação
   useEffect(() => {
-    if (selectedPlano) {
+    if (cotacaoPrioritaria) {
+      if (cotacaoPrioritaria.plano_id) {
+        form.setValue('plano_id', cotacaoPrioritaria.plano_id);
+      }
+      if (cotacaoPrioritaria.valor_total_mensal) {
+        form.setValue('valor_mensal', Number(cotacaoPrioritaria.valor_total_mensal));
+      }
+      if (cotacaoPrioritaria.valor_adesao) {
+        form.setValue('valor_adesao', Number(cotacaoPrioritaria.valor_adesao));
+      }
+    }
+  }, [cotacaoPrioritaria, form]);
+
+  // Update values when plano changes (se não tiver cotação)
+  useEffect(() => {
+    if (selectedPlano && !cotacaoPrioritaria) {
       form.setValue('valor_adesao', selectedPlano.valor_adesao);
     }
-  }, [selectedPlano, form]);
+  }, [selectedPlano, cotacaoPrioritaria, form]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -110,6 +139,17 @@ export function ContratoFormDialog({ open, onOpenChange }: ContratoFormDialogPro
   const onSubmit = async (data: FormData) => {
     setIsSubmitting(true);
     try {
+      // Dados do veículo: priorizar cotação, depois lead
+      const veiculoData = {
+        veiculo_placa: selectedLead?.veiculo_placa || null,
+        veiculo_marca: cotacaoPrioritaria?.veiculo_marca || selectedLead?.veiculo_marca || null,
+        veiculo_modelo: cotacaoPrioritaria?.veiculo_modelo || selectedLead?.veiculo_modelo || null,
+        veiculo_ano: selectedLead?.veiculo_ano || null,
+        veiculo_valor_fipe: cotacaoPrioritaria?.valor_fipe 
+          ? Number(cotacaoPrioritaria.valor_fipe) 
+          : selectedLead?.veiculo_fipe || null,
+      };
+
       await createContrato.mutateAsync({
         lead_id: data.lead_id,
         plano_id: data.plano_id,
@@ -118,6 +158,8 @@ export function ContratoFormDialog({ open, onOpenChange }: ContratoFormDialogPro
         dia_vencimento: data.dia_vencimento,
         data_inicio: new Date().toISOString().split('T')[0],
         status: 'rascunho',
+        cotacao_id: cotacaoPrioritaria?.id || null,
+        ...veiculoData,
       });
 
       toast.success('Contrato criado como rascunho');
@@ -216,27 +258,44 @@ export function ContratoFormDialog({ open, onOpenChange }: ContratoFormDialogPro
               )}
             />
 
-            {/* Lead Info Preview */}
+            {/* Lead Info Preview - com dados da cotação */}
             {selectedLead && (
-              <div className="rounded-lg border p-3 bg-muted/50 text-sm">
+              <div className="rounded-lg border p-3 bg-muted/50 text-sm space-y-2">
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <span className="text-muted-foreground">Veículo:</span>
-                    <p>
-                      {selectedLead.veiculo_marca 
-                        ? `${selectedLead.veiculo_marca} ${selectedLead.veiculo_modelo || ''} ${selectedLead.veiculo_ano || ''}`
-                        : 'Não informado'}
+                    <p className="font-medium">
+                      {cotacaoPrioritaria?.veiculo_marca 
+                        ? `${cotacaoPrioritaria.veiculo_marca} ${cotacaoPrioritaria.veiculo_modelo || ''} ${selectedLead.veiculo_ano || ''}`
+                        : selectedLead.veiculo_marca 
+                          ? `${selectedLead.veiculo_marca} ${selectedLead.veiculo_modelo || ''} ${selectedLead.veiculo_ano || ''}`
+                          : 'Não informado'}
                     </p>
                   </div>
                   <div>
                     <span className="text-muted-foreground">FIPE:</span>
-                    <p>
-                      {selectedLead.veiculo_fipe 
-                        ? formatCurrency(selectedLead.veiculo_fipe)
-                        : 'Não informado'}
+                    <p className="font-medium">
+                      {cotacaoPrioritaria?.valor_fipe 
+                        ? formatCurrency(Number(cotacaoPrioritaria.valor_fipe))
+                        : selectedLead.veiculo_fipe 
+                          ? formatCurrency(selectedLead.veiculo_fipe)
+                          : 'Não informado'}
                     </p>
                   </div>
                 </div>
+                
+                {/* Indicador de cotação encontrada */}
+                {cotacaoPrioritaria && (
+                  <div className="pt-2 border-t border-border/50 text-xs text-muted-foreground flex items-center gap-1.5">
+                    <FileCheck className="h-3.5 w-3.5 text-green-500" />
+                    <span>
+                      Cotação <strong className="text-foreground">{cotacaoPrioritaria.numero}</strong> encontrada 
+                      <span className="ml-1 px-1.5 py-0.5 rounded bg-muted text-xs">
+                        {cotacaoPrioritaria.status}
+                      </span>
+                    </span>
+                  </div>
+                )}
               </div>
             )}
 
