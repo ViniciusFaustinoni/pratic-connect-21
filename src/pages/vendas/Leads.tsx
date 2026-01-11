@@ -802,7 +802,7 @@ export default function Leads() {
                   <SelectContent>
                     <SelectItem value="todos">Todos os vendedores</SelectItem>
                     {vendedores.map((vendedor) => (
-                      <SelectItem key={vendedor.id} value={vendedor.id}>
+                      <SelectItem key={vendedor.id} value={vendedor.user_id}>
                         {vendedor.nome}
                       </SelectItem>
                     ))}

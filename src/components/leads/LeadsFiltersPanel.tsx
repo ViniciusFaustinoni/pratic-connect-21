@@ -21,6 +21,7 @@ import type { DateRange } from 'react-day-picker';
 
 interface Vendedor {
   id: string;
+  user_id: string;
   nome: string;
 }
 
@@ -161,7 +162,7 @@ export function LeadsFiltersPanel({
               <SelectContent>
                 <SelectItem value="_all">Todos os vendedores</SelectItem>
                 {vendedores.map((v) => (
-                  <SelectItem key={v.id} value={v.id}>
+                  <SelectItem key={v.id} value={v.user_id}>
                     {v.nome}
                   </SelectItem>
                 ))}
