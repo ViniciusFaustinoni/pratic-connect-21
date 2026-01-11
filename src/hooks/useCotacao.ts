@@ -119,33 +119,51 @@ export function useFaixasPreco(tipoUso?: TipoUso) {
 // FUNÇÃO: ENCONTRAR FAIXA POR VALOR FIPE
 // ============================================
 
+export interface FaixaPrecoResult {
+  faixa: FaixaPreco | null;
+  ajusteAplicativo: boolean;
+}
+
 export function encontrarFaixaPreco(
   faixas: FaixaPreco[],
   valorFipe: number,
   tipoUso: TipoUso
-): FaixaPreco | null {
-  // Filtrar por tipo de uso
-  const faixasTipo = faixas.filter((f) => f.tipo_uso === tipoUso);
+): FaixaPrecoResult {
+  // Filtrar por tipo de uso específico
+  let faixasTipo = faixas.filter((f) => f.tipo_uso === tipoUso);
+  let ajusteAplicativo = false;
+
+  // Se não encontrar faixas para 'aplicativo', usar 'particular' como base (com acréscimo de 40%)
+  if (faixasTipo.length === 0 && tipoUso === 'aplicativo') {
+    faixasTipo = faixas.filter((f) => f.tipo_uso === 'particular');
+    ajusteAplicativo = true;
+  }
 
   // Encontrar a faixa que contém o valor FIPE
   const faixa = faixasTipo.find(
     (f) => valorFipe >= f.fipe_minimo && valorFipe <= f.fipe_maximo
   );
 
-  return faixa || null;
+  return { faixa: faixa || null, ajusteAplicativo };
 }
 
 // ============================================
 // FUNÇÃO: CALCULAR VALORES DA COTAÇÃO
 // ============================================
 
+const MULTIPLICADOR_APLICATIVO = 1.4; // Acréscimo de 40% para uso em aplicativo
+
 export function calcularValoresCotacao(
   plano: PlanoParaCotacao,
   faixa: FaixaPreco,
-  valorFipe: number
+  valorFipe: number,
+  ajusteAplicativo: boolean = false
 ): ResultadoCotacao['valores'] {
-  const valor_cota = faixa.valor_cota;
-  const taxa_administrativa = faixa.taxa_administrativa;
+  // Aplicar multiplicador de 40% para aplicativo quando usando faixa de particular
+  const multiplicador = ajusteAplicativo ? MULTIPLICADOR_APLICATIVO : 1;
+
+  const valor_cota = Math.round(faixa.valor_cota * multiplicador * 100) / 100;
+  const taxa_administrativa = Math.round(faixa.taxa_administrativa * multiplicador * 100) / 100;
   const valor_rastreamento = faixa.valor_rastreamento;
   const valor_assistencia = faixa.valor_assistencia;
 
@@ -178,26 +196,39 @@ export function useCalcularCotacao() {
   ): ResultadoCotacao[] => {
     if (!planos || !faixas || valorFipe <= 0) return [];
 
-    // Encontrar a faixa de preço
-    const faixa = encontrarFaixaPreco(faixas, valorFipe, tipoUso);
+    // Encontrar a faixa de preço (com fallback para aplicativo)
+    const { faixa, ajusteAplicativo } = encontrarFaixaPreco(faixas, valorFipe, tipoUso);
+    
     if (!faixa) {
-      toast.error('Valor FIPE fora das faixas configuradas');
+      // Mensagem de erro mais específica
+      if (valorFipe > 500000) {
+        toast.error('Valor FIPE acima de R$ 500.000. Entre em contato para cotação especial.');
+      } else if (valorFipe <= 0) {
+        toast.error('Valor FIPE inválido. Verifique o valor do veículo.');
+      } else {
+        toast.error('Valor FIPE fora das faixas configuradas para esta região/uso.');
+      }
       return [];
     }
 
-    // Filtrar planos pelo tipo de uso
+    // Filtrar planos pelo tipo de uso (ou particular se for aplicativo com fallback)
     let planosDisponiveis = planos.filter((p) => p.tipo_uso === tipoUso);
+    
+    // Se não encontrou planos para aplicativo, usar planos de particular
+    if (planosDisponiveis.length === 0 && tipoUso === 'aplicativo') {
+      planosDisponiveis = planos.filter((p) => p.tipo_uso === 'particular');
+    }
 
     // Se especificou plano, filtrar
     if (planoId) {
       planosDisponiveis = planosDisponiveis.filter((p) => p.id === planoId);
     }
 
-    // Calcular para cada plano
+    // Calcular para cada plano (passando ajusteAplicativo)
     return planosDisponiveis.map((plano) => ({
       plano,
       faixa,
-      valores: calcularValoresCotacao(plano, faixa, valorFipe),
+      valores: calcularValoresCotacao(plano, faixa, valorFipe, ajusteAplicativo),
     }));
   };
 
@@ -350,7 +381,14 @@ export function useCriarCotacao() {
       // Calcular valores
       const resultados = calcular(payload.valor_fipe, tipoUso, payload.plano_id);
       if (resultados.length === 0) {
-        throw new Error('Não foi possível calcular a cotação. Verifique se o valor FIPE está dentro das faixas configuradas.');
+        const valorFormatado = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(payload.valor_fipe);
+        throw new Error(
+          payload.valor_fipe > 500000
+            ? `Valor FIPE (${valorFormatado}) acima do limite. Entre em contato para cotação especial.`
+            : payload.valor_fipe <= 0
+            ? 'Valor FIPE inválido. Verifique o valor do veículo.'
+            : `Não foi possível calcular a cotação para o valor ${valorFormatado}. Verifique as faixas de preço configuradas.`
+        );
       }
 
       const resultado = resultados[0];
