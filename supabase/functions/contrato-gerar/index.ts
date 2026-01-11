@@ -79,19 +79,19 @@ serve(async (req) => {
       lead?.cep
     ].filter(Boolean).join(', ');
 
-    // 5. Criar o contrato
+    // 5. Criar o contrato (sem colunas veiculo_* que não existem na tabela)
+    const timestamp = new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 14);
+    const random = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const numeroTemp = `CTR-${timestamp}-${random}`;
+
     const { data: contrato, error: contratoError } = await supabase
       .from('contratos')
       .insert({
+        numero: numeroTemp,
         cotacao_id,
         lead_id: cotacao.lead_id,
         associado_id: cotacao.associado_id,
         plano_id: cotacao.plano_id,
-        veiculo_placa: cotacao.veiculo_placa,
-        veiculo_marca: cotacao.veiculo_marca,
-        veiculo_modelo: cotacao.veiculo_modelo,
-        veiculo_ano: cotacao.veiculo_ano,
-        veiculo_valor_fipe: cotacao.valor_fipe,
         valor_adesao: cotacao.valor_adesao || 0,
         valor_mensal: cotacao.valor_mensal,
         vendedor_id: vendedor_id || cotacao.vendedor_id,

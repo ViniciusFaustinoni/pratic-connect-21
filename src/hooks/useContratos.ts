@@ -30,13 +30,17 @@ export function useContratos() {
           *,
           planos (*),
           cotacoes (*),
-          associados (*),
+          associado:associados!contratos_associado_id_fkey (*),
           leads (*)
         `)
         .order('created_at', { ascending: false });
       
       if (error) throw error;
-      return data as ContratoWithRelations[];
+      // Map aliased field to expected interface name
+      return ((data || []) as unknown as any[]).map(item => ({
+        ...item,
+        associados: item.associado,
+      })) as ContratoWithRelations[];
     },
   });
 }
@@ -53,26 +57,33 @@ export function useContrato(id: string | undefined) {
           *,
           planos (*),
           cotacoes (*),
-          associados (*),
+          associado:associados!contratos_associado_id_fkey (*),
           leads (*)
         `)
         .eq('id', id)
         .single();
       
       if (error) throw error;
+      
+      // Map aliased field to expected interface name
+      const contratoData = data as unknown as any;
 
       // Buscar vendedor separadamente se existir vendedor_id
       let vendedor = null;
-      if (data.vendedor_id) {
+      if (contratoData.vendedor_id) {
         const { data: vendedorData } = await supabase
           .from('profiles')
           .select('id, nome, email')
-          .eq('id', data.vendedor_id)
+          .eq('id', contratoData.vendedor_id)
           .single();
         vendedor = vendedorData;
       }
       
-      return { ...data, vendedor } as ContratoWithRelations;
+      return { 
+        ...contratoData, 
+        associados: contratoData.associado,
+        vendedor,
+      } as ContratoWithRelations;
     },
     enabled: !!id,
   });
@@ -133,6 +144,14 @@ export function useContratoActions() {
   };
 }
 
+// Função auxiliar para gerar número temporário único
+function gerarNumeroTemporario(): string {
+  const now = new Date();
+  const timestamp = now.toISOString().replace(/[-:T.Z]/g, '').slice(0, 14);
+  const random = Math.random().toString(36).substring(2, 8).toUpperCase();
+  return `TEMP-${timestamp}-${random}`;
+}
+
 export function useCreateContrato() {
   const queryClient = useQueryClient();
   
@@ -142,7 +161,7 @@ export function useCreateContrato() {
         .from('contratos')
         .insert({
           ...contrato,
-          numero: 'TEMP', // Trigger will generate
+          numero: gerarNumeroTemporario(),
         })
         .select()
         .single();
