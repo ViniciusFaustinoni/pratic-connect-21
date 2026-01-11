@@ -105,13 +105,21 @@ export function useVendedoresDistribuicao() {
     queryFn: async (): Promise<VendedorDistribuicao[]> => {
       const { data, error } = await supabase
         .from('distribuicao_vendedores')
-        .select(`
-          *,
-          vendedor:profiles!vendedor_id(id, nome, email, telefone)
-        `)
+        .select('*')
         .order('ordem', { ascending: true });
 
       if (error) throw error;
+
+      // Buscar profiles separadamente via user_id
+      const vendedorIds = (data || []).map(v => v.vendedor_id);
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('user_id, nome, email, telefone')
+        .in('user_id', vendedorIds.length > 0 ? vendedorIds : ['00000000-0000-0000-0000-000000000000']);
+
+      const profileMap = new Map(
+        (profiles || []).map(p => [p.user_id, { id: p.user_id!, nome: p.nome, email: p.email, telefone: p.telefone }])
+      );
 
       return (data || []).map(item => ({
         id: item.id,
@@ -124,7 +132,7 @@ export function useVendedoresDistribuicao() {
         ordem: item.ordem ?? 0,
         created_at: item.created_at ?? '',
         updated_at: item.updated_at ?? '',
-        vendedor: item.vendedor,
+        vendedor: profileMap.get(item.vendedor_id) || null,
       }));
     },
   });
@@ -286,16 +294,20 @@ export function useVendedoresDisponiveis() {
       const idsJaAdicionados = (jaAdicionados || []).map(v => v.vendedor_id);
 
       // Buscar profiles que são vendedores e não estão na distribuição
+      // Agora compara user_id (não id) pois vendedor_id agora é auth.users.id
       const { data: vendedores, error } = await supabase
         .from('profiles')
-        .select('id, nome, email')
+        .select('user_id, nome, email')
         .eq('tipo', 'funcionario')
-        .eq('ativo', true);
+        .eq('ativo', true)
+        .not('user_id', 'is', null);
 
       if (error) throw error;
 
-      // Filtrar os que já estão na distribuição
-      return (vendedores || []).filter(v => !idsJaAdicionados.includes(v.id));
+      // Filtrar os que já estão na distribuição (comparar com user_id)
+      return (vendedores || [])
+        .filter(v => v.user_id && !idsJaAdicionados.includes(v.user_id))
+        .map(v => ({ id: v.user_id!, nome: v.nome, email: v.email }));
     },
   });
 }
@@ -318,8 +330,7 @@ export function useHistoricoDistribuicao(filtros?: {
         .from('distribuicao_historico')
         .select(`
           *,
-          lead:leads!lead_id(id, nome, telefone),
-          vendedor:profiles!vendedor_id(id, nome)
+          lead:leads!lead_id(id, nome, telefone)
         `)
         .order('created_at', { ascending: false });
 
@@ -342,6 +353,17 @@ export function useHistoricoDistribuicao(filtros?: {
 
       if (error) throw error;
 
+      // Buscar profiles separadamente via user_id
+      const vendedorIds = (data || []).map(d => d.vendedor_id).filter(Boolean);
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('user_id, nome')
+        .in('user_id', vendedorIds.length > 0 ? vendedorIds : ['00000000-0000-0000-0000-000000000000']);
+
+      const profileMap = new Map(
+        (profiles || []).map(p => [p.user_id, { id: p.user_id!, nome: p.nome }])
+      );
+
       return (data || []).map(item => ({
         id: item.id,
         lead_id: item.lead_id,
@@ -350,7 +372,7 @@ export function useHistoricoDistribuicao(filtros?: {
         motivo: item.motivo ?? 'round_robin',
         created_at: item.created_at ?? '',
         lead: item.lead,
-        vendedor: item.vendedor,
+        vendedor: profileMap.get(item.vendedor_id) || null,
       }));
     },
   });
@@ -372,14 +394,14 @@ export function useEstatisticasDistribuicao() {
         .select('vendedor_id, leads_hoje, status')
         .eq('status', 'ativo');
 
-      // Buscar nomes
+      // Buscar nomes via user_id
       const vendedorIds = (vendedores || []).map(v => v.vendedor_id);
       const { data: profiles } = await supabase
         .from('profiles')
-        .select('id, nome')
-        .in('id', vendedorIds.length > 0 ? vendedorIds : ['00000000-0000-0000-0000-000000000000']);
+        .select('user_id, nome')
+        .in('user_id', vendedorIds.length > 0 ? vendedorIds : ['00000000-0000-0000-0000-000000000000']);
 
-      const profileMap = new Map(profiles?.map(p => [p.id, p.nome]) || []);
+      const profileMap = new Map(profiles?.map(p => [p.user_id, p.nome]) || []);
 
       // Leads hoje
       const { count: leadsHoje } = await supabase
