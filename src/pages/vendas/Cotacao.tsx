@@ -178,16 +178,36 @@ export default function CotacaoPage() {
     toast.info('Funcionalidade de PDF em desenvolvimento');
   }, []);
 
-  // Iniciar Cadastro
+  // Iniciar Cadastro - redireciona para contratos com dados da cotação
   const handleIniciarCadastro = useCallback(() => {
     if (!planoSelecionado) {
       toast.error('Selecione um plano primeiro');
       return;
     }
-    toast.success('Redirecionando para cadastro...');
-    // Poderia navegar para página de cadastro com dados preenchidos
-    navigate('/vendas/leads');
-  }, [planoSelecionado, navigate]);
+    
+    // Dados da cotação para pré-preencher o contrato
+    const dadosCotacao = {
+      veiculo: {
+        placa: veiculoEncontrado?.placa || placa,
+        marca: marca,
+        modelo: modelo,
+        ano: ano,
+        valorFipe: valorFipe,
+      },
+      plano: {
+        id: planoSelecionado.idReal || planoSelecionado.id,
+        nome: planoSelecionado.nome,
+        valorAdesao: planoSelecionado.valorAdesao || 0,
+        valorMensal: planoSelecionado.valorMensal || 0,
+      },
+      categoria: categoria,
+      regiao: regiao,
+      usoApp: usoApp,
+    };
+    
+    toast.success('Redirecionando para cadastro de contrato...');
+    navigate('/vendas/contratos', { state: { fromCotacao: true, dadosCotacao } });
+  }, [planoSelecionado, navigate, veiculoEncontrado, placa, marca, modelo, ano, valorFipe, categoria, regiao, usoApp]);
 
   // Click no stepper
   const handleStepClick = useCallback((step: number) => {
