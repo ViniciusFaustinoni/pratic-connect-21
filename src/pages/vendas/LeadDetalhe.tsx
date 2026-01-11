@@ -318,19 +318,21 @@ export default function LeadDetalhe() {
               <FileText className="mr-2 h-4 w-4" />
               Nova Cotação
             </Button>
-            <Button 
-              variant="outline"
-              onClick={handleGerarLinkCotacao}
-              disabled={criarCotacaoPublica.isPending}
-              className="shadow-md border-primary/50 hover:bg-primary/5"
-            >
-              {criarCotacaoPublica.isPending ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Link2 className="mr-2 h-4 w-4 text-primary" />
-              )}
-              Gerar Link
-            </Button>
+            {cotacoes && cotacoes.length > 0 && (
+              <Button 
+                variant="outline"
+                onClick={handleGerarLinkCotacao}
+                disabled={criarCotacaoPublica.isPending}
+                className="shadow-md border-primary/50 hover:bg-primary/5"
+              >
+                {criarCotacaoPublica.isPending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Link2 className="mr-2 h-4 w-4 text-primary" />
+                )}
+                Gerar Link
+              </Button>
+            )}
             <Button 
               variant="outline"
               onClick={() => setShowFollowupDialog(true)}
