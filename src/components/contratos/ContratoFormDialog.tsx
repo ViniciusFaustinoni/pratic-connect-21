@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Loader2, Search, User, Check, FileCheck } from 'lucide-react';
+import { Loader2, Search, User, Check, FileCheck, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -284,6 +284,19 @@ export function ContratoFormDialog({ open, onOpenChange }: ContratoFormDialogPro
                     </span>
                   </div>
                 )}
+
+                {/* Alerta se lead não tiver email */}
+                {!selectedLead.email && (
+                  <div className="pt-2 border-t border-amber-500/50 flex items-start gap-2">
+                    <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                    <div className="text-xs">
+                      <p className="font-medium text-amber-500">Email não informado</p>
+                      <p className="text-muted-foreground">
+                        O email é obrigatório para enviar o contrato para assinatura. Edite o lead antes de criar o contrato.
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -387,7 +400,7 @@ export function ContratoFormDialog({ open, onOpenChange }: ContratoFormDialogPro
               >
                 Cancelar
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
+              <Button type="submit" disabled={isSubmitting || (selectedLead && !selectedLead.email)}>
                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Criar Rascunho
               </Button>
