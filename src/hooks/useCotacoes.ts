@@ -205,6 +205,42 @@ export function useAtualizarStatusCotacao() {
   });
 }
 
+// Hook para aceitar cotação e gerar contrato
+export function useAceitarCotacaoEGerarContrato() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async ({ cotacaoId, vendedorId }: { cotacaoId: string; vendedorId?: string }) => {
+      // 1. Atualizar status da cotação para 'aceita'
+      const { error: updateError } = await supabase
+        .from('cotacoes')
+        .update({ status: 'aceita' })
+        .eq('id', cotacaoId);
+      
+      if (updateError) throw updateError;
+      
+      // 2. Chamar edge function para gerar contrato
+      const { data, error: fnError } = await supabase.functions.invoke('contrato-gerar', {
+        body: { cotacao_id: cotacaoId, vendedor_id: vendedorId },
+      });
+      
+      if (fnError) throw fnError;
+      
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
+      queryClient.invalidateQueries({ queryKey: ['contratos'] });
+      queryClient.invalidateQueries({ queryKey: ['ativacoes'] });
+      toast.success('Cotação aceita e contrato gerado com sucesso!');
+    },
+    onError: (error: Error) => {
+      console.error('Erro ao aceitar cotação:', error);
+      toast.error('Erro ao aceitar cotação: ' + error.message);
+    },
+  });
+}
+
 // Hook combinado para actions
 export function useCotacaoActions() {
   const reenviar = useReenviarCotacao();
