@@ -293,6 +293,7 @@ export function gerarPdfCotacao(cotacao: CotacaoParaPdf): void {
   centerText('Esta proposta não tem valor contratual. Sujeita a análise.', footerY + 10, 8);
 
   // Download
-  const fileName = `Cotacao_${cotacao.numero || 'SGA'}_${cotacao.leads?.nome?.split(' ')[0] || 'Cliente'}.pdf`;
+  const numeroLimpo = (cotacao.numero || 'SGA').replace(/[^a-zA-Z0-9-]/g, '');
+  const fileName = `cotacao-${numeroLimpo}.pdf`;
   doc.save(fileName);
 }

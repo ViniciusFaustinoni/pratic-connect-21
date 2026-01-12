@@ -40,25 +40,24 @@ export function EnviarEmailModal({
   const [isLoading, setIsLoading] = useState(false);
   const [email, setEmail] = useState(cotacao.leads?.email || '');
   const [assunto, setAssunto] = useState(
-    `Sua Cotação de Proteção Veicular - ${cotacao.numero}`
+    `Sua Cotação #${cotacao.numero} - PRATIC Proteção Veicular`
   );
 
   const conteudoInicial = `
 <p>Olá ${cotacao.leads?.nome?.split(' ')[0] || 'Cliente'},</p>
 
-<p>Conforme solicitado, segue sua cotação de proteção veicular:</p>
+<p>Segue sua cotação de número <strong>#${cotacao.numero}</strong> para proteção veicular:</p>
 
-<p><strong>Cotação Nº:</strong> ${cotacao.numero}<br>
-<strong>Veículo:</strong> ${cotacao.veiculo_marca || ''} ${cotacao.veiculo_modelo || ''} ${cotacao.veiculo_ano || ''}<br>
+<p><strong>Veículo:</strong> ${cotacao.veiculo_marca || ''} ${cotacao.veiculo_modelo || ''} ${cotacao.veiculo_ano || ''}<br>
 <strong>Valor FIPE:</strong> ${formatCurrency(cotacao.valor_fipe)}</p>
 
 <p><strong>Plano:</strong> ${cotacao.planos?.nome || 'Proteção Veicular'}<br>
 <strong>Taxa de Adesão:</strong> ${formatCurrency(cotacao.valor_adesao)}<br>
 <strong>Mensalidade:</strong> ${formatCurrency(cotacao.valor_total_mensal)}</p>
 
-<p>Esta cotação é válida por 7 dias.</p>
+<p>Esta cotação é válida por 7 dias. Guarde o número <strong>#${cotacao.numero}</strong> para referência.</p>
 
-<p>Ficou com alguma dúvida? Entre em contato conosco!</p>
+<p>Ficou com alguma dúvida? Entre em contato conosco informando o número da cotação!</p>
 
 <p>Atenciosamente,<br>
 Equipe PRATIC Proteção Veicular</p>
