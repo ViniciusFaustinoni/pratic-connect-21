@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Users, TrendingUp, Target, Filter, ChevronRight, History } from 'lucide-react';
+import { Search, Users, TrendingUp, Target, ChevronRight, History } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -13,40 +13,40 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { useConsultores, useConsultoresContagem } from '@/hooks/useConsultores';
+import { useVendedores, useVendedoresContagem } from '@/hooks/useVendedores';
 import { Skeleton } from '@/components/ui/skeleton';
 
-export default function Consultores() {
+export default function Vendedores() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
 
-  const { data: consultores = [], isLoading: loadingConsultores } = useConsultores();
-  const { data: contagemLeads = {}, isLoading: loadingContagem } = useConsultoresContagem();
+  const { data: vendedores = [], isLoading: loadingVendedores } = useVendedores();
+  const { data: contagemLeads = {}, isLoading: loadingContagem } = useVendedoresContagem();
 
-  const isLoading = loadingConsultores || loadingContagem;
+  const isLoading = loadingVendedores || loadingContagem;
 
-  // Filtrar consultores
-  const filteredConsultores = useMemo(() => {
-    if (!search) return consultores;
+  // Filtrar vendedores
+  const filteredVendedores = useMemo(() => {
+    if (!search) return vendedores;
 
     const searchLower = search.toLowerCase();
-    return consultores.filter(
-      (c) => c.nome?.toLowerCase().includes(searchLower)
+    return vendedores.filter(
+      (v) => v.nome?.toLowerCase().includes(searchLower)
     );
-  }, [consultores, search]);
+  }, [vendedores, search]);
 
   // Estatísticas gerais
   const stats = useMemo(() => {
-    const totalConsultores = consultores.length;
+    const totalVendedores = vendedores.length;
     const totalLeads = Object.values(contagemLeads).reduce((acc, c) => acc + c.total, 0);
     const totalGanhos = Object.values(contagemLeads).reduce((acc, c) => acc + c.ganhos, 0);
     const taxaConversao = totalLeads > 0 ? ((totalGanhos / totalLeads) * 100).toFixed(1) : '0';
 
-    return { totalConsultores, totalLeads, totalGanhos, taxaConversao };
-  }, [consultores, contagemLeads]);
+    return { totalVendedores, totalLeads, totalGanhos, taxaConversao };
+  }, [vendedores, contagemLeads]);
 
-  const handleVerHistorico = (consultorId: string) => {
-    navigate(`/vendas/consultores/${consultorId}`);
+  const handleVerHistorico = (vendedorId: string) => {
+    navigate(`/vendas/vendedores/${vendedorId}`);
   };
 
   return (
@@ -56,9 +56,9 @@ export default function Consultores() {
         <div className="px-6 py-6 space-y-6">
           {/* Title */}
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Histórico de Consultores</h1>
+            <h1 className="text-2xl font-bold text-foreground">Histórico de Vendedores</h1>
             <p className="text-muted-foreground">
-              Acompanhe o desempenho e histórico de cada consultor
+              Acompanhe o desempenho e histórico de cada vendedor
             </p>
           </div>
 
@@ -71,8 +71,8 @@ export default function Consultores() {
                     <Users className="h-5 w-5 text-primary" />
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Total Consultores</p>
-                    <p className="text-2xl font-bold">{stats.totalConsultores}</p>
+                    <p className="text-sm text-muted-foreground">Total Vendedores</p>
+                    <p className="text-2xl font-bold">{stats.totalVendedores}</p>
                   </div>
                 </div>
               </CardContent>
@@ -144,14 +144,14 @@ export default function Consultores() {
               <Skeleton key={i} className="h-14 w-full" />
             ))}
           </div>
-        ) : filteredConsultores.length === 0 ? (
+        ) : filteredVendedores.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <Users className="h-12 w-12 text-muted-foreground/50 mb-4" />
-            <h3 className="text-lg font-medium">Nenhum consultor encontrado</h3>
+            <h3 className="text-lg font-medium">Nenhum vendedor encontrado</h3>
             <p className="text-sm text-muted-foreground mt-1">
               {search
                 ? 'Tente ajustar a busca'
-                : 'Nenhum consultor cadastrado'}
+                : 'Nenhum vendedor cadastrado'}
             </p>
           </div>
         ) : (
@@ -159,7 +159,7 @@ export default function Consultores() {
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <TableHead>Consultor</TableHead>
+                  <TableHead>Vendedor</TableHead>
                   <TableHead className="text-center">Leads</TableHead>
                   <TableHead className="text-center">Em Andamento</TableHead>
                   <TableHead className="text-center">Ganhos</TableHead>
@@ -169,28 +169,28 @@ export default function Consultores() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredConsultores.map((consultor) => {
-                  const contagem = contagemLeads[consultor.id] || {
+                {filteredVendedores.map((vendedor) => {
+                  const contagem = contagemLeads[vendedor.user_id] || {
                     total: 0,
                     novos: 0,
                     emContato: 0,
                     cotacao: 0,
-                    proposta: 0,
+                    negociacao: 0,
                     ganhos: 0,
                     perdidos: 0,
                   };
-                  const emAndamento = contagem.novos + contagem.emContato + contagem.cotacao + contagem.proposta;
+                  const emAndamento = contagem.novos + contagem.emContato + contagem.cotacao + contagem.negociacao;
                   const taxaConv = contagem.total > 0 
                     ? ((contagem.ganhos / contagem.total) * 100).toFixed(0) 
                     : '0';
 
                   return (
-                    <TableRow key={consultor.id} className="group">
+                    <TableRow key={vendedor.id} className="group">
                       <TableCell>
                         <div>
-                          <p className="font-medium">{consultor.nome}</p>
-                          {consultor.telefone && (
-                            <p className="text-xs text-muted-foreground">{consultor.telefone}</p>
+                          <p className="font-medium">{vendedor.nome}</p>
+                          {vendedor.telefone && (
+                            <p className="text-xs text-muted-foreground">{vendedor.telefone}</p>
                           )}
                         </div>
                       </TableCell>
@@ -232,7 +232,7 @@ export default function Consultores() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleVerHistorico(consultor.id)}
+                          onClick={() => handleVerHistorico(vendedor.user_id)}
                           className="opacity-0 group-hover:opacity-100 transition-opacity"
                         >
                           <History className="h-4 w-4 mr-1" />

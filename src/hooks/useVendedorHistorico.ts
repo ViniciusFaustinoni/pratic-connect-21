@@ -1,17 +1,17 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
-interface ConsultorLeadsOptions {
-  consultorId: string;
+interface VendedorLeadsOptions {
+  vendedorId: string;
   search?: string;
   etapa?: string;
   dataInicio?: Date;
   dataFim?: Date;
 }
 
-export function useConsultorLeads(options: ConsultorLeadsOptions) {
+export function useVendedorLeads(options: VendedorLeadsOptions) {
   return useQuery({
-    queryKey: ['consultor-leads', options],
+    queryKey: ['vendedor-leads', options],
     queryFn: async () => {
       let query = supabase
         .from('leads')
@@ -20,7 +20,7 @@ export function useConsultorLeads(options: ConsultorLeadsOptions) {
           cotacoes:cotacoes(id, numero, status, valor_mensal),
           contratos:contratos(id, numero, status)
         `)
-        .eq('consultor_id', options.consultorId)
+        .eq('vendedor_id', options.vendedorId)
         .order('created_at', { ascending: false });
 
       if (options.search) {
@@ -44,13 +44,13 @@ export function useConsultorLeads(options: ConsultorLeadsOptions) {
       if (error) throw error;
       return data;
     },
-    enabled: !!options.consultorId,
+    enabled: !!options.vendedorId,
   });
 }
 
-export function useConsultorCotacoes(consultorId: string) {
+export function useVendedorCotacoes(vendedorId: string) {
   return useQuery({
-    queryKey: ['consultor-cotacoes', consultorId],
+    queryKey: ['vendedor-cotacoes', vendedorId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('cotacoes')
@@ -58,19 +58,19 @@ export function useConsultorCotacoes(consultorId: string) {
           *,
           lead:leads(id, nome, telefone, veiculo_placa)
         `)
-        .eq('vendedor_id', consultorId)
+        .eq('vendedor_id', vendedorId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
       return data;
     },
-    enabled: !!consultorId,
+    enabled: !!vendedorId,
   });
 }
 
-export function useConsultorContratos(consultorId: string) {
+export function useVendedorContratos(vendedorId: string) {
   return useQuery({
-    queryKey: ['consultor-contratos', consultorId],
+    queryKey: ['vendedor-contratos', vendedorId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('contratos')
@@ -79,24 +79,24 @@ export function useConsultorContratos(consultorId: string) {
           lead:leads(id, nome, telefone),
           plano:planos(id, nome)
         `)
-        .eq('vendedor_id', consultorId)
+        .eq('vendedor_id', vendedorId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
       return data;
     },
-    enabled: !!consultorId,
+    enabled: !!vendedorId,
   });
 }
 
-export function useConsultorStats(consultorId: string) {
+export function useVendedorStats(vendedorId: string) {
   return useQuery({
-    queryKey: ['consultor-stats', consultorId],
+    queryKey: ['vendedor-stats', vendedorId],
     queryFn: async () => {
       const { data: leads, error } = await supabase
         .from('leads')
         .select('etapa')
-        .eq('consultor_id', consultorId);
+        .eq('vendedor_id', vendedorId);
 
       if (error) throw error;
 
@@ -134,6 +134,6 @@ export function useConsultorStats(consultorId: string) {
 
       return stats;
     },
-    enabled: !!consultorId,
+    enabled: !!vendedorId,
   });
 }
