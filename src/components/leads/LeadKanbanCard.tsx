@@ -15,6 +15,7 @@ interface LeadKanbanCardProps {
   lead: Lead;
   onClick: () => void;
   onQuote?: (leadId: string) => void;
+  onWhatsAppClick?: (leadId: string, currentEtapa: string) => void;
 }
 
 // Cores de fundo do avatar baseadas na origem
@@ -31,7 +32,7 @@ const origemAvatarColors: Record<string, string> = {
   outros: 'bg-gray-100 text-gray-700',
 };
 
-export function LeadKanbanCard({ lead, onClick, onQuote }: LeadKanbanCardProps) {
+export function LeadKanbanCard({ lead, onClick, onQuote, onWhatsAppClick }: LeadKanbanCardProps) {
   const {
     attributes,
     listeners,
@@ -117,16 +118,18 @@ export function LeadKanbanCard({ lead, onClick, onQuote }: LeadKanbanCardProps) 
           <div className="flex items-center gap-1.5">
             <Phone className="h-3 w-3 flex-shrink-0" />
             <span className="truncate">{lead.telefone}</span>
-            <a
-              href={`https://wa.me/55${lead.telefone.replace(/\D/g, '')}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onWhatsAppClick?.(lead.id, lead.etapa);
+                window.open(`https://wa.me/55${lead.telefone.replace(/\D/g, '')}`, '_blank');
+              }}
               className="text-green-600 hover:text-green-700 opacity-0 group-hover:opacity-100 transition-opacity"
               title="Abrir WhatsApp"
             >
               <MessageCircle className="h-3 w-3" />
-            </a>
+            </button>
           </div>
           {lead.veiculo_fipe && (
             <span className="font-medium text-foreground text-[11px]">
