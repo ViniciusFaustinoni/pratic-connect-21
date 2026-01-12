@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, Search, FileText, Calculator, Send, Check, X, Loader2, MessageCircle, ChevronDown, FileDown, Mail, FileSignature, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -49,6 +49,7 @@ const statusConfig: Record<StatusCotacao, { label: string; color: string; icon: 
 
 export default function Cotacoes() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [showCotacaoForm, setShowCotacaoForm] = useState(false);
@@ -56,12 +57,25 @@ export default function Cotacoes() {
   const [selectedCotacaoId, setSelectedCotacaoId] = useState<string>('');
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [selectedCotacaoEmail, setSelectedCotacaoEmail] = useState<CotacaoWithRelations | null>(null);
+  const [leadIdFromUrl, setLeadIdFromUrl] = useState<string | null>(null);
 
   const { data: cotacoes, isLoading } = useCotacoes();
   const updateCotacao = useUpdateCotacao();
   const gerarContrato = useGerarContrato();
   const { profile } = useAuth();
   const queryClient = useQueryClient();
+
+  // Detectar parâmetro ?lead=xxx para abrir modal com dados do lead
+  useEffect(() => {
+    const leadParam = searchParams.get('lead');
+    if (leadParam) {
+      setLeadIdFromUrl(leadParam);
+      setShowCotacaoForm(true);
+      // Limpar parâmetro após processar
+      searchParams.delete('lead');
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const filteredCotacoes = (cotacoes || []).filter((cotacao) => {
     const matchesSearch =
@@ -427,7 +441,14 @@ export default function Cotacoes() {
       </Card>
 
       {/* Dialogs */}
-      <CotacaoFormDialog open={showCotacaoForm} onOpenChange={setShowCotacaoForm} />
+      <CotacaoFormDialog 
+        open={showCotacaoForm} 
+        onOpenChange={(open) => {
+          setShowCotacaoForm(open);
+          if (!open) setLeadIdFromUrl(null);
+        }} 
+        leadId={leadIdFromUrl || undefined}
+      />
       <ContratoWizard 
         open={showContratoWizard} 
         onOpenChange={setShowContratoWizard} 
