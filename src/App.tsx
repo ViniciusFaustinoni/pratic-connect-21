@@ -24,6 +24,7 @@ import LeadsUnificado from "./pages/vendas/LeadsUnificado";
 import LeadDetalhe from "./pages/vendas/LeadDetalhe";
 import LeadEditar from "./pages/vendas/LeadEditar";
 import Acompanhamento from "./pages/vendas/Acompanhamento";
+import AtivacoesList from "./pages/vendas/AtivacoesList";
 import Cotacoes from "./pages/vendas/Cotacoes";
 import CotacaoDetalhe from "./pages/vendas/CotacaoDetalhe";
 import Contratos from "./pages/vendas/Contratos";
@@ -252,7 +253,8 @@ const App = () => (
               <Route path="/vendas/leads" element={<LeadsUnificado />} />
               <Route path="/vendas/leads/:id" element={<LeadDetalhe />} />
               <Route path="/vendas/leads/:id/editar" element={<LeadEditar />} />
-              <Route path="/vendas/ativacoes" element={<Acompanhamento />} />
+              <Route path="/vendas/ativacoes" element={<AtivacoesList />} />
+              <Route path="/vendas/acompanhamento" element={<Acompanhamento />} />
               <Route path="/vendas/cotacao" element={<Cotacao />} />
               <Route path="/vendas/cotacoes" element={<Cotacoes />} />
               <Route path="/vendas/cotacoes/:id" element={<CotacaoDetalhe />} />
