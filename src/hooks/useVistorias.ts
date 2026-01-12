@@ -25,6 +25,7 @@ export interface Vistoria {
   data_agendada: string | null;
   created_at: string;
   updated_at: string;
+  contrato_id?: string | null;
   veiculo?: {
     id: string;
     placa: string;
@@ -109,6 +110,51 @@ export function useVistoria(id: string | null) {
   });
 }
 
+// Criar vistoria avulsa (sem veículo vinculado)
+export function useCriarVistoriaAvulsa() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: { tipo_veiculo: 'automovel' | 'moto' }) => {
+      // Buscar o profile do usuário atual para usar como vistoriador
+      const { data: session } = await supabase.auth.getSession();
+      if (!session.session?.user.id) {
+        throw new Error('Usuário não autenticado');
+      }
+
+      // Buscar um associado temporário (o primeiro disponível) para criar a vistoria avulsa
+      // Será atualizado quando vincular a um contrato
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('user_id', session.session.user.id)
+        .single();
+
+      // Usar o próprio user_id como associado_id temporário (vistoria avulsa)
+      const { data: result, error } = await supabase
+        .from('vistorias')
+        .insert([{
+          associado_id: profileData?.id || session.session.user.id,
+          vistoriador_id: profileData?.id || null,
+          tipo: 'entrada',
+          status: 'em_analise' as const,
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+      return result;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vistorias'] });
+    },
+    onError: (error) => {
+      console.error('Erro ao criar vistoria:', error);
+      toast.error('Erro ao criar vistoria');
+    },
+  });
+}
+
 export function useCriarVistoria() {
   const queryClient = useQueryClient();
 
@@ -178,6 +224,77 @@ export function useUploadVistoriaFoto() {
     onError: (error) => {
       console.error('Erro ao fazer upload:', error);
       toast.error('Erro ao enviar foto');
+    },
+  });
+}
+
+// Finalizar vistoria com decisão (aceito/não aceito) e vínculo opcional
+export function useFinalizarVistoriaComDecisao() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: {
+      id: string;
+      aceito: boolean;
+      contrato_id?: string | null;
+      km_atual?: number;
+      observacoes?: string;
+    }) => {
+      const status: VistoriaStatus = data.aceito ? 'aprovada' : 'reprovada';
+      
+      // Se aceito e tem contrato_id, buscar o associado_id do contrato
+      let associadoId: string | undefined;
+      if (data.aceito && data.contrato_id) {
+        const { data: contrato, error: contratoError } = await supabase
+          .from('contratos')
+          .select('associado_id')
+          .eq('id', data.contrato_id)
+          .single();
+        
+        if (contratoError) throw contratoError;
+        associadoId = contrato.associado_id || undefined;
+      }
+
+      // Atualizar a vistoria
+      const updateData: Record<string, any> = {
+        status,
+        observacoes: data.observacoes,
+        km_atual: data.km_atual,
+        updated_at: new Date().toISOString(),
+      };
+
+      // Se tem associado do contrato, vincular
+      if (associadoId) {
+        updateData.associado_id = associadoId;
+      }
+
+      const { error } = await supabase
+        .from('vistorias')
+        .update(updateData)
+        .eq('id', data.id);
+
+      if (error) throw error;
+
+      return { status, contrato_id: data.contrato_id };
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['vistorias'] });
+      queryClient.invalidateQueries({ queryKey: ['ativacoes'] });
+      queryClient.invalidateQueries({ queryKey: ['contratos-pendentes-vinculo'] });
+      
+      if (result.status === 'aprovada') {
+        if (result.contrato_id) {
+          toast.success('Vistoria aprovada e vinculada ao contrato!');
+        } else {
+          toast.success('Vistoria aprovada! Você pode vincular a um contrato depois.');
+        }
+      } else {
+        toast.success('Vistoria finalizada como não aceita.');
+      }
+    },
+    onError: (error) => {
+      console.error('Erro ao finalizar vistoria:', error);
+      toast.error('Erro ao finalizar vistoria');
     },
   });
 }
@@ -297,5 +414,66 @@ export function useBuscarVeiculos(search: string) {
       return data || [];
     },
     enabled: search.length >= 2,
+  });
+}
+
+// Buscar contratos pendentes para vincular vistoria
+export interface ContratoPendenteVinculo {
+  id: string;
+  numero: string;
+  lead_nome: string | null;
+  veiculo_placa: string | null;
+  veiculo_marca: string | null;
+  veiculo_modelo: string | null;
+  associado_id: string | null;
+}
+
+export function useContratosPendentesVinculo() {
+  return useQuery({
+    queryKey: ['contratos-pendentes-vinculo'],
+    queryFn: async (): Promise<ContratoPendenteVinculo[]> => {
+      // Buscar contratos que não estão ativos e não têm vistoria aprovada
+      const { data: contratos, error } = await supabase
+        .from('contratos')
+        .select('id, numero, lead_id, associado_id')
+        .in('status', ['assinado', 'pendente', 'pendente_assinatura', 'enviado'])
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const leadIds = (contratos || []).map(c => c.lead_id).filter(Boolean) as string[];
+      const associadoIds = (contratos || []).map(c => c.associado_id).filter(Boolean) as string[];
+
+      // Buscar leads e verificar vistorias existentes
+      const [leadsRes, vistoriasRes] = await Promise.all([
+        leadIds.length > 0
+          ? supabase.from('leads').select('id, nome, veiculo_placa, veiculo_marca, veiculo_modelo').in('id', leadIds)
+          : { data: [] },
+        associadoIds.length > 0
+          ? supabase.from('vistorias').select('associado_id, status').in('associado_id', associadoIds).eq('tipo', 'entrada').eq('status', 'aprovada')
+          : { data: [] },
+      ]);
+
+      const leadsMap = new Map((leadsRes.data || []).map(l => [l.id, l]));
+      const vistoriasAprovadas = new Set((vistoriasRes.data || []).map(v => v.associado_id));
+
+      // Filtrar contratos que já têm vistoria aprovada
+      const contratosSemVistoria = (contratos || []).filter(c => 
+        !c.associado_id || !vistoriasAprovadas.has(c.associado_id)
+      );
+
+      return contratosSemVistoria.map(contrato => {
+        const lead = contrato.lead_id ? leadsMap.get(contrato.lead_id) : null;
+        return {
+          id: contrato.id,
+          numero: contrato.numero,
+          lead_nome: lead?.nome || null,
+          veiculo_placa: lead?.veiculo_placa || null,
+          veiculo_marca: lead?.veiculo_marca || null,
+          veiculo_modelo: lead?.veiculo_modelo || null,
+          associado_id: contrato.associado_id,
+        };
+      });
+    },
   });
 }
