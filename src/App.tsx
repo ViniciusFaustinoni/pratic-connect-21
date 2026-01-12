@@ -147,6 +147,8 @@ import UTMs from "./pages/marketing/UTMs";
 import RelatoriosMarketing from "./pages/marketing/RelatoriosMarketing";
 import DistribuicaoConfig from "./pages/vendas/DistribuicaoConfig";
 import PlanosBeneficios from "./pages/vendas/PlanosBeneficios";
+import VendasConfig from "./pages/vendas/VendasConfig";
+import { VendasNotificationListener } from "./components/notifications/VendasNotificationListener";
 
 // Diretoria
 import DiretoriaDashboard from "./pages/diretoria/DiretoriaDashboard";
@@ -236,7 +238,7 @@ const App = () => (
             
             {/* Protected routes with internal layout */}
             <Route element={<AppLayout />}>
-              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/dashboard" element={<><VendasNotificationListener /><Dashboard /></>} />
               <Route path="/perfil" element={<Perfil />} />
               <Route path="/notificacoes" element={<Notificacoes />} />
               
@@ -254,6 +256,7 @@ const App = () => (
               <Route path="/vendas/planos-beneficios" element={<PlanosBeneficios />} />
               <Route path="/vendas/consultores" element={<Consultores />} />
               <Route path="/vendas/consultores/:id" element={<ConsultorHistorico />} />
+              <Route path="/vendas/configuracoes" element={<VendasConfig />} />
               
               {/* Cadastro */}
               <Route path="/cadastro/associados" element={<Associados />} />

@@ -465,11 +465,20 @@ export default function CotadorPage() {
 
       setCotacaoSalva(cotacaoData);
 
-      // Atualizar etapa do lead se vinculado
+      // Atualizar etapa do lead e salvar plano escolhido
       if (leadSelecionado?.id) {
         await atualizarLead.mutateAsync({
           id: leadSelecionado.id,
-          etapa: 'cotacao_enviada'
+          etapa: 'cotacao_enviada',
+          plano_escolhido_id: planoFinalSelecionado.idReal,
+          plano_escolhido_nome: planoFinalSelecionado.nome,
+          plano_escolhido_valor: planoFinalSelecionado.valorMensal,
+          veiculo_fipe: valorFipe,
+          veiculo_marca: marca,
+          veiculo_modelo: modelo,
+          veiculo_ano: parseInt(ano),
+          veiculo_placa: veiculoEncontrado?.placa || placaBusca.replace(/[^A-Za-z0-9]/g, '').toUpperCase() || undefined,
+          proposta_enviada_em: new Date().toISOString(),
         });
       }
 
