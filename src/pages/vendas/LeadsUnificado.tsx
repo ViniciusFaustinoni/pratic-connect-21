@@ -14,6 +14,8 @@ import { LeadFormDialog } from '@/components/leads/LeadFormDialog';
 import { LeadDetailDrawer } from '@/components/leads/LeadDetailDrawer';
 import { LeadLossDialog } from '@/components/leads/LeadLossDialog';
 import { LeadSignatureListener } from '@/components/leads/LeadSignatureToast';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 
 import { useAllLeads } from '@/hooks/useLeads';
 import { useVendedores } from '@/hooks/useVendedores';
@@ -55,6 +57,7 @@ export default function LeadsUnificado() {
   
   // View state
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('kanban');
+  const [funnelMode, setFunnelMode] = useState<'simple' | 'complete'>('simple');
   const [quickFilter, setQuickFilter] = useState<QuickFilter>('all');
   const [showFilters, setShowFilters] = useState(false);
   const [showNewLeadDialog, setShowNewLeadDialog] = useState(false);
@@ -103,7 +106,6 @@ export default function LeadsUnificado() {
 
   // Handle send proposal action
   const handleLeadSendProposal = useCallback((lead: Lead) => {
-    // Navigate to contrato page or open proposal modal
     toast.info(`Enviar proposta para ${lead.nome} - funcionalidade em desenvolvimento`);
   }, []);
 
@@ -115,6 +117,12 @@ export default function LeadsUnificado() {
       etapa: lead.etapa as EtapaLead,
     });
     setShowLossDialog(true);
+  }, []);
+
+  // Handle view lead details from signature toast
+  const handleViewLeadDetails = useCallback((leadId: string) => {
+    setSelectedLeadId(leadId);
+    setShowLeadDrawer(true);
   }, []);
 
   // Filter leads based on quick filter and advanced filters
@@ -221,7 +229,7 @@ export default function LeadsUnificado() {
     <div className="flex flex-col h-full bg-background">
       {/* Fixed Header Section with subtle gradient */}
       <div className="shrink-0 z-10 bg-gradient-to-b from-muted/50 to-background border-b border-border/50">
-        <div className="px-6 py-6 space-y-6">
+        <div className="px-6 py-6 space-y-5">
           {/* Title & Actions */}
           <LeadsHeader
             onNovoLead={() => setShowNewLeadDialog(true)}
@@ -233,18 +241,36 @@ export default function LeadsUnificado() {
           {/* Metrics Cards */}
           <LeadMetricsCards leads={allLeads} />
 
-          {/* Filters Bar */}
-          <LeadsFiltersBar
-            search={filters.search}
-            onSearchChange={handleSearchChange}
-            quickFilter={quickFilter}
-            onQuickFilterChange={setQuickFilter}
-            overdueCount={overdueCount}
-            viewMode={viewMode}
-            onViewModeChange={setViewMode}
-            onOpenFilters={() => setShowFilters(true)}
-            filtersActive={hasActiveFilters}
-          />
+          {/* Filters Bar with Funnel Toggle */}
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex-1">
+              <LeadsFiltersBar
+                search={filters.search}
+                onSearchChange={handleSearchChange}
+                quickFilter={quickFilter}
+                onQuickFilterChange={setQuickFilter}
+                overdueCount={overdueCount}
+                viewMode={viewMode}
+                onViewModeChange={setViewMode}
+                onOpenFilters={() => setShowFilters(true)}
+                filtersActive={hasActiveFilters}
+              />
+            </div>
+            
+            {/* Funnel Toggle - Only show in kanban mode */}
+            {viewMode === 'kanban' && (
+              <div className="flex items-center gap-2 shrink-0">
+                <Switch
+                  id="funnel-mode"
+                  checked={funnelMode === 'complete'}
+                  onCheckedChange={(checked) => setFunnelMode(checked ? 'complete' : 'simple')}
+                />
+                <Label htmlFor="funnel-mode" className="text-xs text-muted-foreground cursor-pointer">
+                  Funil Completo
+                </Label>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -272,13 +298,14 @@ export default function LeadsUnificado() {
               onLeadSendProposal={handleLeadSendProposal}
               onLeadMarkLost={handleLeadMarkLost}
               onAddLead={() => setShowNewLeadDialog(true)}
+              funnelMode={funnelMode}
             />
           </div>
         )}
       </div>
 
       {/* Realtime Signature Listener */}
-      <LeadSignatureListener />
+      <LeadSignatureListener onViewDetails={handleViewLeadDetails} />
 
       {/* Filters Panel */}
       <LeadsFiltersPanel

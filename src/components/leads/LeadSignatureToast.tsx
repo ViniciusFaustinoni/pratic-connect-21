@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 import { toast } from 'sonner';
-import { PartyPopper, FileCheck } from 'lucide-react';
+import { PartyPopper, FileCheck, X, ExternalLink } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { Button } from '@/components/ui/button';
 
 interface SignedLead {
   id: string;
@@ -12,9 +13,10 @@ interface SignedLead {
 
 interface LeadSignatureListenerProps {
   onSignature?: (lead: SignedLead) => void;
+  onViewDetails?: (leadId: string) => void;
 }
 
-export function LeadSignatureListener({ onSignature }: LeadSignatureListenerProps) {
+export function LeadSignatureListener({ onSignature, onViewDetails }: LeadSignatureListenerProps) {
   useEffect(() => {
     // Subscribe to leads table changes - specifically contrato_assinado updates
     const channel = supabase
@@ -33,7 +35,7 @@ export function LeadSignatureListener({ onSignature }: LeadSignatureListenerProp
           
           // Only show toast if the lead just changed TO contrato_assinado
           if (oldLead.etapa !== 'contrato_assinado') {
-            showSignatureToast(newLead);
+            showSignatureToast(newLead, onViewDetails);
             onSignature?.(newLead);
           }
         }
@@ -43,12 +45,12 @@ export function LeadSignatureListener({ onSignature }: LeadSignatureListenerProp
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [onSignature]);
+  }, [onSignature, onViewDetails]);
 
   return null;
 }
 
-function showSignatureToast(lead: SignedLead) {
+function showSignatureToast(lead: SignedLead, onViewDetails?: (leadId: string) => void) {
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -73,7 +75,7 @@ function showSignatureToast(lead: SignedLead) {
               O lead <strong>{lead.nome}</strong> assinou a proposta
             </p>
             {lead.plano_escolhido_nome && (
-              <div className="text-xs bg-white/10 rounded px-2 py-1 inline-flex items-center gap-2">
+              <div className="text-xs bg-white/10 rounded px-2 py-1 inline-flex items-center gap-2 mb-3">
                 <span>{lead.plano_escolhido_nome}</span>
                 {lead.plano_escolhido_valor && (
                   <>
@@ -85,7 +87,27 @@ function showSignatureToast(lead: SignedLead) {
                 )}
               </div>
             )}
+            {onViewDetails && (
+              <Button
+                size="sm"
+                variant="secondary"
+                className="bg-white/20 hover:bg-white/30 text-white border-0 text-xs gap-1.5"
+                onClick={() => {
+                  onViewDetails(lead.id);
+                  toast.dismiss(t);
+                }}
+              >
+                <ExternalLink className="h-3 w-3" />
+                Ver detalhes
+              </Button>
+            )}
           </div>
+          <button 
+            onClick={() => toast.dismiss(t)} 
+            className="text-white/60 hover:text-white transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
       </div>
     ),
