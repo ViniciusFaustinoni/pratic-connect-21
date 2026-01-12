@@ -1,108 +1,212 @@
-import { CreditCard, MessageSquare, MapPin, FileSignature, Zap, CheckCircle, XCircle, ExternalLink, AlertCircle } from 'lucide-react';
+import { CreditCard, MessageSquare, MapPin, FileSignature, Zap, CheckCircle, Mail, Search, ExternalLink } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
-const integracoes = [
-  { 
-    id: 'asaas', 
-    nome: 'ASAAS', 
-    desc: 'Boletos, Pix e cobranças automáticas', 
-    icon: CreditCard, 
-    color: 'text-green-500 bg-green-500/10', 
-    ativo: false 
+interface Servico {
+  id: string;
+  nome: string;
+  desc: string;
+  icon: React.ElementType;
+  color: string;
+  bgColor: string;
+  ativo: boolean;
+  ultimaExecucao?: string;
+}
+
+interface CategoriaServicos {
+  titulo: string;
+  emoji: string;
+  servicos: Servico[];
+}
+
+const categorias: CategoriaServicos[] = [
+  {
+    titulo: 'Pagamentos',
+    emoji: '💳',
+    servicos: [
+      {
+        id: 'asaas',
+        nome: 'ASAAS',
+        desc: 'Boletos, Pix e cobranças',
+        icon: CreditCard,
+        color: 'text-green-500',
+        bgColor: 'bg-green-500/10',
+        ativo: false,
+      },
+    ],
   },
-  { 
-    id: 'whatsapp', 
-    nome: 'WhatsApp Evolution API', 
-    desc: 'Mensagens e notificações em massa', 
-    icon: MessageSquare, 
-    color: 'text-emerald-500 bg-emerald-500/10', 
-    ativo: false 
+  {
+    titulo: 'Comunicação',
+    emoji: '💬',
+    servicos: [
+      {
+        id: 'whatsapp',
+        nome: 'WhatsApp',
+        desc: 'Mensagens automáticas',
+        icon: MessageSquare,
+        color: 'text-emerald-500',
+        bgColor: 'bg-emerald-500/10',
+        ativo: false,
+      },
+      {
+        id: 'email',
+        nome: 'Email SMTP',
+        desc: 'Envio de cotações',
+        icon: Mail,
+        color: 'text-blue-500',
+        bgColor: 'bg-blue-500/10',
+        ativo: false,
+      },
+    ],
   },
-  { 
-    id: 'rastreadores', 
-    nome: 'Rede Veículos', 
-    desc: 'Rastreamento veicular em tempo real', 
-    icon: MapPin, 
-    color: 'text-blue-500 bg-blue-500/10', 
-    ativo: false 
+  {
+    titulo: 'Veículos',
+    emoji: '🚗',
+    servicos: [
+      {
+        id: 'rastreadores',
+        nome: 'Rede Veículos',
+        desc: 'Rastreamento em tempo real',
+        icon: MapPin,
+        color: 'text-blue-500',
+        bgColor: 'bg-blue-500/10',
+        ativo: false,
+      },
+      {
+        id: 'fipe',
+        nome: 'Tabela FIPE',
+        desc: 'Consulta de valores',
+        icon: Search,
+        color: 'text-indigo-500',
+        bgColor: 'bg-indigo-500/10',
+        ativo: true,
+      },
+    ],
   },
-  { 
-    id: 'autentique', 
-    nome: 'Autentique', 
-    desc: 'Assinatura digital de contratos', 
-    icon: FileSignature, 
-    color: 'text-purple-500 bg-purple-500/10', 
-    ativo: false 
+  {
+    titulo: 'Documentos',
+    emoji: '📝',
+    servicos: [
+      {
+        id: 'autentique',
+        nome: 'Autentique',
+        desc: 'Assinatura digital',
+        icon: FileSignature,
+        color: 'text-purple-500',
+        bgColor: 'bg-purple-500/10',
+        ativo: false,
+      },
+    ],
   },
-  { 
-    id: 'n8n', 
-    nome: 'n8n', 
-    desc: 'Automações e workflows', 
-    icon: Zap, 
-    color: 'text-orange-500 bg-orange-500/10', 
-    ativo: true 
+  {
+    titulo: 'Automação',
+    emoji: '⚡',
+    servicos: [
+      {
+        id: 'n8n',
+        nome: 'n8n',
+        desc: 'Workflows e automações',
+        icon: Zap,
+        color: 'text-orange-500',
+        bgColor: 'bg-orange-500/10',
+        ativo: true,
+        ultimaExecucao: 'há 5 min',
+      },
+    ],
   },
 ];
 
-export function ServicosTab() {
+function ServicoCard({ servico }: { servico: Servico }) {
+  const Icon = servico.icon;
+
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {integracoes.map((integracao) => {
-          const Icon = integracao.icon;
-          return (
-            <Card key={integracao.id} className="border-border/50 hover:shadow-md transition-shadow">
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start gap-4">
-                    <div className={`p-3 rounded-lg ${integracao.color}`}>
-                      <Icon className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-foreground">{integracao.nome}</h3>
-                      <p className="text-sm text-muted-foreground mt-1">{integracao.desc}</p>
-                    </div>
-                  </div>
-                  <Badge 
-                    variant={integracao.ativo ? 'default' : 'secondary'} 
-                    className={`gap-1 ${integracao.ativo ? 'bg-green-500/20 text-green-400 border-green-500/30' : 'bg-muted text-muted-foreground'}`}
-                  >
-                    {integracao.ativo ? (
-                      <><CheckCircle className="w-3 h-3" /> Conectado</>
-                    ) : (
-                      <><XCircle className="w-3 h-3" /> Desconectado</>
-                    )}
-                  </Badge>
-                </div>
-
-                <div className="mt-4 pt-4 border-t border-border/50">
-                  <Button variant="outline" size="sm" className="gap-2">
-                    <ExternalLink className="w-4 h-4" />
-                    Configurar
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-
-      {/* Info Card */}
-      <Card className="border-border/50 bg-amber-500/5 border-amber-500/20">
-        <CardContent className="py-4">
-          <div className="flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-amber-400 mt-0.5" />
+    <Card className={cn(
+      "border-border/50 min-h-[160px] transition-all duration-200 hover:shadow-md hover:border-primary/30",
+      servico.ativo && "ring-1 ring-green-500/20"
+    )}>
+      <CardContent className="p-5 h-full flex flex-col">
+        {/* Header with Icon, Name and Status */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className={cn("p-2.5 rounded-lg", servico.bgColor)}>
+              <Icon className={cn("w-5 h-5", servico.color)} />
+            </div>
             <div>
-              <p className="font-medium text-foreground">Configuração de Integrações</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                Entre em contato com o suporte técnico para ativar novas integrações ou alterar configurações existentes.
-              </p>
+              <h3 className="font-semibold text-foreground">{servico.nome}</h3>
             </div>
           </div>
-        </CardContent>
-      </Card>
+          
+          {/* Status Badge */}
+          <div className={cn(
+            "flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium",
+            servico.ativo 
+              ? "bg-green-500/10 text-green-500" 
+              : "bg-red-500/10 text-red-500"
+          )}>
+            <span className={cn(
+              "h-2 w-2 rounded-full",
+              servico.ativo ? "bg-green-500 animate-pulse" : "bg-red-500"
+            )} />
+            {servico.ativo ? 'ON' : 'OFF'}
+          </div>
+        </div>
+
+        {/* Description */}
+        <p className="text-sm text-muted-foreground mt-3 flex-1">
+          {servico.desc}
+        </p>
+
+        {/* Last execution if available */}
+        {servico.ultimaExecucao && (
+          <p className="text-xs text-muted-foreground mt-1">
+            Última execução: {servico.ultimaExecucao}
+          </p>
+        )}
+
+        {/* Action Button */}
+        <div className="mt-4 pt-4 border-t border-border/50">
+          {servico.ativo ? (
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" className="gap-2 text-green-500 hover:text-green-600 hover:bg-green-500/10">
+                <CheckCircle className="w-4 h-4" />
+                Configurado
+              </Button>
+              <Button variant="outline" size="sm" className="gap-2">
+                Ver Logs
+              </Button>
+            </div>
+          ) : (
+            <Button variant="outline" size="sm" className="gap-2">
+              <ExternalLink className="w-4 h-4" />
+              Configurar
+            </Button>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+export function ServicosTab() {
+  return (
+    <div className="space-y-8">
+      {categorias.map((categoria) => (
+        <div key={categoria.titulo} className="space-y-4">
+          {/* Section Title */}
+          <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+            <span>{categoria.emoji}</span>
+            {categoria.titulo}
+          </h2>
+
+          {/* Services Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {categoria.servicos.map((servico) => (
+              <ServicoCard key={servico.id} servico={servico} />
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

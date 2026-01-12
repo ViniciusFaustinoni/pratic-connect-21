@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import {
   Copy,
@@ -14,20 +15,157 @@ import {
   Link,
   BookOpen,
   Loader2,
-  TrendingUp,
-  CheckCircle,
-  XCircle,
+  Settings,
+  FileText,
+  Clock,
+  Search,
+  Facebook,
+  Instagram,
+  Globe,
+  MessageCircle,
+  Zap,
+  Lock,
+  Plus,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { formatDistanceToNow } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { useApiKeys, useCreateApiKey } from '@/hooks/useApiKeys';
 import { useApiLeadsConfig, useToggleApiIntegration, ApiLeadsConfig } from '@/hooks/useApiLeadsConfig';
-import { useApiLeadsLogStats } from '@/hooks/useApiLeadsLogs';
-import { ApiIntegrationCard } from '@/components/leads/ApiIntegrationCard';
 import { ApiTutorialModal } from '@/components/leads/ApiTutorialModal';
 import { ApiLogsModal } from '@/components/leads/ApiLogsModal';
+import { cn } from '@/lib/utils';
 
 const SUPABASE_URL = 'https://iyxdgmukrrdkffraptsx.supabase.co';
 const WEBHOOK_URL = `${SUPABASE_URL}/functions/v1/leads-webhook`;
+
+const ICON_MAP: Record<string, React.ElementType> = {
+  'search': Search,
+  'google': Search,
+  'facebook': Facebook,
+  'instagram': Instagram,
+  'globe': Globe,
+  'message-circle': MessageCircle,
+  'zap': Zap,
+  'link': Link,
+};
+
+function FonteLeadCard({
+  config,
+  onToggle,
+  onOpenLogs,
+  onOpenTutorial,
+  isToggling,
+}: {
+  config: ApiLeadsConfig;
+  onToggle: (id: string, ativo: boolean) => void;
+  onOpenLogs: (config: ApiLeadsConfig) => void;
+  onOpenTutorial: (config: ApiLeadsConfig) => void;
+  isToggling?: boolean;
+}) {
+  const Icon = ICON_MAP[config.icone] || Link;
+
+  const formatLastLead = (date: string | null) => {
+    if (!date) return null;
+    try {
+      return formatDistanceToNow(new Date(date), { addSuffix: true, locale: ptBR });
+    } catch {
+      return null;
+    }
+  };
+
+  const lastLead = formatLastLead(config.ultimo_lead_em);
+  const isLowActivity = config.ultimo_lead_em && 
+    new Date(config.ultimo_lead_em) < new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+
+  // Determine status color
+  const getStatusColor = () => {
+    if (!config.ativo) return 'bg-muted-foreground';
+    if (isLowActivity) return 'bg-yellow-500';
+    return 'bg-green-500';
+  };
+
+  return (
+    <Card className={cn(
+      "border-border/50 transition-all duration-200 hover:shadow-md",
+      !config.ativo && "opacity-60"
+    )}>
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between gap-4">
+          {/* Status + Icon + Info */}
+          <div className="flex items-start gap-3 flex-1">
+            <div className="flex items-center gap-2">
+              <span className={cn(
+                "h-2.5 w-2.5 rounded-full flex-shrink-0",
+                getStatusColor(),
+                config.ativo && !isLowActivity && "animate-pulse"
+              )} />
+              <div 
+                className="flex h-10 w-10 items-center justify-center rounded-lg"
+                style={{ backgroundColor: `${config.cor}20` }}
+              >
+                <Icon className="h-5 w-5" style={{ color: config.cor }} />
+              </div>
+            </div>
+            
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <h3 className="font-medium">{config.nome}</h3>
+                {isLowActivity && config.ativo && (
+                  <Badge variant="outline" className="text-xs text-yellow-500 border-yellow-500/30 bg-yellow-500/10">
+                    Baixa atividade
+                  </Badge>
+                )}
+              </div>
+              
+              <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
+                <span className="font-medium text-foreground">
+                  {config.leads_recebidos} leads
+                </span>
+                {lastLead && (
+                  <span className="flex items-center gap-1">
+                    <Clock className="h-3 w-3" />
+                    {lastLead}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Toggle */}
+          <Switch
+            checked={config.ativo}
+            onCheckedChange={(checked) => onToggle(config.id, checked)}
+            disabled={isToggling}
+          />
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center gap-2 mt-4 pt-3 border-t border-border/50">
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => onOpenTutorial(config)}
+          >
+            <Settings className="h-3.5 w-3.5 mr-1.5" />
+            Configurar
+          </Button>
+          
+          {config.leads_recebidos > 0 && (
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => onOpenLogs(config)}
+            >
+              <FileText className="h-3.5 w-3.5 mr-1.5" />
+              Logs
+            </Button>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 export function ApisLeadsTab() {
   const [showApiKey, setShowApiKey] = useState(false);
@@ -40,7 +178,6 @@ export function ApisLeadsTab() {
 
   const { data: apiKeys } = useApiKeys();
   const { data: integrations, isLoading: loadingIntegrations } = useApiLeadsConfig();
-  const { data: stats } = useApiLeadsLogStats();
   const createApiKey = useCreateApiKey();
   const toggleIntegration = useToggleApiIntegration();
 
@@ -91,59 +228,16 @@ export function ApisLeadsTab() {
     setLogsOpen(true);
   };
 
+  const activeIntegrations = integrations?.filter(i => i.ativo).length || 0;
+
   return (
     <div className="space-y-6">
-      {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card className="border-border/50">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                <TrendingUp className="h-6 w-6 text-blue-500" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Leads (24h)</p>
-                <p className="text-2xl font-bold">{stats?.total || 0}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border/50">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-lg bg-green-500/10 flex items-center justify-center">
-                <CheckCircle className="h-6 w-6 text-green-500" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Sucesso</p>
-                <p className="text-2xl font-bold">{stats?.success || 0}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border/50">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-lg bg-red-500/10 flex items-center justify-center">
-                <XCircle className="h-6 w-6 text-red-500" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Erros</p>
-                <p className="text-2xl font-bold">{stats?.errors || 0}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Webhook URL & API Key */}
-      <Card className="border-border/50">
-        <CardHeader>
+      {/* Credentials Card - Highlighted */}
+      <Card className="border-border/50 bg-muted/30">
+        <CardHeader className="pb-4">
           <CardTitle className="flex items-center gap-2 text-lg">
-            <Key className="h-5 w-5" />
-            Credenciais da API
+            <Lock className="h-5 w-5 text-primary" />
+            Credenciais do Webhook
           </CardTitle>
           <CardDescription>
             Use estas credenciais para integrar suas fontes de leads
@@ -153,14 +247,14 @@ export function ApisLeadsTab() {
           {/* Webhook URL */}
           <div className="space-y-2">
             <label className="text-sm font-medium flex items-center gap-2">
-              <Link className="h-4 w-4" />
+              <Link className="h-4 w-4 text-muted-foreground" />
               URL do Webhook
             </label>
             <div className="flex gap-2">
               <Input
                 value={WEBHOOK_URL}
                 readOnly
-                className="font-mono text-sm"
+                className="font-mono text-sm bg-background"
               />
               <Button
                 variant="outline"
@@ -177,15 +271,15 @@ export function ApisLeadsTab() {
           {/* API Key */}
           <div className="space-y-2">
             <label className="text-sm font-medium flex items-center gap-2">
-              <Key className="h-4 w-4" />
-              API Key (mantenha em segredo)
+              <Key className="h-4 w-4 text-muted-foreground" />
+              API Key
             </label>
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <Input
                   value={displayKey}
                   readOnly
-                  className="font-mono text-sm pr-10"
+                  className="font-mono text-sm pr-10 bg-background"
                 />
                 <Button
                   variant="ghost"
@@ -206,7 +300,7 @@ export function ApisLeadsTab() {
               </Button>
             </div>
             {!activeApiKey && !currentApiKey && (
-              <p className="text-xs text-yellow-600">
+              <p className="text-xs text-yellow-600 flex items-center gap-1">
                 ⚠️ Nenhuma API Key ativa. Gere uma para começar a receber leads.
               </p>
             )}
@@ -239,27 +333,52 @@ export function ApisLeadsTab() {
         </CardContent>
       </Card>
 
-      {/* Integrations */}
+      {/* Lead Sources */}
       <Card className="border-border/50">
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span className="flex items-center gap-2 text-lg">
-              📊 Fontes de Leads
-            </span>
-            <Badge variant="secondary">
-              {integrations?.filter(i => i.ativo).length || 0} ativas
-            </Badge>
-          </CardTitle>
+        <CardHeader className="pb-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                📥 Fontes de Leads
+              </CardTitle>
+              <CardDescription>
+                Configure de onde seus leads serão recebidos
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary">
+                {activeIntegrations} ativas
+              </Badge>
+              <Button size="sm" className="gap-2">
+                <Plus className="h-4 w-4" />
+                Nova Fonte
+              </Button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           {loadingIntegrations ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
+          ) : !integrations?.length ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-4">
+                <Zap className="h-6 w-6 text-muted-foreground" />
+              </div>
+              <h3 className="font-medium text-foreground">Nenhuma fonte configurada</h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                Adicione fontes de leads para começar a receber dados
+              </p>
+              <Button className="mt-4 gap-2">
+                <Plus className="h-4 w-4" />
+                Adicionar Fonte
+              </Button>
+            </div>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {integrations?.map((config) => (
-                <ApiIntegrationCard
+            <div className="space-y-3">
+              {integrations.map((config) => (
+                <FonteLeadCard
                   key={config.id}
                   config={config}
                   onToggle={handleToggleIntegration}
