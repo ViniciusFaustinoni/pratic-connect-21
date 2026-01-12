@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Users, Calendar, LayoutGrid, List } from 'lucide-react';
+import { Users, Calendar, LayoutGrid, List, Search } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -14,8 +15,14 @@ export default function Propostas() {
   const [periodo, setPeriodo] = useState<PeriodoFiltro>('mes');
   const [selectedConsultorId, setSelectedConsultorId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [searchTerm, setSearchTerm] = useState('');
   
   const { data, isLoading } = usePropostasMetricas(periodo);
+
+  // Filtrar consultores pela busca
+  const filteredConsultores = data?.consultores.filter(consultor =>
+    consultor.nome.toLowerCase().includes(searchTerm.toLowerCase())
+  ) || [];
 
   const selectedConsultor = data?.consultores.find(c => c.id === selectedConsultorId);
 
@@ -34,6 +41,17 @@ export default function Propostas() {
         </div>
         
         <div className="flex items-center gap-3">
+          {/* Campo de Busca */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar consultor..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-9 w-[200px]"
+            />
+          </div>
+
           {/* Seletor de Período */}
           <Select value={periodo} onValueChange={(v) => setPeriodo(v as PeriodoFiltro)}>
             <SelectTrigger className="w-[140px]">
@@ -110,7 +128,7 @@ export default function Propostas() {
                 <Skeleton key={i} className="h-9 w-32" />
               ))
             ) : (
-              data?.consultores.map((consultor) => (
+              filteredConsultores.map((consultor) => (
                 <TabsTrigger 
                   key={consultor.id}
                   value={consultor.id}
@@ -139,7 +157,7 @@ export default function Propostas() {
                 <Skeleton key={i} className="h-64" />
               ))}
             </div>
-          ) : data?.consultores.length === 0 ? (
+          ) : filteredConsultores.length === 0 ? (
             <div className="text-center py-12">
               <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
               <h3 className="text-lg font-medium">Nenhum consultor encontrado</h3>
@@ -149,7 +167,7 @@ export default function Propostas() {
             </div>
           ) : viewMode === 'grid' ? (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {data?.consultores.map((consultor) => (
+              {filteredConsultores.map((consultor) => (
                 <ConsultorCard
                   key={consultor.id}
                   consultor={consultor}
@@ -160,7 +178,7 @@ export default function Propostas() {
             </div>
           ) : (
             <div className="space-y-3">
-              {data?.consultores.map((consultor) => (
+              {filteredConsultores.map((consultor) => (
                 <ConsultorCard
                   key={consultor.id}
                   consultor={consultor}
