@@ -31,6 +31,7 @@ import { CpfInput, TelefoneInput, PlacaInput, CurrencyInput } from '@/components
 import { leadSchema, type LeadFormData } from '@/lib/validations';
 import { useCreateLead } from '@/hooks/useLeads';
 import { useVendedores } from '@/hooks/useVendedores';
+import { useConsultores } from '@/hooks/useConsultores';
 import { ORIGEM_LABELS } from '@/types/database';
 import { toast } from 'sonner';
 import { useFipe } from '@/hooks/useFipe';
@@ -51,6 +52,7 @@ export function LeadFormDialog({ open, onOpenChange }: LeadFormDialogProps) {
   const [marcaManual, setMarcaManual] = useState(false);
   const createLead = useCreateLead();
   const { data: vendedores = [] } = useVendedores();
+  const { data: consultores = [] } = useConsultores();
   const { loading: placaLoading, error: placaError, getByPlaca, clearError } = useFipe();
   
   const form = useForm<LeadFormData>({
@@ -68,6 +70,7 @@ export function LeadFormDialog({ open, onOpenChange }: LeadFormDialogProps) {
       veiculo_fipe: null,
       origem: 'telefone',
       vendedor_id: '',
+      consultor_id: '',
       observacoes: '',
     },
   });
@@ -128,6 +131,7 @@ export function LeadFormDialog({ open, onOpenChange }: LeadFormDialogProps) {
         veiculo_fipe: data.veiculo_fipe || null,
         origem: data.origem as 'site',
         vendedor_id: data.vendedor_id || null,
+        consultor_id: data.consultor_id || null,
         observacoes: data.observacoes || null,
         etapa: 'novo',
       });
@@ -450,6 +454,33 @@ export function LeadFormDialog({ open, onOpenChange }: LeadFormDialogProps) {
                           <SelectItem value="_none">Não atribuído</SelectItem>
                           {vendedores.map(v => (
                             <SelectItem key={v.id} value={v.user_id}>{v.nome}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="consultor_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Consultor</FormLabel>
+                      <Select 
+                        onValueChange={(value) => field.onChange(value === '_none' ? null : value)} 
+                        value={field.value || '_none'}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecionar consultor (opcional)" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent className="max-h-60">
+                          <SelectItem value="_none">Sem consultor</SelectItem>
+                          {consultores.map(c => (
+                            <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>

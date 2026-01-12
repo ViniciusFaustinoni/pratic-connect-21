@@ -160,6 +160,7 @@ export const leadSchema = z.object({
   veiculo_fipe: z.number().min(0).optional().nullable(),
   origem: z.enum(['indicacao', 'site', 'whatsapp', 'facebook', 'instagram', 'google', 'telefone', 'presencial', 'parceiro', 'outro', 'api']),
   vendedor_id: z.string().optional().nullable(),
+  consultor_id: z.string().uuid().optional().nullable(),
   observacoes: z.string().optional(),
 });
 

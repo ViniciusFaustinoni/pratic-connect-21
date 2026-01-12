@@ -233,11 +233,16 @@ export function LeadKanbanCard({ lead, onClick, onQuote, onWhatsAppClick, onActi
         )}
 
         {/* Plano escolhido (após cotação) */}
-        {(lead as any).plano_id && (
-          <div className="flex items-center gap-1 mb-1.5 text-[11px]">
+        {lead.plano_escolhido_nome && (
+          <div className="flex items-center justify-between gap-1 mb-1.5 text-[11px]">
             <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
-              Plano selecionado
+              {lead.plano_escolhido_nome}
             </Badge>
+            {lead.plano_escolhido_valor && (
+              <span className="font-medium text-green-600">
+                R$ {lead.plano_escolhido_valor.toFixed(2)}/mês
+              </span>
+            )}
           </div>
         )}
 
