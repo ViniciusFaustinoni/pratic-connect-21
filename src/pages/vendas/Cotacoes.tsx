@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, Search, FileText, Send, Check, X, Loader2, MessageCircle, FileDown, Mail, FileSignature, Eye, Link2, Copy, Trash2, MoreHorizontal, Car, Calendar, User, Phone, RefreshCw } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
+import { Plus, Search, FileText, Send, Check, X, Loader2, MessageCircle, FileDown, Mail, FileSignature, Eye, Link2, Copy, Trash2, MoreHorizontal, Car, Calendar, User, Phone, RefreshCw, Clock, CheckCircle, TrendingUp, Users } from 'lucide-react';
+import { formatDistanceToNow, format, isToday, startOfDay, endOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Select,
   SelectContent,
@@ -41,10 +42,12 @@ import { ContratoWizard } from '@/components/contratos/ContratoWizard';
 import { EnviarEmailModal } from '@/components/cotacoes/EnviarEmailModal';
 import { VincularLeadModal } from '@/components/cotacoes/VincularLeadModal';
 import { gerarPdfCotacao } from '@/lib/gerarPdfCotacao';
+import { CotacaoCard } from '@/components/cotacoes/CotacaoCard';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
+import { UserAvatar } from '@/components/UserAvatar';
 
 type StatusCotacaoExtended = StatusCotacao | 'visualizada';
 
@@ -316,6 +319,44 @@ export default function Cotacoes() {
       : 0,
   };
 
+  // Separar cotações em andamento e fechadas
+  const emAndamento = sortedCotacoes.filter(c => 
+    ['rascunho', 'enviada', 'visualizada'].includes(c.status)
+  );
+  const fechadas = sortedCotacoes.filter(c => 
+    ['aceita', 'recusada', 'expirada'].includes(c.status)
+  );
+
+  // Ranking diário de consultores
+  const hoje = new Date();
+  const cotacoesHoje = (cotacoes || []).filter(c => {
+    const dataCotacao = new Date(c.created_at);
+    return isToday(dataCotacao);
+  });
+
+  const rankingConsultores = cotacoesHoje.reduce((acc, cotacao) => {
+    const vendedorId = cotacao.vendedor_id;
+    const vendedorNome = cotacao.vendedor?.nome || 'Sem vendedor';
+    
+    if (!acc[vendedorId || 'sem']) {
+      acc[vendedorId || 'sem'] = {
+        id: vendedorId,
+        nome: vendedorNome,
+        cotacoes: 0,
+        aceitas: 0
+      };
+    }
+    acc[vendedorId || 'sem'].cotacoes++;
+    if (cotacao.status === 'aceita') {
+      acc[vendedorId || 'sem'].aceitas++;
+    }
+    return acc;
+  }, {} as Record<string, { id: string | null; nome: string; cotacoes: number; aceitas: number }>);
+
+  const rankingOrdenado = Object.values(rankingConsultores)
+    .sort((a, b) => b.cotacoes - a.cotacoes)
+    .slice(0, 5);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -329,9 +370,9 @@ export default function Cotacoes() {
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Cotações</h1>
+          <h1 className="text-2xl font-bold">Cotações/Propostas</h1>
           <p className="text-muted-foreground">
-            Gerencie cotações e acompanhe propostas enviadas
+            Gerencie cotações em andamento e acompanhe propostas
           </p>
         </div>
         <Button className="gap-2" onClick={() => setShowCotacaoForm(true)}>
@@ -340,39 +381,107 @@ export default function Cotacoes() {
         </Button>
       </div>
 
-      {/* Stats - Layout compacto */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-        <Card className="bg-card">
-          <CardContent className="p-3 text-center">
-            <p className="text-2xl font-bold">{stats.total}</p>
-            <p className="text-xs text-muted-foreground">Total</p>
+      {/* Stats Cards - Mais chamativo */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Total Cotações</p>
+                <p className="text-3xl font-bold text-primary">{stats.total}</p>
+              </div>
+              <div className="h-12 w-12 rounded-full bg-primary/20 flex items-center justify-center">
+                <FileText className="h-6 w-6 text-primary" />
+              </div>
+            </div>
           </CardContent>
         </Card>
-        <Card className="bg-yellow-500/10 border-yellow-500/30">
-          <CardContent className="p-3 text-center">
-            <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{stats.rascunhos}</p>
-            <p className="text-xs text-muted-foreground">Rascunhos</p>
+        
+        <Card className="bg-gradient-to-br from-blue-500/10 to-blue-500/5 border-blue-500/20">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Enviadas</p>
+                <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">{stats.enviadas}</p>
+              </div>
+              <div className="h-12 w-12 rounded-full bg-blue-500/20 flex items-center justify-center">
+                <Send className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+              </div>
+            </div>
           </CardContent>
         </Card>
-        <Card className="bg-blue-500/10 border-blue-500/30">
-          <CardContent className="p-3 text-center">
-            <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.enviadas}</p>
-            <p className="text-xs text-muted-foreground">Enviadas</p>
+        
+        <Card className="bg-gradient-to-br from-green-500/10 to-green-500/5 border-green-500/20">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Aceitas</p>
+                <p className="text-3xl font-bold text-green-600 dark:text-green-400">{stats.aceitas}</p>
+              </div>
+              <div className="h-12 w-12 rounded-full bg-green-500/20 flex items-center justify-center">
+                <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
+              </div>
+            </div>
           </CardContent>
         </Card>
-        <Card className="bg-green-500/10 border-green-500/30">
-          <CardContent className="p-3 text-center">
-            <p className="text-2xl font-bold text-green-600 dark:text-green-400">{stats.aceitas}</p>
-            <p className="text-xs text-muted-foreground">Aceitas</p>
-          </CardContent>
-        </Card>
-        <Card className="bg-card">
-          <CardContent className="p-3 text-center">
-            <p className="text-2xl font-bold">{stats.taxa}%</p>
-            <p className="text-xs text-muted-foreground">Conversão</p>
+        
+        <Card className="bg-gradient-to-br from-purple-500/10 to-purple-500/5 border-purple-500/20">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Taxa Conversão</p>
+                <p className="text-3xl font-bold text-purple-600 dark:text-purple-400">{stats.taxa}%</p>
+              </div>
+              <div className="h-12 w-12 rounded-full bg-purple-500/20 flex items-center justify-center">
+                <TrendingUp className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Ranking Diário de Consultores */}
+      {rankingOrdenado.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              Ranking de Hoje - {format(hoje, "dd 'de' MMMM", { locale: ptBR })}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="flex flex-wrap gap-3">
+              {rankingOrdenado.map((consultor, index) => (
+                <div 
+                  key={consultor.id || index}
+                  className={cn(
+                    "flex items-center gap-2 px-3 py-2 rounded-lg border",
+                    index === 0 && "bg-yellow-500/10 border-yellow-500/30",
+                    index === 1 && "bg-slate-300/10 border-slate-400/30",
+                    index === 2 && "bg-orange-500/10 border-orange-500/30",
+                    index > 2 && "bg-muted/50"
+                  )}
+                >
+                  <span className="font-bold text-lg w-6">
+                    {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}º`}
+                  </span>
+                  <UserAvatar 
+                    name={consultor.nome} 
+                    size="sm"
+                  />
+                  <div className="text-sm">
+                    <p className="font-medium">{consultor.nome}</p>
+                    <p className="text-muted-foreground text-xs">
+                      {consultor.cotacoes} cotação(ões)
+                      {consultor.aceitas > 0 && ` • ${consultor.aceitas} aceita(s)`}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Filters */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -415,219 +524,98 @@ export default function Cotacoes() {
         )}
       </div>
 
-      {/* Lista de Cotações em Cards */}
-      <div className="space-y-3">
-        {sortedCotacoes.length === 0 ? (
-          <Card>
-            <CardContent className="py-12 text-center text-muted-foreground">
-              <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>Nenhuma cotação encontrada</p>
-            </CardContent>
-          </Card>
-        ) : (
-          sortedCotacoes.map((cotacao) => {
-            const status = statusConfig[cotacao.status as StatusCotacaoExtended] || statusConfig.rascunho;
-            const hasLead = !!cotacao.lead_id;
-            const isWithoutLead = !hasLead && cotacao.status === 'rascunho';
-            
-            return (
-              <Card 
+      {/* Tabs de Em Andamento e Fechadas */}
+      <Tabs defaultValue="andamento" className="w-full">
+        <TabsList className="grid w-full grid-cols-2 max-w-md">
+          <TabsTrigger value="andamento" className="gap-2">
+            <Clock className="h-4 w-4" />
+            Em Andamento
+            <Badge variant="secondary" className="ml-1 bg-yellow-500/20 text-yellow-600 dark:text-yellow-400">
+              {emAndamento.length}
+            </Badge>
+          </TabsTrigger>
+          <TabsTrigger value="fechadas" className="gap-2">
+            <CheckCircle className="h-4 w-4" />
+            Finalizadas
+            <Badge variant="secondary" className="ml-1 bg-green-500/20 text-green-600 dark:text-green-400">
+              {fechadas.length}
+            </Badge>
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="andamento" className="mt-4 space-y-3">
+          {emAndamento.length === 0 ? (
+            <Card className="border-dashed border-yellow-500/50">
+              <CardContent className="py-12 text-center text-muted-foreground">
+                <Clock className="h-12 w-12 mx-auto mb-4 opacity-50 text-yellow-500" />
+                <p className="font-medium">Nenhuma cotação em andamento</p>
+                <p className="text-sm">Crie uma nova cotação para começar</p>
+              </CardContent>
+            </Card>
+          ) : (
+            emAndamento.map((cotacao) => (
+              <CotacaoCard 
                 key={cotacao.id}
-                className={cn(
-                  "overflow-hidden border-l-4 transition-all hover:shadow-md hover:border-l-primary cursor-pointer",
-                  isWithoutLead ? 'border-l-orange-500 bg-orange-500/5' : status.borderColor
-                )}
-                onClick={() => navigate(`/vendas/cotacoes/${cotacao.id}`)}
-              >
-                {/* Header do Card: Status + Tempo */}
-                <div className="flex items-center justify-between px-4 py-2 bg-muted/30">
-                  <Badge className={cn(status.bgColor, status.color, "font-medium border-0")}>
-                    <status.icon className="h-3 w-3 mr-1" />
-                    {isWithoutLead ? 'SEM LEAD VINCULADO' : status.label.toUpperCase()}
-                  </Badge>
-                  <span className="text-xs text-muted-foreground">
-                    {formatRelativeTime(cotacao.created_at)}
-                  </span>
-                </div>
-                
-                <CardContent className="p-4">
-                  {/* Conteúdo Principal: Lead + Veículo */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-                    {/* Coluna Lead */}
-                    <div className="flex items-start gap-3">
-                      <div className={cn(
-                        "flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-medium",
-                        hasLead ? "bg-primary/10 text-primary" : "bg-orange-500/10 text-orange-500"
-                      )}>
-                        {hasLead ? cotacao.leads?.nome?.charAt(0).toUpperCase() : <User className="h-5 w-5" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className={cn(
-                          "font-semibold text-lg truncate",
-                          !hasLead && "text-orange-600 dark:text-orange-400"
-                        )}>
-                          {cotacao.leads?.nome || 'Sem lead vinculado'}
-                        </p>
-                        {hasLead && cotacao.leads?.telefone ? (
-                          <p className="text-sm text-muted-foreground flex items-center gap-1">
-                            <Phone className="h-3 w-3" />
-                            {formatPhone(cotacao.leads.telefone)}
-                          </p>
-                        ) : !hasLead && (
-                          <Button
-                            size="sm"
-                            variant="link"
-                            className="p-0 h-auto text-orange-600 dark:text-orange-400"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setCotacaoParaVincular(cotacao);
-                              setShowVincularModal(true);
-                            }}
-                          >
-                            <Link2 className="h-3 w-3 mr-1" />
-                            Vincular Lead
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                    
-                    {/* Coluna Veículo */}
-                    <div className="flex items-start gap-3">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                        <Car className="h-5 w-5" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">
-                          {cotacao.veiculo_marca} {cotacao.veiculo_modelo} {cotacao.veiculo_ano}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          {cotacao.veiculo_placa ? (
-                            <Badge variant="outline" className="font-mono text-xs">
-                              {cotacao.veiculo_placa}
-                            </Badge>
-                          ) : (
-                            'Placa não informada'
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {/* Valores */}
-                  <div className="flex flex-wrap gap-4 sm:gap-8 text-sm mb-4">
-                    <div>
-                      <span className="text-muted-foreground">FIPE: </span>
-                      <span className="font-medium">{formatCurrency(cotacao.valor_fipe)}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Mensal: </span>
-                      <span className="font-semibold text-primary text-base">
-                        {formatCurrency(cotacao.valor_total_mensal)}
-                      </span>
-                    </div>
-                  </div>
-                  
-                  <Separator className="my-3" />
-                  
-                  {/* Ações */}
-                  <div className="flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
-                    <Button 
-                      size="sm" 
-                      variant="outline"
-                      onClick={() => navigate(`/vendas/cotacoes/${cotacao.id}`)}
-                    >
-                      <FileText className="h-4 w-4 mr-1" />
-                      Ver Detalhes
-                    </Button>
-                    
-                    {/* Ações por Status */}
-                    {cotacao.status === 'rascunho' && hasLead && (
-                      <>
-                        <Button size="sm" variant="outline" onClick={() => enviarWhatsApp(cotacao)}>
-                          <MessageCircle className="h-4 w-4 mr-1 text-green-600" />
-                          WhatsApp
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => handleOpenEmailModal(cotacao)}>
-                          <Mail className="h-4 w-4 mr-1 text-blue-600" />
-                          Email
-                        </Button>
-                      </>
-                    )}
-                    
-                    {cotacao.status === 'rascunho' && !hasLead && (
-                      <Button
-                        size="sm"
-                        className="bg-orange-500 hover:bg-orange-600 text-white"
-                        onClick={() => {
-                          setCotacaoParaVincular(cotacao);
-                          setShowVincularModal(true);
-                        }}
-                      >
-                        <Link2 className="h-4 w-4 mr-1" />
-                        Vincular para Enviar
-                      </Button>
-                    )}
-                    
-                    {cotacao.status === 'enviada' && (
-                      <>
-                        <Button size="sm" variant="outline" onClick={() => enviarWhatsApp(cotacao)}>
-                          <RefreshCw className="h-4 w-4 mr-1" />
-                          Reenviar
-                        </Button>
-                        <Button size="sm" onClick={() => handleOpenContratoWizard(cotacao.id)}>
-                          <Check className="h-4 w-4 mr-1" />
-                          Aceitar
-                        </Button>
-                      </>
-                    )}
-                    
-                    {cotacao.status === 'aceita' && (
-                      <Button 
-                        size="sm"
-                        onClick={() => gerarContrato.mutate({ 
-                          cotacaoId: cotacao.id, 
-                          vendedorId: profile?.id 
-                        })}
-                        disabled={gerarContrato.isPending}
-                      >
-                        <FileSignature className="h-4 w-4 mr-1" />
-                        {gerarContrato.isPending ? 'Gerando...' : 'Gerar Contrato'}
-                      </Button>
-                    )}
-                    
-                    {/* Menu de ações extras */}
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button size="sm" variant="ghost" className="px-2">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => handleBaixarPdf(cotacao)}>
-                          <FileDown className="h-4 w-4 mr-2" />
-                          Baixar PDF
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleDuplicar(cotacao)}>
-                          <Copy className="h-4 w-4 mr-2" />
-                          Duplicar
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem 
-                          className="text-destructive focus:text-destructive"
-                          onClick={() => handleExcluir(cotacao.id)}
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Excluir
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })
-        )}
-      </div>
+                cotacao={cotacao}
+                tipo="andamento"
+                navigate={navigate}
+                formatRelativeTime={formatRelativeTime}
+                formatPhone={formatPhone}
+                formatCurrency={formatCurrency}
+                onVincular={(c) => {
+                  setCotacaoParaVincular(c);
+                  setShowVincularModal(true);
+                }}
+                onWhatsApp={enviarWhatsApp}
+                onEmail={handleOpenEmailModal}
+                onAceitar={handleOpenContratoWizard}
+                onPdf={handleBaixarPdf}
+                onDuplicar={handleDuplicar}
+                onExcluir={handleExcluir}
+              />
+            ))
+          )}
+        </TabsContent>
+
+        <TabsContent value="fechadas" className="mt-4 space-y-3">
+          {fechadas.length === 0 ? (
+            <Card className="border-dashed border-green-500/50">
+              <CardContent className="py-12 text-center text-muted-foreground">
+                <CheckCircle className="h-12 w-12 mx-auto mb-4 opacity-50 text-green-500" />
+                <p className="font-medium">Nenhuma proposta finalizada</p>
+                <p className="text-sm">As propostas aceitas ou recusadas aparecerão aqui</p>
+              </CardContent>
+            </Card>
+          ) : (
+            fechadas.map((cotacao) => (
+              <CotacaoCard 
+                key={cotacao.id}
+                cotacao={cotacao}
+                tipo="fechada"
+                navigate={navigate}
+                formatRelativeTime={formatRelativeTime}
+                formatPhone={formatPhone}
+                formatCurrency={formatCurrency}
+                onVincular={(c) => {
+                  setCotacaoParaVincular(c);
+                  setShowVincularModal(true);
+                }}
+                onWhatsApp={enviarWhatsApp}
+                onEmail={handleOpenEmailModal}
+                onAceitar={handleOpenContratoWizard}
+                onPdf={handleBaixarPdf}
+                onDuplicar={handleDuplicar}
+                onExcluir={handleExcluir}
+                onGerarContrato={(id) => gerarContrato.mutate({ 
+                  cotacaoId: id, 
+                  vendedorId: profile?.id 
+                })}
+                isGerandoContrato={gerarContrato.isPending}
+              />
+            ))
+          )}
+        </TabsContent>
+      </Tabs>
 
       {/* Dialogs */}
       <CotacaoFormDialog 
