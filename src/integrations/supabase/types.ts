@@ -2843,36 +2843,6 @@ export type Database = {
           },
         ]
       }
-      consultores: {
-        Row: {
-          ativo: boolean | null
-          created_at: string | null
-          email: string | null
-          id: string
-          nome: string
-          telefone: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          ativo?: boolean | null
-          created_at?: string | null
-          email?: string | null
-          id?: string
-          nome: string
-          telefone?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          ativo?: boolean | null
-          created_at?: string | null
-          email?: string | null
-          id?: string
-          nome?: string
-          telefone?: string | null
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
       contas_bancarias: {
         Row: {
           agencia: string
@@ -5710,7 +5680,6 @@ export type Database = {
           ativo: boolean
           campanha_id: string | null
           codigo_fipe: string | null
-          consultor_id: string | null
           contrato_assinado_em: string | null
           contrato_enviado_em: string | null
           contrato_id: string | null
@@ -5758,7 +5727,6 @@ export type Database = {
           ativo?: boolean
           campanha_id?: string | null
           codigo_fipe?: string | null
-          consultor_id?: string | null
           contrato_assinado_em?: string | null
           contrato_enviado_em?: string | null
           contrato_id?: string | null
@@ -5806,7 +5774,6 @@ export type Database = {
           ativo?: boolean
           campanha_id?: string | null
           codigo_fipe?: string | null
-          consultor_id?: string | null
           contrato_assinado_em?: string | null
           contrato_enviado_em?: string | null
           contrato_id?: string | null
@@ -5897,13 +5864,6 @@ export type Database = {
             columns: ["campanha_id"]
             isOneToOne: false
             referencedRelation: "campanhas"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "leads_consultor_id_fkey"
-            columns: ["consultor_id"]
-            isOneToOne: false
-            referencedRelation: "consultores"
             referencedColumns: ["id"]
           },
           {

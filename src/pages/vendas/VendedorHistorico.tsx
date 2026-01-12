@@ -28,33 +28,33 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useConsultor } from '@/hooks/useConsultores';
+import { useVendedor } from '@/hooks/useVendedores';
 import { 
-  useConsultorLeads, 
-  useConsultorCotacoes, 
-  useConsultorContratos,
-  useConsultorStats 
-} from '@/hooks/useConsultorHistorico';
+  useVendedorLeads, 
+  useVendedorCotacoes, 
+  useVendedorContratos,
+  useVendedorStats 
+} from '@/hooks/useVendedorHistorico';
 import { ETAPA_LABELS, ETAPA_COLORS, STATUS_COTACAO_LABELS, STATUS_COTACAO_COLORS } from '@/types/vendas';
 
-export default function ConsultorHistorico() {
+export default function VendedorHistorico() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [etapaFilter, setEtapaFilter] = useState('todos');
   const [activeTab, setActiveTab] = useState('leads');
 
-  const { data: consultor, isLoading: loadingConsultor } = useConsultor(id);
-  const { data: stats, isLoading: loadingStats } = useConsultorStats(id || '');
-  const { data: leads = [], isLoading: loadingLeads } = useConsultorLeads({
-    consultorId: id || '',
+  const { data: vendedor, isLoading: loadingVendedor } = useVendedor(id);
+  const { data: stats, isLoading: loadingStats } = useVendedorStats(id || '');
+  const { data: leads = [], isLoading: loadingLeads } = useVendedorLeads({
+    vendedorId: id || '',
     search,
     etapa: etapaFilter,
   });
-  const { data: cotacoes = [], isLoading: loadingCotacoes } = useConsultorCotacoes(id || '');
-  const { data: contratos = [], isLoading: loadingContratos } = useConsultorContratos(id || '');
+  const { data: cotacoes = [], isLoading: loadingCotacoes } = useVendedorCotacoes(id || '');
+  const { data: contratos = [], isLoading: loadingContratos } = useVendedorContratos(id || '');
 
-  const isLoading = loadingConsultor || loadingStats;
+  const isLoading = loadingVendedor || loadingStats;
   const taxaConversao = stats?.total ? ((stats.ganhos / stats.total) * 100).toFixed(1) : '0';
 
   if (isLoading) {
@@ -71,12 +71,12 @@ export default function ConsultorHistorico() {
     );
   }
 
-  if (!consultor) {
+  if (!vendedor) {
     return (
       <div className="flex flex-col items-center justify-center h-full">
-        <h2 className="text-xl font-semibold mb-2">Consultor não encontrado</h2>
-        <Button onClick={() => navigate('/vendas/consultores')}>
-          Voltar para Consultores
+        <h2 className="text-xl font-semibold mb-2">Vendedor não encontrado</h2>
+        <Button onClick={() => navigate('/vendas/vendedores')}>
+          Voltar para Vendedores
         </Button>
       </div>
     );
@@ -92,13 +92,13 @@ export default function ConsultorHistorico() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => navigate('/vendas/consultores')}
+              onClick={() => navigate('/vendas/vendedores')}
             >
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <div>
-              <h1 className="text-2xl font-bold text-foreground">{consultor.nome}</h1>
-              <p className="text-muted-foreground">Histórico de atividades do consultor</p>
+              <h1 className="text-2xl font-bold text-foreground">{vendedor.nome}</h1>
+              <p className="text-muted-foreground">Histórico de atividades do vendedor</p>
             </div>
           </div>
 
@@ -226,7 +226,7 @@ export default function ConsultorHistorico() {
                 <p className="text-sm text-muted-foreground mt-1">
                   {search || etapaFilter !== 'todos'
                     ? 'Tente ajustar os filtros'
-                    : 'Este consultor ainda não possui leads atribuídos'}
+                    : 'Este vendedor ainda não possui leads atribuídos'}
                 </p>
               </div>
             ) : (
@@ -287,7 +287,7 @@ export default function ConsultorHistorico() {
                 <FileText className="h-12 w-12 text-muted-foreground/50 mb-4" />
                 <h3 className="text-lg font-medium">Nenhuma cotação encontrada</h3>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Este consultor ainda não possui cotações
+                  Este vendedor ainda não possui cotações
                 </p>
               </div>
             ) : (
@@ -344,7 +344,7 @@ export default function ConsultorHistorico() {
                 <FileText className="h-12 w-12 text-muted-foreground/50 mb-4" />
                 <h3 className="text-lg font-medium">Nenhum contrato encontrado</h3>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Este consultor ainda não possui contratos
+                  Este vendedor ainda não possui contratos
                 </p>
               </div>
             ) : (

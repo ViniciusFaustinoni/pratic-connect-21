@@ -17,7 +17,7 @@ const ROUTE_CONFIG: Record<string, RouteConfig> = {
   '/vendas': { label: 'Vendas' },
   '/vendas/dashboard': { label: 'Dashboard' },
   '/vendas/leads': { label: 'Leads' },
-  '/vendas/consultores': { label: 'Histórico de Consultores' },
+  '/vendas/vendedores': { label: 'Histórico de Vendedores' },
   '/vendas/acompanhamento': { label: 'Acompanhamento' },
   '/vendas/cotacoes': { label: 'Cotações' },
   '/vendas/cotador': { label: 'Cotador' },
@@ -149,11 +149,11 @@ const DYNAMIC_ROUTES: Record<string, RouteConfig> = {
       return data?.nome || 'Lead';
     },
   },
-  '/vendas/consultores/:id': {
-    label: 'Consultor',
+  '/vendas/vendedores/:id': {
+    label: 'Vendedor',
     resolver: async (id: string) => {
-      const { data } = await supabase.from('consultores').select('nome').eq('id', id).single();
-      return data?.nome || 'Consultor';
+      const { data } = await supabase.from('profiles').select('nome').eq('user_id', id).single();
+      return data?.nome || 'Vendedor';
     },
   },
   '/vendas/cotacoes/:id': {

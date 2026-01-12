@@ -31,8 +31,8 @@ import VendasDashboard from "./pages/vendas/VendasDashboard";
 import RelatoriosVendas from "./pages/vendas/RelatoriosVendas";
 import Metas from "./pages/vendas/Metas";
 import Cotacao from "./pages/vendas/Cotacao";
-import Consultores from "./pages/vendas/Consultores";
-import ConsultorHistorico from "./pages/vendas/ConsultorHistorico";
+import Vendedores from "./pages/vendas/Vendedores";
+import VendedorHistorico from "./pages/vendas/VendedorHistorico";
 import Associados from "./pages/cadastro/Associados";
 import AssociadoDetalhe from "./pages/cadastro/AssociadoDetalhe";
 import Veiculos from "./pages/cadastro/Veiculos";
@@ -254,8 +254,8 @@ const App = () => (
               <Route path="/vendas/contratos" element={<Contratos />} />
               <Route path="/vendas/contratos/:id" element={<ContratoDetalhe />} />
               <Route path="/vendas/planos-beneficios" element={<PlanosBeneficios />} />
-              <Route path="/vendas/consultores" element={<Consultores />} />
-              <Route path="/vendas/consultores/:id" element={<ConsultorHistorico />} />
+              <Route path="/vendas/vendedores" element={<Vendedores />} />
+              <Route path="/vendas/vendedores/:id" element={<VendedorHistorico />} />
               <Route path="/vendas/configuracoes" element={<VendasConfig />} />
               
               {/* Cadastro */}
