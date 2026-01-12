@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, Search, FileText, Calculator, Send, Check, X, Loader2, MessageCircle, ChevronDown, FileDown, Mail, FileSignature, Eye, Link2, AlertCircle } from 'lucide-react';
+import { Plus, Search, FileText, Calculator, Send, Check, X, Loader2, MessageCircle, ChevronDown, FileDown, Mail, FileSignature, Eye, Link2, AlertCircle, Copy, Trash2, MoreHorizontal, Car, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -27,8 +27,23 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import type { StatusCotacao } from '@/types/database';
-import { useCotacoes, useUpdateCotacao, type CotacaoWithRelations } from '@/hooks/useCotacoes';
+import { useCotacoes, useUpdateCotacao, useDuplicarCotacao, useExcluirCotacao, type CotacaoWithRelations } from '@/hooks/useCotacoes';
 import { useGerarContrato } from '@/hooks/useContratos';
 import { useAuth } from '@/contexts/AuthContext';
 import { CotacaoFormDialog } from '@/components/cotacoes/CotacaoFormDialog';
@@ -40,9 +55,12 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 
-const statusConfig: Record<StatusCotacao, { label: string; color: string; icon: typeof FileText }> = {
+type StatusCotacaoExtended = StatusCotacao | 'visualizada';
+
+const statusConfig: Record<StatusCotacaoExtended, { label: string; color: string; icon: typeof FileText }> = {
   rascunho: { label: 'Rascunho', color: 'bg-muted text-muted-foreground', icon: FileText },
   enviada: { label: 'Enviada', color: 'bg-primary text-primary-foreground', icon: Send },
+  visualizada: { label: 'Visualizada', color: 'bg-blue-500 text-white', icon: Eye },
   aceita: { label: 'Aceita', color: 'bg-green-500 text-white', icon: Check },
   recusada: { label: 'Recusada', color: 'bg-destructive text-destructive-foreground', icon: X },
   expirada: { label: 'Expirada', color: 'bg-muted text-muted-foreground', icon: FileText },
@@ -61,10 +79,14 @@ export default function Cotacoes() {
   const [leadIdFromUrl, setLeadIdFromUrl] = useState<string | null>(null);
   const [showVincularModal, setShowVincularModal] = useState(false);
   const [cotacaoParaVincular, setCotacaoParaVincular] = useState<CotacaoWithRelations | null>(null);
+  const [cotacaoParaExcluir, setCotacaoParaExcluir] = useState<string | null>(null);
+  const [mesFilter, setMesFilter] = useState<string>('all');
 
   const { data: cotacoes, isLoading } = useCotacoes();
   const updateCotacao = useUpdateCotacao();
   const gerarContrato = useGerarContrato();
+  const duplicarCotacao = useDuplicarCotacao();
+  const excluirCotacao = useExcluirCotacao();
   const { profile } = useAuth();
   const queryClient = useQueryClient();
 
@@ -83,10 +105,47 @@ export default function Cotacoes() {
   const filteredCotacoes = (cotacoes || []).filter((cotacao) => {
     const matchesSearch =
       cotacao.numero.toLowerCase().includes(search.toLowerCase()) ||
-      (cotacao.leads?.nome?.toLowerCase().includes(search.toLowerCase()) ?? false);
+      (cotacao.leads?.nome?.toLowerCase().includes(search.toLowerCase()) ?? false) ||
+      (cotacao.veiculo_placa?.toLowerCase().includes(search.toLowerCase()) ?? false);
     const matchesStatus = statusFilter === 'all' || cotacao.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    
+    // Filtro por mês
+    let matchesMes = true;
+    if (mesFilter !== 'all') {
+      const cotacaoDate = new Date(cotacao.created_at);
+      const [year, month] = mesFilter.split('-').map(Number);
+      matchesMes = cotacaoDate.getFullYear() === year && cotacaoDate.getMonth() === month - 1;
+    }
+    
+    return matchesSearch && matchesStatus && matchesMes;
   });
+  
+  // Gerar lista de meses disponíveis
+  const mesesDisponiveis = [...new Set((cotacoes || []).map(c => {
+    const date = new Date(c.created_at);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+  }))].sort().reverse();
+  
+  const formatMesLabel = (mes: string) => {
+    const [year, month] = mes.split('-');
+    const date = new Date(parseInt(year), parseInt(month) - 1);
+    return date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  };
+
+  const handleDuplicar = (cotacao: CotacaoWithRelations) => {
+    duplicarCotacao.mutate(cotacao.id);
+  };
+
+  const handleExcluir = (id: string) => {
+    setCotacaoParaExcluir(id);
+  };
+
+  const confirmarExclusao = () => {
+    if (cotacaoParaExcluir) {
+      excluirCotacao.mutate(cotacaoParaExcluir);
+      setCotacaoParaExcluir(null);
+    }
+  };
 
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleDateString('pt-BR', {
@@ -271,7 +330,7 @@ export default function Cotacoes() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Buscar por número ou cliente..."
+            placeholder="Buscar por número, cliente ou placa..."
             className="pl-9"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -290,6 +349,20 @@ export default function Cotacoes() {
             ))}
           </SelectContent>
         </Select>
+        <Select value={mesFilter} onValueChange={setMesFilter}>
+          <SelectTrigger className="w-full sm:w-48">
+            <Calendar className="h-4 w-4 mr-2" />
+            <SelectValue placeholder="Período" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os meses</SelectItem>
+            {mesesDisponiveis.map((mes) => (
+              <SelectItem key={mes} value={mes}>
+                {formatMesLabel(mes)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Table */}
@@ -299,13 +372,14 @@ export default function Cotacoes() {
             <TableHeader>
               <TableRow>
                 <TableHead>Número</TableHead>
-                <TableHead>Cliente</TableHead>
-                <TableHead>Plano</TableHead>
+                <TableHead>Data</TableHead>
+                <TableHead>Lead</TableHead>
+                <TableHead>Veículo</TableHead>
+                <TableHead>Placa</TableHead>
                 <TableHead>Valor FIPE</TableHead>
                 <TableHead>Mensal</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Data</TableHead>
-                <TableHead className="w-32">Ações</TableHead>
+                <TableHead className="w-40">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -317,39 +391,52 @@ export default function Cotacoes() {
                 </TableRow>
               ) : (
                 filteredCotacoes.map((cotacao) => {
-                  const status = statusConfig[cotacao.status];
+                  const status = statusConfig[cotacao.status as StatusCotacaoExtended] || statusConfig.rascunho;
+                  const veiculo = cotacao.veiculo_marca && cotacao.veiculo_modelo 
+                    ? `${cotacao.veiculo_marca} ${cotacao.veiculo_modelo}`.substring(0, 25) + ((`${cotacao.veiculo_marca} ${cotacao.veiculo_modelo}`).length > 25 ? '...' : '')
+                    : '-';
+                  
                   return (
                     <TableRow 
                       key={cotacao.id} 
                       className="cursor-pointer hover:bg-muted/50"
                       onClick={() => navigate(`/vendas/cotacoes/${cotacao.id}`)}
                     >
-                      <TableCell className="font-mono text-sm">{cotacao.numero}</TableCell>
+                      <TableCell className="font-mono text-sm font-medium">{cotacao.numero}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {formatDate(cotacao.created_at)}
+                      </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2">
-                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-sm font-medium text-primary">
-                            {cotacao.leads?.nome?.charAt(0) || '?'}
+                        {cotacao.leads?.nome ? (
+                          <div className="flex items-center gap-2">
+                            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
+                              {cotacao.leads.nome.charAt(0)}
+                            </div>
+                            <span className="truncate max-w-[120px]">{cotacao.leads.nome}</span>
                           </div>
-                          <div className="flex flex-col">
-                            <span>{cotacao.leads?.nome || 'Cotação avulsa'}</span>
-                            {cotacao.leads?.telefone && (
-                              <span className="text-xs text-muted-foreground">
-                                {cotacao.leads.telefone}
-                              </span>
-                            )}
-                          </div>
-                          {cotacao.lead_id && (
-                            <Badge variant="outline" className="text-xs ml-1">
-                              Vinculado
-                            </Badge>
-                          )}
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1.5">
+                          <Car className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span className="text-sm">{veiculo}</span>
                         </div>
                       </TableCell>
-                      <TableCell>{cotacao.planos?.nome || '-'}</TableCell>
+                      <TableCell>
+                        {cotacao.veiculo_placa ? (
+                          <Badge variant="outline" className="font-mono text-xs">
+                            {cotacao.veiculo_placa}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-muted-foreground">
                         {formatCurrency(cotacao.valor_fipe)}
                       </TableCell>
-                      <TableCell className="font-medium">
+                      <TableCell className="font-medium text-green-600 dark:text-green-400">
                         {formatCurrency(cotacao.valor_total_mensal)}
                       </TableCell>
                       <TableCell>
@@ -357,9 +444,6 @@ export default function Cotacoes() {
                           <status.icon className="mr-1 h-3 w-3" />
                           {status.label}
                         </Badge>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {formatDate(cotacao.created_at)}
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-1 items-center" onClick={(e) => e.stopPropagation()}>
@@ -392,81 +476,78 @@ export default function Cotacoes() {
                                   </DropdownMenuContent>
                                 </DropdownMenu>
                               ) : (
-                                /* Se NÃO tem lead: mostra botão Vincular + aviso */
-                                <div className="flex items-center gap-2">
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => {
-                                      setCotacaoParaVincular(cotacao);
-                                      setShowVincularModal(true);
-                                    }}
-                                  >
-                                    <Link2 className="h-3 w-3 mr-1" />
-                                    Vincular
-                                  </Button>
-                                  <span className="text-xs text-muted-foreground whitespace-nowrap">
-                                    Para enviar
-                                  </span>
-                                </div>
+                                /* Se NÃO tem lead: mostra botão Vincular */
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    setCotacaoParaVincular(cotacao);
+                                    setShowVincularModal(true);
+                                  }}
+                                >
+                                  <Link2 className="h-3 w-3 mr-1" />
+                                  Vincular
+                                </Button>
                               )}
                             </>
                           )}
                           {cotacao.status === 'enviada' && (
-                            <div className="flex gap-1">
-                              <Button 
-                                size="sm"
-                                onClick={() => handleOpenContratoWizard(cotacao.id)}
-                              >
-                                Aceitar
-                              </Button>
-                              <Button 
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => handleBaixarPdf(cotacao)}
-                                title="Baixar PDF"
-                              >
-                                <FileDown className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          )}
-                          {cotacao.status === 'aceita' && (
-                            <div className="flex gap-1">
-                              <Button 
-                                size="sm"
-                                onClick={() => gerarContrato.mutate({ 
-                                  cotacaoId: cotacao.id, 
-                                  vendedorId: profile?.id 
-                                })}
-                                disabled={gerarContrato.isPending}
-                              >
-                                {gerarContrato.isPending ? (
-                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                ) : (
-                                  <FileSignature className="h-4 w-4 mr-2" />
-                                )}
-                                {gerarContrato.isPending ? 'Gerando...' : 'Gerar Contrato'}
-                              </Button>
-                              <Button 
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => handleBaixarPdf(cotacao)}
-                                title="Baixar PDF"
-                              >
-                                <FileDown className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          )}
-                          {(cotacao.status === 'recusada' || cotacao.status === 'expirada') && (
                             <Button 
                               size="sm"
-                              variant="ghost"
-                              onClick={() => handleBaixarPdf(cotacao)}
-                              title="Baixar PDF"
+                              onClick={() => handleOpenContratoWizard(cotacao.id)}
                             >
-                              <FileDown className="h-4 w-4" />
+                              Aceitar
                             </Button>
                           )}
+                          {cotacao.status === 'aceita' && (
+                            <Button 
+                              size="sm"
+                              onClick={() => gerarContrato.mutate({ 
+                                cotacaoId: cotacao.id, 
+                                vendedorId: profile?.id 
+                              })}
+                              disabled={gerarContrato.isPending}
+                            >
+                              {gerarContrato.isPending ? (
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              ) : (
+                                <FileSignature className="h-4 w-4 mr-2" />
+                              )}
+                              {gerarContrato.isPending ? 'Gerando...' : 'Contrato'}
+                            </Button>
+                          )}
+                          
+                          {/* Menu de ações extras */}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => navigate(`/vendas/cotacoes/${cotacao.id}`)}>
+                                <Eye className="h-4 w-4 mr-2" />
+                                Ver Detalhes
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleBaixarPdf(cotacao)}>
+                                <FileDown className="h-4 w-4 mr-2" />
+                                Baixar PDF
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => handleDuplicar(cotacao)}>
+                                <Copy className="h-4 w-4 mr-2" />
+                                Duplicar
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem 
+                                className="text-destructive focus:text-destructive"
+                                onClick={() => handleExcluir(cotacao.id)}
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Excluir
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -511,6 +592,27 @@ export default function Cotacoes() {
           queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
         }}
       />
+      
+      {/* Dialog de Confirmação de Exclusão */}
+      <AlertDialog open={!!cotacaoParaExcluir} onOpenChange={(open) => !open && setCotacaoParaExcluir(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir Cotação</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir esta cotação? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={confirmarExclusao}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
