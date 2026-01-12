@@ -2,8 +2,10 @@ import { useEffect, useState, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Loader2, Car, Search, CheckCircle2, Shield, Check, AlertCircle, Copy, MessageCircle, Zap } from 'lucide-react';
+import { Loader2, Car, Search, CheckCircle2, Shield, Check, AlertCircle, Copy, MessageCircle, Zap, User, Link } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { LeadCombobox } from '@/components/leads/LeadCombobox';
+import type { Lead } from '@/types/vendas';
 import {
   Dialog,
   DialogContent,
@@ -484,6 +486,66 @@ Adesão: ${formatCurrency(planoSelecionadoData.plano.valor_adesao)}`);
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
             
+            {/* BLOCO 0: VINCULAR A LEAD (opcional) - só aparece quando não tem leadId */}
+            {!leadId && (
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold flex items-center gap-2">
+                  <Link className="h-4 w-4 text-primary" />
+                  Vincular a Lead (opcional)
+                </h3>
+                
+                <LeadCombobox
+                  value={form.watch('lead_id')}
+                  onSelect={(selectedLeadId, selectedLead) => {
+                    form.setValue('lead_id', selectedLeadId);
+                    if (selectedLead) {
+                      // Preencher dados do veículo se disponíveis
+                      if (selectedLead.veiculo_fipe) {
+                        form.setValue('valor_fipe', selectedLead.veiculo_fipe);
+                      }
+                      if (selectedLead.veiculo_placa) {
+                        setPlaca(selectedLead.veiculo_placa);
+                      }
+                      // Preencher veículo encontrado para exibição
+                      if (selectedLead.veiculo_marca && selectedLead.veiculo_modelo) {
+                        setVeiculoEncontrado({
+                          success: true,
+                          vehicleData: {
+                            marca: selectedLead.veiculo_marca,
+                            modelo: selectedLead.veiculo_modelo,
+                            marca_modelo: `${selectedLead.veiculo_marca} ${selectedLead.veiculo_modelo}`,
+                            ano: selectedLead.veiculo_ano ? String(selectedLead.veiculo_ano) : '',
+                            placa: selectedLead.veiculo_placa || '',
+                            cor: '',
+                            chassi: '',
+                            municipio: '',
+                            uf: '',
+                            combustivel: ''
+                          },
+                          fipeData: selectedLead.veiculo_fipe ? {
+                            valor: selectedLead.veiculo_fipe,
+                            codigo: null,
+                            mesReferencia: null
+                          } : null
+                        });
+                      }
+                      toast.success(`Dados de ${selectedLead.nome} carregados`);
+                    } else {
+                      // Limpar dados se desvincular
+                      setVeiculoEncontrado(null);
+                      setPlaca('');
+                      form.setValue('valor_fipe', 0);
+                    }
+                  }}
+                  placeholder="Buscar lead por nome ou telefone..."
+                />
+                
+                <p className="text-xs text-muted-foreground">
+                  Vincule a um lead para que esta cotação apareça no histórico dele
+                </p>
+              </div>
+            )}
+
             {/* BLOCO 1: VEÍCULO */}
             <div className="space-y-3">
               <h3 className="text-sm font-semibold flex items-center gap-2">

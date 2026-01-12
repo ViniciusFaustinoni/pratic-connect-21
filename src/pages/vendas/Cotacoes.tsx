@@ -327,7 +327,19 @@ export default function Cotacoes() {
                           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-sm font-medium text-primary">
                             {cotacao.leads?.nome?.charAt(0) || '?'}
                           </div>
-                          <span>{cotacao.leads?.nome || 'Cliente não informado'}</span>
+                          <div className="flex flex-col">
+                            <span>{cotacao.leads?.nome || 'Cotação avulsa'}</span>
+                            {cotacao.leads?.telefone && (
+                              <span className="text-xs text-muted-foreground">
+                                {cotacao.leads.telefone}
+                              </span>
+                            )}
+                          </div>
+                          {cotacao.lead_id && (
+                            <Badge variant="outline" className="text-xs ml-1">
+                              Vinculado
+                            </Badge>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell>{cotacao.planos?.nome || '-'}</TableCell>
