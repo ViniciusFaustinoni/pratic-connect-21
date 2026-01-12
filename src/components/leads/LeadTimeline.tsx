@@ -1,4 +1,7 @@
-import { Loader2, Clock, ArrowRight, User, FileText, AlertCircle } from 'lucide-react';
+import { 
+  Loader2, Clock, ArrowRight, User, FileText, AlertCircle,
+  MessageCircle, Calculator, Edit, StickyNote, Phone 
+} from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useLeadHistorico } from '@/hooks/useLeadHistorico';
 import { formatDistanceToNow } from 'date-fns';
@@ -18,6 +21,11 @@ const acaoIcons: Record<string, React.ReactNode> = {
   enviou_cotacao: <FileText className="h-4 w-4" />,
   enviou_contrato: <FileText className="h-4 w-4" />,
   criou_lead: <User className="h-4 w-4" />,
+  contato_whatsapp: <MessageCircle className="h-4 w-4 text-green-500" />,
+  contato_telefone: <Phone className="h-4 w-4" />,
+  cotacao_gerada: <Calculator className="h-4 w-4" />,
+  dados_atualizados: <Edit className="h-4 w-4" />,
+  observacao_adicionada: <StickyNote className="h-4 w-4" />,
   default: <Clock className="h-4 w-4" />,
 };
 
@@ -26,6 +34,11 @@ const acaoLabels: Record<string, string> = {
   enviou_cotacao: 'Cotação enviada',
   enviou_contrato: 'Contrato enviado',
   criou_lead: 'Lead criado',
+  contato_whatsapp: 'Contato via WhatsApp',
+  contato_telefone: 'Contato telefônico',
+  cotacao_gerada: 'Cotação gerada',
+  dados_atualizados: 'Dados atualizados',
+  observacao_adicionada: 'Observação adicionada',
 };
 
 export function LeadTimeline({ leadId, limit }: LeadTimelineProps) {

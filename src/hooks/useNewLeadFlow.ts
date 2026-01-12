@@ -325,6 +325,14 @@ export function useNewLeadFlow() {
 
       if (leadError) throw leadError;
 
+      // Registrar no histórico
+      await supabase.from('leads_historico').insert({
+        lead_id: lead.id,
+        usuario_id: currentUserId || null,
+        acao: 'criou_lead',
+        descricao: `Lead "${lead.nome}" criado via formulário avançado`,
+      });
+
       let token: string | undefined;
 
       // 2. Criar cotação pública se solicitado

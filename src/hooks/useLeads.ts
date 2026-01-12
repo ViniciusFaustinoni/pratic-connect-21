@@ -234,6 +234,10 @@ export function useCreateLead() {
 
   return useMutation({
     mutationFn: async (lead: LeadInsert) => {
+      // Pegar o usuário atual
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      // Criar o lead
       const { data, error } = await supabase
         .from('leads')
         .insert(lead)
@@ -241,11 +245,21 @@ export function useCreateLead() {
         .single();
 
       if (error) throw error;
+
+      // Registrar no histórico
+      await supabase.from('leads_historico').insert({
+        lead_id: data.id,
+        usuario_id: user?.id,
+        acao: 'criou_lead',
+        descricao: `Lead "${data.nome}" criado via formulário`,
+      });
+
       return data as Lead;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['leads'] });
       queryClient.invalidateQueries({ queryKey: ['leads-contagem'] });
+      queryClient.invalidateQueries({ queryKey: ['leads', data.id, 'historico'] });
       toast.success('Lead criado com sucesso!');
     },
     onError: (error: Error) => {
