@@ -162,6 +162,12 @@ export default function LeadKanban() {
     const lead = leads?.find((l) => l.id === leadId);
     if (!lead || lead.etapa === targetEtapa) return;
 
+    // Bloquear volta para "novo" se o lead já passou dessa fase
+    if (targetEtapa === 'novo' && lead.etapa !== 'perdido') {
+      toast.error('Lead já foi contatado e não pode voltar para Novo Lead');
+      return;
+    }
+
     // Verificar se transição é permitida
     if (!canTransition(lead.etapa as EtapaLead, targetEtapa)) {
       toast.error('Transição não permitida');
@@ -188,6 +194,22 @@ export default function LeadKanban() {
 
   const handleQuote = (leadId: string) => {
     navigate(`/vendas/cotacoes?lead=${leadId}`);
+  };
+
+  const handleWhatsAppClick = async (leadId: string, currentEtapa: string) => {
+    // Se o lead está em "novo", mover automaticamente para "contato"
+    if (currentEtapa === 'novo') {
+      try {
+        await changeEtapa.mutateAsync({
+          leadId,
+          etapaAnterior: 'novo' as EtapaLead,
+          etapaNova: 'contato' as EtapaLead,
+        });
+        toast.success('Lead movido para Contato');
+      } catch (error) {
+        console.error('Erro ao mover lead:', error);
+      }
+    }
   };
 
   const activeLead = activeId ? leads?.find((l) => l.id === activeId) : null;
@@ -351,6 +373,7 @@ export default function LeadKanban() {
                           lead={lead}
                           onClick={() => setSelectedLeadId(lead.id)}
                           onQuote={handleQuote}
+                          onWhatsAppClick={handleWhatsAppClick}
                         />
                       ))}
                       {leadsInEtapa.length === 0 && (

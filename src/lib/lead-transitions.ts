@@ -28,6 +28,11 @@ export function canTransition(from: EtapaLead, to: EtapaLead): boolean {
   const normalizedFrom = normalizeEtapa(from);
   const normalizedTo = normalizeEtapa(to);
   
+  // Regra especial: bloquear volta para "novo" exceto de "perdido"
+  if (normalizedTo === 'novo' && normalizedFrom !== 'perdido') {
+    return false;
+  }
+  
   return transicoesPermitidas[normalizedFrom]?.includes(normalizedTo) ?? false;
 }
 
