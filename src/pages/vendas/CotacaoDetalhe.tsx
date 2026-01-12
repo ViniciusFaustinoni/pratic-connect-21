@@ -290,14 +290,22 @@ Ficou com alguma dúvida? Estou à disposição!
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             {/* Info principal */}
             <div className="space-y-2">
+              {/* Linha 1: Nome do Lead (destaque) + Badge de Status */}
               <div className="flex items-center gap-3">
-                <CardTitle className="text-2xl">
-                  Cotação #{cotacao.numero || cotacao.id.slice(0, 8).toUpperCase()}
+                <CardTitle className="text-2xl font-bold">
+                  {cotacao.leads?.nome || 'Cotação Avulsa'}
                 </CardTitle>
                 <Badge className={STATUS_COTACAO_COLORS[cotacao.status as StatusCotacao]}>
                   {STATUS_COTACAO_LABELS[cotacao.status as StatusCotacao]}
                 </Badge>
               </div>
+              
+              {/* Linha 2: ID da cotação (texto secundário) */}
+              <p className="text-sm text-muted-foreground">
+                {cotacao.leads?.nome ? 'Cotação' : ''} #{cotacao.numero || cotacao.id.slice(0, 8).toUpperCase()}
+              </p>
+              
+              {/* Linha 3: Datas */}
               <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                 <span className="flex items-center gap-1">
                   <Calendar className="h-4 w-4" />
