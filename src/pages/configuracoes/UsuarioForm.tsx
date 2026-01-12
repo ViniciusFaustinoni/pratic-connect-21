@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { ArrowLeft, Save, Loader2, User, Shield } from 'lucide-react';
+import { ArrowLeft, Save, Loader2, User, Shield, TrendingUp, History } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,6 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useVendedorStats } from '@/hooks/useVendedorHistorico';
 
 const perfisDisponiveis = [
   { value: 'diretor', label: 'Diretor', desc: 'Acesso total ao sistema' },
@@ -27,11 +28,77 @@ const perfisDisponiveis = [
   { value: 'analista_juridico', label: 'Analista Jurídico', desc: 'Processos e contratos' },
 ];
 
+// Componente para métricas de vendedor
+function VendedorMetricasCard({ userId, navigate }: { userId: string; navigate: (path: string) => void }) {
+  const { data: stats, isLoading } = useVendedorStats(userId);
+  
+  if (isLoading) {
+    return (
+      <Card className="border-border/50">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <TrendingUp className="w-5 h-5" />
+            Métricas de Vendas
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            <div className="h-4 bg-muted animate-pulse rounded" />
+            <div className="h-4 bg-muted animate-pulse rounded" />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+  
+  const taxaConversao = stats?.total ? ((stats.ganhos / stats.total) * 100).toFixed(1) : '0';
+  
+  return (
+    <Card className="border-border/50 border-green-500/30">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-lg">
+          <TrendingUp className="w-5 h-5 text-green-500" />
+          Métricas de Vendas
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex justify-between text-sm">
+          <span className="text-muted-foreground">Total de Leads</span>
+          <span className="font-medium">{stats?.total || 0}</span>
+        </div>
+        <div className="flex justify-between text-sm">
+          <span className="text-muted-foreground">Conversões</span>
+          <span className="font-medium text-green-500">{stats?.ganhos || 0}</span>
+        </div>
+        <div className="flex justify-between text-sm">
+          <span className="text-muted-foreground">Perdidos</span>
+          <span className="font-medium text-red-500">{stats?.perdidos || 0}</span>
+        </div>
+        <div className="flex justify-between text-sm">
+          <span className="text-muted-foreground">Taxa de Conversão</span>
+          <span className="font-medium">{taxaConversao}%</span>
+        </div>
+        <Button 
+          type="button"
+          variant="outline" 
+          className="w-full mt-2"
+          onClick={() => navigate(`/vendas/vendedores/${userId}`)}
+        >
+          <History className="w-4 h-4 mr-2" />
+          Ver Histórico Completo
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function UsuarioForm() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const isEditing = !!id;
+  const preselectedPerfil = searchParams.get('perfil');
 
   const [formData, setFormData] = useState({
     nome: '',
@@ -40,7 +107,7 @@ export default function UsuarioForm() {
     cpf: '',
     tipo: 'funcionario',
     ativo: true,
-    perfis: [] as string[],
+    perfis: preselectedPerfil ? [preselectedPerfil] : [] as string[],
   });
 
   // Buscar usuário existente
@@ -319,6 +386,11 @@ export default function UsuarioForm() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Card de Métricas de Vendas - Só aparece para vendedores */}
+            {isEditing && usuario?.roles?.some((r: string) => ['vendedor_clt', 'vendedor_externo'].includes(r)) && (
+              <VendedorMetricasCard userId={usuario.user_id} navigate={navigate} />
+            )}
 
             <Card className="border-border/50">
               <CardHeader>

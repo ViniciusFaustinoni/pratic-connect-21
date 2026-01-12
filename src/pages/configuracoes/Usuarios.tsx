@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Users, Plus, Search, MoreHorizontal, 
-  UserCheck, UserX, Edit, Trash2, Shield, Key
+  UserCheck, UserX, Edit, Trash2, Shield, Key, ExternalLink
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -58,6 +58,7 @@ export default function Usuarios() {
   const [search, setSearch] = useState('');
   const [filterTipo, setFilterTipo] = useState<string>('todos');
   const [filterStatus, setFilterStatus] = useState<string>('todos');
+  const [filterPerfil, setFilterPerfil] = useState<string>('todos');
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   const { usuarios, isLoading, refetch } = useUsuarios({
@@ -65,6 +66,7 @@ export default function Usuarios() {
       tipo: filterTipo !== 'todos' ? filterTipo as any : undefined,
       status: filterStatus !== 'todos' ? filterStatus as any : undefined,
       search: search || undefined,
+      perfil: filterPerfil !== 'todos' ? filterPerfil as any : undefined,
     },
     pagination: { page: 1, pageSize: 100 }
   });
@@ -170,6 +172,20 @@ export default function Usuarios() {
             <SelectItem value="prestador">Prestador</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={filterPerfil} onValueChange={setFilterPerfil}>
+          <SelectTrigger className="w-full sm:w-[180px]">
+            <SelectValue placeholder="Perfil" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos os perfis</SelectItem>
+            <SelectItem value="vendedor_clt">Vendedor CLT</SelectItem>
+            <SelectItem value="vendedor_externo">Vendedor Externo</SelectItem>
+            <SelectItem value="gerente_comercial">Gerente Comercial</SelectItem>
+            <SelectItem value="supervisor_vendas">Supervisor Vendas</SelectItem>
+            <SelectItem value="analista_cadastro">Analista Cadastro</SelectItem>
+            <SelectItem value="diretor">Diretor</SelectItem>
+          </SelectContent>
+        </Select>
         <Select value={filterStatus} onValueChange={setFilterStatus}>
           <SelectTrigger className="w-full sm:w-[150px]">
             <SelectValue placeholder="Status" />
@@ -241,15 +257,25 @@ export default function Usuarios() {
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1">
-                      {usuario.roles?.slice(0, 2).map((role, idx) => (
-                        <Badge 
-                          key={idx} 
-                          variant="outline" 
-                          className={`text-xs ${perfisConfig[role]?.color || 'bg-gray-500/20 text-gray-400'}`}
-                        >
-                          {perfisConfig[role]?.label || role}
-                        </Badge>
-                      ))}
+                      {usuario.roles?.slice(0, 2).map((role, idx) => {
+                        const isVendedor = ['vendedor_clt', 'vendedor_externo'].includes(role);
+                        return (
+                          <Badge 
+                            key={idx} 
+                            variant="outline" 
+                            className={`text-xs ${perfisConfig[role]?.color || 'bg-gray-500/20 text-gray-400'} ${isVendedor ? 'cursor-pointer hover:opacity-80' : ''}`}
+                            onClick={(e) => {
+                              if (isVendedor && usuario.user_id) {
+                                e.stopPropagation();
+                                navigate(`/vendas/vendedores/${usuario.user_id}`);
+                              }
+                            }}
+                          >
+                            {perfisConfig[role]?.label || role}
+                            {isVendedor && <ExternalLink className="w-3 h-3 ml-1" />}
+                          </Badge>
+                        );
+                      })}
                       {(usuario.roles?.length || 0) > 2 && (
                         <Badge variant="outline" className="text-xs">
                           +{(usuario.roles?.length || 0) - 2}

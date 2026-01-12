@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Users, TrendingUp, Target, ChevronRight, History } from 'lucide-react';
+import { Search, Users, TrendingUp, Target, ChevronRight, History, Plus } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -55,11 +55,17 @@ export default function Vendedores() {
       <div className="shrink-0 z-10 bg-gradient-to-b from-muted/50 to-background border-b border-border/50">
         <div className="px-6 py-6 space-y-6">
           {/* Title */}
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Histórico de Vendedores</h1>
-            <p className="text-muted-foreground">
-              Acompanhe o desempenho e histórico de cada vendedor
-            </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-foreground">Histórico de Vendedores</h1>
+              <p className="text-muted-foreground">
+                Acompanhe o desempenho e histórico de cada vendedor
+              </p>
+            </div>
+            <Button onClick={() => navigate('/configuracoes/usuarios/novo?perfil=vendedor_clt')}>
+              <Plus className="w-4 h-4 mr-2" />
+              Novo Vendedor
+            </Button>
           </div>
 
           {/* Stats Cards */}
