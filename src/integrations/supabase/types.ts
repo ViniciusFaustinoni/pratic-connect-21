@@ -392,6 +392,126 @@ export type Database = {
         }
         Relationships: []
       }
+      api_leads_config: {
+        Row: {
+          api_key_id: string | null
+          ativo: boolean | null
+          configuracoes: Json | null
+          cor: string | null
+          created_at: string | null
+          icone: string | null
+          id: string
+          leads_recebidos: number | null
+          nome: string
+          slug: string
+          tipo: string
+          ultimo_lead_em: string | null
+          updated_at: string | null
+          webhook_url: string | null
+        }
+        Insert: {
+          api_key_id?: string | null
+          ativo?: boolean | null
+          configuracoes?: Json | null
+          cor?: string | null
+          created_at?: string | null
+          icone?: string | null
+          id?: string
+          leads_recebidos?: number | null
+          nome: string
+          slug: string
+          tipo: string
+          ultimo_lead_em?: string | null
+          updated_at?: string | null
+          webhook_url?: string | null
+        }
+        Update: {
+          api_key_id?: string | null
+          ativo?: boolean | null
+          configuracoes?: Json | null
+          cor?: string | null
+          created_at?: string | null
+          icone?: string | null
+          id?: string
+          leads_recebidos?: number | null
+          nome?: string
+          slug?: string
+          tipo?: string
+          ultimo_lead_em?: string | null
+          updated_at?: string | null
+          webhook_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "api_leads_config_api_key_id_fkey"
+            columns: ["api_key_id"]
+            isOneToOne: false
+            referencedRelation: "api_keys"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      api_leads_logs: {
+        Row: {
+          api_config_id: string | null
+          created_at: string | null
+          erro: string | null
+          id: string
+          ip_origem: string | null
+          lead_id: string | null
+          origem: string | null
+          payload: Json | null
+          status: string
+          tempo_resposta_ms: number | null
+        }
+        Insert: {
+          api_config_id?: string | null
+          created_at?: string | null
+          erro?: string | null
+          id?: string
+          ip_origem?: string | null
+          lead_id?: string | null
+          origem?: string | null
+          payload?: Json | null
+          status: string
+          tempo_resposta_ms?: number | null
+        }
+        Update: {
+          api_config_id?: string | null
+          created_at?: string | null
+          erro?: string | null
+          id?: string
+          ip_origem?: string | null
+          lead_id?: string | null
+          origem?: string | null
+          payload?: Json | null
+          status?: string
+          tempo_resposta_ms?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "api_leads_logs_api_config_id_fkey"
+            columns: ["api_config_id"]
+            isOneToOne: false
+            referencedRelation: "api_leads_config"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "api_leads_logs_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "api_leads_logs_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["lead_id"]
+          },
+        ]
+      }
       asaas_clientes: {
         Row: {
           asaas_id: string
