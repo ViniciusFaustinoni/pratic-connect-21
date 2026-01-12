@@ -26,10 +26,10 @@ export default function Propostas() {
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Users className="h-6 w-6 text-primary" />
-            Propostas
+            Consultores
           </h1>
           <p className="text-muted-foreground">
-            Acompanhe o desempenho dos consultores e propostas
+            Acompanhe o desempenho da equipe comercial
           </p>
         </div>
         
