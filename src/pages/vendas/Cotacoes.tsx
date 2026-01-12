@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, Search, FileText, Calculator, Send, Check, X, Loader2, MessageCircle, ChevronDown, FileDown, Mail, FileSignature, Eye } from 'lucide-react';
+import { Plus, Search, FileText, Calculator, Send, Check, X, Loader2, MessageCircle, ChevronDown, FileDown, Mail, FileSignature, Eye, Link2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -34,6 +34,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { CotacaoFormDialog } from '@/components/cotacoes/CotacaoFormDialog';
 import { ContratoWizard } from '@/components/contratos/ContratoWizard';
 import { EnviarEmailModal } from '@/components/cotacoes/EnviarEmailModal';
+import { VincularLeadModal } from '@/components/cotacoes/VincularLeadModal';
 import { gerarPdfCotacao } from '@/lib/gerarPdfCotacao';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -58,6 +59,8 @@ export default function Cotacoes() {
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [selectedCotacaoEmail, setSelectedCotacaoEmail] = useState<CotacaoWithRelations | null>(null);
   const [leadIdFromUrl, setLeadIdFromUrl] = useState<string | null>(null);
+  const [showVincularModal, setShowVincularModal] = useState(false);
+  const [cotacaoParaVincular, setCotacaoParaVincular] = useState<CotacaoWithRelations | null>(null);
 
   const { data: cotacoes, isLoading } = useCotacoes();
   const updateCotacao = useUpdateCotacao();
@@ -359,32 +362,55 @@ export default function Cotacoes() {
                         {formatDate(cotacao.created_at)}
                       </TableCell>
                       <TableCell>
-                        <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex gap-1 items-center" onClick={(e) => e.stopPropagation()}>
                           {cotacao.status === 'rascunho' && (
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button size="sm" variant="outline" className="gap-1">
-                                  <Send className="h-3 w-3" />
-                                  Enviar
-                                  <ChevronDown className="h-3 w-3" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => enviarWhatsApp(cotacao)}>
-                                  <MessageCircle className="h-4 w-4 mr-2 text-green-600" />
-                                  WhatsApp
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleOpenEmailModal(cotacao)}>
-                                  <Mail className="h-4 w-4 mr-2 text-blue-600" />
-                                  Email
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => handleBaixarPdf(cotacao)}>
-                                  <FileDown className="h-4 w-4 mr-2" />
-                                  Baixar PDF
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                            <>
+                              {/* Se TEM lead vinculado: mostra botão Enviar */}
+                              {cotacao.lead_id ? (
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button size="sm" variant="outline" className="gap-1">
+                                      <Send className="h-3 w-3" />
+                                      Enviar
+                                      <ChevronDown className="h-3 w-3" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={() => enviarWhatsApp(cotacao)}>
+                                      <MessageCircle className="h-4 w-4 mr-2 text-green-600" />
+                                      WhatsApp
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleOpenEmailModal(cotacao)}>
+                                      <Mail className="h-4 w-4 mr-2 text-blue-600" />
+                                      Email
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem onClick={() => handleBaixarPdf(cotacao)}>
+                                      <FileDown className="h-4 w-4 mr-2" />
+                                      Baixar PDF
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              ) : (
+                                /* Se NÃO tem lead: mostra botão Vincular + aviso */
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      setCotacaoParaVincular(cotacao);
+                                      setShowVincularModal(true);
+                                    }}
+                                  >
+                                    <Link2 className="h-3 w-3 mr-1" />
+                                    Vincular
+                                  </Button>
+                                  <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                    Para enviar
+                                  </span>
+                                </div>
+                              )}
+                            </>
                           )}
                           {cotacao.status === 'enviada' && (
                             <div className="flex gap-1">
@@ -474,6 +500,17 @@ export default function Cotacoes() {
           onSuccess={() => handleMarkAsEnviada(selectedCotacaoEmail.id, selectedCotacaoEmail.lead_id)}
         />
       )}
+      
+      {/* Modal Vincular Lead */}
+      <VincularLeadModal
+        open={showVincularModal}
+        onOpenChange={setShowVincularModal}
+        cotacaoId={cotacaoParaVincular?.id || ''}
+        leadAtualId={cotacaoParaVincular?.lead_id}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
+        }}
+      />
     </div>
   );
 }

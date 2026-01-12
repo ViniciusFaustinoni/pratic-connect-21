@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useCotacao, useCotacaoActions } from '@/hooks/useCotacoes';
 import { useGerarContrato } from '@/hooks/useContratos';
 import { useAuth } from '@/contexts/AuthContext';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -33,10 +34,13 @@ import {
   Clock,
   FileSignature,
   Loader2,
+  Link2,
+  RefreshCw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BotaoGerarPdf } from '@/components/cotacoes/BotaoGerarPdf';
 import { EnviarEmailModal } from '@/components/cotacoes/EnviarEmailModal';
+import { VincularLeadModal } from '@/components/cotacoes/VincularLeadModal';
 import {
   STATUS_COTACAO_LABELS,
   STATUS_COTACAO_COLORS,
@@ -129,6 +133,8 @@ export default function CotacaoDetalhe() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [showEmailModal, setShowEmailModal] = useState(false);
+  const [showVincularModal, setShowVincularModal] = useState(false);
+  const queryClient = useQueryClient();
 
   const { data: cotacao, isLoading, error } = useCotacao(id);
   const { reenviarCotacao, atualizarStatus, isReenviando, isAtualizando } = useCotacaoActions();
@@ -307,23 +313,36 @@ Ficou com alguma dúvida? Estou à disposição!
             {/* Ações */}
             <div className="flex flex-wrap gap-2">
               <BotaoGerarPdf cotacao={cotacao} />
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => reenviarCotacao(cotacao.id)}
-                disabled={isReenviando}
-              >
-                <Send className="mr-2 h-4 w-4" />
-                {isReenviando ? 'Reenviando...' : 'Reenviar'}
-              </Button>
-              <Button variant="outline" size="sm" onClick={handleWhatsApp}>
-                <MessageSquare className="mr-2 h-4 w-4" />
-                WhatsApp
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => setShowEmailModal(true)}>
-                <Mail className="mr-2 h-4 w-4" />
-                Email
-              </Button>
+              
+              {/* Botões de envio só aparecem se tem lead vinculado */}
+              {cotacao.lead_id ? (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => reenviarCotacao(cotacao.id)}
+                    disabled={isReenviando}
+                  >
+                    <Send className="mr-2 h-4 w-4" />
+                    {isReenviando ? 'Reenviando...' : 'Reenviar'}
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={handleWhatsApp}>
+                    <MessageSquare className="mr-2 h-4 w-4" />
+                    WhatsApp
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setShowEmailModal(true)}>
+                    <Mail className="mr-2 h-4 w-4" />
+                    Email
+                  </Button>
+                </>
+              ) : (
+                /* Aviso sutil quando não tem lead */
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-muted text-muted-foreground text-sm">
+                  <AlertCircle className="h-4 w-4" />
+                  Vincule a um lead para enviar
+                </div>
+              )}
+              
               {cotacao.status === 'aceita' && (
                 <Button
                   size="sm"
@@ -373,35 +392,69 @@ Ficou com alguma dúvida? Estou à disposição!
         {/* CARD: LEAD */}
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <User className="h-4 w-4" />
-              Lead
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <User className="h-4 w-4" />
+                Lead
+              </CardTitle>
+              {/* Botão Trocar/Vincular */}
+              {cotacao.lead_id ? (
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => setShowVincularModal(true)}
+                >
+                  <RefreshCw className="h-3 w-3 mr-1" />
+                  Trocar
+                </Button>
+              ) : (
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setShowVincularModal(true)}
+                >
+                  <Link2 className="h-3 w-3 mr-1" />
+                  Vincular Lead
+                </Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent className="space-y-3">
-            <p className="text-lg font-medium">{cotacao.leads?.nome || '—'}</p>
-            <Separator />
-            <div className="flex items-center gap-2 text-sm">
-              <Phone className="h-4 w-4 text-muted-foreground" />
-              <div>
-                <p className="text-xs text-muted-foreground">Telefone</p>
-                <p>{formatPhone(cotacao.leads?.telefone)}</p>
+            {cotacao.lead_id ? (
+              /* Conteúdo quando tem lead */
+              <>
+                <p className="text-lg font-medium">{cotacao.leads?.nome || '—'}</p>
+                <Separator />
+                <div className="flex items-center gap-2 text-sm">
+                  <Phone className="h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Telefone</p>
+                    <p>{formatPhone(cotacao.leads?.telefone)}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <Mail className="h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Email</p>
+                    <p>{cotacao.leads?.email || '—'}</p>
+                  </div>
+                </div>
+                {cotacao.leads?.id && (
+                  <Button variant="link" size="sm" className="p-0" asChild>
+                    <Link to={`/vendas/leads/${cotacao.leads.id}`}>
+                      Ver Lead
+                      <ExternalLink className="ml-1 h-3 w-3" />
+                    </Link>
+                  </Button>
+                )}
+              </>
+            ) : (
+              /* Aviso quando não tem lead */
+              <div className="text-center py-4 text-muted-foreground">
+                <User className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm font-medium">Cotação avulsa</p>
+                <p className="text-xs">Vincule a um lead para enviar</p>
               </div>
-            </div>
-            <div className="flex items-center gap-2 text-sm">
-              <Mail className="h-4 w-4 text-muted-foreground" />
-              <div>
-                <p className="text-xs text-muted-foreground">Email</p>
-                <p>{cotacao.leads?.email || '—'}</p>
-              </div>
-            </div>
-            {cotacao.leads?.id && (
-              <Button variant="link" size="sm" className="p-0" asChild>
-                <Link to={`/vendas/leads/${cotacao.leads.id}`}>
-                  Ver Lead
-                  <ExternalLink className="ml-1 h-3 w-3" />
-                </Link>
-              </Button>
             )}
           </CardContent>
         </Card>
@@ -531,6 +584,17 @@ Ficou com alguma dúvida? Estou à disposição!
           cotacao={cotacao}
         />
       )}
+
+      {/* Modal Vincular Lead */}
+      <VincularLeadModal
+        open={showVincularModal}
+        onOpenChange={setShowVincularModal}
+        cotacaoId={cotacao.id}
+        leadAtualId={cotacao.lead_id}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ['cotacoes', id] });
+        }}
+      />
     </div>
   );
 }
