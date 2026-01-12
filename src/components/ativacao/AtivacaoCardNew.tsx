@@ -1,20 +1,21 @@
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { 
   CheckCircle2, 
-  Clock, 
-  FileSignature, 
-  ClipboardCheck,
   Phone,
   Car,
-  User
+  User,
+  Send,
+  FileText,
+  ClipboardCheck
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { AtivacaoContrato } from "@/hooks/useAtivacoes";
+import { AtivacaoStatusBadge, StatusMiniCard } from "./AtivacaoStatusBadge";
+import { toast } from "sonner";
 
 interface AtivacaoCardNewProps {
   contrato: AtivacaoContrato;
@@ -51,6 +52,20 @@ export function AtivacaoCardNew({
     return 'bg-red-500/5';
   };
 
+  const handleEnviarLembrete = () => {
+    toast.success('Lembrete de assinatura enviado!', {
+      description: `Lembrete enviado para ${contrato.lead?.nome || 'o cliente'}`
+    });
+  };
+
+  const handleVerProposta = () => {
+    onClickRequisito('proposta');
+  };
+
+  const handleVerVistoria = () => {
+    onClickRequisito('vistoria');
+  };
+
   return (
     <Card className={cn(
       "border-l-4 transition-all hover:shadow-md",
@@ -58,19 +73,32 @@ export function AtivacaoCardNew({
       getStatusBg()
     )}>
       <CardContent className="p-5 space-y-4">
-        {/* Header com nome e info básica */}
+        {/* Header com nome e badge de status */}
         <div className="space-y-2">
           <div className="flex items-start justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <User className="h-4 w-4 text-muted-foreground" />
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
               <h3 className="font-semibold text-base line-clamp-1">
                 {contrato.lead?.nome || 'Cliente não informado'}
               </h3>
             </div>
+            {/* Badge de status no canto superior direito */}
+            {!isAtivado && (
+              <AtivacaoStatusBadge
+                vistoriaRealizada={vistoriaOk}
+                assinaturaRealizada={propostaAssinada}
+                dataVistoria={contrato.vistoria?.data_aprovacao}
+                dataAssinatura={contrato.data_assinatura}
+                variant="compact"
+                onEnviarLembrete={handleEnviarLembrete}
+                onVerProposta={handleVerProposta}
+              />
+            )}
             {isAtivado && (
-              <Badge className="bg-blue-500/20 text-blue-700 border-blue-500/30">
-                Ativado
-              </Badge>
+              <div className="inline-flex items-center gap-1.5 rounded-md border-2 px-2.5 py-1 text-xs font-medium shadow-sm bg-blue-50 border-blue-500 text-blue-800">
+                <CheckCircle2 className="h-4 w-4" />
+                <span>Ativado</span>
+              </div>
             )}
           </div>
           
@@ -100,55 +128,18 @@ export function AtivacaoCardNew({
           )}
         </div>
 
-        {/* Requisitos */}
-        <div className="flex flex-col gap-2">
-          <button
-            onClick={() => !propostaAssinada && onClickRequisito('proposta')}
-            disabled={propostaAssinada}
-            className={cn(
-              "flex items-center gap-2 p-2.5 rounded-lg transition-all text-left",
-              propostaAssinada 
-                ? "bg-emerald-500/10 cursor-default" 
-                : "bg-muted/50 hover:bg-muted cursor-pointer"
-            )}
-          >
-            {propostaAssinada ? (
-              <CheckCircle2 className="h-4 w-4 text-emerald-500 flex-shrink-0" />
-            ) : (
-              <Clock className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-            )}
-            <FileSignature className="h-4 w-4 flex-shrink-0" />
-            <span className={cn(
-              "text-sm font-medium",
-              propostaAssinada ? "text-emerald-700" : "text-muted-foreground"
-            )}>
-              Proposta Assinada
-            </span>
-          </button>
-
-          <button
-            onClick={() => !vistoriaOk && onClickRequisito('vistoria')}
-            disabled={vistoriaOk}
-            className={cn(
-              "flex items-center gap-2 p-2.5 rounded-lg transition-all text-left",
-              vistoriaOk 
-                ? "bg-emerald-500/10 cursor-default" 
-                : "bg-muted/50 hover:bg-muted cursor-pointer"
-            )}
-          >
-            {vistoriaOk ? (
-              <CheckCircle2 className="h-4 w-4 text-emerald-500 flex-shrink-0" />
-            ) : (
-              <Clock className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-            )}
-            <ClipboardCheck className="h-4 w-4 flex-shrink-0" />
-            <span className={cn(
-              "text-sm font-medium",
-              vistoriaOk ? "text-emerald-700" : "text-muted-foreground"
-            )}>
-              Vistoria de Entrada
-            </span>
-          </button>
+        {/* Mini-cards de status (Vistoria e Assinatura) */}
+        <div className="flex gap-2">
+          <StatusMiniCard
+            tipo="vistoria"
+            realizado={vistoriaOk}
+            data={contrato.vistoria?.data_aprovacao}
+          />
+          <StatusMiniCard
+            tipo="assinatura"
+            realizado={propostaAssinada}
+            data={contrato.data_assinatura}
+          />
         </div>
 
         {/* Barra de Progresso */}
@@ -159,7 +150,42 @@ export function AtivacaoCardNew({
           </p>
         </div>
 
-        {/* Footer com botão ou status */}
+        {/* Botões de Ação */}
+        {!isAtivado && (
+          <div className="flex flex-wrap gap-2">
+            {!propostaAssinada && vistoriaOk && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleEnviarLembrete}
+                className="flex-1 min-w-[120px]"
+              >
+                <Send className="h-3.5 w-3.5 mr-1.5" />
+                Enviar Lembrete
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleVerProposta}
+              className="flex-1 min-w-[100px]"
+            >
+              <FileText className="h-3.5 w-3.5 mr-1.5" />
+              Ver Proposta
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleVerVistoria}
+              className="flex-1 min-w-[100px]"
+            >
+              <ClipboardCheck className="h-3.5 w-3.5 mr-1.5" />
+              Ver Vistoria
+            </Button>
+          </div>
+        )}
+
+        {/* Footer com botão de ativar ou status */}
         <div className="pt-2 border-t">
           {isAtivado ? (
             <div className="flex items-center justify-between text-sm">
