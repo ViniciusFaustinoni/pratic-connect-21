@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Plus, Loader2, Calendar, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -91,6 +92,7 @@ export default function LeadKanban() {
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({});
   const boardRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
 
   const { data: leads, isLoading } = useAllLeads(filters);
   const { data: vendedores } = useVendedores();
@@ -182,6 +184,10 @@ export default function LeadKanban() {
     } catch (error) {
       toast.error('Erro ao mover lead');
     }
+  };
+
+  const handleQuote = (leadId: string) => {
+    navigate(`/vendas/cotacoes?lead=${leadId}`);
   };
 
   const activeLead = activeId ? leads?.find((l) => l.id === activeId) : null;
@@ -344,6 +350,7 @@ export default function LeadKanban() {
                           key={lead.id}
                           lead={lead}
                           onClick={() => setSelectedLeadId(lead.id)}
+                          onQuote={handleQuote}
                         />
                       ))}
                       {leadsInEtapa.length === 0 && (
