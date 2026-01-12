@@ -308,42 +308,15 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
     }
   };
 
-  // Pre-fill from lead - aproveitar dados do veículo já extraídos
+  // Pre-fill from lead
   useEffect(() => {
     if (lead) {
       form.setValue('lead_id', lead.id);
-      
-      // Se o lead já tem dados completos do veículo, preencher tudo automaticamente
-      if (lead.veiculo_marca && lead.veiculo_modelo && lead.veiculo_fipe) {
-        // Criar veículo encontrado simulado para exibição visual
-        setVeiculoEncontrado({
-          success: true,
-          vehicleData: {
-            marca: lead.veiculo_marca,
-            modelo: lead.veiculo_modelo,
-            ano: lead.veiculo_ano?.toString() || '',
-            placa: lead.veiculo_placa || '',
-          },
-          fipeData: {
-            valor: lead.veiculo_fipe,
-            codigo: null,
-          }
-        } as PlateResult);
-        
+      if (lead.veiculo_fipe) {
         form.setValue('valor_fipe', lead.veiculo_fipe);
-        
-        // Preencher placa se disponível
-        if (lead.veiculo_placa) {
-          setPlaca(lead.veiculo_placa);
-        }
-      } else {
-        // Caso não tenha dados completos, preencher parcialmente
-        if (lead.veiculo_fipe) {
-          form.setValue('valor_fipe', lead.veiculo_fipe);
-        }
-        if (lead.veiculo_placa) {
-          setPlaca(lead.veiculo_placa);
-        }
+      }
+      if (lead.veiculo_placa) {
+        setPlaca(lead.veiculo_placa);
       }
     }
   }, [lead, form]);
