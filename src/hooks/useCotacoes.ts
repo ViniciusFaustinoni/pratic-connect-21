@@ -217,3 +217,69 @@ export function useCotacaoActions() {
     isAtualizando: atualizarStatus.isPending,
   };
 }
+
+// Hook para duplicar cotação
+export function useDuplicarCotacao() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (cotacaoId: string) => {
+      // Buscar cotação original
+      const { data: original, error: fetchError } = await supabase
+        .from('cotacoes')
+        .select('*')
+        .eq('id', cotacaoId)
+        .single();
+      
+      if (fetchError) throw fetchError;
+      if (!original) throw new Error('Cotação não encontrada');
+      
+      // Remover campos que serão gerados novamente
+      const { id, numero, created_at, updated_at, ...cotacaoData } = original;
+      
+      // Criar cópia com novo número e status rascunho
+      const { data, error } = await supabase
+        .from('cotacoes')
+        .insert({
+          ...cotacaoData,
+          numero: `COT-${Date.now()}-${Math.random().toString(36).substr(2, 3).toUpperCase()}`,
+          status: 'rascunho',
+        })
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
+      toast.success('Cotação duplicada com sucesso!');
+    },
+    onError: () => {
+      toast.error('Erro ao duplicar cotação');
+    },
+  });
+}
+
+// Hook para excluir cotação
+export function useExcluirCotacao() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (cotacaoId: string) => {
+      const { error } = await supabase
+        .from('cotacoes')
+        .delete()
+        .eq('id', cotacaoId);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
+      toast.success('Cotação excluída com sucesso!');
+    },
+    onError: () => {
+      toast.error('Erro ao excluir cotação');
+    },
+  });
+}
