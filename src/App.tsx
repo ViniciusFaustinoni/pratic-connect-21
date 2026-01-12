@@ -10,6 +10,7 @@ import { AssociadoProvider } from "@/contexts/AssociadoContext";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { AppLayout as AssociadoAppLayout } from "@/components/app/AppLayout";
 import { InstaladorLayout } from "@/components/instalador/InstaladorLayout";
+import { AppErrorBoundary } from "@/components/app/AppErrorBoundary";
 
 // Internal System Pages
 import Auth from "./pages/Auth";
@@ -219,9 +220,10 @@ const App = () => (
         <AssociadoProvider>
           <TooltipProvider>
             <Toaster />
-          <Sonner />
-          <BrowserRouter>
-          <Routes>
+            <Sonner />
+            <AppErrorBoundary>
+              <BrowserRouter>
+                <Routes>
             {/* Auth */}
             <Route path="/auth" element={<Auth />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
@@ -449,9 +451,10 @@ const App = () => (
             
             {/* 404 */}
             <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-        </TooltipProvider>
+                </Routes>
+              </BrowserRouter>
+            </AppErrorBoundary>
+          </TooltipProvider>
         </AssociadoProvider>
       </AuthProvider>
     </ThemeProvider>
