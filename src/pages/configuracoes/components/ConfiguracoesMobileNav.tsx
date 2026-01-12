@@ -40,9 +40,7 @@ const menuItems: MenuSection[] = [
     category: 'Administração',
     adminOnly: true,
     items: [
-      { path: '/configuracoes/usuarios', label: 'Usuários', icon: Users },
-      { path: '/configuracoes/perfis', label: 'Perfis', icon: KeyRound },
-      { path: '/configuracoes/logs', label: 'Logs', icon: ScrollText },
+      { path: '/configuracoes/usuarios-acessos', label: 'Usuários e Acessos', icon: Users },
     ]
   },
   {

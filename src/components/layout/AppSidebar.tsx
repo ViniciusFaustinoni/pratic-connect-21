@@ -137,7 +137,6 @@ const menuConfig: {
       color: MENU_COLORS.vendas,
       items: [
         { title: 'Leads', url: '/vendas/leads', icon: UserPlus },
-        { title: 'Vendedores', url: '/vendas/vendedores', icon: Users },
         { title: 'Ativações', url: '/vendas/ativacoes', icon: Rocket },
         { title: 'Cotações', url: '/vendas/cotacoes', icon: Calculator },
         { title: 'Contratos', url: '/vendas/contratos', icon: FileText },
