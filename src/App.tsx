@@ -32,6 +32,7 @@ import RelatoriosVendas from "./pages/vendas/RelatoriosVendas";
 import Metas from "./pages/vendas/Metas";
 import Cotacao from "./pages/vendas/Cotacao";
 import Consultores from "./pages/vendas/Consultores";
+import ConsultorHistorico from "./pages/vendas/ConsultorHistorico";
 import Associados from "./pages/cadastro/Associados";
 import AssociadoDetalhe from "./pages/cadastro/AssociadoDetalhe";
 import Veiculos from "./pages/cadastro/Veiculos";
@@ -252,6 +253,7 @@ const App = () => (
               <Route path="/vendas/contratos/:id" element={<ContratoDetalhe />} />
               <Route path="/vendas/planos-beneficios" element={<PlanosBeneficios />} />
               <Route path="/vendas/consultores" element={<Consultores />} />
+              <Route path="/vendas/consultores/:id" element={<ConsultorHistorico />} />
               
               {/* Cadastro */}
               <Route path="/cadastro/associados" element={<Associados />} />
