@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { useCotacao, useCotacaoActions } from '@/hooks/useCotacoes';
+import { useCotacao, useCotacaoActions, useAceitarCotacaoEGerarContrato } from '@/hooks/useCotacoes';
 import { useGerarContrato } from '@/hooks/useContratos';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
@@ -139,6 +139,7 @@ export default function CotacaoDetalhe() {
   const { data: cotacao, isLoading, error } = useCotacao(id);
   const { reenviarCotacao, atualizarStatus, isReenviando, isAtualizando } = useCotacaoActions();
   const gerarContrato = useGerarContrato();
+  const aceitarEGerar = useAceitarCotacaoEGerarContrato();
   const { profile } = useAuth();
 
   // Handler WhatsApp - agora também atualiza status e etapa do lead
@@ -349,6 +350,26 @@ Ficou com alguma dúvida? Estou à disposição!
                   <AlertCircle className="h-4 w-4" />
                   Vincule a um lead para enviar
                 </div>
+              )}
+              
+              {/* Botão Aceitar e Gerar Contrato - para status enviada */}
+              {(cotacao.status === 'enviada' || cotacao.status === 'rascunho') && cotacao.lead_id && (
+                <Button
+                  size="sm"
+                  onClick={() => aceitarEGerar.mutate({ 
+                    cotacaoId: cotacao.id, 
+                    vendedorId: profile?.id 
+                  })}
+                  disabled={aceitarEGerar.isPending}
+                  className="bg-emerald-600 hover:bg-emerald-700"
+                >
+                  {aceitarEGerar.isPending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Check className="mr-2 h-4 w-4" />
+                  )}
+                  {aceitarEGerar.isPending ? 'Processando...' : 'Aceitar e Gerar Contrato'}
+                </Button>
               )}
               
               {cotacao.status === 'aceita' && (

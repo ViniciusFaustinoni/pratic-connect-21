@@ -47,8 +47,9 @@ export function useAtivacoes(filtro: FiltroAtivacao = 'todos') {
       if (filtro === 'ativados') {
         filteredContratos = filteredContratos.filter(c => c.status === 'ativo');
       } else if (filtro !== 'todos') {
+        // Incluir rascunho para visualizar contratos desde o início do fluxo
         filteredContratos = filteredContratos.filter(c => 
-          ['assinado', 'pendente', 'pendente_assinatura', 'enviado'].includes(c.status)
+          ['rascunho', 'assinado', 'pendente', 'pendente_assinatura', 'enviado'].includes(c.status)
         );
       }
 
