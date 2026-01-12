@@ -134,6 +134,10 @@ export const emailSchema = z.string()
   .email('E-mail inválido')
   .or(z.literal(''));
 
+export const emailRequiredSchema = z.string()
+  .min(1, 'Email é obrigatório')
+  .email('E-mail inválido');
+
 export const placaSchema = z.string()
   .min(8, 'Placa inválida')
   .max(8, 'Placa inválida');
@@ -147,7 +151,7 @@ export const leadSchema = z.object({
   nome: z.string().min(3, 'Nome deve ter no mínimo 3 caracteres'),
   telefone: telefoneSchema,
   whatsapp: z.string().optional(),
-  email: emailSchema.optional(),
+  email: emailRequiredSchema,
   cpf: z.string().optional().refine((val) => !val || val.length === 0 || validateCPF(val), 'CPF inválido'),
   veiculo_marca: z.string().min(1, 'Marca é obrigatória'),
   veiculo_modelo: z.string().min(1, 'Modelo é obrigatório'),

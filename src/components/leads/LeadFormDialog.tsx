@@ -238,7 +238,7 @@ export function LeadFormDialog({ open, onOpenChange }: LeadFormDialogProps) {
                 name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>E-mail</FormLabel>
+                    <FormLabel>E-mail *</FormLabel>
                     <FormControl>
                       <Input type="email" placeholder="email@exemplo.com" {...field} />
                     </FormControl>
