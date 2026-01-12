@@ -1,8 +1,9 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Phone, Car, MessageCircle } from 'lucide-react';
+import { Phone, Car, MessageCircle, Calculator } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import type { Tables } from '@/integrations/supabase/types';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -13,6 +14,7 @@ type Lead = Tables<'leads'>;
 interface LeadKanbanCardProps {
   lead: Lead;
   onClick: () => void;
+  onQuote?: (leadId: string) => void;
 }
 
 // Cores de fundo do avatar baseadas na origem
@@ -29,7 +31,7 @@ const origemAvatarColors: Record<string, string> = {
   outros: 'bg-gray-100 text-gray-700',
 };
 
-export function LeadKanbanCard({ lead, onClick }: LeadKanbanCardProps) {
+export function LeadKanbanCard({ lead, onClick, onQuote }: LeadKanbanCardProps) {
   const {
     attributes,
     listeners,
@@ -142,6 +144,24 @@ export function LeadKanbanCard({ lead, onClick }: LeadKanbanCardProps) {
             {daysInStage}
           </span>
         </div>
+
+        {/* Hover Actions */}
+        {onQuote && (
+          <div className="absolute inset-x-0 bottom-0 flex items-center justify-center p-2 bg-gradient-to-t from-background/95 via-background/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-b-lg">
+            <Button
+              size="sm"
+              variant="secondary"
+              className="h-7 text-xs gap-1.5 shadow-sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                onQuote(lead.id);
+              }}
+            >
+              <Calculator className="h-3.5 w-3.5" />
+              Cotar
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
