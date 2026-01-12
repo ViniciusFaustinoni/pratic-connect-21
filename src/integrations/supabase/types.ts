@@ -5680,6 +5680,7 @@ export type Database = {
           ativo: boolean
           campanha_id: string | null
           codigo_fipe: string | null
+          cotacao_id: string | null
           cpf: string | null
           created_at: string
           data_conversao: string | null
@@ -5697,6 +5698,11 @@ export type Database = {
           observacao_perda: string | null
           observacoes: string | null
           origem: Database["public"]["Enums"]["origem_lead"]
+          plano_escolhido_id: string | null
+          plano_escolhido_nome: string | null
+          plano_escolhido_valor: number | null
+          proposta_assinada_em: string | null
+          proposta_enviada_em: string | null
           telefone: string
           updated_at: string
           utm_campaign: string | null
@@ -5716,6 +5722,7 @@ export type Database = {
           ativo?: boolean
           campanha_id?: string | null
           codigo_fipe?: string | null
+          cotacao_id?: string | null
           cpf?: string | null
           created_at?: string
           data_conversao?: string | null
@@ -5733,6 +5740,11 @@ export type Database = {
           observacao_perda?: string | null
           observacoes?: string | null
           origem?: Database["public"]["Enums"]["origem_lead"]
+          plano_escolhido_id?: string | null
+          plano_escolhido_nome?: string | null
+          plano_escolhido_valor?: number | null
+          proposta_assinada_em?: string | null
+          proposta_enviada_em?: string | null
           telefone: string
           updated_at?: string
           utm_campaign?: string | null
@@ -5752,6 +5764,7 @@ export type Database = {
           ativo?: boolean
           campanha_id?: string | null
           codigo_fipe?: string | null
+          cotacao_id?: string | null
           cpf?: string | null
           created_at?: string
           data_conversao?: string | null
@@ -5769,6 +5782,11 @@ export type Database = {
           observacao_perda?: string | null
           observacoes?: string | null
           origem?: Database["public"]["Enums"]["origem_lead"]
+          plano_escolhido_id?: string | null
+          plano_escolhido_nome?: string | null
+          plano_escolhido_valor?: number | null
+          proposta_assinada_em?: string | null
+          proposta_enviada_em?: string | null
           telefone?: string
           updated_at?: string
           utm_campaign?: string | null
@@ -5834,10 +5852,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "leads_cotacao_id_fkey"
+            columns: ["cotacao_id"]
+            isOneToOne: false
+            referencedRelation: "cotacoes"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "leads_fonte_id_fkey"
             columns: ["fonte_id"]
             isOneToOne: false
             referencedRelation: "lead_fontes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_plano_escolhido_id_fkey"
+            columns: ["plano_escolhido_id"]
+            isOneToOne: false
+            referencedRelation: "planos"
             referencedColumns: ["id"]
           },
         ]
@@ -5887,6 +5919,49 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_acompanhamento"
             referencedColumns: ["lead_id"]
+          },
+        ]
+      }
+      leads_interesse_planos: {
+        Row: {
+          created_at: string | null
+          id: string
+          lead_id: string
+          plano_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          lead_id: string
+          plano_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          lead_id?: string
+          plano_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leads_interesse_planos_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_interesse_planos_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["lead_id"]
+          },
+          {
+            foreignKeyName: "leads_interesse_planos_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "planos"
+            referencedColumns: ["id"]
           },
         ]
       }

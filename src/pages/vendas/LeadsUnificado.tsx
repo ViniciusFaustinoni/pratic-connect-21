@@ -1,5 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
 import type { DateRange } from 'react-day-picker';
 import { differenceInDays } from 'date-fns';
 
@@ -12,6 +13,7 @@ import { LeadsFiltersPanel } from '@/components/leads/LeadsFiltersPanel';
 import { LeadFormDialog } from '@/components/leads/LeadFormDialog';
 import { LeadDetailDrawer } from '@/components/leads/LeadDetailDrawer';
 import { LeadLossDialog } from '@/components/leads/LeadLossDialog';
+import { LeadSignatureListener } from '@/components/leads/LeadSignatureToast';
 
 import { useAllLeads } from '@/hooks/useLeads';
 import { useVendedores } from '@/hooks/useVendedores';
@@ -40,9 +42,17 @@ interface Lead {
     id: string;
     nome: string;
   } | null;
+  // Campos de proposta
+  plano_escolhido_id?: string | null;
+  plano_escolhido_nome?: string | null;
+  plano_escolhido_valor?: number | null;
+  proposta_enviada_em?: string | null;
+  proposta_assinada_em?: string | null;
 }
 
 export default function LeadsUnificado() {
+  const navigate = useNavigate();
+  
   // View state
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('kanban');
   const [quickFilter, setQuickFilter] = useState<QuickFilter>('all');
@@ -78,6 +88,34 @@ export default function LeadsUnificado() {
   });
 
   const { atualizarLead, excluirLead } = useLeadActions();
+
+  // Navigate to cotação with lead data pre-filled
+  const handleLeadQuote = useCallback((lead: Lead) => {
+    navigate('/vendas/cotacao', {
+      state: {
+        leadId: lead.id,
+        nome: lead.nome,
+        telefone: lead.telefone,
+        preencherAutomatico: true,
+      },
+    });
+  }, [navigate]);
+
+  // Handle send proposal action
+  const handleLeadSendProposal = useCallback((lead: Lead) => {
+    // Navigate to contrato page or open proposal modal
+    toast.info(`Enviar proposta para ${lead.nome} - funcionalidade em desenvolvimento`);
+  }, []);
+
+  // Handle mark as lost
+  const handleLeadMarkLost = useCallback((lead: Lead) => {
+    setLossDialogData({
+      id: lead.id,
+      nome: lead.nome,
+      etapa: lead.etapa as EtapaLead,
+    });
+    setShowLossDialog(true);
+  }, []);
 
   // Filter leads based on quick filter and advanced filters
   const filteredLeads = useMemo(() => {
@@ -230,11 +268,17 @@ export default function LeadsUnificado() {
               onLeadClick={handleSelectLead}
               onLeadMove={handleLeadMove}
               onLeadDelete={handleDeleteLead}
+              onLeadQuote={handleLeadQuote}
+              onLeadSendProposal={handleLeadSendProposal}
+              onLeadMarkLost={handleLeadMarkLost}
               onAddLead={() => setShowNewLeadDialog(true)}
             />
           </div>
         )}
       </div>
+
+      {/* Realtime Signature Listener */}
+      <LeadSignatureListener />
 
       {/* Filters Panel */}
       <LeadsFiltersPanel

@@ -14,15 +14,16 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useMemo } from 'react';
 import { Inbox, Users, Sparkles } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 
-import { LeadCard } from './LeadCard';
+import { LeadCardEnhanced } from './LeadCardEnhanced';
 import { LeadsEmptyState } from './LeadsEmptyState';
 import { ETAPA_LABELS, type EtapaLead } from '@/types/database';
 import { cn } from '@/lib/utils';
+import { useLeadsInteressePlanosBulk } from '@/hooks/useLeadInteressePlanos';
 
 // All stages for pre-sale kanban (11 stages)
 const ETAPAS_KANBAN: EtapaLead[] = [
@@ -39,17 +40,18 @@ const ETAPAS_KANBAN: EtapaLead[] = [
   'perdido',
 ];
 
+// Updated colors matching the visual flow
 const ETAPA_COLORS: Record<string, string> = {
-  novo: 'border-t-blue-500',
-  contato: 'border-t-yellow-500',
-  qualificado: 'border-t-purple-500',
-  cotacao_enviada: 'border-t-orange-500',
+  novo: 'border-t-blue-500',           // 🔵 Azul - Novo
+  contato: 'border-t-yellow-500',      // 🟡 Amarelo - Em Contato
+  qualificado: 'border-t-purple-500',  // 🟣 Roxo - Qualificado
+  cotacao_enviada: 'border-t-violet-500', // 🟣 Violeta - Cotação
   negociacao: 'border-t-pink-500',
   vistoria_agendada: 'border-t-teal-500',
-  contrato_enviado: 'border-t-indigo-500',
-  contrato_assinado: 'border-t-emerald-500',
+  contrato_enviado: 'border-t-amber-500',  // 🟡 Amarelo - Proposta Pendente
+  contrato_assinado: 'border-t-green-500', // 🟢 Verde - Proposta Assinada
   instalacao_agendada: 'border-t-cyan-500',
-  ganho: 'border-t-green-500',
+  ganho: 'border-t-emerald-500',
   perdido: 'border-t-red-500',
 };
 
@@ -57,13 +59,13 @@ const ETAPA_HEADER_COLORS: Record<string, string> = {
   novo: 'text-blue-500',
   contato: 'text-yellow-500',
   qualificado: 'text-purple-500',
-  cotacao_enviada: 'text-orange-500',
+  cotacao_enviada: 'text-violet-500',
   negociacao: 'text-pink-500',
   vistoria_agendada: 'text-teal-500',
-  contrato_enviado: 'text-indigo-500',
-  contrato_assinado: 'text-emerald-500',
+  contrato_enviado: 'text-amber-500',
+  contrato_assinado: 'text-green-500',
   instalacao_agendada: 'text-cyan-500',
-  ganho: 'text-green-500',
+  ganho: 'text-emerald-500',
   perdido: 'text-red-500',
 };
 
@@ -71,13 +73,13 @@ const ETAPA_BADGE_BG: Record<string, string> = {
   novo: 'bg-blue-500/15 text-blue-600 dark:text-blue-400',
   contato: 'bg-yellow-500/15 text-yellow-600 dark:text-yellow-400',
   qualificado: 'bg-purple-500/15 text-purple-600 dark:text-purple-400',
-  cotacao_enviada: 'bg-orange-500/15 text-orange-600 dark:text-orange-400',
+  cotacao_enviada: 'bg-violet-500/15 text-violet-600 dark:text-violet-400',
   negociacao: 'bg-pink-500/15 text-pink-600 dark:text-pink-400',
   vistoria_agendada: 'bg-teal-500/15 text-teal-600 dark:text-teal-400',
-  contrato_enviado: 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400',
-  contrato_assinado: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
+  contrato_enviado: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
+  contrato_assinado: 'bg-green-500/15 text-green-600 dark:text-green-400',
   instalacao_agendada: 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-400',
-  ganho: 'bg-green-500/15 text-green-600 dark:text-green-400',
+  ganho: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
   perdido: 'bg-red-500/15 text-red-600 dark:text-red-400',
 };
 
@@ -92,6 +94,16 @@ interface Lead {
   vendedor?: {
     nome: string;
   } | null;
+  plano_escolhido_id?: string | null;
+  plano_escolhido_nome?: string | null;
+  plano_escolhido_valor?: number | null;
+  proposta_enviada_em?: string | null;
+  proposta_assinada_em?: string | null;
+}
+
+interface PlanoInteresse {
+  id: string;
+  nome: string;
 }
 
 interface DroppableColumnProps {
@@ -99,6 +111,10 @@ interface DroppableColumnProps {
   leads: Lead[];
   onLeadClick: (lead: Lead) => void;
   onLeadDelete?: (id: string) => void;
+  onLeadQuote?: (lead: Lead) => void;
+  onLeadSendProposal?: (lead: Lead) => void;
+  onLeadMarkLost?: (lead: Lead) => void;
+  planosInteresseMap: Record<string, PlanoInteresse[]>;
 }
 
 function DroppableColumn({
@@ -106,6 +122,10 @@ function DroppableColumn({
   leads,
   onLeadClick,
   onLeadDelete,
+  onLeadQuote,
+  onLeadSendProposal,
+  onLeadMarkLost,
+  planosInteresseMap,
 }: DroppableColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: etapa });
 
@@ -153,11 +173,15 @@ function DroppableColumn({
           strategy={verticalListSortingStrategy}
         >
           {leads.map((lead) => (
-            <LeadCard
+            <LeadCardEnhanced
               key={lead.id}
               lead={lead}
               onClick={() => onLeadClick(lead)}
               onDelete={onLeadDelete}
+              onQuote={onLeadQuote}
+              onSendProposal={onLeadSendProposal}
+              onMarkLost={onLeadMarkLost}
+              planosInteresse={planosInteresseMap[lead.id] || []}
             />
           ))}
         </SortableContext>
@@ -180,6 +204,9 @@ interface LeadsKanbanNewProps {
   onLeadClick: (lead: Lead) => void;
   onLeadMove: (leadId: string, newEtapa: EtapaLead) => void;
   onLeadDelete?: (id: string) => void;
+  onLeadQuote?: (lead: Lead) => void;
+  onLeadSendProposal?: (lead: Lead) => void;
+  onLeadMarkLost?: (lead: Lead) => void;
   onAddLead?: (etapa?: EtapaLead) => void;
   isLoading?: boolean;
 }
@@ -189,11 +216,23 @@ export function LeadsKanbanNew({
   onLeadClick,
   onLeadMove,
   onLeadDelete,
+  onLeadQuote,
+  onLeadSendProposal,
+  onLeadMarkLost,
   onAddLead,
   isLoading,
 }: LeadsKanbanNewProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Get IDs of leads in "novo" stage for interesse planos query
+  const novoLeadIds = useMemo(() => 
+    leads.filter(l => l.etapa === 'novo').map(l => l.id),
+    [leads]
+  );
+  
+  // Fetch interesse planos for novo leads
+  const { data: planosInteresseMap = {} } = useLeadsInteressePlanosBulk(novoLeadIds);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -308,6 +347,10 @@ export function LeadsKanbanNew({
               leads={leadsByEtapa[etapa] || []}
               onLeadClick={onLeadClick}
               onLeadDelete={onLeadDelete}
+              onLeadQuote={onLeadQuote}
+              onLeadSendProposal={onLeadSendProposal}
+              onLeadMarkLost={onLeadMarkLost}
+              planosInteresseMap={planosInteresseMap}
             />
           ))}
         </div>
@@ -317,7 +360,11 @@ export function LeadsKanbanNew({
       <DragOverlay>
         {activeLead && (
           <div className="opacity-95 rotate-2 shadow-2xl scale-105">
-            <LeadCard lead={activeLead} onClick={() => {}} />
+            <LeadCardEnhanced 
+              lead={activeLead} 
+              onClick={() => {}} 
+              planosInteresse={planosInteresseMap[activeLead.id] || []}
+            />
           </div>
         )}
       </DragOverlay>
