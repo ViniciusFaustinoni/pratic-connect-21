@@ -33,6 +33,15 @@ interface EtapaConsultaFipeProps {
   setPlaca: (placa: string) => void;
   veiculoEncontrado: VeiculoEncontrado | null;
   setVeiculoEncontrado: (veiculo: VeiculoEncontrado | null) => void;
+  // Campos para preenchimento automático
+  marca: string;
+  setMarca: (marca: string) => void;
+  modelo: string;
+  setModelo: (modelo: string) => void;
+  ano: string;
+  setAno: (ano: string) => void;
+  valorFipe: number | null;
+  setValorFipe: (valor: number | null) => void;
   onNext: () => void;
   onManualEntry: () => void;
 }
@@ -51,16 +60,31 @@ const formatCurrency = (value: number) => {
   }).format(value);
 };
 
+const parseCurrency = (value: string): number | null => {
+  const cleaned = value.replace(/[^\d,]/g, '').replace(',', '.');
+  const parsed = parseFloat(cleaned);
+  return isNaN(parsed) ? null : parsed;
+};
+
 export function EtapaConsultaFipe({
   placa,
   setPlaca,
   veiculoEncontrado,
   setVeiculoEncontrado,
+  marca,
+  setMarca,
+  modelo,
+  setModelo,
+  ano,
+  setAno,
+  valorFipe,
+  setValorFipe,
   onNext,
   onManualEntry,
 }: EtapaConsultaFipeProps) {
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [camposAutoPreenchidos, setCamposAutoPreenchidos] = useState<string[]>([]);
   const { getByPlaca } = useFipe();
 
   const handlePlacaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -71,6 +95,7 @@ export function EtapaConsultaFipe({
       setStatus('idle');
       setVeiculoEncontrado(null);
       setErrorMessage(null);
+      setCamposAutoPreenchidos([]);
     }
   };
 
@@ -101,8 +126,23 @@ export function EtapaConsultaFipe({
           valorFipe: fipeData?.valor,
         });
         
+        // PREENCHER CAMPOS AUTOMATICAMENTE
+        setMarca(vehicleData.marca);
+        setModelo(vehicleData.modelo);
+        setAno(vehicleData.ano);
+        if (fipeData?.valor) {
+          setValorFipe(fipeData.valor);
+        }
+        
+        // Marcar quais campos foram auto-preenchidos
+        const camposPreenchidos = ['marca', 'modelo', 'ano'];
+        if (fipeData?.valor) {
+          camposPreenchidos.push('valorFipe');
+        }
+        setCamposAutoPreenchidos(camposPreenchidos);
+        
         setStatus('success');
-        toast.success(`Veículo encontrado! ${vehicleData.marca} ${vehicleData.modelo}`);
+        toast.success(`Dados do veículo preenchidos automaticamente!`);
       } else {
         setStatus('error');
         setErrorMessage(result.error || 'Veículo não encontrado na base FIPE');
@@ -114,7 +154,20 @@ export function EtapaConsultaFipe({
     }
   };
 
-  const canProceed = status === 'success' && veiculoEncontrado !== null;
+  // Remove indicador de auto-preenchimento quando usuário edita manualmente
+  const handleCampoChange = (campo: string, setter: (value: string) => void, value: string) => {
+    setter(value);
+    setCamposAutoPreenchidos(prev => prev.filter(c => c !== campo));
+  };
+
+  const handleValorFipeChange = (value: string) => {
+    const parsed = parseCurrency(value);
+    setValorFipe(parsed);
+    setCamposAutoPreenchidos(prev => prev.filter(c => c !== 'valorFipe'));
+  };
+
+  // Pode avançar se tem marca, modelo, ano e valorFipe preenchidos
+  const canProceed = marca && modelo && ano && valorFipe !== null;
 
   return (
     <Card className="border-border bg-card">
@@ -170,77 +223,135 @@ export function EtapaConsultaFipe({
         {/* Divider */}
         <div className="border-t border-border" />
 
-        {/* Status da Consulta */}
-        <div className="space-y-3">
-          <Label className="text-muted-foreground">Status da Consulta</Label>
+        {/* Campos do Veículo - aparecem sempre */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <Label className="text-base font-medium">Dados do Veículo</Label>
+            {status === 'success' && camposAutoPreenchidos.length > 0 && (
+              <div className="flex items-center gap-2 text-green-600 text-sm">
+                <CheckCircle className="h-4 w-4" />
+                <span>Preenchido automaticamente via FIPE</span>
+              </div>
+            )}
+          </div>
           
-          {status === 'idle' && (
-            <div className="flex items-center gap-2 text-muted-foreground py-3">
-              <div className="w-2 h-2 rounded-full bg-muted-foreground/30" />
-              <span>Aguardando consulta...</span>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Marca */}
+            <div className="space-y-2">
+              <Label htmlFor="marca" className="flex items-center gap-2">
+                Marca
+                {camposAutoPreenchidos.includes('marca') && (
+                  <CheckCircle className="h-3 w-3 text-green-500" />
+                )}
+              </Label>
+              <Input
+                id="marca"
+                value={marca}
+                onChange={(e) => handleCampoChange('marca', setMarca, e.target.value)}
+                placeholder="Ex: Toyota"
+                className={cn(
+                  camposAutoPreenchidos.includes('marca') && 
+                  "border-green-500 bg-green-50 dark:bg-green-950/20"
+                )}
+              />
             </div>
-          )}
 
-          {status === 'loading' && (
-            <div className="flex items-center gap-2 text-primary py-3">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span>Consultando base FIPE...</span>
+            {/* Modelo */}
+            <div className="space-y-2">
+              <Label htmlFor="modelo" className="flex items-center gap-2">
+                Modelo
+                {camposAutoPreenchidos.includes('modelo') && (
+                  <CheckCircle className="h-3 w-3 text-green-500" />
+                )}
+              </Label>
+              <Input
+                id="modelo"
+                value={modelo}
+                onChange={(e) => handleCampoChange('modelo', setModelo, e.target.value)}
+                placeholder="Ex: Corolla XEi"
+                className={cn(
+                  camposAutoPreenchidos.includes('modelo') && 
+                  "border-green-500 bg-green-50 dark:bg-green-950/20"
+                )}
+              />
             </div>
-          )}
 
-          {status === 'success' && veiculoEncontrado && (
-            <Alert className="border-green-500/50 bg-green-500/10">
-              <CheckCircle className="h-4 w-4 text-green-500" />
-              <AlertDescription className="text-green-700 dark:text-green-400">
-                <div className="space-y-2">
-                  <p className="font-medium">Veículo encontrado com sucesso!</p>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3 text-sm">
-                    <div>
-                      <span className="text-muted-foreground">Marca:</span>
-                      <p className="font-medium text-foreground">{veiculoEncontrado.marca}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Modelo:</span>
-                      <p className="font-medium text-foreground">{veiculoEncontrado.modelo}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Ano:</span>
-                      <p className="font-medium text-foreground">{veiculoEncontrado.ano}</p>
-                    </div>
-                    {veiculoEncontrado.valorFipe && (
-                      <div>
-                        <span className="text-muted-foreground">Valor FIPE:</span>
-                        <p className="font-medium text-foreground">
-                          {formatCurrency(veiculoEncontrado.valorFipe)}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
+            {/* Ano */}
+            <div className="space-y-2">
+              <Label htmlFor="ano" className="flex items-center gap-2">
+                Ano
+                {camposAutoPreenchidos.includes('ano') && (
+                  <CheckCircle className="h-3 w-3 text-green-500" />
+                )}
+              </Label>
+              <Input
+                id="ano"
+                value={ano}
+                onChange={(e) => handleCampoChange('ano', setAno, e.target.value)}
+                placeholder="Ex: 2023/2024"
+                className={cn(
+                  camposAutoPreenchidos.includes('ano') && 
+                  "border-green-500 bg-green-50 dark:bg-green-950/20"
+                )}
+              />
+            </div>
+
+            {/* Valor FIPE */}
+            <div className="space-y-2">
+              <Label htmlFor="valorFipe" className="flex items-center gap-2">
+                Valor FIPE
+                {camposAutoPreenchidos.includes('valorFipe') && (
+                  <CheckCircle className="h-3 w-3 text-green-500" />
+                )}
+              </Label>
+              <Input
+                id="valorFipe"
+                value={valorFipe ? formatCurrency(valorFipe) : ''}
+                onChange={(e) => handleValorFipeChange(e.target.value)}
+                placeholder="R$ 0,00"
+                className={cn(
+                  camposAutoPreenchidos.includes('valorFipe') && 
+                  "border-green-500 bg-green-50 dark:bg-green-950/20"
+                )}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Mensagens de Status */}
+        {status === 'idle' && !marca && !modelo && (
+          <div className="flex items-center gap-2 text-muted-foreground text-sm">
+            <div className="w-2 h-2 rounded-full bg-muted-foreground/30" />
+            <span>Consulte a placa ou preencha os dados manualmente</span>
+          </div>
+        )}
+
+        {status === 'loading' && (
+          <div className="flex items-center gap-2 text-primary text-sm">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>Consultando base FIPE...</span>
+          </div>
+        )}
+
+        {status === 'error' && (
+          <div className="space-y-3">
+            <Alert className="border-destructive/50 bg-destructive/10">
+              <XCircle className="h-4 w-4 text-destructive" />
+              <AlertDescription className="text-destructive">
+                {errorMessage || 'Veículo não encontrado na base FIPE'}
               </AlertDescription>
             </Alert>
-          )}
-
-          {status === 'error' && (
-            <div className="space-y-3">
-              <Alert className="border-destructive/50 bg-destructive/10">
-                <XCircle className="h-4 w-4 text-destructive" />
-                <AlertDescription className="text-destructive">
-                  {errorMessage || 'Veículo não encontrado na base FIPE'}
-                </AlertDescription>
-              </Alert>
-              
-              <Button
-                variant="outline"
-                onClick={onManualEntry}
-                className="w-full sm:w-auto"
-              >
-                <Edit className="mr-2 h-4 w-4" />
-                Preencher dados manualmente
-              </Button>
-            </div>
-          )}
-        </div>
+            
+            <Button
+              variant="outline"
+              onClick={onManualEntry}
+              className="w-full sm:w-auto"
+            >
+              <Edit className="mr-2 h-4 w-4" />
+              Preencher dados manualmente
+            </Button>
+          </div>
+        )}
 
         {/* Botão Avançar */}
         <div className="flex justify-end pt-4 border-t border-border">

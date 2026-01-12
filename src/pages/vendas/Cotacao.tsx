@@ -247,6 +247,14 @@ export default function CotacaoPage() {
             setPlaca={setPlaca}
             veiculoEncontrado={veiculoEncontrado}
             setVeiculoEncontrado={setVeiculoEncontrado}
+            marca={marca}
+            setMarca={setMarca}
+            modelo={modelo}
+            setModelo={setModelo}
+            ano={ano}
+            setAno={setAno}
+            valorFipe={valorFipe}
+            setValorFipe={setValorFipe}
             onNext={handleEtapa1Next}
             onManualEntry={handleEntradaManual}
           />
