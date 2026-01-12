@@ -11266,6 +11266,7 @@ export type Database = {
         | "analista_juridico"
         | "desenvolvedor"
         | "admin_master"
+        | "agencia"
       etapa_lead:
         | "novo"
         | "contato_inicial"
@@ -11571,6 +11572,7 @@ export const Constants = {
         "analista_juridico",
         "desenvolvedor",
         "admin_master",
+        "agencia",
       ],
       etapa_lead: [
         "novo",
