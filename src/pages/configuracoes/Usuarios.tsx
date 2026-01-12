@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Users, Plus, Search, MoreHorizontal, 
-  UserCheck, UserX, Edit, Trash2, Shield, Key, ExternalLink
+  UserCheck, UserX, Edit, Trash2, Shield, Key, ExternalLink, Upload, Download
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -32,7 +33,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-
+import { ImportarUsuariosDialog } from '@/components/usuarios/ImportarUsuariosDialog';
 const perfisConfig: Record<string, { label: string; color: string }> = {
   diretor: { label: 'Diretor', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
   gerente_comercial: { label: 'Gerente Comercial', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
@@ -60,6 +61,7 @@ export default function Usuarios() {
   const [filterStatus, setFilterStatus] = useState<string>('todos');
   const [filterPerfil, setFilterPerfil] = useState<string>('todos');
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [showImportDialog, setShowImportDialog] = useState(false);
 
   const { usuarios, isLoading, refetch } = useUsuarios({
     filters: {
@@ -112,6 +114,16 @@ export default function Usuarios() {
     }
   };
 
+  const downloadTemplate = () => {
+    const template = [
+      { nome: 'João Silva', telefone: '21999990000', email: 'joao@empresa.com', senha: 'Senha123!' },
+    ];
+    const ws = XLSX.utils.json_to_sheet(template);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Usuarios');
+    XLSX.writeFile(wb, 'template-importacao-usuarios.xlsx');
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -120,10 +132,20 @@ export default function Usuarios() {
           <h1 className="text-2xl font-semibold text-foreground">Usuários</h1>
           <p className="text-sm text-muted-foreground">Gerencie os usuários do sistema</p>
         </div>
-        <Button onClick={() => navigate('/configuracoes/usuarios/novo')}>
-          <Plus className="w-4 h-4 mr-2" />
-          Novo Usuário
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={downloadTemplate}>
+            <Download className="w-4 h-4 mr-2" />
+            Template
+          </Button>
+          <Button variant="outline" onClick={() => setShowImportDialog(true)}>
+            <Upload className="w-4 h-4 mr-2" />
+            Importar
+          </Button>
+          <Button onClick={() => navigate('/configuracoes/usuarios/novo')}>
+            <Plus className="w-4 h-4 mr-2" />
+            Novo Usuário
+          </Button>
+        </div>
       </div>
 
       {/* Cards Estatísticas */}
@@ -354,6 +376,13 @@ export default function Usuarios() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Import Dialog */}
+      <ImportarUsuariosDialog 
+        open={showImportDialog} 
+        onOpenChange={setShowImportDialog}
+        onSuccess={() => refetch()}
+      />
     </div>
   );
 }
