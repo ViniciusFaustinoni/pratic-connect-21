@@ -140,17 +140,32 @@ export default function UsuarioForm() {
   });
 
   useEffect(() => {
-    if (usuario) {
-      setFormData({
-        nome: usuario.nome || '',
-        email: usuario.email || '',
-        telefone: usuario.telefone || '',
-        cpf: usuario.cpf || '',
-        tipo: usuario.tipo || 'funcionario',
-        ativo: usuario.ativo ?? true,
-        perfis: usuario.roles || [],
-      });
-    }
+    if (!usuario) return;
+
+    const next = {
+      nome: usuario.nome || '',
+      email: usuario.email || '',
+      telefone: usuario.telefone || '',
+      cpf: usuario.cpf || '',
+      tipo: usuario.tipo || 'funcionario',
+      ativo: usuario.ativo ?? true,
+      perfis: usuario.roles || [],
+    };
+
+    // Evita loop: só atualiza o estado se algo realmente mudou
+    setFormData((prev) => {
+      const same =
+        prev.nome === next.nome &&
+        prev.email === next.email &&
+        prev.telefone === next.telefone &&
+        prev.cpf === next.cpf &&
+        prev.tipo === next.tipo &&
+        prev.ativo === next.ativo &&
+        prev.perfis.length === next.perfis.length &&
+        prev.perfis.every((p, i) => p === next.perfis[i]);
+
+      return same ? prev : next;
+    });
   }, [usuario]);
 
   // Salvar usuário
