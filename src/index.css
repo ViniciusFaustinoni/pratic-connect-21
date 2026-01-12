@@ -308,3 +308,29 @@
 .animate-glow-pulse {
   animation: glow-pulse 3s ease-in-out infinite;
 }
+
+/* Lead Card - Proposta Pendente (contrato_enviado) - Borda amarela pulsante */
+@keyframes pulse-yellow {
+  0%, 100% { 
+    box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.4); 
+  }
+  50% { 
+    box-shadow: 0 0 0 8px rgba(251, 191, 36, 0); 
+  }
+}
+
+.card-proposta-pendente {
+  border: 2px solid hsl(38 92% 50%);
+  animation: pulse-yellow 2s infinite;
+}
+
+/* Lead Card - Proposta Assinada (contrato_assinado) - Borda verde com gradiente */
+.card-proposta-assinada {
+  border: 2px solid hsl(160 84% 39%);
+  background: linear-gradient(to right, hsl(160 84% 39% / 0.05), transparent);
+}
+
+/* Lead Card - Cotação Enviada - Destaque roxo */
+.card-cotacao-enviada {
+  border-left: 3px solid hsl(262 83% 58%);
+}
