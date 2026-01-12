@@ -196,6 +196,22 @@ export function ImportarUsuariosDialog({ open, onOpenChange, onSuccess }: Import
     return { nome, telefone, email, senha, perfil, valido, erro };
   };
 
+  // Mapeia colunas da planilha para campos esperados
+  const mapearColuna = (header: string): string | null => {
+    const h = header.toLowerCase().trim();
+    if (h === 'nome') return 'nome';
+    if (h === 'telefone') return 'telefone';
+    if (h.includes('email')) return 'email'; // "Email (Login)" -> "email"
+    if (h.includes('senha')) return 'senha'; // "Senha (Login)" -> "senha"
+    return null; // ignora outras colunas como "#"
+  };
+
+  // Limpa telefone removendo formatação
+  const limparTelefone = (tel: string): string => {
+    if (!tel) return '';
+    return tel.toString().replace(/\D/g, ''); // remove tudo que não é número
+  };
+
   const processFile = (file: File) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -211,16 +227,47 @@ export function ImportarUsuariosDialog({ open, onOpenChange, onSuccess }: Import
           return;
         }
 
-        const allEmails = jsonData.map((row: any) => 
+        // Detecta headers da primeira linha para mapear colunas
+        const primeiraLinha = jsonData[0] as Record<string, any>;
+        const headers = Object.keys(primeiraLinha);
+        const mapeamento: Record<string, string> = {};
+        
+        headers.forEach(header => {
+          const campo = mapearColuna(header);
+          if (campo) {
+            mapeamento[header] = campo;
+          }
+        });
+
+        // Transforma dados usando mapeamento
+        const dadosMapeados = jsonData.map((row: any) => {
+          const mapped: Record<string, any> = {};
+          Object.entries(row).forEach(([key, value]) => {
+            const campo = mapeamento[key];
+            if (campo) {
+              if (campo === 'telefone') {
+                mapped[campo] = limparTelefone(value as string);
+              } else {
+                mapped[campo] = value;
+              }
+            }
+          });
+          // Identifica tipo automaticamente pelo nome
+          mapped.perfil = identificarTipo(mapped.nome || '');
+          return mapped;
+        });
+
+        const allEmails = dadosMapeados.map((row: any) => 
           row.email?.toString().toLowerCase().trim() || ''
         );
 
-        const usuariosValidados = jsonData.map((row: any) => 
-          validateUsuario({ ...row, perfil: perfilPadrao }, allEmails)
+        const usuariosValidados = dadosMapeados.map((row: any) => 
+          validateUsuario({ ...row }, allEmails)
         );
 
         setUsuarios(usuariosValidados);
         setStep('preview');
+        toast.success(`${usuariosValidados.length} usuários carregados da planilha`);
       } catch (error) {
         console.error('Erro ao processar arquivo:', error);
         toast.error('Erro ao processar arquivo');
