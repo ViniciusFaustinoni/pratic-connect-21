@@ -317,7 +317,11 @@ export default function UsuarioForm() {
 
                 <div className="space-y-2">
                   <Label htmlFor="tipo">Tipo de usuário *</Label>
-                  <Select value={formData.tipo} onValueChange={(v) => setFormData({ ...formData, tipo: v })}>
+                  <Select 
+                    key={`tipo-${formData.tipo}`}
+                    value={formData.tipo} 
+                    onValueChange={(v) => setFormData({ ...formData, tipo: v })}
+                  >
                     <SelectTrigger className="bg-background">
                       <SelectValue placeholder="Selecione o tipo" />
                     </SelectTrigger>
