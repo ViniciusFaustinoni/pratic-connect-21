@@ -318,6 +318,29 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
       if (lead.veiculo_placa) {
         setPlaca(lead.veiculo_placa);
       }
+      // Preencher informações do veículo diretamente do lead
+      if (lead.veiculo_marca && lead.veiculo_modelo) {
+        setVeiculoEncontrado({
+          success: true,
+          vehicleData: {
+            marca: lead.veiculo_marca,
+            modelo: lead.veiculo_modelo,
+            marca_modelo: `${lead.veiculo_marca} ${lead.veiculo_modelo}`,
+            ano: lead.veiculo_ano ? String(lead.veiculo_ano) : '',
+            placa: lead.veiculo_placa || '',
+            cor: '',
+            chassi: '',
+            municipio: '',
+            uf: '',
+            combustivel: ''
+          },
+          fipeData: lead.veiculo_fipe ? {
+            valor: lead.veiculo_fipe,
+            codigo: null,
+            mesReferencia: null
+          } : null
+        });
+      }
     }
   }, [lead, form]);
 
