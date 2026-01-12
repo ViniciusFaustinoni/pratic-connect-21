@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { Plus, Loader2, Calendar, X, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -26,6 +26,7 @@ import { etapaColors, ETAPAS_FUNIL, canTransition } from '@/lib/lead-transitions
 import { useAllLeads, type LeadFilters } from '@/hooks/useLeads';
 import { useChangeLeadEtapa } from '@/hooks/useLeadHistorico';
 import { useVendedores } from '@/hooks/useVendedores';
+import { useLeadsRealtime } from '@/hooks/useNotificacoesVendas';
 import { LeadFormDialog } from '@/components/leads/LeadFormDialog';
 import { LeadLossDialog } from '@/components/leads/LeadLossDialog';
 import { LeadKanbanCard } from '@/components/leads/LeadKanbanCard';
@@ -95,10 +96,14 @@ export default function LeadKanban() {
   const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({});
   const boardRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const { data: leads, isLoading } = useAllLeads(filters);
   const { data: vendedores } = useVendedores();
   const changeEtapa = useChangeLeadEtapa();
+
+  // Habilitar Realtime para atualização automática
+  useLeadsRealtime();
 
   const scrollBoard = (direction: 'left' | 'right') => {
     const container = boardRef.current;
@@ -198,7 +203,45 @@ export default function LeadKanban() {
     navigate(`/vendas/cotacoes?lead=${leadId}`);
   };
 
-  const queryClient = useQueryClient();
+  // Handler para ações do menu do card
+  const handleCardAction = (action: string, lead: Lead) => {
+    switch (action) {
+      case 'ver':
+        setSelectedLeadId(lead.id);
+        break;
+      case 'editar':
+        navigate(`/vendas/leads/${lead.id}/editar`);
+        break;
+      case 'contato':
+        handleWhatsAppClick(lead.id, lead.etapa);
+        break;
+      case 'cotacao':
+        navigate('/vendas/cotador', {
+          state: {
+            leadId: lead.id,
+            nome: lead.nome,
+            telefone: lead.telefone,
+            veiculo_placa: lead.veiculo_placa,
+            veiculo_marca: lead.veiculo_marca,
+            veiculo_modelo: lead.veiculo_modelo,
+            veiculo_ano: lead.veiculo_ano,
+            preencherAutomatico: true,
+          },
+        });
+        break;
+      case 'contrato':
+        navigate(`/vendas/contratos?lead=${lead.id}`);
+        break;
+      case 'transferir':
+        toast.info('Função de transferência em desenvolvimento');
+        break;
+      case 'perdido':
+        setLossDialogLead(lead);
+        break;
+      default:
+        break;
+    }
+  };
 
   const handleWhatsAppClick = async (leadId: string, currentEtapa: string) => {
     try {
@@ -390,6 +433,7 @@ export default function LeadKanban() {
                           onClick={() => setSelectedLeadId(lead.id)}
                           onQuote={handleQuote}
                           onWhatsAppClick={handleWhatsAppClick}
+                          onAction={handleCardAction}
                         />
                       ))}
                       {leadsInEtapa.length === 0 && (
@@ -421,7 +465,10 @@ export default function LeadKanban() {
         </DndContext>
       </div>
 
-      <LeadFormDialog open={showLeadForm} onOpenChange={setShowLeadForm} />
+      <LeadFormDialog 
+        open={showLeadForm} 
+        onOpenChange={setShowLeadForm}
+      />
       
       {lossDialogLead && (
         <LeadLossDialog

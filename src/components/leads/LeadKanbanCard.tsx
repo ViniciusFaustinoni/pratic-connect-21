@@ -1,13 +1,21 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Phone, Car, MessageCircle, Calculator } from 'lucide-react';
+import { Phone, Car, MessageCircle, Calculator, MoreHorizontal, Eye, Edit, FileText, FileSignature, UserPlus, XCircle } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import type { Tables } from '@/integrations/supabase/types';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ORIGEM_LABELS } from '@/types/database';
+import { cn } from '@/lib/utils';
 
 type Lead = Tables<'leads'>;
 
@@ -16,6 +24,7 @@ interface LeadKanbanCardProps {
   onClick: () => void;
   onQuote?: (leadId: string) => void;
   onWhatsAppClick?: (leadId: string, currentEtapa: string) => void;
+  onAction?: (action: string, lead: Lead) => void;
 }
 
 // Cores de fundo do avatar baseadas na origem
@@ -32,7 +41,41 @@ const origemAvatarColors: Record<string, string> = {
   outros: 'bg-gray-100 text-gray-700',
 };
 
-export function LeadKanbanCard({ lead, onClick, onQuote, onWhatsAppClick }: LeadKanbanCardProps) {
+// Indicador visual de status do contrato
+function getIndicadorContrato(lead: Lead) {
+  const status = (lead as any).contrato_status;
+  
+  if (status === 'assinado') {
+    return {
+      borderClass: 'border-l-4 border-l-green-500',
+      cardClass: 'card-proposta-assinada',
+      badge: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+      icone: '✅',
+      texto: 'Assinado'
+    };
+  }
+  if (status === 'enviado' || status === 'visualizado') {
+    return {
+      borderClass: 'border-l-4 border-l-yellow-500',
+      cardClass: 'card-proposta-pendente',
+      badge: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
+      icone: '⏳',
+      texto: status === 'visualizado' ? 'Visualizado' : 'Aguardando'
+    };
+  }
+  if (status === 'recusado') {
+    return {
+      borderClass: 'border-l-4 border-l-red-500',
+      cardClass: '',
+      badge: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+      icone: '❌',
+      texto: 'Recusado'
+    };
+  }
+  return null;
+}
+
+export function LeadKanbanCard({ lead, onClick, onQuote, onWhatsAppClick, onAction }: LeadKanbanCardProps) {
   const {
     attributes,
     listeners,
@@ -76,6 +119,10 @@ export function LeadKanbanCard({ lead, onClick, onQuote, onWhatsAppClick }: Lead
     && lead.etapa !== 'perdido';
 
   const avatarColor = origemAvatarColors[lead.origem] || origemAvatarColors.outros;
+  const indicador = getIndicadorContrato(lead);
+
+  // Planos de interesse (novo campo)
+  const planosInteresse = (lead as any).planos_interesse as string[] | null;
 
   return (
     <Card
@@ -83,13 +130,15 @@ export function LeadKanbanCard({ lead, onClick, onQuote, onWhatsAppClick }: Lead
       style={style}
       {...attributes}
       {...listeners}
-      className={`cursor-grab active:cursor-grabbing transition-all hover:shadow-md group border-l-2 ${
-        isStale ? 'border-l-destructive' : 'border-l-transparent hover:border-l-primary'
-      }`}
+      className={cn(
+        "cursor-grab active:cursor-grabbing transition-all hover:shadow-md group relative",
+        indicador?.cardClass,
+        indicador?.borderClass || (isStale ? 'border-l-4 border-l-destructive' : 'border-l-2 border-l-transparent hover:border-l-primary')
+      )}
       onClick={onClick}
     >
       <CardContent className="p-2.5">
-        {/* Header: Avatar + Nome + Indicador */}
+        {/* Header: Avatar + Nome + Indicador + Menu */}
         <div className="flex items-start gap-2 mb-1.5">
           <div className={`flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-semibold flex-shrink-0 ${avatarColor}`}>
             {lead.nome.charAt(0).toUpperCase()}
@@ -105,13 +154,92 @@ export function LeadKanbanCard({ lead, onClick, onQuote, onWhatsAppClick }: Lead
               </p>
             )}
           </div>
-          {isOverdue && (
+          
+          {/* Badge de status do contrato */}
+          {indicador && (
+            <Badge className={cn("text-[9px] px-1 py-0 h-4 flex-shrink-0", indicador.badge)}>
+              {indicador.icone} {indicador.texto}
+            </Badge>
+          )}
+          
+          {isOverdue && !indicador && (
             <div 
               className="h-2 w-2 rounded-full bg-red-500 animate-pulse flex-shrink-0 mt-1" 
               title="Ação atrasada"
             />
           )}
+
+          {/* Menu de ações */}
+          {onAction && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <MoreHorizontal className="h-3.5 w-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onAction('ver', lead); }}>
+                  <Eye className="h-4 w-4 mr-2" />
+                  Ver detalhes
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onAction('editar', lead); }}>
+                  <Edit className="h-4 w-4 mr-2" />
+                  Editar lead
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onAction('contato', lead); }}>
+                  <Phone className="h-4 w-4 mr-2" />
+                  Registrar contato
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onAction('cotacao', lead); }}>
+                  <FileText className="h-4 w-4 mr-2" />
+                  Enviar cotação
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onAction('contrato', lead); }}>
+                  <FileSignature className="h-4 w-4 mr-2" />
+                  Enviar contrato
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onAction('transferir', lead); }}>
+                  <UserPlus className="h-4 w-4 mr-2" />
+                  Transferir lead
+                </DropdownMenuItem>
+                <DropdownMenuItem 
+                  onClick={(e) => { e.stopPropagation(); onAction('perdido', lead); }}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <XCircle className="h-4 w-4 mr-2" />
+                  Marcar como perdido
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
+
+        {/* Planos de interesse (apenas na etapa novo) */}
+        {lead.etapa === 'novo' && planosInteresse && planosInteresse.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-1.5">
+            {planosInteresse.map((plano) => (
+              <Badge key={plano} variant="outline" className="text-[9px] px-1 py-0 h-4 capitalize">
+                {plano}
+              </Badge>
+            ))}
+          </div>
+        )}
+
+        {/* Plano escolhido (após cotação) */}
+        {(lead as any).plano_id && (
+          <div className="flex items-center gap-1 mb-1.5 text-[11px]">
+            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+              Plano selecionado
+            </Badge>
+          </div>
+        )}
 
         {/* Info: Telefone + Valor FIPE */}
         <div className="flex items-center justify-between text-xs text-muted-foreground mb-1.5">

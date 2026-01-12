@@ -5711,6 +5711,10 @@ export type Database = {
           campanha_id: string | null
           codigo_fipe: string | null
           consultor_id: string | null
+          contrato_assinado_em: string | null
+          contrato_enviado_em: string | null
+          contrato_id: string | null
+          contrato_status: string | null
           cotacao_id: string | null
           cpf: string | null
           created_at: string
@@ -5732,6 +5736,7 @@ export type Database = {
           plano_escolhido_id: string | null
           plano_escolhido_nome: string | null
           plano_escolhido_valor: number | null
+          planos_interesse: string[] | null
           proposta_assinada_em: string | null
           proposta_enviada_em: string | null
           telefone: string
@@ -5754,6 +5759,10 @@ export type Database = {
           campanha_id?: string | null
           codigo_fipe?: string | null
           consultor_id?: string | null
+          contrato_assinado_em?: string | null
+          contrato_enviado_em?: string | null
+          contrato_id?: string | null
+          contrato_status?: string | null
           cotacao_id?: string | null
           cpf?: string | null
           created_at?: string
@@ -5775,6 +5784,7 @@ export type Database = {
           plano_escolhido_id?: string | null
           plano_escolhido_nome?: string | null
           plano_escolhido_valor?: number | null
+          planos_interesse?: string[] | null
           proposta_assinada_em?: string | null
           proposta_enviada_em?: string | null
           telefone: string
@@ -5797,6 +5807,10 @@ export type Database = {
           campanha_id?: string | null
           codigo_fipe?: string | null
           consultor_id?: string | null
+          contrato_assinado_em?: string | null
+          contrato_enviado_em?: string | null
+          contrato_id?: string | null
+          contrato_status?: string | null
           cotacao_id?: string | null
           cpf?: string | null
           created_at?: string
@@ -5818,6 +5832,7 @@ export type Database = {
           plano_escolhido_id?: string | null
           plano_escolhido_nome?: string | null
           plano_escolhido_valor?: number | null
+          planos_interesse?: string[] | null
           proposta_assinada_em?: string | null
           proposta_enviada_em?: string | null
           telefone?: string
@@ -5918,32 +5933,38 @@ export type Database = {
         Row: {
           acao: string
           created_at: string | null
+          dados_extras: Json | null
           descricao: string | null
           etapa_anterior: string | null
           etapa_nova: string | null
           id: string
           lead_id: string
           usuario_id: string | null
+          usuario_nome: string | null
         }
         Insert: {
           acao: string
           created_at?: string | null
+          dados_extras?: Json | null
           descricao?: string | null
           etapa_anterior?: string | null
           etapa_nova?: string | null
           id?: string
           lead_id: string
           usuario_id?: string | null
+          usuario_nome?: string | null
         }
         Update: {
           acao?: string
           created_at?: string | null
+          dados_extras?: Json | null
           descricao?: string | null
           etapa_anterior?: string | null
           etapa_nova?: string | null
           id?: string
           lead_id?: string
           usuario_id?: string | null
+          usuario_nome?: string | null
         }
         Relationships: [
           {
@@ -6684,6 +6705,67 @@ export type Database = {
           {
             foreignKeyName: "notificacoes_sistema_criado_por_fkey"
             columns: ["criado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notificacoes_vendas: {
+        Row: {
+          created_at: string | null
+          dados_extras: Json | null
+          id: string
+          lead_id: string | null
+          lida: boolean | null
+          lida_em: string | null
+          mensagem: string | null
+          tipo: string
+          titulo: string
+          usuario_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          dados_extras?: Json | null
+          id?: string
+          lead_id?: string | null
+          lida?: boolean | null
+          lida_em?: string | null
+          mensagem?: string | null
+          tipo: string
+          titulo: string
+          usuario_id: string
+        }
+        Update: {
+          created_at?: string | null
+          dados_extras?: Json | null
+          id?: string
+          lead_id?: string | null
+          lida?: boolean | null
+          lida_em?: string | null
+          mensagem?: string | null
+          tipo?: string
+          titulo?: string
+          usuario_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notificacoes_vendas_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notificacoes_vendas_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["lead_id"]
+          },
+          {
+            foreignKeyName: "notificacoes_vendas_usuario_id_fkey"
+            columns: ["usuario_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
