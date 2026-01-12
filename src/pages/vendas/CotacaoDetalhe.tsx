@@ -429,10 +429,8 @@ Ficou com alguma dúvida? Estou à disposição!
           </CardHeader>
           <CardContent className="space-y-3">
             {cotacao.lead_id ? (
-              /* Conteúdo quando tem lead */
+              /* Conteúdo quando tem lead - nome já aparece no título */
               <>
-                <p className="text-lg font-medium">{cotacao.leads?.nome || '—'}</p>
-                <Separator />
                 <div className="flex items-center gap-2 text-sm">
                   <Phone className="h-4 w-4 text-muted-foreground" />
                   <div>
