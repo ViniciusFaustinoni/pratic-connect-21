@@ -37,7 +37,7 @@ serve(async (req) => {
   try {
     // Verificar autenticação
     const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
+    if (!authHeader?.startsWith('Bearer ')) {
       return new Response(
         JSON.stringify({ error: 'Não autorizado' }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -46,6 +46,7 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     
     // Cliente com service role para operações admin
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
@@ -53,15 +54,17 @@ serve(async (req) => {
     });
 
     // Cliente com token do usuário para verificar permissões
-    const supabaseUser = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    const supabaseUser = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } }
     });
 
-    // Verificar se usuário logado tem permissão
-    const { data: { user: currentUser } } = await supabaseUser.auth.getUser();
-    if (!currentUser) {
+    // Validar JWT usando getUser()
+    const { data: { user: currentUser }, error: userError } = await supabaseUser.auth.getUser();
+    
+    if (userError || !currentUser) {
+      console.error('Erro ao validar usuário:', userError);
       return new Response(
-        JSON.stringify({ error: 'Usuário não autenticado' }),
+        JSON.stringify({ error: 'Token inválido' }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
