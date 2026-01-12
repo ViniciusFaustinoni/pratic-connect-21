@@ -175,9 +175,44 @@ export function usePropostasMetricas(periodo: PeriodoFiltro = 'mes') {
         });
       });
 
-      // Ordenar por propostas fechadas e definir ranking
+      // Lista de consultores prioritários (aparecem primeiro, nesta ordem)
+      const consultoresPrioritarios = [
+        'KALAYANE SHASNAM MURADO',
+        'JEICIELI DOS SANTOS LIMA',
+        'MARIA JULIA FLORENCIO GOMES',
+        'CASAL BRASIL',
+        'ISABELLA SILVA MORSCHBACHER',
+        'PATRICK MACEDO RODRIGUES DUARTE',
+        'LEONARDO LOPES',
+        'ANTONIO FRANCISCO SANTOS DE FREITAS',
+        'THAINÁ DE OLIVEIRA LOUZADA',
+        'TAIANY GONÇALVES DE LIMA',
+        'JAQUELINE ZANONI DA CUNHA',
+        'RENATA PELAIS DOS SANTOS',
+      ];
+
+      // Ordenar: prioritários primeiro (na ordem da lista), depois os demais por propostas fechadas
       const consultores = Array.from(consultoresMap.values())
-        .sort((a, b) => b.propostasFechadas - a.propostasFechadas)
+        .sort((a, b) => {
+          const nomeA = a.nome.toUpperCase();
+          const nomeB = b.nome.toUpperCase();
+          
+          const indexA = consultoresPrioritarios.findIndex(
+            nome => nomeA.includes(nome) || nome.includes(nomeA)
+          );
+          const indexB = consultoresPrioritarios.findIndex(
+            nome => nomeB.includes(nome) || nome.includes(nomeB)
+          );
+          
+          // Ambos são prioritários: ordenar pela posição na lista
+          if (indexA >= 0 && indexB >= 0) return indexA - indexB;
+          // Só A é prioritário: A vem primeiro
+          if (indexA >= 0) return -1;
+          // Só B é prioritário: B vem primeiro
+          if (indexB >= 0) return 1;
+          // Nenhum é prioritário: ordenar por propostas fechadas
+          return b.propostasFechadas - a.propostasFechadas;
+        })
         .map((c, idx) => ({ ...c, ranking: idx + 1 }));
 
       // Calcular métricas globais
