@@ -153,7 +153,6 @@ import RelatoriosMarketing from "./pages/marketing/RelatoriosMarketing";
 import DistribuicaoConfig from "./pages/vendas/DistribuicaoConfig";
 import PlanosBeneficios from "./pages/vendas/PlanosBeneficios";
 import VendasConfig from "./pages/vendas/VendasConfig";
-import LeadsApisConfig from "./pages/vendas/LeadsApisConfig";
 import { VendasNotificationListener } from "./components/notifications/VendasNotificationListener";
 
 // Diretoria
@@ -266,7 +265,6 @@ const App = () => (
               <Route path="/vendas/vendedores" element={<Vendedores />} />
               <Route path="/vendas/vendedores/:id" element={<VendedorHistorico />} />
               <Route path="/vendas/configuracoes" element={<VendasConfig />} />
-              <Route path="/vendas/leads/apis" element={<LeadsApisConfig />} />
               
               {/* Cadastro */}
               <Route path="/cadastro/associados" element={<Associados />} />
