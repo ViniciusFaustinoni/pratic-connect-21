@@ -221,6 +221,37 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
     }
   };
 
+  // Função de fuzzy match para encontrar melhor modelo
+  const fuzzyMatchModelo = (modeloVeiculo: string, modeloFipe: string): number => {
+    if (!modeloVeiculo || !modeloFipe) return 0;
+    
+    const veiculoParts = modeloVeiculo.toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter(p => p.length >= 2);
+    const fipeParts = modeloFipe.toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter(p => p.length >= 2);
+    
+    let matches = 0;
+    for (const vPart of veiculoParts) {
+      for (const fPart of fipeParts) {
+        if (fPart.includes(vPart) || vPart.includes(fPart)) {
+          matches++;
+          break;
+        }
+      }
+    }
+    
+    // Bonus para match exato do primeiro termo (geralmente o nome principal do modelo)
+    if (veiculoParts[0] && fipeParts.some(fp => fp.includes(veiculoParts[0]))) {
+      matches += 2;
+    }
+    
+    return matches;
+  };
+
   // Buscar por placa
   const buscarPorPlaca = async () => {
     const placaLimpa = placa.replace(/[^A-Za-z0-9]/g, '');
@@ -236,9 +267,9 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
       if (resultado.success && resultado.vehicleData) {
         setVeiculoEncontrado(resultado);
         
-        const marcaNome = resultado.vehicleData.marca?.toLowerCase();
-        const modeloNome = resultado.vehicleData.modelo?.toLowerCase();
-        const anoVeiculo = resultado.vehicleData.ano?.split('/')[0];
+        const marcaNome = resultado.vehicleData.marca?.toLowerCase() || '';
+        const modeloNome = resultado.vehicleData.modelo || '';
+        const anoVeiculo = resultado.vehicleData.ano?.split('/')[0] || '';
 
         let marcasCarregadas = marcas;
         if (marcasCarregadas.length === 0) {
@@ -248,9 +279,13 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
           setLoadingMarcas(false);
         }
 
-        const marcaEncontrada = marcasCarregadas.find(
-          m => m.nome.toLowerCase().includes(marcaNome) || marcaNome?.includes(m.nome.toLowerCase())
-        );
+        // Buscar marca com match mais flexível
+        const marcaEncontrada = marcasCarregadas.find(m => {
+          const mNome = m.nome.toLowerCase();
+          return mNome.includes(marcaNome) || 
+                 marcaNome.includes(mNome.split(' ')[0]) ||
+                 mNome.split(' - ').some(part => marcaNome.includes(part.toLowerCase()));
+        });
 
         if (marcaEncontrada) {
           setMarcaSelecionada(marcaEncontrada.codigo);
@@ -260,19 +295,49 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
           setModelos(modelosData);
           setLoadingModelos(false);
 
-          const modeloEncontrado = modelosData.find(
-            m => m.nome.toLowerCase().includes(modeloNome) || modeloNome?.includes(m.nome.toLowerCase())
-          );
+          // Usar fuzzy match para encontrar o melhor modelo
+          const modelosComScore = modelosData.map(m => ({
+            ...m,
+            score: fuzzyMatchModelo(modeloNome, m.nome)
+          }));
 
-          if (modeloEncontrado) {
-            setModeloSelecionado(modeloEncontrado.codigo.toString());
+          const melhorModelo = modelosComScore
+            .filter(m => m.score > 0)
+            .sort((a, b) => b.score - a.score)[0];
+
+          if (melhorModelo) {
+            setModeloSelecionado(melhorModelo.codigo.toString());
 
             setLoadingAnos(true);
-            const anosData = await getAnos(marcaEncontrada.codigo, modeloEncontrado.codigo.toString(), 'carros');
+            const anosData = await getAnos(marcaEncontrada.codigo, melhorModelo.codigo.toString(), 'carros');
             setAnos(anosData);
             setLoadingAnos(false);
 
-            const anoEncontrado = anosData.find(a => a.nome.includes(anoVeiculo || ''));
+            // Buscar ano com match flexível
+            let anoEncontrado = anosData.find(a => {
+              const anoFipe = a.nome.split(' ')[0]; // "2018" de "2018 Gasolina"
+              return anoFipe === anoVeiculo;
+            });
+
+            // Se não encontrou ano exato, tentar o mais próximo ou o primeiro disponível
+            if (!anoEncontrado && anosData.length > 0) {
+              // Tentar encontrar ano aproximado (ex: 2018 quando temos 2017 ou 2019)
+              const anoNum = parseInt(anoVeiculo);
+              if (!isNaN(anoNum)) {
+                const anosComDiff = anosData.map(a => {
+                  const anoFipeNum = parseInt(a.nome.split(' ')[0]);
+                  return { ...a, diff: Math.abs(anoFipeNum - anoNum) };
+                }).filter(a => !isNaN(a.diff));
+                
+                anoEncontrado = anosComDiff.sort((a, b) => a.diff - b.diff)[0];
+              }
+              
+              // Fallback: selecionar o primeiro (geralmente mais recente)
+              if (!anoEncontrado) {
+                anoEncontrado = anosData[0];
+              }
+            }
+
             if (anoEncontrado) {
               setAnoSelecionado(anoEncontrado.codigo);
             }
@@ -284,6 +349,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
           toast.success(`Veículo encontrado! FIPE: R$ ${resultado.fipeData.valor.toLocaleString('pt-BR')}`);
         } else {
           toast.success(`Veículo encontrado: ${resultado.vehicleData.marca} ${resultado.vehicleData.modelo}`);
+          // Se não encontrou via seleção, tentar busca por nome
           if (!marcaEncontrada) {
             const fipeResult = await buscarPorNome(
               resultado.vehicleData.marca,
