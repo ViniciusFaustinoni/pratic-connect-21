@@ -1,13 +1,13 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Users, Calendar, LayoutGrid, List, Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PropostasMetricsBar } from '@/components/propostas/PropostasMetricsBar';
-import { ConsultorCard } from '@/components/propostas/ConsultorCard';
-import { ConsultorTab } from '@/components/propostas/ConsultorTab';
+import { ConsultorCardNew } from '@/components/propostas/ConsultorCardNew';
+import { ConsultoresTable } from '@/components/propostas/ConsultoresTable';
+import { ConsultorDrawer } from '@/components/propostas/ConsultorDrawer';
 import { usePropostasMetricas, type PeriodoFiltro } from '@/hooks/usePropostasMetricas';
 import { cn } from '@/lib/utils';
 
@@ -19,12 +19,17 @@ export default function Propostas() {
   
   const { data, isLoading } = usePropostasMetricas(periodo);
 
-  // Filtrar consultores pela busca
-  const filteredConsultores = data?.consultores.filter(consultor =>
-    consultor.nome.toLowerCase().includes(searchTerm.toLowerCase())
-  ) || [];
+  // Filtrar e ordenar consultores por valor fechado (maior para menor)
+  const sortedConsultores = useMemo(() => {
+    const filtered = data?.consultores.filter(consultor =>
+      consultor.nome.toLowerCase().includes(searchTerm.toLowerCase())
+    ) || [];
+    
+    // Ordenar por valor fechado (desc)
+    return [...filtered].sort((a, b) => b.valorFechado - a.valorFechado);
+  }, [data?.consultores, searchTerm]);
 
-  const selectedConsultor = data?.consultores.find(c => c.id === selectedConsultorId);
+  const selectedConsultor = data?.consultores.find(c => c.id === selectedConsultorId) || null;
 
   return (
     <div className="space-y-6">
@@ -33,14 +38,14 @@ export default function Propostas() {
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Users className="h-6 w-6 text-primary" />
-            Consultores
+            Equipe Comercial
           </h1>
           <p className="text-muted-foreground">
-            Acompanhe o desempenho da equipe comercial
+            Acompanhe o desempenho dos consultores
           </p>
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           {/* Campo de Busca */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -48,7 +53,7 @@ export default function Propostas() {
               placeholder="Buscar consultor..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 w-[200px]"
+              className="pl-9 w-[180px]"
             />
           </div>
 
@@ -107,96 +112,53 @@ export default function Propostas() {
         isLoading={isLoading}
       />
 
-      {/* Sistema de Abas */}
-      <Tabs 
-        value={selectedConsultorId || 'visao-geral'} 
-        onValueChange={(v) => setSelectedConsultorId(v === 'visao-geral' ? null : v)}
-        className="space-y-4"
-      >
-        <div className="overflow-x-auto pb-1">
-          <TabsList className="inline-flex h-auto p-1 gap-1">
-            <TabsTrigger 
-              value="visao-geral"
-              className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground px-4"
-            >
-              <Users className="h-4 w-4 mr-2" />
-              Visão Geral
-            </TabsTrigger>
-            
-            {isLoading ? (
-              [...Array(3)].map((_, i) => (
-                <Skeleton key={i} className="h-9 w-32" />
-              ))
-            ) : (
-              filteredConsultores.map((consultor) => (
-                <TabsTrigger 
-                  key={consultor.id}
-                  value={consultor.id}
-                  className="gap-2"
-                >
-                  <span className="truncate max-w-[100px]">{consultor.nome.split(' ')[0]}</span>
-                  <span className={cn(
-                    "text-xs px-1.5 py-0.5 rounded-full",
-                    consultor.propostasFechadas > 0 
-                      ? "bg-green-100 text-green-700" 
-                      : "bg-muted text-muted-foreground"
-                  )}>
-                    {consultor.propostasFechadas}
-                  </span>
-                </TabsTrigger>
-              ))
-            )}
-          </TabsList>
+      {/* Conteúdo Principal */}
+      {isLoading ? (
+        viewMode === 'grid' ? (
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {[...Array(8)].map((_, i) => (
+              <Skeleton key={i} className="h-80" />
+            ))}
+          </div>
+        ) : (
+          <Skeleton className="h-96" />
+        )
+      ) : sortedConsultores.length === 0 ? (
+        <div className="text-center py-12">
+          <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+          <h3 className="text-lg font-medium">Nenhum consultor encontrado</h3>
+          <p className="text-muted-foreground">
+            {searchTerm 
+              ? `Nenhum consultor corresponde à busca "${searchTerm}"`
+              : 'Cadastre consultores para visualizar as métricas'
+            }
+          </p>
         </div>
+      ) : viewMode === 'grid' ? (
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {sortedConsultores.map((consultor, index) => (
+            <ConsultorCardNew
+              key={consultor.id}
+              consultor={consultor}
+              ranking={index + 1}
+              onClick={() => setSelectedConsultorId(consultor.id)}
+            />
+          ))}
+        </div>
+      ) : (
+        <ConsultoresTable 
+          consultores={sortedConsultores}
+          onSelect={(id) => setSelectedConsultorId(id)}
+        />
+      )}
 
-        {/* Conteúdo da Aba Visão Geral */}
-        <TabsContent value="visao-geral" className="mt-6">
-          {isLoading ? (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {[...Array(8)].map((_, i) => (
-                <Skeleton key={i} className="h-64" />
-              ))}
-            </div>
-          ) : filteredConsultores.length === 0 ? (
-            <div className="text-center py-12">
-              <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="text-lg font-medium">Nenhum consultor encontrado</h3>
-              <p className="text-muted-foreground">
-                Cadastre consultores para visualizar as métricas
-              </p>
-            </div>
-          ) : viewMode === 'grid' ? (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {filteredConsultores.map((consultor) => (
-                <ConsultorCard
-                  key={consultor.id}
-                  consultor={consultor}
-                  onClick={() => setSelectedConsultorId(consultor.id)}
-                  isSelected={selectedConsultorId === consultor.id}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {filteredConsultores.map((consultor) => (
-                <ConsultorCard
-                  key={consultor.id}
-                  consultor={consultor}
-                  onClick={() => setSelectedConsultorId(consultor.id)}
-                  isSelected={selectedConsultorId === consultor.id}
-                />
-              ))}
-            </div>
-          )}
-        </TabsContent>
-
-        {/* Abas Individuais dos Consultores */}
-        {data?.consultores.map((consultor) => (
-          <TabsContent key={consultor.id} value={consultor.id} className="mt-6">
-            <ConsultorTab consultor={consultor} periodo={periodo} />
-          </TabsContent>
-        ))}
-      </Tabs>
+      {/* Drawer de Detalhes */}
+      <ConsultorDrawer 
+        consultor={selectedConsultor}
+        periodo={periodo}
+        open={!!selectedConsultorId}
+        onClose={() => setSelectedConsultorId(null)}
+      />
     </div>
   );
 }
