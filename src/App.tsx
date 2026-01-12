@@ -74,6 +74,7 @@ import Empresa from "./pages/configuracoes/Empresa";
 import Integracoes from "./pages/configuracoes/Integracoes";
 import Sistema from "./pages/configuracoes/Sistema";
 import Logs from "./pages/configuracoes/Logs";
+import UsuariosAcessos from "./pages/configuracoes/UsuariosAcessos";
 import NotFound from "./pages/NotFound";
 import AcessoNegado from "./pages/AcessoNegado";
 import AssistenciaDashboard from "./pages/assistencia/AssistenciaDashboard";
@@ -392,14 +393,15 @@ const App = () => (
                 <Route path="meu-perfil" element={<MeuPerfil />} />
                 <Route path="seguranca" element={<Seguranca />} />
                 <Route path="notificacoes" element={<NotificacoesConfig />} />
-                <Route path="usuarios" element={<Usuarios />} />
+                <Route path="usuarios-acessos" element={<UsuariosAcessos />} />
+                <Route path="usuarios" element={<Navigate to="/configuracoes/usuarios-acessos" replace />} />
                 <Route path="usuarios/novo" element={<UsuarioForm />} />
                 <Route path="usuarios/:id" element={<UsuarioForm />} />
-                <Route path="perfis" element={<Perfis />} />
+                <Route path="perfis" element={<Navigate to="/configuracoes/usuarios-acessos?tab=perfis" replace />} />
+                <Route path="logs" element={<Navigate to="/configuracoes/usuarios-acessos?tab=logs" replace />} />
                 <Route path="empresa" element={<Empresa />} />
                 <Route path="integracoes" element={<Integracoes />} />
                 <Route path="sistema" element={<Sistema />} />
-                <Route path="logs" element={<Logs />} />
               </Route>
             </Route>
             
