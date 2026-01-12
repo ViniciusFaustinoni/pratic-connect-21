@@ -98,3 +98,6 @@ verify_jwt = false
 
 [functions.processar-extrato]
 verify_jwt = true
+
+[functions.import-users]
+verify_jwt = true

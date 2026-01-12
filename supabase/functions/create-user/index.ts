@@ -9,9 +9,11 @@ const corsHeaders = {
 interface CreateUserRequest {
   nome: string;
   email: string;
-  cpf: string;
+  cpf?: string;
   telefone?: string;
-  perfil: string;
+  senha?: string;           // Senha opcional - se não passar, usa magic link
+  perfil?: string;          // Para retro-compatibilidade
+  perfis?: string[];        // Múltiplos perfis
   tipo: 'funcionario' | 'associado' | 'prestador';
 }
 
@@ -70,9 +72,12 @@ serve(async (req) => {
     }
 
     const body: CreateUserRequest = await req.json();
-    const { nome, email, cpf, telefone, perfil, tipo } = body;
+    const { nome, email, cpf, telefone, senha, perfil, perfis, tipo } = body;
+    
+    // Determinar perfis a adicionar
+    const perfisParaAdicionar = perfis?.length ? perfis : (perfil ? [perfil] : ['vendedor_clt']);
 
-    console.log(`Criando usuário: ${email}, tipo: ${tipo}, perfil: ${perfil}`);
+    console.log(`Criando usuário: ${email}, tipo: ${tipo}, perfis: ${perfisParaAdicionar.join(', ')}`);
 
     // Verificar se email já existe
     const { data: existingEmail } = await supabaseAdmin
@@ -88,22 +93,24 @@ serve(async (req) => {
       );
     }
 
-    // Verificar se CPF já existe
-    const { data: existingCPF } = await supabaseAdmin
-      .from('profiles')
-      .select('id')
-      .eq('cpf', cpf)
-      .maybeSingle();
+    // Verificar se CPF já existe (se fornecido)
+    if (cpf) {
+      const { data: existingCPF } = await supabaseAdmin
+        .from('profiles')
+        .select('id')
+        .eq('cpf', cpf)
+        .maybeSingle();
 
-    if (existingCPF) {
-      return new Response(
-        JSON.stringify({ error: 'Este CPF já está cadastrado' }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      if (existingCPF) {
+        return new Response(
+          JSON.stringify({ error: 'Este CPF já está cadastrado' }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
-    // Criar usuário no Auth (sem senha - usará magic link)
-    const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
+    // Criar usuário no Auth (com ou sem senha)
+    const createUserOptions: any = {
       email: email.toLowerCase(),
       email_confirm: true, // Email já confirmado
       user_metadata: {
@@ -112,7 +119,14 @@ serve(async (req) => {
         telefone,
         tipo,
       }
-    });
+    };
+    
+    // Se senha fornecida, usar ela. Senão, magic link
+    if (senha) {
+      createUserOptions.password = senha;
+    }
+    
+    const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser(createUserOptions);
 
     if (authError) {
       console.error('Erro ao criar usuário no Auth:', authError);
@@ -123,62 +137,68 @@ serve(async (req) => {
     }
 
     // O trigger handle_new_user já cria o profile, mas precisamos atualizar campos adicionais
+    const updateData: any = { primeiro_acesso: !senha }; // Se tem senha, não é primeiro acesso
+    if (cpf) updateData.cpf = cpf;
+    if (telefone) updateData.telefone = telefone;
+    
     const { error: updateError } = await supabaseAdmin
       .from('profiles')
-      .update({
-        cpf,
-        telefone,
-        primeiro_acesso: true,
-      })
+      .update(updateData)
       .eq('user_id', authUser.user.id);
 
     if (updateError) {
       console.error('Erro ao atualizar profile:', updateError);
     }
 
-    // Adicionar role na tabela user_roles
-    const { error: roleError } = await supabaseAdmin
-      .from('user_roles')
-      .insert({
-        user_id: authUser.user.id,
-        role: perfil,
-      });
+    // Adicionar múltiplos roles na tabela user_roles
+    for (const role of perfisParaAdicionar) {
+      const { error: roleError } = await supabaseAdmin
+        .from('user_roles')
+        .insert({
+          user_id: authUser.user.id,
+          role: role,
+        });
 
-    if (roleError) {
-      console.error('Erro ao adicionar role:', roleError);
-    }
-
-    // Gerar magic link para definir senha
-    const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
-      type: 'magiclink',
-      email: email.toLowerCase(),
-      options: {
-        redirectTo: `${supabaseUrl.replace('.supabase.co', '.lovable.app')}/auth/definir-senha`,
+      if (roleError) {
+        console.error(`Erro ao adicionar role ${role}:`, roleError);
       }
-    });
-
-    if (linkError) {
-      console.error('Erro ao gerar magic link:', linkError);
     }
 
-    // Enviar email de boas-vindas com link
-    const appUrl = supabaseUrl.replace('.supabase.co', '.lovable.app');
-    
-    try {
-      await supabaseAdmin.functions.invoke('send-email', {
-        body: {
-          template: 'acesso-funcionario',
-          to: email.toLowerCase(),
-          data: {
-            nome,
-            linkAcesso: linkData?.properties?.action_link || `${appUrl}/login`,
-          }
+    // Se não passou senha, gerar magic link para definir senha
+    let linkData = null;
+    if (!senha) {
+      const { data, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+        type: 'magiclink',
+        email: email.toLowerCase(),
+        options: {
+          redirectTo: `${supabaseUrl.replace('.supabase.co', '.lovable.app')}/auth/definir-senha`,
         }
       });
-      console.log('Email de acesso enviado');
-    } catch (emailError) {
-      console.error('Erro ao enviar email:', emailError);
-      // Não falha a operação se email não for enviado
+      linkData = data;
+
+      if (linkError) {
+        console.error('Erro ao gerar magic link:', linkError);
+      }
+
+      // Enviar email de boas-vindas com link
+      const appUrl = supabaseUrl.replace('.supabase.co', '.lovable.app');
+      
+      try {
+        await supabaseAdmin.functions.invoke('send-email', {
+          body: {
+            template: 'acesso-funcionario',
+            to: email.toLowerCase(),
+            data: {
+              nome,
+              linkAcesso: linkData?.properties?.action_link || `${appUrl}/login`,
+            }
+          }
+        });
+        console.log('Email de acesso enviado');
+      } catch (emailError) {
+        console.error('Erro ao enviar email:', emailError);
+        // Não falha a operação se email não for enviado
+      }
     }
 
     // Registrar log de auditoria
@@ -191,7 +211,8 @@ serve(async (req) => {
         metadata: {
           criado_por: currentUser.id,
           tipo,
-          perfil,
+          perfis: perfisParaAdicionar,
+          com_senha: !!senha,
         }
       });
 
