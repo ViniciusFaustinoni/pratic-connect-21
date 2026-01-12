@@ -40,6 +40,7 @@ const perfisConfig: Record<string, { label: string; color: string }> = {
   supervisor_vendas: { label: 'Supervisor', color: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' },
   vendedor_clt: { label: 'Vendedor CLT', color: 'bg-green-500/20 text-green-400 border-green-500/30' },
   vendedor_externo: { label: 'Vendedor Externo', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
+  agencia: { label: 'Agência', color: 'bg-fuchsia-500/20 text-fuchsia-400 border-fuchsia-500/30' },
   analista_cadastro: { label: 'Analista Cadastro', color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' },
   coordenador_monitoramento: { label: 'Coord. Monitoramento', color: 'bg-orange-500/20 text-orange-400 border-orange-500/30' },
   analista_plataforma: { label: 'Analista Plataforma', color: 'bg-pink-500/20 text-pink-400 border-pink-500/30' },
