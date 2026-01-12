@@ -138,7 +138,7 @@ const menuConfig: {
       items: [
         { title: 'Leads', url: '/vendas/leads', icon: UserPlus },
         { title: 'Ativações', url: '/vendas/ativacoes', icon: Rocket },
-        { title: 'Cotações', url: '/vendas/cotacoes', icon: Calculator },
+        { title: 'Cotações/Propostas', url: '/vendas/cotacoes', icon: Calculator },
         { title: 'Consultores', url: '/vendas/propostas', icon: FileText },
         { title: 'Planos e Benefícios', url: '/vendas/planos-beneficios', icon: BookOpen },
       ],
