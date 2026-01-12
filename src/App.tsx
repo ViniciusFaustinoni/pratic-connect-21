@@ -27,6 +27,7 @@ import Acompanhamento from "./pages/vendas/Acompanhamento";
 import Cotacoes from "./pages/vendas/Cotacoes";
 import CotacaoDetalhe from "./pages/vendas/CotacaoDetalhe";
 import Contratos from "./pages/vendas/Contratos";
+import Propostas from "./pages/vendas/Propostas";
 import ContratoDetalhe from "./pages/vendas/ContratoDetalhe";
 import VendasDashboard from "./pages/vendas/VendasDashboard";
 import RelatoriosVendas from "./pages/vendas/RelatoriosVendas";
@@ -254,7 +255,8 @@ const App = () => (
               <Route path="/vendas/cotacao" element={<Cotacao />} />
               <Route path="/vendas/cotacoes" element={<Cotacoes />} />
               <Route path="/vendas/cotacoes/:id" element={<CotacaoDetalhe />} />
-              <Route path="/vendas/contratos" element={<Contratos />} />
+              <Route path="/vendas/contratos" element={<Navigate to="/vendas/propostas" replace />} />
+              <Route path="/vendas/propostas" element={<Propostas />} />
               <Route path="/vendas/contratos/:id" element={<ContratoDetalhe />} />
               <Route path="/vendas/planos-beneficios" element={<PlanosBeneficios />} />
               <Route path="/vendas/vendedores" element={<Vendedores />} />
