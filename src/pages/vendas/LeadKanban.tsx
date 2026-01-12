@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { Plus, Loader2, Calendar, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -32,6 +33,7 @@ import { LeadMetricsCards } from '@/components/leads/LeadMetricsCards';
 import { LeadDetailDrawer } from '@/components/leads/LeadDetailDrawer';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
 
 const ORIGENS: OrigemLead[] = [
   'site', 'indicacao', 'facebook', 'instagram', 'google', 'telefone', 'presencial', 'parceiro', 'outro', 'api'
@@ -196,19 +198,33 @@ export default function LeadKanban() {
     navigate(`/vendas/cotacoes?lead=${leadId}`);
   };
 
+  const queryClient = useQueryClient();
+
   const handleWhatsAppClick = async (leadId: string, currentEtapa: string) => {
-    // Se o lead está em "novo", mover automaticamente para "contato"
-    if (currentEtapa === 'novo') {
-      try {
+    try {
+      // Registrar contato via WhatsApp no histórico (sempre)
+      const { data: { user } } = await supabase.auth.getUser();
+      await supabase.from('leads_historico').insert({
+        lead_id: leadId,
+        usuario_id: user?.id,
+        acao: 'contato_whatsapp',
+        descricao: 'Contato iniciado via WhatsApp',
+      });
+
+      // Se o lead está em "novo", mover automaticamente para "contato"
+      if (currentEtapa === 'novo') {
         await changeEtapa.mutateAsync({
           leadId,
           etapaAnterior: 'novo' as EtapaLead,
           etapaNova: 'contato' as EtapaLead,
         });
         toast.success('Lead movido para Contato');
-      } catch (error) {
-        console.error('Erro ao mover lead:', error);
       }
+      
+      // Invalidar cache do histórico
+      queryClient.invalidateQueries({ queryKey: ['leads', leadId, 'historico'] });
+    } catch (error) {
+      console.error('Erro ao registrar contato:', error);
     }
   };
 
