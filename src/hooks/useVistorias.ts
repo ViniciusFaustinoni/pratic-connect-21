@@ -130,12 +130,14 @@ export function useCriarVistoriaAvulsa() {
         .eq('user_id', session.session.user.id)
         .single();
 
-      // Usar o próprio user_id como associado_id temporário (vistoria avulsa)
+      // Usar o próprio profile_id como associado_id temporário (vistoria avulsa)
+      // veiculo_id é null para vistoria avulsa
       const { data: result, error } = await supabase
         .from('vistorias')
         .insert([{
           associado_id: profileData?.id || session.session.user.id,
           vistoriador_id: profileData?.id || null,
+          veiculo_id: null as unknown as string, // Cast necessário até tipos serem atualizados
           tipo: 'entrada',
           status: 'em_analise' as const,
         }])

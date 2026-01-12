@@ -10385,7 +10385,7 @@ export type Database = {
           status: Database["public"]["Enums"]["status_vistoria"]
           tipo: Database["public"]["Enums"]["tipo_vistoria"]
           updated_at: string
-          veiculo_id: string
+          veiculo_id: string | null
           vistoriador_id: string | null
         }
         Insert: {
@@ -10404,7 +10404,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["status_vistoria"]
           tipo?: Database["public"]["Enums"]["tipo_vistoria"]
           updated_at?: string
-          veiculo_id: string
+          veiculo_id?: string | null
           vistoriador_id?: string | null
         }
         Update: {
@@ -10423,7 +10423,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["status_vistoria"]
           tipo?: Database["public"]["Enums"]["tipo_vistoria"]
           updated_at?: string
-          veiculo_id?: string
+          veiculo_id?: string | null
           vistoriador_id?: string | null
         }
         Relationships: [
