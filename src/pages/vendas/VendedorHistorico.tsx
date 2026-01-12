@@ -13,7 +13,8 @@ import {
   Car,
   Calendar,
   FileText,
-  ChevronRight
+  ChevronRight,
+  Settings
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -88,18 +89,28 @@ export default function VendedorHistorico() {
       <div className="shrink-0 z-10 bg-gradient-to-b from-muted/50 to-background border-b border-border/50">
         <div className="px-6 py-6 space-y-6">
           {/* Back Button & Title */}
-          <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => navigate('/vendas/vendedores')}
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">{vendedor.nome}</h1>
-              <p className="text-muted-foreground">Histórico de atividades do vendedor</p>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => navigate('/vendas/vendedores')}
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+              <div>
+                <h1 className="text-2xl font-bold text-foreground">{vendedor.nome}</h1>
+                <p className="text-muted-foreground">Histórico de atividades do vendedor</p>
+              </div>
             </div>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => navigate(`/configuracoes/usuarios/${vendedor.id}`)}
+            >
+              <Settings className="w-4 h-4 mr-2" />
+              Editar Usuário
+            </Button>
           </div>
 
           {/* Stats Cards */}
