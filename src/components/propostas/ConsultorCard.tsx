@@ -19,11 +19,9 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
-function getRankingIcon(ranking: number) {
-  if (ranking === 1) return '🥇';
-  if (ranking === 2) return '🥈';
-  if (ranking === 3) return '🥉';
-  return `#${ranking}`;
+// Função temporariamente desabilitada - ranking oficial será implementado depois
+function getRankingIcon(_ranking: number) {
+  return null;
 }
 
 function getPerformanceColor(consultor: ConsultorMetricas) {
@@ -66,16 +64,11 @@ export function ConsultorCard({ consultor, onClick, isSelected }: ConsultorCardP
         {/* Header com Avatar e Ranking */}
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center gap-3">
-            <div className="relative">
-              <UserAvatar 
-                src={consultor.avatar_url} 
-                name={consultor.nome} 
-                size="md"
-              />
-              <span className="absolute -top-1 -right-1 text-lg">
-                {getRankingIcon(consultor.ranking)}
-              </span>
-            </div>
+            <UserAvatar 
+              src={consultor.avatar_url} 
+              name={consultor.nome} 
+              size="md"
+            />
             <div>
               <h3 className="font-semibold text-foreground line-clamp-1">{consultor.nome}</h3>
               <Badge className={cn("text-xs", performanceBadge.color)}>
