@@ -251,31 +251,45 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
   const fuzzyMatchModelo = (modeloVeiculo: string, modeloFipe: string): number => {
     if (!modeloVeiculo || !modeloFipe) return 0;
     
-    const veiculoParts = modeloVeiculo.toLowerCase()
+    // Normalizar strings removendo caracteres especiais
+    const veiculoNorm = modeloVeiculo.toLowerCase()
       .replace(/[^a-z0-9\s]/g, ' ')
-      .split(/\s+/)
-      .filter(p => p.length >= 2);
-    const fipeParts = modeloFipe.toLowerCase()
+      .replace(/\s+/g, ' ')
+      .trim();
+    
+    const fipeNorm = modeloFipe.toLowerCase()
       .replace(/[^a-z0-9\s]/g, ' ')
-      .split(/\s+/)
-      .filter(p => p.length >= 2);
+      .replace(/\s+/g, ' ')
+      .trim();
+    
+    // Match exato ou contido
+    if (fipeNorm.includes(veiculoNorm) || veiculoNorm.includes(fipeNorm)) {
+      return 100;
+    }
+    
+    // Extrair palavra principal (primeiro termo significativo)
+    const palavraChave = veiculoNorm.split(' ')[0];
+    if (palavraChave.length >= 3 && fipeNorm.includes(palavraChave)) {
+      return 50; // Match na palavra principal
+    }
+    
+    // Match por partes
+    const veiculoParts = veiculoNorm.split(' ').filter(p => p.length >= 2);
+    const fipeParts = fipeNorm.split(' ').filter(p => p.length >= 2);
     
     let matches = 0;
     for (const vPart of veiculoParts) {
-      for (const fPart of fipeParts) {
-        if (fPart.includes(vPart) || vPart.includes(fPart)) {
-          matches++;
-          break;
-        }
+      if (fipeParts.some(fPart => fPart.includes(vPart) || vPart.includes(fPart))) {
+        matches++;
       }
     }
     
-    // Bonus para match exato do primeiro termo (geralmente o nome principal do modelo)
+    // Bonus para match do primeiro termo (geralmente o nome principal do modelo)
     if (veiculoParts[0] && fipeParts.some(fp => fp.includes(veiculoParts[0]))) {
-      matches += 2;
+      matches += 3;
     }
     
-    return matches;
+    return matches * 10;
   };
 
   // Buscar por placa
@@ -327,9 +341,22 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
             score: fuzzyMatchModelo(modeloNome, m.nome)
           }));
 
-          const melhorModelo = modelosComScore
+          let melhorModelo = modelosComScore
             .filter(m => m.score > 0)
             .sort((a, b) => b.score - a.score)[0];
+
+          // Fallback: se não encontrou match exato, buscar por nome base
+          if (!melhorModelo && modelosData.length > 0) {
+            const nomeBase = modeloNome.toLowerCase().split(' ')[0];
+            if (nomeBase.length >= 3) {
+              const modeloFallback = modelosData.find(m => 
+                m.nome.toLowerCase().includes(nomeBase)
+              );
+              if (modeloFallback) {
+                melhorModelo = { ...modeloFallback, score: 1 };
+              }
+            }
+          }
 
           if (melhorModelo) {
             setModeloSelecionado(melhorModelo.codigo.toString());
