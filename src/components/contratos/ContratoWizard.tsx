@@ -166,140 +166,153 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId }: ContratoWizard
   const handleOcrDataExtracted = (dados: Record<string, string>, tipoDocumento?: string) => {
     console.log('[OCR] Dados recebidos para mapeamento:', dados, 'Tipo:', tipoDocumento);
     
-    // Dados pessoais - considerar variações de nomes de campos
-    const nome = dados.nome || dados.nome_proprietario || dados.nome_titular;
-    if (nome && !form.getValues('nome')) {
-      form.setValue('nome', nome);
-      setDadosExtraidos(prev => ({ ...prev, nome: { value: nome, fonte: 'Documento' } }));
-    }
-    
-    // CPF - buscar em múltiplas fontes e SEMPRE registrar em dadosExtraidos
-    const cpfRaw = dados.cpf || dados.cpf_cnpj || dados.cpf_proprietario || dados.cpf_titular || dados.cpf_mf;
-    const cpfNormalizado = normalizeCpf(cpfRaw);
-    
-    if (cpfNormalizado) {
-      const cpfAtual = form.getValues('cpf');
-      const cpfAtualNormalizado = cpfAtual ? normalizeCpf(cpfAtual) : null;
+    // ========================================
+    // DADOS PESSOAIS - Apenas de CNH ou RG
+    // ========================================
+    if (tipoDocumento === 'cnh' || tipoDocumento === 'rg') {
+      // Nome - SOMENTE de documento pessoal (NÃO do CRLV)
+      const nome = dados.nome;
+      if (nome && !form.getValues('nome')) {
+        form.setValue('nome', nome);
+        const fonteName = tipoDocumento === 'cnh' ? 'CNH' : 'RG';
+        setDadosExtraidos(prev => ({ ...prev, nome: { value: nome, fonte: fonteName } }));
+      }
       
-      // SEMPRE registrar o CPF extraído
-      const fonteCpf = tipoDocumento === 'cnh' ? 'CNH' : tipoDocumento === 'rg' ? 'RG' : tipoDocumento === 'crlv' ? 'CRLV' : 'Documento';
-      setDadosExtraidos(prev => ({ ...prev, cpf: { value: cpfNormalizado, fonte: fonteCpf } }));
+      // CPF - de documento pessoal
+      const cpfRaw = dados.cpf || dados.cpf_cnpj || dados.cpf_mf;
+      const cpfNormalizado = normalizeCpf(cpfRaw);
       
-      // Preencher o form se estiver vazio
-      if (!cpfAtual) {
-        form.setValue('cpf', cpfNormalizado);
-      } else if (cpfAtualNormalizado && cpfAtualNormalizado !== cpfNormalizado) {
-        // CPF divergente - alertar o usuário
-        toast.warning(`CPF no documento (${cpfNormalizado}) difere do cadastro (${cpfAtualNormalizado}). Verifique!`);
+      if (cpfNormalizado) {
+        const cpfAtual = form.getValues('cpf');
+        const cpfAtualNormalizado = cpfAtual ? normalizeCpf(cpfAtual) : null;
+        
+        const fonteCpf = tipoDocumento === 'cnh' ? 'CNH' : 'RG';
+        setDadosExtraidos(prev => ({ ...prev, cpf: { value: cpfNormalizado, fonte: fonteCpf } }));
+        
+        if (!cpfAtual) {
+          form.setValue('cpf', cpfNormalizado);
+        } else if (cpfAtualNormalizado && cpfAtualNormalizado !== cpfNormalizado) {
+          toast.warning(`CPF no documento (${cpfNormalizado}) difere do cadastro (${cpfAtualNormalizado}). Verifique!`);
+        }
+      }
+      
+      // RG - de documento pessoal
+      if (dados.rg && !form.getValues('rg')) {
+        form.setValue('rg', dados.rg);
+        const fonteRg = tipoDocumento === 'cnh' ? 'CNH' : 'RG';
+        setDadosExtraidos(prev => ({ ...prev, rg: { value: dados.rg, fonte: fonteRg } }));
       }
     }
     
-    if (dados.rg && !form.getValues('rg')) {
-      form.setValue('rg', dados.rg);
-      setDadosExtraidos(prev => ({ ...prev, rg: { value: dados.rg, fonte: 'Documento' } }));
-    }
-    
-    // Endereço - considerar variações de nomes de campos
-    const logradouro = dados.logradouro || dados.endereco || dados.rua;
-    if (logradouro && !form.getValues('logradouro')) {
-      form.setValue('logradouro', logradouro);
-      setDadosExtraidos(prev => ({ ...prev, logradouro: { value: logradouro, fonte: 'Comprovante' } }));
-    }
-    
-    if (dados.numero && !form.getValues('numero')) {
-      form.setValue('numero', dados.numero);
-      setDadosExtraidos(prev => ({ ...prev, numero: { value: dados.numero, fonte: 'Comprovante' } }));
-    }
-    
-    if (dados.bairro && !form.getValues('bairro')) {
-      form.setValue('bairro', dados.bairro);
-      setDadosExtraidos(prev => ({ ...prev, bairro: { value: dados.bairro, fonte: 'Comprovante' } }));
-    }
-    
-    const cidade = dados.cidade || dados.municipio || dados.localidade;
-    if (cidade && !form.getValues('cidade')) {
-      form.setValue('cidade', cidade);
-      setDadosExtraidos(prev => ({ ...prev, cidade: { value: cidade, fonte: 'Comprovante' } }));
-    }
-    
-    const uf = dados.uf || dados.estado;
-    if (uf && !form.getValues('uf')) {
-      form.setValue('uf', uf);
-      setDadosExtraidos(prev => ({ ...prev, uf: { value: uf, fonte: 'Comprovante' } }));
-    }
-    
-    if (dados.cep && !form.getValues('cep')) {
-      form.setValue('cep', dados.cep);
-      setDadosExtraidos(prev => ({ ...prev, cep: { value: dados.cep, fonte: 'Comprovante' } }));
-    }
-    
-    // Dados do veículo
-    if (dados.placa && !form.getValues('placa')) {
-      form.setValue('placa', dados.placa);
-      setDadosExtraidos(prev => ({ ...prev, placa: { value: dados.placa, fonte: 'CRLV' } }));
-    }
-    
-    if (dados.marca && !form.getValues('marca')) {
-      form.setValue('marca', dados.marca);
-      setDadosExtraidos(prev => ({ ...prev, marca: { value: dados.marca, fonte: 'CRLV' } }));
-    }
-    
-    if (dados.modelo && !form.getValues('modelo')) {
-      form.setValue('modelo', dados.modelo);
-      setDadosExtraidos(prev => ({ ...prev, modelo: { value: dados.modelo, fonte: 'CRLV' } }));
-    }
-    
-    // ANO - Tratar múltiplas variações possíveis
-    // A IA pode retornar: ano, ano_fabricacao, ano_modelo, ano_fab, ano_mod, ou formato combinado "2013/2014"
-    let anoFab: string | null = null;
-    let anoMod: string | null = null;
-    
-    // Verificar se há campo "ano" combinado como "2013/2014"
-    if (dados.ano && dados.ano.includes('/')) {
-      const [fab, mod] = dados.ano.split('/');
-      anoFab = fab?.trim() || null;
-      anoMod = mod?.trim() || null;
-    } else {
-      // Buscar campos específicos com diferentes nomes
-      anoFab = dados.ano_fabricacao || dados.ano_fab || dados.anofab || dados.ano || null;
-      anoMod = dados.ano_modelo || dados.ano_mod || dados.anomod || dados.ano || null;
-    }
-    
-    if (anoFab) {
-      const anoFabNum = parseInt(anoFab);
-      if (!isNaN(anoFabNum) && anoFabNum >= 1900 && anoFabNum <= new Date().getFullYear() + 2) {
-        form.setValue('ano_fabricacao', anoFabNum);
-        setDadosExtraidos(prev => ({ ...prev, ano_fabricacao: { value: anoFab!, fonte: 'CRLV' } }));
+    // ========================================
+    // DADOS DE ENDEREÇO - Apenas de Comprovante de Residência
+    // ========================================
+    if (tipoDocumento === 'comprovante_residencia') {
+      const logradouro = dados.logradouro || dados.endereco || dados.rua;
+      if (logradouro && !form.getValues('logradouro')) {
+        form.setValue('logradouro', logradouro);
+        setDadosExtraidos(prev => ({ ...prev, logradouro: { value: logradouro, fonte: 'Comprovante' } }));
+      }
+      
+      if (dados.numero && !form.getValues('numero')) {
+        form.setValue('numero', dados.numero);
+        setDadosExtraidos(prev => ({ ...prev, numero: { value: dados.numero, fonte: 'Comprovante' } }));
+      }
+      
+      if (dados.bairro && !form.getValues('bairro')) {
+        form.setValue('bairro', dados.bairro);
+        setDadosExtraidos(prev => ({ ...prev, bairro: { value: dados.bairro, fonte: 'Comprovante' } }));
+      }
+      
+      const cidade = dados.cidade || dados.municipio || dados.localidade;
+      if (cidade && !form.getValues('cidade')) {
+        form.setValue('cidade', cidade);
+        setDadosExtraidos(prev => ({ ...prev, cidade: { value: cidade, fonte: 'Comprovante' } }));
+      }
+      
+      const uf = dados.uf || dados.estado;
+      if (uf && !form.getValues('uf')) {
+        form.setValue('uf', uf);
+        setDadosExtraidos(prev => ({ ...prev, uf: { value: uf, fonte: 'Comprovante' } }));
+      }
+      
+      if (dados.cep && !form.getValues('cep')) {
+        form.setValue('cep', dados.cep);
+        setDadosExtraidos(prev => ({ ...prev, cep: { value: dados.cep, fonte: 'Comprovante' } }));
       }
     }
     
-    if (anoMod) {
-      const anoModNum = parseInt(anoMod);
-      if (!isNaN(anoModNum) && anoModNum >= 1900 && anoModNum <= new Date().getFullYear() + 2) {
-        form.setValue('ano_modelo', anoModNum);
-        setDadosExtraidos(prev => ({ ...prev, ano_modelo: { value: anoMod!, fonte: 'CRLV' } }));
+    // ========================================
+    // DADOS DO VEÍCULO - Apenas de CRLV
+    // ========================================
+    if (tipoDocumento === 'crlv') {
+      // NOTA: nome_proprietario do CRLV NÃO deve ir para o campo nome do associado
+      // O proprietário do veículo pode ser diferente do associado!
+      
+      if (dados.placa && !form.getValues('placa')) {
+        form.setValue('placa', dados.placa);
+        setDadosExtraidos(prev => ({ ...prev, placa: { value: dados.placa, fonte: 'CRLV' } }));
       }
-    }
-    
-    if (dados.cor && !form.getValues('cor')) {
-      form.setValue('cor', dados.cor);
-      setDadosExtraidos(prev => ({ ...prev, cor: { value: dados.cor, fonte: 'CRLV' } }));
-    }
-    
-    if (dados.renavam && !form.getValues('renavam')) {
-      form.setValue('renavam', dados.renavam);
-      setDadosExtraidos(prev => ({ ...prev, renavam: { value: dados.renavam, fonte: 'CRLV' } }));
-    }
-    
-    if (dados.chassi && !form.getValues('chassi')) {
-      form.setValue('chassi', dados.chassi);
-      setDadosExtraidos(prev => ({ ...prev, chassi: { value: dados.chassi, fonte: 'CRLV' } }));
-    }
-    
-    const combustivel = dados.combustivel || dados.combustivel_tipo;
-    if (combustivel && !form.getValues('combustivel')) {
-      form.setValue('combustivel', combustivel);
-      setDadosExtraidos(prev => ({ ...prev, combustivel: { value: combustivel, fonte: 'CRLV' } }));
+      
+      if (dados.marca && !form.getValues('marca')) {
+        form.setValue('marca', dados.marca);
+        setDadosExtraidos(prev => ({ ...prev, marca: { value: dados.marca, fonte: 'CRLV' } }));
+      }
+      
+      if (dados.modelo && !form.getValues('modelo')) {
+        form.setValue('modelo', dados.modelo);
+        setDadosExtraidos(prev => ({ ...prev, modelo: { value: dados.modelo, fonte: 'CRLV' } }));
+      }
+      
+      // ANO - Tratar múltiplas variações possíveis
+      let anoFab: string | null = null;
+      let anoMod: string | null = null;
+      
+      if (dados.ano && dados.ano.includes('/')) {
+        const [fab, mod] = dados.ano.split('/');
+        anoFab = fab?.trim() || null;
+        anoMod = mod?.trim() || null;
+      } else {
+        anoFab = dados.ano_fabricacao || dados.ano_fab || dados.anofab || dados.ano || null;
+        anoMod = dados.ano_modelo || dados.ano_mod || dados.anomod || dados.ano || null;
+      }
+      
+      if (anoFab) {
+        const anoFabNum = parseInt(anoFab);
+        if (!isNaN(anoFabNum) && anoFabNum >= 1900 && anoFabNum <= new Date().getFullYear() + 2) {
+          form.setValue('ano_fabricacao', anoFabNum);
+          setDadosExtraidos(prev => ({ ...prev, ano_fabricacao: { value: anoFab!, fonte: 'CRLV' } }));
+        }
+      }
+      
+      if (anoMod) {
+        const anoModNum = parseInt(anoMod);
+        if (!isNaN(anoModNum) && anoModNum >= 1900 && anoModNum <= new Date().getFullYear() + 2) {
+          form.setValue('ano_modelo', anoModNum);
+          setDadosExtraidos(prev => ({ ...prev, ano_modelo: { value: anoMod!, fonte: 'CRLV' } }));
+        }
+      }
+      
+      if (dados.cor && !form.getValues('cor')) {
+        form.setValue('cor', dados.cor);
+        setDadosExtraidos(prev => ({ ...prev, cor: { value: dados.cor, fonte: 'CRLV' } }));
+      }
+      
+      if (dados.renavam && !form.getValues('renavam')) {
+        form.setValue('renavam', dados.renavam);
+        setDadosExtraidos(prev => ({ ...prev, renavam: { value: dados.renavam, fonte: 'CRLV' } }));
+      }
+      
+      if (dados.chassi && !form.getValues('chassi')) {
+        form.setValue('chassi', dados.chassi);
+        setDadosExtraidos(prev => ({ ...prev, chassi: { value: dados.chassi, fonte: 'CRLV' } }));
+      }
+      
+      const combustivel = dados.combustivel || dados.combustivel_tipo;
+      if (combustivel && !form.getValues('combustivel')) {
+        form.setValue('combustivel', combustivel);
+        setDadosExtraidos(prev => ({ ...prev, combustivel: { value: combustivel, fonte: 'CRLV' } }));
+      }
     }
   };
 
