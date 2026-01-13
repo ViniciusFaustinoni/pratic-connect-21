@@ -37,6 +37,13 @@ export function AtivacaoCardNew({
   const requisitos = (propostaAssinada ? 1 : 0) + (vistoriaOk ? 1 : 0);
   const progressValue = (requisitos / 2) * 100;
 
+  // Priorizar dados do contrato, fallback para lead
+  const nomeCliente = contrato.cliente_nome || contrato.lead?.nome || 'Cliente não informado';
+  const telefoneCliente = contrato.cliente_telefone || contrato.lead?.telefone;
+  const veiculoMarca = contrato.veiculo_marca || contrato.lead?.veiculo_marca;
+  const veiculoModelo = contrato.veiculo_modelo || contrato.lead?.veiculo_modelo;
+  const veiculoPlaca = contrato.veiculo_placa || contrato.lead?.veiculo_placa;
+
   // Determinar cor do status
   const getStatusColor = () => {
     if (isAtivado) return 'border-l-blue-500';
@@ -54,7 +61,7 @@ export function AtivacaoCardNew({
 
   const handleEnviarLembrete = () => {
     toast.success('Lembrete de assinatura enviado!', {
-      description: `Lembrete enviado para ${contrato.lead?.nome || 'o cliente'}`
+      description: `Lembrete enviado para ${nomeCliente}`
     });
   };
 
@@ -78,8 +85,8 @@ export function AtivacaoCardNew({
           <div className="flex items-start justify-between gap-2">
             <div className="flex items-center gap-2 flex-1 min-w-0">
               <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-              <h3 className="font-semibold text-base line-clamp-1">
-                {contrato.lead?.nome || 'Cliente não informado'}
+              <h3 className="font-semibold text-base">
+                {nomeCliente}
               </h3>
             </div>
             {/* Badge de status no canto superior direito */}
@@ -103,17 +110,17 @@ export function AtivacaoCardNew({
           </div>
           
           <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
-            {contrato.lead?.telefone && (
+            {telefoneCliente && (
               <div className="flex items-center gap-1">
                 <Phone className="h-3.5 w-3.5" />
-                <span>{contrato.lead.telefone}</span>
+                <span>{telefoneCliente}</span>
               </div>
             )}
-            {(contrato.lead?.veiculo_marca || contrato.lead?.veiculo_modelo) && (
+            {(veiculoMarca || veiculoModelo) && (
               <div className="flex items-center gap-1">
                 <Car className="h-3.5 w-3.5" />
                 <span>
-                  {[contrato.lead?.veiculo_marca, contrato.lead?.veiculo_modelo, contrato.lead?.veiculo_placa]
+                  {[veiculoMarca, veiculoModelo, veiculoPlaca]
                     .filter(Boolean)
                     .join(' - ')}
                 </span>
