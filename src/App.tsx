@@ -37,6 +37,7 @@ import Cotacao from "./pages/vendas/Cotacao";
 import Cotador from "./pages/vendas/Cotador";
 import CadastroComplementar from "./pages/vendas/CadastroComplementar";
 import GerarContrato from "./pages/vendas/GerarContrato";
+import ContratoEnviado from "./pages/vendas/ContratoEnviado";
 import Vendedores from "./pages/vendas/Vendedores";
 import VendedorHistorico from "./pages/vendas/VendedorHistorico";
 import Associados from "./pages/cadastro/Associados";
@@ -263,6 +264,7 @@ const App = () => (
               <Route path="/vendas/cotador" element={<Cotador />} />
               <Route path="/vendas/cadastro-complementar/:cotacaoId" element={<CadastroComplementar />} />
               <Route path="/vendas/gerar-contrato/:cotacaoId" element={<GerarContrato />} />
+              <Route path="/vendas/contrato-enviado/:contratoId" element={<ContratoEnviado />} />
               <Route path="/vendas/cotacoes" element={<Cotacoes />} />
               <Route path="/vendas/cotacoes/:id" element={<CotacaoDetalhe />} />
               <Route path="/vendas/contratos" element={<Contratos />} />

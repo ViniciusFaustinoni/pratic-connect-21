@@ -119,7 +119,7 @@ export default function GerarContrato() {
       });
 
       toast.success('Contrato gerado com sucesso!');
-      navigate(`/vendas/contratos/${resultado.id}`);
+      navigate(`/vendas/contrato-enviado/${resultado.id}`);
     } catch (error) {
       console.error('Erro ao gerar contrato:', error);
       toast.error('Erro ao gerar contrato. Tente novamente.');
