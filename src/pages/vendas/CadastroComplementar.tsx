@@ -1,89 +1,30 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { ArrowLeft, Car, FileText, Loader2, User, MapPin, Settings } from 'lucide-react';
+import { ArrowLeft, Car, FileText, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { CpfInput, TelefoneInput, CepInput } from '@/components/inputs/MaskedInputs';
-import { buscarCep } from '@/lib/cep';
-import { useEffect } from 'react';
-
-const cadastroComplementarSchema = z.object({
-  // Dados pessoais
-  nome: z.string().min(3, 'Nome deve ter pelo menos 3 caracteres'),
-  cpf: z.string().min(14, 'CPF inválido'),
-  data_nascimento: z.string().min(1, 'Data de nascimento obrigatória'),
-  rg: z.string().optional(),
-  email: z.string().email('E-mail inválido'),
-  telefone: z.string().min(14, 'Telefone inválido'),
-  
-  // Endereço
-  cep: z.string().min(9, 'CEP inválido'),
-  logradouro: z.string().min(1, 'Logradouro obrigatório'),
-  numero: z.string().min(1, 'Número obrigatório'),
-  complemento: z.string().optional(),
-  bairro: z.string().min(1, 'Bairro obrigatório'),
-  cidade: z.string().min(1, 'Cidade obrigatória'),
-  estado: z.string().min(2, 'Estado obrigatório'),
-  
-  // Veículo
-  chassi: z.string().length(17, 'Chassi deve ter 17 caracteres'),
-  renavam: z.string().optional(),
-  cor: z.string().optional(),
-  combustivel: z.string().optional(),
-});
-
-type CadastroComplementarForm = z.infer<typeof cadastroComplementarSchema>;
-
-const ESTADOS_BRASIL = [
-  'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA',
-  'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN',
-  'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'
-];
-
-const COMBUSTIVEIS = [
-  { value: 'gasolina', label: 'Gasolina' },
-  { value: 'alcool', label: 'Álcool' },
-  { value: 'flex', label: 'Flex' },
-  { value: 'diesel', label: 'Diesel' },
-  { value: 'eletrico', label: 'Elétrico' },
-  { value: 'hibrido', label: 'Híbrido' },
-];
+import { DocumentDropzone } from '@/components/cadastro/DocumentDropzone';
+import { DadosExtraidos } from '@/components/cadastro/DadosExtraidos';
+import { useExtrairDadosDocumentos, type DadosCliente, type DadosEndereco, type DadosVeiculo } from '@/hooks/useExtrairDadosDocumentos';
 
 export default function CadastroComplementar() {
   const { cotacaoId } = useParams<{ cotacaoId: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const form = useForm<CadastroComplementarForm>({
-    resolver: zodResolver(cadastroComplementarSchema),
-    defaultValues: {
-      nome: '',
-      cpf: '',
-      data_nascimento: '',
-      rg: '',
-      email: '',
-      telefone: '',
-      cep: '',
-      logradouro: '',
-      numero: '',
-      complemento: '',
-      bairro: '',
-      cidade: '',
-      estado: '',
-      chassi: '',
-      renavam: '',
-      cor: '',
-      combustivel: '',
-    },
-  });
+  // Estados para dados extraídos
+  const [dadosCliente, setDadosCliente] = useState<DadosCliente | null>(null);
+  const [dadosEndereco, setDadosEndereco] = useState<DadosEndereco | null>(null);
+  const [dadosVeiculo, setDadosVeiculo] = useState<DadosVeiculo | null>(null);
+  const [camposFaltantes, setCamposFaltantes] = useState<string[]>([]);
+  const [avisos, setAvisos] = useState<string[]>([]);
+  const [urlsDocumentos, setUrlsDocumentos] = useState<string[]>([]);
+
+  // Hook de extração
+  const extrairDados = useExtrairDadosDocumentos();
 
   // Buscar cotação
   const { data: cotacao, isLoading: isLoadingCotacao } = useQuery({
@@ -103,108 +44,128 @@ export default function CadastroComplementar() {
     enabled: !!cotacaoId,
   });
 
-  // Preencher formulário com dados da cotação
+  // Carregar dados extras se já existirem
   useEffect(() => {
     if (cotacao) {
       const dadosExtras = cotacao.dados_extras as Record<string, unknown> | null;
       
-      // Dados extras se existirem
       if (dadosExtras) {
-        const cliente = dadosExtras.cliente as Record<string, string> | undefined;
-        const endereco = dadosExtras.endereco as Record<string, string> | undefined;
-        const veiculoComp = dadosExtras.veiculo_complementar as Record<string, string> | undefined;
+        const clienteSalvo = dadosExtras.cliente as DadosCliente | undefined;
+        const enderecoSalvo = dadosExtras.endereco as DadosEndereco | undefined;
+        const veiculoSalvo = dadosExtras.veiculo_complementar as DadosVeiculo | undefined;
         
-        if (cliente) {
-          if (cliente.nome) form.setValue('nome', cliente.nome);
-          if (cliente.cpf) form.setValue('cpf', cliente.cpf);
-          if (cliente.email) form.setValue('email', cliente.email);
-          if (cliente.telefone) form.setValue('telefone', cliente.telefone);
-          if (cliente.data_nascimento) form.setValue('data_nascimento', cliente.data_nascimento);
-          if (cliente.rg) form.setValue('rg', cliente.rg);
+        if (clienteSalvo) setDadosCliente(clienteSalvo);
+        if (enderecoSalvo) setDadosEndereco(enderecoSalvo);
+        if (veiculoSalvo) setDadosVeiculo(veiculoSalvo);
+      }
+    }
+  }, [cotacao]);
+
+  // Handler quando arquivos são uploaded
+  const handleFilesUploaded = useCallback(async (urls: string[]) => {
+    // Adicionar às URLs existentes
+    const novasUrls = [...urlsDocumentos, ...urls];
+    setUrlsDocumentos(novasUrls);
+
+    // Processar com IA
+    try {
+      toast.info('Analisando documentos com IA...');
+      
+      const resultado = await extrairDados.mutateAsync({ urls: novasUrls });
+      
+      // Atualizar dados extraídos
+      if (resultado.dados_consolidados) {
+        if (resultado.dados_consolidados.cliente) {
+          setDadosCliente(prev => ({
+            ...prev,
+            ...resultado.dados_consolidados.cliente,
+          }));
         }
-        
-        if (endereco) {
-          if (endereco.cep) form.setValue('cep', endereco.cep);
-          if (endereco.logradouro) form.setValue('logradouro', endereco.logradouro);
-          if (endereco.numero) form.setValue('numero', endereco.numero);
-          if (endereco.complemento) form.setValue('complemento', endereco.complemento);
-          if (endereco.bairro) form.setValue('bairro', endereco.bairro);
-          if (endereco.cidade) form.setValue('cidade', endereco.cidade);
-          if (endereco.estado) form.setValue('estado', endereco.estado);
+        if (resultado.dados_consolidados.endereco) {
+          setDadosEndereco(prev => ({
+            ...prev,
+            ...resultado.dados_consolidados.endereco,
+          }));
         }
-        
-        if (veiculoComp) {
-          if (veiculoComp.chassi) form.setValue('chassi', veiculoComp.chassi);
-          if (veiculoComp.renavam) form.setValue('renavam', veiculoComp.renavam);
-          if (veiculoComp.cor) form.setValue('cor', veiculoComp.cor);
-          if (veiculoComp.combustivel) form.setValue('combustivel', veiculoComp.combustivel);
+        if (resultado.dados_consolidados.veiculo) {
+          setDadosVeiculo(prev => ({
+            ...prev,
+            ...resultado.dados_consolidados.veiculo,
+          }));
         }
       }
       
-      // Combustível da cotação principal
-      if (cotacao.combustivel && !form.getValues('combustivel')) {
-        form.setValue('combustivel', cotacao.combustivel);
-      }
-      if (cotacao.veiculo_combustivel && !form.getValues('combustivel')) {
-        form.setValue('combustivel', cotacao.veiculo_combustivel);
-      }
-    }
-  }, [cotacao, form]);
-
-  // Buscar CEP
-  const handleCepComplete = async (cep: string) => {
-    try {
-      const endereco = await buscarCep(cep);
-      if (endereco) {
-        form.setValue('logradouro', endereco.logradouro || '');
-        form.setValue('bairro', endereco.bairro || '');
-        form.setValue('cidade', endereco.cidade || '');
-        form.setValue('estado', endereco.uf || '');
-      }
+      setCamposFaltantes(resultado.campos_faltantes || []);
+      setAvisos(resultado.avisos || []);
+      
+      toast.success('Documentos analisados com sucesso!');
     } catch (error) {
-      console.error('Erro ao buscar CEP:', error);
+      console.error('Erro ao extrair dados:', error);
+      toast.error(error instanceof Error ? error.message : 'Erro ao processar documentos');
     }
-  };
+  }, [urlsDocumentos, extrairDados]);
+
+  // Verificar se pode continuar
+  const podeContuniar = useCallback(() => {
+    if (!dadosCliente?.nome || !dadosCliente?.cpf || !dadosCliente?.data_nascimento) {
+      return false;
+    }
+    if (!dadosEndereco?.cep || !dadosEndereco?.logradouro || !dadosEndereco?.numero || 
+        !dadosEndereco?.bairro || !dadosEndereco?.cidade || !dadosEndereco?.estado) {
+      return false;
+    }
+    if (!dadosVeiculo?.chassi) {
+      return false;
+    }
+    return true;
+  }, [dadosCliente, dadosEndereco, dadosVeiculo]);
 
   // Mutation para salvar dados
   const salvarDados = useMutation({
-    mutationFn: async (data: CadastroComplementarForm) => {
+    mutationFn: async () => {
       if (!cotacaoId || !cotacao) throw new Error('Cotação não encontrada');
+      if (!podeContuniar()) throw new Error('Preencha todos os campos obrigatórios');
 
       const dadosExtrasAtuais = (cotacao.dados_extras as Record<string, unknown>) || {};
       
       const dadosExtrasNovos = {
         ...dadosExtrasAtuais,
         cliente: {
-          nome: data.nome,
-          cpf: data.cpf,
-          data_nascimento: data.data_nascimento,
-          rg: data.rg || null,
-          email: data.email,
-          telefone: data.telefone,
+          nome: dadosCliente?.nome,
+          cpf: dadosCliente?.cpf,
+          data_nascimento: dadosCliente?.data_nascimento,
+          rg: dadosCliente?.rg || null,
+          email: null, // Será preenchido manualmente ou em outra etapa
+          telefone: null, // Será preenchido manualmente ou em outra etapa
+          nome_mae: dadosCliente?.nome_mae || null,
+          cnh_numero: dadosCliente?.cnh_numero || null,
+          cnh_categoria: dadosCliente?.cnh_categoria || null,
+          cnh_validade: dadosCliente?.cnh_validade || null,
         },
         endereco: {
-          cep: data.cep,
-          logradouro: data.logradouro,
-          numero: data.numero,
-          complemento: data.complemento || null,
-          bairro: data.bairro,
-          cidade: data.cidade,
-          estado: data.estado,
+          cep: dadosEndereco?.cep,
+          logradouro: dadosEndereco?.logradouro,
+          numero: dadosEndereco?.numero,
+          complemento: dadosEndereco?.complemento || null,
+          bairro: dadosEndereco?.bairro,
+          cidade: dadosEndereco?.cidade,
+          estado: dadosEndereco?.estado,
         },
         veiculo_complementar: {
-          chassi: data.chassi,
-          renavam: data.renavam || null,
-          cor: data.cor || null,
-          combustivel: data.combustivel || null,
+          chassi: dadosVeiculo?.chassi,
+          renavam: dadosVeiculo?.renavam || null,
+          cor: dadosVeiculo?.cor || null,
+          combustivel: dadosVeiculo?.combustivel || null,
+          placa: dadosVeiculo?.placa || null,
         },
+        documentos_urls: urlsDocumentos,
       };
 
       const { error } = await supabase
         .from('cotacoes')
         .update({
-          cidade: data.cidade,
-          combustivel: data.combustivel || null,
+          cidade: dadosEndereco?.cidade || null,
+          combustivel: dadosVeiculo?.combustivel || null,
           dados_extras: dadosExtrasNovos,
           status: 'aceita',
         })
@@ -224,10 +185,6 @@ export default function CadastroComplementar() {
       toast.error(`Erro ao salvar dados: ${error.message}`);
     },
   });
-
-  const onSubmit = (data: CadastroComplementarForm) => {
-    salvarDados.mutate(data);
-  };
 
   // Formatar valor FIPE
   const formatarValorFipe = (valor: number | null | undefined) => {
@@ -273,7 +230,12 @@ export default function CadastroComplementar() {
             >
               <ArrowLeft className="h-5 w-5" />
             </Button>
-            <h1 className="text-2xl font-bold">FINALIZAR CADASTRO</h1>
+            <div>
+              <h1 className="text-2xl font-bold">ENVIAR DOCUMENTAÇÃO</h1>
+              <p className="text-sm text-muted-foreground">
+                Envie os documentos e os dados serão preenchidos automaticamente
+              </p>
+            </div>
           </div>
           <span className="text-sm text-muted-foreground bg-muted px-3 py-1 rounded-full">
             Etapa 1 de 3
@@ -300,345 +262,60 @@ export default function CadastroComplementar() {
           </CardContent>
         </Card>
 
-        {/* Formulário */}
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            {/* Dados Pessoais */}
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center gap-2 mb-4">
-                  <User className="h-5 w-5 text-primary" />
-                  <h2 className="text-lg font-semibold">Dados Pessoais</h2>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="nome"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Nome completo *</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Nome completo" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="cpf"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>CPF *</FormLabel>
-                        <FormControl>
-                          <CpfInput
-                            value={field.value}
-                            onChange={field.onChange}
-                            placeholder="000.000.000-00"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="data_nascimento"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Data de Nascimento *</FormLabel>
-                        <FormControl>
-                          <Input type="date" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="rg"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>RG</FormLabel>
-                        <FormControl>
-                          <Input placeholder="RG" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="email"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>E-mail *</FormLabel>
-                        <FormControl>
-                          <Input type="email" placeholder="email@exemplo.com" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="telefone"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Telefone *</FormLabel>
-                        <FormControl>
-                          <TelefoneInput
-                            value={field.value}
-                            onChange={field.onChange}
-                            placeholder="(00) 00000-0000"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </CardContent>
-            </Card>
+        {/* Zona de Upload */}
+        <Card>
+          <CardContent className="p-6">
+            <h2 className="text-lg font-semibold mb-4">📎 Upload de Documentos</h2>
+            <DocumentDropzone 
+              onFilesUploaded={handleFilesUploaded}
+              isProcessing={extrairDados.isPending}
+              disabled={salvarDados.isPending}
+            />
+          </CardContent>
+        </Card>
 
-            {/* Endereço */}
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center gap-2 mb-4">
-                  <MapPin className="h-5 w-5 text-primary" />
-                  <h2 className="text-lg font-semibold">Endereço</h2>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="cep"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>CEP *</FormLabel>
-                        <FormControl>
-                          <CepInput
-                            value={field.value}
-                            onChange={field.onChange}
-                            onCepComplete={handleCepComplete}
-                            placeholder="00000-000"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="logradouro"
-                    render={({ field }) => (
-                      <FormItem className="md:col-span-2">
-                        <FormLabel>Logradouro *</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Rua, Avenida, etc." {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="numero"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Número *</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Nº" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="complemento"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Complemento</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Apto, Sala, etc." {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="bairro"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Bairro *</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Bairro" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="cidade"
-                    render={({ field }) => (
-                      <FormItem className="md:col-span-2">
-                        <FormLabel>Cidade *</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Cidade" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="estado"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Estado *</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="UF" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {ESTADOS_BRASIL.map((uf) => (
-                              <SelectItem key={uf} value={uf}>
-                                {uf}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </CardContent>
-            </Card>
+        {/* Dados Extraídos */}
+        <div>
+          <h2 className="text-lg font-semibold mb-4">📋 Dados Extraídos</h2>
+          <DadosExtraidos
+            cliente={dadosCliente}
+            endereco={dadosEndereco}
+            veiculo={dadosVeiculo}
+            camposFaltantes={camposFaltantes}
+            avisos={avisos}
+          />
+        </div>
 
-            {/* Dados do Veículo */}
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center gap-2 mb-4">
-                  <Settings className="h-5 w-5 text-primary" />
-                  <h2 className="text-lg font-semibold">Dados do Veículo</h2>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="chassi"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Chassi * (17 caracteres)</FormLabel>
-                        <FormControl>
-                          <Input
-                            placeholder="Ex: 9BWZZZ377VT004251"
-                            maxLength={17}
-                            {...field}
-                            onChange={(e) => field.onChange(e.target.value.toUpperCase())}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="renavam"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Renavam</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Renavam" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="cor"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Cor</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Ex: Preto, Branco, Prata" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="combustivel"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Combustível</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Selecione" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {COMBUSTIVEIS.map((comb) => (
-                              <SelectItem key={comb.value} value={comb.value}>
-                                {comb.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </CardContent>
-            </Card>
+        {/* Footer */}
+        <div className="flex justify-between pt-4">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => navigate('/vendas/cotacao')}
+          >
+            Cancelar
+          </Button>
+          <Button 
+            onClick={() => salvarDados.mutate()}
+            disabled={!podeContuniar() || salvarDados.isPending || extrairDados.isPending}
+          >
+            {salvarDados.isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Salvando...
+              </>
+            ) : (
+              'Continuar para Contrato →'
+            )}
+          </Button>
+        </div>
 
-            {/* Footer */}
-            <div className="flex justify-between pt-4">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => navigate('/vendas/cotacao')}
-              >
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={salvarDados.isPending}>
-                {salvarDados.isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Salvando...
-                  </>
-                ) : (
-                  'Continuar para Contrato →'
-                )}
-              </Button>
-            </div>
-          </form>
-        </Form>
+        {/* Helper text */}
+        {!podeContuniar() && (dadosCliente || dadosEndereco || dadosVeiculo) && (
+          <p className="text-sm text-center text-muted-foreground">
+            ⚠️ Envie documentos adicionais para preencher os campos obrigatórios faltantes
+          </p>
+        )}
       </div>
     </div>
   );
