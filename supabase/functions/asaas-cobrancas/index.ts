@@ -7,9 +7,11 @@ const corsHeaders = {
 };
 
 const ASAAS_API_KEY = Deno.env.get('ASAAS_API_KEY');
-const ASAAS_BASE_URL = ASAAS_API_KEY?.startsWith('$aact_') 
-  ? 'https://api.asaas.com/v3'
-  : 'https://sandbox.asaas.com/api/v3';
+// Chaves sandbox contêm '_hmlg_' (homologação)
+const isSandbox = ASAAS_API_KEY?.includes('_hmlg_');
+const ASAAS_BASE_URL = isSandbox
+  ? 'https://sandbox.asaas.com/api/v3'
+  : 'https://api.asaas.com/v3';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;

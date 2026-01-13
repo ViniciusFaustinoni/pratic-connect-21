@@ -19,8 +19,9 @@ function getAsaasConfig() {
     ambiente = envExplicito === 'production' ? 'production' : 'sandbox';
     console.log(`[asaas-cobranca-adesao] Ambiente definido por ASAAS_ENV: ${ambiente}`);
   } else {
-    // Inferir pelo prefixo da chave API
-    ambiente = ASAAS_API_KEY?.startsWith('$aact_') ? 'production' : 'sandbox';
+    // Inferir pelo prefixo da chave API - chaves sandbox contêm '_hmlg_' (homologação)
+    const isSandbox = ASAAS_API_KEY?.includes('_hmlg_');
+    ambiente = isSandbox ? 'sandbox' : 'production';
     console.log(`[asaas-cobranca-adesao] Ambiente inferido pela chave API: ${ambiente}`);
   }
   
