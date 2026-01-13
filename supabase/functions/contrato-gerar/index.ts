@@ -84,10 +84,13 @@ serve(async (req) => {
       cliente.cep
     ].filter(Boolean).join(', ');
 
-    // 5. Criar o contrato (sem colunas veiculo_* que não existem na tabela)
+    // 5. Criar o contrato
     const timestamp = new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 14);
     const random = Math.random().toString(36).substring(2, 8).toUpperCase();
     const numeroTemp = `CTR-${timestamp}-${random}`;
+
+    // Determinar vendedor_id válido (pode ser null)
+    const finalVendedorId = vendedor_id || cotacao.vendedor_id || null;
 
     const { data: contrato, error: contratoError } = await supabase
       .from('contratos')
@@ -98,11 +101,11 @@ serve(async (req) => {
         associado_id: cotacao.associado_id,
         plano_id: cotacao.plano_id,
         valor_adesao: cotacao.valor_adesao || 0,
-        valor_mensal: cotacao.valor_total_mensal, // cotacoes usa valor_total_mensal
-        vendedor_id: vendedor_id || cotacao.vendedor_id,
+        valor_mensal: cotacao.valor_total_mensal,
+        vendedor_id: finalVendedorId,
         status: 'rascunho',
-        validade_link: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 dias
-        created_by: vendedor_id || cotacao.vendedor_id,
+        validade_link: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        created_by: finalVendedorId,
       })
       .select()
       .single();
@@ -114,12 +117,12 @@ serve(async (req) => {
 
     console.log('Contrato criado:', contrato.numero);
 
-    // 6. Registrar no histórico (trigger já faz automaticamente, mas podemos adicionar detalhes)
+    // 6. Registrar no histórico
     await supabase.from('contratos_historico').insert({
       contrato_id: contrato.id,
       evento: 'gerado_de_cotacao',
       descricao: `Contrato gerado a partir da cotação ${cotacao.numero}`,
-      usuario_id: vendedor_id || cotacao.vendedor_id,
+      usuario_id: finalVendedorId,
       dados: { 
         cotacao_id, 
         cotacao_numero: cotacao.numero,
