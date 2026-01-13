@@ -35,6 +35,7 @@ import RelatoriosVendas from "./pages/vendas/RelatoriosVendas";
 import Metas from "./pages/vendas/Metas";
 import Cotacao from "./pages/vendas/Cotacao";
 import Cotador from "./pages/vendas/Cotador";
+import CadastroComplementar from "./pages/vendas/CadastroComplementar";
 import Vendedores from "./pages/vendas/Vendedores";
 import VendedorHistorico from "./pages/vendas/VendedorHistorico";
 import Associados from "./pages/cadastro/Associados";
@@ -259,6 +260,7 @@ const App = () => (
               <Route path="/vendas/acompanhamento" element={<Acompanhamento />} />
               <Route path="/vendas/cotacao" element={<Cotacao />} />
               <Route path="/vendas/cotador" element={<Cotador />} />
+              <Route path="/vendas/cadastro-complementar/:cotacaoId" element={<CadastroComplementar />} />
               <Route path="/vendas/cotacoes" element={<Cotacoes />} />
               <Route path="/vendas/cotacoes/:id" element={<CotacaoDetalhe />} />
               <Route path="/vendas/contratos" element={<Contratos />} />
