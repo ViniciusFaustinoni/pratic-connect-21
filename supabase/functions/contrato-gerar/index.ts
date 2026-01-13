@@ -30,14 +30,13 @@ serve(async (req) => {
 
     console.log('Gerando contrato para cotação:', cotacao_id);
 
-    // 1. Buscar dados da cotação com lead
+    // 1. Buscar dados da cotação com lead (apenas colunas que existem em leads)
     const { data: cotacao, error: cotacaoError } = await supabase
       .from('cotacoes')
       .select(`
         *,
         lead:leads!fk_cotacoes_lead_id (
-          id, nome, email, telefone, cpf,
-          cidade, estado, endereco, bairro, cep
+          id, nome, email, telefone, cpf
         ),
         plano:planos (
           id, nome, coberturas
@@ -46,8 +45,12 @@ serve(async (req) => {
       .eq('id', cotacao_id)
       .maybeSingle();
 
-    if (cotacaoError || !cotacao) {
+    if (cotacaoError) {
       console.error('Erro ao buscar cotação:', cotacaoError);
+      throw new Error(`Erro ao buscar cotação: ${cotacaoError.message}`);
+    }
+
+    if (!cotacao) {
       throw new Error('Cotação não encontrada');
     }
 
@@ -69,14 +72,16 @@ serve(async (req) => {
       throw new Error(`Já existe contrato ${contratoExistente.numero} para esta cotação`);
     }
 
-    // 4. Montar endereço completo
+    // 4. Montar endereço completo (usar dados_extras da cotação, pois leads não tem endereço)
     const lead = cotacao.lead;
+    const dadosExtras = cotacao.dados_extras as Record<string, any> | null;
+    const cliente = dadosExtras?.cliente || {};
     const endereco = [
-      lead?.endereco,
-      lead?.bairro,
-      lead?.cidade,
-      lead?.estado,
-      lead?.cep
+      cliente.endereco,
+      cliente.bairro,
+      cliente.cidade || cotacao.cidade,
+      cliente.estado,
+      cliente.cep
     ].filter(Boolean).join(', ');
 
     // 5. Criar o contrato (sem colunas veiculo_* que não existem na tabela)
