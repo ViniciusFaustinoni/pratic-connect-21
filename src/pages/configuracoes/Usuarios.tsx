@@ -74,7 +74,7 @@ export default function Usuarios() {
     pagination: { page: 1, pageSize: 100 }
   });
 
-  const { desativarUsuario, ativarUsuario, resetarSenha } = useUsuarioActions();
+  const { desativarUsuario, ativarUsuario, resetarSenhaEmail } = useUsuarioActions();
   
   const stats = {
     total: usuarios.length,
@@ -108,7 +108,7 @@ export default function Usuarios() {
 
   const handleResetarSenha = async (email: string) => {
     try {
-      resetarSenha(email);
+      resetarSenhaEmail(email);
       toast.success('Email de recuperação enviado');
     } catch {
       toast.error('Erro ao enviar email');
