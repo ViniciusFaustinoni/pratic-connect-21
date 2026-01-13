@@ -28,6 +28,9 @@ export function useLeadActions() {
   // ============================================
   const criarLead = useMutation({
     mutationFn: async (data: LeadInsert) => {
+      // Pegar usuário atual para registrar histórico
+      const { data: { user } } = await supabase.auth.getUser();
+      
       const { data: lead, error } = await supabase
         .from('leads')
         .insert(data)
@@ -35,10 +38,25 @@ export function useLeadActions() {
         .single();
 
       if (error) throw error;
+
+      // Registrar no histórico
+      try {
+        await supabase.from('leads_historico').insert({
+          lead_id: lead.id,
+          usuario_id: user?.id || null,
+          acao: 'criou_lead',
+          descricao: `Lead "${lead.nome}" criado`,
+        });
+      } catch (histError) {
+        console.error('Erro ao registrar histórico:', histError);
+        // Não interrompe o fluxo principal
+      }
+
       return lead;
     },
-    onSuccess: () => {
-      invalidateLeadQueries();
+    onSuccess: (data) => {
+      invalidateLeadQueries(data.id);
+      queryClient.invalidateQueries({ queryKey: ['leads', data.id, 'historico'] });
       toast.success('Lead criado com sucesso!');
     },
     onError: (error: Error) => {
