@@ -153,8 +153,16 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId }: ContratoWizard
     setDocumentos(docs);
   };
 
-  const handleOcrDataExtracted = (dados: Record<string, string>) => {
-    console.log('[OCR] Dados recebidos para mapeamento:', dados);
+  // Função para normalizar CPF (extrair apenas dígitos e formatar)
+  const normalizeCpf = (cpfRaw: string): string | null => {
+    if (!cpfRaw || cpfRaw === 'null') return null;
+    const digits = cpfRaw.replace(/\D/g, '');
+    if (digits.length !== 11) return null;
+    return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
+  };
+
+  const handleOcrDataExtracted = (dados: Record<string, string>, tipoDocumento?: string) => {
+    console.log('[OCR] Dados recebidos para mapeamento:', dados, 'Tipo:', tipoDocumento);
     
     // Dados pessoais - considerar variações de nomes de campos
     const nome = dados.nome || dados.nome_proprietario || dados.nome_titular;
@@ -163,10 +171,25 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId }: ContratoWizard
       setDadosExtraidos(prev => ({ ...prev, nome: { value: nome, fonte: 'Documento' } }));
     }
     
-    const cpf = dados.cpf || dados.cpf_cnpj;
-    if (cpf && !form.getValues('cpf')) {
-      form.setValue('cpf', cpf);
-      setDadosExtraidos(prev => ({ ...prev, cpf: { value: cpf, fonte: 'Documento' } }));
+    // CPF - buscar em múltiplas fontes e SEMPRE registrar em dadosExtraidos
+    const cpfRaw = dados.cpf || dados.cpf_cnpj || dados.cpf_proprietario || dados.cpf_titular || dados.cpf_mf;
+    const cpfNormalizado = normalizeCpf(cpfRaw);
+    
+    if (cpfNormalizado) {
+      const cpfAtual = form.getValues('cpf');
+      const cpfAtualNormalizado = cpfAtual ? normalizeCpf(cpfAtual) : null;
+      
+      // SEMPRE registrar o CPF extraído
+      const fonteCpf = tipoDocumento === 'cnh' ? 'CNH' : tipoDocumento === 'rg' ? 'RG' : tipoDocumento === 'crlv' ? 'CRLV' : 'Documento';
+      setDadosExtraidos(prev => ({ ...prev, cpf: { value: cpfNormalizado, fonte: fonteCpf } }));
+      
+      // Preencher o form se estiver vazio
+      if (!cpfAtual) {
+        form.setValue('cpf', cpfNormalizado);
+      } else if (cpfAtualNormalizado && cpfAtualNormalizado !== cpfNormalizado) {
+        // CPF divergente - alertar o usuário
+        toast.warning(`CPF no documento (${cpfNormalizado}) difere do cadastro (${cpfAtualNormalizado}). Verifique!`);
+      }
     }
     
     if (dados.rg && !form.getValues('rg')) {
@@ -497,6 +520,8 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId }: ContratoWizard
                   cotacaoId={cotacaoId}
                   onDocumentsChange={handleDocumentsChange}
                   onOcrDataExtracted={handleOcrDataExtracted}
+                  cpfEsperado={form.getValues('cpf') || cotacao?.leads?.cpf || undefined}
+                  nomeEsperado={form.getValues('nome') || cotacao?.leads?.nome || undefined}
                 />
 
                 {/* Dados extraídos pela IA */}
