@@ -3336,7 +3336,7 @@ export type Database = {
           id: string
           lead_id: string | null
           numero: string
-          plano_id: string
+          plano_id: string | null
           regiao: string | null
           status: Database["public"]["Enums"]["status_cotacao"]
           taxa_administrativa: number
@@ -3371,7 +3371,7 @@ export type Database = {
           id?: string
           lead_id?: string | null
           numero: string
-          plano_id: string
+          plano_id?: string | null
           regiao?: string | null
           status?: Database["public"]["Enums"]["status_cotacao"]
           taxa_administrativa?: number
@@ -3406,7 +3406,7 @@ export type Database = {
           id?: string
           lead_id?: string | null
           numero?: string
-          plano_id?: string
+          plano_id?: string | null
           regiao?: string | null
           status?: Database["public"]["Enums"]["status_cotacao"]
           taxa_administrativa?: number
