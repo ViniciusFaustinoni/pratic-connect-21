@@ -350,9 +350,16 @@ export default function Contratos() {
                   const status = statusConfig[contrato.status];
                   const clientName = contrato.associados?.nome || contrato.leads?.nome || '-';
                   const clientPhone = contrato.associados?.telefone || contrato.leads?.telefone;
-                  const veiculo = contrato.leads?.veiculo_marca 
-                    ? `${contrato.leads.veiculo_marca} ${contrato.leads.veiculo_modelo || ''} ${contrato.leads.veiculo_ano || ''}`
-                    : '-';
+                  const veiculoMarca = contrato.veiculo_marca || contrato.leads?.veiculo_marca || contrato.cotacoes?.veiculo_marca;
+                  const veiculoModelo = contrato.veiculo_modelo || contrato.leads?.veiculo_modelo || contrato.cotacoes?.veiculo_modelo;
+                  const veiculoAno = contrato.veiculo_ano || contrato.leads?.veiculo_ano || contrato.cotacoes?.veiculo_ano;
+                  const veiculoPlaca = contrato.veiculo_placa || contrato.leads?.veiculo_placa;
+                  
+                  const veiculo = veiculoMarca 
+                    ? `${veiculoMarca} ${veiculoModelo || ''} ${veiculoAno || ''}`.trim()
+                    : veiculoPlaca 
+                      ? veiculoPlaca 
+                      : '-';
                   
                   return (
                     <TableRow 
