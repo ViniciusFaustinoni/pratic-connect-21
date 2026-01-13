@@ -535,6 +535,7 @@ Adesão: ${formatCurrency(planoSelecionadoData.plano.valor_adesao)}`);
         veiculo_marca: getMarcaNome() || null,
         veiculo_modelo: getModeloNome() || null,
         veiculo_ano: anoNumerico,
+        veiculo_placa: placa || veiculoEncontrado?.extractedPlate || null,
         codigo_fipe: veiculoEncontrado?.fipeData?.codigo || null,
       });
       
