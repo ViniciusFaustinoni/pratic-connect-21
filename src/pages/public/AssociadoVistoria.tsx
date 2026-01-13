@@ -65,6 +65,10 @@ export default function AssociadoVistoria() {
   const veiculoInfo = contrato.veiculo_marca 
     ? `${contrato.veiculo_marca} ${contrato.veiculo_modelo || ''} - ${contrato.veiculo_placa || ''}`
     : 'Veículo não informado';
+  
+  // Detectar tipo de veículo baseado na marca (heurística simples)
+  const MARCAS_MOTOS = ['HONDA', 'YAMAHA', 'SUZUKI', 'KAWASAKI', 'BMW MOTORRAD', 'HARLEY-DAVIDSON', 'TRIUMPH', 'DUCATI', 'KTM', 'DAFRA', 'SHINERAY', 'KASINSKI'];
+  const tipoVeiculo = MARCAS_MOTOS.some(marca => contrato.veiculo_marca?.toUpperCase()?.includes(marca)) ? 'moto' : 'carro';
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-primary/10 py-8 px-4">
@@ -161,7 +165,7 @@ export default function AssociadoVistoria() {
         {etapa === 'autovistoria' && (
           <Autovistoria
             contratoId={contrato.id}
-            tipoVeiculo="carro"
+            tipoVeiculo={tipoVeiculo as 'carro' | 'moto'}
             onComplete={(vistoriaId) => {
               setVistoriaId(vistoriaId);
               setEtapa('pagamento');
