@@ -511,16 +511,36 @@ export default function Contratos() {
                                           return;
                                         }
                                         try {
+                                          // 1. Excluir cobranças Asaas vinculadas (já é CASCADE, mas garantindo)
+                                          await supabase
+                                            .from('asaas_cobrancas')
+                                            .delete()
+                                            .eq('contrato_id', contrato.id);
+                                          
+                                          // 2. Excluir cobranças antigas vinculadas
+                                          await supabase
+                                            .from('cobrancas')
+                                            .delete()
+                                            .eq('contrato_id', contrato.id);
+                                          
+                                          // 3. Excluir histórico do contrato
+                                          await supabase
+                                            .from('contratos_historico')
+                                            .delete()
+                                            .eq('contrato_id', contrato.id);
+                                          
+                                          // 4. Agora excluir o contrato
                                           const { error } = await supabase
                                             .from('contratos')
                                             .delete()
                                             .eq('id', contrato.id);
                                           if (error) throw error;
+                                          
                                           toast.success('Contrato excluído com sucesso');
                                           queryClient.invalidateQueries({ queryKey: ['contratos'] });
                                         } catch (error) {
                                           console.error('Erro ao excluir contrato:', error);
-                                          toast.error('Erro ao excluir contrato');
+                                          toast.error('Erro ao excluir contrato. Verifique se há registros dependentes.');
                                         }
                                       }}
                                     >
