@@ -9,6 +9,7 @@ import { EtapaResultado } from '@/components/cotacao/EtapaResultado';
 import { usePlanosOficiais, type PlanoOficial } from '@/hooks/usePlanosOficiais';
 import { useCreateCotacao } from '@/hooks/useCotacoes';
 import { useAuth } from '@/contexts/AuthContext';
+import { gerarPdfCotacao } from '@/lib/gerarPdfCotacao';
 
 // ============================================
 // INTERFACES
@@ -215,8 +216,41 @@ export default function CotacaoPage() {
 
   // Gerar PDF
   const handleGerarPDF = useCallback(() => {
-    toast.info('Funcionalidade de PDF em desenvolvimento');
-  }, []);
+    if (!planoSelecionado || !valorFipe) {
+      toast.error('Selecione um plano para gerar o PDF');
+      return;
+    }
+
+    try {
+      const cotacaoParaPdf = {
+        numero: cotacaoSalva?.numero || `COT-PREVIEW-${Date.now()}`,
+        valor_fipe: valorFipe,
+        valor_adesao: planoSelecionado.valorAdesao || 0,
+        valor_total_mensal: planoSelecionado.valorMensal || 0,
+        valor_cota: Math.round(valorFipe * 0.01),
+        taxa_administrativa: 0,
+        valor_rastreamento: 0,
+        valor_assistencia: 0,
+        veiculo_marca: marca || veiculoEncontrado?.marca || null,
+        veiculo_modelo: modelo || veiculoEncontrado?.modelo || null,
+        veiculo_ano: ano ? parseInt(ano) : (veiculoEncontrado?.ano ? parseInt(veiculoEncontrado.ano) : null),
+        codigo_fipe: veiculoEncontrado?.codigoFipe || null,
+        created_at: new Date().toISOString(),
+        validade_dias: 7,
+        leads: null,
+        planos: {
+          id: planoSelecionado.idReal || planoSelecionado.id,
+          nome: planoSelecionado.nome,
+        } as any,
+      };
+
+      gerarPdfCotacao(cotacaoParaPdf);
+      toast.success('PDF gerado com sucesso!');
+    } catch (error) {
+      console.error('Erro ao gerar PDF:', error);
+      toast.error('Erro ao gerar PDF. Tente novamente.');
+    }
+  }, [planoSelecionado, valorFipe, marca, modelo, ano, veiculoEncontrado, cotacaoSalva]);
 
   // Salvar cotação no banco de dados
   const handleSalvarCotacao = useCallback(async () => {
