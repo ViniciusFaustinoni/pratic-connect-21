@@ -31,6 +31,11 @@ export interface CotacaoWithRelations extends Cotacao {
     nome: string;
     email: string;
   } | null;
+  contrato?: {
+    id: string;
+    numero: string;
+    status: string;
+  } | null;
 }
 
 export function useCotacoes() {
@@ -42,7 +47,8 @@ export function useCotacoes() {
         .select(`
           *,
           leads:leads!fk_cotacoes_lead_id(*),
-          planos(*)
+          planos(*),
+          contratos(id, numero, status)
         `)
         .order('created_at', { ascending: false });
       
@@ -52,6 +58,15 @@ export function useCotacoes() {
       const cotacoes = data || [];
       const vendedorIds = [...new Set(cotacoes.map(c => c.vendedor_id).filter(Boolean))];
       
+      // Mapear contratos e vendedores
+      const mapCotacao = (c: typeof cotacoes[0], vendedorMap?: Map<string, { id: string; nome: string; email: string }>) => ({
+        ...c,
+        vendedor: c.vendedor_id && vendedorMap ? vendedorMap.get(c.vendedor_id) || null : null,
+        contrato: Array.isArray(c.contratos) && c.contratos.length > 0 
+          ? c.contratos[0] 
+          : null,
+      });
+      
       if (vendedorIds.length > 0) {
         const { data: vendedores } = await supabase
           .from('profiles')
@@ -60,13 +75,10 @@ export function useCotacoes() {
         
         const vendedorMap = new Map(vendedores?.map(v => [v.id, v]) || []);
         
-        return cotacoes.map(c => ({
-          ...c,
-          vendedor: c.vendedor_id ? vendedorMap.get(c.vendedor_id) || null : null,
-        })) as CotacaoWithRelations[];
+        return cotacoes.map(c => mapCotacao(c, vendedorMap)) as CotacaoWithRelations[];
       }
       
-      return cotacoes as CotacaoWithRelations[];
+      return cotacoes.map(c => mapCotacao(c)) as CotacaoWithRelations[];
     },
   });
 }

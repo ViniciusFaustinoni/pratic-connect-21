@@ -288,7 +288,7 @@ export function CotacaoCard({
             </>
           )}
           
-          {cotacao.status === 'aceita' && onGerarContrato && (
+          {cotacao.status === 'aceita' && onGerarContrato && !cotacao.contrato && (
             <Button 
               size="sm"
               onClick={() => onGerarContrato(cotacao.id)}
@@ -296,6 +296,17 @@ export function CotacaoCard({
             >
               <FileSignature className="h-4 w-4 mr-1" />
               {isGerandoContrato ? 'Gerando...' : 'Gerar Contrato'}
+            </Button>
+          )}
+          
+          {cotacao.status === 'aceita' && cotacao.contrato && (
+            <Button 
+              size="sm"
+              variant="outline"
+              onClick={() => navigate(`/vendas/contratos/${cotacao.contrato!.id}`)}
+            >
+              <FileSignature className="h-4 w-4 mr-1" />
+              Ver Contrato
             </Button>
           )}
           
