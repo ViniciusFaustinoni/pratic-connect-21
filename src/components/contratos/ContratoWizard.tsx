@@ -25,8 +25,8 @@ import { Badge } from '@/components/ui/badge';
 import { CpfInput, TelefoneInput, PlacaInput, CepInput } from '@/components/inputs/MaskedInputs';
 import { useCotacao, useUpdateCotacao } from '@/hooks/useCotacoes';
 import { useCreateContrato } from '@/hooks/useContratos';
-import { useCreateAssociado } from '@/hooks/useAssociados';
-import { useCreateVeiculo } from '@/hooks/useVeiculos';
+import { useCreateAssociado, useUpdateAssociado, buscarAssociadoPorCpf } from '@/hooks/useAssociados';
+import { useCreateVeiculo, useUpdateVeiculo, buscarVeiculoPorPlaca } from '@/hooks/useVeiculos';
 import { useUpdateLead } from '@/hooks/useLeads';
 import { UnifiedDocumentUploader, type DocumentoUnificado } from './UnifiedDocumentUploader';
 import { toast } from 'sonner';
@@ -85,7 +85,9 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId }: ContratoWizard
   const { data: cotacao } = useCotacao(cotacaoId);
   const createContrato = useCreateContrato();
   const createAssociado = useCreateAssociado();
+  const updateAssociado = useUpdateAssociado();
   const createVeiculo = useCreateVeiculo();
+  const updateVeiculo = useUpdateVeiculo();
   const updateCotacao = useUpdateCotacao();
   const updateLead = useUpdateLead();
 
@@ -328,37 +330,93 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId }: ContratoWizard
     
     setIsSubmitting(true);
     try {
-      // 1. Criar associado
-      const associado = await createAssociado.mutateAsync({
-        nome: data.nome,
-        cpf: data.cpf,
-        rg: data.rg || null,
-        email: data.email,
-        telefone: data.telefone,
-        cep: data.cep || null,
-        logradouro: data.logradouro || null,
-        numero: data.numero || null,
-        bairro: data.bairro || null,
-        cidade: data.cidade || null,
-        uf: data.uf || null,
-        status: 'em_analise',
-        plano_id: cotacao.plano_id,
-      });
+      // 1. Verificar se associado já existe pelo CPF
+      let associado = await buscarAssociadoPorCpf(data.cpf);
+      
+      if (associado) {
+        console.log('[Contrato] Associado existente encontrado:', associado.id);
+        
+        // Atualizar dados do associado existente
+        associado = await updateAssociado.mutateAsync({
+          id: associado.id,
+          nome: data.nome,
+          email: data.email,
+          telefone: data.telefone,
+          rg: data.rg || associado.rg,
+          cep: data.cep || associado.cep,
+          logradouro: data.logradouro || associado.logradouro,
+          numero: data.numero || associado.numero,
+          bairro: data.bairro || associado.bairro,
+          cidade: data.cidade || associado.cidade,
+          uf: data.uf || associado.uf,
+          plano_id: cotacao.plano_id,
+        });
+        
+        toast.info('Associado existente atualizado');
+      } else {
+        // Criar novo associado
+        console.log('[Contrato] Criando novo associado');
+        associado = await createAssociado.mutateAsync({
+          nome: data.nome,
+          cpf: data.cpf,
+          rg: data.rg || null,
+          email: data.email,
+          telefone: data.telefone,
+          cep: data.cep || null,
+          logradouro: data.logradouro || null,
+          numero: data.numero || null,
+          bairro: data.bairro || null,
+          cidade: data.cidade || null,
+          uf: data.uf || null,
+          status: 'em_analise',
+          plano_id: cotacao.plano_id,
+        });
+      }
 
-      // 2. Criar veículo
-      await createVeiculo.mutateAsync({
-        associado_id: associado.id,
-        placa: data.placa,
-        marca: data.marca,
-        modelo: data.modelo,
-        ano_fabricacao: data.ano_fabricacao,
-        ano_modelo: data.ano_modelo,
-        cor: data.cor || null,
-        combustivel: data.combustivel || null,
-        chassi: data.chassi || null,
-        renavam: data.renavam || null,
-        valor_fipe: data.valor_fipe || null,
-      });
+      // 2. Verificar se veículo já existe pela placa
+      let veiculo = await buscarVeiculoPorPlaca(data.placa);
+      
+      if (veiculo) {
+        console.log('[Contrato] Veículo existente encontrado:', veiculo.id);
+        
+        // Verificar se pertence ao mesmo associado
+        if (veiculo.associado_id && veiculo.associado_id !== associado.id) {
+          toast.warning('Este veículo já está vinculado a outro associado. Será atualizado.');
+        }
+        
+        // Atualizar veículo
+        veiculo = await updateVeiculo.mutateAsync({
+          id: veiculo.id,
+          associado_id: associado.id,
+          marca: data.marca,
+          modelo: data.modelo,
+          ano_fabricacao: data.ano_fabricacao,
+          ano_modelo: data.ano_modelo,
+          cor: data.cor || veiculo.cor,
+          combustivel: data.combustivel || veiculo.combustivel,
+          chassi: data.chassi || veiculo.chassi,
+          renavam: data.renavam || veiculo.renavam,
+          valor_fipe: data.valor_fipe || veiculo.valor_fipe,
+        });
+        
+        toast.info('Veículo existente atualizado');
+      } else {
+        // Criar novo veículo
+        console.log('[Contrato] Criando novo veículo');
+        await createVeiculo.mutateAsync({
+          associado_id: associado.id,
+          placa: data.placa,
+          marca: data.marca,
+          modelo: data.modelo,
+          ano_fabricacao: data.ano_fabricacao,
+          ano_modelo: data.ano_modelo,
+          cor: data.cor || null,
+          combustivel: data.combustivel || null,
+          chassi: data.chassi || null,
+          renavam: data.renavam || null,
+          valor_fipe: data.valor_fipe || null,
+        });
+      }
 
       // 3. Criar contrato
       await createContrato.mutateAsync({
