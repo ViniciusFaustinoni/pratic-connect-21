@@ -20,7 +20,7 @@ const ROUTE_CONFIG: Record<string, RouteConfig> = {
   '/vendas/vendedores': { label: 'Histórico de Vendedores' },
   '/vendas/acompanhamento': { label: 'Acompanhamento' },
   '/vendas/cotacoes': { label: 'Cotações' },
-  '/vendas/cotador': { label: 'Cotador' },
+  '/vendas/cotacao': { label: 'Nova Cotação' },
   '/vendas/contratos': { label: 'Contratos' },
   '/vendas/metas': { label: 'Metas' },
   '/vendas/relatorios': { label: 'Relatórios' },
