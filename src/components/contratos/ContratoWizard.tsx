@@ -2,7 +2,9 @@ import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Loader2, Check, User, Car, FileText, CheckCircle, Upload, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Loader2, Check, User, Car, FileText, CheckCircle, Upload, AlertCircle, ChevronLeft, ChevronRight, DollarSign } from 'lucide-react';
+import { buscarCep } from '@/lib/cep';
+import { useFipe } from '@/hooks/useFipe';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -76,12 +78,16 @@ const steps = [
 export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreated }: ContratoWizardProps) {
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [buscandoFipe, setBuscandoFipe] = useState(false);
   
   // Documentos uploadados
   const [documentos, setDocumentos] = useState<DocumentoUnificado[]>([]);
   
   // Dados extraídos pela IA
-  const [dadosExtraidos, setDadosExtraidos] = useState<Record<string, { value: string; fonte: string }>>({});
+  const [dadosExtraidos, setDadosExtraidos] = useState<Record<string, { value: string; fonte: string }>>({}); 
+  
+  // Hook FIPE
+  const { buscarPorNome } = useFipe();
   
   const { data: cotacao } = useCotacao(cotacaoId);
   const createContrato = useCreateContrato();
@@ -241,6 +247,36 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
         form.setValue('cep', dados.cep);
         setDadosExtraidos(prev => ({ ...prev, cep: { value: dados.cep, fonte: 'Comprovante' } }));
       }
+      
+      // Se não tem bairro mas tem CEP, buscar via ViaCEP
+      const cepValue = dados.cep || form.getValues('cep');
+      if (!form.getValues('bairro') && cepValue) {
+        const cepLimpo = cepValue.replace(/\D/g, '');
+        if (cepLimpo.length === 8) {
+          buscarCep(cepLimpo).then(enderecoCep => {
+            if (enderecoCep) {
+              if (enderecoCep.bairro && !form.getValues('bairro')) {
+                form.setValue('bairro', enderecoCep.bairro);
+                setDadosExtraidos(prev => ({ ...prev, bairro: { value: enderecoCep.bairro, fonte: 'CEP' } }));
+              }
+              if (enderecoCep.logradouro && !form.getValues('logradouro')) {
+                form.setValue('logradouro', enderecoCep.logradouro);
+                setDadosExtraidos(prev => ({ ...prev, logradouro: { value: enderecoCep.logradouro, fonte: 'CEP' } }));
+              }
+              if (enderecoCep.cidade && !form.getValues('cidade')) {
+                form.setValue('cidade', enderecoCep.cidade);
+                setDadosExtraidos(prev => ({ ...prev, cidade: { value: enderecoCep.cidade, fonte: 'CEP' } }));
+              }
+              if (enderecoCep.uf && !form.getValues('uf')) {
+                form.setValue('uf', enderecoCep.uf);
+                setDadosExtraidos(prev => ({ ...prev, uf: { value: enderecoCep.uf, fonte: 'CEP' } }));
+              }
+            }
+          }).catch(error => {
+            console.error('Erro ao buscar CEP:', error);
+          });
+        }
+      }
     }
     
     // ========================================
@@ -313,6 +349,31 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
       if (combustivel && !form.getValues('combustivel')) {
         form.setValue('combustivel', combustivel);
         setDadosExtraidos(prev => ({ ...prev, combustivel: { value: combustivel, fonte: 'CRLV' } }));
+      }
+      
+      // Buscar valor FIPE automaticamente se tiver marca, modelo e ano
+      const marcaValue = dados.marca || form.getValues('marca');
+      const modeloValue = dados.modelo || form.getValues('modelo');
+      const anoValue = anoMod || anoFab || form.getValues('ano_modelo')?.toString() || form.getValues('ano_fabricacao')?.toString();
+      
+      if (marcaValue && modeloValue && anoValue && !form.getValues('valor_fipe')) {
+        setBuscandoFipe(true);
+        buscarPorNome(marcaValue, modeloValue, anoValue).then(resultado => {
+          if (resultado && resultado.valorNumerico) {
+            form.setValue('valor_fipe', resultado.valorNumerico);
+            setDadosExtraidos(prev => ({ 
+              ...prev, 
+              valor_fipe: { 
+                value: formatCurrency(resultado.valorNumerico), 
+                fonte: 'FIPE' 
+              } 
+            }));
+          }
+        }).catch(error => {
+          console.error('Erro ao buscar FIPE:', error);
+        }).finally(() => {
+          setBuscandoFipe(false);
+        });
       }
     }
   };
@@ -639,6 +700,15 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
                         <DadoExtraido label="Modelo" campo="modelo" />
                         <DadoExtraido label="Renavam" campo="renavam" />
                         <DadoExtraido label="Chassi" campo="chassi" />
+                        {dadosExtraidos.valor_fipe && (
+                          <DadoExtraido label="Valor FIPE" campo="valor_fipe" />
+                        )}
+                        {buscandoFipe && (
+                          <div className="flex items-center gap-2 text-sm py-1">
+                            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                            <span className="text-muted-foreground">Buscando valor FIPE...</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -903,6 +973,21 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
                     ) : (
                       <CampoFaltante name="chassi" label="Chassi" placeholder="9BRXXXXXXXXXXXXXXXX" />
                     )}
+                    
+                    {/* Valor FIPE */}
+                    {dadosExtraidos.valor_fipe ? (
+                      <div className="col-span-2 p-2 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-800">
+                        <div className="flex items-center gap-2">
+                          <DollarSign className="h-4 w-4 text-green-600" />
+                          <DadoExtraido label="Valor FIPE" campo="valor_fipe" />
+                        </div>
+                      </div>
+                    ) : buscandoFipe ? (
+                      <div className="col-span-2 p-2 bg-muted/50 rounded-lg flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                        <span className="text-sm text-muted-foreground">Buscando valor FIPE...</span>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
 
