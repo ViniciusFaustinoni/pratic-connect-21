@@ -164,6 +164,87 @@ serve(async (req) => {
               fallback: true,
             },
           });
+
+          // === CRIAR DOCUMENTO NO AUTENTIQUE AUTOMATICAMENTE (FALLBACK) ===
+          try {
+            const contratoId = payment.externalReference;
+            
+            // Buscar dados do contrato
+            const { data: contratoFallback } = await supabase
+              .from('contratos')
+              .select(`
+                id,
+                cliente_nome,
+                cliente_email,
+                cliente_cpf,
+                cliente_telefone,
+                associado_id,
+                lead_id
+              `)
+              .eq('id', contratoId)
+              .single();
+
+            if (contratoFallback) {
+              let clienteNome = contratoFallback.cliente_nome;
+              let clienteEmail = contratoFallback.cliente_email;
+              let clienteCpf = contratoFallback.cliente_cpf;
+              let clienteTelefone = contratoFallback.cliente_telefone;
+
+              // Buscar do associado se necessário
+              if ((!clienteNome || !clienteEmail || !clienteCpf) && contratoFallback.associado_id) {
+                const { data: associadoData } = await supabase
+                  .from('associados')
+                  .select('nome, email, cpf, telefone')
+                  .eq('id', contratoFallback.associado_id)
+                  .single();
+                
+                if (associadoData) {
+                  clienteNome = clienteNome || associadoData.nome;
+                  clienteEmail = clienteEmail || associadoData.email;
+                  clienteCpf = clienteCpf || associadoData.cpf;
+                  clienteTelefone = clienteTelefone || associadoData.telefone;
+                }
+              }
+
+              // Buscar do lead se necessário
+              if ((!clienteNome || !clienteEmail || !clienteCpf) && contratoFallback.lead_id) {
+                const { data: leadData } = await supabase
+                  .from('leads')
+                  .select('nome, email, cpf, telefone')
+                  .eq('id', contratoFallback.lead_id)
+                  .single();
+                
+                if (leadData) {
+                  clienteNome = clienteNome || leadData.nome;
+                  clienteEmail = clienteEmail || leadData.email;
+                  clienteCpf = clienteCpf || leadData.cpf;
+                  clienteTelefone = clienteTelefone || leadData.telefone;
+                }
+              }
+
+              if (clienteNome && clienteEmail && clienteCpf) {
+                console.log(`[asaas-webhook] Criando documento Autentique via fallback para contrato ${contratoId}...`);
+                
+                const { error: autentiqueError } = await supabase.functions.invoke('autentique-create', {
+                  body: {
+                    contratoId,
+                    clienteNome,
+                    clienteEmail,
+                    clienteCpf,
+                    clienteTelefone,
+                  }
+                });
+
+                if (autentiqueError) {
+                  console.error('[asaas-webhook] Erro ao criar documento Autentique (fallback):', autentiqueError);
+                } else {
+                  console.log(`[asaas-webhook] Documento Autentique criado via fallback para contrato ${contratoId}`);
+                }
+              }
+            }
+          } catch (autentiqueErr) {
+            console.error('[asaas-webhook] Erro ao processar Autentique (fallback):', autentiqueErr);
+          }
         }
       }
 
@@ -270,6 +351,90 @@ serve(async (req) => {
               });
 
               console.log(`[asaas-webhook] Adesão paga para contrato ${cobranca.contrato_id}`);
+
+              // === CRIAR DOCUMENTO NO AUTENTIQUE AUTOMATICAMENTE ===
+              try {
+                // Buscar dados completos do contrato para criação do documento
+                const { data: contratoCompleto } = await supabase
+                  .from('contratos')
+                  .select(`
+                    id,
+                    cliente_nome,
+                    cliente_email,
+                    cliente_cpf,
+                    cliente_telefone,
+                    associado_id,
+                    lead_id
+                  `)
+                  .eq('id', cobranca.contrato_id)
+                  .single();
+
+                if (contratoCompleto) {
+                  // Buscar dados do associado ou lead se necessário
+                  let clienteNome = contratoCompleto.cliente_nome;
+                  let clienteEmail = contratoCompleto.cliente_email;
+                  let clienteCpf = contratoCompleto.cliente_cpf;
+                  let clienteTelefone = contratoCompleto.cliente_telefone;
+
+                  // Se não tem dados no contrato, buscar do associado
+                  if ((!clienteNome || !clienteEmail || !clienteCpf) && contratoCompleto.associado_id) {
+                    const { data: associadoData } = await supabase
+                      .from('associados')
+                      .select('nome, email, cpf, telefone')
+                      .eq('id', contratoCompleto.associado_id)
+                      .single();
+                    
+                    if (associadoData) {
+                      clienteNome = clienteNome || associadoData.nome;
+                      clienteEmail = clienteEmail || associadoData.email;
+                      clienteCpf = clienteCpf || associadoData.cpf;
+                      clienteTelefone = clienteTelefone || associadoData.telefone;
+                    }
+                  }
+
+                  // Se ainda não tem dados, buscar do lead
+                  if ((!clienteNome || !clienteEmail || !clienteCpf) && contratoCompleto.lead_id) {
+                    const { data: leadData } = await supabase
+                      .from('leads')
+                      .select('nome, email, cpf, telefone')
+                      .eq('id', contratoCompleto.lead_id)
+                      .single();
+                    
+                    if (leadData) {
+                      clienteNome = clienteNome || leadData.nome;
+                      clienteEmail = clienteEmail || leadData.email;
+                      clienteCpf = clienteCpf || leadData.cpf;
+                      clienteTelefone = clienteTelefone || leadData.telefone;
+                    }
+                  }
+
+                  if (clienteNome && clienteEmail && clienteCpf) {
+                    console.log(`[asaas-webhook] Criando documento Autentique para contrato ${cobranca.contrato_id}...`);
+                    
+                    // Chamar edge function do Autentique
+                    const { error: autentiqueError } = await supabase.functions.invoke('autentique-create', {
+                      body: {
+                        contratoId: cobranca.contrato_id,
+                        clienteNome,
+                        clienteEmail,
+                        clienteCpf,
+                        clienteTelefone,
+                      }
+                    });
+
+                    if (autentiqueError) {
+                      console.error('[asaas-webhook] Erro ao criar documento Autentique:', autentiqueError);
+                    } else {
+                      console.log(`[asaas-webhook] Documento Autentique criado com sucesso para contrato ${cobranca.contrato_id}`);
+                    }
+                  } else {
+                    console.warn('[asaas-webhook] Dados insuficientes para criar documento Autentique:', { clienteNome, clienteEmail, clienteCpf });
+                  }
+                }
+              } catch (autentiqueErr) {
+                console.error('[asaas-webhook] Erro ao processar Autentique:', autentiqueErr);
+                // Não bloqueia o fluxo principal se falhar
+              }
             }
 
             // CORREÇÃO 7.5.6: Verificar se associado suspenso deve ser reativado
