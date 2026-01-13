@@ -223,10 +223,13 @@ export function ContratoDetailDrawer({ contratoId, open, onClose }: ContratoDeta
                     <span className="text-muted-foreground">Valor Adesão:</span>
                     <p>{formatCurrency(contrato.valor_adesao)}</p>
                   </div>
-                  <div>
-                    <span className="text-muted-foreground">Dia Vencimento:</span>
-                    <p>{contrato.dia_vencimento || '-'}</p>
-                  </div>
+                  {/* Só exibe dia de vencimento após contrato assinado/ativo */}
+                  {(contrato.status === 'assinado' || contrato.status === 'ativo') && contrato.dia_vencimento && (
+                    <div>
+                      <span className="text-muted-foreground">Dia Vencimento:</span>
+                      <p>Dia {contrato.dia_vencimento}</p>
+                    </div>
+                  )}
                   <div>
                     <span className="text-muted-foreground">Data Início:</span>
                     <p>{formatDate(contrato.data_inicio)}</p>
