@@ -363,25 +363,25 @@ function QuickActions() {
   const actions = [
     { 
       label: 'Nova Cotação', 
-      emoji: '📊', 
+      icon: Calculator, 
       url: '/vendas/cotador',
       primary: true 
     },
     { 
       label: 'Novo Lead', 
-      emoji: '👤', 
+      icon: UserPlus, 
       url: '/vendas/leads?novo=true',
       primary: false 
     },
     { 
       label: 'Agendar', 
-      emoji: '🔧', 
+      icon: Wrench, 
       url: '/monitoramento/instalacoes?agendar=true',
       primary: false 
     },
     { 
       label: 'Documentos', 
-      emoji: '📄', 
+      icon: FileText, 
       url: '/cadastro/documentos',
       primary: false 
     },
@@ -401,7 +401,7 @@ function QuickActions() {
           )}
           onClick={() => navigate(action.url)}
         >
-          <span className="text-2xl">{action.emoji}</span>
+          <action.icon className="h-6 w-6" />
           <span className="text-sm font-medium">{action.label}</span>
         </Button>
       ))}
