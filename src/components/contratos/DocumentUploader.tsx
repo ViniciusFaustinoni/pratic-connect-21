@@ -21,7 +21,7 @@ import {
   type OcrResultado 
 } from '@/hooks/useContratoDocumentos';
 
-interface UploadedDocument {
+export interface UploadedDocument {
   id: string;
   tipo: TipoDocumentoContrato;
   arquivo_url: string;
@@ -37,6 +37,7 @@ interface DocumentUploaderProps {
   onDocumentsChange: (docs: UploadedDocument[]) => void;
   onOcrDataExtracted: (dados: Record<string, string>) => void;
   initialDocuments?: UploadedDocument[];
+  tiposPermitidos?: TipoDocumentoContrato[];
 }
 
 const tipoConfig: Record<TipoDocumentoContrato, { 
@@ -77,23 +78,25 @@ export function DocumentUploader({
   onDocumentsChange,
   onOcrDataExtracted,
   initialDocuments = [],
+  tiposPermitidos,
 }: DocumentUploaderProps) {
   const [documents, setDocuments] = useState<UploadedDocument[]>(initialDocuments);
   const [dragOver, setDragOver] = useState<TipoDocumentoContrato | null>(null);
   
   const uploadMutation = useUploadDocumentoContrato();
 
+  // Filtrar tipos permitidos
+  const tiposParaExibir = tiposPermitidos || (['crlv', 'cnh', 'rg', 'comprovante_residencia'] as TipoDocumentoContrato[]);
+
   const handleFileSelect = useCallback(async (
     file: File, 
     tipo: TipoDocumentoContrato
   ) => {
-    // Validar tipo de arquivo
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
     if (!allowedTypes.includes(file.type)) {
       return;
     }
 
-    // Validar tamanho (10MB)
     if (file.size > 10 * 1024 * 1024) {
       return;
     }
@@ -108,9 +111,10 @@ export function DocumentUploader({
     };
 
     setDocuments(prev => {
-      // Remover documento anterior do mesmo tipo
       const filtered = prev.filter(d => d.tipo !== tipo);
-      return [...filtered, newDoc];
+      const updated = [...filtered, newDoc];
+      onDocumentsChange(updated);
+      return updated;
     });
 
     try {
@@ -136,14 +140,15 @@ export function DocumentUploader({
         return updated;
       });
 
-      // Extrair dados do OCR se disponível
       if (result.ocr.sucesso && result.ocr.dados) {
         onOcrDataExtracted(result.ocr.dados as Record<string, string>);
       }
     } catch (error: any) {
-      setDocuments(prev => 
-        prev.map(d => d.id === tempId ? { ...d, status: 'error', error: error.message } : d)
-      );
+      setDocuments(prev => {
+        const updated = prev.map(d => d.id === tempId ? { ...d, status: 'error' as const, error: error.message } : d);
+        onDocumentsChange(updated);
+        return updated;
+      });
     }
   }, [cotacaoId, contratoId, uploadMutation, onDocumentsChange, onOcrDataExtracted]);
 
@@ -192,7 +197,7 @@ export function DocumentUploader({
 
     if (doc) {
       return (
-        <Card className={cn(
+        <Card key={tipo} className={cn(
           "relative overflow-hidden transition-all",
           doc.status === 'uploading' && "border-blue-500 bg-blue-500/5",
           doc.status === 'success' && "border-green-500 bg-green-500/5",
@@ -278,6 +283,7 @@ export function DocumentUploader({
 
     return (
       <Card
+        key={tipo}
         className={cn(
           "border-2 border-dashed transition-all cursor-pointer",
           isDragOver && "border-primary bg-primary/5",
@@ -327,17 +333,20 @@ export function DocumentUploader({
     );
   };
 
-  // Verificar se documentos obrigatórios estão completos
-  const documentosObrigatorios: TipoDocumentoContrato[] = ['crlv', 'comprovante_residencia'];
+  // Para tiposPermitidos de associado, verificar se tem CNH ou RG
   const temCnhOuRg = documents.some(d => (d.tipo === 'cnh' || d.tipo === 'rg') && d.status === 'success');
   const crlvOk = documents.some(d => d.tipo === 'crlv' && d.status === 'success');
   const comprovanteOk = documents.some(d => d.tipo === 'comprovante_residencia' && d.status === 'success');
-  const todosCompletos = temCnhOuRg && crlvOk && comprovanteOk;
+  
+  // Verificar documentos completos baseado nos tipos permitidos
+  const todosCompletos = tiposPermitidos?.includes('crlv') 
+    ? crlvOk 
+    : (temCnhOuRg && comprovanteOk);
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="font-semibold">Documentos para o Contrato</h3>
+        <h3 className="font-semibold">Documentos</h3>
         {todosCompletos ? (
           <Badge className="bg-green-500/20 text-green-600 border-green-500/30">
             <CheckCircle className="h-3 w-3 mr-1" />
@@ -345,16 +354,17 @@ export function DocumentUploader({
           </Badge>
         ) : (
           <Badge variant="outline" className="text-muted-foreground">
-            Envie os documentos obrigatórios
+            Envie os documentos
           </Badge>
         )}
       </div>
 
       <div className="grid gap-3">
-        {renderDropzone('crlv')}
-        {renderDropzone('cnh')}
-        {!getDocumentForTipo('cnh') && renderDropzone('rg')}
-        {renderDropzone('comprovante_residencia')}
+        {tiposParaExibir.map((tipo) => {
+          // Se já tem CNH, não mostrar RG
+          if (tipo === 'rg' && getDocumentForTipo('cnh')) return null;
+          return renderDropzone(tipo);
+        })}
       </div>
 
       <p className="text-xs text-muted-foreground">
