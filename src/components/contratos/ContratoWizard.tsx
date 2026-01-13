@@ -903,24 +903,6 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
                     ) : (
                       <CampoFaltante name="chassi" label="Chassi" placeholder="9BRXXXXXXXXXXXXXXXX" />
                     )}
-                    
-                    {/* Valor FIPE */}
-                    {(cotacao?.valor_fipe || form.getValues('valor_fipe')) ? (
-                      <div className="flex items-center gap-2 text-sm py-1">
-                        <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
-                        <span className="text-muted-foreground">Valor FIPE:</span>
-                        <span className="font-medium">
-                          {formatCurrency(cotacao?.valor_fipe || form.getValues('valor_fipe') || 0)}
-                        </span>
-                        <Badge variant="outline" className="text-xs">via Cotação</Badge>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 text-sm py-1">
-                        <AlertCircle className="h-4 w-4 text-amber-500 flex-shrink-0" />
-                        <span className="text-muted-foreground">Valor FIPE:</span>
-                        <span className="font-medium text-muted-foreground">Não informado</span>
-                      </div>
-                    )}
                   </div>
                 </div>
 
