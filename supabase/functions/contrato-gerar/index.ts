@@ -98,7 +98,7 @@ serve(async (req) => {
         associado_id: cotacao.associado_id,
         plano_id: cotacao.plano_id,
         valor_adesao: cotacao.valor_adesao || 0,
-        valor_mensal: cotacao.valor_mensal,
+        valor_mensal: cotacao.valor_total_mensal, // cotacoes usa valor_total_mensal
         vendedor_id: vendedor_id || cotacao.vendedor_id,
         status: 'rascunho',
         validade_link: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 dias
@@ -123,7 +123,7 @@ serve(async (req) => {
       dados: { 
         cotacao_id, 
         cotacao_numero: cotacao.numero,
-        valor_mensal: cotacao.valor_mensal 
+        valor_mensal: cotacao.valor_total_mensal 
       },
     });
 
