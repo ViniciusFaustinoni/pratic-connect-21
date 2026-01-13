@@ -431,7 +431,7 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId }: ContratoWizard
         });
       }
 
-      // 3. Criar contrato
+      // 3. Criar contrato com dados do veículo e cliente
       await createContrato.mutateAsync({
         cotacao_id: cotacao.id,
         plano_id: cotacao.plano_id,
@@ -440,6 +440,23 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId }: ContratoWizard
         valor_mensal: cotacao.valor_total_mensal,
         data_inicio: new Date().toISOString().split('T')[0],
         status: 'pendente',
+        // Dados do veículo
+        veiculo_placa: data.placa || null,
+        veiculo_marca: data.marca || null,
+        veiculo_modelo: data.modelo || null,
+        veiculo_ano: data.ano_fabricacao || null,
+        veiculo_cor: data.cor || null,
+        veiculo_chassi: data.chassi || null,
+        veiculo_renavam: data.renavam || null,
+        veiculo_valor_fipe: data.valor_fipe || null,
+        // Dados do cliente
+        cliente_nome: data.nome || null,
+        cliente_cpf: data.cpf || null,
+        cliente_email: data.email || null,
+        cliente_telefone: data.telefone || null,
+        cliente_cep: data.cep || null,
+        cliente_cidade: data.cidade || null,
+        cliente_uf: data.uf || null,
       });
 
       // 4. Atualizar status da cotação
