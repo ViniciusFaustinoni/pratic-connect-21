@@ -6,6 +6,29 @@ type Veiculo = Tables<'veiculos'>;
 type VeiculoInsert = TablesInsert<'veiculos'>;
 type VeiculoUpdate = TablesUpdate<'veiculos'>;
 
+// ============================================
+// FUNÇÃO STANDALONE: BUSCAR VEÍCULO POR PLACA
+// ============================================
+export async function buscarVeiculoPorPlaca(placa: string): Promise<Veiculo | null> {
+  // Normalizar placa (remover caracteres especiais e uppercase)
+  const placaNormalizada = placa.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+  
+  if (placaNormalizada.length < 7) return null;
+  
+  const { data, error } = await supabase
+    .from('veiculos')
+    .select('*')
+    .or(`placa.ilike.${placaNormalizada},placa.ilike.${placa}`)
+    .maybeSingle();
+    
+  if (error) {
+    console.error('[buscarVeiculoPorPlaca] Erro:', error);
+    throw error;
+  }
+  
+  return data as Veiculo | null;
+}
+
 export function useVeiculos(associadoId?: string) {
   return useQuery({
     queryKey: ['veiculos', associadoId],

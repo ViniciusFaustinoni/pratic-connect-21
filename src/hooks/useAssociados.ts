@@ -8,6 +8,30 @@ type Associado = Tables<'associados'>;
 type AssociadoInsert = TablesInsert<'associados'>;
 type AssociadoUpdate = TablesUpdate<'associados'>;
 
+// ============================================
+// FUNÇÃO STANDALONE: BUSCAR ASSOCIADO POR CPF
+// ============================================
+export async function buscarAssociadoPorCpf(cpf: string): Promise<Associado | null> {
+  // Normalizar CPF para diferentes formatos
+  const cpfDigits = cpf.replace(/\D/g, '');
+  if (cpfDigits.length !== 11) return null;
+  
+  const cpfFormatado = `${cpfDigits.slice(0, 3)}.${cpfDigits.slice(3, 6)}.${cpfDigits.slice(6, 9)}-${cpfDigits.slice(9)}`;
+  
+  const { data, error } = await supabase
+    .from('associados')
+    .select('*')
+    .or(`cpf.eq.${cpf},cpf.eq.${cpfDigits},cpf.eq.${cpfFormatado}`)
+    .maybeSingle();
+    
+  if (error) {
+    console.error('[buscarAssociadoPorCpf] Erro:', error);
+    throw error;
+  }
+  
+  return data as Associado | null;
+}
+
 export interface AssociadoWithRelations extends Associado {
   planos?: Tables<'planos'> | null;
   contratos?: Tables<'contratos'> | null;
