@@ -303,7 +303,9 @@ export function CotacaoCard({
             <Button 
               size="sm"
               variant="outline"
-              onClick={() => navigate(`/vendas/contratos/${cotacao.contrato!.id}`)}
+              onClick={() => navigate('/vendas/contratos', { 
+                state: { openContrato: cotacao.contrato!.id } 
+              })}
             >
               <FileSignature className="h-4 w-4 mr-1" />
               Ver Contrato

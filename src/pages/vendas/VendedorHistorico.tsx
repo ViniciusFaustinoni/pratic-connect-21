@@ -363,7 +363,9 @@ export default function VendedorHistorico() {
                 <Card 
                   key={contrato.id} 
                   className="border-border/50 hover:border-primary/50 transition-colors cursor-pointer group"
-                  onClick={() => navigate(`/vendas/contratos/${contrato.id}`)}
+                  onClick={() => navigate('/vendas/contratos', { 
+                    state: { openContrato: contrato.id } 
+                  })}
                 >
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
