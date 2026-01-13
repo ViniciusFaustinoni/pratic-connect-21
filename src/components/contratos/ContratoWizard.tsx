@@ -64,6 +64,7 @@ interface ContratoWizardProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   cotacaoId: string;
+  onContratoCreated?: (contratoId: string) => void;
 }
 
 const steps = [
@@ -72,7 +73,7 @@ const steps = [
   { id: 3, title: 'Revisão', icon: CheckCircle },
 ];
 
-export function ContratoWizard({ open, onOpenChange, cotacaoId }: ContratoWizardProps) {
+export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreated }: ContratoWizardProps) {
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
@@ -432,7 +433,7 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId }: ContratoWizard
       }
 
       // 3. Criar contrato com dados do veículo e cliente
-      await createContrato.mutateAsync({
+      const novoContrato = await createContrato.mutateAsync({
         cotacao_id: cotacao.id,
         plano_id: cotacao.plano_id,
         associado_id: associado.id,
@@ -469,6 +470,11 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId }: ContratoWizard
 
       toast.success('Contrato criado com sucesso!');
       onOpenChange(false);
+      
+      // Notificar que contrato foi criado para navegação
+      if (onContratoCreated && novoContrato?.id) {
+        onContratoCreated(novoContrato.id);
+      }
     } catch (error) {
       toast.error('Erro ao criar contrato');
       console.error(error);
