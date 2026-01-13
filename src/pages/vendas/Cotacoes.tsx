@@ -396,7 +396,7 @@ export default function Cotacoes() {
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Cotações/Propostas</h1>
+          <h1 className="text-2xl font-bold">Cotação</h1>
           <p className="text-muted-foreground">
             Gerencie cotações em andamento e acompanhe propostas
           </p>
