@@ -2,13 +2,12 @@ import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Loader2, Check, User, Car, FileText, CheckCircle } from 'lucide-react';
+import { Loader2, Check, User, Car, FileText, CheckCircle, Upload, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -22,53 +21,40 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { CpfInput, TelefoneInput, PlacaInput, CepInput, CurrencyInput } from '@/components/inputs/MaskedInputs';
-import { associadoSchema, veiculoSchema } from '@/lib/validations';
+import { Badge } from '@/components/ui/badge';
+import { CpfInput, TelefoneInput, PlacaInput, CepInput } from '@/components/inputs/MaskedInputs';
 import { useCotacao, useUpdateCotacao } from '@/hooks/useCotacoes';
 import { useCreateContrato } from '@/hooks/useContratos';
 import { useCreateAssociado } from '@/hooks/useAssociados';
 import { useCreateVeiculo } from '@/hooks/useVeiculos';
 import { useUpdateLead } from '@/hooks/useLeads';
+import { DocumentUploader, type UploadedDocument } from './DocumentUploader';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
 const wizardSchema = z.object({
   // Associado
-  nome: associadoSchema.shape.nome,
-  cpf: associadoSchema.shape.cpf,
+  nome: z.string().min(3, "Nome deve ter pelo menos 3 caracteres"),
+  cpf: z.string().min(11, "CPF inválido"),
   rg: z.string().optional(),
-  data_nascimento: z.string().optional(),
-  sexo: z.enum(['M', 'F']).optional().nullable(),
-  estado_civil: z.string().optional(),
-  profissao: z.string().optional(),
-  email: associadoSchema.shape.email,
-  telefone: associadoSchema.shape.telefone,
-  telefone_secundario: z.string().optional(),
+  email: z.string().email("E-mail inválido"),
+  telefone: z.string().min(10, "Telefone inválido"),
   cep: z.string().optional(),
   logradouro: z.string().optional(),
   numero: z.string().optional(),
-  complemento: z.string().optional(),
   bairro: z.string().optional(),
   cidade: z.string().optional(),
   uf: z.string().optional(),
   // Veículo
-  placa: veiculoSchema.shape.placa,
-  marca: veiculoSchema.shape.marca,
-  modelo: veiculoSchema.shape.modelo,
-  ano_fabricacao: veiculoSchema.shape.ano_fabricacao,
-  ano_modelo: veiculoSchema.shape.ano_modelo,
+  placa: z.string().min(7, "Placa inválida"),
+  marca: z.string().min(2, "Marca obrigatória"),
+  modelo: z.string().min(2, "Modelo obrigatório"),
+  ano_fabricacao: z.coerce.number().min(1900, "Ano inválido"),
+  ano_modelo: z.coerce.number().min(1900, "Ano inválido"),
   cor: z.string().optional(),
   combustivel: z.string().optional(),
   chassi: z.string().optional(),
   renavam: z.string().optional(),
-  codigo_fipe: z.string().optional(),
   valor_fipe: z.number().optional().nullable(),
 });
 
@@ -91,6 +77,14 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId }: ContratoWizard
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
+  // Documentos uploadados
+  const [docsAssociado, setDocsAssociado] = useState<UploadedDocument[]>([]);
+  const [docsVeiculo, setDocsVeiculo] = useState<UploadedDocument[]>([]);
+  
+  // Dados extraídos pela IA
+  const [dadosExtraidosAssociado, setDadosExtraidosAssociado] = useState<Record<string, { value: string; fonte: string }>>({});
+  const [dadosExtraidosVeiculo, setDadosExtraidosVeiculo] = useState<Record<string, { value: string; fonte: string }>>({});
+  
   const { data: cotacao } = useCotacao(cotacaoId);
   const createContrato = useCreateContrato();
   const createAssociado = useCreateAssociado();
@@ -101,19 +95,14 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId }: ContratoWizard
   const form = useForm<WizardFormData>({
     resolver: zodResolver(wizardSchema),
     defaultValues: {
-      nome: '',
-      cpf: '',
-      email: '',
-      telefone: '',
-      placa: '',
-      marca: '',
-      modelo: '',
-      ano_fabricacao: new Date().getFullYear(),
-      ano_modelo: new Date().getFullYear(),
+      nome: '', cpf: '', rg: '', email: '', telefone: '',
+      cep: '', logradouro: '', numero: '', bairro: '', cidade: '', uf: '',
+      placa: '', marca: '', modelo: '', ano_fabricacao: new Date().getFullYear(),
+      ano_modelo: new Date().getFullYear(), cor: '', combustivel: '', chassi: '', renavam: '',
     },
   });
 
-  // Pre-fill from cotacao/lead
+  // Pré-preencher dados da cotação/lead
   useEffect(() => {
     if (cotacao?.leads) {
       const lead = cotacao.leads;
@@ -132,11 +121,20 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId }: ContratoWizard
     }
   }, [cotacao, form]);
 
+  // Reset ao fechar
+  useEffect(() => {
+    if (!open) {
+      setStep(1);
+      setDocsAssociado([]);
+      setDocsVeiculo([]);
+      setDadosExtraidosAssociado({});
+      setDadosExtraidosVeiculo({});
+      form.reset();
+    }
+  }, [open, form]);
+
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-    }).format(value);
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   };
 
   const fetchCep = async (cep: string) => {
@@ -155,27 +153,129 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId }: ContratoWizard
     }
   };
 
+  // Handler para documentos do associado com OCR
+  const handleDocsAssociadoChange = (docs: UploadedDocument[]) => {
+    setDocsAssociado(docs);
+  };
+
+  const handleOcrAssociado = (dados: Record<string, string>) => {
+    // Mapear dados do OCR para o form
+    const fonte = 'Documento';
+    
+    if (dados.nome && !form.getValues('nome')) {
+      form.setValue('nome', dados.nome);
+      setDadosExtraidosAssociado(prev => ({ ...prev, nome: { value: dados.nome, fonte } }));
+    }
+    if (dados.cpf && !form.getValues('cpf')) {
+      form.setValue('cpf', dados.cpf);
+      setDadosExtraidosAssociado(prev => ({ ...prev, cpf: { value: dados.cpf, fonte } }));
+    }
+    if (dados.rg && !form.getValues('rg')) {
+      form.setValue('rg', dados.rg);
+      setDadosExtraidosAssociado(prev => ({ ...prev, rg: { value: dados.rg, fonte } }));
+    }
+    if (dados.logradouro && !form.getValues('logradouro')) {
+      form.setValue('logradouro', dados.logradouro);
+      setDadosExtraidosAssociado(prev => ({ ...prev, logradouro: { value: dados.logradouro, fonte } }));
+    }
+    if (dados.numero && !form.getValues('numero')) {
+      form.setValue('numero', dados.numero);
+      setDadosExtraidosAssociado(prev => ({ ...prev, numero: { value: dados.numero, fonte } }));
+    }
+    if (dados.bairro && !form.getValues('bairro')) {
+      form.setValue('bairro', dados.bairro);
+      setDadosExtraidosAssociado(prev => ({ ...prev, bairro: { value: dados.bairro, fonte } }));
+    }
+    if (dados.cidade && !form.getValues('cidade')) {
+      form.setValue('cidade', dados.cidade);
+      setDadosExtraidosAssociado(prev => ({ ...prev, cidade: { value: dados.cidade, fonte } }));
+    }
+    if (dados.uf && !form.getValues('uf')) {
+      form.setValue('uf', dados.uf);
+      setDadosExtraidosAssociado(prev => ({ ...prev, uf: { value: dados.uf, fonte } }));
+    }
+    if (dados.cep && !form.getValues('cep')) {
+      form.setValue('cep', dados.cep);
+      setDadosExtraidosAssociado(prev => ({ ...prev, cep: { value: dados.cep, fonte } }));
+    }
+  };
+
+  // Handler para documentos do veículo com OCR
+  const handleDocsVeiculoChange = (docs: UploadedDocument[]) => {
+    setDocsVeiculo(docs);
+  };
+
+  const handleOcrVeiculo = (dados: Record<string, string>) => {
+    const fonte = 'CRLV';
+    
+    if (dados.placa && !form.getValues('placa')) {
+      form.setValue('placa', dados.placa);
+      setDadosExtraidosVeiculo(prev => ({ ...prev, placa: { value: dados.placa, fonte } }));
+    }
+    if (dados.marca && !form.getValues('marca')) {
+      form.setValue('marca', dados.marca);
+      setDadosExtraidosVeiculo(prev => ({ ...prev, marca: { value: dados.marca, fonte } }));
+    }
+    if (dados.modelo && !form.getValues('modelo')) {
+      form.setValue('modelo', dados.modelo);
+      setDadosExtraidosVeiculo(prev => ({ ...prev, modelo: { value: dados.modelo, fonte } }));
+    }
+    if (dados.ano_fabricacao) {
+      form.setValue('ano_fabricacao', parseInt(dados.ano_fabricacao));
+      setDadosExtraidosVeiculo(prev => ({ ...prev, ano_fabricacao: { value: dados.ano_fabricacao, fonte } }));
+    }
+    if (dados.ano_modelo) {
+      form.setValue('ano_modelo', parseInt(dados.ano_modelo));
+      setDadosExtraidosVeiculo(prev => ({ ...prev, ano_modelo: { value: dados.ano_modelo, fonte } }));
+    }
+    if (dados.cor) {
+      form.setValue('cor', dados.cor);
+      setDadosExtraidosVeiculo(prev => ({ ...prev, cor: { value: dados.cor, fonte } }));
+    }
+    if (dados.renavam) {
+      form.setValue('renavam', dados.renavam);
+      setDadosExtraidosVeiculo(prev => ({ ...prev, renavam: { value: dados.renavam, fonte } }));
+    }
+    if (dados.chassi) {
+      form.setValue('chassi', dados.chassi);
+      setDadosExtraidosVeiculo(prev => ({ ...prev, chassi: { value: dados.chassi, fonte } }));
+    }
+  };
+
+  // Verificar documentos
+  const hasDocsAssociado = docsAssociado.some(d => d.status === 'success');
+  const hasDocsVeiculo = docsVeiculo.some(d => d.status === 'success');
+
+  const handleNext = async () => {
+    if (step === 2) {
+      const result = await form.trigger(['nome', 'cpf', 'email', 'telefone']);
+      if (!result) return;
+    } else if (step === 3) {
+      const result = await form.trigger(['placa', 'marca', 'modelo', 'ano_fabricacao']);
+      if (!result) return;
+    }
+    if (step < 4) setStep(step + 1);
+  };
+
+  const handleBack = () => {
+    if (step > 1) setStep(step - 1);
+  };
+
   const onSubmit = async (data: WizardFormData) => {
     if (!cotacao) return;
     
     setIsSubmitting(true);
     try {
-      // 1. Create associado
+      // 1. Criar associado
       const associado = await createAssociado.mutateAsync({
         nome: data.nome,
         cpf: data.cpf,
         rg: data.rg || null,
-        data_nascimento: data.data_nascimento || null,
-        sexo: data.sexo || null,
-        estado_civil: data.estado_civil || null,
-        profissao: data.profissao || null,
         email: data.email,
         telefone: data.telefone,
-        telefone_secundario: data.telefone_secundario || null,
         cep: data.cep || null,
         logradouro: data.logradouro || null,
         numero: data.numero || null,
-        complemento: data.complemento || null,
         bairro: data.bairro || null,
         cidade: data.cidade || null,
         uf: data.uf || null,
@@ -183,7 +283,7 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId }: ContratoWizard
         plano_id: cotacao.plano_id,
       });
 
-      // 2. Create veículo
+      // 2. Criar veículo
       await createVeiculo.mutateAsync({
         associado_id: associado.id,
         placa: data.placa,
@@ -195,11 +295,10 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId }: ContratoWizard
         combustivel: data.combustivel || null,
         chassi: data.chassi || null,
         renavam: data.renavam || null,
-        codigo_fipe: data.codigo_fipe || null,
         valor_fipe: data.valor_fipe || null,
       });
 
-      // 3. Create contrato
+      // 3. Criar contrato
       await createContrato.mutateAsync({
         cotacao_id: cotacao.id,
         plano_id: cotacao.plano_id,
@@ -210,18 +309,12 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId }: ContratoWizard
         status: 'pendente',
       });
 
-      // 4. Update cotacao status
-      await updateCotacao.mutateAsync({
-        id: cotacao.id,
-        status: 'aceita',
-      });
+      // 4. Atualizar status da cotação
+      await updateCotacao.mutateAsync({ id: cotacao.id, status: 'aceita' });
 
-      // 5. Update lead status if exists
+      // 5. Atualizar lead se existir
       if (cotacao.lead_id) {
-        await updateLead.mutateAsync({
-          id: cotacao.lead_id,
-          etapa: 'ganho',
-        });
+        await updateLead.mutateAsync({ id: cotacao.lead_id, etapa: 'ganho' });
       }
 
       toast.success('Contrato criado com sucesso!');
@@ -232,6 +325,43 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId }: ContratoWizard
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  // Componente para exibir dado extraído
+  const DadoExtraido = ({ label, campo, dados }: { label: string; campo: string; dados: Record<string, { value: string; fonte: string }> }) => {
+    const dado = dados[campo];
+    if (!dado) return null;
+    return (
+      <div className="flex items-center gap-2 text-sm py-1">
+        <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
+        <span className="text-muted-foreground">{label}:</span>
+        <span className="font-medium">{dado.value}</span>
+        <Badge variant="outline" className="text-xs">via {dado.fonte}</Badge>
+      </div>
+    );
+  };
+
+  // Componente para campo faltante
+  const CampoFaltante = ({ name, label, placeholder, children }: { name: keyof WizardFormData; label: string; placeholder?: string; children?: React.ReactNode }) => {
+    return (
+      <FormField
+        control={form.control}
+        name={name}
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel className="flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 text-amber-500" />
+              {label}
+              <span className="text-xs text-muted-foreground">(não detectado)</span>
+            </FormLabel>
+            <FormControl>
+              {children || <Input placeholder={placeholder} {...field} value={field.value?.toString() || ''} />}
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+    );
   };
 
   return (
@@ -311,355 +441,344 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId }: ContratoWizard
               </Card>
             )}
 
-            {/* Step 2: Associado */}
+            {/* Step 2: Associado - Upload de Documentos */}
             {step === 2 && (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="nome"
-                    render={({ field }) => (
-                      <FormItem className="col-span-2">
-                        <FormLabel>Nome Completo *</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="cpf"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>CPF *</FormLabel>
-                        <FormControl>
-                          <CpfInput value={field.value} onChange={field.onChange} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="rg"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>RG</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="email"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>E-mail *</FormLabel>
-                        <FormControl>
-                          <Input type="email" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="telefone"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Telefone *</FormLabel>
-                        <FormControl>
-                          <TelefoneInput value={field.value} onChange={field.onChange} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="cep"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>CEP</FormLabel>
-                        <FormControl>
-                          <CepInput 
-                            value={field.value || ''} 
-                            onChange={field.onChange}
-                            onCepComplete={fetchCep}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="logradouro"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Logradouro</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="numero"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Número</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="bairro"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Bairro</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="cidade"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Cidade</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="uf"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>UF</FormLabel>
-                        <FormControl>
-                          <Input maxLength={2} className="uppercase" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-lg font-semibold flex items-center gap-2">
+                    <Upload className="h-5 w-5" />
+                    Documentos do Associado
+                  </h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Faça upload dos documentos pessoais. A IA irá extrair os dados automaticamente.
+                  </p>
                 </div>
+
+                <DocumentUploader
+                  cotacaoId={cotacaoId}
+                  onDocumentsChange={handleDocsAssociadoChange}
+                  onOcrDataExtracted={handleOcrAssociado}
+                  tiposPermitidos={['cnh', 'rg', 'comprovante_residencia']}
+                />
+
+                {/* Dados extraídos pela IA */}
+                {Object.keys(dadosExtraidosAssociado).length > 0 && (
+                  <div className="p-4 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-800">
+                    <h4 className="font-medium text-green-700 dark:text-green-400 mb-2 flex items-center gap-2">
+                      <CheckCircle className="h-4 w-4" />
+                      Dados Extraídos pela IA
+                    </h4>
+                    <div className="space-y-1">
+                      <DadoExtraido label="Nome" campo="nome" dados={dadosExtraidosAssociado} />
+                      <DadoExtraido label="CPF" campo="cpf" dados={dadosExtraidosAssociado} />
+                      <DadoExtraido label="RG" campo="rg" dados={dadosExtraidosAssociado} />
+                      <DadoExtraido label="Logradouro" campo="logradouro" dados={dadosExtraidosAssociado} />
+                      <DadoExtraido label="Bairro" campo="bairro" dados={dadosExtraidosAssociado} />
+                      <DadoExtraido label="Cidade" campo="cidade" dados={dadosExtraidosAssociado} />
+                      <DadoExtraido label="UF" campo="uf" dados={dadosExtraidosAssociado} />
+                      <DadoExtraido label="CEP" campo="cep" dados={dadosExtraidosAssociado} />
+                    </div>
+                  </div>
+                )}
+
+                {/* Campos faltantes - aparecem após upload */}
+                {hasDocsAssociado && (
+                  <div className="space-y-4 p-4 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-800">
+                    <h4 className="font-medium text-amber-700 dark:text-amber-400 flex items-center gap-2">
+                      <AlertCircle className="h-4 w-4" />
+                      Complete os dados não detectados
+                    </h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      {!dadosExtraidosAssociado.nome && (
+                        <CampoFaltante name="nome" label="Nome Completo" placeholder="Digite o nome completo" />
+                      )}
+                      {!dadosExtraidosAssociado.cpf && (
+                        <FormField
+                          control={form.control}
+                          name="cpf"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="flex items-center gap-2">
+                                <AlertCircle className="h-4 w-4 text-amber-500" />
+                                CPF <span className="text-xs text-muted-foreground">(não detectado)</span>
+                              </FormLabel>
+                              <FormControl>
+                                <CpfInput value={field.value} onChange={field.onChange} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      )}
+                      {!dadosExtraidosAssociado.email && (
+                        <CampoFaltante name="email" label="E-mail" placeholder="email@exemplo.com" />
+                      )}
+                      {!dadosExtraidosAssociado.telefone && (
+                        <FormField
+                          control={form.control}
+                          name="telefone"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="flex items-center gap-2">
+                                <AlertCircle className="h-4 w-4 text-amber-500" />
+                                Telefone <span className="text-xs text-muted-foreground">(não detectado)</span>
+                              </FormLabel>
+                              <FormControl>
+                                <TelefoneInput value={field.value} onChange={field.onChange} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      )}
+                      {!dadosExtraidosAssociado.cep && (
+                        <FormField
+                          control={form.control}
+                          name="cep"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="flex items-center gap-2">
+                                <AlertCircle className="h-4 w-4 text-amber-500" />
+                                CEP <span className="text-xs text-muted-foreground">(não detectado)</span>
+                              </FormLabel>
+                              <FormControl>
+                                <CepInput value={field.value || ''} onChange={field.onChange} onCepComplete={fetchCep} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      )}
+                      {!dadosExtraidosAssociado.logradouro && (
+                        <CampoFaltante name="logradouro" label="Logradouro" placeholder="Rua, Avenida..." />
+                      )}
+                      {!dadosExtraidosAssociado.numero && (
+                        <CampoFaltante name="numero" label="Número" placeholder="123" />
+                      )}
+                      {!dadosExtraidosAssociado.bairro && (
+                        <CampoFaltante name="bairro" label="Bairro" placeholder="Bairro" />
+                      )}
+                      {!dadosExtraidosAssociado.cidade && (
+                        <CampoFaltante name="cidade" label="Cidade" placeholder="Cidade" />
+                      )}
+                      {!dadosExtraidosAssociado.uf && (
+                        <CampoFaltante name="uf" label="UF" placeholder="SP" />
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {!hasDocsAssociado && (
+                  <div className="p-4 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-800">
+                    <p className="text-sm text-amber-700 dark:text-amber-400 flex items-center gap-2">
+                      <AlertCircle className="h-4 w-4" />
+                      Faça upload de pelo menos um documento pessoal (CNH ou RG) para continuar.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
-            {/* Step 3: Veículo */}
+            {/* Step 3: Veículo - Upload de Documentos */}
             {step === 3 && (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="placa"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Placa *</FormLabel>
-                        <FormControl>
-                          <PlacaInput value={field.value} onChange={field.onChange} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="renavam"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Renavam</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="marca"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Marca *</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="modelo"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Modelo *</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="ano_fabricacao"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Ano Fabricação *</FormLabel>
-                        <FormControl>
-                          <Input 
-                            type="number" 
-                            {...field} 
-                            onChange={(e) => field.onChange(parseInt(e.target.value))}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="ano_modelo"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Ano Modelo *</FormLabel>
-                        <FormControl>
-                          <Input 
-                            type="number" 
-                            {...field} 
-                            onChange={(e) => field.onChange(parseInt(e.target.value))}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="cor"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Cor</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="chassi"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Chassi</FormLabel>
-                        <FormControl>
-                          <Input className="uppercase" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="valor_fipe"
-                    render={({ field }) => (
-                      <FormItem className="col-span-2">
-                        <FormLabel>Valor FIPE</FormLabel>
-                        <FormControl>
-                          <CurrencyInput 
-                            value={field.value ?? 0} 
-                            onChange={field.onChange} 
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-lg font-semibold flex items-center gap-2">
+                    <Upload className="h-5 w-5" />
+                    Documento do Veículo
+                  </h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Faça upload do CRLV. A IA irá extrair os dados do veículo automaticamente.
+                  </p>
                 </div>
+
+                <DocumentUploader
+                  cotacaoId={cotacaoId}
+                  onDocumentsChange={handleDocsVeiculoChange}
+                  onOcrDataExtracted={handleOcrVeiculo}
+                  tiposPermitidos={['crlv']}
+                />
+
+                {/* Dados extraídos pela IA */}
+                {Object.keys(dadosExtraidosVeiculo).length > 0 && (
+                  <div className="p-4 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-800">
+                    <h4 className="font-medium text-green-700 dark:text-green-400 mb-2 flex items-center gap-2">
+                      <CheckCircle className="h-4 w-4" />
+                      Dados Extraídos pela IA
+                    </h4>
+                    <div className="space-y-1">
+                      <DadoExtraido label="Placa" campo="placa" dados={dadosExtraidosVeiculo} />
+                      <DadoExtraido label="Marca" campo="marca" dados={dadosExtraidosVeiculo} />
+                      <DadoExtraido label="Modelo" campo="modelo" dados={dadosExtraidosVeiculo} />
+                      <DadoExtraido label="Ano" campo="ano_fabricacao" dados={dadosExtraidosVeiculo} />
+                      <DadoExtraido label="Cor" campo="cor" dados={dadosExtraidosVeiculo} />
+                      <DadoExtraido label="Renavam" campo="renavam" dados={dadosExtraidosVeiculo} />
+                      <DadoExtraido label="Chassi" campo="chassi" dados={dadosExtraidosVeiculo} />
+                    </div>
+                  </div>
+                )}
+
+                {/* Campos faltantes - aparecem após upload */}
+                {hasDocsVeiculo && (
+                  <div className="space-y-4 p-4 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-800">
+                    <h4 className="font-medium text-amber-700 dark:text-amber-400 flex items-center gap-2">
+                      <AlertCircle className="h-4 w-4" />
+                      Complete os dados não detectados
+                    </h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      {!dadosExtraidosVeiculo.placa && (
+                        <FormField
+                          control={form.control}
+                          name="placa"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="flex items-center gap-2">
+                                <AlertCircle className="h-4 w-4 text-amber-500" />
+                                Placa <span className="text-xs text-muted-foreground">(não detectado)</span>
+                              </FormLabel>
+                              <FormControl>
+                                <PlacaInput value={field.value} onChange={field.onChange} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      )}
+                      {!dadosExtraidosVeiculo.marca && (
+                        <CampoFaltante name="marca" label="Marca" placeholder="Toyota" />
+                      )}
+                      {!dadosExtraidosVeiculo.modelo && (
+                        <CampoFaltante name="modelo" label="Modelo" placeholder="Corolla XEi" />
+                      )}
+                      {!dadosExtraidosVeiculo.ano_fabricacao && (
+                        <CampoFaltante name="ano_fabricacao" label="Ano Fabricação" placeholder="2023" />
+                      )}
+                      {!dadosExtraidosVeiculo.ano_modelo && (
+                        <CampoFaltante name="ano_modelo" label="Ano Modelo" placeholder="2024" />
+                      )}
+                      {!dadosExtraidosVeiculo.cor && (
+                        <CampoFaltante name="cor" label="Cor" placeholder="Prata" />
+                      )}
+                      {!dadosExtraidosVeiculo.renavam && (
+                        <CampoFaltante name="renavam" label="Renavam" placeholder="00000000000" />
+                      )}
+                      {!dadosExtraidosVeiculo.chassi && (
+                        <CampoFaltante name="chassi" label="Chassi" placeholder="9BRXXXXXXXXXXXXXXXX" />
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {!hasDocsVeiculo && (
+                  <div className="p-4 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-800">
+                    <p className="text-sm text-amber-700 dark:text-amber-400 flex items-center gap-2">
+                      <AlertCircle className="h-4 w-4" />
+                      Faça upload do CRLV para continuar.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
             {/* Step 4: Confirmação */}
             {step === 4 && (
-              <Card className="bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-900">
-                <CardContent className="p-6 text-center space-y-4">
-                  <div className="flex justify-center">
-                    <div className="w-16 h-16 rounded-full bg-green-500 flex items-center justify-center">
-                      <Check className="h-8 w-8 text-white" />
-                    </div>
+              <div className="space-y-6">
+                <h3 className="text-lg font-semibold">Confirmação dos Dados</h3>
+
+                <div className="p-4 bg-muted/50 rounded-lg">
+                  <h4 className="font-medium mb-3 flex items-center gap-2">
+                    <User className="h-4 w-4" />
+                    Dados do Associado
+                  </h4>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div><span className="text-muted-foreground">Nome:</span> <span className="font-medium">{form.getValues('nome')}</span></div>
+                    <div><span className="text-muted-foreground">CPF:</span> <span className="font-medium">{form.getValues('cpf')}</span></div>
+                    <div><span className="text-muted-foreground">E-mail:</span> <span className="font-medium">{form.getValues('email')}</span></div>
+                    <div><span className="text-muted-foreground">Telefone:</span> <span className="font-medium">{form.getValues('telefone')}</span></div>
+                    {form.getValues('logradouro') && (
+                      <div className="col-span-2">
+                        <span className="text-muted-foreground">Endereço:</span>{' '}
+                        <span className="font-medium">
+                          {[form.getValues('logradouro'), form.getValues('numero'), form.getValues('bairro'), form.getValues('cidade'), form.getValues('uf')].filter(Boolean).join(', ')}
+                        </span>
+                      </div>
+                    )}
                   </div>
-                  <h3 className="text-lg font-semibold">Pronto para finalizar!</h3>
-                  <p className="text-muted-foreground">
-                    Revise os dados e clique em "Criar Contrato" para finalizar.
-                  </p>
-                  <div className="text-left bg-background rounded-lg p-4 space-y-2 text-sm">
-                    <p><strong>Associado:</strong> {form.getValues('nome')}</p>
-                    <p><strong>CPF:</strong> {form.getValues('cpf')}</p>
-                    <p><strong>Veículo:</strong> {form.getValues('marca')} {form.getValues('modelo')} - {form.getValues('placa')}</p>
-                    <p><strong>Valor Mensal:</strong> {cotacao && formatCurrency(cotacao.valor_total_mensal)}</p>
+                </div>
+
+                <div className="p-4 bg-muted/50 rounded-lg">
+                  <h4 className="font-medium mb-3 flex items-center gap-2">
+                    <Car className="h-4 w-4" />
+                    Dados do Veículo
+                  </h4>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div><span className="text-muted-foreground">Placa:</span> <span className="font-medium">{form.getValues('placa')}</span></div>
+                    <div><span className="text-muted-foreground">Marca/Modelo:</span> <span className="font-medium">{form.getValues('marca')} {form.getValues('modelo')}</span></div>
+                    <div><span className="text-muted-foreground">Ano:</span> <span className="font-medium">{form.getValues('ano_fabricacao')}/{form.getValues('ano_modelo')}</span></div>
+                    {form.getValues('cor') && <div><span className="text-muted-foreground">Cor:</span> <span className="font-medium">{form.getValues('cor')}</span></div>}
+                    {form.getValues('renavam') && <div><span className="text-muted-foreground">Renavam:</span> <span className="font-medium">{form.getValues('renavam')}</span></div>}
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+
+                <div className="p-4 bg-muted/50 rounded-lg">
+                  <h4 className="font-medium mb-3 flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Documentos Anexados
+                  </h4>
+                  <div className="space-y-2">
+                    {[...docsAssociado, ...docsVeiculo].filter(d => d.status === 'success').map((doc, i) => (
+                      <div key={i} className="flex items-center gap-2 text-sm">
+                        <CheckCircle className="h-4 w-4 text-green-500" />
+                        <span>{doc.tipo === 'cnh' ? 'CNH' : doc.tipo === 'rg' ? 'RG' : doc.tipo === 'comprovante_residencia' ? 'Comprovante' : 'CRLV'}</span>
+                        <span className="text-muted-foreground">- {doc.arquivo_nome}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="p-4 bg-primary/10 rounded-lg">
+                  <h4 className="font-medium mb-3">Resumo Financeiro</h4>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div><span className="text-muted-foreground">Plano:</span> <span className="font-medium">{cotacao?.planos?.nome}</span></div>
+                    <div><span className="text-muted-foreground">Adesão:</span> <span className="font-medium">{formatCurrency(cotacao?.valor_adesao || 0)}</span></div>
+                    <div><span className="text-muted-foreground">Mensalidade:</span> <span className="font-medium">{formatCurrency(cotacao?.valor_total_mensal || 0)}</span></div>
+                  </div>
+                </div>
+              </div>
             )}
 
-            <DialogFooter className="gap-2 sm:gap-0">
-              {step > 1 && (
-                <Button type="button" variant="outline" onClick={() => setStep(step - 1)}>
-                  Voltar
-                </Button>
-              )}
+            {/* Botões de navegação */}
+            <div className="flex justify-between pt-4 border-t">
+              <Button type="button" variant="outline" onClick={handleBack} disabled={step === 1}>
+                <ChevronLeft className="w-4 h-4 mr-2" />
+                Voltar
+              </Button>
+
               {step < 4 ? (
-                <Button type="button" onClick={() => setStep(step + 1)}>
+                <Button 
+                  type="button" 
+                  onClick={handleNext}
+                  disabled={(step === 2 && !hasDocsAssociado) || (step === 3 && !hasDocsVeiculo)}
+                >
                   Próximo
+                  <ChevronRight className="w-4 h-4 ml-2" />
                 </Button>
               ) : (
                 <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Criar Contrato
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Criando...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="w-4 h-4 mr-2" />
+                      Criar Contrato
+                    </>
+                  )}
                 </Button>
               )}
-            </DialogFooter>
+            </div>
           </form>
         </Form>
       </DialogContent>
