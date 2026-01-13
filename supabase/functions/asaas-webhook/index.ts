@@ -226,6 +226,9 @@ serve(async (req) => {
                 console.log(`[asaas-webhook] Criando documento Autentique via fallback para contrato ${contratoId}...`);
                 
                 const { error: autentiqueError } = await supabase.functions.invoke('autentique-create', {
+                  headers: {
+                    Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+                  },
                   body: {
                     contratoId,
                     clienteNome,
@@ -411,8 +414,11 @@ serve(async (req) => {
                   if (clienteNome && clienteEmail && clienteCpf) {
                     console.log(`[asaas-webhook] Criando documento Autentique para contrato ${cobranca.contrato_id}...`);
                     
-                    // Chamar edge function do Autentique
+                    // Chamar edge function do Autentique com service role key
                     const { error: autentiqueError } = await supabase.functions.invoke('autentique-create', {
+                      headers: {
+                        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+                      },
                       body: {
                         contratoId: cobranca.contrato_id,
                         clienteNome,
