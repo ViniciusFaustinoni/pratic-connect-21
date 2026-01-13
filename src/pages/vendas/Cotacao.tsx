@@ -232,23 +232,37 @@ export default function CotacaoPage() {
       const valorFipeCalc = valorFipe || 0;
       const valorCota = Math.round(valorFipeCalc * 0.01); // 1% do FIPE como exemplo
       
+      // Não enviar plano_id pois os planos são calculados dinamicamente (não são UUIDs do banco)
+      // Os dados do plano são salvos em dados_extras
       const cotacaoData = {
-        lead_id: leadId || undefined,
-        vendedor_id: user?.id || undefined,
-        plano_id: planoSelecionado.idReal || planoSelecionado.id,
+        lead_id: leadId || null,
+        vendedor_id: user?.id || null,
+        plano_id: null as string | null, // planos calculados não têm UUID no banco
         status: 'rascunho' as const,
-        veiculo_placa: veiculoEncontrado?.placa || placa || undefined,
-        veiculo_marca: marca || undefined,
-        veiculo_modelo: modelo || undefined,
-        veiculo_ano: ano ? parseInt(ano) : undefined,
+        veiculo_placa: veiculoEncontrado?.placa || placa || null,
+        veiculo_marca: marca || null,
+        veiculo_modelo: modelo || null,
+        veiculo_ano: ano ? parseInt(ano) : null,
         valor_fipe: valorFipeCalc,
         valor_adesao: planoSelecionado.valorAdesao || 0,
         valor_cota: valorCota,
         valor_rastreamento: (planoSelecionado as any).valorRastreamento || 0,
         valor_total_mensal: planoSelecionado.valorMensal || 0,
-        regiao: regiao || undefined,
-        categoria: categoria || undefined,
+        regiao: regiao || null,
+        categoria: categoria || null,
         uso_aplicativo: usoApp,
+        // Salvar dados completos do plano em dados_extras
+        dados_extras: {
+          plano_codigo: planoSelecionado.id,
+          plano_nome: planoSelecionado.nome,
+          plano_linha: planoSelecionado.linha,
+          plano_nivel: planoSelecionado.nivel,
+          coberturas: planoSelecionado.coberturas,
+          cota: planoSelecionado.cota,
+          coberturaFipe: planoSelecionado.coberturaFipe,
+          valorMensal: planoSelecionado.valorMensal,
+          valorAdesao: planoSelecionado.valorAdesao,
+        },
       };
 
       const result = await createCotacao.mutateAsync(cotacaoData);

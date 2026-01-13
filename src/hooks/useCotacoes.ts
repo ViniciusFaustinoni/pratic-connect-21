@@ -106,15 +106,21 @@ export function useCotacao(id: string | undefined) {
   });
 }
 
+// Tipo flexível para criação de cotação (plano_id é opcional)
+type CreateCotacaoInput = Omit<CotacaoInsert, 'numero' | 'plano_id'> & {
+  plano_id?: string | null;
+};
+
 export function useCreateCotacao() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async (cotacao: Omit<CotacaoInsert, 'numero'>) => {
+    mutationFn: async (cotacao: CreateCotacaoInput) => {
       const { data, error } = await supabase
         .from('cotacoes')
         .insert({
           ...cotacao,
+          plano_id: cotacao.plano_id || null,
           numero: gerarNumeroCotacao(),
         })
         .select()
