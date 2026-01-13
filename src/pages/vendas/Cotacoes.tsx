@@ -263,6 +263,13 @@ export default function Cotacoes() {
     setShowContratoWizard(true);
   };
 
+  // Handler para quando contrato for criado - redirecionar para contratos com drawer aberto
+  const handleContratoCreated = (contratoId: string) => {
+    navigate('/vendas/contratos', { 
+      state: { openContrato: contratoId } 
+    });
+  };
+
   const handleOpenEmailModal = (cotacao: CotacaoWithRelations) => {
     setSelectedCotacaoEmail(cotacao);
     setShowEmailModal(true);
@@ -661,6 +668,7 @@ export default function Cotacoes() {
         open={showContratoWizard} 
         onOpenChange={setShowContratoWizard} 
         cotacaoId={selectedCotacaoId}
+        onContratoCreated={handleContratoCreated}
       />
       {selectedCotacaoEmail && (
         <EnviarEmailModal

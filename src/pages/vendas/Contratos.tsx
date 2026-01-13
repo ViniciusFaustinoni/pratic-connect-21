@@ -67,13 +67,23 @@ export default function Contratos() {
   const resendAutentique = useResendAutentique();
   const cancelAutentique = useCancelAutentique();
 
-  // Abrir modal automaticamente se vier da cotação
+  // Abrir modal/drawer automaticamente se vier da cotação
   useEffect(() => {
-    const state = location.state as { fromCotacao?: boolean; dadosCotacao?: PrefilledCotacaoData } | null;
+    const state = location.state as { 
+      fromCotacao?: boolean; 
+      dadosCotacao?: PrefilledCotacaoData;
+      openContrato?: string;
+    } | null;
+    
     if (state?.fromCotacao && state?.dadosCotacao) {
       setPrefilledData(state.dadosCotacao);
       setFormDialogOpen(true);
-      // Limpar state para não reabrir em refresh
+      window.history.replaceState({}, document.title);
+    }
+    
+    // Abrir drawer do contrato recém-criado (vindo do wizard de cotação)
+    if (state?.openContrato) {
+      setDrawerContratoId(state.openContrato);
       window.history.replaceState({}, document.title);
     }
   }, [location.state]);
