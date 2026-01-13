@@ -287,7 +287,7 @@ export function useCotacoesFiltradas(filtros?: {
         veiculo_marca: item.veiculo_marca,
         veiculo_modelo: item.veiculo_modelo,
         veiculo_ano: item.veiculo_ano,
-        veiculo_placa: undefined, // Campo não existe no BD
+        veiculo_placa: item.veiculo_placa || undefined,
         codigo_fipe: item.codigo_fipe,
         valor_fipe: Number(item.valor_fipe),
         uso_aplicativo: false, // Campo virtual
@@ -339,7 +339,7 @@ export function useCotacaoDetalhe(id: string | undefined) {
         veiculo_marca: data.veiculo_marca,
         veiculo_modelo: data.veiculo_modelo,
         veiculo_ano: data.veiculo_ano,
-        veiculo_placa: undefined,
+        veiculo_placa: data.veiculo_placa || undefined,
         codigo_fipe: data.codigo_fipe,
         valor_fipe: Number(data.valor_fipe),
         uso_aplicativo: false,
@@ -418,6 +418,7 @@ export function useCriarCotacao() {
         veiculo_marca: payload.veiculo_marca,
         veiculo_modelo: payload.veiculo_modelo,
         veiculo_ano: payload.veiculo_ano,
+        veiculo_placa: payload.veiculo_placa || null,
         codigo_fipe: payload.codigo_fipe,
         valor_fipe: payload.valor_fipe,
         valor_cota: resultado.valores.valor_cota,
