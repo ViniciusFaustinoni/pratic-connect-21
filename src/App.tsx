@@ -191,6 +191,7 @@ import AppConfiguracoes from "./pages/app/AppConfiguracoes";
 import AppDocumentos from "./pages/app/AppDocumentos";
 import AppNotificacoes from "./pages/app/AppNotificacoes";
 import AppPlano from "./pages/app/AppPlano";
+import AppInstall from "./pages/app/AppInstall";
 import Revistoria from "./pages/app/Revistoria";
 
 // App Ouvidoria
@@ -414,6 +415,7 @@ const App = () => (
             </Route>
             
             {/* Associate App Routes */}
+            <Route path="/app/install" element={<AppInstall />} />
             <Route path="/app/login" element={<AppLogin />} />
             <Route path="/app/criar-senha" element={<AppCriarSenha />} />
             <Route path="/app/forgot-password" element={<AppForgotPassword />} />

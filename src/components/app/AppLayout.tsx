@@ -6,7 +6,8 @@ import { TestModeBanner } from './TestModeBanner';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { SessionTimeoutProvider } from '@/components/auth/SessionTimeoutProvider';
 import { useNotificacoesRealtime } from '@/hooks/useNotificacoesRealtime';
-import { AssociadoContext, useAssociado } from '@/contexts/AssociadoContext';
+import { AssociadoContext } from '@/contexts/AssociadoContext';
+import { PWAInstallPrompt } from '@/components/pwa/PWAInstallPrompt';
 
 export function AppLayout() {
   // Verificar se o contexto existe antes de usar
@@ -42,6 +43,7 @@ export function AppLayout() {
             </div>
           </main>
           <AppBottomNav />
+          <PWAInstallPrompt />
         </div>
       </SessionTimeoutProvider>
     </ProtectedRoute>
