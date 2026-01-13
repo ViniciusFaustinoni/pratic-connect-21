@@ -85,9 +85,10 @@ interface KPICardProps {
   variacao?: number;
   emoji: string;
   loading?: boolean;
+  onClick?: () => void;
 }
 
-function KPICard({ titulo, valor, variacao, emoji, loading }: KPICardProps) {
+function KPICard({ titulo, valor, variacao, emoji, loading, onClick }: KPICardProps) {
   if (loading) {
     return (
       <Card className="border-border bg-card hover:border-border-hover transition-all duration-200">
@@ -105,7 +106,13 @@ function KPICard({ titulo, valor, variacao, emoji, loading }: KPICardProps) {
   }
 
   return (
-    <Card className="border-border bg-card hover:border-border-hover transition-all duration-200 group">
+    <Card 
+      className={cn(
+        "border-border bg-card hover:border-border-hover transition-all duration-200 group",
+        onClick && "cursor-pointer hover:scale-[1.02]"
+      )}
+      onClick={onClick}
+    >
       <CardContent className="p-6">
         <div className="flex items-start justify-between">
           <div className="space-y-1">
@@ -304,7 +311,7 @@ function FunilVendas({ dados, loading }: { dados: FunilItem[]; loading: boolean 
             variant="outline" 
             size="sm" 
             className="border-border hover:border-border-hover hover:bg-card-hover"
-            onClick={() => navigate('/vendas/kanban')}
+            onClick={() => navigate('/vendas/leads')}
           >
             Ver Kanban <ArrowRight className="ml-1 h-4 w-4" />
           </Button>
@@ -317,7 +324,11 @@ function FunilVendas({ dados, loading }: { dados: FunilItem[]; loading: boolean 
             const percentual = totalLeads > 0 ? Math.round((item.count / totalLeads) * 100) : 0;
             
             return (
-              <div key={item.etapa} className="space-y-1">
+              <div 
+                key={item.etapa} 
+                className="space-y-1 cursor-pointer hover:bg-card-hover rounded p-1 -mx-1 transition-colors"
+                onClick={() => navigate(`/vendas/leads?etapa=${item.etapa}`)}
+              >
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">{config.label}</span>
                   <span className="font-medium text-foreground">{item.count}</span>
@@ -484,6 +495,7 @@ export default function Dashboard() {
           valor={contratos?.filter(c => c.status === 'ativo').length || 0}
           emoji="👥"
           loading={contratosLoading}
+          onClick={() => navigate('/cadastro/associados')}
         />
         <KPICard
           titulo="Leads do Mês"
@@ -491,18 +503,21 @@ export default function Dashboard() {
           emoji="📊"
           variacao={12}
           loading={leadsLoading}
+          onClick={() => navigate('/vendas/leads')}
         />
         <KPICard
           titulo="Instalações/Mês"
           valor={instMetricas?.concluidasHoje || 0}
           emoji="🔧"
           loading={instalacoesLoading}
+          onClick={() => navigate('/monitoramento/instalacoes')}
         />
         <KPICard
           titulo="Receita Mensal"
           valor={`R$ ${(contratos?.filter(c => c.status === 'ativo').reduce((acc, c) => acc + (c.valor_mensal || 0), 0) || 0).toLocaleString('pt-BR')}`}
           emoji="💰"
           loading={contratosLoading}
+          onClick={() => navigate('/financeiro')}
         />
       </div>
 
