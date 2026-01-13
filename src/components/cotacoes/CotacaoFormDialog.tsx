@@ -140,6 +140,32 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
     }).filter((p): p is PlanoComPreco => p !== null);
   }, [planos, tabelasPreco, valorFipe]);
 
+  // Resetar formulário quando o modal abre sem leadId
+  useEffect(() => {
+    if (open && !leadId) {
+      // Resetar todos os estados para começar limpo
+      form.reset({
+        lead_id: null,
+        plano_id: '',
+        valor_fipe: 0,
+        valor_cota: 0,
+        taxa_administrativa: 0,
+        valor_rastreamento: 0,
+        valor_adesao: 0,
+        valor_total_mensal: 0,
+        validade_dias: 7,
+      });
+      setVeiculoEncontrado(null);
+      setPlaca('');
+      setPlanoSelecionadoData(null);
+      setMarcaSelecionada('');
+      setModeloSelecionado('');
+      setAnoSelecionado('');
+      setModelos([]);
+      setAnos([]);
+    }
+  }, [open, leadId, form]);
+
   // Carregar marcas quando dialog abre
   useEffect(() => {
     if (open && marcas.length === 0) {
