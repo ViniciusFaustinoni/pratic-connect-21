@@ -200,20 +200,7 @@ export default function LeadKanban() {
   };
 
   const handleQuote = (leadId: string) => {
-    const lead = leads?.find(l => l.id === leadId);
-    if (lead) {
-      navigate('/vendas/cotacao', {
-        state: {
-          leadId: lead.id,
-          placa: lead.veiculo_placa,
-          marca: lead.veiculo_marca,
-          modelo: lead.veiculo_modelo,
-          ano: lead.veiculo_ano?.toString(),
-          valorFipe: lead.veiculo_fipe,
-          nome: lead.nome,
-        },
-      });
-    }
+    navigate(`/vendas/cotacoes?lead=${leadId}`);
   };
 
   // Handler para ações do menu do card
@@ -229,15 +216,16 @@ export default function LeadKanban() {
         handleWhatsAppClick(lead.id, lead.etapa);
         break;
       case 'cotacao':
-        navigate('/vendas/cotacao', {
+        navigate('/vendas/cotador', {
           state: {
             leadId: lead.id,
             nome: lead.nome,
-            placa: lead.veiculo_placa,
-            marca: lead.veiculo_marca,
-            modelo: lead.veiculo_modelo,
-            ano: lead.veiculo_ano?.toString(),
-            valorFipe: lead.veiculo_fipe,
+            telefone: lead.telefone,
+            veiculo_placa: lead.veiculo_placa,
+            veiculo_marca: lead.veiculo_marca,
+            veiculo_modelo: lead.veiculo_modelo,
+            veiculo_ano: lead.veiculo_ano,
+            preencherAutomatico: true,
           },
         });
         break;

@@ -106,21 +106,15 @@ export function useCotacao(id: string | undefined) {
   });
 }
 
-// Tipo flexível para criação de cotação (plano_id é opcional)
-type CreateCotacaoInput = Omit<CotacaoInsert, 'numero' | 'plano_id'> & {
-  plano_id?: string | null;
-};
-
 export function useCreateCotacao() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async (cotacao: CreateCotacaoInput) => {
+    mutationFn: async (cotacao: Omit<CotacaoInsert, 'numero'>) => {
       const { data, error } = await supabase
         .from('cotacoes')
         .insert({
           ...cotacao,
-          plano_id: cotacao.plano_id || null,
           numero: gerarNumeroCotacao(),
         })
         .select()
@@ -212,12 +206,11 @@ export function useAtualizarStatusCotacao() {
 }
 
 // Hook para aceitar cotação e gerar contrato
-// vendedor_id é resolvido automaticamente pelo token na edge function
 export function useAceitarCotacaoEGerarContrato() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async ({ cotacaoId }: { cotacaoId: string }) => {
+    mutationFn: async ({ cotacaoId, vendedorId }: { cotacaoId: string; vendedorId?: string }) => {
       // 1. Atualizar status da cotação para 'aceita'
       const { error: updateError } = await supabase
         .from('cotacoes')
@@ -226,9 +219,9 @@ export function useAceitarCotacaoEGerarContrato() {
       
       if (updateError) throw updateError;
       
-      // 2. Chamar edge function para gerar contrato (vendedor resolvido pelo token)
+      // 2. Chamar edge function para gerar contrato
       const { data, error: fnError } = await supabase.functions.invoke('contrato-gerar', {
-        body: { cotacao_id: cotacaoId },
+        body: { cotacao_id: cotacaoId, vendedor_id: vendedorId },
       });
       
       if (fnError) throw fnError;

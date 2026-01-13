@@ -34,10 +34,6 @@ import VendasDashboard from "./pages/vendas/VendasDashboard";
 import RelatoriosVendas from "./pages/vendas/RelatoriosVendas";
 import Metas from "./pages/vendas/Metas";
 import Cotacao from "./pages/vendas/Cotacao";
-import Cotador from "./pages/vendas/Cotador";
-import CadastroComplementar from "./pages/vendas/CadastroComplementar";
-import ContratoNovo from "./pages/vendas/ContratoNovo";
-import ContratoEnviado from "./pages/vendas/ContratoEnviado";
 import Vendedores from "./pages/vendas/Vendedores";
 import VendedorHistorico from "./pages/vendas/VendedorHistorico";
 import Associados from "./pages/cadastro/Associados";
@@ -261,13 +257,9 @@ const App = () => (
               <Route path="/vendas/ativacoes" element={<AtivacoesList />} />
               <Route path="/vendas/acompanhamento" element={<Acompanhamento />} />
               <Route path="/vendas/cotacao" element={<Cotacao />} />
-              <Route path="/vendas/cotador" element={<Cotador />} />
-              <Route path="/vendas/cadastro-complementar/:cotacaoId" element={<CadastroComplementar />} />
-              <Route path="/vendas/contratos/novo" element={<ContratoNovo />} />
-              <Route path="/vendas/contrato-enviado/:contratoId" element={<ContratoEnviado />} />
               <Route path="/vendas/cotacoes" element={<Cotacoes />} />
               <Route path="/vendas/cotacoes/:id" element={<CotacaoDetalhe />} />
-              <Route path="/vendas/contratos" element={<Contratos />} />
+              <Route path="/vendas/contratos" element={<Navigate to="/vendas/propostas" replace />} />
               <Route path="/vendas/propostas" element={<Propostas />} />
               <Route path="/vendas/contratos/:id" element={<ContratoDetalhe />} />
               <Route path="/vendas/planos-beneficios" element={<PlanosBeneficios />} />

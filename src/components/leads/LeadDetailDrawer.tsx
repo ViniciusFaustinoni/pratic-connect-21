@@ -11,9 +11,7 @@ import {
   Calculator, 
   XCircle,
   FileText,
-  CalendarClock,
-  UserPlus,
-  User
+  CalendarClock 
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -24,19 +22,9 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { useLead } from '@/hooks/useLeads';
 import { useCotacoesByLead } from '@/hooks/useCotacoesByLead';
 import { useContratoByLead } from '@/hooks/useContratos';
-import { useVendedores } from '@/hooks/useVendedores';
-import { useLeadActions } from '@/hooks/useLeadActions';
-import { useAuth } from '@/contexts/AuthContext';
 import { LeadTimeline } from '@/components/leads/LeadTimeline';
 import { LeadLossDialog } from '@/components/leads/LeadLossDialog';
 import { AgendarFollowupDialog } from '@/components/leads/AgendarFollowupDialog';
@@ -71,17 +59,10 @@ export function LeadDetailDrawer({ leadId, open, onClose }: LeadDetailDrawerProp
   const navigate = useNavigate();
   const [showLossDialog, setShowLossDialog] = useState(false);
   const [showFollowupDialog, setShowFollowupDialog] = useState(false);
-  const [selectedVendedor, setSelectedVendedor] = useState<string>('');
   
-  const { canAccess } = useAuth();
   const { data: lead, isLoading } = useLead(leadId || undefined);
   const { data: cotacoes } = useCotacoesByLead(leadId || undefined);
   const { data: contrato } = useContratoByLead(leadId || undefined);
-  const { data: vendedores } = useVendedores();
-  const { atribuirVendedor, isAssigning } = useLeadActions();
-
-  const podeAtribuirVendedor = canAccess(['diretor', 'gerente_comercial', 'supervisor_vendas']);
-  const vendedorAtual = vendedores?.find(v => v.user_id === lead?.vendedor_id);
 
   const formatCurrency = (value: number | null) => {
     if (!value) return '—';
@@ -101,19 +82,9 @@ export function LeadDetailDrawer({ leadId, open, onClose }: LeadDetailDrawerProp
   };
 
   const handleNovaCotacao = () => {
-    if (leadId && lead) {
+    if (leadId) {
       onClose();
-      navigate('/vendas/cotacao', { 
-        state: { 
-          leadId: lead.id,
-          placa: lead.veiculo_placa,
-          marca: lead.veiculo_marca,
-          modelo: lead.veiculo_modelo,
-          ano: lead.veiculo_ano?.toString(),
-          valorFipe: lead.veiculo_fipe,
-          nome: lead.nome,
-        } 
-      });
+      navigate(`/vendas/cotacoes?lead=${leadId}`);
     }
   };
 
@@ -155,69 +126,6 @@ export function LeadDetailDrawer({ leadId, open, onClose }: LeadDetailDrawerProp
                   })}
                 </span>
               </div>
-
-              {/* Atribuir/Mostrar Vendedor Responsável */}
-              {podeAtribuirVendedor && !lead.vendedor_id && (
-                <>
-                  <Separator />
-                  <div className="space-y-3">
-                    <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
-                      <UserPlus className="h-4 w-4 text-orange-500" />
-                      Atribuir Responsável
-                    </h3>
-                    <div className="p-3 rounded-lg bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800">
-                      <p className="text-xs text-orange-600 dark:text-orange-400 mb-2">
-                        Este lead ainda não tem um vendedor responsável
-                      </p>
-                      <div className="flex gap-2">
-                        <Select value={selectedVendedor} onValueChange={setSelectedVendedor}>
-                          <SelectTrigger className="flex-1">
-                            <SelectValue placeholder="Selecione um vendedor" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {vendedores?.filter(v => v.user_id).map((v) => (
-                              <SelectItem key={v.user_id} value={v.user_id!}>
-                                {v.nome}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <Button 
-                          size="sm"
-                          disabled={!selectedVendedor || isAssigning}
-                          onClick={() => {
-                            if (selectedVendedor && lead?.id) {
-                              atribuirVendedor({ leadId: lead.id, vendedorId: selectedVendedor });
-                              setSelectedVendedor('');
-                            }
-                          }}
-                        >
-                          {isAssigning ? 'Atribuindo...' : 'Atribuir'}
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {/* Mostrar vendedor atual */}
-              {lead.vendedor_id && vendedorAtual && (
-                <>
-                  <Separator />
-                  <div className="space-y-3">
-                    <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
-                      <User className="h-4 w-4" />
-                      Responsável
-                    </h3>
-                    <div className="flex items-center gap-2">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
-                        {vendedorAtual.nome?.charAt(0) || 'V'}
-                      </div>
-                      <span className="font-medium">{vendedorAtual.nome}</span>
-                    </div>
-                  </div>
-                </>
-              )}
 
               <Separator />
 

@@ -85,10 +85,9 @@ interface KPICardProps {
   variacao?: number;
   emoji: string;
   loading?: boolean;
-  onClick?: () => void;
 }
 
-function KPICard({ titulo, valor, variacao, emoji, loading, onClick }: KPICardProps) {
+function KPICard({ titulo, valor, variacao, emoji, loading }: KPICardProps) {
   if (loading) {
     return (
       <Card className="border-border bg-card hover:border-border-hover transition-all duration-200">
@@ -106,13 +105,7 @@ function KPICard({ titulo, valor, variacao, emoji, loading, onClick }: KPICardPr
   }
 
   return (
-    <Card 
-      className={cn(
-        "border-border bg-card hover:border-border-hover transition-all duration-200 group",
-        onClick && "cursor-pointer hover:scale-[1.02]"
-      )}
-      onClick={onClick}
-    >
+    <Card className="border-border bg-card hover:border-border-hover transition-all duration-200 group">
       <CardContent className="p-6">
         <div className="flex items-start justify-between">
           <div className="space-y-1">
@@ -311,7 +304,7 @@ function FunilVendas({ dados, loading }: { dados: FunilItem[]; loading: boolean 
             variant="outline" 
             size="sm" 
             className="border-border hover:border-border-hover hover:bg-card-hover"
-            onClick={() => navigate('/vendas/leads')}
+            onClick={() => navigate('/vendas/kanban')}
           >
             Ver Kanban <ArrowRight className="ml-1 h-4 w-4" />
           </Button>
@@ -324,11 +317,7 @@ function FunilVendas({ dados, loading }: { dados: FunilItem[]; loading: boolean 
             const percentual = totalLeads > 0 ? Math.round((item.count / totalLeads) * 100) : 0;
             
             return (
-              <div 
-                key={item.etapa} 
-                className="space-y-1 cursor-pointer hover:bg-card-hover rounded p-1 -mx-1 transition-colors"
-                onClick={() => navigate(`/vendas/leads?etapa=${item.etapa}`)}
-              >
+              <div key={item.etapa} className="space-y-1">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">{config.label}</span>
                   <span className="font-medium text-foreground">{item.count}</span>
@@ -363,25 +352,25 @@ function QuickActions() {
   const actions = [
     { 
       label: 'Nova Cotação', 
-      icon: Calculator, 
-      url: '/vendas/cotacao',
+      emoji: '📊', 
+      url: '/vendas/cotador',
       primary: true 
     },
     { 
       label: 'Novo Lead', 
-      icon: UserPlus, 
+      emoji: '👤', 
       url: '/vendas/leads?novo=true',
       primary: false 
     },
     { 
       label: 'Agendar', 
-      icon: Wrench, 
+      emoji: '🔧', 
       url: '/monitoramento/instalacoes?agendar=true',
       primary: false 
     },
     { 
       label: 'Documentos', 
-      icon: FileText, 
+      emoji: '📄', 
       url: '/cadastro/documentos',
       primary: false 
     },
@@ -401,7 +390,7 @@ function QuickActions() {
           )}
           onClick={() => navigate(action.url)}
         >
-          <action.icon className="h-6 w-6" />
+          <span className="text-2xl">{action.emoji}</span>
           <span className="text-sm font-medium">{action.label}</span>
         </Button>
       ))}
@@ -495,7 +484,6 @@ export default function Dashboard() {
           valor={contratos?.filter(c => c.status === 'ativo').length || 0}
           emoji="👥"
           loading={contratosLoading}
-          onClick={() => navigate('/cadastro/associados')}
         />
         <KPICard
           titulo="Leads do Mês"
@@ -503,21 +491,18 @@ export default function Dashboard() {
           emoji="📊"
           variacao={12}
           loading={leadsLoading}
-          onClick={() => navigate('/vendas/leads')}
         />
         <KPICard
           titulo="Instalações/Mês"
           valor={instMetricas?.concluidasHoje || 0}
           emoji="🔧"
           loading={instalacoesLoading}
-          onClick={() => navigate('/monitoramento/instalacoes')}
         />
         <KPICard
           titulo="Receita Mensal"
           valor={`R$ ${(contratos?.filter(c => c.status === 'ativo').reduce((acc, c) => acc + (c.valor_mensal || 0), 0) || 0).toLocaleString('pt-BR')}`}
           emoji="💰"
           loading={contratosLoading}
-          onClick={() => navigate('/financeiro')}
         />
       </div>
 

@@ -457,7 +457,6 @@ export default function CotadorPage() {
         veiculo_marca: marca,
         veiculo_modelo: modelo,
         veiculo_ano: parseInt(ano),
-        veiculo_placa: veiculoEncontrado?.placa || placaBusca.replace(/[^A-Za-z0-9]/g, '').toUpperCase() || undefined,
         valor_fipe: valorFipe,
         codigo_fipe: veiculoEncontrado?.codigoFipe,
         uso_aplicativo: usoApp,

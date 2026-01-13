@@ -4,7 +4,7 @@ import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, subWeeks, subMonths, 
 
 export type PeriodoFiltro = 'semana' | 'mes';
 
-export interface VendedorMetricas {
+export interface ConsultorMetricas {
   id: string;
   nome: string;
   avatar_url?: string | null;
@@ -26,9 +26,6 @@ export interface VendedorMetricas {
   // Ranking
   ranking: number;
 }
-
-// Alias para compatibilidade (deprecated - use VendedorMetricas)
-export type ConsultorMetricas = VendedorMetricas;
 
 export interface PropostasMetricasGlobais {
   totalPropostas: number;
@@ -78,7 +75,7 @@ export function usePropostasMetricas(periodo: PeriodoFiltro = 'mes') {
         .in('role', ['vendedor_clt', 'vendedor_externo', 'supervisor_vendas', 'gerente_comercial']);
       
       if (!vendedoresRoles || vendedoresRoles.length === 0) {
-        return { vendedores: [], globais: getEmptyGlobais() };
+        return { consultores: [], globais: getEmptyGlobais() };
       }
 
       const vendedorIds = [...new Set(vendedoresRoles.map(r => r.user_id))];
@@ -119,8 +116,8 @@ export function usePropostasMetricas(periodo: PeriodoFiltro = 'mes') {
         .select('id, vendedor_id, status, valor_mensal, created_at')
         .in('vendedor_id', vendedorIds);
 
-      // Processar métricas por vendedor
-      const vendedoresMap = new Map<string, VendedorMetricas>();
+      // Processar métricas por consultor
+      const consultoresMap = new Map<string, ConsultorMetricas>();
 
       profiles?.forEach(profile => {
         const vendedorLeads = leads?.filter(l => l.vendedor_id === profile.user_id) || [];
@@ -160,7 +157,7 @@ export function usePropostasMetricas(periodo: PeriodoFiltro = 'mes') {
         const totalLeads = vendedorLeads.length;
         const taxaConversao = totalLeads > 0 ? (leadsGanhos / totalLeads) * 100 : 0;
 
-        vendedoresMap.set(profile.user_id, {
+        consultoresMap.set(profile.user_id, {
           id: profile.user_id,
           nome: profile.nome || 'Sem nome',
           avatar_url: profile.avatar_url,
@@ -178,8 +175,8 @@ export function usePropostasMetricas(periodo: PeriodoFiltro = 'mes') {
         });
       });
 
-      // Lista de vendedores prioritários (aparecem primeiro, nesta ordem)
-      const vendedoresPrioritarios = [
+      // Lista de consultores prioritários (aparecem primeiro, nesta ordem)
+      const consultoresPrioritarios = [
         'KALAYANE SHASNAM MURADO',
         'JEICIELI DOS SANTOS LIMA',
         'MARIA JULIA FLORENCIO GOMES',
@@ -195,15 +192,15 @@ export function usePropostasMetricas(periodo: PeriodoFiltro = 'mes') {
       ];
 
       // Ordenar: prioritários primeiro (na ordem da lista), depois os demais por propostas fechadas
-      const vendedores = Array.from(vendedoresMap.values())
+      const consultores = Array.from(consultoresMap.values())
         .sort((a, b) => {
           const nomeA = a.nome.toUpperCase();
           const nomeB = b.nome.toUpperCase();
           
-          const indexA = vendedoresPrioritarios.findIndex(
+          const indexA = consultoresPrioritarios.findIndex(
             nome => nomeA.includes(nome) || nome.includes(nomeA)
           );
-          const indexB = vendedoresPrioritarios.findIndex(
+          const indexB = consultoresPrioritarios.findIndex(
             nome => nomeB.includes(nome) || nome.includes(nomeB)
           );
           
@@ -242,7 +239,7 @@ export function usePropostasMetricas(periodo: PeriodoFiltro = 'mes') {
         ),
       };
 
-      return { vendedores, globais };
+      return { consultores, globais };
     },
     staleTime: 1000 * 60 * 5, // 5 minutos
   });
@@ -266,12 +263,12 @@ function getEmptyGlobais(): PropostasMetricasGlobais {
   };
 }
 
-// Hook para buscar detalhes de propostas de um vendedor específico
-export function useVendedorPropostas(vendedorId: string | null, periodo: PeriodoFiltro = 'mes') {
+// Hook para buscar detalhes de propostas de um consultor específico
+export function useConsultorPropostas(consultorId: string | null, periodo: PeriodoFiltro = 'mes') {
   return useQuery({
-    queryKey: ['vendedor-propostas', vendedorId, periodo],
+    queryKey: ['consultor-propostas', consultorId, periodo],
     queryFn: async () => {
-      if (!vendedorId) return null;
+      if (!consultorId) return null;
 
       const now = new Date();
       const periodoInicio = periodo === 'semana' 
@@ -279,7 +276,7 @@ export function useVendedorPropostas(vendedorId: string | null, periodo: Periodo
         : startOfMonth(now);
       const periodoInicioStr = format(periodoInicio, 'yyyy-MM-dd');
 
-      // Leads do vendedor
+      // Leads do consultor
       const { data: leads } = await supabase
         .from('leads')
         .select(`
@@ -287,10 +284,10 @@ export function useVendedorPropostas(vendedorId: string | null, periodo: Periodo
           veiculo_marca, veiculo_modelo, veiculo_ano,
           cotacoes(id, status, valor_mensal, created_at)
         `)
-        .eq('vendedor_id', vendedorId)
+        .eq('vendedor_id', consultorId)
         .order('created_at', { ascending: false });
 
-      // Contratos do vendedor
+      // Contratos do consultor
       const { data: contratos } = await supabase
         .from('contratos')
         .select(`
@@ -298,7 +295,7 @@ export function useVendedorPropostas(vendedorId: string | null, periodo: Periodo
           leads(id, nome, telefone, veiculo_marca, veiculo_modelo),
           planos(nome)
         `)
-        .eq('vendedor_id', vendedorId)
+        .eq('vendedor_id', consultorId)
         .order('created_at', { ascending: false });
 
       // Separar por status
@@ -327,9 +324,6 @@ export function useVendedorPropostas(vendedorId: string | null, periodo: Periodo
         totalValorPeriodo: fechadasNoPeriodo.reduce((acc, c) => acc + (c.valor_mensal || 0), 0),
       };
     },
-    enabled: !!vendedorId,
+    enabled: !!consultorId,
   });
 }
-
-// Alias para compatibilidade (deprecated - use useVendedorPropostas)
-export const useConsultorPropostas = useVendedorPropostas;

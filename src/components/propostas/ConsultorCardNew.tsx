@@ -4,10 +4,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { UserAvatar } from '@/components/UserAvatar';
 import { cn } from '@/lib/utils';
-import type { VendedorMetricas } from '@/hooks/usePropostasMetricas';
+import type { ConsultorMetricas } from '@/hooks/usePropostasMetricas';
 
-interface VendedorCardNewProps {
-  vendedor: VendedorMetricas;
+interface ConsultorCardNewProps {
+  consultor: ConsultorMetricas;
   ranking: number;
   onClick: () => void;
 }
@@ -66,9 +66,9 @@ function getPerformanceBadge(taxaConversao: number) {
   };
 }
 
-export function VendedorCardNew({ vendedor, ranking, onClick }: VendedorCardNewProps) {
+export function ConsultorCardNew({ consultor, ranking, onClick }: ConsultorCardNewProps) {
   const rankingBadge = getRankingBadge(ranking);
-  const performanceBadge = getPerformanceBadge(vendedor.taxaConversao);
+  const performanceBadge = getPerformanceBadge(consultor.taxaConversao);
   const Icon = performanceBadge.icon;
 
   return (
@@ -98,13 +98,13 @@ export function VendedorCardNew({ vendedor, ranking, onClick }: VendedorCardNewP
         {/* Avatar e Nome */}
         <div className="flex flex-col items-center text-center mb-4">
           <UserAvatar 
-            src={vendedor.avatar_url} 
-            name={vendedor.nome} 
+            src={consultor.avatar_url} 
+            name={consultor.nome} 
             size="lg"
             className="mb-3"
           />
           <h3 className="font-semibold text-foreground text-sm leading-tight min-h-[2.5rem] flex items-center">
-            {vendedor.nome}
+            {consultor.nome}
           </h3>
           <Badge className={cn("mt-2 gap-1", performanceBadge.className)}>
             <Icon className="h-3 w-3" />
@@ -117,27 +117,27 @@ export function VendedorCardNew({ vendedor, ranking, onClick }: VendedorCardNewP
           <div className="text-center p-2 rounded-lg bg-muted/50">
             <p className={cn(
               "text-lg font-bold",
-              vendedor.emCotacao > 0 ? "text-yellow-600" : "text-muted-foreground"
+              consultor.emCotacao > 0 ? "text-yellow-600" : "text-muted-foreground"
             )}>
-              {vendedor.emCotacao}
+              {consultor.emCotacao}
             </p>
             <p className="text-[10px] text-muted-foreground">Cotação</p>
           </div>
           <div className="text-center p-2 rounded-lg bg-muted/50">
             <p className={cn(
               "text-lg font-bold",
-              vendedor.contratoEnviado > 0 ? "text-blue-600" : "text-muted-foreground"
+              consultor.contratoEnviado > 0 ? "text-blue-600" : "text-muted-foreground"
             )}>
-              {vendedor.contratoEnviado}
+              {consultor.contratoEnviado}
             </p>
             <p className="text-[10px] text-muted-foreground">Enviadas</p>
           </div>
           <div className="text-center p-2 rounded-lg bg-muted/50">
             <p className={cn(
               "text-lg font-bold",
-              vendedor.propostasFechadas > 0 ? "text-green-600" : "text-muted-foreground"
+              consultor.propostasFechadas > 0 ? "text-green-600" : "text-muted-foreground"
             )}>
-              {vendedor.propostasFechadas}
+              {consultor.propostasFechadas}
             </p>
             <p className="text-[10px] text-muted-foreground">Fechadas</p>
           </div>
@@ -149,19 +149,19 @@ export function VendedorCardNew({ vendedor, ranking, onClick }: VendedorCardNewP
             <span className="text-muted-foreground">💰 Valor fechado</span>
             <span className={cn(
               "font-semibold",
-              vendedor.valorFechado > 0 ? "text-green-600" : "text-muted-foreground"
+              consultor.valorFechado > 0 ? "text-green-600" : "text-muted-foreground"
             )}>
-              {formatCurrency(vendedor.valorFechado)}
+              {formatCurrency(consultor.valorFechado)}
             </span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground">📈 Conversão</span>
             <span className={cn(
               "font-semibold",
-              vendedor.taxaConversao >= 30 ? "text-green-600" :
-              vendedor.taxaConversao >= 10 ? "text-yellow-600" : "text-red-500"
+              consultor.taxaConversao >= 30 ? "text-green-600" :
+              consultor.taxaConversao >= 10 ? "text-yellow-600" : "text-red-500"
             )}>
-              {vendedor.taxaConversao.toFixed(0)}%
+              {consultor.taxaConversao.toFixed(0)}%
             </span>
           </div>
         </div>

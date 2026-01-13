@@ -267,7 +267,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
       if (resultado.success && resultado.vehicleData) {
         setVeiculoEncontrado(resultado);
         
-        const marcaNome = resultado.vehicleData.marca?.toLowerCase().trim() || '';
+        const marcaNome = resultado.vehicleData.marca?.toLowerCase() || '';
         const modeloNome = resultado.vehicleData.modelo || '';
         const anoVeiculo = resultado.vehicleData.ano?.split('/')[0] || '';
 
@@ -279,21 +279,15 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
           setLoadingMarcas(false);
         }
 
-        // Buscar marca com match mais robusto
-        const marcaNomePrimeiro = marcaNome.split(' ')[0];
+        // Buscar marca com match mais flexível
         const marcaEncontrada = marcasCarregadas.find(m => {
-          const mNome = m.nome.toLowerCase().trim();
-          const mNomePrimeiro = mNome.split(' ')[0];
-          
-          return mNome === marcaNome ||                    // Match exato
-                 mNome.includes(marcaNome) ||              // FIPE contém API
-                 marcaNome.includes(mNomePrimeiro) ||      // API contém primeiro termo FIPE
-                 mNomePrimeiro === marcaNomePrimeiro ||    // Primeiro termo igual
-                 mNome.split(' - ').some(part => marcaNome.includes(part.toLowerCase().trim()));
+          const mNome = m.nome.toLowerCase();
+          return mNome.includes(marcaNome) || 
+                 marcaNome.includes(mNome.split(' ')[0]) ||
+                 mNome.split(' - ').some(part => marcaNome.includes(part.toLowerCase()));
         });
 
         if (marcaEncontrada) {
-          // Sempre preencher o select de marca
           setMarcaSelecionada(marcaEncontrada.codigo);
           
           setLoadingModelos(true);
@@ -312,7 +306,6 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
             .sort((a, b) => b.score - a.score)[0];
 
           if (melhorModelo) {
-            // Preencher select de modelo
             setModeloSelecionado(melhorModelo.codigo.toString());
 
             setLoadingAnos(true);
@@ -326,8 +319,9 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
               return anoFipe === anoVeiculo;
             });
 
-            // Se não encontrou ano exato, tentar o mais próximo
+            // Se não encontrou ano exato, tentar o mais próximo ou o primeiro disponível
             if (!anoEncontrado && anosData.length > 0) {
+              // Tentar encontrar ano aproximado (ex: 2018 quando temos 2017 ou 2019)
               const anoNum = parseInt(anoVeiculo);
               if (!isNaN(anoNum)) {
                 const anosComDiff = anosData.map(a => {
@@ -345,17 +339,9 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
             }
 
             if (anoEncontrado) {
-              // Preencher select de ano
               setAnoSelecionado(anoEncontrado.codigo);
             }
-          } else {
-            // Modelo não encontrado na FIPE
-            toast.info('Modelo não encontrado na FIPE. Selecione manualmente.');
           }
-        } else {
-          // Marca não encontrada na FIPE
-          console.warn('Marca não encontrada na FIPE:', marcaNome);
-          toast.info(`Marca "${resultado.vehicleData.marca}" não encontrada na FIPE. Selecione manualmente.`);
         }
 
         if (resultado.fipeData?.valor) {

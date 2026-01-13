@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -11,8 +11,7 @@ import {
   CheckCircle, 
   XCircle,
   Edit,
-  ArrowRight,
-  RefreshCw
+  ArrowRight
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFipe } from '@/hooks/useFipe';
@@ -83,30 +82,10 @@ export function EtapaConsultaFipe({
   onNext,
   onManualEntry,
 }: EtapaConsultaFipeProps) {
-  // Detectar se dados já existem (vieram do lead ou foram consultados antes)
-  const dadosJaPreenchidos = useMemo(() => {
-    return !!(marca && modelo && ano && valorFipe);
-  }, [marca, modelo, ano, valorFipe]);
-
-  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>(() => 
-    (marca && modelo && ano && valorFipe) ? 'success' : 'idle'
-  );
+  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [camposAutoPreenchidos, setCamposAutoPreenchidos] = useState<string[]>(() => {
-    const campos: string[] = [];
-    if (marca) campos.push('marca');
-    if (modelo) campos.push('modelo');
-    if (ano) campos.push('ano');
-    if (valorFipe) campos.push('valorFipe');
-    return campos;
-  });
+  const [camposAutoPreenchidos, setCamposAutoPreenchidos] = useState<string[]>([]);
   const { getByPlaca } = useFipe();
-
-  const handleReconsultar = () => {
-    setStatus('idle');
-    setCamposAutoPreenchidos([]);
-    setVeiculoEncontrado(null);
-  };
 
   const handlePlacaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const formatted = formatPlaca(e.target.value);
@@ -221,34 +200,23 @@ export function EtapaConsultaFipe({
               className="flex-1 uppercase text-lg font-mono tracking-wider"
               maxLength={8}
             />
-            {dadosJaPreenchidos && status === 'success' ? (
-              <Button
-                variant="outline"
-                onClick={handleReconsultar}
-                className="min-w-[160px]"
-              >
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Reconsultar
-              </Button>
-            ) : (
-              <Button
-                onClick={handleConsultar}
-                disabled={status === 'loading' || placa.replace(/[^A-Za-z0-9]/g, '').length < 7}
-                className="min-w-[160px]"
-              >
-                {status === 'loading' ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Consultando...
-                  </>
-                ) : (
-                  <>
-                    <Search className="mr-2 h-4 w-4" />
-                    Consultar FIPE
-                  </>
-                )}
-              </Button>
-            )}
+            <Button
+              onClick={handleConsultar}
+              disabled={status === 'loading' || placa.replace(/[^A-Za-z0-9]/g, '').length < 7}
+              className="min-w-[160px]"
+            >
+              {status === 'loading' ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Consultando...
+                </>
+              ) : (
+                <>
+                  <Search className="mr-2 h-4 w-4" />
+                  Consultar FIPE
+                </>
+              )}
+            </Button>
           </div>
         </div>
 
@@ -351,15 +319,6 @@ export function EtapaConsultaFipe({
         </div>
 
         {/* Mensagens de Status */}
-        {dadosJaPreenchidos && status === 'success' && (
-          <Alert className="border-green-500/50 bg-green-500/10">
-            <CheckCircle className="h-4 w-4 text-green-600" />
-            <AlertDescription className="text-green-700 dark:text-green-400">
-              Dados do veículo já preenchidos. Clique em "Avançar" para continuar ou em "Reconsultar" para atualizar.
-            </AlertDescription>
-          </Alert>
-        )}
-        
         {status === 'idle' && !marca && !modelo && (
           <div className="flex items-center gap-2 text-muted-foreground text-sm">
             <div className="w-2 h-2 rounded-full bg-muted-foreground/30" />

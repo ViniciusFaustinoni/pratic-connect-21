@@ -38,7 +38,7 @@ import { useCotacoes, useUpdateCotacao, useDuplicarCotacao, useExcluirCotacao, t
 import { useGerarContrato } from '@/hooks/useContratos';
 import { useAuth } from '@/contexts/AuthContext';
 import { CotacaoFormDialog } from '@/components/cotacoes/CotacaoFormDialog';
-// ContratoWizard removido - fluxo simplificado: contrato é gerado via edge function na página de detalhe da cotação
+import { ContratoWizard } from '@/components/contratos/ContratoWizard';
 import { EnviarEmailModal } from '@/components/cotacoes/EnviarEmailModal';
 import { VincularLeadModal } from '@/components/cotacoes/VincularLeadModal';
 import { gerarPdfCotacao } from '@/lib/gerarPdfCotacao';
@@ -108,7 +108,8 @@ export default function Cotacoes() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [showCotacaoForm, setShowCotacaoForm] = useState(false);
-  // ContratoWizard removido - contrato gerado via detalhe da cotação
+  const [showContratoWizard, setShowContratoWizard] = useState(false);
+  const [selectedCotacaoId, setSelectedCotacaoId] = useState<string>('');
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [selectedCotacaoEmail, setSelectedCotacaoEmail] = useState<CotacaoWithRelations | null>(null);
   const [leadIdFromUrl, setLeadIdFromUrl] = useState<string | null>(null);
@@ -180,8 +181,25 @@ export default function Cotacoes() {
     return matchesSearch && matchesStatus && matchesMes;
   });
 
-  // Ordenação por data (mais recentes primeiro)
+  // Ordenação inteligente
   const sortedCotacoes = [...filteredCotacoes].sort((a, b) => {
+    // Prioridade 1: Sem lead vinculado (precisam de ação urgente)
+    if (!a.lead_id && b.lead_id) return -1;
+    if (a.lead_id && !b.lead_id) return 1;
+    
+    // Prioridade 2: Por status
+    const statusOrder: Record<string, number> = {
+      rascunho: 1,
+      enviada: 2,
+      visualizada: 3,
+      aceita: 4,
+      recusada: 5,
+      expirada: 6,
+    };
+    const statusDiff = (statusOrder[a.status] || 99) - (statusOrder[b.status] || 99);
+    if (statusDiff !== 0) return statusDiff;
+    
+    // Prioridade 3: Mais recentes primeiro
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   });
   
@@ -240,9 +258,9 @@ export default function Cotacoes() {
     }
   };
 
-  // Handler para ir ao detalhe da cotação e gerar contrato
-  const handleIrParaDetalhe = (cotacaoId: string) => {
-    navigate(`/vendas/cotacoes/${cotacaoId}`);
+  const handleOpenContratoWizard = (cotacaoId: string) => {
+    setSelectedCotacaoId(cotacaoId);
+    setShowContratoWizard(true);
   };
 
   const handleOpenEmailModal = (cotacao: CotacaoWithRelations) => {
@@ -252,6 +270,10 @@ export default function Cotacoes() {
 
   const enviarWhatsApp = (cotacao: CotacaoWithRelations) => {
     const telefone = cotacao.leads?.telefone?.replace(/\D/g, '');
+    if (!telefone) {
+      toast.error('Lead sem telefone cadastrado');
+      return;
+    }
 
     const mensagem = encodeURIComponent(
       `Olá ${cotacao.leads?.nome || 'Cliente'}! 🚗\n\n` +
@@ -270,30 +292,8 @@ export default function Cotacoes() {
       `Posso te ajudar com mais alguma informação?`
     );
 
-    // Se tem telefone, abre direto. Se não, abre WhatsApp Web para escolher contato
-    const url = telefone 
-      ? `https://wa.me/55${telefone}?text=${mensagem}`
-      : `https://wa.me/?text=${mensagem}`;
-    
-    window.open(url, '_blank');
+    window.open(`https://wa.me/55${telefone}?text=${mensagem}`, '_blank');
     handleMarkAsEnviada(cotacao.id, cotacao.lead_id);
-  };
-
-  const handleCopiarCotacao = (cotacao: CotacaoWithRelations) => {
-    const placaInfo = cotacao.veiculo_placa ? `\n*Placa:* ${cotacao.veiculo_placa}` : '';
-    const texto = `🚗 *COTAÇÃO DE PROTEÇÃO VEICULAR*
-📋 Nº ${cotacao.numero}
-
-*Veículo:* ${cotacao.veiculo_marca} ${cotacao.veiculo_modelo} ${cotacao.veiculo_ano}${placaInfo}
-*Valor FIPE:* ${formatCurrency(cotacao.valor_fipe)}
-
-💰 *Valor Mensal:* ${formatCurrency(cotacao.valor_total_mensal)}
-💰 *Adesão:* ${formatCurrency(cotacao.valor_adesao)}
-
-📞 Entre em contato para mais informações!`;
-    
-    navigator.clipboard.writeText(texto);
-    toast.success('Cotação copiada para a área de transferência!');
   };
 
   const clearFilters = () => {
@@ -566,10 +566,9 @@ export default function Cotacoes() {
                   setCotacaoParaVincular(c);
                   setShowVincularModal(true);
                 }}
-                onCopiar={handleCopiarCotacao}
                 onWhatsApp={enviarWhatsApp}
                 onEmail={handleOpenEmailModal}
-                onAceitar={handleIrParaDetalhe}
+                onAceitar={handleOpenContratoWizard}
                 onPdf={handleBaixarPdf}
                 onDuplicar={handleDuplicar}
                 onExcluir={handleExcluir}
@@ -601,15 +600,15 @@ export default function Cotacoes() {
                   setCotacaoParaVincular(c);
                   setShowVincularModal(true);
                 }}
-                onCopiar={handleCopiarCotacao}
                 onWhatsApp={enviarWhatsApp}
                 onEmail={handleOpenEmailModal}
-                onAceitar={handleIrParaDetalhe}
+                onAceitar={handleOpenContratoWizard}
                 onPdf={handleBaixarPdf}
                 onDuplicar={handleDuplicar}
                 onExcluir={handleExcluir}
                 onGerarContrato={(id) => gerarContrato.mutate({ 
-                  cotacaoId: id
+                  cotacaoId: id, 
+                  vendedorId: profile?.id 
                 })}
                 isGerandoContrato={gerarContrato.isPending}
               />
@@ -627,7 +626,11 @@ export default function Cotacoes() {
         }} 
         leadId={leadIdFromUrl || undefined}
       />
-      {/* ContratoWizard removido - contrato gerado via detalhe da cotação */}
+      <ContratoWizard 
+        open={showContratoWizard} 
+        onOpenChange={setShowContratoWizard} 
+        cotacaoId={selectedCotacaoId}
+      />
       {selectedCotacaoEmail && (
         <EnviarEmailModal
           open={showEmailModal}

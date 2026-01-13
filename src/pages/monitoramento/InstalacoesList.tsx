@@ -195,12 +195,12 @@ export default function InstalacoesList() {
           <Input placeholder="Buscar por nome ou placa..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
         </div>
 
-        <Select value={statusFilter || "all"} onValueChange={(v) => handleFilterChange(setStatusFilter, v === "all" ? "" : v as StatusInstalacao)}>
+        <Select value={statusFilter} onValueChange={(v) => handleFilterChange(setStatusFilter, v as StatusInstalacao | '')}>
           <SelectTrigger className="w-[160px]">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Todos</SelectItem>
+            <SelectItem value="">Todos</SelectItem>
             <SelectItem value="agendada">Agendada</SelectItem>
             <SelectItem value="em_rota">Em Rota</SelectItem>
             <SelectItem value="em_andamento">Em Andamento</SelectItem>
@@ -210,12 +210,12 @@ export default function InstalacoesList() {
           </SelectContent>
         </Select>
 
-        <Select value={periodoFilter || "all"} onValueChange={(v) => handleFilterChange(setPeriodoFilter, v === "all" ? "" : v as typeof periodoFilter)}>
+        <Select value={periodoFilter} onValueChange={(v) => handleFilterChange(setPeriodoFilter, v as typeof periodoFilter)}>
           <SelectTrigger className="w-[140px]">
             <SelectValue placeholder="Período" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Todos</SelectItem>
+            <SelectItem value="">Todos</SelectItem>
             <SelectItem value="hoje">Hoje</SelectItem>
             <SelectItem value="amanha">Amanhã</SelectItem>
             <SelectItem value="semana">Esta Semana</SelectItem>

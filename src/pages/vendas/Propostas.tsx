@@ -5,9 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PropostasMetricsBar } from '@/components/propostas/PropostasMetricsBar';
-import { VendedorCardNew } from '@/components/propostas/VendedorCardNew';
-import { VendedoresTable } from '@/components/propostas/VendedoresTable';
-import { VendedorDrawer } from '@/components/propostas/VendedorDrawer';
+import { ConsultorCardNew } from '@/components/propostas/ConsultorCardNew';
+import { ConsultoresTable } from '@/components/propostas/ConsultoresTable';
+import { ConsultorDrawer } from '@/components/propostas/ConsultorDrawer';
 import { usePropostasMetricas, type PeriodoFiltro } from '@/hooks/usePropostasMetricas';
 import { cn } from '@/lib/utils';
 
@@ -15,32 +15,32 @@ const PAGE_SIZE = 12;
 
 export default function Propostas() {
   const [periodo, setPeriodo] = useState<PeriodoFiltro>('mes');
-  const [selectedVendedorId, setSelectedVendedorId] = useState<string | null>(null);
+  const [selectedConsultorId, setSelectedConsultorId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchTerm, setSearchTerm] = useState('');
   const [page, setPage] = useState(1);
   
   const { data, isLoading } = usePropostasMetricas(periodo);
 
-  // Filtrar e ordenar vendedores por valor fechado (maior para menor)
-  const sortedVendedores = useMemo(() => {
-    const filtered = data?.vendedores.filter(vendedor =>
-      vendedor.nome.toLowerCase().includes(searchTerm.toLowerCase())
+  // Filtrar e ordenar consultores por valor fechado (maior para menor)
+  const sortedConsultores = useMemo(() => {
+    const filtered = data?.consultores.filter(consultor =>
+      consultor.nome.toLowerCase().includes(searchTerm.toLowerCase())
     ) || [];
     
     // Ordenar por valor fechado (desc)
     return [...filtered].sort((a, b) => b.valorFechado - a.valorFechado);
-  }, [data?.vendedores, searchTerm]);
+  }, [data?.consultores, searchTerm]);
 
   // Pagination
-  const totalPages = Math.ceil(sortedVendedores.length / PAGE_SIZE);
-  const paginatedVendedores = useMemo(() => {
+  const totalPages = Math.ceil(sortedConsultores.length / PAGE_SIZE);
+  const paginatedConsultores = useMemo(() => {
     const start = (page - 1) * PAGE_SIZE;
-    return sortedVendedores.slice(start, start + PAGE_SIZE);
-  }, [sortedVendedores, page]);
+    return sortedConsultores.slice(start, start + PAGE_SIZE);
+  }, [sortedConsultores, page]);
 
   const startItem = (page - 1) * PAGE_SIZE + 1;
-  const endItem = Math.min(page * PAGE_SIZE, sortedVendedores.length);
+  const endItem = Math.min(page * PAGE_SIZE, sortedConsultores.length);
 
   // Reset page when search changes
   const handleSearchChange = (value: string) => {
@@ -48,7 +48,7 @@ export default function Propostas() {
     setPage(1);
   };
 
-  const selectedVendedor = data?.vendedores.find(c => c.id === selectedVendedorId) || null;
+  const selectedConsultor = data?.consultores.find(c => c.id === selectedConsultorId) || null;
 
   return (
     <div className="space-y-6">
@@ -60,7 +60,7 @@ export default function Propostas() {
             Equipe Comercial
           </h1>
           <p className="text-muted-foreground">
-            Acompanhe o desempenho dos vendedores
+            Acompanhe o desempenho dos consultores
           </p>
         </div>
         
@@ -69,7 +69,7 @@ export default function Propostas() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Buscar vendedor..."
+              placeholder="Buscar consultor..."
               value={searchTerm}
               onChange={(e) => handleSearchChange(e.target.value)}
               className="pl-9 w-[180px]"
@@ -142,26 +142,26 @@ export default function Propostas() {
         ) : (
           <Skeleton className="h-96" />
         )
-      ) : sortedVendedores.length === 0 ? (
+      ) : sortedConsultores.length === 0 ? (
         <div className="text-center py-12">
           <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-          <h3 className="text-lg font-medium">Nenhum vendedor encontrado</h3>
+          <h3 className="text-lg font-medium">Nenhum consultor encontrado</h3>
           <p className="text-muted-foreground">
             {searchTerm 
-              ? `Nenhum vendedor corresponde à busca "${searchTerm}"`
-              : 'Cadastre vendedores para visualizar as métricas'
+              ? `Nenhum consultor corresponde à busca "${searchTerm}"`
+              : 'Cadastre consultores para visualizar as métricas'
             }
           </p>
         </div>
       ) : viewMode === 'grid' ? (
         <div className="space-y-4">
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {paginatedVendedores.map((vendedor, index) => (
-              <VendedorCardNew
-                key={vendedor.id}
-                vendedor={vendedor}
+            {paginatedConsultores.map((consultor, index) => (
+              <ConsultorCardNew
+                key={consultor.id}
+                consultor={consultor}
                 ranking={(page - 1) * PAGE_SIZE + index + 1}
-                onClick={() => setSelectedVendedorId(vendedor.id)}
+                onClick={() => setSelectedConsultorId(consultor.id)}
               />
             ))}
           </div>
@@ -170,7 +170,7 @@ export default function Propostas() {
           {totalPages > 1 && (
             <div className="flex items-center justify-between pt-4 border-t border-border/50">
               <p className="text-sm text-muted-foreground">
-                Mostrando {startItem} a {endItem} de {sortedVendedores.length} vendedores
+                Mostrando {startItem} a {endItem} de {sortedConsultores.length} consultores
               </p>
               <div className="flex items-center gap-2">
                 <Button
@@ -221,18 +221,18 @@ export default function Propostas() {
           )}
         </div>
       ) : (
-        <VendedoresTable 
-          vendedores={sortedVendedores}
-          onSelect={(id) => setSelectedVendedorId(id)}
+        <ConsultoresTable 
+          consultores={sortedConsultores}
+          onSelect={(id) => setSelectedConsultorId(id)}
         />
       )}
 
       {/* Drawer de Detalhes */}
-      <VendedorDrawer 
-        vendedor={selectedVendedor}
+      <ConsultorDrawer 
+        consultor={selectedConsultor}
         periodo={periodo}
-        open={!!selectedVendedorId}
-        onClose={() => setSelectedVendedorId(null)}
+        open={!!selectedConsultorId}
+        onClose={() => setSelectedConsultorId(null)}
       />
     </div>
   );

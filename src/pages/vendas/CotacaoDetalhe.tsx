@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { useCotacao, useCotacaoActions } from '@/hooks/useCotacoes';
-import { useContratoByCotacao } from '@/hooks/useContratos';
+import { useCotacao, useCotacaoActions, useAceitarCotacaoEGerarContrato } from '@/hooks/useCotacoes';
+import { useGerarContrato } from '@/hooks/useContratos';
+import { useAuth } from '@/contexts/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -136,8 +137,10 @@ export default function CotacaoDetalhe() {
   const queryClient = useQueryClient();
 
   const { data: cotacao, isLoading, error } = useCotacao(id);
-  const { data: contratoExistente } = useContratoByCotacao(id);
   const { reenviarCotacao, atualizarStatus, isReenviando, isAtualizando } = useCotacaoActions();
+  const gerarContrato = useGerarContrato();
+  const aceitarEGerar = useAceitarCotacaoEGerarContrato();
+  const { profile } = useAuth();
 
   // Handler WhatsApp - agora também atualiza status e etapa do lead
   const handleWhatsApp = async () => {
@@ -320,15 +323,9 @@ Ficou com alguma dúvida? Estou à disposição!
             <div className="flex flex-wrap gap-2">
               <BotaoGerarPdf cotacao={cotacao} />
               
-              {/* WhatsApp - SEMPRE disponível */}
-              <Button variant="outline" size="sm" onClick={handleWhatsApp}>
-                <MessageSquare className="mr-2 h-4 w-4" />
-                WhatsApp
-              </Button>
-              
-              {/* Email - só se tem lead com email */}
-              {cotacao.lead_id && (
-                cotacao.email_enviado_em ? (
+              {/* Botões de envio só aparecem se tem lead vinculado */}
+              {cotacao.lead_id ? (
+                <>
                   <Button
                     variant="outline"
                     size="sm"
@@ -338,35 +335,58 @@ Ficou com alguma dúvida? Estou à disposição!
                     <Send className="mr-2 h-4 w-4" />
                     {isReenviando ? 'Reenviando...' : 'Reenviar'}
                   </Button>
-                ) : (
+                  <Button variant="outline" size="sm" onClick={handleWhatsApp}>
+                    <MessageSquare className="mr-2 h-4 w-4" />
+                    WhatsApp
+                  </Button>
                   <Button variant="outline" size="sm" onClick={() => setShowEmailModal(true)}>
                     <Mail className="mr-2 h-4 w-4" />
                     Email
                   </Button>
-                )
+                </>
+              ) : (
+                /* Aviso sutil quando não tem lead */
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-muted text-muted-foreground text-sm">
+                  <AlertCircle className="h-4 w-4" />
+                  Vincule a um lead para enviar
+                </div>
               )}
               
-              {/* BOTÃO ÚNICO: GERAR CONTRATO */}
-              {/* Condição: status permitido + não tem contrato ainda */}
-              {['enviada', 'visualizada', 'aceita', 'rascunho'].includes(cotacao.status) && 
-               !contratoExistente && (
+              {/* Botão Aceitar e Gerar Contrato - para status enviada */}
+              {(cotacao.status === 'enviada' || cotacao.status === 'rascunho') && cotacao.lead_id && (
                 <Button
                   size="sm"
-                  onClick={() => navigate(`/vendas/contratos/novo?cotacao=${cotacao.id}`)}
+                  onClick={() => aceitarEGerar.mutate({ 
+                    cotacaoId: cotacao.id, 
+                    vendedorId: profile?.id 
+                  })}
+                  disabled={aceitarEGerar.isPending}
                   className="bg-emerald-600 hover:bg-emerald-700"
                 >
-                  <FileSignature className="mr-2 h-4 w-4" />
-                  Gerar Contrato
+                  {aceitarEGerar.isPending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Check className="mr-2 h-4 w-4" />
+                  )}
+                  {aceitarEGerar.isPending ? 'Processando...' : 'Aceitar e Gerar Contrato'}
                 </Button>
               )}
               
-              {/* Se já existe contrato, mostrar link para ele */}
-              {contratoExistente && (
-                <Button size="sm" variant="outline" asChild>
-                  <Link to={`/vendas/contratos/${contratoExistente.id}`}>
+              {cotacao.status === 'aceita' && (
+                <Button
+                  size="sm"
+                  onClick={() => gerarContrato.mutate({ 
+                    cotacaoId: cotacao.id, 
+                    vendedorId: profile?.id 
+                  })}
+                  disabled={gerarContrato.isPending}
+                >
+                  {gerarContrato.isPending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
                     <FileSignature className="mr-2 h-4 w-4" />
-                    Ver Contrato
-                  </Link>
+                  )}
+                  {gerarContrato.isPending ? 'Gerando...' : 'Gerar Contrato'}
                 </Button>
               )}
               <DropdownMenu>

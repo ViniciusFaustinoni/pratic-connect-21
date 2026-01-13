@@ -1,9 +1,9 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   Search, FileText, CheckCircle, XCircle, Clock, Loader2, 
   Send, MoreHorizontal, Edit, Trash, RefreshCw, Link, 
-  ExternalLink, Pause, Eye, PlayCircle 
+  ExternalLink, Pause, Eye, PlayCircle, Plus 
 } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { supabase } from '@/integrations/supabase/client';
@@ -31,6 +31,7 @@ import {
 import type { StatusContrato } from '@/types/database';
 import { useContratos, useUpdateContrato, useAtivarContrato } from '@/hooks/useContratos';
 import { useSendToAutentique, useResendAutentique, useCancelAutentique, getWhatsAppLink } from '@/hooks/useAutentique';
+import { ContratoFormDialog, type PrefilledCotacaoData } from '@/components/contratos/ContratoFormDialog';
 import { ContratoDetailDrawer } from '@/components/contratos/ContratoDetailDrawer';
 import { toast } from 'sonner';
 
@@ -48,10 +49,13 @@ type TabValue = 'all' | StatusContrato;
 
 export default function Contratos() {
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<TabValue>('all');
+  const [formDialogOpen, setFormDialogOpen] = useState(false);
   const [drawerContratoId, setDrawerContratoId] = useState<string | null>(null);
+  const [prefilledData, setPrefilledData] = useState<PrefilledCotacaoData | null>(null);
 
   const { isDiretor, isDesenvolvedor, isAdminMaster } = usePermissions();
   const canDeleteContratos = isDiretor || isDesenvolvedor || isAdminMaster;
@@ -62,6 +66,17 @@ export default function Contratos() {
   const sendToAutentique = useSendToAutentique();
   const resendAutentique = useResendAutentique();
   const cancelAutentique = useCancelAutentique();
+
+  // Abrir modal automaticamente se vier da cotação
+  useEffect(() => {
+    const state = location.state as { fromCotacao?: boolean; dadosCotacao?: PrefilledCotacaoData } | null;
+    if (state?.fromCotacao && state?.dadosCotacao) {
+      setPrefilledData(state.dadosCotacao);
+      setFormDialogOpen(true);
+      // Limpar state para não reabrir em refresh
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
 
   const filteredContratos = (contratos || []).filter((contrato) => {
     const matchesSearch =
@@ -219,11 +234,11 @@ export default function Contratos() {
         <div>
           <h1 className="text-2xl font-bold">Contratos</h1>
           <p className="text-muted-foreground">
-            Visualize e gerencie contratos de adesão.
+            Visualize e gerencie contratos de adesão
           </p>
         </div>
-        <Button onClick={() => navigate('/vendas/contratos/novo')}>
-          <FileText className="mr-2 h-4 w-4" />
+        <Button onClick={() => setFormDialogOpen(true)}>
+          <Plus className="mr-2 h-4 w-4" />
           Novo Contrato
         </Button>
       </div>
@@ -519,7 +534,15 @@ export default function Contratos() {
         </CardContent>
       </Card>
 
-      {/* ContratoFormDialog removido - contratos são gerados via cotação */}
+      {/* Dialog e Drawer */}
+      <ContratoFormDialog 
+        open={formDialogOpen} 
+        onOpenChange={(open) => {
+          setFormDialogOpen(open);
+          if (!open) setPrefilledData(null);
+        }}
+        prefilledData={prefilledData}
+      />
 
       <ContratoDetailDrawer
         contratoId={drawerContratoId}

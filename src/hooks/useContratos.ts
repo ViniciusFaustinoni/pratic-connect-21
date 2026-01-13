@@ -220,29 +220,6 @@ export function useContratoByLead(leadId: string | undefined) {
   });
 }
 
-// Hook para buscar contrato de uma cotação específica
-export function useContratoByCotacao(cotacaoId: string | undefined) {
-  return useQuery({
-    queryKey: ['contratos', 'cotacao', cotacaoId],
-    queryFn: async () => {
-      if (!cotacaoId) return null;
-
-      const { data, error } = await supabase
-        .from('contratos')
-        .select(`
-          *,
-          planos (*)
-        `)
-        .eq('cotacao_id', cotacaoId)
-        .maybeSingle();
-
-      if (error) throw error;
-      return data as ContratoWithRelations | null;
-    },
-    enabled: !!cotacaoId,
-  });
-}
-
 // Hook para ativar contrato e criar associado automaticamente
 export function useAtivarContrato() {
   const queryClient = useQueryClient();
@@ -396,14 +373,13 @@ export function useContratoHistorico(contratoId: string | undefined) {
 }
 
 // Hook para gerar contrato a partir de cotação (via Edge Function)
-// vendedor_id é resolvido automaticamente pelo token na edge function
 export function useGerarContrato() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ cotacaoId }: { cotacaoId: string }) => {
+    mutationFn: async ({ cotacaoId, vendedorId }: { cotacaoId: string; vendedorId?: string }) => {
       const { data, error } = await supabase.functions.invoke('contrato-gerar', {
-        body: { cotacao_id: cotacaoId },
+        body: { cotacao_id: cotacaoId, vendedor_id: vendedorId },
       });
 
       if (error) throw error;

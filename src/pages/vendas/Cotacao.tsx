@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { CotacaoStepper } from '@/components/cotacao/CotacaoStepper';
 import { EtapaConsultaFipe } from '@/components/cotacao/EtapaConsultaFipe';
@@ -7,24 +7,10 @@ import { EtapaCategoriaVeiculo } from '@/components/cotacao/EtapaCategoriaVeicul
 import { EtapaDadosVeiculo } from '@/components/cotacao/EtapaDadosVeiculo';
 import { EtapaResultado } from '@/components/cotacao/EtapaResultado';
 import { usePlanosOficiais, type PlanoOficial } from '@/hooks/usePlanosOficiais';
-import { useCreateCotacao } from '@/hooks/useCotacoes';
-import { useAuth } from '@/contexts/AuthContext';
-import { gerarPdfCotacao } from '@/lib/gerarPdfCotacao';
 
 // ============================================
 // INTERFACES
 // ============================================
-
-// Interface para dados vindos do lead
-interface LeadState {
-  leadId?: string;
-  placa?: string;
-  marca?: string;
-  modelo?: string;
-  ano?: string;
-  valorFipe?: number;
-  nome?: string;
-}
 
 interface VeiculoEncontrado {
   placa: string;
@@ -60,22 +46,13 @@ const calcularFipeMock = (marca: string, _modelo: string, ano: number): number =
 
 export default function CotacaoPage() {
   const navigate = useNavigate();
-  const location = useLocation();
-  const { user } = useAuth();
-  const createCotacao = useCreateCotacao();
-  
-  // Dados vindos de navegação (lead, etc.)
-  const leadState = location.state as LeadState | null;
   
   // Estado da etapa atual
   const [etapaAtual, setEtapaAtual] = useState(1);
   const [etapasCompletas, setEtapasCompletas] = useState<number[]>([]);
-  const [leadId, setLeadId] = useState<string | null>(leadState?.leadId || null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [cotacaoSalva, setCotacaoSalva] = useState<{ id: string; numero: string } | null>(null);
 
   // Etapa 1 - Consulta FIPE
-  const [placa, setPlaca] = useState(leadState?.placa || '');
+  const [placa, setPlaca] = useState('');
   const [veiculoEncontrado, setVeiculoEncontrado] = useState<VeiculoEncontrado | null>(null);
   const [modoEntrada, setModoEntrada] = useState<'fipe' | 'manual'>('fipe');
 
@@ -84,10 +61,10 @@ export default function CotacaoPage() {
   const [usoApp, setUsoApp] = useState(false);
 
   // Etapa 3 - Dados do Veículo
-  const [marca, setMarca] = useState(leadState?.marca || '');
-  const [modelo, setModelo] = useState(leadState?.modelo || '');
-  const [ano, setAno] = useState(leadState?.ano || '');
-  const [valorFipe, setValorFipe] = useState<number | null>(leadState?.valorFipe || null);
+  const [marca, setMarca] = useState('');
+  const [modelo, setModelo] = useState('');
+  const [ano, setAno] = useState('');
+  const [valorFipe, setValorFipe] = useState<number | null>(null);
   const [combustivel, setCombustivel] = useState('');
   const [regiao, setRegiao] = useState('');
   
@@ -104,22 +81,6 @@ export default function CotacaoPage() {
     anoVeiculo: ano ? parseInt(ano) : undefined,
     tipoVeiculo: 'carro',
   });
-  
-  // Pré-preencher dados se vier de um lead
-  useEffect(() => {
-    if (leadState?.placa && !veiculoEncontrado) {
-      // Se tem dados do lead, pode pular para etapa de categoria ou dados
-      if (leadState.marca && leadState.modelo && leadState.ano) {
-        setVeiculoEncontrado({
-          placa: leadState.placa,
-          marca: leadState.marca,
-          modelo: leadState.modelo,
-          ano: leadState.ano,
-          valorFipe: leadState.valorFipe,
-        });
-      }
-    }
-  }, [leadState]);
 
   // ============================================
   // HANDLERS DE NAVEGAÇÃO
@@ -210,128 +171,22 @@ export default function CotacaoPage() {
     setCombustivel('');
     setRegiao('');
     setPlanoSelecionado(null);
-    setLeadId(null);
-    setCotacaoSalva(null);
   }, []);
 
   // Gerar PDF
   const handleGerarPDF = useCallback(() => {
-    if (!planoSelecionado || !valorFipe) {
-      toast.error('Selecione um plano para gerar o PDF');
-      return;
-    }
+    toast.info('Funcionalidade de PDF em desenvolvimento');
+  }, []);
 
-    try {
-      const cotacaoParaPdf = {
-        numero: cotacaoSalva?.numero || `COT-PREVIEW-${Date.now()}`,
-        valor_fipe: valorFipe,
-        valor_adesao: planoSelecionado.valorAdesao || 0,
-        valor_total_mensal: planoSelecionado.valorMensal || 0,
-        valor_cota: Math.round(valorFipe * 0.01),
-        taxa_administrativa: 0,
-        valor_rastreamento: 0,
-        valor_assistencia: 0,
-        veiculo_marca: marca || veiculoEncontrado?.marca || null,
-        veiculo_modelo: modelo || veiculoEncontrado?.modelo || null,
-        veiculo_ano: ano ? parseInt(ano) : (veiculoEncontrado?.ano ? parseInt(veiculoEncontrado.ano) : null),
-        codigo_fipe: veiculoEncontrado?.codigoFipe || null,
-        created_at: new Date().toISOString(),
-        validade_dias: 7,
-        leads: null,
-        planos: {
-          id: planoSelecionado.idReal || planoSelecionado.id,
-          nome: planoSelecionado.nome,
-        } as any,
-      };
-
-      gerarPdfCotacao(cotacaoParaPdf);
-      toast.success('PDF gerado com sucesso!');
-    } catch (error) {
-      console.error('Erro ao gerar PDF:', error);
-      toast.error('Erro ao gerar PDF. Tente novamente.');
-    }
-  }, [planoSelecionado, valorFipe, marca, modelo, ano, veiculoEncontrado, cotacaoSalva]);
-
-  // Salvar cotação no banco de dados
-  const handleSalvarCotacao = useCallback(async () => {
-    if (!planoSelecionado) {
-      toast.error('Selecione um plano primeiro');
-      return null;
-    }
-
-    setIsSaving(true);
-    
-    try {
-      // Calcular valor da cota (geralmente um percentual do valor FIPE)
-      const valorFipeCalc = valorFipe || 0;
-      const valorCota = Math.round(valorFipeCalc * 0.01); // 1% do FIPE como exemplo
-      
-      // Não enviar plano_id pois os planos são calculados dinamicamente (não são UUIDs do banco)
-      // Os dados do plano são salvos em dados_extras
-      const cotacaoData = {
-        lead_id: leadId || null,
-        vendedor_id: user?.id || null,
-        plano_id: null as string | null, // planos calculados não têm UUID no banco
-        status: 'rascunho' as const,
-        veiculo_placa: veiculoEncontrado?.placa || placa || null,
-        veiculo_marca: marca || null,
-        veiculo_modelo: modelo || null,
-        veiculo_ano: ano ? parseInt(ano) : null,
-        valor_fipe: valorFipeCalc,
-        valor_adesao: planoSelecionado.valorAdesao || 0,
-        valor_cota: valorCota,
-        valor_rastreamento: (planoSelecionado as any).valorRastreamento || 0,
-        valor_total_mensal: planoSelecionado.valorMensal || 0,
-        regiao: regiao || null,
-        categoria: categoria || null,
-        uso_aplicativo: usoApp,
-        // Salvar dados completos do plano em dados_extras
-        dados_extras: {
-          plano_codigo: planoSelecionado.id,
-          plano_nome: planoSelecionado.nome,
-          plano_linha: planoSelecionado.linha,
-          plano_nivel: planoSelecionado.nivel,
-          coberturas: planoSelecionado.coberturas,
-          cota: planoSelecionado.cota,
-          coberturaFipe: planoSelecionado.coberturaFipe,
-          valorMensal: planoSelecionado.valorMensal,
-          valorAdesao: planoSelecionado.valorAdesao,
-        },
-      };
-
-      const result = await createCotacao.mutateAsync(cotacaoData);
-      
-      setCotacaoSalva({ id: result.id, numero: result.numero });
-      toast.success('Cotação salva com sucesso!');
-      
-      return result;
-    } catch (error) {
-      console.error('Erro ao salvar cotação:', error);
-      toast.error('Erro ao salvar cotação');
-      return null;
-    } finally {
-      setIsSaving(false);
-    }
-  }, [planoSelecionado, leadId, user?.id, veiculoEncontrado, placa, marca, modelo, ano, valorFipe, regiao, categoria, usoApp, createCotacao]);
-
-  // Iniciar Cadastro - salva cotação e redireciona para contratos
-  const handleIniciarCadastro = useCallback(async () => {
+  // Iniciar Cadastro - redireciona para contratos com dados da cotação
+  const handleIniciarCadastro = useCallback(() => {
     if (!planoSelecionado) {
       toast.error('Selecione um plano primeiro');
       return;
-    }
-    
-    // Se ainda não salvou, salvar primeiro
-    let cotacao = cotacaoSalva;
-    if (!cotacao) {
-      const result = await handleSalvarCotacao();
-      if (!result) return;
-      cotacao = { id: result.id, numero: result.numero };
     }
     
     // Dados da cotação para pré-preencher o contrato
     const dadosCotacao = {
-      cotacaoId: cotacao.id,
       veiculo: {
         placa: veiculoEncontrado?.placa || placa,
         marca: marca,
@@ -348,12 +203,11 @@ export default function CotacaoPage() {
       categoria: categoria,
       regiao: regiao,
       usoApp: usoApp,
-      leadId: leadId,
     };
     
-    toast.success('Redirecionando para cadastro complementar...');
-    navigate(`/vendas/cadastro-complementar/${cotacao.id}`);
-  }, [planoSelecionado, cotacaoSalva, handleSalvarCotacao, navigate, veiculoEncontrado, placa, marca, modelo, ano, valorFipe, categoria, regiao, usoApp, leadId]);
+    toast.success('Redirecionando para cadastro de contrato...');
+    navigate('/vendas/contratos', { state: { fromCotacao: true, dadosCotacao } });
+  }, [planoSelecionado, navigate, veiculoEncontrado, placa, marca, modelo, ano, valorFipe, categoria, regiao, usoApp]);
 
   // Click no stepper
   const handleStepClick = useCallback((step: number) => {

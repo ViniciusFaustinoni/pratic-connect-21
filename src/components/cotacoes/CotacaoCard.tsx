@@ -77,7 +77,6 @@ interface CotacaoCardProps {
   formatPhone: (phone?: string | null) => string | null;
   formatCurrency: (value: number) => string;
   onVincular: (cotacao: CotacaoWithRelations) => void;
-  onCopiar?: (cotacao: CotacaoWithRelations) => void;
   onWhatsApp: (cotacao: CotacaoWithRelations) => void;
   onEmail: (cotacao: CotacaoWithRelations) => void;
   onAceitar: (cotacaoId: string) => void;
@@ -96,7 +95,6 @@ export function CotacaoCard({
   formatPhone,
   formatCurrency,
   onVincular,
-  onCopiar,
   onWhatsApp,
   onEmail,
   onAceitar,
@@ -239,25 +237,28 @@ export function CotacaoCard({
           </Button>
           
           {/* Ações por Status */}
-          {cotacao.status === 'rascunho' && (
+          {cotacao.status === 'rascunho' && hasLead && (
             <>
               <Button size="sm" variant="outline" onClick={() => onWhatsApp(cotacao)}>
                 <MessageCircle className="h-4 w-4 mr-1 text-green-600" />
                 WhatsApp
               </Button>
-              {hasLead && (
-                <Button size="sm" variant="outline" onClick={() => onEmail(cotacao)}>
-                  <Mail className="h-4 w-4 mr-1 text-blue-600" />
-                  Email
-                </Button>
-              )}
-              {onCopiar && (
-                <Button size="sm" variant="outline" onClick={() => onCopiar(cotacao)}>
-                  <Copy className="h-4 w-4 mr-1" />
-                  Copiar
-                </Button>
-              )}
+              <Button size="sm" variant="outline" onClick={() => onEmail(cotacao)}>
+                <Mail className="h-4 w-4 mr-1 text-blue-600" />
+                Email
+              </Button>
             </>
+          )}
+          
+          {cotacao.status === 'rascunho' && !hasLead && (
+            <Button
+              size="sm"
+              className="bg-orange-500 hover:bg-orange-600 text-white"
+              onClick={() => onVincular(cotacao)}
+            >
+              <Link2 className="h-4 w-4 mr-1" />
+              Vincular para Enviar
+            </Button>
           )}
           
           {cotacao.status === 'enviada' && (

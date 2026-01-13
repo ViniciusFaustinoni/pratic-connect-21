@@ -10,10 +10,10 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { UserAvatar } from '@/components/UserAvatar';
 import { cn } from '@/lib/utils';
-import type { VendedorMetricas } from '@/hooks/usePropostasMetricas';
+import type { ConsultorMetricas } from '@/hooks/usePropostasMetricas';
 
-interface VendedoresTableProps {
-  vendedores: VendedorMetricas[];
+interface ConsultoresTableProps {
+  consultores: ConsultorMetricas[];
   onSelect: (id: string) => void;
 }
 
@@ -63,11 +63,11 @@ function abbreviateName(fullName: string): string {
   return `${firstName} ${lastName}`;
 }
 
-export function VendedoresTable({ vendedores, onSelect }: VendedoresTableProps) {
-  if (vendedores.length === 0) {
+export function ConsultoresTable({ consultores, onSelect }: ConsultoresTableProps) {
+  if (consultores.length === 0) {
     return (
       <div className="text-center py-12 text-muted-foreground">
-        Nenhum vendedor encontrado
+        Nenhum consultor encontrado
       </div>
     );
   }
@@ -78,7 +78,7 @@ export function VendedoresTable({ vendedores, onSelect }: VendedoresTableProps) 
         <TableHeader>
           <TableRow className="bg-muted/50">
             <TableHead className="w-12 text-center">#</TableHead>
-            <TableHead>Vendedor</TableHead>
+            <TableHead>Consultor</TableHead>
             <TableHead className="text-center w-24">Cotação</TableHead>
             <TableHead className="text-center w-24">Enviadas</TableHead>
             <TableHead className="text-center w-24">Fechadas</TableHead>
@@ -87,16 +87,16 @@ export function VendedoresTable({ vendedores, onSelect }: VendedoresTableProps) 
           </TableRow>
         </TableHeader>
         <TableBody>
-          {vendedores.map((vendedor, index) => {
+          {consultores.map((consultor, index) => {
             const ranking = index + 1;
             const rankingDisplay = getRankingDisplay(ranking);
-            const performanceBadge = getPerformanceBadge(vendedor.taxaConversao);
+            const performanceBadge = getPerformanceBadge(consultor.taxaConversao);
             
             return (
               <TableRow 
-                key={vendedor.id}
+                key={consultor.id}
                 className="cursor-pointer hover:bg-muted/50 transition-colors"
-                onClick={() => onSelect(vendedor.id)}
+                onClick={() => onSelect(consultor.id)}
               >
                 <TableCell className={cn("text-center text-lg", rankingDisplay.className)}>
                   {rankingDisplay.emoji}
@@ -104,12 +104,12 @@ export function VendedoresTable({ vendedores, onSelect }: VendedoresTableProps) 
                 <TableCell>
                   <div className="flex items-center gap-3">
                     <UserAvatar 
-                      src={vendedor.avatar_url} 
-                      name={vendedor.nome} 
+                      src={consultor.avatar_url} 
+                      name={consultor.nome} 
                       size="sm"
                     />
                     <div>
-                      <p className="font-medium text-sm">{abbreviateName(vendedor.nome)}</p>
+                      <p className="font-medium text-sm">{abbreviateName(consultor.nome)}</p>
                       <Badge className={cn("text-[10px] px-1.5 py-0", performanceBadge.className)}>
                         {performanceBadge.label}
                       </Badge>
@@ -118,35 +118,35 @@ export function VendedoresTable({ vendedores, onSelect }: VendedoresTableProps) 
                 </TableCell>
                 <TableCell className={cn(
                   "text-center font-semibold",
-                  vendedor.emCotacao > 0 ? "text-yellow-600" : "text-muted-foreground"
+                  consultor.emCotacao > 0 ? "text-yellow-600" : "text-muted-foreground"
                 )}>
-                  {vendedor.emCotacao}
+                  {consultor.emCotacao}
                 </TableCell>
                 <TableCell className={cn(
                   "text-center font-semibold",
-                  vendedor.contratoEnviado > 0 ? "text-blue-600" : "text-muted-foreground"
+                  consultor.contratoEnviado > 0 ? "text-blue-600" : "text-muted-foreground"
                 )}>
-                  {vendedor.contratoEnviado}
+                  {consultor.contratoEnviado}
                 </TableCell>
                 <TableCell className={cn(
                   "text-center font-semibold",
-                  vendedor.propostasFechadas > 0 ? "text-green-600" : "text-muted-foreground"
+                  consultor.propostasFechadas > 0 ? "text-green-600" : "text-muted-foreground"
                 )}>
-                  {vendedor.propostasFechadas}
+                  {consultor.propostasFechadas}
                 </TableCell>
                 <TableCell className={cn(
                   "text-right font-semibold",
-                  vendedor.valorFechado > 0 ? "text-green-600" : "text-muted-foreground"
+                  consultor.valorFechado > 0 ? "text-green-600" : "text-muted-foreground"
                 )}>
-                  {formatCurrency(vendedor.valorFechado)}
+                  {formatCurrency(consultor.valorFechado)}
                 </TableCell>
                 <TableCell className="text-center">
                   <span className={cn(
                     "font-semibold",
-                    vendedor.taxaConversao >= 30 ? "text-green-600" :
-                    vendedor.taxaConversao >= 10 ? "text-yellow-600" : "text-red-500"
+                    consultor.taxaConversao >= 30 ? "text-green-600" :
+                    consultor.taxaConversao >= 10 ? "text-yellow-600" : "text-red-500"
                   )}>
-                    {vendedor.taxaConversao.toFixed(0)}%
+                    {consultor.taxaConversao.toFixed(0)}%
                   </span>
                 </TableCell>
               </TableRow>
