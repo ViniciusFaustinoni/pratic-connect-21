@@ -282,23 +282,35 @@ export function ContratoDetailDrawer({ contratoId, open, onClose }: ContratoDeta
                   <Car className="h-4 w-4" />
                   Veículo
                 </h3>
-                {lead?.veiculo_marca ? (
+                {contrato.veiculo_marca || contrato.veiculo_placa ? (
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div>
                       <span className="text-muted-foreground">Marca/Modelo:</span>
-                      <p>{lead.veiculo_marca} {lead.veiculo_modelo}</p>
+                      <p>{contrato.veiculo_marca} {contrato.veiculo_modelo}</p>
                     </div>
                     <div>
                       <span className="text-muted-foreground">Ano:</span>
-                      <p>{lead.veiculo_ano || '-'}</p>
+                      <p>{contrato.veiculo_ano || '-'}</p>
                     </div>
                     <div>
                       <span className="text-muted-foreground">Placa:</span>
-                      <p className="font-mono">{lead.veiculo_placa || '-'}</p>
+                      <p className="font-mono">{contrato.veiculo_placa || '-'}</p>
                     </div>
+                    {contrato.veiculo_cor && (
+                      <div>
+                        <span className="text-muted-foreground">Cor:</span>
+                        <p>{contrato.veiculo_cor}</p>
+                      </div>
+                    )}
+                    {contrato.veiculo_renavam && (
+                      <div>
+                        <span className="text-muted-foreground">Renavam:</span>
+                        <p className="font-mono">{contrato.veiculo_renavam}</p>
+                      </div>
+                    )}
                     <div>
                       <span className="text-muted-foreground">Valor FIPE:</span>
-                      <p>{lead.veiculo_fipe ? formatCurrency(lead.veiculo_fipe) : '-'}</p>
+                      <p>{contrato.veiculo_valor_fipe ? formatCurrency(contrato.veiculo_valor_fipe) : '-'}</p>
                     </div>
                   </div>
                 ) : (
