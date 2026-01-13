@@ -110,13 +110,17 @@ export function useCriarVistoriaAgendada() {
       dataAgendada: string; 
       horarioAgendado: string;
       veiculoId?: string;
-      associadoId?: string;
+      associadoId: string; // Agora obrigatório
     }) => {
+      if (!associadoId) {
+        throw new Error('Associado não vinculado ao contrato. Entre em contato com a associação.');
+      }
+      
       // Criar vistoria
       const { data: vistoria, error: vistoriaError } = await supabase
         .from('vistorias')
         .insert({
-          associado_id: associadoId || '00000000-0000-0000-0000-000000000000',
+          associado_id: associadoId,
           veiculo_id: veiculoId,
           contrato_id: contratoId,
           data_agendada: dataAgendada,
@@ -142,7 +146,6 @@ export function useCriarVistoriaAgendada() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['contrato-publico'] });
-      queryClient.invalidateQueries({ queryKey: ['vistorias'] });
       toast.success('Vistoria agendada com sucesso!');
     },
     onError: (error: any) => {
@@ -163,13 +166,17 @@ export function useCriarAutovistoria() {
     }: { 
       contratoId: string; 
       veiculoId?: string;
-      associadoId?: string;
+      associadoId: string; // Agora obrigatório
     }) => {
+      if (!associadoId) {
+        throw new Error('Associado não vinculado ao contrato. Entre em contato com a associação.');
+      }
+      
       // Criar vistoria como autovistoria
       const { data: vistoria, error: vistoriaError } = await supabase
         .from('vistorias')
         .insert({
-          associado_id: associadoId || '00000000-0000-0000-0000-000000000000',
+          associado_id: associadoId,
           veiculo_id: veiculoId,
           contrato_id: contratoId,
           modalidade: 'autovistoria',
@@ -193,7 +200,6 @@ export function useCriarAutovistoria() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['contrato-publico'] });
-      queryClient.invalidateQueries({ queryKey: ['vistorias'] });
     },
   });
 }
