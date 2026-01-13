@@ -7,11 +7,33 @@ const corsHeaders = {
 };
 
 const ASAAS_API_KEY = Deno.env.get('ASAAS_API_KEY')!;
-// Usar ASAAS_ENV para definir ambiente (sandbox ou production). Default: sandbox
-const ASAAS_ENV = Deno.env.get('ASAAS_ENV') || 'sandbox';
-const ASAAS_API_URL = ASAAS_ENV === 'production'
-  ? 'https://api.asaas.com/v3'
-  : 'https://sandbox.asaas.com/api/v3';
+
+// Detectar ambiente: prioriza ASAAS_ENV, senão infere pelo prefixo da chave
+// $aact_ = produção, caso contrário sandbox
+function getAsaasConfig() {
+  const envExplicito = Deno.env.get('ASAAS_ENV');
+  
+  let ambiente: 'production' | 'sandbox';
+  
+  if (envExplicito) {
+    ambiente = envExplicito === 'production' ? 'production' : 'sandbox';
+    console.log(`[asaas-cobranca-adesao] Ambiente definido por ASAAS_ENV: ${ambiente}`);
+  } else {
+    // Inferir pelo prefixo da chave API
+    ambiente = ASAAS_API_KEY?.startsWith('$aact_') ? 'production' : 'sandbox';
+    console.log(`[asaas-cobranca-adesao] Ambiente inferido pela chave API: ${ambiente}`);
+  }
+  
+  const baseUrl = ambiente === 'production'
+    ? 'https://api.asaas.com/v3'
+    : 'https://sandbox.asaas.com/api/v3';
+  
+  console.log(`[asaas-cobranca-adesao] Base URL: ${baseUrl}`);
+  
+  return { ambiente, baseUrl };
+}
+
+const { ambiente: ASAAS_ENV, baseUrl: ASAAS_API_URL } = getAsaasConfig();
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
