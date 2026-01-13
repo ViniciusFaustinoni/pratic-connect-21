@@ -17,13 +17,13 @@ import {
 } from '@/components/ui/table';
 import { UserAvatar } from '@/components/UserAvatar';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useConsultorPropostas, type ConsultorMetricas } from '@/hooks/usePropostasMetricas';
+import { useVendedorPropostas, type VendedorMetricas } from '@/hooks/usePropostasMetricas';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
-interface ConsultorTabProps {
-  consultor: ConsultorMetricas;
+interface VendedorTabProps {
+  vendedor: VendedorMetricas;
   periodo: 'semana' | 'mes';
 }
 
@@ -50,9 +50,9 @@ const etapaConfig: Record<string, { label: string; color: string }> = {
   contrato_assinado: { label: 'Contrato Assinado', color: 'bg-green-100 text-green-800' },
 };
 
-export function ConsultorTab({ consultor, periodo }: ConsultorTabProps) {
+export function VendedorTab({ vendedor, periodo }: VendedorTabProps) {
   const [activeTab, setActiveTab] = useState('cotacao');
-  const { data, isLoading } = useConsultorPropostas(consultor.id, periodo);
+  const { data, isLoading } = useVendedorPropostas(vendedor.id, periodo);
 
   if (isLoading) {
     return (
@@ -77,17 +77,17 @@ export function ConsultorTab({ consultor, periodo }: ConsultorTabProps) {
 
   return (
     <div className="space-y-6">
-      {/* Header do Consultor */}
+      {/* Header do Vendedor */}
       <div className="flex items-center gap-4 p-4 rounded-lg bg-gradient-to-r from-primary/5 to-primary/10 border">
         <UserAvatar 
-          src={consultor.avatar_url} 
-          name={consultor.nome} 
+          src={vendedor.avatar_url} 
+          name={vendedor.nome} 
           size="lg"
         />
         <div className="flex-1">
-          <h2 className="text-xl font-bold">{consultor.nome}</h2>
+          <h2 className="text-xl font-bold">{vendedor.nome}</h2>
           <p className="text-sm text-muted-foreground">
-            Ranking #{consultor.ranking} • Taxa de conversão: {consultor.taxaConversao.toFixed(0)}%
+            Ranking #{vendedor.ranking} • Taxa de conversão: {vendedor.taxaConversao.toFixed(0)}%
           </p>
         </div>
         <div className="text-right">
@@ -109,7 +109,7 @@ export function ConsultorTab({ consultor, periodo }: ConsultorTabProps) {
                 <User className="h-5 w-5 text-blue-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{consultor.leadsAtivos}</p>
+                <p className="text-2xl font-bold">{vendedor.leadsAtivos}</p>
                 <p className="text-xs text-muted-foreground">Leads Ativos</p>
               </div>
             </div>

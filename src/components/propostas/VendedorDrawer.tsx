@@ -12,12 +12,12 @@ import { UserAvatar } from '@/components/UserAvatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { useConsultorPropostas, type ConsultorMetricas, type PeriodoFiltro } from '@/hooks/usePropostasMetricas';
+import { useVendedorPropostas, type VendedorMetricas, type PeriodoFiltro } from '@/hooks/usePropostasMetricas';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
-interface ConsultorDrawerProps {
-  consultor: ConsultorMetricas | null;
+interface VendedorDrawerProps {
+  vendedor: VendedorMetricas | null;
   periodo: PeriodoFiltro;
   open: boolean;
   onClose: () => void;
@@ -59,13 +59,13 @@ function getStatusIcon(status: string) {
   }
 }
 
-export function ConsultorDrawer({ consultor, periodo, open, onClose }: ConsultorDrawerProps) {
-  const { data, isLoading } = useConsultorPropostas(consultor?.id || null, periodo);
+export function VendedorDrawer({ vendedor, periodo, open, onClose }: VendedorDrawerProps) {
+  const { data, isLoading } = useVendedorPropostas(vendedor?.id || null, periodo);
 
-  if (!consultor) return null;
+  if (!vendedor) return null;
 
-  const rankingBadge = getRankingBadge(consultor.ranking);
-  const performanceBadge = getPerformanceBadge(consultor.taxaConversao);
+  const rankingBadge = getRankingBadge(vendedor.ranking);
+  const performanceBadge = getPerformanceBadge(vendedor.taxaConversao);
   const Icon = performanceBadge.icon;
 
   // Combinar todas as propostas recentes (max 5)
@@ -93,13 +93,13 @@ export function ConsultorDrawer({ consultor, periodo, open, onClose }: Consultor
         <SheetHeader className="p-6 pb-4 border-b">
           <div className="flex items-start gap-4">
             <UserAvatar 
-              src={consultor.avatar_url} 
-              name={consultor.nome} 
+              src={vendedor.avatar_url} 
+              name={vendedor.nome} 
               size="lg"
             />
             <div className="flex-1 min-w-0">
               <SheetTitle className="text-lg font-bold leading-tight mb-2">
-                {consultor.nome}
+                {vendedor.nome}
               </SheetTitle>
               <div className="flex flex-wrap gap-2">
                 <Badge className={cn("gap-1", rankingBadge.className)}>
@@ -133,7 +133,7 @@ export function ConsultorDrawer({ consultor, periodo, open, onClose }: Consultor
                   <MetricRow 
                     icon={User} 
                     label="Leads Ativos" 
-                    value={consultor.leadsAtivos}
+                    value={vendedor.leadsAtivos}
                   />
                   <MetricRow 
                     icon={Clock} 
@@ -164,10 +164,10 @@ export function ConsultorDrawer({ consultor, periodo, open, onClose }: Consultor
                     <span className="text-sm font-medium">📈 Taxa de Conversão</span>
                     <span className={cn(
                       "text-lg font-bold",
-                      consultor.taxaConversao >= 30 ? "text-green-600" :
-                      consultor.taxaConversao >= 10 ? "text-yellow-600" : "text-red-500"
+                      vendedor.taxaConversao >= 30 ? "text-green-600" :
+                      vendedor.taxaConversao >= 10 ? "text-yellow-600" : "text-red-500"
                     )}>
-                      {consultor.taxaConversao.toFixed(0)}%
+                      {vendedor.taxaConversao.toFixed(0)}%
                     </span>
                   </div>
                 </div>
