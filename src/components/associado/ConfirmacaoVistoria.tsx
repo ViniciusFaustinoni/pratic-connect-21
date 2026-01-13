@@ -1,0 +1,116 @@
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { CheckCircle, Calendar, Camera, Clock, MapPin } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+
+interface ConfirmacaoVistoriaProps {
+  tipoVistoria: 'agendada' | 'autovistoria';
+  dadosAgendamento?: { data: string; horario: string } | null;
+}
+
+export function ConfirmacaoVistoria({ tipoVistoria, dadosAgendamento }: ConfirmacaoVistoriaProps) {
+  return (
+    <Card className="border-green-200 dark:border-green-900">
+      <CardHeader className="text-center bg-green-50 dark:bg-green-950/30 rounded-t-lg">
+        <div className="mx-auto w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mb-4">
+          <CheckCircle className="h-10 w-10 text-white" />
+        </div>
+        <CardTitle className="text-green-700 dark:text-green-400">
+          Pagamento Confirmado!
+        </CardTitle>
+        <CardDescription>
+          Sua adesão foi processada com sucesso
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="pt-6 space-y-6">
+        {tipoVistoria === 'agendada' && dadosAgendamento ? (
+          <div className="space-y-4">
+            <div className="bg-muted/50 p-4 rounded-lg space-y-3">
+              <h4 className="font-medium flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-primary" />
+                Vistoria Agendada
+              </h4>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-muted-foreground">Data</p>
+                    <p className="font-medium">
+                      {format(new Date(dadosAgendamento.data), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-muted-foreground">Horário</p>
+                    <p className="font-medium">{dadosAgendamento.horario}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-blue-50 dark:bg-blue-950/20 p-4 rounded-lg">
+              <p className="text-sm text-blue-700 dark:text-blue-400">
+                <strong>Importante:</strong> Compareça no local com o veículo limpo e todos os documentos.
+                Você receberá um lembrete por SMS/WhatsApp antes da vistoria.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="bg-muted/50 p-4 rounded-lg space-y-3">
+              <h4 className="font-medium flex items-center gap-2">
+                <Camera className="h-4 w-4 text-primary" />
+                Autovistoria Enviada
+              </h4>
+              <p className="text-sm text-muted-foreground">
+                Suas fotos foram recebidas e estão em análise pela nossa equipe técnica.
+              </p>
+            </div>
+
+            <div className="bg-yellow-50 dark:bg-yellow-950/20 p-4 rounded-lg">
+              <p className="text-sm text-yellow-700 dark:text-yellow-400">
+                <strong>Próximos passos:</strong> Você será notificado quando a análise for concluída.
+                Em caso de aprovação, receberá o link para assinatura do contrato.
+              </p>
+            </div>
+          </div>
+        )}
+
+        <div className="border-t pt-4">
+          <h4 className="font-medium mb-3">Próximas etapas:</h4>
+          <ul className="space-y-2 text-sm text-muted-foreground">
+            <li className="flex items-start gap-2">
+              <CheckCircle className="h-4 w-4 text-green-500 mt-0.5" />
+              Pagamento da adesão confirmado
+            </li>
+            <li className="flex items-start gap-2">
+              <div className="h-4 w-4 rounded-full border-2 border-muted-foreground/30 mt-0.5" />
+              {tipoVistoria === 'agendada' 
+                ? 'Realização da vistoria presencial'
+                : 'Análise das fotos da autovistoria'
+              }
+            </li>
+            <li className="flex items-start gap-2">
+              <div className="h-4 w-4 rounded-full border-2 border-muted-foreground/30 mt-0.5" />
+              Assinatura do contrato
+            </li>
+            <li className="flex items-start gap-2">
+              <div className="h-4 w-4 rounded-full border-2 border-muted-foreground/30 mt-0.5" />
+              Instalação do rastreador
+            </li>
+            <li className="flex items-start gap-2">
+              <div className="h-4 w-4 rounded-full border-2 border-muted-foreground/30 mt-0.5" />
+              Ativação da proteção
+            </li>
+          </ul>
+        </div>
+
+        <p className="text-center text-sm text-muted-foreground">
+          Em caso de dúvidas, entre em contato conosco.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
