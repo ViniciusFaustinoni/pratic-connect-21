@@ -3112,6 +3112,9 @@ export type Database = {
       }
       contratos: {
         Row: {
+          adesao_cobranca_id: string | null
+          adesao_paga: boolean | null
+          adesao_paga_em: string | null
           associado_id: string | null
           autentique_documento_id: string | null
           autentique_status: string | null
@@ -3138,11 +3141,14 @@ export type Database = {
           documentos_completos: boolean | null
           id: string
           lead_id: string | null
+          link_gerado_em: string | null
+          link_token: string | null
           numero: string
           pdf_assinado_url: string | null
           pdf_url: string | null
           plano_id: string
           status: Database["public"]["Enums"]["status_contrato"]
+          tipo_vistoria: string | null
           updated_at: string
           validade_link: string | null
           valor_adesao: number
@@ -3158,6 +3164,9 @@ export type Database = {
           vendedor_id: string | null
         }
         Insert: {
+          adesao_cobranca_id?: string | null
+          adesao_paga?: boolean | null
+          adesao_paga_em?: string | null
           associado_id?: string | null
           autentique_documento_id?: string | null
           autentique_status?: string | null
@@ -3184,11 +3193,14 @@ export type Database = {
           documentos_completos?: boolean | null
           id?: string
           lead_id?: string | null
+          link_gerado_em?: string | null
+          link_token?: string | null
           numero: string
           pdf_assinado_url?: string | null
           pdf_url?: string | null
           plano_id: string
           status?: Database["public"]["Enums"]["status_contrato"]
+          tipo_vistoria?: string | null
           updated_at?: string
           validade_link?: string | null
           valor_adesao: number
@@ -3204,6 +3216,9 @@ export type Database = {
           vendedor_id?: string | null
         }
         Update: {
+          adesao_cobranca_id?: string | null
+          adesao_paga?: boolean | null
+          adesao_paga_em?: string | null
           associado_id?: string | null
           autentique_documento_id?: string | null
           autentique_status?: string | null
@@ -3230,11 +3245,14 @@ export type Database = {
           documentos_completos?: boolean | null
           id?: string
           lead_id?: string | null
+          link_gerado_em?: string | null
+          link_token?: string | null
           numero?: string
           pdf_assinado_url?: string | null
           pdf_url?: string | null
           plano_id?: string
           status?: Database["public"]["Enums"]["status_contrato"]
+          tipo_vistoria?: string | null
           updated_at?: string
           validade_link?: string | null
           valor_adesao?: number
@@ -10487,14 +10505,17 @@ export type Database = {
         Row: {
           associado_id: string
           avarias: string | null
+          contrato_id: string | null
           created_at: string
           data_agendada: string | null
           endereco_cidade: string | null
           endereco_estado: string | null
           endereco_logradouro: string | null
+          horario_agendado: string | null
           id: string
           instalacao_id: string | null
           km_atual: number | null
+          modalidade: string | null
           observacoes: string | null
           sinistro_id: string | null
           status: Database["public"]["Enums"]["status_vistoria"]
@@ -10506,14 +10527,17 @@ export type Database = {
         Insert: {
           associado_id: string
           avarias?: string | null
+          contrato_id?: string | null
           created_at?: string
           data_agendada?: string | null
           endereco_cidade?: string | null
           endereco_estado?: string | null
           endereco_logradouro?: string | null
+          horario_agendado?: string | null
           id?: string
           instalacao_id?: string | null
           km_atual?: number | null
+          modalidade?: string | null
           observacoes?: string | null
           sinistro_id?: string | null
           status?: Database["public"]["Enums"]["status_vistoria"]
@@ -10525,14 +10549,17 @@ export type Database = {
         Update: {
           associado_id?: string
           avarias?: string | null
+          contrato_id?: string | null
           created_at?: string
           data_agendada?: string | null
           endereco_cidade?: string | null
           endereco_estado?: string | null
           endereco_logradouro?: string | null
+          horario_agendado?: string | null
           id?: string
           instalacao_id?: string | null
           km_atual?: number | null
+          modalidade?: string | null
           observacoes?: string | null
           sinistro_id?: string | null
           status?: Database["public"]["Enums"]["status_vistoria"]
@@ -10583,6 +10610,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "vistorias_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "contratos"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "vistorias_instalacao_id_fkey"
