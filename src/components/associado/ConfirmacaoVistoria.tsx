@@ -87,14 +87,14 @@ export function ConfirmacaoVistoria({ tipoVistoria, dadosAgendamento }: Confirma
             </li>
             <li className="flex items-start gap-2">
               <div className="h-4 w-4 rounded-full border-2 border-muted-foreground/30 mt-0.5" />
+              Assinatura do contrato
+            </li>
+            <li className="flex items-start gap-2">
+              <div className="h-4 w-4 rounded-full border-2 border-muted-foreground/30 mt-0.5" />
               {tipoVistoria === 'agendada' 
                 ? 'Realização da vistoria presencial'
                 : 'Análise das fotos da autovistoria'
               }
-            </li>
-            <li className="flex items-start gap-2">
-              <div className="h-4 w-4 rounded-full border-2 border-muted-foreground/30 mt-0.5" />
-              Assinatura do contrato
             </li>
             <li className="flex items-start gap-2">
               <div className="h-4 w-4 rounded-full border-2 border-muted-foreground/30 mt-0.5" />
