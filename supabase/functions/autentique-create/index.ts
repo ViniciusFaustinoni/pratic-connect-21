@@ -12,15 +12,25 @@ const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
 // Função para validar autorização (chamada interna ou usuário autenticado)
-async function validateAuthorization(req: Request): Promise<{ authorized: boolean; error?: string }> {
+async function validateAuthorization(req: Request): Promise<{ authorized: boolean; method?: string; error?: string }> {
   const authHeader = req.headers.get('Authorization');
+  const apiKey = req.headers.get('apikey') || req.headers.get('x-apikey');
   
-  // Cenário A: Chamada interna com service role key
-  if (authHeader === `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`) {
-    return { authorized: true };
+  console.log('[autentique-create] Validando auth - tem Authorization:', !!authHeader, '- tem apikey:', !!apiKey);
+  
+  // Cenário A: Chamada interna com apikey = service role key
+  if (apiKey === SUPABASE_SERVICE_ROLE_KEY) {
+    console.log('[autentique-create] Auth via apikey (service role)');
+    return { authorized: true, method: 'apikey' };
   }
   
-  // Cenário B: Usuário autenticado via JWT
+  // Cenário B: Chamada interna com Authorization Bearer = service role key
+  if (authHeader === `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`) {
+    console.log('[autentique-create] Auth via bearer (service role)');
+    return { authorized: true, method: 'bearer' };
+  }
+  
+  // Cenário C: Usuário autenticado via JWT
   if (authHeader?.startsWith('Bearer ')) {
     try {
       const supabaseUser = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -29,13 +39,15 @@ async function validateAuthorization(req: Request): Promise<{ authorized: boolea
       
       const { data: { user }, error } = await supabaseUser.auth.getUser();
       if (user && !error) {
-        return { authorized: true };
+        console.log('[autentique-create] Auth via JWT user:', user.email);
+        return { authorized: true, method: 'jwt' };
       }
     } catch (e) {
       console.error('[autentique-create] Erro ao validar JWT:', e);
     }
   }
   
+  console.warn('[autentique-create] Nenhum método de auth válido encontrado');
   return { authorized: false, error: 'Unauthorized - Token inválido ou ausente' };
 }
 

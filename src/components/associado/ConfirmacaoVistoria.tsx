@@ -1,6 +1,6 @@
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { CheckCircle, Calendar, Camera, Clock, FileSignature, ExternalLink, Loader2 } from 'lucide-react';
+import { CheckCircle, Calendar, Camera, Clock, FileSignature, ExternalLink, Loader2, RefreshCw, AlertCircle } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
@@ -8,9 +8,17 @@ interface ConfirmacaoVistoriaProps {
   tipoVistoria: 'agendada' | 'autovistoria';
   dadosAgendamento?: { data: string; horario: string } | null;
   autentiqueUrl?: string | null;
+  isAutentiqueTimeout?: boolean;
+  onRetryAutentique?: () => void;
 }
 
-export function ConfirmacaoVistoria({ tipoVistoria, dadosAgendamento, autentiqueUrl }: ConfirmacaoVistoriaProps) {
+export function ConfirmacaoVistoria({ 
+  tipoVistoria, 
+  dadosAgendamento, 
+  autentiqueUrl,
+  isAutentiqueTimeout,
+  onRetryAutentique,
+}: ConfirmacaoVistoriaProps) {
   return (
     <Card className="border-green-200 dark:border-green-900">
       <CardHeader className="text-center bg-green-50 dark:bg-green-950/30 rounded-t-lg">
@@ -80,7 +88,7 @@ export function ConfirmacaoVistoria({ tipoVistoria, dadosAgendamento, autentique
           </div>
         )}
 
-        {/* CTA para Assinatura do Contrato - com estado de carregamento */}
+        {/* CTA para Assinatura do Contrato - com estados de carregamento, timeout e sucesso */}
         {autentiqueUrl ? (
           <div className="bg-primary/5 border border-primary/20 p-4 rounded-lg space-y-3">
             <div className="flex items-center gap-2">
@@ -96,6 +104,30 @@ export function ConfirmacaoVistoria({ tipoVistoria, dadosAgendamento, autentique
                 Assinar Contrato Agora
               </a>
             </Button>
+          </div>
+        ) : isAutentiqueTimeout ? (
+          <div className="bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-900 p-4 rounded-lg space-y-3">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+              <h4 className="font-medium text-yellow-700 dark:text-yellow-400">
+                Link ainda não disponível
+              </h4>
+            </div>
+            <p className="text-sm text-yellow-700 dark:text-yellow-400">
+              O link para assinatura está demorando mais que o esperado. 
+              Isso pode acontecer em momentos de alta demanda.
+            </p>
+            <Button 
+              variant="outline" 
+              className="w-full border-yellow-500 text-yellow-700 hover:bg-yellow-100 dark:text-yellow-400 dark:hover:bg-yellow-950"
+              onClick={onRetryAutentique}
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Tentar Novamente
+            </Button>
+            <p className="text-xs text-yellow-600 dark:text-yellow-500 text-center">
+              Caso o problema persista, entre em contato conosco.
+            </p>
           </div>
         ) : (
           <div className="bg-muted/50 border border-muted p-4 rounded-lg space-y-3">

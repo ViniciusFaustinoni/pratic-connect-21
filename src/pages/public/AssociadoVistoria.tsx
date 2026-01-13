@@ -14,7 +14,7 @@ type Etapa = 'escolha' | 'agendar' | 'autovistoria' | 'pagamento' | 'confirmacao
 
 export default function AssociadoVistoria() {
   const { token } = useParams<{ token: string }>();
-  const { data: contrato, isLoading, error } = useContratoByToken(token);
+  const { data: contrato, isLoading, error, isAutentiqueTimeout, retryAutentiquePolling } = useContratoByToken(token);
   const [etapa, setEtapa] = useState<Etapa>('escolha');
   const [vistoriaId, setVistoriaId] = useState<string | null>(null);
   const [dadosAgendamento, setDadosAgendamento] = useState<{ data: string; horario: string } | null>(null);
@@ -192,6 +192,8 @@ export default function AssociadoVistoria() {
             tipoVistoria={contrato.tipo_vistoria as 'agendada' | 'autovistoria'}
             dadosAgendamento={dadosAgendamento}
             autentiqueUrl={contrato.autentique_url}
+            isAutentiqueTimeout={isAutentiqueTimeout}
+            onRetryAutentique={retryAutentiquePolling}
           />
         )}
       </div>
