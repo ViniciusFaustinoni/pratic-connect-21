@@ -3116,6 +3116,14 @@ export type Database = {
           autentique_documento_id: string | null
           autentique_status: string | null
           autentique_url: string | null
+          cliente_cep: string | null
+          cliente_cidade: string | null
+          cliente_cpf: string | null
+          cliente_email: string | null
+          cliente_endereco: string | null
+          cliente_nome: string | null
+          cliente_telefone: string | null
+          cliente_uf: string | null
           cotacao_id: string | null
           created_at: string
           created_by: string | null
@@ -3127,6 +3135,7 @@ export type Database = {
           data_inicio: string
           data_visualizacao: string | null
           dia_vencimento: number | null
+          documentos_completos: boolean | null
           id: string
           lead_id: string | null
           numero: string
@@ -3138,6 +3147,14 @@ export type Database = {
           validade_link: string | null
           valor_adesao: number
           valor_mensal: number
+          veiculo_ano: number | null
+          veiculo_chassi: string | null
+          veiculo_cor: string | null
+          veiculo_marca: string | null
+          veiculo_modelo: string | null
+          veiculo_placa: string | null
+          veiculo_renavam: string | null
+          veiculo_valor_fipe: number | null
           vendedor_id: string | null
         }
         Insert: {
@@ -3145,6 +3162,14 @@ export type Database = {
           autentique_documento_id?: string | null
           autentique_status?: string | null
           autentique_url?: string | null
+          cliente_cep?: string | null
+          cliente_cidade?: string | null
+          cliente_cpf?: string | null
+          cliente_email?: string | null
+          cliente_endereco?: string | null
+          cliente_nome?: string | null
+          cliente_telefone?: string | null
+          cliente_uf?: string | null
           cotacao_id?: string | null
           created_at?: string
           created_by?: string | null
@@ -3156,6 +3181,7 @@ export type Database = {
           data_inicio?: string
           data_visualizacao?: string | null
           dia_vencimento?: number | null
+          documentos_completos?: boolean | null
           id?: string
           lead_id?: string | null
           numero: string
@@ -3167,6 +3193,14 @@ export type Database = {
           validade_link?: string | null
           valor_adesao: number
           valor_mensal: number
+          veiculo_ano?: number | null
+          veiculo_chassi?: string | null
+          veiculo_cor?: string | null
+          veiculo_marca?: string | null
+          veiculo_modelo?: string | null
+          veiculo_placa?: string | null
+          veiculo_renavam?: string | null
+          veiculo_valor_fipe?: number | null
           vendedor_id?: string | null
         }
         Update: {
@@ -3174,6 +3208,14 @@ export type Database = {
           autentique_documento_id?: string | null
           autentique_status?: string | null
           autentique_url?: string | null
+          cliente_cep?: string | null
+          cliente_cidade?: string | null
+          cliente_cpf?: string | null
+          cliente_email?: string | null
+          cliente_endereco?: string | null
+          cliente_nome?: string | null
+          cliente_telefone?: string | null
+          cliente_uf?: string | null
           cotacao_id?: string | null
           created_at?: string
           created_by?: string | null
@@ -3185,6 +3227,7 @@ export type Database = {
           data_inicio?: string
           data_visualizacao?: string | null
           dia_vencimento?: number | null
+          documentos_completos?: boolean | null
           id?: string
           lead_id?: string | null
           numero?: string
@@ -3196,6 +3239,14 @@ export type Database = {
           validade_link?: string | null
           valor_adesao?: number
           valor_mensal?: number
+          veiculo_ano?: number | null
+          veiculo_chassi?: string | null
+          veiculo_cor?: string | null
+          veiculo_marca?: string | null
+          veiculo_modelo?: string | null
+          veiculo_placa?: string | null
+          veiculo_renavam?: string | null
+          veiculo_valor_fipe?: number | null
           vendedor_id?: string | null
         }
         Relationships: [
@@ -3282,6 +3333,60 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["associado_id"]
+          },
+        ]
+      }
+      contratos_documentos: {
+        Row: {
+          arquivo_nome: string | null
+          arquivo_url: string
+          contrato_id: string | null
+          cotacao_id: string | null
+          created_at: string | null
+          id: string
+          ocr_resultado: Json | null
+          status: string | null
+          tipo: string
+          updated_at: string | null
+        }
+        Insert: {
+          arquivo_nome?: string | null
+          arquivo_url: string
+          contrato_id?: string | null
+          cotacao_id?: string | null
+          created_at?: string | null
+          id?: string
+          ocr_resultado?: Json | null
+          status?: string | null
+          tipo: string
+          updated_at?: string | null
+        }
+        Update: {
+          arquivo_nome?: string | null
+          arquivo_url?: string
+          contrato_id?: string | null
+          cotacao_id?: string | null
+          created_at?: string | null
+          id?: string
+          ocr_resultado?: Json | null
+          status?: string | null
+          tipo?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contratos_documentos_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "contratos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contratos_documentos_cotacao_id_fkey"
+            columns: ["cotacao_id"]
+            isOneToOne: false
+            referencedRelation: "cotacoes"
+            referencedColumns: ["id"]
           },
         ]
       }

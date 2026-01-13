@@ -594,15 +594,14 @@ export default function Cotacoes() {
                 }}
                 onWhatsApp={enviarWhatsApp}
                 onEmail={handleOpenEmailModal}
-                onAceitar={handleOpenContratoWizard}
+                onAceitar={(id) => {
+                  updateCotacao.mutate({ id, status: 'aceita' });
+                }}
                 onPdf={handleBaixarPdf}
                 onDuplicar={handleDuplicar}
                 onExcluir={handleExcluir}
                 onCopiarWhatsApp={copiarParaWhatsApp}
-                onGerarContrato={(id) => gerarContrato.mutate({ 
-                  cotacaoId: id, 
-                  vendedorId: profile?.id 
-                })}
+                onGerarContrato={handleOpenContratoWizard}
                 isGerandoContrato={gerarContrato.isPending}
               />
             ))
@@ -634,15 +633,14 @@ export default function Cotacoes() {
                 }}
                 onWhatsApp={enviarWhatsApp}
                 onEmail={handleOpenEmailModal}
-                onAceitar={handleOpenContratoWizard}
+                onAceitar={(id) => {
+                  updateCotacao.mutate({ id, status: 'aceita' });
+                }}
                 onPdf={handleBaixarPdf}
                 onDuplicar={handleDuplicar}
                 onExcluir={handleExcluir}
                 onCopiarWhatsApp={copiarParaWhatsApp}
-                onGerarContrato={(id) => gerarContrato.mutate({ 
-                  cotacaoId: id, 
-                  vendedorId: profile?.id 
-                })}
+                onGerarContrato={handleOpenContratoWizard}
                 isGerandoContrato={gerarContrato.isPending}
               />
             ))
