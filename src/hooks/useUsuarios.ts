@@ -235,8 +235,8 @@ export function useUsuarioActions() {
     },
   });
 
-  // Resetar senha (via Supabase Auth)
-  const resetarSenha = useMutation({
+  // Resetar senha (via Supabase Auth) - envia email
+  const resetarSenhaEmail = useMutation({
     mutationFn: async (email: string) => {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/auth/reset-password`,
@@ -249,6 +249,69 @@ export function useUsuarioActions() {
     },
     onError: (error: Error) => {
       toast.error('Erro ao enviar email: ' + error.message);
+    },
+  });
+
+  // Resetar senha administrativamente (define nova senha diretamente)
+  const resetarSenhaAdmin = useMutation({
+    mutationFn: async ({ userId, novaSenha }: { userId: string; novaSenha: string }) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      const response = await fetch(
+        'https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/admin-reset-password',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token}`,
+          },
+          body: JSON.stringify({ userId, novaSenha }),
+        }
+      );
+
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Erro ao redefinir senha');
+      }
+      return result;
+    },
+    onSuccess: () => {
+      toast.success('Senha redefinida com sucesso');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+
+  // Excluir usuário permanentemente
+  const excluirUsuario = useMutation({
+    mutationFn: async ({ profileId, userId }: { profileId: string; userId?: string | null }) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      const response = await fetch(
+        'https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/delete-user',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token}`,
+          },
+          body: JSON.stringify({ profileId, userId }),
+        }
+      );
+
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Erro ao excluir usuário');
+      }
+      return result;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['usuarios'] });
+      toast.success('Usuário excluído permanentemente');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
     },
   });
 
@@ -343,7 +406,9 @@ export function useUsuarioActions() {
     ativarUsuario: ativarUsuario.mutate,
     bloquearUsuario: bloquearUsuario.mutate,
     desbloquearUsuario: desbloquearUsuario.mutate,
-    resetarSenha: resetarSenha.mutate,
+    resetarSenhaEmail: resetarSenhaEmail.mutate,
+    resetarSenhaAdmin: resetarSenhaAdmin.mutateAsync,
+    excluirUsuario: excluirUsuario.mutateAsync,
     atualizarUsuario: atualizarUsuario.mutate,
     adicionarPerfil: adicionarPerfil.mutate,
     removerPerfil: removerPerfil.mutate,
@@ -352,7 +417,9 @@ export function useUsuarioActions() {
       ativarUsuario.isPending || 
       bloquearUsuario.isPending ||
       desbloquearUsuario.isPending ||
-      resetarSenha.isPending,
+      resetarSenhaEmail.isPending,
+    isResettingPassword: resetarSenhaAdmin.isPending,
+    isDeletingUser: excluirUsuario.isPending,
     isUpdating: atualizarUsuario.isPending,
     isAddingPerfil: adicionarPerfil.isPending,
     isRemovingPerfil: removerPerfil.isPending,

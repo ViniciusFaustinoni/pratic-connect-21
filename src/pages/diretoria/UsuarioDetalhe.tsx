@@ -99,7 +99,7 @@ export default function UsuarioDetalhePage() {
     ativarUsuario, 
     bloquearUsuario,
     desbloquearUsuario,
-    resetarSenha,
+    resetarSenhaEmail,
     isLoading: actionLoading 
   } = useUsuarioActions();
 
@@ -129,7 +129,7 @@ export default function UsuarioDetalhePage() {
         desbloquearUsuario(usuario.id);
         break;
       case 'resetar':
-        resetarSenha(usuario.email);
+        resetarSenhaEmail(usuario.email);
         break;
     }
 

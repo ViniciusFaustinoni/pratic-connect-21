@@ -119,7 +119,7 @@ export default function UsuariosPage() {
     ativarUsuario, 
     bloquearUsuario,
     desbloquearUsuario,
-    resetarSenha, 
+    resetarSenhaEmail, 
     isLoading: actionLoading 
   } = useUsuarioActions();
 
@@ -163,7 +163,7 @@ export default function UsuariosPage() {
         desbloquearUsuario(confirmDialog.usuario.id);
         break;
       case 'resetar':
-        resetarSenha(confirmDialog.usuario.email);
+        resetarSenhaEmail(confirmDialog.usuario.email);
         break;
     }
 

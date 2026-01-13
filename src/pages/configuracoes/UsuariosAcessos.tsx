@@ -5,7 +5,8 @@ import {
   Search, Plus, MoreHorizontal, Edit, Key, ExternalLink, 
   Upload, Download, Crown, Briefcase, UserPlus, FileCheck, 
   Megaphone, Scale, MapPin, Monitor, Wrench, User, LogIn, 
-  LogOut, AlertTriangle, Trash, Settings, LucideIcon
+  LogOut, AlertTriangle, Trash, Settings, LucideIcon, Eye, EyeOff,
+  RefreshCw, ChevronLeft, ChevronRight, Trash2
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { format } from 'date-fns';
@@ -42,11 +43,12 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 
-import { useUsuarios, useUsuarioActions } from '@/hooks/useUsuarios';
+import { useUsuarios, useUsuarioActions, ProfileWithRoles } from '@/hooks/useUsuarios';
 import { useVendedores, useVendedoresContagem } from '@/hooks/useVendedores';
 import { ImportarUsuariosDialog } from '@/components/usuarios/ImportarUsuariosDialog';
 
@@ -127,6 +129,8 @@ const acoesConfig: Record<string, { label: string; icon: LucideIcon; color: stri
   desativar: { label: 'Desativação', icon: User, color: 'text-orange-500 bg-orange-500/10' },
 };
 
+const PAGE_SIZE = 15;
+
 // ==================== COMPONENT ====================
 
 export default function UsuariosAcessos() {
@@ -141,8 +145,15 @@ export default function UsuariosAcessos() {
   const [filterTipo, setFilterTipo] = useState<string>('todos');
   const [filterStatus, setFilterStatus] = useState<string>('todos');
   const [filterPerfil, setFilterPerfil] = useState<string>('todos');
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
   const [showImportDialog, setShowImportDialog] = useState(false);
+  
+  // Dialogs state
+  const [deactivateConfirm, setDeactivateConfirm] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<ProfileWithRoles | null>(null);
+  const [resetPasswordDialog, setResetPasswordDialog] = useState<ProfileWithRoles | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   // ===== VENDEDORES STATE =====
   const [searchVendedor, setSearchVendedor] = useState('');
@@ -157,16 +168,24 @@ export default function UsuariosAcessos() {
   const [filterAcao, setFilterAcao] = useState<string>('todas');
 
   // ===== USUARIOS HOOKS =====
-  const { usuarios, isLoading: isLoadingUsuarios, refetch: refetchUsuarios } = useUsuarios({
+  const { usuarios, pagination, isLoading: isLoadingUsuarios, refetch: refetchUsuarios } = useUsuarios({
     filters: {
       tipo: filterTipo !== 'todos' ? filterTipo as any : undefined,
       status: filterStatus !== 'todos' ? filterStatus as any : undefined,
       search: search || undefined,
       perfil: filterPerfil !== 'todos' ? filterPerfil as any : undefined,
     },
-    pagination: { page: 1, pageSize: 100 }
+    pagination: { page, pageSize: PAGE_SIZE }
   });
-  const { desativarUsuario, ativarUsuario, resetarSenha } = useUsuarioActions();
+  
+  const { 
+    desativarUsuario, 
+    ativarUsuario, 
+    resetarSenhaAdmin,
+    excluirUsuario,
+    isResettingPassword,
+    isDeletingUser 
+  } = useUsuarioActions();
 
   // ===== VENDEDORES HOOKS =====
   const { data: vendedores, isLoading: isLoadingVendedores } = useVendedores();
@@ -241,11 +260,16 @@ export default function UsuariosAcessos() {
 
   // ===== STATS =====
   const stats = {
-    total: usuarios.length,
+    total: pagination.total,
     ativos: usuarios.filter(u => u.ativo).length,
     inativos: usuarios.filter(u => !u.ativo).length,
     vendedores: vendedores?.length || 0,
   };
+
+  // ===== PAGINATION =====
+  const totalPages = Math.ceil(pagination.total / PAGE_SIZE);
+  const startItem = (page - 1) * PAGE_SIZE + 1;
+  const endItem = Math.min(page * PAGE_SIZE, pagination.total);
 
   // ===== HELPERS =====
   const getInitials = (name: string) => name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || '??';
@@ -275,13 +299,41 @@ export default function UsuariosAcessos() {
     }
   };
 
-  const handleResetarSenha = async (email: string) => {
+  const handleExcluirPermanente = async () => {
+    if (!deleteConfirm) return;
     try {
-      resetarSenha(email);
-      toast.success('Email de recuperação enviado');
+      await excluirUsuario({ profileId: deleteConfirm.id, userId: deleteConfirm.user_id });
+      setDeleteConfirm(null);
+      refetchUsuarios();
     } catch {
-      toast.error('Erro ao enviar email');
+      // Error handled by mutation
     }
+  };
+
+  const handleResetarSenha = async () => {
+    if (!resetPasswordDialog?.user_id || !newPassword) return;
+    if (newPassword.length < 8) {
+      toast.error('A senha deve ter pelo menos 8 caracteres');
+      return;
+    }
+    try {
+      await resetarSenhaAdmin({ userId: resetPasswordDialog.user_id, novaSenha: newPassword });
+      setResetPasswordDialog(null);
+      setNewPassword('');
+      setShowPassword(false);
+    } catch {
+      // Error handled by mutation
+    }
+  };
+
+  const generateRandomPassword = () => {
+    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%';
+    let password = '';
+    for (let i = 0; i < 12; i++) {
+      password += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    setNewPassword(password);
+    setShowPassword(true);
   };
 
   const downloadTemplate = () => {
@@ -325,6 +377,12 @@ export default function UsuariosAcessos() {
     const matchTipo = filterTipoVendedor === 'todos' || v.roles?.includes(filterTipoVendedor === 'clt' ? 'vendedor_clt' : 'vendedor_externo');
     return matchSearch && matchTipo;
   }) || [];
+
+  // Reset page when filters change
+  const handleFilterChange = (setter: React.Dispatch<React.SetStateAction<string>>, value: string) => {
+    setter(value);
+    setPage(1);
+  };
 
   return (
     <div className="space-y-6">
@@ -400,10 +458,15 @@ export default function UsuariosAcessos() {
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input placeholder="Buscar por nome, email ou CPF..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10 bg-background" />
+              <Input 
+                placeholder="Buscar por nome, email ou CPF..." 
+                value={search} 
+                onChange={(e) => { setSearch(e.target.value); setPage(1); }} 
+                className="pl-10 bg-background" 
+              />
             </div>
-            <Select value={filterTipo} onValueChange={setFilterTipo}>
-              <SelectTrigger className="w-full sm:w-[180px]"><SelectValue placeholder="Tipo" /></SelectTrigger>
+            <Select value={filterTipo} onValueChange={(v) => handleFilterChange(setFilterTipo, v)}>
+              <SelectTrigger className="w-full sm:w-[150px]"><SelectValue placeholder="Tipo" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos os tipos</SelectItem>
                 <SelectItem value="funcionario">Funcionário</SelectItem>
@@ -411,8 +474,8 @@ export default function UsuariosAcessos() {
                 <SelectItem value="prestador">Prestador</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={filterPerfil} onValueChange={setFilterPerfil}>
-              <SelectTrigger className="w-full sm:w-[180px]"><SelectValue placeholder="Perfil" /></SelectTrigger>
+            <Select value={filterPerfil} onValueChange={(v) => handleFilterChange(setFilterPerfil, v)}>
+              <SelectTrigger className="w-full sm:w-[150px]"><SelectValue placeholder="Perfil" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos os perfis</SelectItem>
                 <SelectItem value="vendedor_clt">Vendedor CLT</SelectItem>
@@ -423,8 +486,8 @@ export default function UsuariosAcessos() {
                 <SelectItem value="diretor">Diretor</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="w-full sm:w-[150px]"><SelectValue placeholder="Status" /></SelectTrigger>
+            <Select value={filterStatus} onValueChange={(v) => handleFilterChange(setFilterStatus, v)}>
+              <SelectTrigger className="w-full sm:w-[120px]"><SelectValue placeholder="Status" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos</SelectItem>
                 <SelectItem value="ativo">Ativos</SelectItem>
@@ -433,91 +496,164 @@ export default function UsuariosAcessos() {
             </Select>
           </div>
 
-          <Card className="border-border/50">
-            <Table>
-              <TableHeader>
-                <TableRow className="border-border/50 hover:bg-transparent">
-                  <TableHead>Usuário</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead>Perfis</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Criado em</TableHead>
-                  <TableHead className="w-[50px]"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoadingUsuarios ? (
-                  Array.from({ length: 5 }).map((_, i) => (
-                    <TableRow key={i} className="border-border/50">
-                      <TableCell><Skeleton className="h-10 w-48" /></TableCell>
-                      <TableCell><Skeleton className="h-6 w-24" /></TableCell>
-                      <TableCell><Skeleton className="h-6 w-32" /></TableCell>
-                      <TableCell><Skeleton className="h-6 w-16" /></TableCell>
-                      <TableCell><Skeleton className="h-6 w-24" /></TableCell>
-                      <TableCell><Skeleton className="h-8 w-8" /></TableCell>
-                    </TableRow>
-                  ))
-                ) : usuarios.length === 0 ? (
-                  <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhum usuário encontrado</TableCell></TableRow>
-                ) : (
-                  usuarios.map((usuario) => (
-                    <TableRow key={usuario.id} className="border-border/50 cursor-pointer hover:bg-muted/50" onClick={() => navigate(`/configuracoes/usuarios/${usuario.id}`)}>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-10 w-10">
-                            <AvatarImage src={usuario.avatar_url || ''} />
-                            <AvatarFallback className="bg-primary/10 text-primary">{getInitials(usuario.nome)}</AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <p className="font-medium text-foreground">{usuario.nome}</p>
-                            <p className="text-xs text-muted-foreground">{usuario.email}</p>
+          <Card className="border-border/50 overflow-hidden">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-border/50 hover:bg-transparent">
+                    <TableHead className="min-w-[200px]">Usuário</TableHead>
+                    <TableHead className="hidden md:table-cell">Tipo</TableHead>
+                    <TableHead className="hidden lg:table-cell">Perfis</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="hidden md:table-cell">Criado em</TableHead>
+                    <TableHead className="w-[50px]"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {isLoadingUsuarios ? (
+                    Array.from({ length: 5 }).map((_, i) => (
+                      <TableRow key={i} className="border-border/50">
+                        <TableCell><Skeleton className="h-10 w-48" /></TableCell>
+                        <TableCell className="hidden md:table-cell"><Skeleton className="h-6 w-24" /></TableCell>
+                        <TableCell className="hidden lg:table-cell"><Skeleton className="h-6 w-32" /></TableCell>
+                        <TableCell><Skeleton className="h-6 w-16" /></TableCell>
+                        <TableCell className="hidden md:table-cell"><Skeleton className="h-6 w-24" /></TableCell>
+                        <TableCell><Skeleton className="h-8 w-8" /></TableCell>
+                      </TableRow>
+                    ))
+                  ) : usuarios.length === 0 ? (
+                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhum usuário encontrado</TableCell></TableRow>
+                  ) : (
+                    usuarios.map((usuario) => (
+                      <TableRow key={usuario.id} className="border-border/50 cursor-pointer hover:bg-muted/50" onClick={() => navigate(`/configuracoes/usuarios/${usuario.id}`)}>
+                        <TableCell>
+                          <div className="flex items-center gap-3 min-w-0">
+                            <Avatar className="h-10 w-10 shrink-0">
+                              <AvatarImage src={usuario.avatar_url || ''} />
+                              <AvatarFallback className="bg-primary/10 text-primary">{getInitials(usuario.nome)}</AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0">
+                              <p className="font-medium text-foreground truncate max-w-[180px]">{usuario.nome}</p>
+                              <p className="text-xs text-muted-foreground truncate max-w-[180px]">{usuario.email}</p>
+                            </div>
                           </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={tiposUsuario[usuario.tipo]?.color}>{tiposUsuario[usuario.tipo]?.label || usuario.tipo}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {usuario.roles?.slice(0, 2).map((role, idx) => (
-                            <Badge key={idx} variant="outline" className={`text-xs ${perfisConfig[role]?.color || 'bg-gray-500/20 text-gray-400'}`}>
-                              {perfisConfig[role]?.label || role}
-                            </Badge>
-                          ))}
-                          {(usuario.roles?.length || 0) > 2 && <Badge variant="outline" className="text-xs">+{(usuario.roles?.length || 0) - 2}</Badge>}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={usuario.ativo ? 'default' : 'secondary'} className="gap-1">
-                          <span className={`w-1.5 h-1.5 rounded-full ${usuario.ativo ? 'bg-green-500' : 'bg-gray-500'}`} />
-                          {usuario.ativo ? 'Ativo' : 'Inativo'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">{new Date(usuario.created_at).toLocaleDateString('pt-BR')}</TableCell>
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                            <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="w-4 h-4" /></Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Ações</DropdownMenuLabel>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); navigate(`/configuracoes/usuarios/${usuario.id}`); }}><Edit className="w-4 h-4 mr-2" /> Editar</DropdownMenuItem>
-                            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleResetarSenha(usuario.email); }}><Key className="w-4 h-4 mr-2" /> Resetar senha</DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            {usuario.ativo ? (
-                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setDeleteConfirm(usuario.id); }} className="text-red-500"><UserX className="w-4 h-4 mr-2" /> Desativar</DropdownMenuItem>
-                            ) : (
-                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleAtivar(usuario.id); }} className="text-green-500"><UserCheck className="w-4 h-4 mr-2" /> Ativar</DropdownMenuItem>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell">
+                          <Badge variant="outline" className={tiposUsuario[usuario.tipo]?.color}>{tiposUsuario[usuario.tipo]?.label || usuario.tipo}</Badge>
+                        </TableCell>
+                        <TableCell className="hidden lg:table-cell">
+                          <div className="flex flex-wrap gap-1">
+                            {usuario.roles?.slice(0, 2).map((role, idx) => (
+                              <Badge key={idx} variant="outline" className={`text-xs ${perfisConfig[role]?.color || 'bg-gray-500/20 text-gray-400'}`}>
+                                {perfisConfig[role]?.label || role}
+                              </Badge>
+                            ))}
+                            {(usuario.roles?.length || 0) > 2 && <Badge variant="outline" className="text-xs">+{(usuario.roles?.length || 0) - 2}</Badge>}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={usuario.ativo ? 'default' : 'secondary'} className="gap-1">
+                            <span className={`w-1.5 h-1.5 rounded-full ${usuario.ativo ? 'bg-green-500' : 'bg-gray-500'}`} />
+                            {usuario.ativo ? 'Ativo' : 'Inativo'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell text-muted-foreground">{new Date(usuario.created_at).toLocaleDateString('pt-BR')}</TableCell>
+                        <TableCell>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                              <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="w-4 h-4" /></Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuLabel>Ações</DropdownMenuLabel>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); navigate(`/configuracoes/usuarios/${usuario.id}`); }}>
+                                <Edit className="w-4 h-4 mr-2" /> Editar
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={(e) => { e.stopPropagation(); setResetPasswordDialog(usuario); }}
+                                disabled={!usuario.user_id}
+                              >
+                                <Key className="w-4 h-4 mr-2" /> Redefinir senha
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              {usuario.ativo ? (
+                                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setDeactivateConfirm(usuario.id); }} className="text-orange-500">
+                                  <UserX className="w-4 h-4 mr-2" /> Desativar
+                                </DropdownMenuItem>
+                              ) : (
+                                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleAtivar(usuario.id); }} className="text-green-500">
+                                  <UserCheck className="w-4 h-4 mr-2" /> Ativar
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuItem 
+                                onClick={(e) => { e.stopPropagation(); setDeleteConfirm(usuario); }} 
+                                className="text-red-500"
+                              >
+                                <Trash2 className="w-4 h-4 mr-2" /> Excluir permanentemente
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+            
+            {/* Pagination */}
+            {pagination.total > PAGE_SIZE && (
+              <div className="flex items-center justify-between px-4 py-3 border-t border-border/50">
+                <p className="text-sm text-muted-foreground">
+                  Mostrando {startItem} a {endItem} de {pagination.total}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    Anterior
+                  </Button>
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let pageNum: number;
+                      if (totalPages <= 5) {
+                        pageNum = i + 1;
+                      } else if (page <= 3) {
+                        pageNum = i + 1;
+                      } else if (page >= totalPages - 2) {
+                        pageNum = totalPages - 4 + i;
+                      } else {
+                        pageNum = page - 2 + i;
+                      }
+                      return (
+                        <Button
+                          key={pageNum}
+                          variant={page === pageNum ? "default" : "outline"}
+                          size="sm"
+                          className="w-8 h-8 p-0"
+                          onClick={() => setPage(pageNum)}
+                        >
+                          {pageNum}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                    disabled={page === totalPages}
+                  >
+                    Próximo
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </Card>
         </TabsContent>
 
@@ -543,7 +679,7 @@ export default function UsuariosAcessos() {
               <TableHeader>
                 <TableRow className="border-border/50 hover:bg-transparent">
                   <TableHead>Vendedor</TableHead>
-                  <TableHead>Email</TableHead>
+                  <TableHead className="hidden md:table-cell">Email</TableHead>
                   <TableHead>Tipo</TableHead>
                   <TableHead>Leads</TableHead>
                   <TableHead>Conversão</TableHead>
@@ -555,7 +691,7 @@ export default function UsuariosAcessos() {
                   Array.from({ length: 5 }).map((_, i) => (
                     <TableRow key={i} className="border-border/50">
                       <TableCell><Skeleton className="h-10 w-48" /></TableCell>
-                      <TableCell><Skeleton className="h-6 w-32" /></TableCell>
+                      <TableCell className="hidden md:table-cell"><Skeleton className="h-6 w-32" /></TableCell>
                       <TableCell><Skeleton className="h-6 w-16" /></TableCell>
                       <TableCell><Skeleton className="h-6 w-12" /></TableCell>
                       <TableCell><Skeleton className="h-6 w-12" /></TableCell>
@@ -580,10 +716,10 @@ export default function UsuariosAcessos() {
                               <AvatarImage src={vendedor.avatar_url || ''} />
                               <AvatarFallback className="bg-primary/10 text-primary">{getInitials(vendedor.nome || '')}</AvatarFallback>
                             </Avatar>
-                            <p className="font-medium text-foreground">{vendedor.nome}</p>
+                            <p className="font-medium text-foreground truncate max-w-[150px]">{vendedor.nome}</p>
                           </div>
                         </TableCell>
-                        <TableCell className="text-muted-foreground">{vendedor.email}</TableCell>
+                        <TableCell className="hidden md:table-cell text-muted-foreground truncate max-w-[200px]">{vendedor.email}</TableCell>
                         <TableCell>
                           <Badge variant="outline" className={isCLT ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}>
                             {isCLT ? 'CLT' : 'Externo'}
@@ -643,7 +779,7 @@ export default function UsuariosAcessos() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Nome</TableHead>
-                    <TableHead>Email</TableHead>
+                    <TableHead className="hidden md:table-cell">Email</TableHead>
                     <TableHead>Perfis</TableHead>
                     <TableHead className="w-[100px]">Ações</TableHead>
                   </TableRow>
@@ -654,7 +790,7 @@ export default function UsuariosAcessos() {
                     return (
                       <TableRow key={user.id}>
                         <TableCell className="font-medium">{user.nome}</TableCell>
-                        <TableCell className="text-muted-foreground">{user.email}</TableCell>
+                        <TableCell className="hidden md:table-cell text-muted-foreground">{user.email}</TableCell>
                         <TableCell>
                           <div className="flex flex-wrap gap-1">
                             {roles.length === 0 ? <span className="text-muted-foreground text-sm">Nenhum perfil</span> : roles.map(role => {
@@ -721,7 +857,7 @@ export default function UsuariosAcessos() {
                   const Icon = info.icon;
                   return (
                     <div key={log.id} className="flex items-start gap-4 p-4 hover:bg-muted/50 transition-colors">
-                      <Avatar className="h-10 w-10">
+                      <Avatar className="h-10 w-10 shrink-0">
                         <AvatarFallback className="bg-primary/10 text-primary text-xs">{getInitials(log.email?.split('@')[0] || '')}</AvatarFallback>
                       </Avatar>
                       <div className="flex-1 min-w-0">
@@ -746,8 +882,8 @@ export default function UsuariosAcessos() {
         </TabsContent>
       </Tabs>
 
-      {/* Confirm Dialog */}
-      <AlertDialog open={!!deleteConfirm} onOpenChange={() => setDeleteConfirm(null)}>
+      {/* Deactivate Confirm Dialog */}
+      <AlertDialog open={!!deactivateConfirm} onOpenChange={() => setDeactivateConfirm(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Desativar usuário?</AlertDialogTitle>
@@ -755,10 +891,121 @@ export default function UsuariosAcessos() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={() => { if (deleteConfirm) handleDesativar(deleteConfirm); setDeleteConfirm(null); }} className="bg-red-500 hover:bg-red-600">Desativar</AlertDialogAction>
+            <AlertDialogAction onClick={() => { if (deactivateConfirm) handleDesativar(deactivateConfirm); setDeactivateConfirm(null); }} className="bg-orange-500 hover:bg-orange-600">Desativar</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Delete Confirm Dialog */}
+      <AlertDialog open={!!deleteConfirm} onOpenChange={() => setDeleteConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-red-500 flex items-center gap-2">
+              <Trash2 className="h-5 w-5" />
+              Excluir permanentemente?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>Esta ação é <strong className="text-foreground">irreversível</strong>. O usuário <strong className="text-foreground">{deleteConfirm?.nome}</strong> será completamente removido do sistema.</p>
+              <p className="text-red-500">Todos os dados associados a este usuário serão perdidos permanentemente.</p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleExcluirPermanente} 
+              className="bg-red-500 hover:bg-red-600"
+              disabled={isDeletingUser}
+            >
+              {isDeletingUser ? (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  Excluindo...
+                </>
+              ) : (
+                'Excluir permanentemente'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Reset Password Dialog */}
+      <Dialog open={!!resetPasswordDialog} onOpenChange={() => { setResetPasswordDialog(null); setNewPassword(''); setShowPassword(false); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Key className="h-5 w-5" />
+              Redefinir Senha
+            </DialogTitle>
+            <DialogDescription>
+              Defina uma nova senha para <strong>{resetPasswordDialog?.nome}</strong>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="new-password">Nova Senha</Label>
+                <Button 
+                  type="button" 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={generateRandomPassword}
+                  className="h-7 text-xs"
+                >
+                  <RefreshCw className="w-3 h-3 mr-1" />
+                  Gerar aleatória
+                </Button>
+              </div>
+              <div className="relative">
+                <Input
+                  id="new-password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Mínimo 8 caracteres"
+                  className="pr-10"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                  onClick={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+              {newPassword && newPassword.length < 8 && (
+                <p className="text-xs text-red-500">A senha deve ter pelo menos 8 caracteres</p>
+              )}
+            </div>
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
+              <p className="text-sm text-amber-500 flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                A senha atual será substituída imediatamente. O usuário precisará usar a nova senha no próximo login.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setResetPasswordDialog(null); setNewPassword(''); setShowPassword(false); }}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleResetarSenha} 
+              disabled={!newPassword || newPassword.length < 8 || isResettingPassword}
+            >
+              {isResettingPassword ? (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  Redefinindo...
+                </>
+              ) : (
+                'Redefinir Senha'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Modal Editar Perfis */}
       <Dialog open={!!editingUser} onOpenChange={() => handleCloseEditModal()}>
