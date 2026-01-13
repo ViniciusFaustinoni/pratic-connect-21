@@ -403,23 +403,14 @@ export default function Contratos() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            {/* Rascunho */}
+{/* Rascunho/Pendente - apenas excluir na listagem */}
                             {(contrato.status === 'rascunho' || contrato.status === 'pendente') && (
-                              <>
-                                <DropdownMenuItem onClick={() => setDrawerContratoId(contrato.id)}>
-                                  <Edit className="mr-2 h-4 w-4" /> Editar
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleEnviar(contrato.id)}>
-                                  <Send className="mr-2 h-4 w-4" /> Enviar para Assinatura
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem 
-                                  className="text-destructive"
-                                  onClick={() => handleCancelar(contrato.id)}
-                                >
-                                  <Trash className="mr-2 h-4 w-4" /> Excluir
-                                </DropdownMenuItem>
-                              </>
+                              <DropdownMenuItem 
+                                className="text-destructive"
+                                onClick={() => handleCancelar(contrato.id)}
+                              >
+                                <Trash className="mr-2 h-4 w-4" /> Excluir
+                              </DropdownMenuItem>
                             )}
                             {/* Enviado */}
                             {contrato.status === 'enviado' && (
