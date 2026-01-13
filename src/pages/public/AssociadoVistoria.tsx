@@ -191,6 +191,7 @@ export default function AssociadoVistoria() {
           <ConfirmacaoVistoria
             tipoVistoria={contrato.tipo_vistoria as 'agendada' | 'autovistoria'}
             dadosAgendamento={dadosAgendamento}
+            autentiqueUrl={contrato.autentique_url}
           />
         )}
       </div>

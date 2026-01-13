@@ -1,14 +1,16 @@
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { CheckCircle, Calendar, Camera, Clock, MapPin } from 'lucide-react';
+import { CheckCircle, Calendar, Camera, Clock, FileSignature, ExternalLink } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 
 interface ConfirmacaoVistoriaProps {
   tipoVistoria: 'agendada' | 'autovistoria';
   dadosAgendamento?: { data: string; horario: string } | null;
+  autentiqueUrl?: string | null;
 }
 
-export function ConfirmacaoVistoria({ tipoVistoria, dadosAgendamento }: ConfirmacaoVistoriaProps) {
+export function ConfirmacaoVistoria({ tipoVistoria, dadosAgendamento, autentiqueUrl }: ConfirmacaoVistoriaProps) {
   return (
     <Card className="border-green-200 dark:border-green-900">
       <CardHeader className="text-center bg-green-50 dark:bg-green-950/30 rounded-t-lg">
@@ -78,6 +80,25 @@ export function ConfirmacaoVistoria({ tipoVistoria, dadosAgendamento }: Confirma
           </div>
         )}
 
+        {/* CTA para Assinatura do Contrato */}
+        {autentiqueUrl && (
+          <div className="bg-primary/5 border border-primary/20 p-4 rounded-lg space-y-3">
+            <div className="flex items-center gap-2">
+              <FileSignature className="h-5 w-5 text-primary" />
+              <h4 className="font-medium text-primary">Assine seu Contrato</h4>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Clique no botão abaixo para assinar digitalmente seu contrato de proteção veicular.
+            </p>
+            <Button asChild className="w-full">
+              <a href={autentiqueUrl} target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="h-4 w-4 mr-2" />
+                Assinar Contrato Agora
+              </a>
+            </Button>
+          </div>
+        )}
+
         <div className="border-t pt-4">
           <h4 className="font-medium mb-3">Próximas etapas:</h4>
           <ul className="space-y-2 text-sm text-muted-foreground">
@@ -86,8 +107,14 @@ export function ConfirmacaoVistoria({ tipoVistoria, dadosAgendamento }: Confirma
               Pagamento da adesão confirmado
             </li>
             <li className="flex items-start gap-2">
-              <div className="h-4 w-4 rounded-full border-2 border-muted-foreground/30 mt-0.5" />
-              Assinatura do contrato
+              {autentiqueUrl ? (
+                <div className="h-4 w-4 rounded-full border-2 border-primary bg-primary/20 mt-0.5 animate-pulse" />
+              ) : (
+                <div className="h-4 w-4 rounded-full border-2 border-muted-foreground/30 mt-0.5" />
+              )}
+              <span className={autentiqueUrl ? "text-primary font-medium" : ""}>
+                Assinatura do contrato {autentiqueUrl && "(aguardando)"}
+              </span>
             </li>
             <li className="flex items-start gap-2">
               <div className="h-4 w-4 rounded-full border-2 border-muted-foreground/30 mt-0.5" />
