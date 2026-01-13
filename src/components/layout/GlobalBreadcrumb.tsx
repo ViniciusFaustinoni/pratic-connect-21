@@ -160,13 +160,6 @@ const DYNAMIC_ROUTES: Record<string, RouteConfig> = {
     label: 'Cotação',
     resolver: async (id: string) => `Cotação #${id.slice(0, 8)}`,
   },
-  '/vendas/contratos/:id': {
-    label: 'Contrato',
-    resolver: async (id: string) => {
-      const { data } = await supabase.from('contratos').select('numero').eq('id', id).single();
-      return data?.numero || 'Contrato';
-    },
-  },
   
   // Cadastro
   '/cadastro/associados/:id': {

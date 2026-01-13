@@ -3,7 +3,7 @@ import AcompanharChamado from "./pages/app/AcompanharChamado";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useParams } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { AssociadoProvider } from "@/contexts/AssociadoContext";
@@ -217,6 +217,12 @@ import CotacaoPublicaCompleta from "./pages/public/CotacaoPublicaCompleta";
 
 const queryClient = new QueryClient();
 
+// Componente para redirect de contrato com state
+const ContratoRedirect = () => {
+  const { id } = useParams();
+  return <Navigate to="/vendas/contratos" state={{ openContrato: id }} replace />;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
@@ -261,7 +267,7 @@ const App = () => (
               <Route path="/vendas/cotacoes/:id" element={<CotacaoDetalhe />} />
               <Route path="/vendas/contratos" element={<Contratos />} />
               <Route path="/vendas/propostas" element={<Propostas />} />
-              <Route path="/vendas/contratos/:id" element={<ContratoDetalhe />} />
+              <Route path="/vendas/contratos/:id" element={<ContratoRedirect />} />
               <Route path="/vendas/planos-beneficios" element={<PlanosBeneficios />} />
               <Route path="/vendas/vendedores" element={<Vendedores />} />
               <Route path="/vendas/vendedores/:id" element={<VendedorHistorico />} />
