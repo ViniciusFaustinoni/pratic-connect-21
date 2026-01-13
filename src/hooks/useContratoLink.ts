@@ -118,10 +118,12 @@ export function useCriarVistoriaAgendada() {
         .insert({
           associado_id: associadoId || '00000000-0000-0000-0000-000000000000',
           veiculo_id: veiculoId,
+          contrato_id: contratoId,
           data_agendada: dataAgendada,
+          horario_agendado: horarioAgendado,
           modalidade: 'presencial',
           status: 'pendente',
-          tipo: 'adesao',
+          tipo: 'entrada',
         })
         .select()
         .single();
@@ -169,9 +171,10 @@ export function useCriarAutovistoria() {
         .insert({
           associado_id: associadoId || '00000000-0000-0000-0000-000000000000',
           veiculo_id: veiculoId,
+          contrato_id: contratoId,
           modalidade: 'autovistoria',
           status: 'pendente',
-          tipo: 'adesao',
+          tipo: 'entrada',
         })
         .select()
         .single();
