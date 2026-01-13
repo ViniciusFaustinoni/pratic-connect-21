@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { FileText, Send, Check, X, MessageCircle, FileDown, Mail, FileSignature, Eye, Link2, Copy, Trash2, MoreHorizontal, Car, User, Phone, RefreshCw } from 'lucide-react';
+import { FileText, Send, Check, X, MessageCircle, FileDown, Mail, FileSignature, Eye, Link2, Copy, Trash2, MoreHorizontal, Car, User, Phone, RefreshCw, ClipboardCopy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -85,6 +85,7 @@ interface CotacaoCardProps {
   onExcluir: (id: string) => void;
   onGerarContrato?: (id: string) => void;
   isGerandoContrato?: boolean;
+  onCopiarWhatsApp?: (cotacao: CotacaoWithRelations) => void;
 }
 
 export function CotacaoCard({
@@ -103,6 +104,7 @@ export function CotacaoCard({
   onExcluir,
   onGerarContrato,
   isGerandoContrato = false,
+  onCopiarWhatsApp,
 }: CotacaoCardProps) {
   const status = statusConfig[cotacao.status as StatusCotacaoExtended] || statusConfig.rascunho;
   const hasLead = !!cotacao.lead_id;
@@ -250,14 +252,26 @@ export function CotacaoCard({
             </>
           )}
           
-          {cotacao.status === 'rascunho' && !hasLead && (
+          {cotacao.status === 'rascunho' && !hasLead && onCopiarWhatsApp && (
             <Button
               size="sm"
-              className="bg-orange-500 hover:bg-orange-600 text-white"
-              onClick={() => onVincular(cotacao)}
+              className="bg-green-600 hover:bg-green-700 text-white"
+              onClick={() => onCopiarWhatsApp(cotacao)}
             >
-              <Link2 className="h-4 w-4 mr-1" />
-              Vincular para Enviar
+              <ClipboardCopy className="h-4 w-4 mr-1" />
+              Copiar para WhatsApp
+            </Button>
+          )}
+          
+          {cotacao.status === 'rascunho' && !hasLead && onGerarContrato && (
+            <Button 
+              size="sm"
+              variant="outline"
+              onClick={() => onGerarContrato(cotacao.id)}
+              disabled={isGerandoContrato}
+            >
+              <FileSignature className="h-4 w-4 mr-1" />
+              {isGerandoContrato ? 'Gerando...' : 'Gerar Contrato'}
             </Button>
           )}
           
