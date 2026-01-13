@@ -309,12 +309,25 @@ export function useDuplicarCotacao() {
   });
 }
 
-// Hook para excluir cotação
+// Hook para excluir cotação (exclui contratos associados primeiro)
 export function useExcluirCotacao() {
   const queryClient = useQueryClient();
   
   return useMutation({
     mutationFn: async (cotacaoId: string) => {
+      // 1. Primeiro excluir contratos vinculados a esta cotação
+      // (a FK agora é SET NULL, mas vamos excluir explicitamente para limpeza)
+      const { error: contratoError } = await supabase
+        .from('contratos')
+        .delete()
+        .eq('cotacao_id', cotacaoId);
+      
+      if (contratoError) {
+        console.error('Erro ao excluir contratos da cotação:', contratoError);
+        throw contratoError;
+      }
+      
+      // 2. Depois excluir a cotação
       const { error } = await supabase
         .from('cotacoes')
         .delete()
@@ -324,10 +337,12 @@ export function useExcluirCotacao() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
+      queryClient.invalidateQueries({ queryKey: ['contratos'] });
       toast.success('Cotação excluída com sucesso!');
     },
-    onError: () => {
-      toast.error('Erro ao excluir cotação');
+    onError: (error: Error) => {
+      console.error('Erro ao excluir cotação:', error);
+      toast.error('Erro ao excluir cotação. Verifique se há registros dependentes.');
     },
   });
 }
