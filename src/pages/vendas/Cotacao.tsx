@@ -317,8 +317,8 @@ export default function CotacaoPage() {
       leadId: leadId,
     };
     
-    toast.success('Redirecionando para cadastro de contrato...');
-    navigate('/vendas/contratos', { state: { fromCotacao: true, dadosCotacao } });
+    toast.success('Redirecionando para cadastro complementar...');
+    navigate(`/vendas/cadastro-complementar/${cotacao.id}`);
   }, [planoSelecionado, cotacaoSalva, handleSalvarCotacao, navigate, veiculoEncontrado, placa, marca, modelo, ano, valorFipe, categoria, regiao, usoApp, leadId]);
 
   // Click no stepper
