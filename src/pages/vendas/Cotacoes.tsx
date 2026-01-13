@@ -590,8 +590,7 @@ export default function Cotacoes() {
                 onDuplicar={handleDuplicar}
                 onExcluir={handleExcluir}
                 onGerarContrato={(id) => gerarContrato.mutate({ 
-                  cotacaoId: id, 
-                  vendedorId: profile?.id 
+                  cotacaoId: id
                 })}
                 isGerandoContrato={gerarContrato.isPending}
               />

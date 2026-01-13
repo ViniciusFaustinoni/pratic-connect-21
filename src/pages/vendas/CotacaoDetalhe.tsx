@@ -361,8 +361,7 @@ Ficou com alguma dúvida? Estou à disposição!
                 <Button
                   size="sm"
                   onClick={() => aceitarEGerar.mutate({ 
-                    cotacaoId: cotacao.id, 
-                    vendedorId: profile?.id 
+                    cotacaoId: cotacao.id
                   })}
                   disabled={aceitarEGerar.isPending}
                   className="bg-emerald-600 hover:bg-emerald-700"
@@ -380,8 +379,7 @@ Ficou com alguma dúvida? Estou à disposição!
                 <Button
                   size="sm"
                   onClick={() => gerarContrato.mutate({ 
-                    cotacaoId: cotacao.id, 
-                    vendedorId: profile?.id 
+                    cotacaoId: cotacao.id
                   })}
                   disabled={gerarContrato.isPending}
                 >

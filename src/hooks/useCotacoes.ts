@@ -212,11 +212,12 @@ export function useAtualizarStatusCotacao() {
 }
 
 // Hook para aceitar cotação e gerar contrato
+// vendedor_id é resolvido automaticamente pelo token na edge function
 export function useAceitarCotacaoEGerarContrato() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async ({ cotacaoId, vendedorId }: { cotacaoId: string; vendedorId?: string }) => {
+    mutationFn: async ({ cotacaoId }: { cotacaoId: string }) => {
       // 1. Atualizar status da cotação para 'aceita'
       const { error: updateError } = await supabase
         .from('cotacoes')
@@ -225,9 +226,9 @@ export function useAceitarCotacaoEGerarContrato() {
       
       if (updateError) throw updateError;
       
-      // 2. Chamar edge function para gerar contrato
+      // 2. Chamar edge function para gerar contrato (vendedor resolvido pelo token)
       const { data, error: fnError } = await supabase.functions.invoke('contrato-gerar', {
-        body: { cotacao_id: cotacaoId, vendedor_id: vendedorId },
+        body: { cotacao_id: cotacaoId },
       });
       
       if (fnError) throw fnError;

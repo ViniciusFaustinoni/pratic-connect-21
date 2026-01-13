@@ -113,9 +113,9 @@ export default function GerarContrato() {
     setIsProcessing(true);
 
     try {
+      // vendedor_id é resolvido automaticamente pelo token na edge function
       const resultado = await gerarContrato.mutateAsync({
         cotacaoId: cotacao.id,
-        vendedorId: profile.user_id,
       });
 
       toast.success('Contrato gerado com sucesso!');
