@@ -373,13 +373,14 @@ export function useContratoHistorico(contratoId: string | undefined) {
 }
 
 // Hook para gerar contrato a partir de cotação (via Edge Function)
+// vendedor_id é resolvido automaticamente pelo token na edge function
 export function useGerarContrato() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ cotacaoId, vendedorId }: { cotacaoId: string; vendedorId?: string }) => {
+    mutationFn: async ({ cotacaoId }: { cotacaoId: string }) => {
       const { data, error } = await supabase.functions.invoke('contrato-gerar', {
-        body: { cotacao_id: cotacaoId, vendedor_id: vendedorId },
+        body: { cotacao_id: cotacaoId },
       });
 
       if (error) throw error;
