@@ -1,7 +1,7 @@
 import { 
   FileText, CheckCircle, XCircle, Clock, Send, Pause, 
   ExternalLink, Phone, Mail, MapPin, Car, User, Link,
-  RefreshCw, Loader2, Eye, Copy, MessageCircle, History
+  RefreshCw, Loader2, Eye, Copy, MessageCircle, History, LinkIcon
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -36,6 +36,7 @@ import {
   getWhatsAppLink 
 } from '@/hooks/useAutentique';
 import { ContratoTimeline } from './ContratoTimeline';
+import { useGerarLinkAssociado, getAssociadoLinkUrl } from '@/hooks/useContratoLink';
 import { toast } from 'sonner';
 import type { StatusContrato } from '@/types/database';
 
@@ -66,6 +67,8 @@ export function ContratoDetailDrawer({ contratoId, open, onClose }: ContratoDeta
   const sendToAutentique = useSendToAutentique();
   const resendAutentique = useResendAutentique();
   const cancelAutentique = useCancelAutentique();
+  
+  const gerarLink = useGerarLinkAssociado();
   
   // Buscar status do Autentique se houver documento
   const { data: autentiqueStatus, isLoading: isLoadingStatus } = useAutentiqueStatus(
@@ -164,6 +167,34 @@ export function ContratoDetailDrawer({ contratoId, open, onClose }: ContratoDeta
     }
     const url = getWhatsAppLink(phone, contrato.autentique_url, client?.nome);
     window.open(url, '_blank');
+  };
+
+  // Handlers para link do associado
+  const handleGerarLink = async () => {
+    if (!contrato) return;
+    await gerarLink.mutateAsync(contrato.id);
+  };
+
+  const handleCopiarLinkAssociado = () => {
+    if (contrato?.link_token) {
+      const url = getAssociadoLinkUrl(contrato.link_token);
+      navigator.clipboard.writeText(url);
+      toast.success('Link do associado copiado!');
+    }
+  };
+
+  const handleEnviarLinkWhatsApp = () => {
+    const client = contrato?.associados || contrato?.leads;
+    const phone = client?.telefone;
+    if (!phone || !contrato?.link_token) {
+      toast.error('Telefone ou link não disponível');
+      return;
+    }
+    const url = getAssociadoLinkUrl(contrato.link_token);
+    const message = encodeURIComponent(
+      `Olá ${client?.nome?.split(' ')[0]}! 👋\n\nAcesse o link abaixo para completar sua adesão:\n\n${url}\n\n*Próximos passos:*\n1️⃣ Escolha o tipo de vistoria\n2️⃣ Realize a vistoria\n3️⃣ Pague a taxa de adesão\n\nQualquer dúvida, estamos à disposição!`
+    );
+    window.open(`https://wa.me/55${phone.replace(/\D/g, '')}?text=${message}`, '_blank');
   };
 
   if (!contratoId) return null;
@@ -485,6 +516,40 @@ export function ContratoDetailDrawer({ contratoId, open, onClose }: ContratoDeta
                 </>
               )}
 
+              {/* Status do Link/Vistoria - Se link foi gerado */}
+              {contrato.link_gerado_em && (
+                <>
+                  <Separator />
+                  <section>
+                    <h3 className="text-sm font-medium uppercase tracking-wide text-muted-foreground mb-3 flex items-center gap-2">
+                      <LinkIcon className="h-4 w-4" />
+                      Status do Associado
+                    </h3>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Link gerado em:</span>
+                        <span>{formatDateTime(contrato.link_gerado_em)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Tipo de Vistoria:</span>
+                        <Badge variant="outline">
+                          {contrato.tipo_vistoria === 'agendada' ? 'Agendada' : 
+                           contrato.tipo_vistoria === 'autovistoria' ? 'Autovistoria' : 
+                           'Não selecionado'}
+                        </Badge>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Adesão:</span>
+                        <Badge variant={contrato.adesao_paga ? "default" : "secondary"} 
+                               className={contrato.adesao_paga ? "bg-green-600" : ""}>
+                          {contrato.adesao_paga ? 'Paga' : 'Pendente'}
+                        </Badge>
+                      </div>
+                    </div>
+                  </section>
+                </>
+              )}
+
               <Separator />
 
               {/* Ações */}
@@ -493,7 +558,55 @@ export function ContratoDetailDrawer({ contratoId, open, onClose }: ContratoDeta
                   Ações
                 </h3>
                 
-                {(contrato.status === 'rascunho' || contrato.status === 'pendente') && (
+                {/* Link NÃO gerado - Mostrar botão "Gerar Link do Associado" */}
+                {(contrato.status === 'rascunho' || contrato.status === 'pendente') && !contrato.link_gerado_em && (
+                  <Button 
+                    onClick={handleGerarLink} 
+                    className="w-full"
+                    disabled={gerarLink.isPending}
+                  >
+                    {gerarLink.isPending ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <LinkIcon className="mr-2 h-4 w-4" />
+                    )}
+                    Gerar Link do Associado
+                  </Button>
+                )}
+
+                {/* Link JÁ gerado - Mostrar opções de copiar/acessar */}
+                {contrato.link_token && contrato.link_gerado_em && (
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <Button 
+                        variant="outline" 
+                        className="flex-1"
+                        onClick={handleCopiarLinkAssociado}
+                      >
+                        <Copy className="mr-2 h-4 w-4" />
+                        Copiar Link
+                      </Button>
+                      <Button 
+                        variant="outline"
+                        onClick={handleEnviarLinkWhatsApp}
+                        title="Enviar link via WhatsApp"
+                      >
+                        <MessageCircle className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <Button 
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => window.open(getAssociadoLinkUrl(contrato.link_token!), '_blank')}
+                    >
+                      <ExternalLink className="mr-2 h-4 w-4" />
+                      Acessar Link do Associado
+                    </Button>
+                  </div>
+                )}
+
+                {/* Enviar para Assinatura - SOMENTE após adesão paga */}
+                {contrato.adesao_paga && !contrato.autentique_documento_id && (
                   <Button 
                     onClick={handleEnviar} 
                     className="w-full"
