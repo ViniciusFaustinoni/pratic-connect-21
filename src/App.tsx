@@ -12,6 +12,9 @@ import { AppLayout as AssociadoAppLayout } from "@/components/app/AppLayout";
 import { InstaladorLayout } from "@/components/instalador/InstaladorLayout";
 import { AppErrorBoundary } from "@/components/app/AppErrorBoundary";
 
+// Public Pages
+import AssociadoVistoria from "./pages/public/AssociadoVistoria";
+
 // Internal System Pages
 import Auth from "./pages/Auth";
 import AuthCallback from "./pages/auth/AuthCallback";
@@ -245,6 +248,9 @@ const App = () => (
             {/* Public Quote Page */}
             <Route path="/cotacao/:token" element={<CotacaoPublicaPage />} />
             <Route path="/q/:token" element={<CotacaoPublicaCompleta />} />
+            
+            {/* Public Associate Vistoria Page */}
+            <Route path="/associado/:token" element={<AssociadoVistoria />} />
             
             {/* Redirect root to dashboard */}
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
