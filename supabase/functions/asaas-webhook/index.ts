@@ -162,6 +162,38 @@ serve(async (req) => {
               }
             }
 
+            // Verificar se é cobrança de adesão vinculada a contrato
+            const { data: cobrancaAdesao } = await supabase
+              .from('asaas_cobrancas')
+              .select('contrato_id, tipo')
+              .eq('asaas_id', payment.id)
+              .single();
+
+            if (cobrancaAdesao?.tipo === 'adesao' && cobrancaAdesao.contrato_id) {
+              // Atualizar contrato com adesão paga
+              await supabase
+                .from('contratos')
+                .update({ 
+                  adesao_paga: true,
+                  adesao_paga_em: new Date().toISOString(),
+                })
+                .eq('id', cobrancaAdesao.contrato_id);
+
+              // Registrar no histórico do contrato
+              await supabase.from('contratos_historico').insert({
+                contrato_id: cobrancaAdesao.contrato_id,
+                evento: 'adesao_paga',
+                descricao: `Pagamento de adesão confirmado - R$ ${payment.value.toFixed(2)}`,
+                dados: { 
+                  asaas_id: payment.id, 
+                  valor: payment.value,
+                  forma_pagamento: payment.billingType,
+                },
+              });
+
+              console.log(`[asaas-webhook] Adesão paga para contrato ${cobrancaAdesao.contrato_id}`);
+            }
+
             // CORREÇÃO 7.5.6: Verificar se associado suspenso deve ser reativado
             const { data: associadoStatus } = await supabase
               .from('associados')

@@ -107,3 +107,6 @@ verify_jwt = false
 
 [functions.admin-reset-password]
 verify_jwt = false
+
+[functions.asaas-cobranca-adesao]
+verify_jwt = false

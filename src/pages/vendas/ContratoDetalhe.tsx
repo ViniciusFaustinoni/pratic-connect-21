@@ -36,7 +36,13 @@ import {
   Eye,
   PenLine,
   CheckCircle2,
+  Link2,
+  ExternalLink,
+  Copy,
+  Camera,
 } from 'lucide-react';
+import { useGerarLinkAssociado, getAssociadoLinkUrl } from '@/hooks/useContratoLink';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import {
   STATUS_CONTRATO_LABELS,
@@ -137,10 +143,11 @@ interface TimelineEvento {
 const gerarTimeline = (contrato: any): TimelineEvento[] => {
   const eventos: TimelineEvento[] = [];
   const createdAt = new Date(contrato.created_at);
+  let eventId = 1;
   
   // 1. Criação
   eventos.push({
-    id: 1,
+    id: eventId++,
     tipo: 'criacao',
     descricao: `Contrato gerado por ${contrato.vendedor?.nome || 'Sistema'}`,
     data: createdAt.toISOString(),
@@ -150,11 +157,53 @@ const gerarTimeline = (contrato: any): TimelineEvento[] => {
     concluido: true,
   });
 
-  // 2. Envio (se status >= enviado)
+  // 2. Link gerado
+  if (contrato.link_gerado_em) {
+    eventos.push({
+      id: eventId++,
+      tipo: 'link_gerado',
+      descricao: 'Link do associado gerado',
+      data: contrato.link_gerado_em,
+      icone: Link2,
+      cor: 'text-blue-500',
+      bgCor: 'bg-blue-100',
+      concluido: true,
+    });
+  }
+
+  // 3. Tipo de vistoria selecionado
+  if (contrato.tipo_vistoria) {
+    eventos.push({
+      id: eventId++,
+      tipo: 'vistoria_tipo',
+      descricao: `Tipo selecionado: ${contrato.tipo_vistoria === 'agendada' ? 'Vistoria Agendada' : 'Autovistoria'}`,
+      data: null,
+      icone: contrato.tipo_vistoria === 'agendada' ? Calendar : Camera,
+      cor: 'text-purple-500',
+      bgCor: 'bg-purple-100',
+      concluido: true,
+    });
+  }
+
+  // 4. Adesão paga
+  if (contrato.adesao_paga) {
+    eventos.push({
+      id: eventId++,
+      tipo: 'adesao_paga',
+      descricao: 'Adesão paga pelo associado',
+      data: contrato.adesao_paga_em,
+      icone: DollarSign,
+      cor: 'text-green-500',
+      bgCor: 'bg-green-100',
+      concluido: true,
+    });
+  }
+
+  // 5. Envio para assinatura (se status >= enviado)
   if (['enviado', 'assinado', 'ativo'].includes(contrato.status)) {
     const envioDate = new Date(createdAt.getTime() + 5 * 60 * 1000);
     eventos.push({
-      id: 2,
+      id: eventId++,
       tipo: 'envio',
       descricao: 'Enviado para assinatura via Autentique',
       data: envioDate.toISOString(),
@@ -165,11 +214,11 @@ const gerarTimeline = (contrato: any): TimelineEvento[] => {
     });
   }
 
-  // 3. Visualização (mock)
+  // 6. Visualização (mock)
   if (['assinado', 'ativo'].includes(contrato.status)) {
     const vizDate = new Date(createdAt.getTime() + 4 * 60 * 60 * 1000);
     eventos.push({
-      id: 3,
+      id: eventId++,
       tipo: 'visualizacao',
       descricao: 'Visualizado pelo cliente',
       data: vizDate.toISOString(),
@@ -180,11 +229,11 @@ const gerarTimeline = (contrato: any): TimelineEvento[] => {
     });
   }
 
-  // 4. Assinatura
+  // 7. Assinatura
   if (['assinado', 'ativo'].includes(contrato.status)) {
     const assDate = new Date(createdAt.getTime() + 5 * 60 * 60 * 1000);
     eventos.push({
-      id: 4,
+      id: eventId++,
       tipo: 'assinatura',
       descricao: 'Assinado pelo cliente',
       data: assDate.toISOString(),
@@ -195,11 +244,11 @@ const gerarTimeline = (contrato: any): TimelineEvento[] => {
     });
   }
 
-  // 5. Ativação
+  // 8. Ativação
   if (contrato.status === 'ativo') {
     const ativoDate = new Date(createdAt.getTime() + 6 * 60 * 60 * 1000);
     eventos.push({
-      id: 5,
+      id: eventId++,
       tipo: 'ativacao',
       descricao: 'Contrato ativado',
       data: ativoDate.toISOString(),
@@ -212,16 +261,43 @@ const gerarTimeline = (contrato: any): TimelineEvento[] => {
 
   // Eventos pendentes
   if (contrato.status === 'pendente' || contrato.status === 'rascunho') {
-    eventos.push({
-      id: 2,
-      tipo: 'envio',
-      descricao: 'Aguardando envio para assinatura',
-      data: null,
-      icone: Clock,
-      cor: 'text-muted-foreground',
-      bgCor: 'bg-muted',
-      concluido: false,
-    });
+    // Aguardando link
+    if (!contrato.link_gerado_em) {
+      eventos.push({
+        id: eventId++,
+        tipo: 'aguardando_link',
+        descricao: 'Aguardando geração do link do associado',
+        data: null,
+        icone: Clock,
+        cor: 'text-muted-foreground',
+        bgCor: 'bg-muted',
+        concluido: false,
+      });
+    } else if (!contrato.tipo_vistoria) {
+      // Aguardando seleção de vistoria
+      eventos.push({
+        id: eventId++,
+        tipo: 'aguardando_vistoria',
+        descricao: 'Aguardando associado selecionar tipo de vistoria',
+        data: null,
+        icone: Clock,
+        cor: 'text-muted-foreground',
+        bgCor: 'bg-muted',
+        concluido: false,
+      });
+    } else if (!contrato.adesao_paga) {
+      // Aguardando pagamento
+      eventos.push({
+        id: eventId++,
+        tipo: 'aguardando_pagamento',
+        descricao: 'Aguardando pagamento da adesão',
+        data: null,
+        icone: Clock,
+        cor: 'text-muted-foreground',
+        bgCor: 'bg-muted',
+        concluido: false,
+      });
+    }
   }
 
   if (contrato.status === 'enviado') {
@@ -280,6 +356,7 @@ export default function ContratoDetalhe() {
 
   // Actions
   const { reenviarAssinatura, cancelarContrato, isReenviando, isCancelando } = useContratoActions();
+  const gerarLink = useGerarLinkAssociado();
 
   // ============================================
   // LOADING STATE
@@ -410,15 +487,31 @@ export default function ContratoDetalhe() {
 
             {/* Ações */}
             <div className="flex flex-wrap gap-2">
-              {(contrato.status === 'pendente' || contrato.status === 'enviado' || contrato.status === 'rascunho') && (
-                <Button
-                  variant="outline"
-                  onClick={() => reenviarAssinatura(contrato.id)}
-                  disabled={isReenviando}
-                >
-                  <Send className="h-4 w-4 mr-2" />
-                  {isReenviando ? 'Enviando...' : 'Reenviar Assinatura'}
-                </Button>
+              {/* Gerar ou Acessar Link do Associado */}
+              {(contrato.status === 'pendente' || contrato.status === 'rascunho') && (
+                <>
+                  {contrato.link_gerado_em ? (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        const url = getAssociadoLinkUrl(contrato.link_token);
+                        window.open(url, '_blank');
+                      }}
+                    >
+                      <ExternalLink className="h-4 w-4 mr-2" />
+                      Acessar Link do Associado
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="default"
+                      onClick={() => gerarLink.mutate(contrato.id)}
+                      disabled={gerarLink.isPending}
+                    >
+                      <Link2 className="h-4 w-4 mr-2" />
+                      {gerarLink.isPending ? 'Gerando...' : 'Gerar Link do Associado'}
+                    </Button>
+                  )}
+                </>
               )}
               
               {contrato.autentique_url && (
@@ -608,6 +701,65 @@ export default function ContratoDetalhe() {
             </div>
           </CardContent>
         </Card>
+
+        {/* CARD: LINK DO ASSOCIADO */}
+        {contrato.link_token && (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Link2 className="h-4 w-4 text-primary" />
+                Link do Associado
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="space-y-2 text-sm">
+                <div className="flex items-start gap-2">
+                  <Calendar className="h-4 w-4 text-muted-foreground mt-0.5" />
+                  <div>
+                    <p className="text-muted-foreground">Gerado em</p>
+                    <p className="font-medium">{contrato.link_gerado_em ? formatDateTime(contrato.link_gerado_em) : '—'}</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2">
+                  <Camera className="h-4 w-4 text-muted-foreground mt-0.5" />
+                  <div>
+                    <p className="text-muted-foreground">Tipo de Vistoria</p>
+                    <p className="font-medium">
+                      {contrato.tipo_vistoria === 'agendada' ? 'Vistoria Agendada' 
+                        : contrato.tipo_vistoria === 'autovistoria' ? 'Autovistoria' 
+                        : 'Não selecionado'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2">
+                  <DollarSign className="h-4 w-4 text-muted-foreground mt-0.5" />
+                  <div>
+                    <p className="text-muted-foreground">Adesão</p>
+                    <p className={`font-medium ${contrato.adesao_paga ? 'text-green-600' : 'text-orange-600'}`}>
+                      {contrato.adesao_paga ? 'Paga' : 'Pendente'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Copiar Link */}
+              <div className="pt-2 border-t">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="w-full"
+                  onClick={() => {
+                    navigator.clipboard.writeText(getAssociadoLinkUrl(contrato.link_token));
+                    toast.success('Link copiado!');
+                  }}
+                >
+                  <Copy className="h-4 w-4 mr-2" />
+                  Copiar Link
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* TIMELINE */}
