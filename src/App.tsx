@@ -259,7 +259,7 @@ const App = () => (
               <Route path="/vendas/cotacao" element={<Cotacao />} />
               <Route path="/vendas/cotacoes" element={<Cotacoes />} />
               <Route path="/vendas/cotacoes/:id" element={<CotacaoDetalhe />} />
-              <Route path="/vendas/contratos" element={<Navigate to="/vendas/propostas" replace />} />
+              <Route path="/vendas/contratos" element={<Contratos />} />
               <Route path="/vendas/propostas" element={<Propostas />} />
               <Route path="/vendas/contratos/:id" element={<ContratoDetalhe />} />
               <Route path="/vendas/planos-beneficios" element={<PlanosBeneficios />} />
