@@ -48,7 +48,9 @@ interface UnifiedDocumentUploaderProps {
   cotacaoId?: string;
   contratoId?: string;
   onDocumentsChange: (docs: DocumentoUnificado[]) => void;
-  onOcrDataExtracted: (dados: Record<string, string>) => void;
+  onOcrDataExtracted: (dados: Record<string, string>, tipoDocumento?: string) => void;
+  cpfEsperado?: string;
+  nomeEsperado?: string;
 }
 
 const tipoLabels: Record<TipoDocumentoDetectado, { label: string; icon: typeof FileText }> = {
@@ -70,11 +72,12 @@ export function UnifiedDocumentUploader({
   contratoId,
   onDocumentsChange,
   onOcrDataExtracted,
+  cpfEsperado,
+  nomeEsperado,
 }: UnifiedDocumentUploaderProps) {
   const [documents, setDocuments] = useState<DocumentoUnificado[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-
   const processFile = useCallback(async (file: File) => {
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
     if (!allowedTypes.includes(file.type)) {
@@ -164,7 +167,7 @@ export function UnifiedDocumentUploader({
 
       // 3. Chamar OCR para detectar tipo e extrair dados
       const { data: ocrData, error: ocrError } = await supabase.functions.invoke('document-ocr', {
-        body: { url: arquivoUrl }
+        body: { url: arquivoUrl, cpfEsperado, nomeEsperado }
       });
 
       if (ocrError) {
@@ -219,7 +222,7 @@ export function UnifiedDocumentUploader({
         });
         
         console.log('[OCR] Dados limpos para mapeamento:', dadosLimpos);
-        onOcrDataExtracted(dadosLimpos);
+        onOcrDataExtracted(dadosLimpos, ocrResult.tipo_detectado);
       }
 
       toast.success(`${tipoLabels[ocrResult.tipo_detectado]?.label || 'Documento'} identificado com sucesso!`);
@@ -235,7 +238,7 @@ export function UnifiedDocumentUploader({
       });
       toast.error(error.message || 'Erro ao processar documento');
     }
-  }, [cotacaoId, contratoId, onDocumentsChange, onOcrDataExtracted]);
+  }, [cotacaoId, contratoId, onDocumentsChange, onOcrDataExtracted, cpfEsperado, nomeEsperado]);
 
   const handleFileSelect = useCallback(async (files: FileList | null) => {
     if (!files || files.length === 0) return;
