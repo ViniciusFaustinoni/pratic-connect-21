@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Users, Calendar, LayoutGrid, List, Search } from 'lucide-react';
+import { Users, Calendar, LayoutGrid, List, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -11,11 +11,14 @@ import { ConsultorDrawer } from '@/components/propostas/ConsultorDrawer';
 import { usePropostasMetricas, type PeriodoFiltro } from '@/hooks/usePropostasMetricas';
 import { cn } from '@/lib/utils';
 
+const PAGE_SIZE = 12;
+
 export default function Propostas() {
   const [periodo, setPeriodo] = useState<PeriodoFiltro>('mes');
   const [selectedConsultorId, setSelectedConsultorId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchTerm, setSearchTerm] = useState('');
+  const [page, setPage] = useState(1);
   
   const { data, isLoading } = usePropostasMetricas(periodo);
 
@@ -28,6 +31,22 @@ export default function Propostas() {
     // Ordenar por valor fechado (desc)
     return [...filtered].sort((a, b) => b.valorFechado - a.valorFechado);
   }, [data?.consultores, searchTerm]);
+
+  // Pagination
+  const totalPages = Math.ceil(sortedConsultores.length / PAGE_SIZE);
+  const paginatedConsultores = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return sortedConsultores.slice(start, start + PAGE_SIZE);
+  }, [sortedConsultores, page]);
+
+  const startItem = (page - 1) * PAGE_SIZE + 1;
+  const endItem = Math.min(page * PAGE_SIZE, sortedConsultores.length);
+
+  // Reset page when search changes
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value);
+    setPage(1);
+  };
 
   const selectedConsultor = data?.consultores.find(c => c.id === selectedConsultorId) || null;
 
@@ -52,7 +71,7 @@ export default function Propostas() {
             <Input
               placeholder="Buscar consultor..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
               className="pl-9 w-[180px]"
             />
           </div>
@@ -135,15 +154,71 @@ export default function Propostas() {
           </p>
         </div>
       ) : viewMode === 'grid' ? (
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {sortedConsultores.map((consultor, index) => (
-            <ConsultorCardNew
-              key={consultor.id}
-              consultor={consultor}
-              ranking={index + 1}
-              onClick={() => setSelectedConsultorId(consultor.id)}
-            />
-          ))}
+        <div className="space-y-4">
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {paginatedConsultores.map((consultor, index) => (
+              <ConsultorCardNew
+                key={consultor.id}
+                consultor={consultor}
+                ranking={(page - 1) * PAGE_SIZE + index + 1}
+                onClick={() => setSelectedConsultorId(consultor.id)}
+              />
+            ))}
+          </div>
+          
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between pt-4 border-t border-border/50">
+              <p className="text-sm text-muted-foreground">
+                Mostrando {startItem} a {endItem} de {sortedConsultores.length} consultores
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Anterior
+                </Button>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum: number;
+                    if (totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (page <= 3) {
+                      pageNum = i + 1;
+                    } else if (page >= totalPages - 2) {
+                      pageNum = totalPages - 4 + i;
+                    } else {
+                      pageNum = page - 2 + i;
+                    }
+                    return (
+                      <Button
+                        key={pageNum}
+                        variant={page === pageNum ? "default" : "outline"}
+                        size="sm"
+                        className="w-8 h-8 p-0"
+                        onClick={() => setPage(pageNum)}
+                      >
+                        {pageNum}
+                      </Button>
+                    );
+                  })}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                >
+                  Próximo
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <ConsultoresTable 
