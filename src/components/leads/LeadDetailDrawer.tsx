@@ -82,9 +82,19 @@ export function LeadDetailDrawer({ leadId, open, onClose }: LeadDetailDrawerProp
   };
 
   const handleNovaCotacao = () => {
-    if (leadId) {
+    if (leadId && lead) {
       onClose();
-      navigate(`/vendas/cotacoes?lead=${leadId}`);
+      navigate('/vendas/cotacao', { 
+        state: { 
+          leadId: lead.id,
+          placa: lead.veiculo_placa,
+          marca: lead.veiculo_marca,
+          modelo: lead.veiculo_modelo,
+          ano: lead.veiculo_ano?.toString(),
+          valorFipe: lead.veiculo_fipe,
+          nome: lead.nome,
+        } 
+      });
     }
   };
 

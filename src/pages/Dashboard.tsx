@@ -364,7 +364,7 @@ function QuickActions() {
     { 
       label: 'Nova Cotação', 
       icon: Calculator, 
-      url: '/vendas/cotador',
+      url: '/vendas/cotacao',
       primary: true 
     },
     { 
