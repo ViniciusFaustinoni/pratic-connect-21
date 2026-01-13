@@ -9,6 +9,13 @@ export interface AtivacaoContrato {
   data_ativacao: string | null;
   status: string;
   created_at: string;
+  // Dados do cliente diretamente do contrato
+  cliente_nome: string | null;
+  cliente_telefone: string | null;
+  // Dados do veículo do contrato
+  veiculo_marca: string | null;
+  veiculo_modelo: string | null;
+  veiculo_placa: string | null;
   lead: {
     id: string;
     nome: string;
@@ -34,10 +41,15 @@ export function useAtivacoes(filtro: FiltroAtivacao = 'todos') {
   return useQuery({
     queryKey: ['ativacoes', filtro],
     queryFn: async (): Promise<AtivacaoContrato[]> => {
-      // Buscar contratos
+      // Buscar contratos com dados do cliente
       const { data: contratos, error } = await supabase
         .from('contratos')
-        .select('id, numero, data_assinatura, data_ativacao, status, created_at, lead_id, vendedor_id, associado_id')
+        .select(`
+          id, numero, data_assinatura, data_ativacao, status, created_at, 
+          lead_id, vendedor_id, associado_id,
+          cliente_nome, cliente_telefone,
+          veiculo_marca, veiculo_modelo, veiculo_placa
+        `)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -96,6 +108,12 @@ export function useAtivacoes(filtro: FiltroAtivacao = 'todos') {
           data_ativacao: contrato.data_ativacao,
           status: contrato.status,
           created_at: contrato.created_at,
+          // Dados do cliente e veículo do contrato
+          cliente_nome: contrato.cliente_nome,
+          cliente_telefone: contrato.cliente_telefone,
+          veiculo_marca: contrato.veiculo_marca,
+          veiculo_modelo: contrato.veiculo_modelo,
+          veiculo_placa: contrato.veiculo_placa,
           lead: lead ? {
             id: lead.id,
             nome: lead.nome,
