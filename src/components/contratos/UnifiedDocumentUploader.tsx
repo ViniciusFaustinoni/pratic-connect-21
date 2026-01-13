@@ -67,6 +67,28 @@ const documentosEsperados = [
   { tipo: 'crlv' as const, label: 'CRLV do Veículo' },
 ];
 
+// Função para detectar se "outro" documento tem dados de endereço
+const isComprovanteResidenciaByData = (ocr: OcrResultadoUnificado | undefined): boolean => {
+  if (!ocr?.dados) return false;
+  
+  // Verificar se tem campos típicos de endereço
+  const dados = ocr.dados as Record<string, string | null>;
+  const { logradouro, numero, bairro, cidade, uf, cep, nome_titular } = dados;
+  const endereco = dados['endereco'] || dados['rua'];
+  const nomePagador = dados['nome_pagador'] || dados['sacado'] || dados['pagador'];
+  
+  // Se tem pelo menos logradouro/endereco + cidade ou bairro, é comprovante
+  const temEndereco = !!(logradouro || endereco);
+  const temLocalizacao = !!(cidade || bairro || uf || cep);
+  const temNumero = !!numero;
+  const temNome = !!(nome_titular || nomePagador);
+  
+  // Condições para considerar comprovante de residência:
+  // 1. Tem endereço completo (logradouro + número + localização)
+  // 2. Ou tem nome + endereço parcial
+  return (temEndereco && temNumero && temLocalizacao) || (temNome && temEndereco && temLocalizacao);
+};
+
 export function UnifiedDocumentUploader({
   cotacaoId,
   contratoId,
@@ -195,14 +217,21 @@ export function UnifiedDocumentUploader({
         console.error('Database insert error:', insertError);
       }
 
-      // 5. Atualizar documento com resultado
+      // 5. Verificar se "outro" pode ser reclassificado como comprovante de residência
+      let tipoFinal = ocrResult.tipo_detectado;
+      if (tipoFinal === 'outro' && isComprovanteResidenciaByData(ocrResult)) {
+        tipoFinal = 'comprovante_residencia';
+        console.log('[OCR] Documento "outro" reclassificado como comprovante de residência pelos dados extraídos');
+      }
+
+      // 6. Atualizar documento com resultado
       const successDoc: DocumentoUnificado = {
         id: docData?.id || tempId,
         arquivo_url: arquivoUrl,
         arquivo_nome: originalFileName,
         status: 'success',
-        tipo_detectado: ocrResult.tipo_detectado,
-        ocr: ocrResult,
+        tipo_detectado: tipoFinal,
+        ocr: { ...ocrResult, tipo_detectado: tipoFinal },
       };
 
       setDocuments(prev => {
