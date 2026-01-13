@@ -21,7 +21,9 @@ function getAsaasBaseUrl() {
     ambiente = envExplicito === 'production' ? 'production' : 'sandbox';
     console.log(`[gerar-cobrancas] Ambiente definido por ASAAS_ENV: ${ambiente}`);
   } else {
-    ambiente = ASAAS_API_KEY?.startsWith('$aact_') ? 'production' : 'sandbox';
+    // Chaves sandbox contêm '_hmlg_' (homologação)
+    const isSandbox = ASAAS_API_KEY?.includes('_hmlg_');
+    ambiente = isSandbox ? 'sandbox' : 'production';
     console.log(`[gerar-cobrancas] Ambiente inferido pela chave API: ${ambiente}`);
   }
   
