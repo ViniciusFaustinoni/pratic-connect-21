@@ -63,13 +63,19 @@ serve(async (req) => {
       const payment = event.payment;
       
       // Buscar cobrança no banco com dados do associado
-      const { data: cobranca, error: fetchError } = await supabase
+      let cobranca = null;
+      let fetchError = null;
+      
+      // Primeiro tentar buscar pelo asaas_id
+      const { data: cobrancaByAsaasId, error: fetchError1 } = await supabase
         .from('asaas_cobrancas')
         .select(`
           id, 
           associado_id, 
           valor,
           competencia,
+          contrato_id,
+          tipo,
           associados:associado_id (
             email,
             nome
@@ -78,11 +84,88 @@ serve(async (req) => {
         .eq('asaas_id', payment.id)
         .maybeSingle();
 
+      if (cobrancaByAsaasId) {
+        cobranca = cobrancaByAsaasId;
+        console.log(`[asaas-webhook] Cobrança encontrada pelo asaas_id: ${payment.id}`);
+      } else {
+        fetchError = fetchError1;
+        console.log(`[asaas-webhook] Cobrança não encontrada pelo asaas_id, tentando externalReference...`);
+        
+        // FALLBACK: Buscar pelo externalReference (contrato_id)
+        if (payment.externalReference) {
+          const { data: cobrancaByRef, error: fetchError2 } = await supabase
+            .from('asaas_cobrancas')
+            .select(`
+              id, 
+              associado_id, 
+              valor,
+              competencia,
+              contrato_id,
+              tipo,
+              associados:associado_id (
+                email,
+                nome
+              )
+            `)
+            .eq('contrato_id', payment.externalReference)
+            .eq('tipo', 'adesao')
+            .maybeSingle();
+          
+          if (cobrancaByRef) {
+            cobranca = cobrancaByRef;
+            console.log(`[asaas-webhook] Cobrança encontrada pelo externalReference (contrato_id): ${payment.externalReference}`);
+            
+            // Atualizar o asaas_id na cobrança para futuras buscas
+            await supabase
+              .from('asaas_cobrancas')
+              .update({ asaas_id: payment.id })
+              .eq('id', cobrancaByRef.id);
+          } else {
+            fetchError = fetchError2;
+            console.log(`[asaas-webhook] Cobrança não encontrada pelo externalReference`);
+          }
+        }
+      }
+
       if (fetchError) {
         console.error('[asaas-webhook] Erro ao buscar cobrança:', fetchError);
       }
 
       const associado = cobranca?.associados as any;
+      
+      // FALLBACK EXTRA: Se não encontrou cobrança mas tem externalReference (contrato_id),
+      // atualizar o contrato diretamente para eventos de pagamento confirmado
+      if (!cobranca && payment.externalReference && 
+          (event.event === 'PAYMENT_RECEIVED' || event.event === 'PAYMENT_CONFIRMED')) {
+        console.log(`[asaas-webhook] Fallback: Atualizando contrato ${payment.externalReference} diretamente`);
+        
+        const { error: updateContratoError } = await supabase
+          .from('contratos')
+          .update({ 
+            adesao_paga: true,
+            adesao_paga_em: new Date().toISOString(),
+          })
+          .eq('id', payment.externalReference);
+        
+        if (updateContratoError) {
+          console.error('[asaas-webhook] Erro ao atualizar contrato via fallback:', updateContratoError);
+        } else {
+          console.log(`[asaas-webhook] Contrato ${payment.externalReference} atualizado via fallback`);
+          
+          // Registrar no histórico
+          await supabase.from('contratos_historico').insert({
+            contrato_id: payment.externalReference,
+            evento: 'adesao_paga',
+            descricao: `Pagamento de adesão confirmado via webhook fallback - R$ ${payment.value.toFixed(2)}`,
+            dados: { 
+              asaas_id: payment.id, 
+              valor: payment.value,
+              forma_pagamento: payment.billingType,
+              fallback: true,
+            },
+          });
+        }
+      }
 
       // Mapear status do ASAAS para status interno
       const statusMap: Record<string, string> = {
@@ -163,13 +246,8 @@ serve(async (req) => {
             }
 
             // Verificar se é cobrança de adesão vinculada a contrato
-            const { data: cobrancaAdesao } = await supabase
-              .from('asaas_cobrancas')
-              .select('contrato_id, tipo')
-              .eq('asaas_id', payment.id)
-              .single();
-
-            if (cobrancaAdesao?.tipo === 'adesao' && cobrancaAdesao.contrato_id) {
+            // Agora usamos os dados já carregados na cobrança
+            if (cobranca?.tipo === 'adesao' && cobranca.contrato_id) {
               // Atualizar contrato com adesão paga
               await supabase
                 .from('contratos')
@@ -177,11 +255,11 @@ serve(async (req) => {
                   adesao_paga: true,
                   adesao_paga_em: new Date().toISOString(),
                 })
-                .eq('id', cobrancaAdesao.contrato_id);
+                .eq('id', cobranca.contrato_id);
 
               // Registrar no histórico do contrato
               await supabase.from('contratos_historico').insert({
-                contrato_id: cobrancaAdesao.contrato_id,
+                contrato_id: cobranca.contrato_id,
                 evento: 'adesao_paga',
                 descricao: `Pagamento de adesão confirmado - R$ ${payment.value.toFixed(2)}`,
                 dados: { 
@@ -191,7 +269,7 @@ serve(async (req) => {
                 },
               });
 
-              console.log(`[asaas-webhook] Adesão paga para contrato ${cobrancaAdesao.contrato_id}`);
+              console.log(`[asaas-webhook] Adesão paga para contrato ${cobranca.contrato_id}`);
             }
 
             // CORREÇÃO 7.5.6: Verificar se associado suspenso deve ser reativado

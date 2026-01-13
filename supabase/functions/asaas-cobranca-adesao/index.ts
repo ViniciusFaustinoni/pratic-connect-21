@@ -142,8 +142,16 @@ serve(async (req) => {
       .single();
 
     if (saveError) {
-      console.error('[asaas-cobranca-adesao] Erro ao salvar cobrança:', saveError);
-      // Continua mesmo com erro ao salvar
+      console.error('[asaas-cobranca-adesao] ❌ ERRO CRÍTICO ao salvar cobrança no banco:', saveError);
+      console.error('[asaas-cobranca-adesao] Dados que tentaram ser inseridos:', {
+        asaas_id: cobrancaData.id,
+        asaas_cliente_id: asaasClienteId,
+        associado_id: associadoId,
+        contrato_id: contratoId,
+      });
+      // Continua mesmo com erro ao salvar - o webhook pode usar fallback via externalReference
+    } else {
+      console.log('[asaas-cobranca-adesao] ✅ Cobrança salva com sucesso no banco');
     }
 
     // Registrar no histórico do contrato
