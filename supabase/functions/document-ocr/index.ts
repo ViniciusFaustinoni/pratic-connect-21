@@ -61,7 +61,43 @@ IMPORTANTE para CRLV:
 - Se aparecer apenas um ano, use-o para ambos os campos
 - SEMPRE retorne ano_fabricacao e ano_modelo como números inteiros separados
 
-### Comprovante de Residência (conta de luz, água, telefone, internet, gás, etc.)
+### Comprovante de Residência
+ACEITAR como comprovante de residência válido QUALQUER UM destes documentos:
+
+**Contas de Consumo** (máx. 3 meses):
+- Conta de água, luz, energia elétrica, gás
+- Conta de telefone fixo, celular, internet, TV por assinatura
+
+**Faturas e Boletos** (máx. 3 meses):
+- Fatura de cartão de crédito
+- Boleto de plano de saúde
+- Boleto de condomínio
+- Boleto de mensalidade escolar/faculdade
+- Boleto de financiamento (residencial ou veicular)
+
+**Documentos de Impostos e Registros**:
+- Carnê/Guia de IPTU (ano vigente ou anterior)
+- Carnê/Guia de IPVA (ano vigente ou anterior)
+- Declaração de Imposto de Renda (IRPF) com endereço
+- Extrato do FGTS
+- CRLV (se usado como comprovante de endereço)
+
+**Documentos Financeiros** (máx. 3 meses):
+- Extrato bancário (conta corrente, poupança, empréstimo)
+- Correspondência bancária oficial
+
+**Documentos Públicos**:
+- Correspondência do INSS
+- Correspondência da Receita Federal
+- Contracheque de órgão público
+- Termo de Rescisão de Contrato de Trabalho (TRCT)
+
+**Contratos e Escrituras**:
+- Contrato de aluguel (com ou sem firma reconhecida)
+- Contrato de financiamento imobiliário
+- Escritura do imóvel
+- Certidão de registro do imóvel
+
 Extrair OBRIGATORIAMENTE:
 - logradouro (nome da rua/avenida/travessa SEM o número)
 - numero (apenas o número do endereço)
@@ -70,7 +106,17 @@ Extrair OBRIGATORIAMENTE:
 - cidade (nome da cidade)
 - uf (sigla do estado com 2 letras, ex: SP, RJ, MG)
 - cep (formato 00000-000 ou 00000000)
-- nome_titular (nome da pessoa responsável na conta)
+- nome_titular (nome da pessoa responsável/destinatário)
+- tipo_comprovante (tipo específico: "conta_luz", "conta_agua", "conta_gas", "conta_telefone", "conta_internet", "fatura_cartao", "boleto_plano_saude", "boleto_condominio", "boleto_escola", "iptu", "ipva", "irpf", "extrato_fgts", "extrato_bancario", "correspondencia_inss", "contrato_aluguel", "escritura", "outro")
+- data_emissao (formato YYYY-MM-DD, se disponível)
+
+REGRAS ESPECIAIS para Comprovante de Residência:
+- ACEITE como válido mesmo que o documento não tenha data de emissão visível
+- Para IPTU/IPVA, aceitar se for do ano vigente ou anterior
+- Para contratos de aluguel, NÃO exigir firma reconhecida
+- Se o endereço estiver completo e legível, SEMPRE sugerir "aprovar"
+- Para correspondências/cartas, extrair o destinatário como nome_titular
+- CLASSIFIQUE como "comprovante_residencia" qualquer documento que contenha endereço residencial claro
 
 ### Outro documento
 Identificar e extrair o que for possível
