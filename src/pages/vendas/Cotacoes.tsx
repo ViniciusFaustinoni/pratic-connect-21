@@ -252,10 +252,6 @@ export default function Cotacoes() {
 
   const enviarWhatsApp = (cotacao: CotacaoWithRelations) => {
     const telefone = cotacao.leads?.telefone?.replace(/\D/g, '');
-    if (!telefone) {
-      toast.error('Lead sem telefone cadastrado');
-      return;
-    }
 
     const mensagem = encodeURIComponent(
       `Olá ${cotacao.leads?.nome || 'Cliente'}! 🚗\n\n` +
@@ -274,7 +270,12 @@ export default function Cotacoes() {
       `Posso te ajudar com mais alguma informação?`
     );
 
-    window.open(`https://wa.me/55${telefone}?text=${mensagem}`, '_blank');
+    // Se tem telefone, abre direto. Se não, abre WhatsApp Web para escolher contato
+    const url = telefone 
+      ? `https://wa.me/55${telefone}?text=${mensagem}`
+      : `https://wa.me/?text=${mensagem}`;
+    
+    window.open(url, '_blank');
     handleMarkAsEnviada(cotacao.id, cotacao.lead_id);
   };
 

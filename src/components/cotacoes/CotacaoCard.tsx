@@ -239,28 +239,25 @@ export function CotacaoCard({
           </Button>
           
           {/* Ações por Status */}
-          {cotacao.status === 'rascunho' && hasLead && (
+          {cotacao.status === 'rascunho' && (
             <>
               <Button size="sm" variant="outline" onClick={() => onWhatsApp(cotacao)}>
                 <MessageCircle className="h-4 w-4 mr-1 text-green-600" />
                 WhatsApp
               </Button>
-              <Button size="sm" variant="outline" onClick={() => onEmail(cotacao)}>
-                <Mail className="h-4 w-4 mr-1 text-blue-600" />
-                Email
-              </Button>
+              {hasLead && (
+                <Button size="sm" variant="outline" onClick={() => onEmail(cotacao)}>
+                  <Mail className="h-4 w-4 mr-1 text-blue-600" />
+                  Email
+                </Button>
+              )}
+              {onCopiar && (
+                <Button size="sm" variant="outline" onClick={() => onCopiar(cotacao)}>
+                  <Copy className="h-4 w-4 mr-1" />
+                  Copiar
+                </Button>
+              )}
             </>
-          )}
-          
-          {cotacao.status === 'rascunho' && !hasLead && onCopiar && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => onCopiar(cotacao)}
-            >
-              <Copy className="h-4 w-4 mr-1" />
-              Copiar Cotação
-            </Button>
           )}
           
           {cotacao.status === 'enviada' && (
