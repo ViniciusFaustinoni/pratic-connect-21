@@ -40,6 +40,7 @@ interface Lead {
   etapa: string;
   created_at: string;
   updated_at: string;
+  vendedor_id?: string | null;
   vendedor?: {
     id: string;
     nome: string;
@@ -127,6 +128,8 @@ export default function LeadsUnificado() {
 
   // Filter leads based on quick filter and advanced filters
   const filteredLeads = useMemo(() => {
+    const vendedorByUserId = new Map(vendedores.map((v) => [v.user_id, v]));
+
     let result = allLeads as Lead[];
 
     // Apply etapa filter
@@ -155,8 +158,17 @@ export default function LeadsUnificado() {
       });
     }
 
-    return result;
-  }, [allLeads, filters.etapa, quickFilter]);
+    // Enriquecer com dados do vendedor para exibição nos cards/tabela
+    return result.map((lead) => {
+      const vendedorProfile = lead.vendedor_id ? vendedorByUserId.get(lead.vendedor_id) : undefined;
+      return {
+        ...lead,
+        vendedor: vendedorProfile
+          ? { id: vendedorProfile.id, nome: vendedorProfile.nome }
+          : null,
+      } as Lead;
+    });
+  }, [allLeads, filters.etapa, quickFilter, vendedores]);
 
   // Calculate overdue count for badge
   const overdueCount = useMemo(() => {
