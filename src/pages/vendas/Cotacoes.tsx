@@ -278,6 +278,23 @@ export default function Cotacoes() {
     handleMarkAsEnviada(cotacao.id, cotacao.lead_id);
   };
 
+  const handleCopiarCotacao = (cotacao: CotacaoWithRelations) => {
+    const placaInfo = cotacao.veiculo_placa ? `\n*Placa:* ${cotacao.veiculo_placa}` : '';
+    const texto = `🚗 *COTAÇÃO DE PROTEÇÃO VEICULAR*
+📋 Nº ${cotacao.numero}
+
+*Veículo:* ${cotacao.veiculo_marca} ${cotacao.veiculo_modelo} ${cotacao.veiculo_ano}${placaInfo}
+*Valor FIPE:* ${formatCurrency(cotacao.valor_fipe)}
+
+💰 *Valor Mensal:* ${formatCurrency(cotacao.valor_total_mensal)}
+💰 *Adesão:* ${formatCurrency(cotacao.valor_adesao)}
+
+📞 Entre em contato para mais informações!`;
+    
+    navigator.clipboard.writeText(texto);
+    toast.success('Cotação copiada para a área de transferência!');
+  };
+
   const clearFilters = () => {
     setSearch('');
     setStatusFilter('all');
@@ -548,6 +565,7 @@ export default function Cotacoes() {
                   setCotacaoParaVincular(c);
                   setShowVincularModal(true);
                 }}
+                onCopiar={handleCopiarCotacao}
                 onWhatsApp={enviarWhatsApp}
                 onEmail={handleOpenEmailModal}
                 onAceitar={handleIrParaDetalhe}
@@ -582,6 +600,7 @@ export default function Cotacoes() {
                   setCotacaoParaVincular(c);
                   setShowVincularModal(true);
                 }}
+                onCopiar={handleCopiarCotacao}
                 onWhatsApp={enviarWhatsApp}
                 onEmail={handleOpenEmailModal}
                 onAceitar={handleIrParaDetalhe}

@@ -77,6 +77,7 @@ interface CotacaoCardProps {
   formatPhone: (phone?: string | null) => string | null;
   formatCurrency: (value: number) => string;
   onVincular: (cotacao: CotacaoWithRelations) => void;
+  onCopiar?: (cotacao: CotacaoWithRelations) => void;
   onWhatsApp: (cotacao: CotacaoWithRelations) => void;
   onEmail: (cotacao: CotacaoWithRelations) => void;
   onAceitar: (cotacaoId: string) => void;
@@ -95,6 +96,7 @@ export function CotacaoCard({
   formatPhone,
   formatCurrency,
   onVincular,
+  onCopiar,
   onWhatsApp,
   onEmail,
   onAceitar,
@@ -250,14 +252,14 @@ export function CotacaoCard({
             </>
           )}
           
-          {cotacao.status === 'rascunho' && !hasLead && (
+          {cotacao.status === 'rascunho' && !hasLead && onCopiar && (
             <Button
               size="sm"
-              className="bg-orange-500 hover:bg-orange-600 text-white"
-              onClick={() => onVincular(cotacao)}
+              variant="outline"
+              onClick={() => onCopiar(cotacao)}
             >
-              <Link2 className="h-4 w-4 mr-1" />
-              Vincular para Enviar
+              <Copy className="h-4 w-4 mr-1" />
+              Copiar Cotação
             </Button>
           )}
           
