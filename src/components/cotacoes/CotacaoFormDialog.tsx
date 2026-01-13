@@ -269,13 +269,19 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
     
     // Extrair palavra principal (primeiro termo significativo)
     const palavraChave = veiculoNorm.split(' ')[0];
-    if (palavraChave.length >= 3 && fipeNorm.includes(palavraChave)) {
-      return 50; // Match na palavra principal
+    if (palavraChave.length >= 3) {
+      // Match no início é mais relevante
+      if (fipeNorm.startsWith(palavraChave)) {
+        return 80;
+      }
+      if (fipeNorm.includes(palavraChave)) {
+        return 60;
+      }
     }
     
     // Match por partes
-    const veiculoParts = veiculoNorm.split(' ').filter(p => p.length >= 2);
-    const fipeParts = fipeNorm.split(' ').filter(p => p.length >= 2);
+    const veiculoParts = veiculoNorm.split(' ').filter(p => p.length >= 3);
+    const fipeParts = fipeNorm.split(' ').filter(p => p.length >= 3);
     
     let matches = 0;
     for (const vPart of veiculoParts) {
@@ -284,12 +290,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
       }
     }
     
-    // Bonus para match do primeiro termo (geralmente o nome principal do modelo)
-    if (veiculoParts[0] && fipeParts.some(fp => fp.includes(veiculoParts[0]))) {
-      matches += 3;
-    }
-    
-    return matches * 10;
+    return matches * 15;
   };
 
   // Buscar por placa
@@ -311,6 +312,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
         const modeloNome = resultado.vehicleData.modelo || '';
         const anoVeiculo = resultado.vehicleData.ano?.split('/')[0] || '';
 
+        console.log('[DEBUG Placa] Dados do veículo:', { marcaNome, modeloNome, anoVeiculo });
+
         let marcasCarregadas = marcas;
         if (marcasCarregadas.length === 0) {
           setLoadingMarcas(true);
@@ -327,6 +330,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
                  mNome.split(' - ').some(part => marcaNome.includes(part.toLowerCase()));
         });
 
+        console.log('[DEBUG Placa] Marca encontrada:', marcaEncontrada?.nome);
+
         if (marcaEncontrada) {
           setMarcaSelecionada(marcaEncontrada.codigo);
           
@@ -335,36 +340,57 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
           setModelos(modelosData);
           setLoadingModelos(false);
 
+          console.log('[DEBUG Placa] Modelos carregados:', modelosData.length);
+
           // Usar fuzzy match para encontrar o melhor modelo
           const modelosComScore = modelosData.map(m => ({
             ...m,
             score: fuzzyMatchModelo(modeloNome, m.nome)
           }));
 
-          let melhorModelo = modelosComScore
-            .filter(m => m.score > 0)
-            .sort((a, b) => b.score - a.score)[0];
+          const modelosPositivos = modelosComScore.filter(m => m.score > 0);
+          console.log('[DEBUG Placa] Modelos com score positivo:', modelosPositivos.length, modelosPositivos.slice(0, 3).map(m => ({ nome: m.nome, score: m.score })));
+
+          let melhorModelo = modelosPositivos.sort((a, b) => b.score - a.score)[0];
 
           // Fallback: se não encontrou match exato, buscar por nome base
           if (!melhorModelo && modelosData.length > 0) {
-            const nomeBase = modeloNome.toLowerCase().split(' ')[0];
+            const nomeBase = modeloNome.toLowerCase().split(' ')[0].replace(/[^a-z0-9]/g, '');
+            console.log('[DEBUG Placa] Buscando fallback com nome base:', nomeBase);
+            
             if (nomeBase.length >= 3) {
-              const modeloFallback = modelosData.find(m => 
-                m.nome.toLowerCase().includes(nomeBase)
+              // Primeiro tenta encontrar modelo que começa com o nome base
+              let modeloFallback = modelosData.find(m => 
+                m.nome.toLowerCase().replace(/[^a-z0-9\s]/g, '').startsWith(nomeBase)
               );
+              
+              // Se não encontrou, busca por contains
+              if (!modeloFallback) {
+                modeloFallback = modelosData.find(m => 
+                  m.nome.toLowerCase().includes(nomeBase)
+                );
+              }
+              
               if (modeloFallback) {
+                console.log('[DEBUG Placa] Modelo fallback encontrado:', modeloFallback.nome);
                 melhorModelo = { ...modeloFallback, score: 1 };
               }
             }
           }
 
+          console.log('[DEBUG Placa] Melhor modelo final:', melhorModelo?.nome, 'codigo:', melhorModelo?.codigo);
+
           if (melhorModelo) {
-            setModeloSelecionado(melhorModelo.codigo.toString());
+            const codigoModelo = melhorModelo.codigo.toString();
+            console.log('[DEBUG Placa] Setando modelo:', codigoModelo);
+            setModeloSelecionado(codigoModelo);
 
             setLoadingAnos(true);
-            const anosData = await getAnos(marcaEncontrada.codigo, melhorModelo.codigo.toString(), 'carros');
+            const anosData = await getAnos(marcaEncontrada.codigo, codigoModelo, 'carros');
             setAnos(anosData);
             setLoadingAnos(false);
+
+            console.log('[DEBUG Placa] Anos carregados:', anosData.length, anosData.slice(0, 3));
 
             // Buscar ano com match flexível
             let anoEncontrado = anosData.find(a => {
@@ -392,6 +418,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
             }
 
             if (anoEncontrado) {
+              console.log('[DEBUG Placa] Ano encontrado:', anoEncontrado.nome, 'codigo:', anoEncontrado.codigo);
               setAnoSelecionado(anoEncontrado.codigo);
             }
           }
