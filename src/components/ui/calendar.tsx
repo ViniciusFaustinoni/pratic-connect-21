@@ -44,8 +44,10 @@ const Calendar = React.forwardRef<HTMLDivElement, CalendarProps>(
             ...classNames,
           }}
           components={{
-            IconLeft: ({ ..._props }) => <ChevronLeft className="h-4 w-4" />,
-            IconRight: ({ ..._props }) => <ChevronRight className="h-4 w-4" />,
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            IconLeft: ({ className: _className, ...rest }) => <ChevronLeft className="h-4 w-4" />,
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            IconRight: ({ className: _className, ...rest }) => <ChevronRight className="h-4 w-4" />,
           }}
           {...props}
         />

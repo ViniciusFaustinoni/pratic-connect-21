@@ -7,7 +7,9 @@ const corsHeaders = {
 };
 
 const ASAAS_API_KEY = Deno.env.get('ASAAS_API_KEY')!;
-const ASAAS_API_URL = ASAAS_API_KEY?.startsWith('$aact_')
+// Usar ASAAS_ENV para definir ambiente (sandbox ou production). Default: sandbox
+const ASAAS_ENV = Deno.env.get('ASAAS_ENV') || 'sandbox';
+const ASAAS_API_URL = ASAAS_ENV === 'production'
   ? 'https://api.asaas.com/v3'
   : 'https://sandbox.asaas.com/api/v3';
 
