@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Camera, Check, ArrowLeft, Loader2, Upload, X, ChevronRight } from 'lucide-react';
+import { Camera, Check, ArrowLeft, Loader2, Upload, X, ChevronRight, Gauge } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -20,6 +20,7 @@ export function Autovistoria({ contratoId, tipoVeiculo, onComplete, onVoltar }: 
   const [fotoAtual, setFotoAtual] = useState<FotoAutovistoria | null>(null);
   const [vistoriaId, setVistoriaId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [kmIdentificado, setKmIdentificado] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const criarAutovistoria = useCriarAutovistoria();
@@ -76,7 +77,13 @@ export function Autovistoria({ contratoId, tipoVeiculo, onComplete, onVoltar }: 
         [fotoAtual.id]: result.url,
       }));
 
-      toast.success(`Foto "${fotoAtual.label}" enviada!`);
+      // Se for odômetro e KM foi extraído, mostrar
+      if (fotoAtual.id === 'odometro' && result.kmExtraido) {
+        setKmIdentificado(result.kmExtraido);
+        toast.success(`Quilometragem identificada: ${result.kmExtraido.toLocaleString('pt-BR')} km`);
+      } else {
+        toast.success(`Foto "${fotoAtual.label}" enviada!`);
+      }
     } catch (error) {
       toast.error('Erro ao enviar foto');
     } finally {
@@ -120,6 +127,21 @@ export function Autovistoria({ contratoId, tipoVeiculo, onComplete, onVoltar }: 
           </div>
           <Progress value={progresso} className="h-2" />
         </div>
+
+        {/* Quilometragem Identificada */}
+        {kmIdentificado && (
+          <div className="bg-blue-50 dark:bg-blue-950/20 p-4 rounded-lg flex items-center gap-3 border border-blue-200 dark:border-blue-900">
+            <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center">
+              <Gauge className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Quilometragem Identificada</p>
+              <p className="text-xl font-bold text-blue-700 dark:text-blue-400">
+                {kmIdentificado.toLocaleString('pt-BR')} km
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Lista de Fotos */}
         <div className="space-y-2">

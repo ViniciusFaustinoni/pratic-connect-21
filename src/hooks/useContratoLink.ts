@@ -228,16 +228,40 @@ export function useUploadFotoAutovistoria() {
         .from('documentos')
         .getPublicUrl(fileName);
       
-      // Salvar referência na tabela vistoria_fotos (se existir) ou nas observações
-      // Por enquanto, vamos registrar no histórico
+      const publicUrl = urlData.publicUrl;
+      
+      // Se for foto do odômetro, extrair quilometragem via IA
+      let kmExtraido: number | null = null;
+      if (fotoId === 'odometro') {
+        try {
+          const { data: ocrResult, error: ocrError } = await supabase.functions.invoke('odometro-ocr', {
+            body: { url: publicUrl, vistoriaId }
+          });
+          
+          if (!ocrError && ocrResult?.km && ocrResult.confianca >= 0.7) {
+            kmExtraido = ocrResult.km;
+            console.log('KM extraído do odômetro:', kmExtraido);
+          }
+        } catch (error) {
+          console.error('Erro ao extrair km do odômetro:', error);
+          // Não bloqueia o fluxo se OCR falhar
+        }
+      }
+      
+      // Registrar no histórico
       await supabase.from('contratos_historico').insert({
         contrato_id: contratoId,
         evento: 'autovistoria_foto_enviada',
-        descricao: `Foto enviada: ${fotoId}`,
-        dados: { vistoria_id: vistoriaId, foto_id: fotoId, url: urlData.publicUrl },
+        descricao: `Foto enviada: ${fotoId}${kmExtraido ? ` (KM: ${kmExtraido.toLocaleString('pt-BR')})` : ''}`,
+        dados: { 
+          vistoria_id: vistoriaId, 
+          foto_id: fotoId, 
+          url: publicUrl,
+          km_extraido: kmExtraido,
+        },
       });
       
-      return { fotoId, url: urlData.publicUrl };
+      return { fotoId, url: publicUrl, kmExtraido };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['contrato-publico'] });
