@@ -28,7 +28,7 @@ import { useCreateContrato } from '@/hooks/useContratos';
 import { useCreateAssociado } from '@/hooks/useAssociados';
 import { useCreateVeiculo } from '@/hooks/useVeiculos';
 import { useUpdateLead } from '@/hooks/useLeads';
-import { DocumentUploader, type UploadedDocument } from './DocumentUploader';
+import { UnifiedDocumentUploader, type DocumentoUnificado } from './UnifiedDocumentUploader';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -68,9 +68,8 @@ interface ContratoWizardProps {
 
 const steps = [
   { id: 1, title: 'Cotação', icon: FileText },
-  { id: 2, title: 'Associado', icon: User },
-  { id: 3, title: 'Veículo', icon: Car },
-  { id: 4, title: 'Confirmação', icon: CheckCircle },
+  { id: 2, title: 'Documentos', icon: Upload },
+  { id: 3, title: 'Revisão', icon: CheckCircle },
 ];
 
 export function ContratoWizard({ open, onOpenChange, cotacaoId }: ContratoWizardProps) {
@@ -78,12 +77,10 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId }: ContratoWizard
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Documentos uploadados
-  const [docsAssociado, setDocsAssociado] = useState<UploadedDocument[]>([]);
-  const [docsVeiculo, setDocsVeiculo] = useState<UploadedDocument[]>([]);
+  const [documentos, setDocumentos] = useState<DocumentoUnificado[]>([]);
   
   // Dados extraídos pela IA
-  const [dadosExtraidosAssociado, setDadosExtraidosAssociado] = useState<Record<string, { value: string; fonte: string }>>({});
-  const [dadosExtraidosVeiculo, setDadosExtraidosVeiculo] = useState<Record<string, { value: string; fonte: string }>>({});
+  const [dadosExtraidos, setDadosExtraidos] = useState<Record<string, { value: string; fonte: string }>>({});
   
   const { data: cotacao } = useCotacao(cotacaoId);
   const createContrato = useCreateContrato();
@@ -125,10 +122,8 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId }: ContratoWizard
   useEffect(() => {
     if (!open) {
       setStep(1);
-      setDocsAssociado([]);
-      setDocsVeiculo([]);
-      setDadosExtraidosAssociado({});
-      setDadosExtraidosVeiculo({});
+      setDocumentos([]);
+      setDadosExtraidos({});
       form.reset();
     }
   }, [open, form]);
@@ -153,108 +148,106 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId }: ContratoWizard
     }
   };
 
-  // Handler para documentos do associado com OCR
-  const handleDocsAssociadoChange = (docs: UploadedDocument[]) => {
-    setDocsAssociado(docs);
+  // Handler para documentos com OCR unificado
+  const handleDocumentsChange = (docs: DocumentoUnificado[]) => {
+    setDocumentos(docs);
   };
 
-  const handleOcrAssociado = (dados: Record<string, string>) => {
+  const handleOcrDataExtracted = (dados: Record<string, string>) => {
     // Mapear dados do OCR para o form
     const fonte = 'Documento';
     
+    // Dados pessoais
     if (dados.nome && !form.getValues('nome')) {
       form.setValue('nome', dados.nome);
-      setDadosExtraidosAssociado(prev => ({ ...prev, nome: { value: dados.nome, fonte } }));
+      setDadosExtraidos(prev => ({ ...prev, nome: { value: dados.nome, fonte } }));
     }
     if (dados.cpf && !form.getValues('cpf')) {
       form.setValue('cpf', dados.cpf);
-      setDadosExtraidosAssociado(prev => ({ ...prev, cpf: { value: dados.cpf, fonte } }));
+      setDadosExtraidos(prev => ({ ...prev, cpf: { value: dados.cpf, fonte } }));
     }
     if (dados.rg && !form.getValues('rg')) {
       form.setValue('rg', dados.rg);
-      setDadosExtraidosAssociado(prev => ({ ...prev, rg: { value: dados.rg, fonte } }));
+      setDadosExtraidos(prev => ({ ...prev, rg: { value: dados.rg, fonte } }));
     }
+    
+    // Endereço
     if (dados.logradouro && !form.getValues('logradouro')) {
       form.setValue('logradouro', dados.logradouro);
-      setDadosExtraidosAssociado(prev => ({ ...prev, logradouro: { value: dados.logradouro, fonte } }));
+      setDadosExtraidos(prev => ({ ...prev, logradouro: { value: dados.logradouro, fonte } }));
     }
     if (dados.numero && !form.getValues('numero')) {
       form.setValue('numero', dados.numero);
-      setDadosExtraidosAssociado(prev => ({ ...prev, numero: { value: dados.numero, fonte } }));
+      setDadosExtraidos(prev => ({ ...prev, numero: { value: dados.numero, fonte } }));
     }
     if (dados.bairro && !form.getValues('bairro')) {
       form.setValue('bairro', dados.bairro);
-      setDadosExtraidosAssociado(prev => ({ ...prev, bairro: { value: dados.bairro, fonte } }));
+      setDadosExtraidos(prev => ({ ...prev, bairro: { value: dados.bairro, fonte } }));
     }
     if (dados.cidade && !form.getValues('cidade')) {
       form.setValue('cidade', dados.cidade);
-      setDadosExtraidosAssociado(prev => ({ ...prev, cidade: { value: dados.cidade, fonte } }));
+      setDadosExtraidos(prev => ({ ...prev, cidade: { value: dados.cidade, fonte } }));
     }
     if (dados.uf && !form.getValues('uf')) {
       form.setValue('uf', dados.uf);
-      setDadosExtraidosAssociado(prev => ({ ...prev, uf: { value: dados.uf, fonte } }));
+      setDadosExtraidos(prev => ({ ...prev, uf: { value: dados.uf, fonte } }));
     }
     if (dados.cep && !form.getValues('cep')) {
       form.setValue('cep', dados.cep);
-      setDadosExtraidosAssociado(prev => ({ ...prev, cep: { value: dados.cep, fonte } }));
+      setDadosExtraidos(prev => ({ ...prev, cep: { value: dados.cep, fonte } }));
     }
-  };
-
-  // Handler para documentos do veículo com OCR
-  const handleDocsVeiculoChange = (docs: UploadedDocument[]) => {
-    setDocsVeiculo(docs);
-  };
-
-  const handleOcrVeiculo = (dados: Record<string, string>) => {
-    const fonte = 'CRLV';
     
+    // Dados do veículo
     if (dados.placa && !form.getValues('placa')) {
       form.setValue('placa', dados.placa);
-      setDadosExtraidosVeiculo(prev => ({ ...prev, placa: { value: dados.placa, fonte } }));
+      setDadosExtraidos(prev => ({ ...prev, placa: { value: dados.placa, fonte: 'CRLV' } }));
     }
     if (dados.marca && !form.getValues('marca')) {
       form.setValue('marca', dados.marca);
-      setDadosExtraidosVeiculo(prev => ({ ...prev, marca: { value: dados.marca, fonte } }));
+      setDadosExtraidos(prev => ({ ...prev, marca: { value: dados.marca, fonte: 'CRLV' } }));
     }
     if (dados.modelo && !form.getValues('modelo')) {
       form.setValue('modelo', dados.modelo);
-      setDadosExtraidosVeiculo(prev => ({ ...prev, modelo: { value: dados.modelo, fonte } }));
+      setDadosExtraidos(prev => ({ ...prev, modelo: { value: dados.modelo, fonte: 'CRLV' } }));
     }
     if (dados.ano_fabricacao) {
       form.setValue('ano_fabricacao', parseInt(dados.ano_fabricacao));
-      setDadosExtraidosVeiculo(prev => ({ ...prev, ano_fabricacao: { value: dados.ano_fabricacao, fonte } }));
+      setDadosExtraidos(prev => ({ ...prev, ano_fabricacao: { value: dados.ano_fabricacao, fonte: 'CRLV' } }));
     }
     if (dados.ano_modelo) {
       form.setValue('ano_modelo', parseInt(dados.ano_modelo));
-      setDadosExtraidosVeiculo(prev => ({ ...prev, ano_modelo: { value: dados.ano_modelo, fonte } }));
+      setDadosExtraidos(prev => ({ ...prev, ano_modelo: { value: dados.ano_modelo, fonte: 'CRLV' } }));
     }
     if (dados.cor) {
       form.setValue('cor', dados.cor);
-      setDadosExtraidosVeiculo(prev => ({ ...prev, cor: { value: dados.cor, fonte } }));
+      setDadosExtraidos(prev => ({ ...prev, cor: { value: dados.cor, fonte: 'CRLV' } }));
     }
     if (dados.renavam) {
       form.setValue('renavam', dados.renavam);
-      setDadosExtraidosVeiculo(prev => ({ ...prev, renavam: { value: dados.renavam, fonte } }));
+      setDadosExtraidos(prev => ({ ...prev, renavam: { value: dados.renavam, fonte: 'CRLV' } }));
     }
     if (dados.chassi) {
       form.setValue('chassi', dados.chassi);
-      setDadosExtraidosVeiculo(prev => ({ ...prev, chassi: { value: dados.chassi, fonte } }));
+      setDadosExtraidos(prev => ({ ...prev, chassi: { value: dados.chassi, fonte: 'CRLV' } }));
     }
   };
 
   // Verificar documentos
-  const hasDocsAssociado = docsAssociado.some(d => d.status === 'success');
-  const hasDocsVeiculo = docsVeiculo.some(d => d.status === 'success');
+  const tiposIdentificados = documentos
+    .filter(d => d.status === 'success' && d.tipo_detectado)
+    .map(d => d.tipo_detectado!);
+
+  const temDocPessoal = tiposIdentificados.includes('cnh') || tiposIdentificados.includes('rg');
+  const temCrlv = tiposIdentificados.includes('crlv');
+  const temComprovante = tiposIdentificados.includes('comprovante_residencia');
+  const hasMinimumDocs = temDocPessoal && temCrlv;
 
   const handleNext = async () => {
-    if (step === 2) {
-      const result = await form.trigger(['nome', 'cpf', 'email', 'telefone']);
-      if (!result) return;
-    } else if (step === 3) {
-      const result = await form.trigger(['placa', 'marca', 'modelo', 'ano_fabricacao']);
+    if (step === 3) {
+      const result = await form.trigger();
       if (!result) return;
     }
-    if (step < 4) setStep(step + 1);
+    if (step < 3) setStep(step + 1);
   };
 
   const handleBack = () => {
@@ -328,8 +321,8 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId }: ContratoWizard
   };
 
   // Componente para exibir dado extraído
-  const DadoExtraido = ({ label, campo, dados }: { label: string; campo: string; dados: Record<string, { value: string; fonte: string }> }) => {
-    const dado = dados[campo];
+  const DadoExtraido = ({ label, campo }: { label: string; campo: string }) => {
+    const dado = dadosExtraidos[campo];
     if (!dado) return null;
     return (
       <div className="flex items-center gap-2 text-sm py-1">
@@ -441,301 +434,302 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId }: ContratoWizard
               </Card>
             )}
 
-            {/* Step 2: Associado - Upload de Documentos */}
+            {/* Step 2: Upload Unificado de Documentos */}
             {step === 2 && (
               <div className="space-y-6">
                 <div>
                   <h3 className="text-lg font-semibold flex items-center gap-2">
                     <Upload className="h-5 w-5" />
-                    Documentos do Associado
+                    Documentos
                   </h3>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Faça upload dos documentos pessoais. A IA irá extrair os dados automaticamente.
+                    Envie todos os documentos de uma vez. A IA irá identificar e extrair os dados automaticamente.
                   </p>
                 </div>
 
-                <DocumentUploader
+                <UnifiedDocumentUploader
                   cotacaoId={cotacaoId}
-                  onDocumentsChange={handleDocsAssociadoChange}
-                  onOcrDataExtracted={handleOcrAssociado}
-                  tiposPermitidos={['cnh', 'rg', 'comprovante_residencia']}
+                  onDocumentsChange={handleDocumentsChange}
+                  onOcrDataExtracted={handleOcrDataExtracted}
                 />
 
                 {/* Dados extraídos pela IA */}
-                {Object.keys(dadosExtraidosAssociado).length > 0 && (
+                {Object.keys(dadosExtraidos).length > 0 && (
                   <div className="p-4 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-800">
                     <h4 className="font-medium text-green-700 dark:text-green-400 mb-2 flex items-center gap-2">
                       <CheckCircle className="h-4 w-4" />
                       Dados Extraídos pela IA
                     </h4>
-                    <div className="space-y-1">
-                      <DadoExtraido label="Nome" campo="nome" dados={dadosExtraidosAssociado} />
-                      <DadoExtraido label="CPF" campo="cpf" dados={dadosExtraidosAssociado} />
-                      <DadoExtraido label="RG" campo="rg" dados={dadosExtraidosAssociado} />
-                      <DadoExtraido label="Logradouro" campo="logradouro" dados={dadosExtraidosAssociado} />
-                      <DadoExtraido label="Bairro" campo="bairro" dados={dadosExtraidosAssociado} />
-                      <DadoExtraido label="Cidade" campo="cidade" dados={dadosExtraidosAssociado} />
-                      <DadoExtraido label="UF" campo="uf" dados={dadosExtraidosAssociado} />
-                      <DadoExtraido label="CEP" campo="cep" dados={dadosExtraidosAssociado} />
+                    <div className="grid grid-cols-2 gap-x-4">
+                      <div className="space-y-1">
+                        <DadoExtraido label="Nome" campo="nome" />
+                        <DadoExtraido label="CPF" campo="cpf" />
+                        <DadoExtraido label="RG" campo="rg" />
+                        <DadoExtraido label="Endereço" campo="logradouro" />
+                        <DadoExtraido label="Cidade" campo="cidade" />
+                      </div>
+                      <div className="space-y-1">
+                        <DadoExtraido label="Placa" campo="placa" />
+                        <DadoExtraido label="Marca" campo="marca" />
+                        <DadoExtraido label="Modelo" campo="modelo" />
+                        <DadoExtraido label="Renavam" campo="renavam" />
+                        <DadoExtraido label="Chassi" campo="chassi" />
+                      </div>
                     </div>
                   </div>
                 )}
 
-                {/* Campos faltantes - aparecem após upload */}
-                {hasDocsAssociado && (
-                  <div className="space-y-4 p-4 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-800">
-                    <h4 className="font-medium text-amber-700 dark:text-amber-400 flex items-center gap-2">
+                {!hasMinimumDocs && documentos.length > 0 && (
+                  <div className="p-4 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-800">
+                    <p className="text-sm text-amber-700 dark:text-amber-400 flex items-center gap-2">
                       <AlertCircle className="h-4 w-4" />
-                      Complete os dados não detectados
-                    </h4>
-                    <div className="grid grid-cols-2 gap-4">
-                      {!dadosExtraidosAssociado.nome && (
-                        <CampoFaltante name="nome" label="Nome Completo" placeholder="Digite o nome completo" />
+                      É necessário enviar pelo menos: documento pessoal (CNH ou RG) e CRLV do veículo.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Step 3: Revisão e Confirmação */}
+            {step === 3 && (
+              <div className="space-y-6">
+                <h3 className="text-lg font-semibold">Revisão dos Dados</h3>
+
+                {/* Dados Pessoais */}
+                <div className="p-4 bg-muted/50 rounded-lg space-y-4">
+                  <h4 className="font-medium flex items-center gap-2">
+                    <User className="h-4 w-4" />
+                    Dados do Associado
+                  </h4>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    {dadosExtraidos.nome ? (
+                      <DadoExtraido label="Nome" campo="nome" />
+                    ) : (
+                      <CampoFaltante name="nome" label="Nome Completo" placeholder="Digite o nome completo" />
+                    )}
+                    
+                    {dadosExtraidos.cpf ? (
+                      <DadoExtraido label="CPF" campo="cpf" />
+                    ) : (
+                      <FormField
+                        control={form.control}
+                        name="cpf"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="flex items-center gap-2">
+                              <AlertCircle className="h-4 w-4 text-amber-500" />
+                              CPF <span className="text-xs text-muted-foreground">(não detectado)</span>
+                            </FormLabel>
+                            <FormControl>
+                              <CpfInput value={field.value} onChange={field.onChange} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
+                    
+                    {/* Email sempre precisa ser preenchido */}
+                    <FormField
+                      control={form.control}
+                      name="email"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>E-mail</FormLabel>
+                          <FormControl>
+                            <Input placeholder="email@exemplo.com" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
                       )}
-                      {!dadosExtraidosAssociado.cpf && (
-                        <FormField
-                          control={form.control}
-                          name="cpf"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="flex items-center gap-2">
-                                <AlertCircle className="h-4 w-4 text-amber-500" />
-                                CPF <span className="text-xs text-muted-foreground">(não detectado)</span>
-                              </FormLabel>
-                              <FormControl>
-                                <CpfInput value={field.value} onChange={field.onChange} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
+                    />
+                    
+                    {/* Telefone sempre precisa ser preenchido */}
+                    <FormField
+                      control={form.control}
+                      name="telefone"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Telefone</FormLabel>
+                          <FormControl>
+                            <TelefoneInput value={field.value} onChange={field.onChange} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
                       )}
-                      {!dadosExtraidosAssociado.email && (
-                        <CampoFaltante name="email" label="E-mail" placeholder="email@exemplo.com" />
-                      )}
-                      {!dadosExtraidosAssociado.telefone && (
-                        <FormField
-                          control={form.control}
-                          name="telefone"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="flex items-center gap-2">
-                                <AlertCircle className="h-4 w-4 text-amber-500" />
-                                Telefone <span className="text-xs text-muted-foreground">(não detectado)</span>
-                              </FormLabel>
-                              <FormControl>
-                                <TelefoneInput value={field.value} onChange={field.onChange} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      )}
-                      {!dadosExtraidosAssociado.cep && (
+                    />
+                  </div>
+
+                  {/* Endereço */}
+                  <div className="pt-2 border-t">
+                    <p className="text-sm font-medium mb-3">Endereço</p>
+                    <div className="grid grid-cols-3 gap-4">
+                      {dadosExtraidos.cep ? (
+                        <DadoExtraido label="CEP" campo="cep" />
+                      ) : (
                         <FormField
                           control={form.control}
                           name="cep"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel className="flex items-center gap-2">
-                                <AlertCircle className="h-4 w-4 text-amber-500" />
-                                CEP <span className="text-xs text-muted-foreground">(não detectado)</span>
-                              </FormLabel>
+                              <FormLabel>CEP</FormLabel>
                               <FormControl>
                                 <CepInput value={field.value || ''} onChange={field.onChange} onCepComplete={fetchCep} />
                               </FormControl>
-                              <FormMessage />
                             </FormItem>
                           )}
                         />
                       )}
-                      {!dadosExtraidosAssociado.logradouro && (
-                        <CampoFaltante name="logradouro" label="Logradouro" placeholder="Rua, Avenida..." />
-                      )}
-                      {!dadosExtraidosAssociado.numero && (
-                        <CampoFaltante name="numero" label="Número" placeholder="123" />
-                      )}
-                      {!dadosExtraidosAssociado.bairro && (
-                        <CampoFaltante name="bairro" label="Bairro" placeholder="Bairro" />
-                      )}
-                      {!dadosExtraidosAssociado.cidade && (
-                        <CampoFaltante name="cidade" label="Cidade" placeholder="Cidade" />
-                      )}
-                      {!dadosExtraidosAssociado.uf && (
-                        <CampoFaltante name="uf" label="UF" placeholder="SP" />
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {!hasDocsAssociado && (
-                  <div className="p-4 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-800">
-                    <p className="text-sm text-amber-700 dark:text-amber-400 flex items-center gap-2">
-                      <AlertCircle className="h-4 w-4" />
-                      Faça upload de pelo menos um documento pessoal (CNH ou RG) para continuar.
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Step 3: Veículo - Upload de Documentos */}
-            {step === 3 && (
-              <div className="space-y-6">
-                <div>
-                  <h3 className="text-lg font-semibold flex items-center gap-2">
-                    <Upload className="h-5 w-5" />
-                    Documento do Veículo
-                  </h3>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Faça upload do CRLV. A IA irá extrair os dados do veículo automaticamente.
-                  </p>
-                </div>
-
-                <DocumentUploader
-                  cotacaoId={cotacaoId}
-                  onDocumentsChange={handleDocsVeiculoChange}
-                  onOcrDataExtracted={handleOcrVeiculo}
-                  tiposPermitidos={['crlv']}
-                />
-
-                {/* Dados extraídos pela IA */}
-                {Object.keys(dadosExtraidosVeiculo).length > 0 && (
-                  <div className="p-4 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-800">
-                    <h4 className="font-medium text-green-700 dark:text-green-400 mb-2 flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4" />
-                      Dados Extraídos pela IA
-                    </h4>
-                    <div className="space-y-1">
-                      <DadoExtraido label="Placa" campo="placa" dados={dadosExtraidosVeiculo} />
-                      <DadoExtraido label="Marca" campo="marca" dados={dadosExtraidosVeiculo} />
-                      <DadoExtraido label="Modelo" campo="modelo" dados={dadosExtraidosVeiculo} />
-                      <DadoExtraido label="Ano" campo="ano_fabricacao" dados={dadosExtraidosVeiculo} />
-                      <DadoExtraido label="Cor" campo="cor" dados={dadosExtraidosVeiculo} />
-                      <DadoExtraido label="Renavam" campo="renavam" dados={dadosExtraidosVeiculo} />
-                      <DadoExtraido label="Chassi" campo="chassi" dados={dadosExtraidosVeiculo} />
-                    </div>
-                  </div>
-                )}
-
-                {/* Campos faltantes - aparecem após upload */}
-                {hasDocsVeiculo && (
-                  <div className="space-y-4 p-4 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-800">
-                    <h4 className="font-medium text-amber-700 dark:text-amber-400 flex items-center gap-2">
-                      <AlertCircle className="h-4 w-4" />
-                      Complete os dados não detectados
-                    </h4>
-                    <div className="grid grid-cols-2 gap-4">
-                      {!dadosExtraidosVeiculo.placa && (
+                      
+                      {dadosExtraidos.logradouro ? (
+                        <div className="col-span-2"><DadoExtraido label="Logradouro" campo="logradouro" /></div>
+                      ) : (
                         <FormField
                           control={form.control}
-                          name="placa"
+                          name="logradouro"
                           render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="flex items-center gap-2">
-                                <AlertCircle className="h-4 w-4 text-amber-500" />
-                                Placa <span className="text-xs text-muted-foreground">(não detectado)</span>
-                              </FormLabel>
+                            <FormItem className="col-span-2">
+                              <FormLabel>Logradouro</FormLabel>
                               <FormControl>
-                                <PlacaInput value={field.value} onChange={field.onChange} />
+                                <Input placeholder="Rua, Avenida..." {...field} value={field.value || ''} />
                               </FormControl>
-                              <FormMessage />
                             </FormItem>
                           )}
                         />
                       )}
-                      {!dadosExtraidosVeiculo.marca && (
-                        <CampoFaltante name="marca" label="Marca" placeholder="Toyota" />
-                      )}
-                      {!dadosExtraidosVeiculo.modelo && (
-                        <CampoFaltante name="modelo" label="Modelo" placeholder="Corolla XEi" />
-                      )}
-                      {!dadosExtraidosVeiculo.ano_fabricacao && (
-                        <CampoFaltante name="ano_fabricacao" label="Ano Fabricação" placeholder="2023" />
-                      )}
-                      {!dadosExtraidosVeiculo.ano_modelo && (
-                        <CampoFaltante name="ano_modelo" label="Ano Modelo" placeholder="2024" />
-                      )}
-                      {!dadosExtraidosVeiculo.cor && (
-                        <CampoFaltante name="cor" label="Cor" placeholder="Prata" />
-                      )}
-                      {!dadosExtraidosVeiculo.renavam && (
-                        <CampoFaltante name="renavam" label="Renavam" placeholder="00000000000" />
-                      )}
-                      {!dadosExtraidosVeiculo.chassi && (
-                        <CampoFaltante name="chassi" label="Chassi" placeholder="9BRXXXXXXXXXXXXXXXX" />
-                      )}
+                      
+                      <FormField
+                        control={form.control}
+                        name="numero"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Número</FormLabel>
+                            <FormControl>
+                              <Input placeholder="123" {...field} value={field.value || ''} />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <FormField
+                        control={form.control}
+                        name="bairro"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Bairro</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Bairro" {...field} value={field.value || ''} />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <FormField
+                        control={form.control}
+                        name="cidade"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Cidade</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Cidade" {...field} value={field.value || ''} />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
                     </div>
                   </div>
-                )}
+                </div>
 
-                {!hasDocsVeiculo && (
-                  <div className="p-4 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-800">
-                    <p className="text-sm text-amber-700 dark:text-amber-400 flex items-center gap-2">
-                      <AlertCircle className="h-4 w-4" />
-                      Faça upload do CRLV para continuar.
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Step 4: Confirmação */}
-            {step === 4 && (
-              <div className="space-y-6">
-                <h3 className="text-lg font-semibold">Confirmação dos Dados</h3>
-
-                <div className="p-4 bg-muted/50 rounded-lg">
-                  <h4 className="font-medium mb-3 flex items-center gap-2">
-                    <User className="h-4 w-4" />
-                    Dados do Associado
+                {/* Dados do Veículo */}
+                <div className="p-4 bg-muted/50 rounded-lg space-y-4">
+                  <h4 className="font-medium flex items-center gap-2">
+                    <Car className="h-4 w-4" />
+                    Dados do Veículo
                   </h4>
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div><span className="text-muted-foreground">Nome:</span> <span className="font-medium">{form.getValues('nome')}</span></div>
-                    <div><span className="text-muted-foreground">CPF:</span> <span className="font-medium">{form.getValues('cpf')}</span></div>
-                    <div><span className="text-muted-foreground">E-mail:</span> <span className="font-medium">{form.getValues('email')}</span></div>
-                    <div><span className="text-muted-foreground">Telefone:</span> <span className="font-medium">{form.getValues('telefone')}</span></div>
-                    {form.getValues('logradouro') && (
-                      <div className="col-span-2">
-                        <span className="text-muted-foreground">Endereço:</span>{' '}
-                        <span className="font-medium">
-                          {[form.getValues('logradouro'), form.getValues('numero'), form.getValues('bairro'), form.getValues('cidade'), form.getValues('uf')].filter(Boolean).join(', ')}
-                        </span>
-                      </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    {dadosExtraidos.placa ? (
+                      <DadoExtraido label="Placa" campo="placa" />
+                    ) : (
+                      <FormField
+                        control={form.control}
+                        name="placa"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="flex items-center gap-2">
+                              <AlertCircle className="h-4 w-4 text-amber-500" />
+                              Placa <span className="text-xs text-muted-foreground">(não detectado)</span>
+                            </FormLabel>
+                            <FormControl>
+                              <PlacaInput value={field.value} onChange={field.onChange} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
+                    
+                    {dadosExtraidos.marca ? (
+                      <DadoExtraido label="Marca" campo="marca" />
+                    ) : (
+                      <CampoFaltante name="marca" label="Marca" placeholder="Toyota" />
+                    )}
+                    
+                    {dadosExtraidos.modelo ? (
+                      <DadoExtraido label="Modelo" campo="modelo" />
+                    ) : (
+                      <CampoFaltante name="modelo" label="Modelo" placeholder="Corolla XEi" />
+                    )}
+                    
+                    {dadosExtraidos.ano_fabricacao ? (
+                      <DadoExtraido label="Ano" campo="ano_fabricacao" />
+                    ) : (
+                      <CampoFaltante name="ano_fabricacao" label="Ano Fabricação" placeholder="2023" />
+                    )}
+                    
+                    {!dadosExtraidos.ano_modelo && (
+                      <CampoFaltante name="ano_modelo" label="Ano Modelo" placeholder="2024" />
+                    )}
+                    
+                    {dadosExtraidos.cor ? (
+                      <DadoExtraido label="Cor" campo="cor" />
+                    ) : (
+                      <CampoFaltante name="cor" label="Cor" placeholder="Prata" />
+                    )}
+                    
+                    {dadosExtraidos.renavam ? (
+                      <DadoExtraido label="Renavam" campo="renavam" />
+                    ) : (
+                      <CampoFaltante name="renavam" label="Renavam" placeholder="00000000000" />
+                    )}
+                    
+                    {dadosExtraidos.chassi ? (
+                      <DadoExtraido label="Chassi" campo="chassi" />
+                    ) : (
+                      <CampoFaltante name="chassi" label="Chassi" placeholder="9BRXXXXXXXXXXXXXXXX" />
                     )}
                   </div>
                 </div>
 
-                <div className="p-4 bg-muted/50 rounded-lg">
-                  <h4 className="font-medium mb-3 flex items-center gap-2">
-                    <Car className="h-4 w-4" />
-                    Dados do Veículo
-                  </h4>
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div><span className="text-muted-foreground">Placa:</span> <span className="font-medium">{form.getValues('placa')}</span></div>
-                    <div><span className="text-muted-foreground">Marca/Modelo:</span> <span className="font-medium">{form.getValues('marca')} {form.getValues('modelo')}</span></div>
-                    <div><span className="text-muted-foreground">Ano:</span> <span className="font-medium">{form.getValues('ano_fabricacao')}/{form.getValues('ano_modelo')}</span></div>
-                    {form.getValues('cor') && <div><span className="text-muted-foreground">Cor:</span> <span className="font-medium">{form.getValues('cor')}</span></div>}
-                    {form.getValues('renavam') && <div><span className="text-muted-foreground">Renavam:</span> <span className="font-medium">{form.getValues('renavam')}</span></div>}
-                  </div>
-                </div>
-
+                {/* Documentos anexados */}
                 <div className="p-4 bg-muted/50 rounded-lg">
                   <h4 className="font-medium mb-3 flex items-center gap-2">
                     <FileText className="h-4 w-4" />
                     Documentos Anexados
                   </h4>
                   <div className="space-y-2">
-                    {[...docsAssociado, ...docsVeiculo].filter(d => d.status === 'success').map((doc, i) => (
+                    {documentos.filter(d => d.status === 'success').map((doc, i) => (
                       <div key={i} className="flex items-center gap-2 text-sm">
                         <CheckCircle className="h-4 w-4 text-green-500" />
-                        <span>{doc.tipo === 'cnh' ? 'CNH' : doc.tipo === 'rg' ? 'RG' : doc.tipo === 'comprovante_residencia' ? 'Comprovante' : 'CRLV'}</span>
+                        <span>{doc.tipo_detectado === 'cnh' ? 'CNH' : doc.tipo_detectado === 'rg' ? 'RG' : doc.tipo_detectado === 'comprovante_residencia' ? 'Comprovante' : doc.tipo_detectado === 'crlv' ? 'CRLV' : 'Documento'}</span>
                         <span className="text-muted-foreground">- {doc.arquivo_nome}</span>
                       </div>
                     ))}
                   </div>
                 </div>
 
+                {/* Resumo financeiro */}
                 <div className="p-4 bg-primary/10 rounded-lg">
                   <h4 className="font-medium mb-3">Resumo Financeiro</h4>
                   <div className="grid grid-cols-2 gap-2 text-sm">
@@ -754,11 +748,11 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId }: ContratoWizard
                 Voltar
               </Button>
 
-              {step < 4 ? (
+              {step < 3 ? (
                 <Button 
                   type="button" 
                   onClick={handleNext}
-                  disabled={(step === 2 && !hasDocsAssociado) || (step === 3 && !hasDocsVeiculo)}
+                  disabled={step === 2 && !hasMinimumDocs}
                 >
                   Próximo
                   <ChevronRight className="w-4 h-4 ml-2" />

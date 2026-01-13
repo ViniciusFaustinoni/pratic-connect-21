@@ -28,7 +28,7 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.document-ocr]
-verify_jwt = true
+verify_jwt = false
 
 [functions.sync-rastreadores]
 verify_jwt = false
