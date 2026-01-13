@@ -764,44 +764,73 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
                         />
                       )}
                       
-                      <FormField
-                        control={form.control}
-                        name="numero"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Número</FormLabel>
-                            <FormControl>
-                              <Input placeholder="123" {...field} value={field.value || ''} />
-                            </FormControl>
-                          </FormItem>
-                        )}
-                      />
+                      {dadosExtraidos.numero ? (
+                        <DadoExtraido label="Número" campo="numero" />
+                      ) : (
+                        <FormField
+                          control={form.control}
+                          name="numero"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Número</FormLabel>
+                              <FormControl>
+                                <Input placeholder="123" {...field} value={field.value || ''} />
+                              </FormControl>
+                            </FormItem>
+                          )}
+                        />
+                      )}
                       
-                      <FormField
-                        control={form.control}
-                        name="bairro"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Bairro</FormLabel>
-                            <FormControl>
-                              <Input placeholder="Bairro" {...field} value={field.value || ''} />
-                            </FormControl>
-                          </FormItem>
-                        )}
-                      />
+                      {dadosExtraidos.bairro ? (
+                        <DadoExtraido label="Bairro" campo="bairro" />
+                      ) : (
+                        <FormField
+                          control={form.control}
+                          name="bairro"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Bairro</FormLabel>
+                              <FormControl>
+                                <Input placeholder="Bairro" {...field} value={field.value || ''} />
+                              </FormControl>
+                            </FormItem>
+                          )}
+                        />
+                      )}
                       
-                      <FormField
-                        control={form.control}
-                        name="cidade"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Cidade</FormLabel>
-                            <FormControl>
-                              <Input placeholder="Cidade" {...field} value={field.value || ''} />
-                            </FormControl>
-                          </FormItem>
-                        )}
-                      />
+                      {dadosExtraidos.cidade ? (
+                        <DadoExtraido label="Cidade" campo="cidade" />
+                      ) : (
+                        <FormField
+                          control={form.control}
+                          name="cidade"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Cidade</FormLabel>
+                              <FormControl>
+                                <Input placeholder="Cidade" {...field} value={field.value || ''} />
+                              </FormControl>
+                            </FormItem>
+                          )}
+                        />
+                      )}
+                      
+                      {dadosExtraidos.uf ? (
+                        <DadoExtraido label="UF" campo="uf" />
+                      ) : (
+                        <FormField
+                          control={form.control}
+                          name="uf"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>UF</FormLabel>
+                              <FormControl>
+                                <Input placeholder="SP" maxLength={2} {...field} value={field.value || ''} />
+                              </FormControl>
+                            </FormItem>
+                          )}
+                        />
+                      )}
                     </div>
                   </div>
                 </div>
