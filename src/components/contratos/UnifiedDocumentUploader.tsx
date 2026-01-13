@@ -210,10 +210,15 @@ export function UnifiedDocumentUploader({
 
       // 6. Notificar dados extraídos
       if (ocrResult.sucesso && ocrResult.dados) {
+        console.log('[OCR] Tipo detectado:', ocrResult.tipo_detectado);
+        console.log('[OCR] Dados extraídos brutos:', ocrResult.dados);
+        
         const dadosLimpos: Record<string, string> = {};
         Object.entries(ocrResult.dados).forEach(([key, value]) => {
           if (value) dadosLimpos[key] = value;
         });
+        
+        console.log('[OCR] Dados limpos para mapeamento:', dadosLimpos);
         onOcrDataExtracted(dadosLimpos);
       }
 
