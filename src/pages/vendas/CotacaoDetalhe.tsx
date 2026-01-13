@@ -326,22 +326,26 @@ Ficou com alguma dúvida? Estou à disposição!
               {/* Botões de envio só aparecem se tem lead vinculado */}
               {cotacao.lead_id ? (
                 <>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => reenviarCotacao(cotacao.id)}
-                    disabled={isReenviando}
-                  >
-                    <Send className="mr-2 h-4 w-4" />
-                    {isReenviando ? 'Reenviando...' : 'Reenviar'}
-                  </Button>
+                  {/* Se já foi enviada, mostra Reenviar. Senão, mostra Email */}
+                  {cotacao.status !== 'rascunho' ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => reenviarCotacao(cotacao.id)}
+                      disabled={isReenviando}
+                    >
+                      <Send className="mr-2 h-4 w-4" />
+                      {isReenviando ? 'Reenviando...' : 'Reenviar'}
+                    </Button>
+                  ) : (
+                    <Button variant="outline" size="sm" onClick={() => setShowEmailModal(true)}>
+                      <Mail className="mr-2 h-4 w-4" />
+                      Email
+                    </Button>
+                  )}
                   <Button variant="outline" size="sm" onClick={handleWhatsApp}>
                     <MessageSquare className="mr-2 h-4 w-4" />
                     WhatsApp
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => setShowEmailModal(true)}>
-                    <Mail className="mr-2 h-4 w-4" />
-                    Email
                   </Button>
                 </>
               ) : (
