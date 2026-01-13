@@ -1,10 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useState, useEffect } from 'react';
 
-// Hook para buscar contrato por token (público) com polling inteligente
+// Hook para buscar contrato por token (público) com polling inteligente e timeout
 export function useContratoByToken(token: string | undefined) {
-  return useQuery({
+  const [pollingStartTime, setPollingStartTime] = useState<number | null>(null);
+  const [isAutentiqueTimeout, setIsAutentiqueTimeout] = useState(false);
+  
+  const POLLING_TIMEOUT_MS = 60000; // 60 segundos de timeout
+  
+  const query = useQuery({
     queryKey: ['contrato-publico', token],
     queryFn: async () => {
       if (!token) return null;
@@ -24,15 +30,60 @@ export function useContratoByToken(token: string | undefined) {
       return data;
     },
     enabled: !!token,
-    // Polling inteligente: se adesão paga mas sem autentique_url, refetch a cada 3s
-    refetchInterval: (query) => {
-      const data = query.state.data;
-      if (data?.adesao_paga && !data?.autentique_url) {
+    // Polling inteligente: se adesão paga mas sem autentique_url, refetch a cada 3s (até timeout)
+    refetchInterval: (queryState) => {
+      const data = queryState.state.data;
+      if (data?.adesao_paga && !data?.autentique_url && !isAutentiqueTimeout) {
         return 3000; // 3 segundos
       }
       return false; // Parar polling
     },
   });
+
+  // Controlar timeout do polling
+  useEffect(() => {
+    const data = query.data;
+    
+    // Iniciar contagem quando adesao_paga=true e autentique_url=null
+    if (data?.adesao_paga && !data?.autentique_url && !pollingStartTime) {
+      setPollingStartTime(Date.now());
+      setIsAutentiqueTimeout(false);
+    }
+    
+    // Se autentique_url aparecer, resetar
+    if (data?.autentique_url && pollingStartTime) {
+      setPollingStartTime(null);
+      setIsAutentiqueTimeout(false);
+    }
+  }, [query.data, pollingStartTime]);
+
+  // Checar timeout
+  useEffect(() => {
+    if (!pollingStartTime || isAutentiqueTimeout) return;
+    
+    const checkTimeout = () => {
+      if (Date.now() - pollingStartTime > POLLING_TIMEOUT_MS) {
+        setIsAutentiqueTimeout(true);
+        console.warn('[useContratoByToken] Timeout ao aguardar autentique_url');
+      }
+    };
+    
+    const interval = setInterval(checkTimeout, 1000);
+    return () => clearInterval(interval);
+  }, [pollingStartTime, isAutentiqueTimeout]);
+
+  // Função para tentar novamente
+  const retryAutentiquePolling = () => {
+    setPollingStartTime(Date.now());
+    setIsAutentiqueTimeout(false);
+    query.refetch();
+  };
+
+  return {
+    ...query,
+    isAutentiqueTimeout,
+    retryAutentiquePolling,
+  };
 }
 
 // Hook para gerar link do associado

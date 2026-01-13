@@ -227,7 +227,8 @@ serve(async (req) => {
                 
                 const { error: autentiqueError } = await supabase.functions.invoke('autentique-create', {
                   headers: {
-                    Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+                    'apikey': SUPABASE_SERVICE_ROLE_KEY,
+                    'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
                   },
                   body: {
                     contratoId,
@@ -417,7 +418,8 @@ serve(async (req) => {
                     // Chamar edge function do Autentique com service role key
                     const { error: autentiqueError } = await supabase.functions.invoke('autentique-create', {
                       headers: {
-                        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+                        'apikey': SUPABASE_SERVICE_ROLE_KEY,
+                        'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
                       },
                       body: {
                         contratoId: cobranca.contrato_id,
