@@ -247,12 +247,17 @@ export function useCreateLead() {
       if (error) throw error;
 
       // Registrar no histórico
-      await supabase.from('leads_historico').insert({
-        lead_id: data.id,
-        usuario_id: user?.id,
-        acao: 'criou_lead',
-        descricao: `Lead "${data.nome}" criado via formulário`,
-      });
+      try {
+        await supabase.from('leads_historico').insert({
+          lead_id: data.id,
+          usuario_id: user?.id || null,
+          acao: 'criou_lead',
+          descricao: `Lead "${data.nome}" criado via formulário`,
+        });
+      } catch (histError) {
+        console.error('Erro ao registrar histórico do lead:', histError);
+        // Não interrompe o fluxo principal
+      }
 
       return data as Lead;
     },
