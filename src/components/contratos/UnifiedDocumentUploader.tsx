@@ -19,6 +19,7 @@ import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { isPdf, convertPdfToImage, getPdfConvertedName } from '@/lib/pdfToImage';
 
 export type TipoDocumentoDetectado = 'cnh' | 'rg' | 'crlv' | 'comprovante_residencia' | 'outro';
 
@@ -88,11 +89,12 @@ export function UnifiedDocumentUploader({
 
     const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(7)}`;
     const entityId = contratoId || cotacaoId;
+    const originalFileName = file.name;
     
     const newDoc: DocumentoUnificado = {
       id: tempId,
       arquivo_url: URL.createObjectURL(file),
-      arquivo_nome: file.name,
+      arquivo_nome: originalFileName,
       status: 'uploading',
     };
 
@@ -103,14 +105,39 @@ export function UnifiedDocumentUploader({
     });
 
     try {
+      let fileToUpload = file;
+      let finalFileName = originalFileName;
+
+      // Se for PDF, converter para imagem antes do upload
+      if (isPdf(file)) {
+        setDocuments(prev => {
+          const updated = prev.map(d => 
+            d.id === tempId ? { ...d, status: 'processing' as const } : d
+          );
+          onDocumentsChange(updated);
+          return updated;
+        });
+        
+        toast.info('Convertendo PDF para imagem...');
+        
+        try {
+          const imageBlob = await convertPdfToImage(file);
+          finalFileName = getPdfConvertedName(originalFileName);
+          fileToUpload = new File([imageBlob], finalFileName, { type: 'image/jpeg' });
+        } catch (pdfError) {
+          console.error('PDF conversion error:', pdfError);
+          throw new Error('Erro ao converter PDF. Tente enviar como imagem JPG ou PNG.');
+        }
+      }
+
       // 1. Upload para storage
       const timestamp = Date.now();
-      const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const sanitizedFileName = finalFileName.replace(/[^a-zA-Z0-9.-]/g, '_');
       const filePath = `${entityId}/documentos/${timestamp}_${sanitizedFileName}`;
 
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('contratos-documentos')
-        .upload(filePath, file, {
+        .upload(filePath, fileToUpload, {
           cacheControl: '3600',
           upsert: false,
         });
@@ -154,7 +181,7 @@ export function UnifiedDocumentUploader({
           cotacao_id: cotacaoId || null,
           tipo: ocrResult.tipo_detectado || 'outro',
           arquivo_url: arquivoUrl,
-          arquivo_nome: file.name,
+          arquivo_nome: originalFileName, // Keep original name for reference
           status: ocrResult.sugestao === 'aprovar' ? 'aprovado' : 'pendente',
           ocr_resultado: ocrResult as any,
         })
@@ -169,7 +196,7 @@ export function UnifiedDocumentUploader({
       const successDoc: DocumentoUnificado = {
         id: docData?.id || tempId,
         arquivo_url: arquivoUrl,
-        arquivo_nome: file.name,
+        arquivo_nome: originalFileName,
         status: 'success',
         tipo_detectado: ocrResult.tipo_detectado,
         ocr: ocrResult,
