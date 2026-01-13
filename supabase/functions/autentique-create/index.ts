@@ -7,6 +7,37 @@ const corsHeaders = {
 };
 
 const AUTENTIQUE_API_URL = "https://api.autentique.com.br/v2/graphql";
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+// Função para validar autorização (chamada interna ou usuário autenticado)
+async function validateAuthorization(req: Request): Promise<{ authorized: boolean; error?: string }> {
+  const authHeader = req.headers.get('Authorization');
+  
+  // Cenário A: Chamada interna com service role key
+  if (authHeader === `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`) {
+    return { authorized: true };
+  }
+  
+  // Cenário B: Usuário autenticado via JWT
+  if (authHeader?.startsWith('Bearer ')) {
+    try {
+      const supabaseUser = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        global: { headers: { Authorization: authHeader } }
+      });
+      
+      const { data: { user }, error } = await supabaseUser.auth.getUser();
+      if (user && !error) {
+        return { authorized: true };
+      }
+    } catch (e) {
+      console.error('[autentique-create] Erro ao validar JWT:', e);
+    }
+  }
+  
+  return { authorized: false, error: 'Unauthorized - Token inválido ou ausente' };
+}
 
 interface ContratoRequest {
   contratoId: string;
@@ -777,6 +808,16 @@ serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  // Validar autorização (chamada interna ou usuário autenticado)
+  const authResult = await validateAuthorization(req);
+  if (!authResult.authorized) {
+    console.error('[autentique-create] Acesso não autorizado');
+    return new Response(
+      JSON.stringify({ error: authResult.error }),
+      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   }
 
   try {

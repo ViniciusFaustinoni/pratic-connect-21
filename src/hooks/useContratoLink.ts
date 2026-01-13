@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
-// Hook para buscar contrato por token (público)
+// Hook para buscar contrato por token (público) com polling inteligente
 export function useContratoByToken(token: string | undefined) {
   return useQuery({
     queryKey: ['contrato-publico', token],
@@ -24,6 +24,14 @@ export function useContratoByToken(token: string | undefined) {
       return data;
     },
     enabled: !!token,
+    // Polling inteligente: se adesão paga mas sem autentique_url, refetch a cada 3s
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (data?.adesao_paga && !data?.autentique_url) {
+        return 3000; // 3 segundos
+      }
+      return false; // Parar polling
+    },
   });
 }
 

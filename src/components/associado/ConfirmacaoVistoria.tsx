@@ -1,6 +1,6 @@
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { CheckCircle, Calendar, Camera, Clock, FileSignature, ExternalLink } from 'lucide-react';
+import { CheckCircle, Calendar, Camera, Clock, FileSignature, ExternalLink, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
@@ -80,8 +80,8 @@ export function ConfirmacaoVistoria({ tipoVistoria, dadosAgendamento, autentique
           </div>
         )}
 
-        {/* CTA para Assinatura do Contrato */}
-        {autentiqueUrl && (
+        {/* CTA para Assinatura do Contrato - com estado de carregamento */}
+        {autentiqueUrl ? (
           <div className="bg-primary/5 border border-primary/20 p-4 rounded-lg space-y-3">
             <div className="flex items-center gap-2">
               <FileSignature className="h-5 w-5 text-primary" />
@@ -96,6 +96,16 @@ export function ConfirmacaoVistoria({ tipoVistoria, dadosAgendamento, autentique
                 Assinar Contrato Agora
               </a>
             </Button>
+          </div>
+        ) : (
+          <div className="bg-muted/50 border border-muted p-4 rounded-lg space-y-3">
+            <div className="flex items-center gap-2">
+              <Loader2 className="h-5 w-5 text-muted-foreground animate-spin" />
+              <h4 className="font-medium text-muted-foreground">Gerando Link de Assinatura...</h4>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Estamos preparando seu contrato para assinatura digital. Isso pode levar alguns segundos...
+            </p>
           </div>
         )}
 
