@@ -744,13 +744,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "asaas_cobrancas_asaas_cliente_id_fkey"
-            columns: ["asaas_cliente_id"]
-            isOneToOne: false
-            referencedRelation: "asaas_clientes"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "asaas_cobrancas_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
