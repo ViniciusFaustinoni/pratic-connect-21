@@ -61,55 +61,7 @@ IMPORTANTE para CRLV:
 - Se aparecer apenas um ano, use-o para ambos os campos
 - SEMPRE retorne ano_fabricacao e ano_modelo como números inteiros separados
 
-### Comprovante de Residência
-IMPORTANTE: Considere como comprovante de residência QUALQUER documento que contenha nome e endereço completo de uma pessoa, incluindo:
-
-CONTAS DE SERVIÇOS (até 3 meses):
-- Conta de energia/luz (ENEL, Light, CPFL, Cemig, Energisa, etc.)
-- Conta de água/saneamento (Sabesp, Cedae, Copasa, Sanepar, etc.)
-- Conta de gás (Comgás, Naturgy, CEG, etc.)
-- Conta de telefone fixo ou celular (Vivo, Claro, TIM, Oi)
-- Conta de internet ou TV por assinatura (NET, Sky, Claro, etc.)
-
-BOLETOS E FATURAS:
-- Boletos de cobrança (qualquer boleto bancário com nome e endereço do pagador)
-- Fatura de cartão de crédito
-- Boleto de plano de saúde (Unimed, Amil, SulAmérica, Bradesco Saúde, etc.)
-- Boleto de condomínio
-- Boleto de mensalidade escolar/faculdade
-- Boleto de financiamento (veículo, imobiliário)
-- Carnê de pagamento
-
-DOCUMENTOS DE IMPOSTOS:
-- Carnê/Guia de IPTU (Imposto Predial e Territorial Urbano)
-- Carnê/Guia de IPVA
-- Declaração de Imposto de Renda (IRPF)
-- Extrato do FGTS
-- CRLV (Certificado de Registro e Licenciamento de Veículos) - contém endereço
-
-DOCUMENTOS FINANCEIROS:
-- Extratos bancários (conta corrente, poupança)
-- Correspondência de banco com endereço
-- Comprovante de pagamento com endereço
-
-DOCUMENTOS PÚBLICOS E OFICIAIS:
-- Correspondência do INSS
-- Correspondência da Receita Federal
-- Contracheque de órgão público com endereço
-- Termo de Rescisão de Contrato de Trabalho (TRCT)
-
-CONTRATOS:
-- Contrato de aluguel
-- Contrato de financiamento imobiliário
-- Escritura ou certidão de imóvel
-
-CRITÉRIOS PARA IDENTIFICAÇÃO:
-- Se o documento contém NOME + ENDEREÇO COMPLETO (logradouro, número, bairro, cidade, UF, CEP) → É comprovante de residência
-- Documentos com campos "Pagador", "Sacado", "Cliente", "Titular", "Beneficiário" + endereço → É comprovante de residência
-- Boletos bancários com dados do pagador/sacado → É comprovante de residência
-- Fichas de cadastro com endereço → É comprovante de residência
-- Se aparecer "Nome Pagador" ou "Sacado" junto com endereço, CLASSIFIQUE como comprovante_residencia
-
+### Comprovante de Residência (conta de luz, água, telefone, internet, gás, etc.)
 Extrair OBRIGATORIAMENTE:
 - logradouro (nome da rua/avenida/travessa SEM o número)
 - numero (apenas o número do endereço)
@@ -118,10 +70,9 @@ Extrair OBRIGATORIAMENTE:
 - cidade (nome da cidade)
 - uf (sigla do estado com 2 letras, ex: SP, RJ, MG)
 - cep (formato 00000-000 ou 00000000)
-- nome_titular (nome da pessoa responsável/pagador/sacado na conta/boleto)
+- nome_titular (nome da pessoa responsável na conta)
 
 ### Outro documento
-ATENÇÃO: Só classifique como "outro" se NÃO for possível identificar como nenhum dos tipos acima.
 Identificar e extrair o que for possível
 
 ## Regras:
