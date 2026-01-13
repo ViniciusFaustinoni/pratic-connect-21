@@ -81,7 +81,7 @@ export function LeadDetailDrawer({ leadId, open, onClose }: LeadDetailDrawerProp
   const { atribuirVendedor, isAssigning } = useLeadActions();
 
   const podeAtribuirVendedor = canAccess(['diretor', 'gerente_comercial', 'supervisor_vendas']);
-  const vendedorAtual = vendedores?.find(v => v.id === lead?.vendedor_id);
+  const vendedorAtual = vendedores?.find(v => v.user_id === lead?.vendedor_id);
 
   const formatCurrency = (value: number | null) => {
     if (!value) return '—';
@@ -175,8 +175,8 @@ export function LeadDetailDrawer({ leadId, open, onClose }: LeadDetailDrawerProp
                             <SelectValue placeholder="Selecione um vendedor" />
                           </SelectTrigger>
                           <SelectContent>
-                            {vendedores?.map((v) => (
-                              <SelectItem key={v.id} value={v.id}>
+                            {vendedores?.filter(v => v.user_id).map((v) => (
+                              <SelectItem key={v.user_id} value={v.user_id!}>
                                 {v.nome}
                               </SelectItem>
                             ))}
