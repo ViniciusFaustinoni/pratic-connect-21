@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { useCotacao, useCotacaoActions, useAceitarCotacaoEGerarContrato } from '@/hooks/useCotacoes';
-import { useGerarContrato, useContratoByCotacao } from '@/hooks/useContratos';
-import { useAuth } from '@/contexts/AuthContext';
+import { useCotacao, useCotacaoActions } from '@/hooks/useCotacoes';
+import { useContratoByCotacao } from '@/hooks/useContratos';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -137,11 +136,8 @@ export default function CotacaoDetalhe() {
   const queryClient = useQueryClient();
 
   const { data: cotacao, isLoading, error } = useCotacao(id);
-  const { data: contratoExistente } = useContratoByCotacao(id); // Verificar se já existe contrato
+  const { data: contratoExistente } = useContratoByCotacao(id);
   const { reenviarCotacao, atualizarStatus, isReenviando, isAtualizando } = useCotacaoActions();
-  const gerarContrato = useGerarContrato();
-  const aceitarEGerar = useAceitarCotacaoEGerarContrato();
-  const { profile } = useAuth();
 
   // Handler WhatsApp - agora também atualiza status e etapa do lead
   const handleWhatsApp = async () => {
@@ -358,31 +354,16 @@ Ficou com alguma dúvida? Estou à disposição!
               )}
               
               {/* BOTÃO ÚNICO: GERAR CONTRATO */}
-              {/* Condição: status permitido + tem lead + não tem contrato ainda */}
+              {/* Condição: status permitido + não tem contrato ainda */}
               {['enviada', 'visualizada', 'aceita', 'rascunho'].includes(cotacao.status) && 
-               cotacao.lead_id && 
                !contratoExistente && (
                 <Button
                   size="sm"
-                  onClick={() => {
-                    // Se não é aceita, primeiro aceitar depois gerar
-                    if (cotacao.status !== 'aceita') {
-                      aceitarEGerar.mutate({ cotacaoId: cotacao.id });
-                    } else {
-                      gerarContrato.mutate({ cotacaoId: cotacao.id });
-                    }
-                  }}
-                  disabled={aceitarEGerar.isPending || gerarContrato.isPending}
+                  onClick={() => navigate(`/vendas/contratos/novo?cotacao=${cotacao.id}`)}
                   className="bg-emerald-600 hover:bg-emerald-700"
                 >
-                  {(aceitarEGerar.isPending || gerarContrato.isPending) ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <FileSignature className="mr-2 h-4 w-4" />
-                  )}
-                  {(aceitarEGerar.isPending || gerarContrato.isPending) 
-                    ? 'Gerando...' 
-                    : 'Gerar Contrato'}
+                  <FileSignature className="mr-2 h-4 w-4" />
+                  Gerar Contrato
                 </Button>
               )}
               

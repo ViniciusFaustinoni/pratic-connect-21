@@ -219,10 +219,13 @@ export default function Contratos() {
         <div>
           <h1 className="text-2xl font-bold">Contratos</h1>
           <p className="text-muted-foreground">
-            Visualize e gerencie contratos de adesão. Contratos são gerados a partir de cotações aceitas.
+            Visualize e gerencie contratos de adesão.
           </p>
         </div>
-        {/* Botão "Novo Contrato" removido - contratos são gerados via cotação */}
+        <Button onClick={() => navigate('/vendas/contratos/novo')}>
+          <FileText className="mr-2 h-4 w-4" />
+          Novo Contrato
+        </Button>
       </div>
 
       {/* Stats */}
