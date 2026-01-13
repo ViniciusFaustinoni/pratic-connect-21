@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useCotacao, useCotacaoActions, useAceitarCotacaoEGerarContrato } from '@/hooks/useCotacoes';
-import { useGerarContrato } from '@/hooks/useContratos';
+import { useGerarContrato, useContratoByCotacao } from '@/hooks/useContratos';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
@@ -137,6 +137,7 @@ export default function CotacaoDetalhe() {
   const queryClient = useQueryClient();
 
   const { data: cotacao, isLoading, error } = useCotacao(id);
+  const { data: contratoExistente } = useContratoByCotacao(id); // Verificar se já existe contrato
   const { reenviarCotacao, atualizarStatus, isReenviando, isAtualizando } = useCotacaoActions();
   const gerarContrato = useGerarContrato();
   const aceitarEGerar = useAceitarCotacaoEGerarContrato();
@@ -356,39 +357,42 @@ Ficou com alguma dúvida? Estou à disposição!
                 </div>
               )}
               
-              {/* Botão Aceitar e Gerar Contrato - para status enviada */}
-              {(cotacao.status === 'enviada' || cotacao.status === 'rascunho') && cotacao.lead_id && (
+              {/* BOTÃO ÚNICO: GERAR CONTRATO */}
+              {/* Condição: status permitido + tem lead + não tem contrato ainda */}
+              {['enviada', 'visualizada', 'aceita', 'rascunho'].includes(cotacao.status) && 
+               cotacao.lead_id && 
+               !contratoExistente && (
                 <Button
                   size="sm"
-                  onClick={() => aceitarEGerar.mutate({ 
-                    cotacaoId: cotacao.id
-                  })}
-                  disabled={aceitarEGerar.isPending}
+                  onClick={() => {
+                    // Se não é aceita, primeiro aceitar depois gerar
+                    if (cotacao.status !== 'aceita') {
+                      aceitarEGerar.mutate({ cotacaoId: cotacao.id });
+                    } else {
+                      gerarContrato.mutate({ cotacaoId: cotacao.id });
+                    }
+                  }}
+                  disabled={aceitarEGerar.isPending || gerarContrato.isPending}
                   className="bg-emerald-600 hover:bg-emerald-700"
                 >
-                  {aceitarEGerar.isPending ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Check className="mr-2 h-4 w-4" />
-                  )}
-                  {aceitarEGerar.isPending ? 'Processando...' : 'Aceitar e Gerar Contrato'}
-                </Button>
-              )}
-              
-              {cotacao.status === 'aceita' && (
-                <Button
-                  size="sm"
-                  onClick={() => gerarContrato.mutate({ 
-                    cotacaoId: cotacao.id
-                  })}
-                  disabled={gerarContrato.isPending}
-                >
-                  {gerarContrato.isPending ? (
+                  {(aceitarEGerar.isPending || gerarContrato.isPending) ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
                     <FileSignature className="mr-2 h-4 w-4" />
                   )}
-                  {gerarContrato.isPending ? 'Gerando...' : 'Gerar Contrato'}
+                  {(aceitarEGerar.isPending || gerarContrato.isPending) 
+                    ? 'Gerando...' 
+                    : 'Gerar Contrato'}
+                </Button>
+              )}
+              
+              {/* Se já existe contrato, mostrar link para ele */}
+              {contratoExistente && (
+                <Button size="sm" variant="outline" asChild>
+                  <Link to={`/vendas/contratos/${contratoExistente.id}`}>
+                    <FileSignature className="mr-2 h-4 w-4" />
+                    Ver Contrato
+                  </Link>
                 </Button>
               )}
               <DropdownMenu>
