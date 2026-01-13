@@ -10,18 +10,23 @@ import {
   ChevronRight, Zap
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useAtivacoes, useAtivarContrato, useAtivacaoMetricas, FiltroAtivacao } from "@/hooks/useAtivacoes";
+import { useAtivacoes, useAtivarContrato, useAtivacaoMetricas, useExcluirAtivacao, FiltroAtivacao } from "@/hooks/useAtivacoes";
 import { AtivacaoCardNew } from "@/components/ativacao/AtivacaoCardNew";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { usePermissions } from "@/hooks/usePermissions";
 
 export default function AtivacoesList() {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [filtro, setFiltro] = useState<FiltroAtivacao>("todos");
   
+  const { isDiretor, isAdminMaster } = usePermissions();
+  const canDeleteAtivacoes = isDiretor || isAdminMaster;
+  
   const { data: ativacoes, isLoading, error, refetch } = useAtivacoes(filtro);
   const { mutate: ativarContrato, isPending: isAtivando } = useAtivarContrato();
+  const { mutate: excluirAtivacao, isPending: isExcluindo } = useExcluirAtivacao();
   const metrics = useAtivacaoMetricas();
 
   // Filtrar por busca
@@ -241,7 +246,10 @@ export default function AtivacoesList() {
                 contrato={contrato}
                 onAtivar={() => handleAtivar(contrato.id)}
                 onClickRequisito={(tipo) => handleClickRequisito(contrato.id, tipo)}
+                onExcluir={() => excluirAtivacao(contrato.id)}
+                canDelete={canDeleteAtivacoes}
                 isAtivando={isAtivando}
+                isExcluindo={isExcluindo}
               />
             ))}
           </div>

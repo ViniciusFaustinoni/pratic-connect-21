@@ -1,6 +1,17 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { 
   CheckCircle2, 
   Phone,
@@ -8,7 +19,8 @@ import {
   User,
   Send,
   FileText,
-  ClipboardCheck
+  ClipboardCheck,
+  Trash2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -21,14 +33,20 @@ interface AtivacaoCardNewProps {
   contrato: AtivacaoContrato;
   onAtivar: () => void;
   onClickRequisito: (tipo: 'proposta' | 'vistoria') => void;
+  onExcluir?: () => void;
+  canDelete?: boolean;
   isAtivando?: boolean;
+  isExcluindo?: boolean;
 }
 
 export function AtivacaoCardNew({ 
   contrato, 
   onAtivar, 
   onClickRequisito,
-  isAtivando 
+  onExcluir,
+  canDelete,
+  isAtivando,
+  isExcluindo
 }: AtivacaoCardNewProps) {
   const propostaAssinada = !!contrato.data_assinatura;
   const vistoriaOk = contrato.vistoria?.status === 'aprovada';
@@ -89,24 +107,63 @@ export function AtivacaoCardNew({
                 {nomeCliente}
               </h3>
             </div>
-            {/* Badge de status no canto superior direito */}
-            {!isAtivado && (
-              <AtivacaoStatusBadge
-                vistoriaRealizada={vistoriaOk}
-                assinaturaRealizada={propostaAssinada}
-                dataVistoria={contrato.vistoria?.data_aprovacao}
-                dataAssinatura={contrato.data_assinatura}
-                variant="compact"
-                onEnviarLembrete={handleEnviarLembrete}
-                onVerProposta={handleVerProposta}
-              />
-            )}
-            {isAtivado && (
-              <div className="inline-flex items-center gap-1.5 rounded-md border-2 px-2.5 py-1 text-xs font-medium shadow-sm bg-blue-50 border-blue-500 text-blue-800">
-                <CheckCircle2 className="h-4 w-4" />
-                <span>Ativado</span>
-              </div>
-            )}
+            
+            <div className="flex items-center gap-1.5">
+              {/* Badge de status */}
+              {!isAtivado && (
+                <AtivacaoStatusBadge
+                  vistoriaRealizada={vistoriaOk}
+                  assinaturaRealizada={propostaAssinada}
+                  dataVistoria={contrato.vistoria?.data_aprovacao}
+                  dataAssinatura={contrato.data_assinatura}
+                  variant="compact"
+                  onEnviarLembrete={handleEnviarLembrete}
+                  onVerProposta={handleVerProposta}
+                />
+              )}
+              {isAtivado && (
+                <div className="inline-flex items-center gap-1.5 rounded-md border-2 px-2.5 py-1 text-xs font-medium shadow-sm bg-blue-50 border-blue-500 text-blue-800">
+                  <CheckCircle2 className="h-4 w-4" />
+                  <span>Ativado</span>
+                </div>
+              )}
+              
+              {/* Botão de excluir - apenas para diretores e admin master */}
+              {canDelete && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                      disabled={isExcluindo}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Excluir Ativação</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Tem certeza que deseja excluir esta ativação? Esta ação não pode ser desfeita.
+                        <br /><br />
+                        <strong>Contrato:</strong> {contrato.numero}<br />
+                        <strong>Cliente:</strong> {nomeCliente}
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => onExcluir?.()}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      >
+                        {isExcluindo ? 'Excluindo...' : 'Excluir'}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
+            </div>
           </div>
           
           <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">

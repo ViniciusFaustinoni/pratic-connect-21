@@ -203,3 +203,45 @@ export function useAtivacaoMetricas() {
     tempoMedio: 3, // Placeholder - calcular média real
   };
 }
+
+export function useExcluirAtivacao() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (contratoId: string) => {
+      // 1. Excluir cobranças Asaas vinculadas
+      await supabase
+        .from('asaas_cobrancas')
+        .delete()
+        .eq('contrato_id', contratoId);
+      
+      // 2. Excluir cobranças antigas
+      await supabase
+        .from('cobrancas')
+        .delete()
+        .eq('contrato_id', contratoId);
+      
+      // 3. Excluir histórico
+      await supabase
+        .from('contratos_historico')
+        .delete()
+        .eq('contrato_id', contratoId);
+      
+      // 4. Excluir o contrato
+      const { error } = await supabase
+        .from('contratos')
+        .delete()
+        .eq('id', contratoId);
+        
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ativacoes'] });
+      toast.success('Ativação excluída com sucesso!');
+    },
+    onError: (error) => {
+      console.error('Erro ao excluir ativação:', error);
+      toast.error('Erro ao excluir ativação. Verifique suas permissões.');
+    },
+  });
+}

@@ -11489,6 +11489,7 @@ export type Database = {
       is_associado: { Args: { _user_id: string }; Returns: boolean }
       is_desenvolvedor: { Args: { _user_id: string }; Returns: boolean }
       is_diretor: { Args: { _user_id: string }; Returns: boolean }
+      is_diretor_or_admin: { Args: { _user_id: string }; Returns: boolean }
       is_funcionario: { Args: { _user_id: string }; Returns: boolean }
       is_gerencia: { Args: { _user_id: string }; Returns: boolean }
       is_prestador: { Args: { _user_id: string }; Returns: boolean }
