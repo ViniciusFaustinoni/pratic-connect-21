@@ -38,7 +38,7 @@ import { useCotacoes, useUpdateCotacao, useDuplicarCotacao, useExcluirCotacao, t
 import { useGerarContrato } from '@/hooks/useContratos';
 import { useAuth } from '@/contexts/AuthContext';
 import { CotacaoFormDialog } from '@/components/cotacoes/CotacaoFormDialog';
-import { ContratoWizard } from '@/components/contratos/ContratoWizard';
+// ContratoWizard removido - fluxo simplificado: contrato é gerado via edge function na página de detalhe da cotação
 import { EnviarEmailModal } from '@/components/cotacoes/EnviarEmailModal';
 import { VincularLeadModal } from '@/components/cotacoes/VincularLeadModal';
 import { gerarPdfCotacao } from '@/lib/gerarPdfCotacao';
@@ -108,8 +108,7 @@ export default function Cotacoes() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [showCotacaoForm, setShowCotacaoForm] = useState(false);
-  const [showContratoWizard, setShowContratoWizard] = useState(false);
-  const [selectedCotacaoId, setSelectedCotacaoId] = useState<string>('');
+  // ContratoWizard removido - contrato gerado via detalhe da cotação
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [selectedCotacaoEmail, setSelectedCotacaoEmail] = useState<CotacaoWithRelations | null>(null);
   const [leadIdFromUrl, setLeadIdFromUrl] = useState<string | null>(null);
@@ -241,9 +240,9 @@ export default function Cotacoes() {
     }
   };
 
-  const handleOpenContratoWizard = (cotacaoId: string) => {
-    setSelectedCotacaoId(cotacaoId);
-    setShowContratoWizard(true);
+  // Handler para ir ao detalhe da cotação e gerar contrato
+  const handleIrParaDetalhe = (cotacaoId: string) => {
+    navigate(`/vendas/cotacoes/${cotacaoId}`);
   };
 
   const handleOpenEmailModal = (cotacao: CotacaoWithRelations) => {
@@ -551,7 +550,7 @@ export default function Cotacoes() {
                 }}
                 onWhatsApp={enviarWhatsApp}
                 onEmail={handleOpenEmailModal}
-                onAceitar={handleOpenContratoWizard}
+                onAceitar={handleIrParaDetalhe}
                 onPdf={handleBaixarPdf}
                 onDuplicar={handleDuplicar}
                 onExcluir={handleExcluir}
@@ -585,7 +584,7 @@ export default function Cotacoes() {
                 }}
                 onWhatsApp={enviarWhatsApp}
                 onEmail={handleOpenEmailModal}
-                onAceitar={handleOpenContratoWizard}
+                onAceitar={handleIrParaDetalhe}
                 onPdf={handleBaixarPdf}
                 onDuplicar={handleDuplicar}
                 onExcluir={handleExcluir}
@@ -608,11 +607,7 @@ export default function Cotacoes() {
         }} 
         leadId={leadIdFromUrl || undefined}
       />
-      <ContratoWizard 
-        open={showContratoWizard} 
-        onOpenChange={setShowContratoWizard} 
-        cotacaoId={selectedCotacaoId}
-      />
+      {/* ContratoWizard removido - contrato gerado via detalhe da cotação */}
       {selectedCotacaoEmail && (
         <EnviarEmailModal
           open={showEmailModal}

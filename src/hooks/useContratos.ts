@@ -220,6 +220,29 @@ export function useContratoByLead(leadId: string | undefined) {
   });
 }
 
+// Hook para buscar contrato de uma cotação específica
+export function useContratoByCotacao(cotacaoId: string | undefined) {
+  return useQuery({
+    queryKey: ['contratos', 'cotacao', cotacaoId],
+    queryFn: async () => {
+      if (!cotacaoId) return null;
+
+      const { data, error } = await supabase
+        .from('contratos')
+        .select(`
+          *,
+          planos (*)
+        `)
+        .eq('cotacao_id', cotacaoId)
+        .maybeSingle();
+
+      if (error) throw error;
+      return data as ContratoWithRelations | null;
+    },
+    enabled: !!cotacaoId,
+  });
+}
+
 // Hook para ativar contrato e criar associado automaticamente
 export function useAtivarContrato() {
   const queryClient = useQueryClient();

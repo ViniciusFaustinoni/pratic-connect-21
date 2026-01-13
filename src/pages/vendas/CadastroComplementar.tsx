@@ -176,9 +176,10 @@ export default function CadastroComplementar() {
       return cotacaoId;
     },
     onSuccess: (id) => {
-      toast.success('Dados salvos com sucesso!');
+      toast.success('Dados salvos! Agora você pode gerar o contrato.');
       queryClient.invalidateQueries({ queryKey: ['cotacao', id] });
-      navigate(`/vendas/gerar-contrato/${id}`);
+      // Redirecionar para o detalhe da cotação onde o vendedor clica em "Gerar Contrato"
+      navigate(`/vendas/cotacoes/${id}`);
     },
     onError: (error: Error) => {
       console.error('Erro ao salvar dados:', error);
