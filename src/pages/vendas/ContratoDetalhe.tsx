@@ -329,8 +329,14 @@ export default function ContratoDetalhe() {
   const cliente = contrato.associados || contrato.leads;
   const numeroContrato = contrato.numero || `CTR-${contrato.id.slice(0, 8).toUpperCase()}`;
   
-  // Dados do veículo vêm da cotação
-  const veiculo = contrato.cotacoes || contrato.leads;
+  // Dados do veículo vêm do próprio contrato (com fallback para cotação/lead)
+  const veiculoMarca = contrato.veiculo_marca || contrato.cotacoes?.veiculo_marca || contrato.leads?.veiculo_marca;
+  const veiculoModelo = contrato.veiculo_modelo || contrato.cotacoes?.veiculo_modelo || contrato.leads?.veiculo_modelo;
+  const veiculoAno = contrato.veiculo_ano || contrato.cotacoes?.veiculo_ano || contrato.leads?.veiculo_ano;
+  const veiculoPlaca = contrato.veiculo_placa || contrato.leads?.veiculo_placa;
+  const veiculoCor = contrato.veiculo_cor;
+  const veiculoRenavam = contrato.veiculo_renavam;
+  const veiculoValorFipe = contrato.veiculo_valor_fipe || contrato.cotacoes?.valor_fipe;
 
   // ============================================
   // RENDER
@@ -512,33 +518,57 @@ export default function ContratoDetalhe() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <p className="font-semibold text-lg">
-              {veiculo?.veiculo_marca} {veiculo?.veiculo_modelo}
-            </p>
-            <Separator />
-            <div className="space-y-2 text-sm">
-              <div className="flex items-start gap-2">
-                <Calendar className="h-4 w-4 text-muted-foreground mt-0.5" />
-                <div>
-                  <p className="text-muted-foreground">Ano</p>
-                  <p className="font-medium">{veiculo?.veiculo_ano || '—'}</p>
+            {veiculoMarca || veiculoPlaca ? (
+              <>
+                <p className="font-semibold text-lg">
+                  {veiculoMarca} {veiculoModelo}
+                </p>
+                <Separator />
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-start gap-2">
+                    <Calendar className="h-4 w-4 text-muted-foreground mt-0.5" />
+                    <div>
+                      <p className="text-muted-foreground">Ano</p>
+                      <p className="font-medium">{veiculoAno || '—'}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Tag className="h-4 w-4 text-muted-foreground mt-0.5" />
+                    <div>
+                      <p className="text-muted-foreground">Placa</p>
+                      <p className="font-medium font-mono">{veiculoPlaca || '—'}</p>
+                    </div>
+                  </div>
+                  {veiculoCor && (
+                    <div className="flex items-start gap-2">
+                      <Car className="h-4 w-4 text-muted-foreground mt-0.5" />
+                      <div>
+                        <p className="text-muted-foreground">Cor</p>
+                        <p className="font-medium">{veiculoCor}</p>
+                      </div>
+                    </div>
+                  )}
+                  {veiculoRenavam && (
+                    <div className="flex items-start gap-2">
+                      <FileText className="h-4 w-4 text-muted-foreground mt-0.5" />
+                      <div>
+                        <p className="text-muted-foreground">Renavam</p>
+                        <p className="font-medium font-mono">{veiculoRenavam}</p>
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex items-start gap-2">
+                    <DollarSign className="h-4 w-4 text-muted-foreground mt-0.5" />
+                    <div>
+                      <p className="text-muted-foreground">Valor FIPE</p>
+                      <p className="font-medium">{formatCurrency(veiculoValorFipe)}</p>
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-start gap-2">
-                <Tag className="h-4 w-4 text-muted-foreground mt-0.5" />
-                <div>
-                  <p className="text-muted-foreground">Placa</p>
-                  <p className="font-medium">{contrato.leads?.veiculo_placa || '—'}</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-2">
-                <DollarSign className="h-4 w-4 text-muted-foreground mt-0.5" />
-                <div>
-                  <p className="text-muted-foreground">Valor FIPE</p>
-                  <p className="font-medium">{formatCurrency(contrato.cotacoes?.valor_fipe)}</p>
-                </div>
-              </div>
-            </div>
+              </>
+            ) : (
+              <p className="text-muted-foreground text-sm">Sem informações do veículo</p>
+            )}
           </CardContent>
         </Card>
 
