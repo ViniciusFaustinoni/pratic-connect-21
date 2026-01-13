@@ -3333,6 +3333,7 @@ export type Database = {
           created_at: string
           dados_extras: Json | null
           desagio_aplicado: number | null
+          email_enviado_em: string | null
           id: string
           lead_id: string | null
           numero: string
@@ -3368,6 +3369,7 @@ export type Database = {
           created_at?: string
           dados_extras?: Json | null
           desagio_aplicado?: number | null
+          email_enviado_em?: string | null
           id?: string
           lead_id?: string | null
           numero: string
@@ -3403,6 +3405,7 @@ export type Database = {
           created_at?: string
           dados_extras?: Json | null
           desagio_aplicado?: number | null
+          email_enviado_em?: string | null
           id?: string
           lead_id?: string | null
           numero?: string

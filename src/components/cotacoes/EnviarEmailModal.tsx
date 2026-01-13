@@ -93,6 +93,12 @@ Equipe PRATIC Proteção Veicular</p>
 
       if (error) throw error;
 
+      // Atualizar email_enviado_em na cotação
+      await supabase
+        .from('cotacoes')
+        .update({ email_enviado_em: new Date().toISOString() })
+        .eq('id', cotacao.id);
+
       toast.success('Email enviado com sucesso!');
       onOpenChange(false);
       onSuccess?.();

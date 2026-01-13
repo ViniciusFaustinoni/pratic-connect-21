@@ -326,8 +326,8 @@ Ficou com alguma dúvida? Estou à disposição!
               {/* Botões de envio só aparecem se tem lead vinculado */}
               {cotacao.lead_id ? (
                 <>
-                  {/* Se já foi enviada, mostra Reenviar. Senão, mostra Email */}
-                  {cotacao.status !== 'rascunho' ? (
+                  {/* Se email já foi enviado, mostra Reenviar. Senão, mostra Email */}
+                  {cotacao.email_enviado_em ? (
                     <Button
                       variant="outline"
                       size="sm"
