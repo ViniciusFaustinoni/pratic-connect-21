@@ -4,10 +4,10 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { UserAvatar } from '@/components/UserAvatar';
 import { cn } from '@/lib/utils';
-import type { ConsultorMetricas } from '@/hooks/usePropostasMetricas';
+import type { VendedorMetricas } from '@/hooks/usePropostasMetricas';
 
-interface ConsultorCardProps {
-  consultor: ConsultorMetricas;
+interface VendedorCardProps {
+  vendedor: VendedorMetricas;
   onClick?: () => void;
   isSelected?: boolean;
 }
@@ -24,20 +24,20 @@ function getRankingIcon(_ranking: number) {
   return null;
 }
 
-function getPerformanceColor(consultor: ConsultorMetricas) {
-  const variacao = consultor.propostasFechadasAnterior > 0
-    ? ((consultor.propostasFechadas - consultor.propostasFechadasAnterior) / consultor.propostasFechadasAnterior) * 100
-    : consultor.propostasFechadas > 0 ? 100 : 0;
+function getPerformanceColor(vendedor: VendedorMetricas) {
+  const variacao = vendedor.propostasFechadasAnterior > 0
+    ? ((vendedor.propostasFechadas - vendedor.propostasFechadasAnterior) / vendedor.propostasFechadasAnterior) * 100
+    : vendedor.propostasFechadas > 0 ? 100 : 0;
 
   if (variacao >= 10) return 'border-green-500/50 bg-green-500/5';
   if (variacao >= 0) return 'border-yellow-500/50 bg-yellow-500/5';
   return 'border-red-500/50 bg-red-500/5';
 }
 
-function getPerformanceBadge(consultor: ConsultorMetricas) {
-  const variacao = consultor.propostasFechadasAnterior > 0
-    ? ((consultor.propostasFechadas - consultor.propostasFechadasAnterior) / consultor.propostasFechadasAnterior) * 100
-    : consultor.propostasFechadas > 0 ? 100 : 0;
+function getPerformanceBadge(vendedor: VendedorMetricas) {
+  const variacao = vendedor.propostasFechadasAnterior > 0
+    ? ((vendedor.propostasFechadas - vendedor.propostasFechadasAnterior) / vendedor.propostasFechadasAnterior) * 100
+    : vendedor.propostasFechadas > 0 ? 100 : 0;
 
   if (variacao >= 20) return { label: 'Excelente', color: 'bg-green-100 text-green-800' };
   if (variacao >= 10) return { label: 'Bom', color: 'bg-emerald-100 text-emerald-800' };
@@ -46,17 +46,17 @@ function getPerformanceBadge(consultor: ConsultorMetricas) {
   return { label: 'Crítico', color: 'bg-red-100 text-red-800' };
 }
 
-export function ConsultorCard({ consultor, onClick, isSelected }: ConsultorCardProps) {
-  const performanceBadge = getPerformanceBadge(consultor);
-  const variacao = consultor.propostasFechadasAnterior > 0
-    ? ((consultor.propostasFechadas - consultor.propostasFechadasAnterior) / consultor.propostasFechadasAnterior) * 100
-    : consultor.propostasFechadas > 0 ? 100 : 0;
+export function VendedorCard({ vendedor, onClick, isSelected }: VendedorCardProps) {
+  const performanceBadge = getPerformanceBadge(vendedor);
+  const variacao = vendedor.propostasFechadasAnterior > 0
+    ? ((vendedor.propostasFechadas - vendedor.propostasFechadasAnterior) / vendedor.propostasFechadasAnterior) * 100
+    : vendedor.propostasFechadas > 0 ? 100 : 0;
 
   return (
     <Card 
       className={cn(
         "cursor-pointer hover:shadow-lg transition-all duration-200 border-2",
-        isSelected ? "ring-2 ring-primary border-primary" : getPerformanceColor(consultor)
+        isSelected ? "ring-2 ring-primary border-primary" : getPerformanceColor(vendedor)
       )}
       onClick={onClick}
     >
@@ -65,12 +65,12 @@ export function ConsultorCard({ consultor, onClick, isSelected }: ConsultorCardP
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center gap-3">
             <UserAvatar 
-              src={consultor.avatar_url} 
-              name={consultor.nome} 
+              src={vendedor.avatar_url} 
+              name={vendedor.nome} 
               size="md"
             />
             <div>
-              <h3 className="font-semibold text-foreground line-clamp-1">{consultor.nome}</h3>
+              <h3 className="font-semibold text-foreground line-clamp-1">{vendedor.nome}</h3>
               <Badge className={cn("text-xs", performanceBadge.color)}>
                 {performanceBadge.label}
               </Badge>
@@ -81,15 +81,15 @@ export function ConsultorCard({ consultor, onClick, isSelected }: ConsultorCardP
         {/* Métricas Principais */}
         <div className="grid grid-cols-3 gap-2 mb-4">
           <div className="text-center p-2 rounded-lg bg-muted/50">
-            <p className="text-lg font-bold text-primary">{consultor.propostasFechadas}</p>
+            <p className="text-lg font-bold text-primary">{vendedor.propostasFechadas}</p>
             <p className="text-[10px] text-muted-foreground">Fechadas</p>
           </div>
           <div className="text-center p-2 rounded-lg bg-muted/50">
-            <p className="text-lg font-bold text-yellow-600">{consultor.emCotacao}</p>
+            <p className="text-lg font-bold text-yellow-600">{vendedor.emCotacao}</p>
             <p className="text-[10px] text-muted-foreground">Cotação</p>
           </div>
           <div className="text-center p-2 rounded-lg bg-muted/50">
-            <p className="text-lg font-bold text-orange-600">{consultor.contratoEnviado}</p>
+            <p className="text-lg font-bold text-orange-600">{vendedor.contratoEnviado}</p>
             <p className="text-[10px] text-muted-foreground">Enviados</p>
           </div>
         </div>
@@ -98,7 +98,7 @@ export function ConsultorCard({ consultor, onClick, isSelected }: ConsultorCardP
         <div className="flex items-center justify-between mb-3">
           <span className="text-sm text-muted-foreground">Valor Fechado</span>
           <span className="font-semibold text-green-600">
-            {formatCurrency(consultor.valorFechado)}
+            {formatCurrency(vendedor.valorFechado)}
           </span>
         </div>
 
@@ -118,9 +118,9 @@ export function ConsultorCard({ consultor, onClick, isSelected }: ConsultorCardP
         <div className="mt-3 pt-3 border-t">
           <div className="flex items-center justify-between text-xs mb-1">
             <span className="text-muted-foreground">Taxa de Conversão</span>
-            <span className="font-medium">{consultor.taxaConversao.toFixed(0)}%</span>
+            <span className="font-medium">{vendedor.taxaConversao.toFixed(0)}%</span>
           </div>
-          <Progress value={consultor.taxaConversao} className="h-1.5" />
+          <Progress value={vendedor.taxaConversao} className="h-1.5" />
         </div>
       </CardContent>
     </Card>
