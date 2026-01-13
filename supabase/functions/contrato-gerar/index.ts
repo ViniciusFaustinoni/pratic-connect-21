@@ -35,7 +35,7 @@ serve(async (req) => {
       .from('cotacoes')
       .select(`
         *,
-        lead:leads (
+        lead:leads!fk_cotacoes_lead_id (
           id, nome, email, telefone, cpf,
           cidade, estado, endereco, bairro, cep
         ),
@@ -44,7 +44,7 @@ serve(async (req) => {
         )
       `)
       .eq('id', cotacao_id)
-      .single();
+      .maybeSingle();
 
     if (cotacaoError || !cotacao) {
       console.error('Erro ao buscar cotação:', cotacaoError);
