@@ -10,11 +10,13 @@ import { useCriarVistoriaAgendada } from '@/hooks/useContratoLink';
 
 interface AgendarVistoriaProps {
   contratoId: string;
+  associadoId: string;
+  veiculoId?: string;
   onAgendar: (data: string, horario: string, vistoriaId: string) => void;
   onVoltar: () => void;
 }
 
-export function AgendarVistoria({ contratoId, onAgendar, onVoltar }: AgendarVistoriaProps) {
+export function AgendarVistoria({ contratoId, associadoId, veiculoId, onAgendar, onVoltar }: AgendarVistoriaProps) {
   const [dataSelecionada, setDataSelecionada] = useState<Date | undefined>();
   const [horarioSelecionado, setHorarioSelecionado] = useState<string | null>(null);
   const criarVistoria = useCriarVistoriaAgendada();
@@ -33,6 +35,8 @@ export function AgendarVistoria({ contratoId, onAgendar, onVoltar }: AgendarVist
     
     const result = await criarVistoria.mutateAsync({
       contratoId,
+      associadoId,
+      veiculoId,
       dataAgendada: dataFormatada,
       horarioAgendado: horarioSelecionado,
     });

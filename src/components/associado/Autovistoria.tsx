@@ -13,12 +13,14 @@ import { toast } from 'sonner';
 
 interface AutovistoriaProps {
   contratoId: string;
+  associadoId: string;
+  veiculoId?: string;
   tipoVeiculo: TipoVeiculo;
   onComplete: (vistoriaId: string) => void;
   onVoltar: () => void;
 }
 
-export function Autovistoria({ contratoId, tipoVeiculo, onComplete, onVoltar }: AutovistoriaProps) {
+export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, onComplete, onVoltar }: AutovistoriaProps) {
   const fotos = getFotosAutovistoria(tipoVeiculo);
   const [fotosEnviadas, setFotosEnviadas] = useState<Record<string, string>>({});
   const [indiceAtual, setIndiceAtual] = useState(0);
@@ -56,7 +58,11 @@ export function Autovistoria({ contratoId, tipoVeiculo, onComplete, onVoltar }: 
     // Criar vistoria se ainda não existir
     if (!vistoriaId) {
       try {
-        const result = await criarAutovistoria.mutateAsync({ contratoId });
+        const result = await criarAutovistoria.mutateAsync({ 
+          contratoId, 
+          associadoId, 
+          veiculoId 
+        });
         setVistoriaId(result.id);
       } catch (error) {
         toast.error('Erro ao iniciar autovistoria');

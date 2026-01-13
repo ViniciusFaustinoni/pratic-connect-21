@@ -153,6 +153,7 @@ export default function AssociadoVistoria() {
         {etapa === 'agendar' && (
           <AgendarVistoria
             contratoId={contrato.id}
+            associadoId={contrato.associado_id || ''}
             onAgendar={(data, horario, vistoriaId) => {
               setDadosAgendamento({ data, horario });
               setVistoriaId(vistoriaId);
@@ -165,6 +166,7 @@ export default function AssociadoVistoria() {
         {etapa === 'autovistoria' && (
           <Autovistoria
             contratoId={contrato.id}
+            associadoId={contrato.associado_id || ''}
             tipoVeiculo={tipoVeiculo as 'carro' | 'moto'}
             onComplete={(vistoriaId) => {
               setVistoriaId(vistoriaId);
