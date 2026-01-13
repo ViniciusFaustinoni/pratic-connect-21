@@ -227,7 +227,13 @@ export function useExcluirAtivacao() {
         .delete()
         .eq('contrato_id', contratoId);
       
-      // 4. Excluir o contrato
+      // 4. Excluir vistorias vinculadas
+      await supabase
+        .from('vistorias')
+        .delete()
+        .eq('contrato_id', contratoId);
+      
+      // 5. Excluir o contrato
       const { error } = await supabase
         .from('contratos')
         .delete()
@@ -237,6 +243,7 @@ export function useExcluirAtivacao() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ativacoes'] });
+      queryClient.invalidateQueries({ queryKey: ['vistorias'] });
       toast.success('Ativação excluída com sucesso!');
     },
     onError: (error) => {
