@@ -110,3 +110,6 @@ verify_jwt = false
 
 [functions.asaas-cobranca-adesao]
 verify_jwt = false
+
+[functions.odometro-ocr]
+verify_jwt = false
