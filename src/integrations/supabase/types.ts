@@ -3235,6 +3235,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "contratos_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "fk_contratos_associado"
             columns: ["associado_id"]
             isOneToOne: false
@@ -3333,10 +3340,11 @@ export type Database = {
           created_at: string
           dados_extras: Json | null
           desagio_aplicado: number | null
+          email_enviado_em: string | null
           id: string
           lead_id: string | null
           numero: string
-          plano_id: string
+          plano_id: string | null
           regiao: string | null
           status: Database["public"]["Enums"]["status_cotacao"]
           taxa_administrativa: number
@@ -3368,10 +3376,11 @@ export type Database = {
           created_at?: string
           dados_extras?: Json | null
           desagio_aplicado?: number | null
+          email_enviado_em?: string | null
           id?: string
           lead_id?: string | null
           numero: string
-          plano_id: string
+          plano_id?: string | null
           regiao?: string | null
           status?: Database["public"]["Enums"]["status_cotacao"]
           taxa_administrativa?: number
@@ -3403,10 +3412,11 @@ export type Database = {
           created_at?: string
           dados_extras?: Json | null
           desagio_aplicado?: number | null
+          email_enviado_em?: string | null
           id?: string
           lead_id?: string | null
           numero?: string
-          plano_id?: string
+          plano_id?: string | null
           regiao?: string | null
           status?: Database["public"]["Enums"]["status_cotacao"]
           taxa_administrativa?: number
