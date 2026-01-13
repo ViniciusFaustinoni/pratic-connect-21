@@ -92,16 +92,9 @@ export default function LeadsUnificado() {
 
   const { atualizarLead, excluirLead } = useLeadActions();
 
-  // Navigate to cotação with lead data pre-filled
+  // Navigate to cotações with lead parameter to open modal with lead data
   const handleLeadQuote = useCallback((lead: Lead) => {
-    navigate('/vendas/cotacao', {
-      state: {
-        leadId: lead.id,
-        nome: lead.nome,
-        telefone: lead.telefone,
-        preencherAutomatico: true,
-      },
-    });
+    navigate(`/vendas/cotacoes?lead=${lead.id}`);
   }, [navigate]);
 
   // Handle send proposal action
