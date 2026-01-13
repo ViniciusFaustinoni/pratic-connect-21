@@ -296,6 +296,32 @@ export default function Cotacoes() {
     handleMarkAsEnviada(cotacao.id, cotacao.lead_id);
   };
 
+  const copiarParaWhatsApp = async (cotacao: CotacaoWithRelations) => {
+    const mensagem = 
+      `Olá! 🚗\n\n` +
+      `Segue sua cotação de proteção veicular:\n\n` +
+      `📋 *Cotação Nº:* ${cotacao.numero}\n` +
+      `🚙 *Veículo:* ${cotacao.veiculo_marca} ${cotacao.veiculo_modelo} ${cotacao.veiculo_ano}\n` +
+      `📦 *Plano:* ${cotacao.planos?.nome || 'Proteção Veicular'}\n` +
+      `💰 *Valor FIPE:* R$ ${cotacao.valor_fipe?.toLocaleString('pt-BR')}\n\n` +
+      `*Valores Mensais:*\n` +
+      `• Cota: R$ ${cotacao.valor_cota?.toFixed(2)}\n` +
+      `• Taxa Adm: R$ ${cotacao.taxa_administrativa?.toFixed(2)}\n` +
+      `• Rastreamento: R$ ${cotacao.valor_rastreamento?.toFixed(2)}\n` +
+      `• Assistência: R$ ${(cotacao.valor_assistencia || 0)?.toFixed(2)}\n\n` +
+      `💵 *TOTAL MENSAL: R$ ${cotacao.valor_total_mensal?.toFixed(2)}*\n\n` +
+      `📝 Taxa de Adesão: R$ ${cotacao.valor_adesao?.toFixed(2)}\n\n` +
+      `⏰ Cotação válida por ${cotacao.validade_dias || 7} dias.\n\n` +
+      `Posso te ajudar com mais alguma informação?`;
+
+    try {
+      await navigator.clipboard.writeText(mensagem);
+      toast.success('Mensagem copiada! Cole no WhatsApp.');
+    } catch (error) {
+      toast.error('Erro ao copiar mensagem');
+    }
+  };
+
   const clearFilters = () => {
     setSearch('');
     setStatusFilter('all');
@@ -572,6 +598,12 @@ export default function Cotacoes() {
                 onPdf={handleBaixarPdf}
                 onDuplicar={handleDuplicar}
                 onExcluir={handleExcluir}
+                onCopiarWhatsApp={copiarParaWhatsApp}
+                onGerarContrato={(id) => gerarContrato.mutate({ 
+                  cotacaoId: id, 
+                  vendedorId: profile?.id 
+                })}
+                isGerandoContrato={gerarContrato.isPending}
               />
             ))
           )}
@@ -606,6 +638,7 @@ export default function Cotacoes() {
                 onPdf={handleBaixarPdf}
                 onDuplicar={handleDuplicar}
                 onExcluir={handleExcluir}
+                onCopiarWhatsApp={copiarParaWhatsApp}
                 onGerarContrato={(id) => gerarContrato.mutate({ 
                   cotacaoId: id, 
                   vendedorId: profile?.id 
