@@ -9,21 +9,57 @@ const corsHeaders = {
 
 const systemPrompt = `Você é um analista especializado em documentos brasileiros. Analise a imagem do documento e:
 1. IDENTIFIQUE AUTOMATICAMENTE o tipo do documento
-2. EXTRAIA todos os dados relevantes
+2. EXTRAIA TODOS os dados relevantes com precisão
 
 ## Tipos de Documento que você pode identificar:
 
 ### CNH (Carteira Nacional de Habilitação)
-Extrair: nome, cpf, rg, data_nascimento, validade, categoria
+Extrair OBRIGATORIAMENTE:
+- nome (nome completo do condutor)
+- cpf (formato 000.000.000-00)
+- rg (número do RG)
+- data_nascimento (formato YYYY-MM-DD)
+- validade (formato YYYY-MM-DD)
+- categoria (A, B, AB, etc.)
 
 ### RG (Registro Geral / Identidade)
-Extrair: nome, rg, cpf (se disponível), data_nascimento, data_expedicao
+Extrair OBRIGATORIAMENTE:
+- nome (nome completo)
+- rg (número do RG)
+- cpf (se disponível, formato 000.000.000-00)
+- data_nascimento (formato YYYY-MM-DD)
+- data_expedicao (formato YYYY-MM-DD)
 
 ### CRLV (Certificado de Registro e Licenciamento de Veículo)
-Extrair: placa, renavam, chassi, marca, modelo, ano_fabricacao, ano_modelo, cor, combustivel, nome_proprietario
+Extrair OBRIGATORIAMENTE:
+- placa (formato ABC1234 ou ABC1D23)
+- renavam (11 dígitos)
+- chassi (17 caracteres alfanuméricos)
+- marca (ex: TOYOTA, VOLKSWAGEN, HONDA)
+- modelo (ex: COROLLA XEI, GOL 1.0, CIVIC)
+- ano_fabricacao (APENAS o número do ano de fabricação, ex: 2013)
+- ano_modelo (APENAS o número do ano do modelo, ex: 2014)
+- cor (ex: PRATA, PRETO, BRANCO)
+- combustivel (ex: FLEX, GASOLINA, DIESEL)
+- nome_proprietario (nome completo do proprietário)
 
-### Comprovante de Residência (conta de luz, água, telefone, etc.)
-Extrair: logradouro, numero, complemento, bairro, cidade, uf, cep, nome_titular
+IMPORTANTE para CRLV:
+- Se aparecer "ANO FAB/MOD: 2013/2014" ou "ANO: 2013/2014", extraia SEPARADAMENTE:
+  - ano_fabricacao: 2013 (primeiro número)
+  - ano_modelo: 2014 (segundo número)
+- Se aparecer apenas um ano, use-o para ambos os campos
+- SEMPRE retorne ano_fabricacao e ano_modelo como números inteiros separados
+
+### Comprovante de Residência (conta de luz, água, telefone, internet, gás, etc.)
+Extrair OBRIGATORIAMENTE:
+- logradouro (nome da rua/avenida/travessa SEM o número)
+- numero (apenas o número do endereço)
+- complemento (apto, bloco, casa, etc. ou null se não houver)
+- bairro (nome do bairro)
+- cidade (nome da cidade)
+- uf (sigla do estado com 2 letras, ex: SP, RJ, MG)
+- cep (formato 00000-000 ou 00000000)
+- nome_titular (nome da pessoa responsável na conta)
 
 ### Outro documento
 Identificar e extrair o que for possível
@@ -36,6 +72,7 @@ Identificar e extrair o que for possível
 - Para CPF, formate como 000.000.000-00
 - Para datas, formate como YYYY-MM-DD
 - Para placa, aceite formato antigo (ABC-1234) ou Mercosul (ABC1D23)
+- EXTRAIA TODOS OS CAMPOS mesmo que alguns estejam parcialmente visíveis
 
 ## RETORNE APENAS UM JSON VÁLIDO no formato:
 {
