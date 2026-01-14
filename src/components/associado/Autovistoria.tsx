@@ -27,7 +27,7 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
   const [vistoriaId, setVistoriaId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [kmIdentificado, setKmIdentificado] = useState<number | null>(null);
-  const [previewLocal, setPreviewLocal] = useState<string | null>(null);
+  const [previewsLocais, setPreviewsLocais] = useState<Record<string, string>>({});
   const inputRef = useRef<HTMLInputElement>(null);
 
   const criarAutovistoria = useCriarAutovistoria();
@@ -46,14 +46,12 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
   const avancarFoto = () => {
     if (indiceAtual < totalFotos - 1) {
       setIndiceAtual(prev => prev + 1);
-      setPreviewLocal(null);
     }
   };
 
   const voltarFoto = () => {
     if (indiceAtual > 0) {
       setIndiceAtual(prev => prev - 1);
-      setPreviewLocal(null);
     }
   };
 
@@ -92,10 +90,13 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
       return;
     }
 
-    // Criar preview local IMEDIATAMENTE
+    // Criar preview local IMEDIATAMENTE e guardar por fotoId
     const reader = new FileReader();
     reader.onload = () => {
-      setPreviewLocal(reader.result as string);
+      setPreviewsLocais(prev => ({
+        ...prev,
+        [fotoAtual.id]: reader.result as string,
+      }));
     };
     reader.readAsDataURL(file);
 
@@ -112,9 +113,6 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
         ...prev,
         [fotoAtual.id]: result.url,
       }));
-
-      // Limpar preview local após sucesso (URL real assume)
-      setPreviewLocal(null);
 
       // Se for odômetro e KM foi extraído, mostrar
       if (fotoAtual.id === 'odometro' && result.kmExtraido) {
@@ -215,10 +213,10 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
       <CardContent className="space-y-5">
         {/* Ícone ilustrativo */}
         <div className="bg-muted rounded-xl p-8 flex flex-col items-center justify-center min-h-[200px]">
-          {(fotoAtualEnviada || previewLocal) ? (
+          {(fotoAtualEnviada || previewsLocais[fotoAtual.id]) ? (
             <div className="relative w-full">
               <img 
-                src={fotosEnviadas[fotoAtual.id] || previewLocal || ''} 
+                src={fotosEnviadas[fotoAtual.id] || previewsLocais[fotoAtual.id] || ''}
                 alt={fotoAtual.label}
                 className="w-full max-h-48 object-contain rounded-lg"
               />
