@@ -367,7 +367,17 @@ serve(async (req) => {
     if (!contratoToken) {
       console.error('[autentique-create-by-token] Token não fornecido');
       return new Response(
-        JSON.stringify({ success: false, error: 'Token não fornecido' }),
+        JSON.stringify({ success: false, error: 'Token não fornecido', errorCode: 'TOKEN_MISSING' }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Validar formato UUID antes de fazer query no banco
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(contratoToken)) {
+      console.error('[autentique-create-by-token] Token com formato inválido:', contratoToken.substring(0, 20) + '...');
+      return new Response(
+        JSON.stringify({ success: false, error: 'Token inválido', errorCode: 'TOKEN_INVALID' }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -397,8 +407,15 @@ serve(async (req) => {
 
     if (contratoError) {
       console.error('[autentique-create-by-token] Erro ao buscar contrato:', contratoError.message, contratoError.details);
+      // Verificar se é erro de formato UUID
+      if (contratoError.message?.includes('invalid input syntax for type uuid')) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Token inválido', errorCode: 'TOKEN_INVALID' }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
       return new Response(
-        JSON.stringify({ success: false, error: `Erro ao buscar contrato: ${contratoError.message}` }),
+        JSON.stringify({ success: false, error: 'Erro ao buscar contrato', errorCode: 'DATABASE_ERROR' }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -406,7 +423,7 @@ serve(async (req) => {
     if (!contrato) {
       console.error('[autentique-create-by-token] Contrato não encontrado para o token');
       return new Response(
-        JSON.stringify({ success: false, error: 'Contrato não encontrado' }),
+        JSON.stringify({ success: false, error: 'Contrato não encontrado. O link pode ter expirado.', errorCode: 'CONTRACT_NOT_FOUND' }),
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -419,7 +436,7 @@ serve(async (req) => {
     if (!contrato.adesao_paga) {
       console.warn('[autentique-create-by-token] Adesão ainda não foi paga');
       return new Response(
-        JSON.stringify({ success: false, error: 'Adesão ainda não foi paga' }),
+        JSON.stringify({ success: false, error: 'Aguardando confirmação do pagamento', errorCode: 'PAYMENT_PENDING' }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
