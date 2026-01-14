@@ -110,20 +110,12 @@ interface CurrencyInputProps extends Omit<React.InputHTMLAttributes<HTMLInputEle
 }
 
 export function CurrencyInput({ value, onChange, className, ...props }: CurrencyInputProps) {
-  const [displayValue, setDisplayValue] = React.useState(
-    value ? maskCurrency((value * 100).toString()) : ''
-  );
-
-  React.useEffect(() => {
-    if (value !== undefined) {
-      setDisplayValue(maskCurrency((value * 100).toString()));
-    }
-  }, [value]);
+  // Calcular displayValue diretamente da prop (sem estado interno para evitar perda de foco)
+  const displayValue = value ? maskCurrency((value * 100).toString()) : '';
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const rawValue = e.target.value;
     const masked = maskCurrency(rawValue);
-    setDisplayValue(masked);
     onChange(parseCurrency(masked));
   };
 
