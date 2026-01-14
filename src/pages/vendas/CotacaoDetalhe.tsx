@@ -4,6 +4,7 @@ import { useCotacao, useCotacaoActions, useAceitarCotacaoEGerarContrato } from '
 import { useGerarContrato } from '@/hooks/useContratos';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -176,7 +177,6 @@ Ficou com alguma dúvida? Estou à disposição!
       
       // Atualizar etapa do lead para 'cotacao_enviada'
       if (cotacao.lead_id) {
-        const { supabase } = await import('@/integrations/supabase/client');
         await supabase
           .from('leads')
           .update({ etapa: 'cotacao_enviada', updated_at: new Date().toISOString() })
