@@ -33,6 +33,7 @@ import { useUpdateLead } from '@/hooks/useLeads';
 import { UnifiedDocumentUploader, type DocumentoUnificado } from './UnifiedDocumentUploader';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
 
 const wizardSchema = z.object({
   // Associado
@@ -504,11 +505,72 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
         });
       }
 
-      // 3. Criar contrato com dados do veículo e cliente
+      // 3. Criar lead retroativo se cotação não tem lead vinculado
+      let leadId = cotacao.lead_id;
+      
+      if (!leadId && data.nome) {
+        console.log('[Contrato] Criando lead retroativo a partir da cotação');
+        
+        // Buscar vendedor_id da cotação ou do usuário atual
+        let vendedorId = cotacao.vendedor_id;
+        if (!vendedorId) {
+          try {
+            const { data: userData } = await supabase.auth.getUser();
+            if (userData?.user) {
+              const { data: perfil } = await supabase
+                .from('profiles')
+                .select('id')
+                .eq('user_id', userData.user.id)
+                .single();
+              vendedorId = perfil?.id || null;
+            }
+          } catch (err) {
+            console.warn('[Contrato] Não foi possível obter vendedor atual:', err);
+          }
+        }
+        
+        // Criar lead usando array syntax para satisfazer o TypeScript
+        const { data: novoLead, error: leadError } = await supabase
+          .from('leads')
+          .insert([{
+            nome: data.nome,
+            telefone: data.telefone,
+            email: data.email || null,
+            cpf: data.cpf || null,
+            veiculo_marca: data.marca,
+            veiculo_modelo: data.modelo,
+            veiculo_ano: data.ano_fabricacao,
+            veiculo_placa: data.placa,
+            veiculo_fipe: data.valor_fipe || null,
+            origem: 'site' as const, // 'cotador' não existe no enum, usando 'site'
+            etapa: 'ganho' as const,
+            vendedor_id: vendedorId,
+            associado_id: associado.id,
+            plano_escolhido_id: cotacao.plano_id,
+          }])
+          .select('id')
+          .single();
+        
+        if (leadError) {
+          console.error('[Contrato] Erro ao criar lead retroativo:', leadError);
+        } else if (novoLead) {
+          leadId = novoLead.id;
+          console.log('[Contrato] Lead retroativo criado:', leadId);
+          
+          // Atualizar a cotação com o lead_id
+          await supabase
+            .from('cotacoes')
+            .update({ lead_id: leadId })
+            .eq('id', cotacao.id);
+        }
+      }
+
+      // 4. Criar contrato com dados do veículo e cliente
       const novoContrato = await createContrato.mutateAsync({
         cotacao_id: cotacao.id,
         plano_id: cotacao.plano_id,
         associado_id: associado.id,
+        lead_id: leadId, // Vincular lead (original ou criado retroativamente)
         valor_adesao: cotacao.valor_adesao,
         valor_mensal: cotacao.valor_total_mensal,
         data_inicio: new Date().toISOString().split('T')[0],
@@ -532,12 +594,13 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
         cliente_uf: data.uf || null,
       });
 
-      // 4. Atualizar status da cotação
+      // 5. Atualizar status da cotação
       await updateCotacao.mutateAsync({ id: cotacao.id, status: 'aceita' });
 
-      // 5. Atualizar lead se existir
-      if (cotacao.lead_id) {
-        await updateLead.mutateAsync({ id: cotacao.lead_id, etapa: 'ganho' });
+      // 6. Atualizar lead se existir (etapa já definida como 'ganho' na criação)
+      if (leadId && cotacao.lead_id) {
+        // Lead já existia, só atualizar etapa
+        await updateLead.mutateAsync({ id: leadId, etapa: 'ganho' });
       }
 
       toast.success('Contrato criado com sucesso!');
