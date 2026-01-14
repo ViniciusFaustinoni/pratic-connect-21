@@ -741,6 +741,42 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
                   </p>
                 </div>
 
+                {/* Resumo dos documentos identificados */}
+                {documentos.length > 0 && (
+                  <div className="flex gap-2 flex-wrap">
+                    {temDocPessoal && (
+                      <Badge variant="default" className="bg-green-600">
+                        <CheckCircle className="h-3 w-3 mr-1" />
+                        {tiposIdentificados.includes('cnh') ? 'CNH' : 'RG'}
+                      </Badge>
+                    )}
+                    {temCrlv && (
+                      <Badge variant="default" className="bg-green-600">
+                        <CheckCircle className="h-3 w-3 mr-1" />
+                        CRLV
+                      </Badge>
+                    )}
+                    {temComprovante && (
+                      <Badge variant="default" className="bg-green-600">
+                        <CheckCircle className="h-3 w-3 mr-1" />
+                        Comprovante de Residência
+                      </Badge>
+                    )}
+                    {!temDocPessoal && (
+                      <Badge variant="outline" className="text-amber-600 border-amber-600">
+                        <AlertCircle className="h-3 w-3 mr-1" />
+                        Falta: CNH ou RG
+                      </Badge>
+                    )}
+                    {!temCrlv && (
+                      <Badge variant="outline" className="text-amber-600 border-amber-600">
+                        <AlertCircle className="h-3 w-3 mr-1" />
+                        Falta: CRLV
+                      </Badge>
+                    )}
+                  </div>
+                )}
+
                 <UnifiedDocumentUploader
                   cotacaoId={cotacaoId}
                   onDocumentsChange={handleDocumentsChange}
@@ -754,20 +790,25 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
                   <div className="p-4 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-800">
                     <h4 className="font-medium text-green-700 dark:text-green-400 mb-2 flex items-center gap-2">
                       <CheckCircle className="h-4 w-4" />
-                      Dados Extraídos pela IA
+                      Dados Extraídos pela IA (editáveis na próxima etapa)
                     </h4>
                     <div className="grid grid-cols-2 gap-x-4">
                       <div className="space-y-1">
                         <DadoExtraido label="Nome" campo="nome" />
                         <DadoExtraido label="CPF" campo="cpf" />
                         <DadoExtraido label="RG" campo="rg" />
+                        <DadoExtraido label="CEP" campo="cep" />
                         <DadoExtraido label="Endereço" campo="logradouro" />
+                        <DadoExtraido label="Bairro" campo="bairro" />
                         <DadoExtraido label="Cidade" campo="cidade" />
+                        <DadoExtraido label="UF" campo="uf" />
                       </div>
                       <div className="space-y-1">
                         <DadoExtraido label="Placa" campo="placa" />
                         <DadoExtraido label="Marca" campo="marca" />
                         <DadoExtraido label="Modelo" campo="modelo" />
+                        <DadoExtraido label="Ano" campo="ano_fabricacao" />
+                        <DadoExtraido label="Cor" campo="cor" />
                         <DadoExtraido label="Renavam" campo="renavam" />
                         <DadoExtraido label="Chassi" campo="chassi" />
                         {dadosExtraidos.valor_fipe && (
