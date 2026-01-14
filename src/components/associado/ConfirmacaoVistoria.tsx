@@ -91,6 +91,23 @@ export function ConfirmacaoVistoria({
   
   const isGenerating = gerarAutentique.isPending || progressoGeracao !== null;
   const urlAssinatura = linkGerado || autentiqueUrl;
+  
+  // Função para exibir mensagem de erro amigável baseada no código de erro
+  const getMensagemErro = (error: string) => {
+    if (error.includes('Token inválido') || error.includes('TOKEN_INVALID')) {
+      return 'Link inválido. Solicite um novo link ao vendedor.';
+    }
+    if (error.includes('não encontrado') || error.includes('CONTRACT_NOT_FOUND')) {
+      return 'Contrato não encontrado. O link pode ter expirado.';
+    }
+    if (error.includes('pagamento') || error.includes('PAYMENT_PENDING')) {
+      return 'Aguardando confirmação do pagamento da adesão.';
+    }
+    if (error.includes('non-2xx') || error.includes('network') || error.includes('fetch')) {
+      return 'Erro de conexão. Verifique sua internet e tente novamente.';
+    }
+    return 'Erro ao gerar link. Tente novamente em alguns instantes.';
+  };
   return (
     <Card className="border-green-200 dark:border-green-900">
       <CardHeader className="text-center bg-green-50 dark:bg-green-950/30 rounded-t-lg">
@@ -196,7 +213,7 @@ export function ConfirmacaoVistoria({
               </h4>
             </div>
             <p className="text-sm text-yellow-700 dark:text-yellow-400">
-              {generationError || 'O link para assinatura está demorando mais que o esperado. Isso pode acontecer em momentos de alta demanda. Você também receberá o link por email.'}
+              {generationError ? getMensagemErro(generationError) : 'O link para assinatura está demorando mais que o esperado. Isso pode acontecer em momentos de alta demanda. Você também receberá o link por email.'}
             </p>
             <Button 
               variant="outline" 
