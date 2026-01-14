@@ -34,6 +34,7 @@ import { useSendToAutentique, useResendAutentique, useCancelAutentique, getWhats
 import { ContratoFormDialog, type PrefilledCotacaoData } from '@/components/contratos/ContratoFormDialog';
 import { ContratoDetailDrawer } from '@/components/contratos/ContratoDetailDrawer';
 import { toast } from 'sonner';
+import { useContratosRealtime } from '@/hooks/useContratosRealtime';
 
 const statusConfig: Record<string, { label: string; color: string; icon: typeof FileText }> = {
   rascunho: { label: 'Rascunho', color: 'bg-gray-100 text-gray-800', icon: FileText },
@@ -62,6 +63,9 @@ export default function Contratos() {
 
   const { isDiretor, isDesenvolvedor, isAdminMaster } = usePermissions();
   const canDeleteContratos = isDiretor || isDesenvolvedor || isAdminMaster;
+
+  // Ativar listener realtime para atualizações automáticas
+  useContratosRealtime();
 
   const { data: contratos, isLoading } = useContratos();
   const updateContrato = useUpdateContrato();
