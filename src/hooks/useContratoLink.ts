@@ -416,7 +416,13 @@ export function useGerarAutentiqueByToken() {
       });
       
       if (error) throw error;
-      if (!data?.success) throw new Error(data?.error || 'Erro ao gerar link de assinatura');
+      
+      if (!data?.success) {
+        // Propagar erro com código específico
+        const err = new Error(data?.error || 'Erro ao gerar link de assinatura') as Error & { code?: string };
+        err.code = data?.error_code || 'UNKNOWN_ERROR';
+        throw err;
+      }
       
       return data as { success: boolean; signatureLink: string; message: string };
     },
