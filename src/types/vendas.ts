@@ -77,6 +77,7 @@ export const ORIGEM_COLORS: Record<OrigemLead, string> = {
   parceiro: 'bg-teal-100 text-teal-800',
   outro: 'bg-gray-100 text-gray-800',
   api: 'bg-cyan-100 text-cyan-800',
+  cotador: 'bg-orange-100 text-orange-800',
 };
 
 // ============================================
@@ -177,6 +178,7 @@ export const ORIGENS_TODAS: OrigemLead[] = [
   'presencial',
   'parceiro',
   'api',
+  'cotador',
   'outro',
 ];
 

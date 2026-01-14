@@ -50,7 +50,8 @@ export type OrigemLead =
   | 'presencial'
   | 'parceiro'
   | 'outro'
-  | 'api';
+  | 'api'
+  | 'cotador';
 
 export type MotivoPerda =
   | 'preco'
@@ -534,6 +535,7 @@ export const ORIGEM_LABELS: Record<OrigemLead, string> = {
   parceiro: 'Parceiro',
   outro: 'Outro',
   api: 'API',
+  cotador: 'Cotador',
 };
 
 export const STATUS_ASSOCIADO_LABELS: Record<StatusAssociado, string> = {
