@@ -231,7 +231,7 @@ export function EtapaResultado({
           {planoSelecionado && onValorAdesaoChange && (
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pb-4 border-b border-border">
               <Label className="text-sm font-medium text-muted-foreground whitespace-nowrap">
-                Valor de Adesão:
+                Taxa de Filiação:
               </Label>
               <CurrencyInput
                 value={valorAdesao ?? planoSelecionado.valorAdesao ?? 0}

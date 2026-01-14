@@ -870,9 +870,9 @@ Adesão: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
               />
             </div>
 
-            {/* Campo de Adesão Manual - Obrigatório */}
+            {/* Campo de Taxa de Filiação - Obrigatório */}
             <div>
-              <Label className="text-sm font-semibold">Valor de Adesão *</Label>
+              <Label className="text-sm font-semibold">Taxa de Filiação *</Label>
               <FormField
                 control={form.control}
                 name="valor_adesao"
@@ -890,7 +890,7 @@ Adesão: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
                 )}
               />
               <p className="text-xs text-muted-foreground mt-1">
-                Informe o valor de adesão que será cobrado do cliente
+                Informe a taxa de filiação que será cobrada do associado
               </p>
             </div>
 
@@ -941,7 +941,7 @@ Adesão: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
                         </ul>
                         <Separator className="my-3" />
                         <div className="text-xs flex items-center gap-1">
-                          <span className="text-muted-foreground">Adesão: </span>
+                          <span className="text-muted-foreground">Filiação: </span>
                           <span className="font-medium text-primary">{formatCurrency(valorAdesao || 0)}</span>
                         </div>
                       </CardContent>
@@ -995,7 +995,7 @@ Adesão: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
                     <div className="flex flex-wrap items-center gap-4 mt-3 pt-3 border-t text-sm">
                       <div className="flex flex-col gap-1">
                         <div className="flex items-center gap-1">
-                          <span className="text-muted-foreground">Adesão:</span>
+                          <span className="text-muted-foreground">Filiação:</span>
                           <FormField
                             control={form.control}
                             name="valor_adesao"
@@ -1019,7 +1019,7 @@ Adesão: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
                         {valorAdesao <= 0 && (
                           <p className="text-xs text-destructive flex items-center gap-1">
                             <AlertCircle className="h-3 w-3" />
-                            O valor de adesão não pode ser zero
+                            A taxa de filiação não pode ser zero
                           </p>
                         )}
                       </div>
@@ -1092,19 +1092,19 @@ Adesão: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
         </Form>
       </DialogContent>
 
-      {/* Dialog de Confirmação de Valor de Adesão */}
+      {/* Dialog de Confirmação de Taxa de Filiação */}
       <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar Valor de Adesão</AlertDialogTitle>
+            <AlertDialogTitle>Confirmar Taxa de Filiação</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-4">
-                <p>Você está definindo o valor de adesão como:</p>
+                <p>Você está definindo a taxa de filiação como:</p>
                 <div className="text-3xl font-bold text-center text-primary py-4 bg-primary/5 rounded-lg">
                   {formatCurrency(pendingFormData?.valor_adesao || 0)}
                 </div>
                 <p className="text-sm text-muted-foreground text-center">
-                  Este valor será cobrado do cliente. Confirma?
+                  Este valor será cobrado do associado. Confirma?
                 </p>
               </div>
             </AlertDialogDescription>

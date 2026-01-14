@@ -120,9 +120,9 @@ export function PlanoCardCotacao({
           {isSelected ? 'Plano Selecionado' : 'Selecionar este plano'}
         </Button>
 
-        {/* Adesão */}
+        {/* Filiação */}
         <p className="text-xs text-center text-muted-foreground">
-          Adesão: {formatCurrency(plano.valorAdesao)}
+          Filiação: {formatCurrency(plano.valorAdesao)}
         </p>
       </CardContent>
     </Card>

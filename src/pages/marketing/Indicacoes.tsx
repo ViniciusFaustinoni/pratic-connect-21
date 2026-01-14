@@ -411,7 +411,7 @@ export default function Indicacoes() {
                 Ranking de Indicadores
               </CardTitle>
               <CardDescription>
-                Associados que mais indicaram novos clientes
+                Associados que mais indicaram novos associados
               </CardDescription>
             </CardHeader>
             <CardContent className="p-0">

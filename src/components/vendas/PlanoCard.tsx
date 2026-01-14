@@ -70,7 +70,7 @@ export function PlanoCard({ plano, selecionado, onSelecionar }: PlanoCardProps) 
       {/* Valores */}
       <div className="flex items-end justify-between gap-4 mb-4 pl-3">
         <div>
-          <span className="text-xs text-muted-foreground">Adesão</span>
+          <span className="text-xs text-muted-foreground">Filiação</span>
           <p className="font-medium">{formatCurrency(plano.valorAdesao)}</p>
         </div>
         <div className="text-right">
