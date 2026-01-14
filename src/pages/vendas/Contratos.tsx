@@ -35,14 +35,17 @@ import { ContratoFormDialog, type PrefilledCotacaoData } from '@/components/cont
 import { ContratoDetailDrawer } from '@/components/contratos/ContratoDetailDrawer';
 import { toast } from 'sonner';
 
-const statusConfig: Record<StatusContrato, { label: string; color: string; icon: typeof FileText }> = {
+const statusConfig: Record<string, { label: string; color: string; icon: typeof FileText }> = {
   rascunho: { label: 'Rascunho', color: 'bg-gray-100 text-gray-800', icon: FileText },
   pendente: { label: 'Pendente', color: 'bg-gray-100 text-gray-800', icon: Clock },
+  pendente_assinatura: { label: 'Aguardando Assinatura', color: 'bg-amber-100 text-amber-800', icon: Clock },
   enviado: { label: 'Enviado', color: 'bg-yellow-100 text-yellow-800', icon: Send },
+  visualizado: { label: 'Visualizado', color: 'bg-indigo-100 text-indigo-800', icon: Eye },
   assinado: { label: 'Assinado', color: 'bg-green-100 text-green-800', icon: CheckCircle },
   ativo: { label: 'Ativo', color: 'bg-blue-100 text-blue-800', icon: CheckCircle },
   suspenso: { label: 'Suspenso', color: 'bg-orange-100 text-orange-800', icon: Pause },
   cancelado: { label: 'Cancelado', color: 'bg-red-100 text-red-800', icon: XCircle },
+  expirado: { label: 'Expirado', color: 'bg-gray-100 text-gray-600', icon: Clock },
 };
 
 type TabValue = 'all' | StatusContrato;
@@ -357,7 +360,7 @@ export default function Contratos() {
                 </TableRow>
               ) : (
                 filteredContratos.map((contrato) => {
-                  const status = statusConfig[contrato.status];
+                  const status = statusConfig[contrato.status] || { label: contrato.status, color: 'bg-gray-100 text-gray-800', icon: FileText };
                   const clientName = contrato.associados?.nome || contrato.leads?.nome || '-';
                   const clientPhone = contrato.associados?.telefone || contrato.leads?.telefone;
                   const veiculoMarca = contrato.veiculo_marca || contrato.leads?.veiculo_marca || contrato.cotacoes?.veiculo_marca;
