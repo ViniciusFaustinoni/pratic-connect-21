@@ -544,7 +544,7 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
     }
   };
 
-  // Componente para exibir dado extraído
+  // Componente para exibir dado extraído (somente leitura - usado no Step 2)
   const DadoExtraido = ({ label, campo }: { label: string; campo: string }) => {
     const dado = dadosExtraidos[campo];
     if (!dado) return null;
@@ -555,6 +555,76 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
         <span className="font-medium">{dado.value}</span>
         <Badge variant="outline" className="text-xs">via {dado.fonte}</Badge>
       </div>
+    );
+  };
+
+  // Componente para dado extraído EDITÁVEL (usado no Step 3 - Revisão)
+  const DadoExtraidoEditavel = ({ 
+    label, 
+    campo, 
+    name,
+    inputType = 'text',
+    placeholder,
+    colSpan
+  }: { 
+    label: string; 
+    campo: string; 
+    name: keyof WizardFormData;
+    inputType?: 'text' | 'cpf' | 'telefone' | 'cep' | 'placa';
+    placeholder?: string;
+    colSpan?: number;
+  }) => {
+    const dado = dadosExtraidos[campo];
+    
+    const renderInput = (field: any) => {
+      const baseProps = {
+        value: field.value?.toString() || '',
+        onChange: field.onChange
+      };
+      
+      switch (inputType) {
+        case 'cpf':
+          return <CpfInput {...baseProps} />;
+        case 'telefone':
+          return <TelefoneInput {...baseProps} />;
+        case 'cep':
+          return <CepInput {...baseProps} onCepComplete={fetchCep} />;
+        case 'placa':
+          return <PlacaInput {...baseProps} />;
+        default:
+          return <Input {...field} value={field.value?.toString() || ''} placeholder={placeholder} />;
+      }
+    };
+
+    return (
+      <FormField
+        control={form.control}
+        name={name}
+        render={({ field }) => (
+          <FormItem className={colSpan ? `col-span-${colSpan}` : undefined}>
+            <FormLabel className="flex items-center gap-2 flex-wrap">
+              {dado ? (
+                <CheckCircle className="h-4 w-4 text-green-500" />
+              ) : (
+                <AlertCircle className="h-4 w-4 text-amber-500" />
+              )}
+              {label}
+              {dado && (
+                <Badge variant="outline" className="text-xs">
+                  via {dado.fonte}
+                </Badge>
+              )}
+              {!dado && (
+                <span className="text-xs text-muted-foreground">(não detectado)</span>
+              )}
+            </FormLabel>
+            <FormControl>
+              {renderInput(field)}
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
     );
   };
 
@@ -728,7 +798,12 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
             {/* Step 3: Revisão e Confirmação */}
             {step === 3 && (
               <div className="space-y-6">
-                <h3 className="text-lg font-semibold">Revisão dos Dados</h3>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold">Revisão dos Dados</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Todos os campos são editáveis. Corrija se necessário.
+                  </p>
+                </div>
 
                 {/* Dados Pessoais */}
                 <div className="p-4 bg-muted/50 rounded-lg space-y-4">
@@ -738,34 +813,20 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
                   </h4>
                   
                   <div className="grid grid-cols-2 gap-4">
-                    {dadosExtraidos.nome ? (
-                      <DadoExtraido label="Nome" campo="nome" />
-                    ) : (
-                      <CampoFaltante name="nome" label="Nome Completo" placeholder="Digite o nome completo" />
-                    )}
+                    <DadoExtraidoEditavel 
+                      label="Nome" 
+                      campo="nome" 
+                      name="nome" 
+                      placeholder="Digite o nome completo"
+                    />
                     
-                    {dadosExtraidos.cpf ? (
-                      <DadoExtraido label="CPF" campo="cpf" />
-                    ) : (
-                      <FormField
-                        control={form.control}
-                        name="cpf"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel className="flex items-center gap-2">
-                              <AlertCircle className="h-4 w-4 text-amber-500" />
-                              CPF <span className="text-xs text-muted-foreground">(não detectado)</span>
-                            </FormLabel>
-                            <FormControl>
-                              <CpfInput value={field.value} onChange={field.onChange} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    )}
+                    <DadoExtraidoEditavel 
+                      label="CPF" 
+                      campo="cpf" 
+                      name="cpf" 
+                      inputType="cpf"
+                    />
                     
-                    {/* Email sempre precisa ser preenchido */}
                     <FormField
                       control={form.control}
                       name="email"
@@ -780,7 +841,6 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
                       )}
                     />
                     
-                    {/* Telefone sempre precisa ser preenchido */}
                     <FormField
                       control={form.control}
                       name="telefone"
@@ -800,107 +860,49 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
                   <div className="pt-2 border-t">
                     <p className="text-sm font-medium mb-3">Endereço</p>
                     <div className="grid grid-cols-3 gap-4">
-                      {dadosExtraidos.cep ? (
-                        <DadoExtraido label="CEP" campo="cep" />
-                      ) : (
-                        <FormField
-                          control={form.control}
-                          name="cep"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>CEP</FormLabel>
-                              <FormControl>
-                                <CepInput value={field.value || ''} onChange={field.onChange} onCepComplete={fetchCep} />
-                              </FormControl>
-                            </FormItem>
-                          )}
-                        />
-                      )}
+                      <DadoExtraidoEditavel 
+                        label="CEP" 
+                        campo="cep" 
+                        name="cep" 
+                        inputType="cep"
+                      />
                       
-                      {dadosExtraidos.logradouro ? (
-                        <div className="col-span-2"><DadoExtraido label="Logradouro" campo="logradouro" /></div>
-                      ) : (
-                        <FormField
-                          control={form.control}
-                          name="logradouro"
-                          render={({ field }) => (
-                            <FormItem className="col-span-2">
-                              <FormLabel>Logradouro</FormLabel>
-                              <FormControl>
-                                <Input placeholder="Rua, Avenida..." {...field} value={field.value || ''} />
-                              </FormControl>
-                            </FormItem>
-                          )}
+                      <div className="col-span-2">
+                        <DadoExtraidoEditavel 
+                          label="Logradouro" 
+                          campo="logradouro" 
+                          name="logradouro" 
+                          placeholder="Rua, Avenida..."
                         />
-                      )}
+                      </div>
                       
-                      {dadosExtraidos.numero ? (
-                        <DadoExtraido label="Número" campo="numero" />
-                      ) : (
-                        <FormField
-                          control={form.control}
-                          name="numero"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Número</FormLabel>
-                              <FormControl>
-                                <Input placeholder="123" {...field} value={field.value || ''} />
-                              </FormControl>
-                            </FormItem>
-                          )}
-                        />
-                      )}
+                      <DadoExtraidoEditavel 
+                        label="Número" 
+                        campo="numero" 
+                        name="numero" 
+                        placeholder="123"
+                      />
                       
-                      {dadosExtraidos.bairro ? (
-                        <DadoExtraido label="Bairro" campo="bairro" />
-                      ) : (
-                        <FormField
-                          control={form.control}
-                          name="bairro"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Bairro</FormLabel>
-                              <FormControl>
-                                <Input placeholder="Bairro" {...field} value={field.value || ''} />
-                              </FormControl>
-                            </FormItem>
-                          )}
-                        />
-                      )}
+                      <DadoExtraidoEditavel 
+                        label="Bairro" 
+                        campo="bairro" 
+                        name="bairro" 
+                        placeholder="Bairro"
+                      />
                       
-                      {dadosExtraidos.cidade ? (
-                        <DadoExtraido label="Cidade" campo="cidade" />
-                      ) : (
-                        <FormField
-                          control={form.control}
-                          name="cidade"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Cidade</FormLabel>
-                              <FormControl>
-                                <Input placeholder="Cidade" {...field} value={field.value || ''} />
-                              </FormControl>
-                            </FormItem>
-                          )}
-                        />
-                      )}
+                      <DadoExtraidoEditavel 
+                        label="Cidade" 
+                        campo="cidade" 
+                        name="cidade" 
+                        placeholder="Cidade"
+                      />
                       
-                      {dadosExtraidos.uf ? (
-                        <DadoExtraido label="UF" campo="uf" />
-                      ) : (
-                        <FormField
-                          control={form.control}
-                          name="uf"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>UF</FormLabel>
-                              <FormControl>
-                                <Input placeholder="SP" maxLength={2} {...field} value={field.value || ''} />
-                              </FormControl>
-                            </FormItem>
-                          )}
-                        />
-                      )}
+                      <DadoExtraidoEditavel 
+                        label="UF" 
+                        campo="uf" 
+                        name="uf" 
+                        placeholder="SP"
+                      />
                     </div>
                   </div>
                 </div>
@@ -913,66 +915,61 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
                   </h4>
                   
                   <div className="grid grid-cols-2 gap-4">
-                    {dadosExtraidos.placa ? (
-                      <DadoExtraido label="Placa" campo="placa" />
-                    ) : (
-                      <FormField
-                        control={form.control}
-                        name="placa"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel className="flex items-center gap-2">
-                              <AlertCircle className="h-4 w-4 text-amber-500" />
-                              Placa <span className="text-xs text-muted-foreground">(não detectado)</span>
-                            </FormLabel>
-                            <FormControl>
-                              <PlacaInput value={field.value} onChange={field.onChange} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    )}
+                    <DadoExtraidoEditavel 
+                      label="Placa" 
+                      campo="placa" 
+                      name="placa" 
+                      inputType="placa"
+                    />
                     
-                    {dadosExtraidos.marca ? (
-                      <DadoExtraido label="Marca" campo="marca" />
-                    ) : (
-                      <CampoFaltante name="marca" label="Marca" placeholder="Toyota" />
-                    )}
+                    <DadoExtraidoEditavel 
+                      label="Marca" 
+                      campo="marca" 
+                      name="marca" 
+                      placeholder="Toyota"
+                    />
                     
-                    {dadosExtraidos.modelo ? (
-                      <DadoExtraido label="Modelo" campo="modelo" />
-                    ) : (
-                      <CampoFaltante name="modelo" label="Modelo" placeholder="Corolla XEi" />
-                    )}
+                    <DadoExtraidoEditavel 
+                      label="Modelo" 
+                      campo="modelo" 
+                      name="modelo" 
+                      placeholder="Corolla XEi"
+                    />
                     
-                    {dadosExtraidos.ano_fabricacao ? (
-                      <DadoExtraido label="Ano" campo="ano_fabricacao" />
-                    ) : (
-                      <CampoFaltante name="ano_fabricacao" label="Ano Fabricação" placeholder="2023" />
-                    )}
+                    <DadoExtraidoEditavel 
+                      label="Ano Fabricação" 
+                      campo="ano_fabricacao" 
+                      name="ano_fabricacao" 
+                      placeholder="2023"
+                    />
                     
-                    {!dadosExtraidos.ano_modelo && (
-                      <CampoFaltante name="ano_modelo" label="Ano Modelo" placeholder="2024" />
-                    )}
+                    <DadoExtraidoEditavel 
+                      label="Ano Modelo" 
+                      campo="ano_modelo" 
+                      name="ano_modelo" 
+                      placeholder="2024"
+                    />
                     
-                    {dadosExtraidos.cor ? (
-                      <DadoExtraido label="Cor" campo="cor" />
-                    ) : (
-                      <CampoFaltante name="cor" label="Cor" placeholder="Prata" />
-                    )}
+                    <DadoExtraidoEditavel 
+                      label="Cor" 
+                      campo="cor" 
+                      name="cor" 
+                      placeholder="Prata"
+                    />
                     
-                    {dadosExtraidos.renavam ? (
-                      <DadoExtraido label="Renavam" campo="renavam" />
-                    ) : (
-                      <CampoFaltante name="renavam" label="Renavam" placeholder="00000000000" />
-                    )}
+                    <DadoExtraidoEditavel 
+                      label="Renavam" 
+                      campo="renavam" 
+                      name="renavam" 
+                      placeholder="00000000000"
+                    />
                     
-                    {dadosExtraidos.chassi ? (
-                      <DadoExtraido label="Chassi" campo="chassi" />
-                    ) : (
-                      <CampoFaltante name="chassi" label="Chassi" placeholder="9BRXXXXXXXXXXXXXXXX" />
-                    )}
+                    <DadoExtraidoEditavel 
+                      label="Chassi" 
+                      campo="chassi" 
+                      name="chassi" 
+                      placeholder="9BRXXXXXXXXXXXXXXXX"
+                    />
                     
                     {/* Valor FIPE */}
                     {dadosExtraidos.valor_fipe ? (
