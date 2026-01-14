@@ -251,7 +251,7 @@ export function ConfirmacaoVistoria({
             </div>
             
             <p className="text-xs text-muted-foreground text-center">
-              Isso geralmente leva de 5 a 10 segundos...
+              Isso pode levar de 10 a 30 segundos. Você também receberá o link por e-mail.
             </p>
           </div>
         )}
