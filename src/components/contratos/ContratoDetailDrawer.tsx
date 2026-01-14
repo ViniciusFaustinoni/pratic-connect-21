@@ -605,8 +605,37 @@ export function ContratoDetailDrawer({ contratoId, open, onClose }: ContratoDeta
                   </div>
                 )}
 
-                {/* Enviar para Assinatura - SOMENTE após adesão paga */}
-                {contrato.adesao_paga && !contrato.autentique_documento_id && (
+                {/* Status da Assinatura - quando já foi enviado */}
+                {(contrato.autentique_documento_id || ['pendente_assinatura', 'enviado', 'visualizado'].includes(contrato.status)) && (
+                  <div className="bg-muted/50 rounded-lg p-4 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Status da Assinatura</span>
+                      <Badge className={
+                        contrato.status === 'assinado' ? 'bg-green-100 text-green-800' :
+                        contrato.status === 'visualizado' ? 'bg-indigo-100 text-indigo-800' :
+                        'bg-yellow-100 text-yellow-800'
+                      }>
+                        {contrato.status === 'visualizado' && <Eye className="mr-1 h-3 w-3" />}
+                        {contrato.status === 'pendente_assinatura' && <Clock className="mr-1 h-3 w-3" />}
+                        {contrato.status === 'enviado' && <Send className="mr-1 h-3 w-3" />}
+                        {contrato.status === 'assinado' && <CheckCircle className="mr-1 h-3 w-3" />}
+                        {contrato.status === 'visualizado' ? 'Visualizado' :
+                         contrato.status === 'assinado' ? 'Assinado' :
+                         'Aguardando Assinatura'}
+                      </Badge>
+                    </div>
+                    {contrato.updated_at && (contrato.autentique_documento_id || ['pendente_assinatura', 'enviado'].includes(contrato.status)) && (
+                      <p className="text-xs text-muted-foreground">
+                        Atualizado em: {new Date(contrato.updated_at).toLocaleString('pt-BR')}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Enviar para Assinatura - SOMENTE quando nunca foi enviado */}
+                {contrato.adesao_paga && 
+                 !contrato.autentique_documento_id && 
+                 !['pendente_assinatura', 'enviado', 'visualizado', 'assinado', 'ativo'].includes(contrato.status) && (
                   <Button 
                     onClick={handleEnviar} 
                     className="w-full"
@@ -621,7 +650,9 @@ export function ContratoDetailDrawer({ contratoId, open, onClose }: ContratoDeta
                   </Button>
                 )}
 
-                {contrato.status === 'enviado' && (
+                {/* Reenviar - quando já foi enviado mas não assinado */}
+                {(contrato.autentique_documento_id || ['pendente_assinatura', 'enviado', 'visualizado'].includes(contrato.status)) &&
+                 !['assinado', 'ativo', 'cancelado'].includes(contrato.status) && (
                   <Button 
                     onClick={handleEnviar} 
                     variant="outline"
@@ -637,6 +668,7 @@ export function ContratoDetailDrawer({ contratoId, open, onClose }: ContratoDeta
                   </Button>
                 )}
 
+                {/* Ativar - quando assinado */}
                 {contrato.status === 'assinado' && (
                   <Button onClick={handleAtivar} className="w-full">
                     <CheckCircle className="mr-2 h-4 w-4" />
