@@ -111,6 +111,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
   const valorFipe = form.watch('valor_fipe');
   const planoId = form.watch('plano_id');
   const validadeDias = form.watch('validade_dias');
+  const valorAdesao = form.watch('valor_adesao');
   const { data: tabelasPreco } = useTabelaPrecoByFipe(valorFipe);
 
   // Combinar planos com seus preços para o valor FIPE atual
@@ -471,7 +472,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
     form.setValue('valor_cota', planoPreco.valorCota);
     form.setValue('taxa_administrativa', planoPreco.taxaAdmin);
     form.setValue('valor_rastreamento', planoPreco.rastreamento);
-    form.setValue('valor_adesao', planoPreco.plano.valor_adesao);
+    // valor_adesao não é mais definido automaticamente - o consultor preenche manualmente
     form.setValue('valor_total_mensal', planoPreco.totalMensal);
     setPlanoSelecionadoData(planoPreco);
   };
@@ -515,7 +516,7 @@ Veículo: ${veiculoInfo}
 FIPE: ${formatCurrency(valorFipe)}
 Plano: ${planoSelecionadoData.plano.nome}
 Valor Mensal: ${formatCurrency(planoSelecionadoData.totalMensal)}
-Adesão: ${formatCurrency(planoSelecionadoData.plano.valor_adesao)}
+Adesão: ${formatCurrency(form.getValues('valor_adesao') || 0)}
 Validade: ${validadeDias} dias`;
     
     navigator.clipboard.writeText(texto);
@@ -535,7 +536,7 @@ Veículo: ${veiculoInfo}
 FIPE: ${formatCurrency(valorFipe)}
 Plano: ${planoSelecionadoData.plano.nome}
 Valor Mensal: ${formatCurrency(planoSelecionadoData.totalMensal)}
-Adesão: ${formatCurrency(planoSelecionadoData.plano.valor_adesao)}`);
+Adesão: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
     
     window.open(`https://wa.me/?text=${texto}`, '_blank');
   };
@@ -836,6 +837,30 @@ Adesão: ${formatCurrency(planoSelecionadoData.plano.valor_adesao)}`);
               />
             </div>
 
+            {/* Campo de Adesão Manual - Obrigatório */}
+            <div>
+              <Label className="text-sm font-semibold">Valor de Adesão *</Label>
+              <FormField
+                control={form.control}
+                name="valor_adesao"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormControl>
+                      <CurrencyInput 
+                        value={field.value}
+                        onChange={field.onChange}
+                        placeholder="R$ 0,00"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Informe o valor de adesão que será cobrado do cliente
+              </p>
+            </div>
+
             <Separator />
 
             {/* BLOCO 3: PLANOS - Sempre visível */}
@@ -884,7 +909,7 @@ Adesão: ${formatCurrency(planoSelecionadoData.plano.valor_adesao)}`);
                         <Separator className="my-3" />
                         <div className="text-xs">
                           <span className="text-muted-foreground">Adesão: </span>
-                          <span className="font-medium">{formatCurrency(planoPreco.plano.valor_adesao)}</span>
+                          <span className="font-medium">{formatCurrency(valorAdesao || 0)}</span>
                         </div>
                       </CardContent>
                     </Card>
