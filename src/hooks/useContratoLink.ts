@@ -8,7 +8,7 @@ export function useContratoByToken(token: string | undefined) {
   const [pollingStartTime, setPollingStartTime] = useState<number | null>(null);
   const [isAutentiqueTimeout, setIsAutentiqueTimeout] = useState(false);
   
-  const POLLING_TIMEOUT_MS = 60000; // 60 segundos de timeout
+  const POLLING_TIMEOUT_MS = 90000; // 90 segundos de timeout (API Autentique pode demorar)
   
   const query = useQuery({
     queryKey: ['contrato-publico', token],
