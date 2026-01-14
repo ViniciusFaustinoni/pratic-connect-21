@@ -176,7 +176,17 @@ export function useAtivarContrato() {
 
   return useMutation({
     mutationFn: async (contratoId: string) => {
-      const { error } = await supabase
+      // 1. Buscar contrato para pegar associado_id
+      const { data: contrato, error: fetchError } = await supabase
+        .from('contratos')
+        .select('associado_id')
+        .eq('id', contratoId)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      // 2. Atualizar contrato
+      const { error: contratoError } = await supabase
         .from('contratos')
         .update({
           status: 'ativo',
@@ -184,11 +194,27 @@ export function useAtivarContrato() {
         })
         .eq('id', contratoId);
 
-      if (error) throw error;
+      if (contratoError) throw contratoError;
+
+      // 3. Atualizar associado para ativo (se existir)
+      if (contrato?.associado_id) {
+        const { error: associadoError } = await supabase
+          .from('associados')
+          .update({
+            status: 'ativo',
+            data_adesao: new Date().toISOString().split('T')[0],
+          })
+          .eq('id', contrato.associado_id);
+
+        if (associadoError) {
+          console.error('Erro ao ativar associado:', associadoError);
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ativacoes'] });
-      toast.success('Contrato ativado com sucesso!');
+      queryClient.invalidateQueries({ queryKey: ['associados'] });
+      toast.success('Contrato e associado ativados com sucesso!');
     },
     onError: (error) => {
       console.error('Erro ao ativar contrato:', error);
