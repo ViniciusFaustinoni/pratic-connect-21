@@ -786,92 +786,95 @@ Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
                 </div>
               )}
 
-              {/* Divisor */}
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t" />
-                </div>
-                <div className="relative flex justify-center">
-                  <span className="bg-background px-3 text-xs text-muted-foreground">
-                    ou selecione manualmente
-                  </span>
-                </div>
-              </div>
+              {/* Divisor e Seleção manual - só aparece se FIPE não retornou dados */}
+              {!(veiculoEncontrado?.success && veiculoEncontrado.vehicleData && valorFipe > 0) && (
+                <>
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t" />
+                    </div>
+                    <div className="relative flex justify-center">
+                      <span className="bg-background px-3 text-xs text-muted-foreground">
+                        ou selecione manualmente
+                      </span>
+                    </div>
+                  </div>
 
-              {/* Seleção manual - grid compacto */}
-              <div className="grid grid-cols-3 gap-2">
-                <div className="space-y-1">
-                  <Label className="text-xs">Marca</Label>
-                  <Select 
-                    value={marcaSelecionada} 
-                    onValueChange={handleMarcaChange}
-                    disabled={loadingMarcas}
-                  >
-                    <SelectTrigger className="h-9">
-                      {loadingMarcas ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      ) : (
-                        <SelectValue placeholder="Marca" />
-                      )}
-                    </SelectTrigger>
-                    <SelectContent>
-                      {marcas.map((marca) => (
-                        <SelectItem key={marca.codigo} value={marca.codigo}>
-                          {marca.nome}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Marca</Label>
+                      <Select 
+                        value={marcaSelecionada} 
+                        onValueChange={handleMarcaChange}
+                        disabled={loadingMarcas}
+                      >
+                        <SelectTrigger className="h-9">
+                          {loadingMarcas ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <SelectValue placeholder="Marca" />
+                          )}
+                        </SelectTrigger>
+                        <SelectContent>
+                          {marcas.map((marca) => (
+                            <SelectItem key={marca.codigo} value={marca.codigo}>
+                              {marca.nome}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-                <div className="space-y-1">
-                  <Label className="text-xs">Modelo</Label>
-                  <Select 
-                    value={modeloSelecionado} 
-                    onValueChange={handleModeloChange}
-                    disabled={!marcaSelecionada || loadingModelos}
-                  >
-                    <SelectTrigger className="h-9">
-                      {loadingModelos ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      ) : (
-                        <SelectValue placeholder="Modelo" />
-                      )}
-                    </SelectTrigger>
-                    <SelectContent>
-                      {modelos.map((modelo) => (
-                        <SelectItem key={modelo.codigo} value={modelo.codigo.toString()}>
-                          {modelo.nome}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Modelo</Label>
+                      <Select 
+                        value={modeloSelecionado} 
+                        onValueChange={handleModeloChange}
+                        disabled={!marcaSelecionada || loadingModelos}
+                      >
+                        <SelectTrigger className="h-9">
+                          {loadingModelos ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <SelectValue placeholder="Modelo" />
+                          )}
+                        </SelectTrigger>
+                        <SelectContent>
+                          {modelos.map((modelo) => (
+                            <SelectItem key={modelo.codigo} value={modelo.codigo.toString()}>
+                              {modelo.nome}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-                <div className="space-y-1">
-                  <Label className="text-xs">Ano</Label>
-                  <Select 
-                    value={anoSelecionado} 
-                    onValueChange={setAnoSelecionado}
-                    disabled={!modeloSelecionado || loadingAnos}
-                  >
-                    <SelectTrigger className="h-9">
-                      {loadingAnos ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      ) : (
-                        <SelectValue placeholder="Ano" />
-                      )}
-                    </SelectTrigger>
-                    <SelectContent>
-                      {anos.map((ano) => (
-                        <SelectItem key={ano.codigo} value={ano.codigo}>
-                          {ano.nome}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Ano</Label>
+                      <Select 
+                        value={anoSelecionado} 
+                        onValueChange={setAnoSelecionado}
+                        disabled={!modeloSelecionado || loadingAnos}
+                      >
+                        <SelectTrigger className="h-9">
+                          {loadingAnos ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <SelectValue placeholder="Ano" />
+                          )}
+                        </SelectTrigger>
+                        <SelectContent>
+                          {anos.map((ano) => (
+                            <SelectItem key={ano.codigo} value={ano.codigo}>
+                              {ano.nome}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
 
             <Separator />
