@@ -14,6 +14,16 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Form,
   FormControl,
   FormField,
@@ -75,6 +85,10 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
   const [placa, setPlaca] = useState('');
   const [buscandoPlaca, setBuscandoPlaca] = useState(false);
   const [veiculoEncontrado, setVeiculoEncontrado] = useState<PlateResult | null>(null);
+
+  // Estados para confirmação de valor de adesão
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [pendingFormData, setPendingFormData] = useState<CotacaoFormData | null>(null);
 
   // Estados para seleção FIPE manual
   const [marcas, setMarcas] = useState<FipeMarca[]>([]);
@@ -541,23 +555,41 @@ Adesão: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
     window.open(`https://wa.me/?text=${texto}`, '_blank');
   };
 
-  const onSubmit = async (data: CotacaoFormData) => {
+  // Abre o popup de confirmação de adesão
+  const onSubmit = (data: CotacaoFormData) => {
+    // Validação extra (redundante mas segura)
+    if (data.valor_adesao <= 0) {
+      toast.error('O valor de adesão deve ser maior que zero!');
+      return;
+    }
+    
+    // Guardar dados e abrir popup de confirmação
+    setPendingFormData(data);
+    setShowConfirmDialog(true);
+  };
+
+  // Handler quando confirmar no popup
+  const handleConfirmSubmit = async () => {
+    if (!pendingFormData) return;
+    
+    setShowConfirmDialog(false);
+    
     try {
       // Extrair ano numérico do texto (ex: "2022 Gasolina" -> 2022)
       const anoTexto = getAnoNome();
       const anoNumerico = anoTexto ? parseInt(anoTexto.split(' ')[0]) : null;
       
       await createCotacao.mutateAsync({
-        lead_id: data.lead_id,
-        plano_id: data.plano_id,
-        valor_fipe: data.valor_fipe,
-        valor_cota: data.valor_cota,
-        taxa_administrativa: data.taxa_administrativa,
-        valor_rastreamento: data.valor_rastreamento,
-        valor_adesao: data.valor_adesao,
-        valor_total_mensal: data.valor_total_mensal,
+        lead_id: pendingFormData.lead_id,
+        plano_id: pendingFormData.plano_id,
+        valor_fipe: pendingFormData.valor_fipe,
+        valor_cota: pendingFormData.valor_cota,
+        taxa_administrativa: pendingFormData.taxa_administrativa,
+        valor_rastreamento: pendingFormData.valor_rastreamento,
+        valor_adesao: pendingFormData.valor_adesao,
+        valor_total_mensal: pendingFormData.valor_total_mensal,
         valor_assistencia: planoSelecionadoData?.assistencia || 0,
-        validade_dias: data.validade_dias,
+        validade_dias: pendingFormData.validade_dias,
         status: 'rascunho',
         // Dados do veículo
         veiculo_marca: getMarcaNome() || null,
@@ -579,6 +611,7 @@ Adesão: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
       setAnoSelecionado('');
       setModelos([]);
       setAnos([]);
+      setPendingFormData(null);
       
       // Fechar modal
       onOpenChange(false);
@@ -960,24 +993,35 @@ Adesão: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-4 mt-3 pt-3 border-t text-sm">
-                      <div className="flex items-center gap-1">
-                        <span className="text-muted-foreground">Adesão:</span>
-                        <FormField
-                          control={form.control}
-                          name="valor_adesao"
-                          render={({ field }) => (
-                            <FormItem className="flex items-center gap-1 space-y-0">
-                              <FormControl>
-                                <CurrencyInput 
-                                  value={field.value}
-                                  onChange={field.onChange}
-                                  className="w-28 h-7 text-center font-medium"
-                                  placeholder="R$ 0,00"
-                                />
-                              </FormControl>
-                            </FormItem>
-                          )}
-                        />
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-1">
+                          <span className="text-muted-foreground">Adesão:</span>
+                          <FormField
+                            control={form.control}
+                            name="valor_adesao"
+                            render={({ field }) => (
+                              <FormItem className="flex items-center gap-1 space-y-0">
+                                <FormControl>
+                                  <CurrencyInput 
+                                    value={field.value}
+                                    onChange={field.onChange}
+                                    className={cn(
+                                      "w-28 h-7 text-center font-medium",
+                                      field.value <= 0 && "border-destructive bg-destructive/5"
+                                    )}
+                                    placeholder="R$ 0,00"
+                                  />
+                                </FormControl>
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                        {valorAdesao <= 0 && (
+                          <p className="text-xs text-destructive flex items-center gap-1">
+                            <AlertCircle className="h-3 w-3" />
+                            O valor de adesão não pode ser zero
+                          </p>
+                        )}
                       </div>
                       <div className="flex items-center gap-1">
                         <span className="text-muted-foreground">Validade:</span>
@@ -1033,7 +1077,7 @@ Adesão: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
               </div>
               <Button 
                 type="submit" 
-                disabled={createCotacao.isPending || !planoSelecionadoData}
+                disabled={createCotacao.isPending || !planoSelecionadoData || valorAdesao <= 0}
               >
                 {createCotacao.isPending ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-1" />
@@ -1047,6 +1091,34 @@ Adesão: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
           </form>
         </Form>
       </DialogContent>
+
+      {/* Dialog de Confirmação de Valor de Adesão */}
+      <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar Valor de Adesão</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-4">
+                <p>Você está definindo o valor de adesão como:</p>
+                <div className="text-3xl font-bold text-center text-primary py-4 bg-primary/5 rounded-lg">
+                  {formatCurrency(pendingFormData?.valor_adesao || 0)}
+                </div>
+                <p className="text-sm text-muted-foreground text-center">
+                  Este valor será cobrado do cliente. Confirma?
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setPendingFormData(null)}>
+              Revisar Valor
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmSubmit}>
+              Confirmar e Criar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }
