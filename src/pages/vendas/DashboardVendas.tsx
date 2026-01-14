@@ -49,7 +49,7 @@ export default function DashboardVendas() {
       bgCor: 'bg-purple-100 dark:bg-purple-900/30',
     },
     {
-      titulo: 'Contratos Fechados',
+      titulo: 'Propostas Fechadas',
       valor: metricas?.contratos || 0,
       icone: CheckCircle,
       cor: 'text-green-600',
@@ -174,7 +174,7 @@ export default function DashboardVendas() {
                     type="monotone"
                     dataKey="contratos"
                     stroke="#22c55e"
-                    name="Contratos"
+                    name="Propostas"
                     strokeWidth={2}
                   />
                 </LineChart>
@@ -219,7 +219,7 @@ export default function DashboardVendas() {
                     <div className="flex-1">
                       <p className="font-medium">{v.nome}</p>
                       <p className="text-sm text-muted-foreground">
-                        {v.contratos} {v.contratos === 1 ? 'contrato' : 'contratos'}
+                        {v.contratos} {v.contratos === 1 ? 'proposta' : 'propostas'}
                       </p>
                     </div>
                     <Badge variant="outline">
@@ -230,7 +230,7 @@ export default function DashboardVendas() {
               </div>
             ) : (
               <div className="flex h-[200px] items-center justify-center text-muted-foreground">
-                Nenhum vendedor com contratos no período
+                Nenhum vendedor com propostas no período
               </div>
             )}
           </CardContent>
