@@ -935,9 +935,24 @@ Adesão: ${formatCurrency(planoSelecionadoData.plano.valor_adesao)}`);
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-4 mt-3 pt-3 border-t text-sm">
-                      <div>
-                        <span className="text-muted-foreground">Adesão:</span>{' '}
-                        <strong>{formatCurrency(planoSelecionadoData.plano.valor_adesao)}</strong>
+                      <div className="flex items-center gap-1">
+                        <span className="text-muted-foreground">Adesão:</span>
+                        <FormField
+                          control={form.control}
+                          name="valor_adesao"
+                          render={({ field }) => (
+                            <FormItem className="flex items-center gap-1 space-y-0">
+                              <FormControl>
+                                <CurrencyInput 
+                                  value={field.value}
+                                  onChange={field.onChange}
+                                  className="w-28 h-7 text-center font-medium"
+                                  placeholder="R$ 0,00"
+                                />
+                              </FormControl>
+                            </FormItem>
+                          )}
+                        />
                       </div>
                       <div className="flex items-center gap-1">
                         <span className="text-muted-foreground">Validade:</span>
