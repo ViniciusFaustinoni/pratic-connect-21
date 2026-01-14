@@ -16,18 +16,41 @@ const systemPrompt = `Você é um analista especializado em documentos brasileir
 ### CNH (Carteira Nacional de Habilitação)
 Extrair OBRIGATORIAMENTE:
 - nome (nome completo do condutor)
-- cpf (formato 000.000.000-00) - SEMPRE presente na CNH, geralmente abaixo da foto ou próximo ao nome. Procure por "CPF", "CPF/MF", "CPF Nº" ou sequência de 11 dígitos
+- cpf (formato 000.000.000-00) - **PRIORIDADE MÁXIMA**
 - rg (número do RG)
 - data_nascimento (formato YYYY-MM-DD)
 - validade (formato YYYY-MM-DD)
 - categoria (A, B, AB, etc.)
 
-IMPORTANTE para CNH:
-- O CPF SEMPRE está impresso na CNH brasileira
-- Se não encontrar com label "CPF", procure sequência de 11 dígitos numéricos no formato XXX.XXX.XXX-XX
-- NÃO confunda CPF com RENACH (número de registro da CNH que tem letras)
-- Se a imagem estiver inclinada ou parcialmente cortada, ainda tente extrair o CPF
-- NUNCA retorne cpf: null para uma CNH brasileira válida
+**⚠️ INSTRUÇÕES CRÍTICAS PARA EXTRAÇÃO DE CPF NA CNH ⚠️**
+
+O CPF está SEMPRE presente em TODAS as CNHs brasileiras. Localizações comuns:
+1. Na FRENTE da CNH, geralmente:
+   - Campo específico rotulado "CPF" ou "CPF/MF"
+   - Próximo ao campo de nome do condutor
+   - Abaixo ou ao lado da foto 3x4
+   - Próximo ao campo "Doc. Identidade/Org. Emissor/UF"
+   
+2. No VERSO da CNH (se houver), pode aparecer também
+
+**FORMATO DO CPF:**
+- 11 dígitos numéricos no padrão: XXX.XXX.XXX-XX
+- Exemplos: 123.456.789-00, 987.654.321-12
+- Pode aparecer SEM pontos e traço: 12345678900
+
+**O QUE NÃO É CPF (não confundir):**
+- RENACH: contém letras (ex: SP123456789)
+- Número do Registro da CNH: formato diferente
+- RG: geralmente menos dígitos
+- Número de série/controle do documento
+
+**REGRAS OBRIGATÓRIAS:**
+- VASCULHE toda a imagem em busca do CPF
+- Se a imagem estiver inclinada, rotacionada ou com baixa qualidade, AINDA ASSIM extraia o CPF
+- Procure por QUALQUER sequência de 11 dígitos numéricos
+- Se encontrar múltiplas sequências de 11 dígitos, escolha a que tem formato XXX.XXX.XXX-XX ou está próxima ao label "CPF"
+- **NUNCA retorne cpf: null para uma CNH brasileira**
+- Se REALMENTE não conseguir ler (documento muito danificado/cortado), retorne cpf: "ilegivel"
 
 ### RG (Registro Geral / Identidade)
 Extrair OBRIGATORIAMENTE:
@@ -145,6 +168,22 @@ Identificar e extrair o que for possível
   "confianca": 0.0 a 1.0
 }`;
 
+// Prompt específico para retry de extração de CPF
+const cpfRetryPrompt = `TAREFA ÚNICA: Extraia o CPF desta CNH brasileira.
+
+O CPF é um número de 11 dígitos no formato XXX.XXX.XXX-XX.
+
+Locais comuns do CPF na CNH:
+- Próximo ao nome do condutor
+- Abaixo da foto
+- Campo rotulado "CPF" ou "CPF/MF"
+
+IMPORTANTE:
+- Ignore todos os outros campos (nome, RG, validade, etc.)
+- Foque APENAS em encontrar a sequência de 11 dígitos do CPF
+- Se encontrar, retorne APENAS: {"cpf": "XXX.XXX.XXX-XX"}
+- Se realmente não conseguir ler, retorne: {"cpf": "ilegivel"}`;
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -212,7 +251,7 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
+        model: 'google/gemini-2.5-pro', // Modelo mais potente para melhor OCR
         messages: [
           { role: 'system', content: systemPrompt },
           {
@@ -223,7 +262,7 @@ serve(async (req) => {
             ],
           },
         ],
-        max_tokens: 1000,
+        max_tokens: 1500,
         temperature: 0.1,
       }),
     });
@@ -280,6 +319,63 @@ serve(async (req) => {
     }
 
     console.log('OCR result:', result);
+
+    // Se for CNH e CPF veio null, fazer uma segunda tentativa focada apenas no CPF
+    if (result.tipo_detectado === 'cnh' && (!result.dados?.cpf || result.dados?.cpf === null)) {
+      console.log('CPF não encontrado na CNH, tentando extração específica...');
+      
+      try {
+        const retryResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'google/gemini-2.5-pro',
+            messages: [
+              { role: 'system', content: cpfRetryPrompt },
+              {
+                role: 'user',
+                content: [
+                  { type: 'text', text: 'Extraia o CPF desta CNH.' },
+                  { type: 'image_url', image_url: { url } },
+                ],
+              },
+            ],
+            max_tokens: 200,
+            temperature: 0.1,
+          }),
+        });
+
+        if (retryResponse.ok) {
+          const retryData = await retryResponse.json();
+          const retryContent = retryData.choices?.[0]?.message?.content;
+          
+          if (retryContent) {
+            try {
+              const cleanRetryContent = retryContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+              const cpfResult = JSON.parse(cleanRetryContent);
+              
+              if (cpfResult.cpf && cpfResult.cpf !== 'ilegivel') {
+                console.log('CPF extraído na segunda tentativa:', cpfResult.cpf);
+                result.dados = result.dados || {};
+                result.dados.cpf = cpfResult.cpf;
+              } else if (cpfResult.cpf === 'ilegivel') {
+                console.log('CPF marcado como ilegível na segunda tentativa');
+                result.dados = result.dados || {};
+                result.dados.cpf = 'ilegivel';
+                result.motivo = (result.motivo || '') + ' CPF não pôde ser lido (documento danificado ou cortado).';
+              }
+            } catch (retryParseError) {
+              console.error('Falha ao parsear resultado do retry de CPF:', retryContent);
+            }
+          }
+        }
+      } catch (retryError) {
+        console.error('Erro no retry de extração de CPF:', retryError);
+      }
+    }
 
     return new Response(
       JSON.stringify(result),

@@ -18,8 +18,8 @@ export async function convertPdfToImage(file: File): Promise<Blob> {
   // Get first page (documents like CNH, CRLV are usually 1 page)
   const page = await pdf.getPage(1);
   
-  // Set scale for good OCR quality (2x resolution)
-  const scale = 2;
+  // Set scale for good OCR quality (2.5x resolution for better CPF extraction)
+  const scale = 2.5;
   const viewport = page.getViewport({ scale });
   
   // Create canvas element
