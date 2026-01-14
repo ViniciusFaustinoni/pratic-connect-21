@@ -166,8 +166,9 @@ const menuConfig: {
       items: [
         { title: 'Instalações', url: '/monitoramento/instalacoes', icon: Wrench },
         { title: 'Vistorias', url: '/monitoramento/vistorias', icon: ClipboardCheck },
-        { title: 'Rotas', url: '/monitoramento/rotas', icon: MapPin },
-        { title: 'Estoque', url: '/monitoramento/estoque', icon: Package },
+          { title: 'Rotas', url: '/monitoramento/rotas', icon: MapPin },
+          { title: 'Calendário', url: '/monitoramento/calendario', icon: Calendar },
+          { title: 'Estoque', url: '/monitoramento/estoque', icon: Package },
         { 
           title: 'Rastreadores', 
           url: '/monitoramento/rastreadores', 
