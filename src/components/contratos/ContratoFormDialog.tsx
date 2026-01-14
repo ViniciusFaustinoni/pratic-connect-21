@@ -13,6 +13,16 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Form,
   FormControl,
   FormField,
@@ -52,7 +62,7 @@ import { cn } from '@/lib/utils';
 const formSchema = z.object({
   lead_id: z.string().min(1, 'Selecione um lead'),
   plano_id: z.string().min(1, 'Selecione um plano'),
-  valor_adesao: z.number().min(0, 'Informe o valor de adesão'),
+  valor_adesao: z.number().min(1, 'O valor de adesão é obrigatório e deve ser maior que zero'),
   valor_mensal: z.number().min(0, 'Informe o valor mensal'),
   dia_vencimento: z.number().min(1).max(28).optional(),
 });
@@ -88,6 +98,8 @@ interface ContratoFormDialogProps {
 export function ContratoFormDialog({ open, onOpenChange, prefilledData }: ContratoFormDialogProps) {
   const [leadSearchOpen, setLeadSearchOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [pendingFormData, setPendingFormData] = useState<FormData | null>(null);
 
   const { data: leads } = useAllLeads();
   const { data: planos } = usePlanos();
@@ -172,15 +184,33 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
     }).format(value);
   };
 
-  const onSubmit = async (data: FormData) => {
+  // Abre o popup de confirmação de adesão
+  const onSubmit = (data: FormData) => {
+    // Validação extra (redundante mas segura)
+    if (data.valor_adesao <= 0) {
+      toast.error('O valor de adesão deve ser maior que zero!');
+      return;
+    }
+    
+    // Guardar dados e abrir popup de confirmação
+    setPendingFormData(data);
+    setShowConfirmDialog(true);
+  };
+
+  // Handler quando confirmar no popup
+  const handleConfirmSubmit = async () => {
+    if (!pendingFormData) return;
+    
+    setShowConfirmDialog(false);
     setIsSubmitting(true);
+    
     try {
       await createContrato.mutateAsync({
-        lead_id: data.lead_id,
-        plano_id: data.plano_id,
-        valor_adesao: data.valor_adesao,
-        valor_mensal: data.valor_mensal,
-        dia_vencimento: data.dia_vencimento,
+        lead_id: pendingFormData.lead_id,
+        plano_id: pendingFormData.plano_id,
+        valor_adesao: pendingFormData.valor_adesao,
+        valor_mensal: pendingFormData.valor_mensal,
+        dia_vencimento: pendingFormData.dia_vencimento,
         data_inicio: new Date().toISOString().split('T')[0],
         status: 'rascunho',
         cotacao_id: cotacaoPrioritaria?.id || null,
@@ -189,6 +219,7 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
       toast.success('Contrato criado como rascunho');
       onOpenChange(false);
       form.reset();
+      setPendingFormData(null);
     } catch (error) {
       toast.error('Erro ao criar contrato');
       console.error(error);
@@ -374,8 +405,17 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
                       <CurrencyInput
                         value={field.value}
                         onChange={field.onChange}
+                        className={cn(
+                          field.value <= 0 && "border-destructive bg-destructive/5"
+                        )}
                       />
                     </FormControl>
+                    {field.value <= 0 && (
+                      <p className="text-xs text-destructive flex items-center gap-1 mt-1">
+                        <AlertTriangle className="h-3 w-3" />
+                        O valor de adesão não pode ser zero
+                      </p>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}
@@ -436,7 +476,10 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
               >
                 Cancelar
               </Button>
-              <Button type="submit" disabled={isSubmitting || (selectedLead && !selectedLead.email)}>
+              <Button 
+                type="submit" 
+                disabled={isSubmitting || (selectedLead && !selectedLead.email) || form.watch('valor_adesao') <= 0}
+              >
                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Criar Rascunho
               </Button>
@@ -444,6 +487,34 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
           </form>
         </Form>
       </DialogContent>
+
+      {/* Dialog de Confirmação de Valor de Adesão */}
+      <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar Valor de Adesão</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-4">
+                <p>Você está definindo o valor de adesão como:</p>
+                <div className="text-3xl font-bold text-center text-primary py-4 bg-primary/5 rounded-lg">
+                  {formatCurrency(pendingFormData?.valor_adesao || 0)}
+                </div>
+                <p className="text-sm text-muted-foreground text-center">
+                  Este valor será cobrado do cliente. Confirma?
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setPendingFormData(null)}>
+              Revisar Valor
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmSubmit}>
+              Confirmar e Criar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }
