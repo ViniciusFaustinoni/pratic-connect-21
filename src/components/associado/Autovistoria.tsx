@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { getFotosAutovistoria, TipoVeiculo } from '@/data/autovistoriaConfig';
-import { useCriarAutovistoria, useUploadFotoAutovistoria, useAutovistoriaExistente } from '@/hooks/useContratoLink';
+import { useCriarAutovistoria, useUploadFotoAutovistoria, useAutovistoriaExistente, useFinalizarAutovistoria } from '@/hooks/useContratoLink';
 import { toast } from 'sonner';
 
 interface AutovistoriaProps {
@@ -36,6 +36,7 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
 
   const criarAutovistoria = useCriarAutovistoria();
   const uploadFoto = useUploadFotoAutovistoria();
+  const finalizarAutovistoria = useFinalizarAutovistoria();
 
   // Reidratar estado quando carregar vistoria existente
   useEffect(() => {
@@ -71,6 +72,14 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
   const isUltimaFoto = indiceAtual === totalFotos - 1;
   const isPrimeiraFoto = indiceAtual === 0;
   const fotoAtualEnviada = !!fotosEnviadas[fotoAtual.id];
+
+  // Finalizar autovistoria quando todas as fotos forem enviadas
+  useEffect(() => {
+    if (todasEnviadas && vistoriaId && hidratado) {
+      finalizarAutovistoria.mutate({ vistoriaId });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todasEnviadas, vistoriaId, hidratado]);
 
   const avancarFoto = () => {
     if (indiceAtual < totalFotos - 1) {

@@ -426,6 +426,31 @@ export function useGerarAutentiqueByToken() {
   });
 }
 
+// Hook para finalizar autovistoria (atualizar status para 'em_analise')
+export function useFinalizarAutovistoria() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async ({ vistoriaId }: { vistoriaId: string }) => {
+      const { error } = await supabase
+        .from('vistorias')
+        .update({ 
+          status: 'em_analise',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', vistoriaId);
+      
+      if (error) throw error;
+      return { success: true };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vistorias'] });
+      queryClient.invalidateQueries({ queryKey: ['vistorias-metricas'] });
+      queryClient.invalidateQueries({ queryKey: ['autovistoria-existente'] });
+    },
+  });
+}
+
 // Gerar URL do link do associado
 export function getAssociadoLinkUrl(token: string): string {
   const baseUrl = window.location.origin;
