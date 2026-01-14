@@ -188,14 +188,24 @@ export function useNewLeadFlow() {
         return null;
       }
 
+      // A Edge Function retorna { dados: {...}, tipo_detectado, sucesso, ... }
+      // Acessar data.dados para obter os campos reais
+      const documentData = data.dados || data;
+      
+      console.log('OCR documento resultado:', { 
+        tipo: data.tipo_detectado, 
+        sucesso: data.sucesso,
+        dados: documentData 
+      });
+
       const personalData: PersonalData = {
-        nome: data.nome || '',
-        cpf: data.cpf || '',
-        rg: data.rg || '',
-        data_nascimento: data.data_nascimento || '',
-        cnh: data.cnh || '',
-        cnh_categoria: data.categoria || '',
-        cnh_validade: data.validade || '',
+        nome: documentData.nome || '',
+        cpf: documentData.cpf || '',
+        rg: documentData.rg || '',
+        data_nascimento: documentData.data_nascimento || '',
+        cnh: documentData.numero_registro || documentData.cnh || '',
+        cnh_categoria: documentData.categoria || '',
+        cnh_validade: documentData.validade || '',
       };
 
       updateState({ processingStatus: { ...state.processingStatus, document: 'done' } });
