@@ -1,8 +1,10 @@
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useEffect, useState } from 'react';
 import { CheckCircle, Calendar, Camera, Clock, FileSignature, ExternalLink, Loader2, RefreshCw, AlertCircle } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { useGerarAutentiqueByToken } from '@/hooks/useContratoLink';
 
 interface ConfirmacaoVistoriaProps {
   tipoVistoria: 'agendada' | 'autovistoria';
@@ -10,6 +12,8 @@ interface ConfirmacaoVistoriaProps {
   autentiqueUrl?: string | null;
   isAutentiqueTimeout?: boolean;
   onRetryAutentique?: () => void;
+  contratoToken?: string;
+  adesaoPaga?: boolean;
 }
 
 export function ConfirmacaoVistoria({ 
@@ -18,7 +22,49 @@ export function ConfirmacaoVistoria({
   autentiqueUrl,
   isAutentiqueTimeout,
   onRetryAutentique,
+  contratoToken,
+  adesaoPaga,
 }: ConfirmacaoVistoriaProps) {
+  const [hasTriedGeneration, setHasTriedGeneration] = useState(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
+  
+  const gerarAutentique = useGerarAutentiqueByToken();
+  
+  // Gerar link automaticamente quando adesao_paga=true e autentique_url=null
+  useEffect(() => {
+    if (
+      adesaoPaga && 
+      !autentiqueUrl && 
+      !hasTriedGeneration && 
+      !gerarAutentique.isPending && 
+      contratoToken
+    ) {
+      console.log('[ConfirmacaoVistoria] Iniciando geração automática do link Autentique...');
+      setHasTriedGeneration(true);
+      setGenerationError(null);
+      
+      gerarAutentique.mutate(contratoToken, {
+        onSuccess: (result) => {
+          console.log('[ConfirmacaoVistoria] Link gerado com sucesso:', result.signatureLink);
+        },
+        onError: (error: any) => {
+          console.error('[ConfirmacaoVistoria] Erro ao gerar link:', error);
+          setGenerationError(error.message || 'Erro ao gerar link de assinatura');
+        },
+      });
+    }
+  }, [adesaoPaga, autentiqueUrl, hasTriedGeneration, gerarAutentique.isPending, contratoToken]);
+  
+  // Função para tentar novamente
+  const handleRetry = () => {
+    if (contratoToken) {
+      setHasTriedGeneration(false);
+      setGenerationError(null);
+      onRetryAutentique?.();
+    }
+  };
+  
+  const isGenerating = gerarAutentique.isPending;
   return (
     <Card className="border-green-200 dark:border-green-900">
       <CardHeader className="text-center bg-green-50 dark:bg-green-950/30 rounded-t-lg">
@@ -105,24 +151,28 @@ export function ConfirmacaoVistoria({
               </a>
             </Button>
           </div>
-        ) : isAutentiqueTimeout ? (
+        ) : (isAutentiqueTimeout || generationError) ? (
           <div className="bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-900 p-4 rounded-lg space-y-3">
             <div className="flex items-center gap-2">
               <AlertCircle className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
               <h4 className="font-medium text-yellow-700 dark:text-yellow-400">
-                Link ainda não disponível
+                {generationError ? 'Erro ao gerar link' : 'Link ainda não disponível'}
               </h4>
             </div>
             <p className="text-sm text-yellow-700 dark:text-yellow-400">
-              O link para assinatura está demorando mais que o esperado. 
-              Isso pode acontecer em momentos de alta demanda.
+              {generationError || 'O link para assinatura está demorando mais que o esperado. Isso pode acontecer em momentos de alta demanda.'}
             </p>
             <Button 
               variant="outline" 
               className="w-full border-yellow-500 text-yellow-700 hover:bg-yellow-100 dark:text-yellow-400 dark:hover:bg-yellow-950"
-              onClick={onRetryAutentique}
+              onClick={handleRetry}
+              disabled={isGenerating}
             >
-              <RefreshCw className="h-4 w-4 mr-2" />
+              {isGenerating ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4 mr-2" />
+              )}
               Tentar Novamente
             </Button>
             <p className="text-xs text-yellow-600 dark:text-yellow-500 text-center">

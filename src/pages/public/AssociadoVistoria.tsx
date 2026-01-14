@@ -194,6 +194,8 @@ export default function AssociadoVistoria() {
             autentiqueUrl={contrato.autentique_url}
             isAutentiqueTimeout={isAutentiqueTimeout}
             onRetryAutentique={retryAutentiquePolling}
+            contratoToken={token}
+            adesaoPaga={contrato.adesao_paga}
           />
         )}
       </div>
