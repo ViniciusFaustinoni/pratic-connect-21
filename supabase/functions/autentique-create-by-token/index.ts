@@ -377,20 +377,28 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Buscar contrato por link_token
+    // Buscar contrato por link_token com embeds explícitos (evita erro de relacionamento ambíguo)
     const { data: contrato, error: contratoError } = await supabase
       .from("contratos")
       .select(`
         *,
-        planos (*),
-        leads (*),
-        associados (*)
+        planos:plano_id (*),
+        leads:lead_id (id, nome, email, telefone, cpf, veiculo_marca, veiculo_modelo, veiculo_placa, veiculo_ano, veiculo_fipe),
+        associados:associado_id (id, nome, email, telefone, cpf)
       `)
       .eq("link_token", contratoToken)
       .single();
 
-    if (contratoError || !contrato) {
-      console.error('[autentique-create-by-token] Contrato não encontrado:', contratoError?.message);
+    if (contratoError) {
+      console.error('[autentique-create-by-token] Erro ao buscar contrato:', contratoError.message, contratoError.details);
+      return new Response(
+        JSON.stringify({ success: false, error: `Erro ao buscar contrato: ${contratoError.message}` }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (!contrato) {
+      console.error('[autentique-create-by-token] Contrato não encontrado para o token');
       return new Response(
         JSON.stringify({ success: false, error: 'Contrato não encontrado' }),
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
