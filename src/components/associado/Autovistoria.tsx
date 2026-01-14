@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { 
   Camera, Check, ArrowLeft, ArrowRight, Loader2, ChevronRight, Gauge, 
   CheckCircle, XCircle, Lightbulb, RotateCcw 
@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { getFotosAutovistoria, TipoVeiculo } from '@/data/autovistoriaConfig';
-import { useCriarAutovistoria, useUploadFotoAutovistoria } from '@/hooks/useContratoLink';
+import { useCriarAutovistoria, useUploadFotoAutovistoria, useAutovistoriaExistente } from '@/hooks/useContratoLink';
 import { toast } from 'sonner';
 
 interface AutovistoriaProps {
@@ -28,10 +28,39 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
   const [uploading, setUploading] = useState(false);
   const [kmIdentificado, setKmIdentificado] = useState<number | null>(null);
   const [previewsLocais, setPreviewsLocais] = useState<Record<string, string>>({});
+  const [hidratado, setHidratado] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Buscar autovistoria existente para reidratar fotos após refresh
+  const { data: vistoriaExistente, isLoading: carregandoVistoria } = useAutovistoriaExistente(contratoId);
 
   const criarAutovistoria = useCriarAutovistoria();
   const uploadFoto = useUploadFotoAutovistoria();
+
+  // Reidratar estado quando carregar vistoria existente
+  useEffect(() => {
+    if (vistoriaExistente && !hidratado) {
+      console.log('[Autovistoria] Reidratando fotos existentes:', vistoriaExistente);
+      setVistoriaId(vistoriaExistente.id);
+      
+      // Montar mapa de fotos: { [tipo]: arquivo_url }
+      const fotosMap: Record<string, string> = {};
+      if (vistoriaExistente.fotos && Array.isArray(vistoriaExistente.fotos)) {
+        for (const foto of vistoriaExistente.fotos) {
+          if (foto.tipo && foto.arquivo_url) {
+            fotosMap[foto.tipo] = foto.arquivo_url;
+          }
+        }
+      }
+      
+      if (Object.keys(fotosMap).length > 0) {
+        setFotosEnviadas(fotosMap);
+        toast.success(`${Object.keys(fotosMap).length} foto(s) carregadas de sessão anterior`);
+      }
+      
+      setHidratado(true);
+    }
+  }, [vistoriaExistente, hidratado]);
 
   const totalFotos = fotos.length;
   const fotosCompletadas = Object.keys(fotosEnviadas).length;
@@ -142,6 +171,18 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
       onComplete(vistoriaId);
     }
   };
+
+  // Loading enquanto carrega vistoria existente
+  if (carregandoVistoria && !hidratado) {
+    return (
+      <Card className="max-w-lg mx-auto">
+        <CardContent className="pt-8 pb-8 flex flex-col items-center justify-center min-h-[300px]">
+          <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
+          <p className="text-muted-foreground">Carregando vistoria...</p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   // Se todas foram enviadas, mostrar tela de conclusão
   if (todasEnviadas) {
