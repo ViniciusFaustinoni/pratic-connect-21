@@ -537,6 +537,7 @@ serve(async (req) => {
         },
         signers: [
           {
+            name: clienteNome,
             email: clienteEmail,
             action: "SIGN",
             delivery_method: "DELIVERY_METHOD_LINK", // Força geração de link na criação
@@ -570,6 +571,7 @@ serve(async (req) => {
 
     console.log("[autentique-create-by-token] Enviando para Autentique via multipart/form-data...");
     console.log("[autentique-create-by-token] Document name:", documentName);
+    console.log("[autentique-create-by-token] Signer name:", clienteNome);
     console.log("[autentique-create-by-token] Signer email:", clienteEmail);
 
     const autentiqueResponse = await fetch(AUTENTIQUE_API_URL, {
