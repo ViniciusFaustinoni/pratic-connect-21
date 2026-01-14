@@ -56,6 +56,23 @@ export function VistoriaListItem({ vistoria, onClick }: VistoriaListItemProps) {
   const config = STATUS_CONFIG[status];
   const StatusIcon = config.icon;
 
+  // Prioridade para placa: veículo vinculado > primeiro veículo do associado > "SEM PLACA"
+  const placa = vistoria.veiculo?.placa 
+    || vistoria.associado?.veiculos?.[0]?.placa 
+    || 'SEM PLACA';
+
+  // Prioridade para nome: associado do veículo > associado direto > fallback
+  const nomeAssociado = vistoria.veiculo?.associado?.nome 
+    || vistoria.associado?.nome 
+    || 'Cliente não identificado';
+
+  // Marca e modelo do veículo
+  const marcaModelo = vistoria.veiculo?.marca && vistoria.veiculo?.modelo
+    ? `${vistoria.veiculo.marca} ${vistoria.veiculo.modelo}`
+    : vistoria.associado?.veiculos?.[0]?.marca && vistoria.associado?.veiculos?.[0]?.modelo
+      ? `${vistoria.associado.veiculos[0].marca} ${vistoria.associado.veiculos[0].modelo}`
+      : '';
+
   return (
     <div
       className={cn(
@@ -69,7 +86,7 @@ export function VistoriaListItem({ vistoria, onClick }: VistoriaListItemProps) {
         <div className="flex items-center gap-2 min-w-[120px]">
           <Car className="h-5 w-5 text-muted-foreground" />
           <span className="font-mono font-semibold text-lg">
-            {vistoria.veiculo?.placa || 'N/A'}
+            {placa}
           </span>
         </div>
 
@@ -77,13 +94,13 @@ export function VistoriaListItem({ vistoria, onClick }: VistoriaListItemProps) {
         <div className="flex items-center gap-2 flex-1">
           <User className="h-4 w-4 text-muted-foreground" />
           <span className="text-sm truncate">
-            {vistoria.veiculo?.associado?.nome || 'Cliente não identificado'}
+            {nomeAssociado}
           </span>
         </div>
 
         {/* Veículo */}
         <div className="hidden md:block text-sm text-muted-foreground min-w-[150px]">
-          {vistoria.veiculo?.marca} {vistoria.veiculo?.modelo}
+          {marcaModelo}
         </div>
 
         {/* Data */}
