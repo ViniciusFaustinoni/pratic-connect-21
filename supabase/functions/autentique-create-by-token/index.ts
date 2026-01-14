@@ -589,8 +589,44 @@ serve(async (req) => {
     
     console.log("[autentique-create-by-token] Resposta Autentique:", JSON.stringify(autentiqueData, null, 2));
 
+    // Tratamento de erros específicos do Autentique
     if (autentiqueData.errors) {
-      throw new Error(`Erro Autentique: ${JSON.stringify(autentiqueData.errors)}`);
+      const errorMsg = autentiqueData.errors[0]?.message || 'unknown_error';
+      console.error("[autentique-create-by-token] Erro do Autentique:", errorMsg);
+      
+      // Mapear códigos de erro conhecidos
+      let errorCode = 'AUTENTIQUE_ERROR';
+      let userMessage = 'Erro no serviço de assinatura. Tente novamente.';
+      
+      if (errorMsg === 'unavailable_credits' || errorMsg.includes('credits')) {
+        errorCode = 'UNAVAILABLE_CREDITS';
+        userMessage = 'Serviço de assinatura indisponível no momento. Nossa equipe foi notificada.';
+      } else if (errorMsg === 'unauthorized' || errorMsg.includes('token') || errorMsg.includes('auth')) {
+        errorCode = 'AUTENTIQUE_UNAUTHORIZED';
+        userMessage = 'Configuração do serviço de assinatura inválida. Contate o suporte.';
+      } else if (autentiqueData.validation) {
+        errorCode = 'AUTENTIQUE_VALIDATION';
+        userMessage = 'Dados incompletos para assinatura. Contate o vendedor.';
+      }
+      
+      // Registrar erro no histórico do contrato
+      await supabase.from('contratos_historico').insert({
+        contrato_id: contrato.id,
+        tipo: 'erro_autentique',
+        descricao: `Erro ao criar documento: ${errorCode}`,
+        dados: { error_code: errorCode, raw: autentiqueData }
+      });
+      
+      // Retornar erro tratado (HTTP 200 com success: false)
+      return new Response(JSON.stringify({
+        success: false,
+        error: userMessage,
+        error_code: errorCode,
+        timings
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200
+      });
     }
 
     const document = autentiqueData.data?.createDocument;

@@ -94,6 +94,17 @@ export function ConfirmacaoVistoria({
   
   // Função para exibir mensagem de erro amigável baseada no código de erro
   const getMensagemErro = (error: string) => {
+    // Erros específicos do Autentique
+    if (error.includes('UNAVAILABLE_CREDITS') || error.includes('indisponível')) {
+      return 'Serviço de assinatura sem créditos no momento. Nossa equipe já foi notificada e está resolvendo. Você receberá o link por e-mail em breve.';
+    }
+    if (error.includes('AUTENTIQUE_UNAUTHORIZED') || error.includes('Configuração')) {
+      return 'Configuração do serviço de assinatura inválida. Entre em contato com o suporte.';
+    }
+    if (error.includes('AUTENTIQUE_VALIDATION') || error.includes('incompletos')) {
+      return 'Dados incompletos para gerar a assinatura. Contate seu vendedor.';
+    }
+    // Erros genéricos
     if (error.includes('Token inválido') || error.includes('TOKEN_INVALID')) {
       return 'Link inválido. Solicite um novo link ao vendedor.';
     }
