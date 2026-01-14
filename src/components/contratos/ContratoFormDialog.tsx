@@ -492,15 +492,15 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
       <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar Valor de Adesão</AlertDialogTitle>
+            <AlertDialogTitle>Confirmar Taxa de Filiação</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-4">
-                <p>Você está definindo o valor de adesão como:</p>
+                <p>Você está definindo a taxa de filiação como:</p>
                 <div className="text-3xl font-bold text-center text-primary py-4 bg-primary/5 rounded-lg">
                   {formatCurrency(pendingFormData?.valor_adesao || 0)}
                 </div>
                 <p className="text-sm text-muted-foreground text-center">
-                  Este valor será cobrado do cliente. Confirma?
+                  Este valor será cobrado do associado. Confirma?
                 </p>
               </div>
             </AlertDialogDescription>

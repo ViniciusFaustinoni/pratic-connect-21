@@ -196,10 +196,10 @@ export default function CotacaoPage() {
       return;
     }
     
-    // Validar valor de adesão
+    // Validar taxa de filiação
     const valorAdesaoFinal = valorAdesaoCustomizado ?? planoSelecionado.valorAdesao ?? 0;
     if (valorAdesaoFinal <= 0) {
-      toast.error('O valor de adesão deve ser maior que zero');
+      toast.error('A taxa de filiação deve ser maior que zero');
       return;
     }
     
