@@ -60,12 +60,20 @@ serve(async (req) => {
     // 3. Verificar se já existe contrato para esta cotação
     const { data: contratoExistente } = await supabase
       .from('contratos')
-      .select('id, numero')
+      .select('id, numero, status, validade_link, valor_mensal')
       .eq('cotacao_id', cotacao_id)
       .maybeSingle();
 
     if (contratoExistente) {
-      throw new Error(`Já existe contrato ${contratoExistente.numero} para esta cotação`);
+      console.log('Contrato já existe para esta cotação:', contratoExistente.numero);
+      return new Response(
+        JSON.stringify({
+          success: true,
+          already_exists: true,
+          contrato: contratoExistente,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
     }
 
     // 4. Criar lead retroativo se cotação não tem lead vinculado
