@@ -81,7 +81,7 @@ serve(async (req) => {
         .insert({
           nome: `Cliente Cotação ${cotacao.numero}`,
           telefone: cotacao.lead?.telefone || '00000000000', // telefone é obrigatório
-          origem: 'site', // Usando 'site' para leads gerados pelo cotador
+          origem: 'cotador', // Lead criado a partir do cotador de preços
           etapa: 'contrato_enviado',
           vendedor_id: vendedor_id || cotacao.vendedor_id,
           veiculo_marca: cotacao.veiculo_marca,
@@ -127,7 +127,7 @@ serve(async (req) => {
       .insert({
         numero: numeroTemp,
         cotacao_id,
-        lead_id: cotacao.lead_id,
+        lead_id: leadId, // Usa o lead original ou o criado retroativamente
         associado_id: cotacao.associado_id,
         plano_id: cotacao.plano_id,
         valor_adesao: cotacao.valor_adesao || 0,

@@ -106,8 +106,8 @@ const editarLeadSchema = z.object({
     ),
   veiculo_placa: z.string().max(8).optional().or(z.literal('')),
   origem: z.enum([
-    'indicacao', 'site', 'facebook', 'instagram', 'google', 
-    'telefone', 'presencial', 'parceiro', 'api', 'outro',
+    'indicacao', 'site', 'whatsapp', 'facebook', 'instagram', 'google', 
+    'telefone', 'presencial', 'parceiro', 'api', 'cotador', 'outro',
   ] as const),
   etapa: z.enum([
     'novo', 'contato', 'contato_inicial', 'apresentacao', 'qualificado', 'cotacao_enviada', 'negociacao',

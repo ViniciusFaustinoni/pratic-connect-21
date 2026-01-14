@@ -542,7 +542,7 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
             veiculo_ano: data.ano_fabricacao,
             veiculo_placa: data.placa,
             veiculo_fipe: data.valor_fipe || null,
-            origem: 'site' as const, // 'cotador' não existe no enum, usando 'site'
+            origem: 'cotador' as const, // Lead criado a partir do cotador de preços
             etapa: 'ganho' as const,
             vendedor_id: vendedorId,
             associado_id: associado.id,
