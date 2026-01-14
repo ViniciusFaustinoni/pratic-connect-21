@@ -223,6 +223,8 @@ export default function AssociadoVistoria() {
             adesaoPaga={contrato.adesao_paga}
             contratoAssinado={contrato.status === 'assinado'}
             isGeneratingLink={gerarAutentique.isPending}
+            autentiqueDocumentoId={contrato.autentique_documento_id}
+            clienteEmail={contrato.associados?.email || contrato.leads?.email || contrato.cliente_email || ''}
           />
         )}
       </div>
