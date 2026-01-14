@@ -1,10 +1,12 @@
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useEffect, useState } from 'react';
-import { CheckCircle, Calendar, Camera, Clock, FileSignature, ExternalLink, Loader2, RefreshCw, AlertCircle } from 'lucide-react';
+import { CheckCircle, Calendar, Camera, Clock, FileSignature, ExternalLink, Loader2, RefreshCw, AlertCircle, PartyPopper } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useGerarAutentiqueByToken } from '@/hooks/useContratoLink';
+import { useContratoRealtimeByToken } from '@/hooks/useContratosRealtime';
 
 interface ConfirmacaoVistoriaProps {
   tipoVistoria: 'agendada' | 'autovistoria';
@@ -14,6 +16,7 @@ interface ConfirmacaoVistoriaProps {
   onRetryAutentique?: () => void;
   contratoToken?: string;
   adesaoPaga?: boolean;
+  contratoAssinado?: boolean;
 }
 
 export function ConfirmacaoVistoria({ 
@@ -24,11 +27,15 @@ export function ConfirmacaoVistoria({
   onRetryAutentique,
   contratoToken,
   adesaoPaga,
+  contratoAssinado,
 }: ConfirmacaoVistoriaProps) {
   const [hasTriedGeneration, setHasTriedGeneration] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
   
   const gerarAutentique = useGerarAutentiqueByToken();
+  
+  // Ativar listener realtime para receber atualização quando contrato for assinado
+  useContratoRealtimeByToken(contratoToken);
   
   // Gerar link automaticamente quando adesao_paga=true e autentique_url=null
   useEffect(() => {
@@ -79,6 +86,16 @@ export function ConfirmacaoVistoria({
         </CardDescription>
       </CardHeader>
       <CardContent className="pt-6 space-y-6">
+        {/* Feedback visual quando contrato é assinado */}
+        {contratoAssinado && (
+          <Alert className="bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800">
+            <PartyPopper className="h-4 w-4 text-green-600 dark:text-green-400" />
+            <AlertDescription className="text-green-800 dark:text-green-300">
+              <strong>Contrato assinado com sucesso!</strong> Seu processo de adesão está quase completo. 
+              Aguarde as próximas etapas.
+            </AlertDescription>
+          </Alert>
+        )}
         {tipoVistoria === 'agendada' && dadosAgendamento ? (
           <div className="space-y-4">
             <div className="bg-muted/50 p-4 rounded-lg space-y-3">

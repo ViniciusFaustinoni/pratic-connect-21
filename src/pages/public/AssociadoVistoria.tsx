@@ -204,6 +204,7 @@ export default function AssociadoVistoria() {
             onRetryAutentique={retryAutentiquePolling}
             contratoToken={token}
             adesaoPaga={contrato.adesao_paga}
+            contratoAssinado={contrato.status === 'assinado'}
           />
         )}
       </div>
