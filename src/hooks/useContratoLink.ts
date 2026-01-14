@@ -221,7 +221,7 @@ export function useCriarVistoriaAgendada() {
   });
 }
 
-// Hook para criar autovistoria
+// Hook para criar autovistoria (ou reutilizar existente)
 export function useCriarAutovistoria() {
   const queryClient = useQueryClient();
   
@@ -233,13 +233,30 @@ export function useCriarAutovistoria() {
     }: { 
       contratoId: string; 
       veiculoId?: string;
-      associadoId: string; // Agora obrigatório
+      associadoId: string;
     }) => {
       if (!associadoId) {
         throw new Error('Associado não vinculado ao contrato. Entre em contato com a associação.');
       }
       
-      // Criar vistoria como autovistoria
+      // Verificar se já existe autovistoria pendente para este contrato
+      const { data: existingVistoria } = await supabase
+        .from('vistorias')
+        .select('*')
+        .eq('contrato_id', contratoId)
+        .eq('modalidade', 'autovistoria')
+        .eq('status', 'pendente')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+      
+      // Se já existe, reutilizar
+      if (existingVistoria) {
+        console.log('[useCriarAutovistoria] Reutilizando vistoria existente:', existingVistoria.id);
+        return existingVistoria;
+      }
+      
+      // Criar nova vistoria
       const { data: vistoria, error: vistoriaError } = await supabase
         .from('vistorias')
         .insert({
@@ -271,7 +288,7 @@ export function useCriarAutovistoria() {
   });
 }
 
-// Hook para upload de foto da autovistoria
+// Hook para upload de foto da autovistoria (com persistência em vistoria_fotos)
 export function useUploadFotoAutovistoria() {
   const queryClient = useQueryClient();
   
@@ -303,6 +320,19 @@ export function useUploadFotoAutovistoria() {
       
       const publicUrl = urlData.publicUrl;
       
+      // Persistir/atualizar em vistoria_fotos (upsert por vistoria_id + tipo)
+      const { error: fotoDbError } = await supabase
+        .from('vistoria_fotos')
+        .upsert(
+          { vistoria_id: vistoriaId, tipo: fotoId, arquivo_url: publicUrl },
+          { onConflict: 'vistoria_id,tipo' }
+        );
+      
+      if (fotoDbError) {
+        console.error('Erro ao salvar foto no banco:', fotoDbError);
+        throw fotoDbError;
+      }
+      
       // Se for foto do odômetro, extrair quilometragem via IA
       let kmExtraido: number | null = null;
       if (fotoId === 'odometro') {
@@ -317,7 +347,6 @@ export function useUploadFotoAutovistoria() {
           }
         } catch (error) {
           console.error('Erro ao extrair km do odômetro:', error);
-          // Não bloqueia o fluxo se OCR falhar
         }
       }
       
@@ -338,7 +367,41 @@ export function useUploadFotoAutovistoria() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['contrato-publico'] });
+      queryClient.invalidateQueries({ queryKey: ['autovistoria-fotos'] });
     },
+  });
+}
+
+// Hook para buscar autovistoria existente com fotos (para reidratar estado após refresh)
+export function useAutovistoriaExistente(contratoId: string | undefined) {
+  return useQuery({
+    queryKey: ['autovistoria-existente', contratoId],
+    queryFn: async () => {
+      if (!contratoId) return null;
+      
+      // Buscar autovistoria pendente mais recente para este contrato
+      const { data: vistoria, error } = await supabase
+        .from('vistorias')
+        .select(`
+          *,
+          fotos:vistoria_fotos(tipo, arquivo_url)
+        `)
+        .eq('contrato_id', contratoId)
+        .eq('modalidade', 'autovistoria')
+        .eq('status', 'pendente')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+      
+      if (error && error.code !== 'PGRST116') {
+        // PGRST116 = no rows found, que é aceitável
+        console.error('Erro ao buscar autovistoria existente:', error);
+      }
+      
+      return vistoria || null;
+    },
+    enabled: !!contratoId,
+    staleTime: 30000, // 30 segundos
   });
 }
 
