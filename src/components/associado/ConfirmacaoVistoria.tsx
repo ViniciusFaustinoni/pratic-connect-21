@@ -1,7 +1,7 @@
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useEffect, useState } from 'react';
-import { CheckCircle, Calendar, Camera, Clock, FileSignature, ExternalLink, Loader2, RefreshCw, AlertCircle, PartyPopper } from 'lucide-react';
+import { CheckCircle, Calendar, Camera, Clock, FileSignature, ExternalLink, Loader2, RefreshCw, AlertCircle, PartyPopper, Circle } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -19,6 +19,8 @@ interface ConfirmacaoVistoriaProps {
   contratoAssinado?: boolean;
 }
 
+type ProgressoEtapa = 'preparando' | 'enviando' | 'finalizando' | null;
+
 export function ConfirmacaoVistoria({ 
   tipoVistoria, 
   dadosAgendamento, 
@@ -31,6 +33,8 @@ export function ConfirmacaoVistoria({
 }: ConfirmacaoVistoriaProps) {
   const [hasTriedGeneration, setHasTriedGeneration] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
+  const [progressoGeracao, setProgressoGeracao] = useState<ProgressoEtapa>(null);
+  const [linkGerado, setLinkGerado] = useState<string | null>(null);
   
   const gerarAutentique = useGerarAutentiqueByToken();
   
@@ -42,6 +46,7 @@ export function ConfirmacaoVistoria({
     if (
       adesaoPaga && 
       !autentiqueUrl && 
+      !linkGerado &&
       !hasTriedGeneration && 
       !gerarAutentique.isPending && 
       contratoToken
@@ -49,29 +54,43 @@ export function ConfirmacaoVistoria({
       console.log('[ConfirmacaoVistoria] Iniciando geração automática do link Autentique...');
       setHasTriedGeneration(true);
       setGenerationError(null);
+      setProgressoGeracao('preparando');
+      
+      // Simular etapas visuais de progresso
+      const timer1 = setTimeout(() => setProgressoGeracao('enviando'), 1500);
+      const timer2 = setTimeout(() => setProgressoGeracao('finalizando'), 4000);
       
       gerarAutentique.mutate(contratoToken, {
         onSuccess: (result) => {
           console.log('[ConfirmacaoVistoria] Link gerado com sucesso:', result.signatureLink);
+          setLinkGerado(result.signatureLink);
+          setProgressoGeracao(null);
+          clearTimeout(timer1);
+          clearTimeout(timer2);
         },
         onError: (error: any) => {
           console.error('[ConfirmacaoVistoria] Erro ao gerar link:', error);
           setGenerationError(error.message || 'Erro ao gerar link de assinatura');
+          setProgressoGeracao(null);
+          clearTimeout(timer1);
+          clearTimeout(timer2);
         },
       });
     }
-  }, [adesaoPaga, autentiqueUrl, hasTriedGeneration, gerarAutentique.isPending, contratoToken]);
+  }, [adesaoPaga, autentiqueUrl, linkGerado, hasTriedGeneration, gerarAutentique.isPending, contratoToken]);
   
   // Função para tentar novamente
   const handleRetry = () => {
     if (contratoToken) {
       setHasTriedGeneration(false);
       setGenerationError(null);
+      setLinkGerado(null);
       onRetryAutentique?.();
     }
   };
   
-  const isGenerating = gerarAutentique.isPending;
+  const isGenerating = gerarAutentique.isPending || progressoGeracao !== null;
+  const urlAssinatura = linkGerado || autentiqueUrl;
   return (
     <Card className="border-green-200 dark:border-green-900">
       <CardHeader className="text-center bg-green-50 dark:bg-green-950/30 rounded-t-lg">
@@ -152,7 +171,7 @@ export function ConfirmacaoVistoria({
         )}
 
         {/* CTA para Assinatura do Contrato - com estados de carregamento, timeout e sucesso */}
-        {autentiqueUrl ? (
+        {urlAssinatura ? (
           <div className="bg-primary/5 border border-primary/20 p-4 rounded-lg space-y-3">
             <div className="flex items-center gap-2">
               <FileSignature className="h-5 w-5 text-primary" />
@@ -162,7 +181,7 @@ export function ConfirmacaoVistoria({
               Clique no botão abaixo para assinar digitalmente seu contrato de proteção veicular.
             </p>
             <Button asChild className="w-full">
-              <a href={autentiqueUrl} target="_blank" rel="noopener noreferrer">
+              <a href={urlAssinatura} target="_blank" rel="noopener noreferrer">
                 <ExternalLink className="h-4 w-4 mr-2" />
                 Assinar Contrato Agora
               </a>
@@ -177,7 +196,7 @@ export function ConfirmacaoVistoria({
               </h4>
             </div>
             <p className="text-sm text-yellow-700 dark:text-yellow-400">
-              {generationError || 'O link para assinatura está demorando mais que o esperado. Isso pode acontecer em momentos de alta demanda.'}
+              {generationError || 'O link para assinatura está demorando mais que o esperado. Isso pode acontecer em momentos de alta demanda. Você também receberá o link por email.'}
             </p>
             <Button 
               variant="outline" 
@@ -197,13 +216,42 @@ export function ConfirmacaoVistoria({
             </p>
           </div>
         ) : (
-          <div className="bg-muted/50 border border-muted p-4 rounded-lg space-y-3">
+          <div className="bg-muted/50 border border-muted p-4 rounded-lg space-y-4">
             <div className="flex items-center gap-2">
-              <Loader2 className="h-5 w-5 text-muted-foreground animate-spin" />
-              <h4 className="font-medium text-muted-foreground">Gerando Link de Assinatura...</h4>
+              <Loader2 className="h-5 w-5 text-primary animate-spin" />
+              <h4 className="font-medium text-primary">Gerando Link de Assinatura...</h4>
             </div>
-            <p className="text-sm text-muted-foreground">
-              Estamos preparando seu contrato para assinatura digital. Isso pode levar alguns segundos...
+            
+            {/* Etapas de progresso visuais */}
+            <div className="space-y-2 text-sm">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-green-500" />
+                <span className="text-muted-foreground">Preparando contrato</span>
+              </div>
+              <div className="flex items-center gap-2">
+                {progressoGeracao === 'enviando' || progressoGeracao === 'finalizando' ? (
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                ) : (
+                  <Loader2 className="h-4 w-4 text-primary animate-spin" />
+                )}
+                <span className={progressoGeracao === 'preparando' ? 'text-primary font-medium' : 'text-muted-foreground'}>
+                  Enviando para assinatura digital
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                {progressoGeracao === 'finalizando' ? (
+                  <Loader2 className="h-4 w-4 text-primary animate-spin" />
+                ) : (
+                  <Circle className="h-4 w-4 text-muted-foreground/30" />
+                )}
+                <span className={progressoGeracao === 'finalizando' ? 'text-primary font-medium' : 'text-muted-foreground'}>
+                  Gerando link de assinatura
+                </span>
+              </div>
+            </div>
+            
+            <p className="text-xs text-muted-foreground text-center">
+              Isso geralmente leva de 5 a 10 segundos...
             </p>
           </div>
         )}
@@ -218,13 +266,13 @@ export function ConfirmacaoVistoria({
             <li className="flex items-start gap-2">
               {contratoAssinado ? (
                 <CheckCircle className="h-4 w-4 text-green-500 mt-0.5" />
-              ) : autentiqueUrl ? (
+              ) : urlAssinatura ? (
                 <div className="h-4 w-4 rounded-full border-2 border-primary bg-primary/20 mt-0.5 animate-pulse" />
               ) : (
                 <div className="h-4 w-4 rounded-full border-2 border-muted-foreground/30 mt-0.5" />
               )}
-              <span className={contratoAssinado ? "text-green-700 dark:text-green-400 font-medium" : autentiqueUrl ? "text-primary font-medium" : ""}>
-                Assinatura do contrato{!contratoAssinado && autentiqueUrl && " (aguardando)"}
+              <span className={contratoAssinado ? "text-green-700 dark:text-green-400 font-medium" : urlAssinatura ? "text-primary font-medium" : ""}>
+                Assinatura do contrato{!contratoAssinado && urlAssinatura && " (aguardando)"}
               </span>
             </li>
             <li className="flex items-start gap-2">
