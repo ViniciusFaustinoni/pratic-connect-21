@@ -37,6 +37,17 @@ export interface Vistoria {
       telefone: string;
     };
   } | null;
+  associado?: {
+    id: string;
+    nome: string;
+    telefone: string;
+    veiculos?: {
+      id: string;
+      placa: string;
+      marca: string | null;
+      modelo: string | null;
+    }[];
+  } | null;
   vistoriador?: {
     id: string;
     nome: string;
@@ -58,6 +69,7 @@ export function useVistorias(filters: VistoriaFilters = {}) {
         .select(`
           *,
           veiculo:veiculos(id, placa, marca, modelo, associado:associados(id, nome, telefone)),
+          associado:associados!vistorias_associado_id_fkey(id, nome, telefone, veiculos(id, placa, marca, modelo)),
           vistoriador:profiles!vistorias_vistoriador_id_fkey(id, nome)
         `)
         .eq('tipo', 'entrada')
@@ -77,7 +89,9 @@ export function useVistorias(filters: VistoriaFilters = {}) {
         const searchLower = filters.search.toLowerCase();
         result = result.filter((v: any) => 
           v.veiculo?.placa?.toLowerCase().includes(searchLower) ||
-          v.veiculo?.associado?.nome?.toLowerCase().includes(searchLower)
+          v.veiculo?.associado?.nome?.toLowerCase().includes(searchLower) ||
+          v.associado?.nome?.toLowerCase().includes(searchLower) ||
+          v.associado?.veiculos?.[0]?.placa?.toLowerCase().includes(searchLower)
         );
       }
 
