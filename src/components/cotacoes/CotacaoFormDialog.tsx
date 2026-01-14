@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Loader2, Car, Search, CheckCircle2, Shield, Check, AlertCircle, Copy, MessageCircle, Zap, User, Link } from 'lucide-react';
+import { Loader2, Car, Search, CheckCircle2, Shield, Check, AlertCircle, Copy, MessageCircle, Zap, User, Link, UserCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { LeadCombobox } from '@/components/leads/LeadCombobox';
 import type { Lead } from '@/types/vendas';
@@ -48,6 +48,7 @@ import { useCreateCotacao } from '@/hooks/useCotacoes';
 import { usePlanos, useTabelaPrecoByFipe } from '@/hooks/usePlanos';
 import { useLead } from '@/hooks/useLeads';
 import { useFipe, type PlateResult, type FipeMarca, type FipeModelo, type FipeAno } from '@/hooks/useFipe';
+import { useVendedores } from '@/hooks/useVendedores';
 import { toast } from 'sonner';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
@@ -80,7 +81,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
   const { data: planos, isLoading: planosLoading } = usePlanos();
   const { data: lead } = useLead(leadId);
   const { getMarcas, getModelos, getAnos, getPreco, getByPlaca, buscarPorNome, loading: fipeLoading } = useFipe();
-
+  const { data: vendedores = [], isLoading: vendedoresLoading } = useVendedores();
   // Estados para busca por placa
   const [placa, setPlaca] = useState('');
   const [buscandoPlaca, setBuscandoPlaca] = useState(false);
@@ -119,6 +120,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
       valor_adesao: 0,
       valor_total_mensal: 0,
       validade_dias: 7,
+      vendedor_id: null,
     },
   });
 
@@ -169,6 +171,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
         valor_adesao: 0,
         valor_total_mensal: 0,
         validade_dias: 7,
+        vendedor_id: null,
       });
       setVeiculoEncontrado(null);
       setPlaca('');
@@ -597,6 +600,8 @@ Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
         veiculo_ano: anoNumerico,
         veiculo_placa: placa || veiculoEncontrado?.extractedPlate || null,
         codigo_fipe: veiculoEncontrado?.fipeData?.codigo || null,
+        // Consultor responsável
+        vendedor_id: pendingFormData.vendedor_id || null,
       });
       
       toast.success('Cotação criada com sucesso!');
@@ -699,6 +704,47 @@ Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
                 </p>
               </div>
             )}
+
+            {/* BLOCO 0.5: CONSULTOR RESPONSÁVEL */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                <UserCheck className="h-4 w-4 text-primary" />
+                Consultor Responsável
+              </h3>
+              
+              <FormField
+                control={form.control}
+                name="vendedor_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <Select 
+                      onValueChange={(value) => field.onChange(value === '_none' ? null : value)} 
+                      value={field.value || '_none'}
+                      disabled={vendedoresLoading}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          {vendedoresLoading ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <SelectValue placeholder="Selecione um consultor" />
+                          )}
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="_none">Não atribuído</SelectItem>
+                        {vendedores.map((v) => (
+                          <SelectItem key={v.id} value={v.user_id}>
+                            {v.nome}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
             {/* BLOCO 1: VEÍCULO */}
             <div className="space-y-3">

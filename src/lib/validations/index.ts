@@ -181,6 +181,8 @@ export const cotacaoSchema = z.object({
   veiculo_modelo: z.string().optional(),
   veiculo_ano: z.number().optional().nullable(),
   codigo_fipe: z.string().optional(),
+  // Consultor responsável
+  vendedor_id: z.string().uuid('Selecione um consultor').optional().nullable(),
 });
 
 // Schema de Contrato
