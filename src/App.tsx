@@ -58,6 +58,7 @@ import ConfigCredenciais from "./pages/monitoramento/ConfigCredenciais";
 import Mapa from "./pages/monitoramento/Mapa";
 import CalendarioInstalacoes from "./pages/monitoramento/CalendarioInstalacoes";
 import Vistorias from "./pages/monitoramento/Vistorias";
+import VistoriasInstalacoes from "./pages/monitoramento/VistoriasInstalacoes";
 import Oficinas from "./pages/oficinas/Oficinas";
 import OrdensServico from "./pages/oficinas/OrdensServico";
 import OrdemServicoDetalhe from "./pages/oficinas/OrdemServicoDetalhe";
@@ -366,6 +367,7 @@ const App = () => (
               <Route path="/monitoramento/credenciais" element={<ConfigCredenciais />} />
               <Route path="/monitoramento/calendario" element={<CalendarioInstalacoes />} />
               <Route path="/monitoramento/vistorias" element={<Vistorias />} />
+              <Route path="/monitoramento/vistorias-instalacoes" element={<VistoriasInstalacoes />} />
               
               {/* Marketing */}
               <Route path="/marketing" element={<MarketingDashboard />} />
