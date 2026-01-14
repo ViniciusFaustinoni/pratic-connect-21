@@ -1,12 +1,13 @@
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useEffect, useState } from 'react';
-import { CheckCircle, Calendar, Camera, Clock, FileSignature, ExternalLink, Loader2, RefreshCw, AlertCircle, PartyPopper, Circle } from 'lucide-react';
+import { CheckCircle, Calendar, Camera, Clock, FileSignature, Loader2, RefreshCw, AlertCircle, PartyPopper, Circle, Mail } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useGerarAutentiqueByToken } from '@/hooks/useContratoLink';
 import { useContratoRealtimeByToken } from '@/hooks/useContratosRealtime';
+import { useAutentiqueStatusPublico } from '@/hooks/useAutentiqueStatusPublico';
 
 interface ConfirmacaoVistoriaProps {
   tipoVistoria: 'agendada' | 'autovistoria';
@@ -18,6 +19,8 @@ interface ConfirmacaoVistoriaProps {
   adesaoPaga?: boolean;
   contratoAssinado?: boolean;
   isGeneratingLink?: boolean;
+  autentiqueDocumentoId?: string | null;
+  clienteEmail?: string;
 }
 
 type ProgressoEtapa = 'preparando' | 'enviando' | 'finalizando' | null;
@@ -32,6 +35,8 @@ export function ConfirmacaoVistoria({
   adesaoPaga,
   contratoAssinado,
   isGeneratingLink = false,
+  autentiqueDocumentoId,
+  clienteEmail,
 }: ConfirmacaoVistoriaProps) {
   const [hasTriedGeneration, setHasTriedGeneration] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
@@ -42,6 +47,17 @@ export function ConfirmacaoVistoria({
   
   // Ativar listener realtime para receber atualização quando contrato for assinado
   useContratoRealtimeByToken(contratoToken);
+  
+  // Polling para verificar status da assinatura a cada 15 segundos
+  const { data: statusAutentique, isLoading: isCheckingStatus } = useAutentiqueStatusPublico({
+    documentoId: autentiqueDocumentoId || undefined,
+    contratoToken,
+    enabled: !!autentiqueDocumentoId && !contratoAssinado,
+  });
+  
+  // Detectar quando foi assinado via polling
+  const assinadoViaPolling = statusAutentique?.document?.status === 'signed';
+  const contratoFoiAssinado = contratoAssinado || assinadoViaPolling;
   
   // Gerenciar progresso visual quando link está sendo gerado externamente
   useEffect(() => {
@@ -158,16 +174,7 @@ export function ConfirmacaoVistoria({
         </CardDescription>
       </CardHeader>
       <CardContent className="pt-6 space-y-6">
-        {/* Feedback visual quando contrato é assinado */}
-        {contratoAssinado && (
-          <Alert className="bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800">
-            <PartyPopper className="h-4 w-4 text-green-600 dark:text-green-400" />
-            <AlertDescription className="text-green-800 dark:text-green-300">
-              <strong>Contrato assinado com sucesso!</strong> Seu processo de adesão está quase completo. 
-              Aguarde as próximas etapas.
-            </AlertDescription>
-          </Alert>
-        )}
+        {/* O feedback de contrato assinado agora é exibido junto com as instruções de email */}
         {tipoVistoria === 'agendada' && dadosAgendamento ? (
           <div className="space-y-4">
             <div className="bg-muted/50 p-4 rounded-lg space-y-3">
@@ -223,22 +230,48 @@ export function ConfirmacaoVistoria({
           </div>
         )}
 
-        {/* CTA para Assinatura do Contrato - com estados de carregamento, timeout e sucesso */}
-        {urlAssinatura ? (
-          <div className="bg-primary/5 border border-primary/20 p-4 rounded-lg space-y-3">
-            <div className="flex items-center gap-2">
-              <FileSignature className="h-5 w-5 text-primary" />
-              <h4 className="font-medium text-primary">Assine seu Contrato</h4>
+        {/* CTA para Assinatura do Contrato - Instruções por email + verificação automática */}
+        {contratoFoiAssinado ? (
+          <Alert className="bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800">
+            <PartyPopper className="h-4 w-4 text-green-600 dark:text-green-400" />
+            <AlertDescription className="text-green-800 dark:text-green-300">
+              <strong>Contrato assinado com sucesso!</strong> Seu processo de adesão está quase completo. 
+              Aguarde as próximas etapas.
+            </AlertDescription>
+          </Alert>
+        ) : urlAssinatura ? (
+          <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 p-4 rounded-lg space-y-4">
+            <div className="flex items-start gap-3">
+              <Mail className="h-5 w-5 text-blue-600 mt-0.5" />
+              <div>
+                <h4 className="font-semibold text-blue-800 dark:text-blue-300">
+                  Verifique seu Email
+                </h4>
+                <p className="text-sm text-blue-700 dark:text-blue-400 mt-1">
+                  Enviamos o contrato para <strong>{clienteEmail || 'seu email cadastrado'}</strong>. 
+                  Siga as instruções abaixo para assinar.
+                </p>
+              </div>
             </div>
-            <p className="text-sm text-muted-foreground">
-              Clique no botão abaixo para assinar digitalmente seu contrato de proteção veicular.
-            </p>
-            <Button asChild className="w-full">
-              <a href={urlAssinatura} target="_blank" rel="noopener noreferrer">
-                <ExternalLink className="h-4 w-4 mr-2" />
-                Assinar Contrato Agora
-              </a>
-            </Button>
+
+            <div className="border-t border-blue-200 dark:border-blue-700 pt-3">
+              <h5 className="text-sm font-medium text-blue-800 dark:text-blue-300 mb-2">
+                Passo a passo para assinar:
+              </h5>
+              <ol className="text-sm text-blue-700 dark:text-blue-400 space-y-2 list-decimal list-inside">
+                <li>Acesse a caixa de entrada do email <strong>{clienteEmail || 'cadastrado'}</strong></li>
+                <li>Procure por um email da <strong>Autentique</strong> (verifique spam/lixo eletrônico)</li>
+                <li>Clique no link <strong>"Assinar Documento"</strong> no email</li>
+                <li>Leia o contrato e clique em <strong>"Assinar"</strong></li>
+                <li>Volte para esta página - atualizaremos automaticamente quando concluir</li>
+              </ol>
+            </div>
+
+            {/* Indicador de verificação automática */}
+            <div className="flex items-center gap-2 text-xs text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/50 px-3 py-2 rounded">
+              <RefreshCw className={`h-3 w-3 ${isCheckingStatus ? 'animate-spin' : ''}`} />
+              <span>Verificando assinatura automaticamente a cada 15 segundos...</span>
+            </div>
           </div>
         ) : (isAutentiqueTimeout || generationError) ? (
           <div className="bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-900 p-4 rounded-lg space-y-3">
@@ -317,15 +350,15 @@ export function ConfirmacaoVistoria({
               Pagamento da adesão confirmado
             </li>
             <li className="flex items-start gap-2">
-              {contratoAssinado ? (
+              {contratoFoiAssinado ? (
                 <CheckCircle className="h-4 w-4 text-green-500 mt-0.5" />
               ) : urlAssinatura ? (
                 <div className="h-4 w-4 rounded-full border-2 border-primary bg-primary/20 mt-0.5 animate-pulse" />
               ) : (
                 <div className="h-4 w-4 rounded-full border-2 border-muted-foreground/30 mt-0.5" />
               )}
-              <span className={contratoAssinado ? "text-green-700 dark:text-green-400 font-medium" : urlAssinatura ? "text-primary font-medium" : ""}>
-                Assinatura do contrato{!contratoAssinado && urlAssinatura && " (aguardando)"}
+              <span className={contratoFoiAssinado ? "text-green-700 dark:text-green-400 font-medium" : urlAssinatura ? "text-primary font-medium" : ""}>
+                Assinatura do contrato{!contratoFoiAssinado && urlAssinatura && " (aguardando)"}
               </span>
             </li>
             <li className="flex items-start gap-2">
