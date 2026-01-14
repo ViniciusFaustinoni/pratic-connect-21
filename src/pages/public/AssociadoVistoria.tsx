@@ -19,6 +19,14 @@ export default function AssociadoVistoria() {
   const [vistoriaId, setVistoriaId] = useState<string | null>(null);
   const [dadosAgendamento, setDadosAgendamento] = useState<{ data: string; horario: string } | null>(null);
 
+  // Debug logs para diagnosticar problemas
+  useEffect(() => {
+    console.log('[AssociadoVistoria] Token recebido:', token);
+    console.log('[AssociadoVistoria] isLoading:', isLoading);
+    console.log('[AssociadoVistoria] Contrato:', contrato);
+    console.log('[AssociadoVistoria] Error:', error);
+  }, [token, contrato, error, isLoading]);
+
   // Determinar etapa baseado no estado do contrato
   useEffect(() => {
     if (contrato) {
