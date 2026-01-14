@@ -31,6 +31,7 @@ export interface AtivacaoContrato {
   vistoria: {
     id: string;
     status: string;
+    modalidade: 'autovistoria' | 'presencial' | null;
     data_aprovacao: string | null;
   } | null;
 }
@@ -83,11 +84,11 @@ export function useAtivacoes(filtro: FiltroAtivacao = 'todos') {
       const vendedoresMap = new Map((vendedoresRes.data || []).map(v => [v.id, v]));
 
       // Buscar vistorias de entrada para cada associado
-      let vistoriasData: Array<{ id: string; status: string | null; created_at: string; associado_id: string }> = [];
+      let vistoriasData: Array<{ id: string; status: string | null; modalidade: string | null; created_at: string; associado_id: string }> = [];
       if (associadoIds.length > 0) {
         const { data } = await supabase
           .from('vistorias')
-          .select('id, status, created_at, associado_id')
+          .select('id, status, modalidade, created_at, associado_id')
           .in('associado_id', associadoIds)
           .eq('tipo', 'entrada');
         vistoriasData = (data || []) as unknown as typeof vistoriasData;
@@ -129,16 +130,29 @@ export function useAtivacoes(filtro: FiltroAtivacao = 'todos') {
           vistoria: vistoria ? {
             id: vistoria.id,
             status: vistoria.status || '',
+            modalidade: (vistoria.modalidade as 'autovistoria' | 'presencial') || null,
             data_aprovacao: vistoria.created_at,
           } : null,
         };
       });
 
+      // Helper para verificar se vistoria está OK baseado na modalidade
+      const isVistoriaOk = (vistoria: typeof result[0]['vistoria']) => {
+        if (!vistoria) return false;
+        const isAutovistoria = vistoria.modalidade === 'autovistoria';
+        // Autovistoria: em_analise ou aprovada são válidos para ativação
+        // Presencial: apenas aprovada
+        if (isAutovistoria) {
+          return ['em_analise', 'aprovada'].includes(vistoria.status);
+        }
+        return vistoria.status === 'aprovada';
+      };
+
       // Aplicar filtros de requisitos
       if (filtro === 'pendentes') {
         return result.filter(c => {
           const propostaAssinada = !!c.data_assinatura;
-          const vistoriaOk = c.vistoria?.status === 'aprovada';
+          const vistoriaOk = isVistoriaOk(c.vistoria);
           const requisitos = (propostaAssinada ? 1 : 0) + (vistoriaOk ? 1 : 0);
           return requisitos < 2 && c.status !== 'ativo';
         });
@@ -147,7 +161,7 @@ export function useAtivacoes(filtro: FiltroAtivacao = 'todos') {
       if (filtro === 'prontos') {
         return result.filter(c => {
           const propostaAssinada = !!c.data_assinatura;
-          const vistoriaOk = c.vistoria?.status === 'aprovada';
+          const vistoriaOk = isVistoriaOk(c.vistoria);
           return propostaAssinada && vistoriaOk && c.status !== 'ativo';
         });
       }

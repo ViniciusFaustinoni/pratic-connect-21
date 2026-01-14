@@ -49,7 +49,14 @@ export function AtivacaoCardNew({
   isExcluindo
 }: AtivacaoCardNewProps) {
   const propostaAssinada = !!contrato.data_assinatura;
-  const vistoriaOk = contrato.vistoria?.status === 'aprovada';
+  const isAutovistoria = contrato.vistoria?.modalidade === 'autovistoria';
+  
+  // Autovistoria: em_analise ou aprovada são válidos para ativação
+  // Presencial: apenas aprovada
+  const vistoriaOk = isAutovistoria 
+    ? ['em_analise', 'aprovada'].includes(contrato.vistoria?.status || '')
+    : contrato.vistoria?.status === 'aprovada';
+  
   const isAtivado = contrato.status === 'ativo';
   
   const requisitos = (propostaAssinada ? 1 : 0) + (vistoriaOk ? 1 : 0);
@@ -111,12 +118,14 @@ export function AtivacaoCardNew({
             <div className="flex items-center gap-1.5">
               {/* Badge de status */}
               {!isAtivado && (
-                <AtivacaoStatusBadge
+              <AtivacaoStatusBadge
                   vistoriaRealizada={vistoriaOk}
                   assinaturaRealizada={propostaAssinada}
                   dataVistoria={contrato.vistoria?.data_aprovacao}
                   dataAssinatura={contrato.data_assinatura}
                   variant="compact"
+                  modalidadeVistoria={contrato.vistoria?.modalidade}
+                  vistoriaStatus={contrato.vistoria?.status}
                   onEnviarLembrete={handleEnviarLembrete}
                   onVerProposta={handleVerProposta}
                 />
@@ -198,6 +207,8 @@ export function AtivacaoCardNew({
             tipo="vistoria"
             realizado={vistoriaOk}
             data={contrato.vistoria?.data_aprovacao}
+            modalidade={contrato.vistoria?.modalidade}
+            vistoriaStatus={contrato.vistoria?.status}
           />
           <StatusMiniCard
             tipo="assinatura"

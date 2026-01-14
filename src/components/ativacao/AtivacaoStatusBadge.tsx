@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { CheckCircle2, Clock, AlertCircle } from "lucide-react";
+import { CheckCircle2, Clock, AlertCircle, Camera, CalendarClock } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -22,11 +22,13 @@ interface AtivacaoStatusBadgeProps {
   dataVistoria?: string | null;
   dataAssinatura?: string | null;
   variant?: 'full' | 'compact';
+  modalidadeVistoria?: 'autovistoria' | 'presencial' | null;
+  vistoriaStatus?: string | null;
   onEnviarLembrete?: () => void;
   onVerProposta?: () => void;
 }
 
-type StatusType = 'concluida' | 'pendente_assinatura' | 'pendente_vistoria';
+type StatusType = 'concluida' | 'pendente_assinatura' | 'pendente_vistoria' | 'autovistoria_analise';
 
 const STATUS_CONFIG: Record<StatusType, {
   label: string;
@@ -46,6 +48,15 @@ const STATUS_CONFIG: Record<StatusType, {
     borderClass: 'border-emerald-500',
     textClass: 'text-emerald-800',
   },
+  autovistoria_analise: {
+    label: 'Autovistoria em Análise',
+    labelCompact: 'Autovistoria OK',
+    sublabel: 'PODE ATIVAR',
+    icon: <><Camera className="h-4 w-4" /><CheckCircle2 className="h-4 w-4" /></>,
+    bgClass: 'bg-blue-50',
+    borderClass: 'border-blue-500',
+    textClass: 'text-blue-800',
+  },
   pendente_assinatura: {
     label: 'Vistoria Realizada',
     labelCompact: 'Pend. Assinatura',
@@ -59,15 +70,26 @@ const STATUS_CONFIG: Record<StatusType, {
     label: 'Aguardando Vistoria',
     labelCompact: 'Pend. Vistoria',
     sublabel: 'PENDENTE',
-    icon: <Clock className="h-4 w-4" />,
+    icon: <CalendarClock className="h-4 w-4" />,
     bgClass: 'bg-gray-100',
     borderClass: 'border-gray-400',
     textClass: 'text-gray-600',
   },
 };
 
-function getStatus(vistoriaRealizada: boolean, assinaturaRealizada: boolean): StatusType {
-  if (vistoriaRealizada && assinaturaRealizada) return 'concluida';
+function getStatus(
+  vistoriaRealizada: boolean, 
+  assinaturaRealizada: boolean,
+  modalidade?: 'autovistoria' | 'presencial' | null,
+  vistoriaStatus?: string | null
+): StatusType {
+  if (vistoriaRealizada && assinaturaRealizada) {
+    // Se é autovistoria em análise (não aprovada ainda), mostrar status especial
+    if (modalidade === 'autovistoria' && vistoriaStatus === 'em_analise') {
+      return 'autovistoria_analise';
+    }
+    return 'concluida';
+  }
   if (vistoriaRealizada && !assinaturaRealizada) return 'pendente_assinatura';
   return 'pendente_vistoria';
 }
@@ -87,10 +109,12 @@ export function AtivacaoStatusBadge({
   dataVistoria,
   dataAssinatura,
   variant = 'compact',
+  modalidadeVistoria,
+  vistoriaStatus,
   onEnviarLembrete,
   onVerProposta,
 }: AtivacaoStatusBadgeProps) {
-  const status = getStatus(vistoriaRealizada, assinaturaRealizada);
+  const status = getStatus(vistoriaRealizada, assinaturaRealizada, modalidadeVistoria, vistoriaStatus);
   const config = STATUS_CONFIG[status];
 
   const handleEnviarLembrete = () => {
@@ -109,7 +133,14 @@ export function AtivacaoStatusBadge({
         ) : (
           <Clock className="h-3.5 w-3.5 text-muted-foreground" />
         )}
-        <span>Vistoria: {vistoriaRealizada ? formatDate(dataVistoria) : 'Aguardando'}</span>
+        <span>
+          Vistoria: {vistoriaRealizada ? formatDate(dataVistoria) : 'Aguardando'}
+          {modalidadeVistoria && (
+            <span className="ml-1 text-xs text-muted-foreground">
+              ({modalidadeVistoria === 'autovistoria' ? 'Auto' : 'Presencial'})
+            </span>
+          )}
+        </span>
       </div>
       <div className="flex items-center gap-2">
         {assinaturaRealizada ? (
@@ -119,6 +150,11 @@ export function AtivacaoStatusBadge({
         )}
         <span>Assinatura: {assinaturaRealizada ? formatDate(dataAssinatura) : 'Aguardando'}</span>
       </div>
+      {modalidadeVistoria === 'autovistoria' && vistoriaStatus === 'em_analise' && (
+        <p className="text-xs text-blue-600 mt-1">
+          ✓ Autovistoria realizada - pode ativar para roubo/furto
+        </p>
+      )}
     </div>
   );
 
@@ -226,44 +262,74 @@ interface StatusMiniCardProps {
   tipo: 'vistoria' | 'assinatura';
   realizado: boolean;
   data?: string | null;
+  modalidade?: 'autovistoria' | 'presencial' | null;
+  vistoriaStatus?: string | null;
 }
 
-export function StatusMiniCard({ tipo, realizado, data }: StatusMiniCardProps) {
-  const label = tipo === 'vistoria' ? 'Vistoria' : 'Assinatura';
+export function StatusMiniCard({ tipo, realizado, data, modalidade, vistoriaStatus }: StatusMiniCardProps) {
+  const isAutovistoriaEmAnalise = tipo === 'vistoria' && modalidade === 'autovistoria' && vistoriaStatus === 'em_analise';
+  
+  const getLabel = () => {
+    if (tipo === 'assinatura') return 'Assinatura';
+    if (modalidade === 'autovistoria') return 'Autovistoria';
+    if (modalidade === 'presencial') return 'Vistoria Agend.';
+    return 'Vistoria';
+  };
+  
+  const getBgColor = () => {
+    if (!realizado) return "bg-gray-50 border-gray-200";
+    if (isAutovistoriaEmAnalise) return "bg-blue-50 border-blue-200";
+    return "bg-emerald-50 border-emerald-200";
+  };
+  
+  const getIconColor = () => {
+    if (!realizado) return "text-gray-400";
+    if (isAutovistoriaEmAnalise) return "text-blue-500";
+    return "text-emerald-500";
+  };
+  
+  const getTextColor = () => {
+    if (!realizado) return "text-gray-600";
+    if (isAutovistoriaEmAnalise) return "text-blue-700";
+    return "text-emerald-700";
+  };
+  
+  const getSubtextColor = () => {
+    if (!realizado) return "text-gray-500";
+    if (isAutovistoriaEmAnalise) return "text-blue-600";
+    return "text-emerald-600";
+  };
+  
+  const getStatusText = () => {
+    if (!realizado) return "Pendente";
+    if (isAutovistoriaEmAnalise) return "Em Análise";
+    if (data) return format(new Date(data), "dd/MM/yyyy", { locale: ptBR });
+    return "Realizado";
+  };
   
   return (
     <div
       className={cn(
         "flex-1 rounded-lg border p-3 text-center",
-        realizado
-          ? "bg-emerald-50 border-emerald-200"
-          : "bg-gray-50 border-gray-200"
+        getBgColor()
       )}
     >
       <div className="flex items-center justify-center gap-1.5 mb-1">
         {realizado ? (
-          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+          isAutovistoriaEmAnalise ? (
+            <Camera className={cn("h-4 w-4", getIconColor())} />
+          ) : (
+            <CheckCircle2 className={cn("h-4 w-4", getIconColor())} />
+          )
         ) : (
           <Clock className="h-4 w-4 text-gray-400" />
         )}
-        <span
-          className={cn(
-            "text-sm font-medium",
-            realizado ? "text-emerald-700" : "text-gray-600"
-          )}
-        >
-          {label}
+        <span className={cn("text-sm font-medium", getTextColor())}>
+          {getLabel()}
         </span>
       </div>
-      <p
-        className={cn(
-          "text-xs",
-          realizado ? "text-emerald-600" : "text-gray-500"
-        )}
-      >
-        {realizado && data
-          ? format(new Date(data), "dd/MM/yyyy", { locale: ptBR })
-          : "Pendente"}
+      <p className={cn("text-xs", getSubtextColor())}>
+        {getStatusText()}
       </p>
     </div>
   );
