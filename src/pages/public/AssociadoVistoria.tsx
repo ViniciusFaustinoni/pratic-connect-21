@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { Loader2, Car, Calendar, Camera, CheckCircle, AlertCircle } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { useContratoByToken } from '@/hooks/useContratoLink';
+import { useContratoByToken, useGerarAutentiqueByToken } from '@/hooks/useContratoLink';
 import { EscolhaVistoria } from '@/components/associado/EscolhaVistoria';
 import { AgendarVistoria } from '@/components/associado/AgendarVistoria';
 import { Autovistoria } from '@/components/associado/Autovistoria';
@@ -15,9 +15,11 @@ type Etapa = 'escolha' | 'agendar' | 'autovistoria' | 'pagamento' | 'confirmacao
 export default function AssociadoVistoria() {
   const { token } = useParams<{ token: string }>();
   const { data: contrato, isLoading, error, isAutentiqueTimeout, retryAutentiquePolling } = useContratoByToken(token);
+  const gerarAutentique = useGerarAutentiqueByToken();
   const [etapa, setEtapa] = useState<Etapa>('escolha');
   const [vistoriaId, setVistoriaId] = useState<string | null>(null);
   const [dadosAgendamento, setDadosAgendamento] = useState<{ data: string; horario: string } | null>(null);
+  const [linkGeradoAntecipado, setLinkGeradoAntecipado] = useState<string | null>(null);
 
   // Debug logs para diagnosticar problemas
   useEffect(() => {
@@ -191,7 +193,22 @@ export default function AssociadoVistoria() {
             clienteNome={clienteNome}
             clienteEmail={contrato.associados?.email || contrato.leads?.email || contrato.cliente_email || ''}
             clienteCpf={contrato.associados?.cpf || contrato.leads?.cpf || contrato.cliente_cpf || ''}
-            onPagamentoConfirmado={() => setEtapa('confirmacao')}
+            onPagamentoConfirmado={() => {
+              // Iniciar geração do link imediatamente quando pagamento é confirmado
+              if (token && !contrato?.autentique_url) {
+                console.log('[AssociadoVistoria] Iniciando geração antecipada do link Autentique...');
+                gerarAutentique.mutate(token, {
+                  onSuccess: (result) => {
+                    console.log('[AssociadoVistoria] Link gerado antecipadamente:', result.signatureLink);
+                    setLinkGeradoAntecipado(result.signatureLink);
+                  },
+                  onError: (err) => {
+                    console.error('[AssociadoVistoria] Erro na geração antecipada:', err);
+                  },
+                });
+              }
+              setEtapa('confirmacao');
+            }}
           />
         )}
 
@@ -199,12 +216,13 @@ export default function AssociadoVistoria() {
           <ConfirmacaoVistoria
             tipoVistoria={contrato.tipo_vistoria as 'agendada' | 'autovistoria'}
             dadosAgendamento={dadosAgendamento}
-            autentiqueUrl={contrato.autentique_url}
+            autentiqueUrl={linkGeradoAntecipado || contrato.autentique_url}
             isAutentiqueTimeout={isAutentiqueTimeout}
             onRetryAutentique={retryAutentiquePolling}
             contratoToken={token}
             adesaoPaga={contrato.adesao_paga}
             contratoAssinado={contrato.status === 'assinado'}
+            isGeneratingLink={gerarAutentique.isPending}
           />
         )}
       </div>

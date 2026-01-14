@@ -17,6 +17,7 @@ interface ConfirmacaoVistoriaProps {
   contratoToken?: string;
   adesaoPaga?: boolean;
   contratoAssinado?: boolean;
+  isGeneratingLink?: boolean;
 }
 
 type ProgressoEtapa = 'preparando' | 'enviando' | 'finalizando' | null;
@@ -30,6 +31,7 @@ export function ConfirmacaoVistoria({
   contratoToken,
   adesaoPaga,
   contratoAssinado,
+  isGeneratingLink = false,
 }: ConfirmacaoVistoriaProps) {
   const [hasTriedGeneration, setHasTriedGeneration] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
@@ -41,7 +43,23 @@ export function ConfirmacaoVistoria({
   // Ativar listener realtime para receber atualização quando contrato for assinado
   useContratoRealtimeByToken(contratoToken);
   
-  // Gerar link automaticamente quando adesao_paga=true e autentique_url=null
+  // Gerenciar progresso visual quando link está sendo gerado externamente
+  useEffect(() => {
+    if (isGeneratingLink && !autentiqueUrl && !linkGerado) {
+      setProgressoGeracao('preparando');
+      const timer1 = setTimeout(() => setProgressoGeracao('enviando'), 1500);
+      const timer2 = setTimeout(() => setProgressoGeracao('finalizando'), 4000);
+      
+      return () => {
+        clearTimeout(timer1);
+        clearTimeout(timer2);
+      };
+    } else if (autentiqueUrl || linkGerado) {
+      setProgressoGeracao(null);
+    }
+  }, [isGeneratingLink, autentiqueUrl, linkGerado]);
+  
+  // Fallback: Gerar link se ainda não foi gerado após 3 segundos
   useEffect(() => {
     if (
       adesaoPaga && 
@@ -49,35 +67,42 @@ export function ConfirmacaoVistoria({
       !linkGerado &&
       !hasTriedGeneration && 
       !gerarAutentique.isPending && 
+      !isGeneratingLink &&
       contratoToken
     ) {
-      console.log('[ConfirmacaoVistoria] Iniciando geração automática do link Autentique...');
-      setHasTriedGeneration(true);
-      setGenerationError(null);
-      setProgressoGeracao('preparando');
+      // Aguardar 3 segundos antes de tentar gerar (dar tempo para a geração antecipada ou Realtime)
+      const fallbackTimer = setTimeout(() => {
+        if (!autentiqueUrl && !linkGerado) {
+          console.log('[ConfirmacaoVistoria] Fallback: Iniciando geração do link Autentique...');
+          setHasTriedGeneration(true);
+          setGenerationError(null);
+          setProgressoGeracao('preparando');
+          
+          const timer1 = setTimeout(() => setProgressoGeracao('enviando'), 1500);
+          const timer2 = setTimeout(() => setProgressoGeracao('finalizando'), 4000);
+          
+          gerarAutentique.mutate(contratoToken, {
+            onSuccess: (result) => {
+              console.log('[ConfirmacaoVistoria] Link gerado com sucesso:', result.signatureLink);
+              setLinkGerado(result.signatureLink);
+              setProgressoGeracao(null);
+              clearTimeout(timer1);
+              clearTimeout(timer2);
+            },
+            onError: (error: any) => {
+              console.error('[ConfirmacaoVistoria] Erro ao gerar link:', error);
+              setGenerationError(error.message || 'Erro ao gerar link de assinatura');
+              setProgressoGeracao(null);
+              clearTimeout(timer1);
+              clearTimeout(timer2);
+            },
+          });
+        }
+      }, 3000);
       
-      // Simular etapas visuais de progresso
-      const timer1 = setTimeout(() => setProgressoGeracao('enviando'), 1500);
-      const timer2 = setTimeout(() => setProgressoGeracao('finalizando'), 4000);
-      
-      gerarAutentique.mutate(contratoToken, {
-        onSuccess: (result) => {
-          console.log('[ConfirmacaoVistoria] Link gerado com sucesso:', result.signatureLink);
-          setLinkGerado(result.signatureLink);
-          setProgressoGeracao(null);
-          clearTimeout(timer1);
-          clearTimeout(timer2);
-        },
-        onError: (error: any) => {
-          console.error('[ConfirmacaoVistoria] Erro ao gerar link:', error);
-          setGenerationError(error.message || 'Erro ao gerar link de assinatura');
-          setProgressoGeracao(null);
-          clearTimeout(timer1);
-          clearTimeout(timer2);
-        },
-      });
+      return () => clearTimeout(fallbackTimer);
     }
-  }, [adesaoPaga, autentiqueUrl, linkGerado, hasTriedGeneration, gerarAutentique.isPending, contratoToken]);
+  }, [adesaoPaga, autentiqueUrl, linkGerado, hasTriedGeneration, gerarAutentique.isPending, isGeneratingLink, contratoToken]);
   
   // Função para tentar novamente
   const handleRetry = () => {
@@ -89,8 +114,8 @@ export function ConfirmacaoVistoria({
     }
   };
   
-  const isGenerating = gerarAutentique.isPending || progressoGeracao !== null;
-  const urlAssinatura = linkGerado || autentiqueUrl;
+  const isGenerating = gerarAutentique.isPending || isGeneratingLink || progressoGeracao !== null;
+  const urlAssinatura = autentiqueUrl || linkGerado;
   
   // Função para exibir mensagem de erro amigável baseada no código de erro
   const getMensagemErro = (error: string) => {
