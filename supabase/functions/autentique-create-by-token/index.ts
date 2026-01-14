@@ -357,6 +357,10 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Timing instrumentation
+  const timings: Record<string, number | string> = {};
+  const t0 = Date.now();
+
   try {
     const { contratoToken } = await req.json();
 
@@ -388,6 +392,8 @@ serve(async (req) => {
       `)
       .eq("link_token", contratoToken)
       .single();
+
+    timings.fetchContrato = Date.now() - t0;
 
     if (contratoError) {
       console.error('[autentique-create-by-token] Erro ao buscar contrato:', contratoError.message, contratoError.details);
@@ -425,7 +431,8 @@ serve(async (req) => {
         JSON.stringify({ 
           success: true, 
           signatureLink: contrato.autentique_url,
-          message: 'Link já existe' 
+          message: 'Link já existe',
+          timingsMs: timings
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -499,9 +506,12 @@ serve(async (req) => {
       }
     `;
 
+    timings.generateHtml = Date.now() - t0 - (timings.fetchContrato || 0);
+    
     const documentName = `Contrato ${contrato.numero} - ${clienteNome} - ${contrato.planos?.nome || 'Plano'}`;
     
     // Preparar operations JSON (com file: null como placeholder)
+    // Usando delivery_method: "DELIVERY_METHOD_LINK" para tentar obter o short_link direto
     const operations = {
       query: mutation,
       variables: {
@@ -512,6 +522,7 @@ serve(async (req) => {
           {
             email: clienteEmail,
             action: "SIGN",
+            delivery_method: "DELIVERY_METHOD_LINK", // Força geração de link na criação
             positions: [
               {
                 x: "65.0",
@@ -555,6 +566,8 @@ serve(async (req) => {
 
     const autentiqueData = await autentiqueResponse.json();
     
+    timings.createDocument = Date.now() - t0 - (timings.fetchContrato || 0) - (timings.generateHtml || 0);
+    
     console.log("[autentique-create-by-token] Resposta Autentique:", JSON.stringify(autentiqueData, null, 2));
 
     if (autentiqueData.errors) {
@@ -580,40 +593,50 @@ serve(async (req) => {
 
     console.log("[autentique-create-by-token] Public ID da assinatura:", signerSignature.public_id);
 
-    // O Autentique NÃO retorna short_link quando o signatário é adicionado por email
-    // Por isso, precisamos chamar createLinkToSignature para obter o link
-    const linkMutation = `
-      mutation {
-        createLinkToSignature(public_id: "${signerSignature.public_id}") {
-          short_link
-        }
-      }
-    `;
-
-    console.log("[autentique-create-by-token] Buscando link de assinatura via createLinkToSignature...");
-
-    const linkResponse = await fetch(AUTENTIQUE_API_URL, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${autentiqueApiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ query: linkMutation }),
-    });
-
-    const linkData = await linkResponse.json();
+    // Tentar obter o link diretamente da resposta do createDocument (otimização)
+    let signatureLink = signerSignature.link?.short_link;
     
-    console.log("[autentique-create-by-token] Resposta createLinkToSignature:", JSON.stringify(linkData, null, 2));
+    if (signatureLink) {
+      console.log("[autentique-create-by-token] Link obtido diretamente do createDocument:", signatureLink);
+      timings.getLinkMethod = 'direct';
+    } else {
+      // Fallback: chamar createLinkToSignature se o link não veio na resposta inicial
+      console.log("[autentique-create-by-token] Link não veio na resposta, chamando createLinkToSignature...");
+      
+      const linkMutation = `
+        mutation {
+          createLinkToSignature(public_id: "${signerSignature.public_id}") {
+            short_link
+          }
+        }
+      `;
 
-    if (linkData.errors) {
-      console.error("[autentique-create-by-token] Erro ao obter link:", linkData.errors);
-      throw new Error(`Erro ao obter link de assinatura: ${JSON.stringify(linkData.errors)}`);
+      const linkResponse = await fetch(AUTENTIQUE_API_URL, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${autentiqueApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ query: linkMutation }),
+      });
+
+      const linkData = await linkResponse.json();
+      
+      timings.createLinkToSignature = Date.now() - t0 - (timings.fetchContrato || 0) - (timings.generateHtml || 0) - (timings.createDocument || 0);
+      
+      console.log("[autentique-create-by-token] Resposta createLinkToSignature:", JSON.stringify(linkData, null, 2));
+
+      if (linkData.errors) {
+        console.error("[autentique-create-by-token] Erro ao obter link:", linkData.errors);
+        throw new Error(`Erro ao obter link de assinatura: ${JSON.stringify(linkData.errors)}`);
+      }
+
+      signatureLink = linkData.data?.createLinkToSignature?.short_link;
+      timings.getLinkMethod = 'createLinkToSignature';
     }
 
-    const signatureLink = linkData.data?.createLinkToSignature?.short_link;
-
     if (!signatureLink) {
-      throw new Error("Link de assinatura não foi retornado pelo Autentique (createLinkToSignature)");
+      throw new Error("Link de assinatura não foi retornado pelo Autentique");
     }
 
     console.log("[autentique-create-by-token] Link de assinatura obtido:", signatureLink);
@@ -663,7 +686,11 @@ serve(async (req) => {
         .eq("id", contrato.lead_id);
     }
 
+    timings.updateDb = Date.now() - t0 - Number(timings.fetchContrato || 0) - Number(timings.generateHtml || 0) - Number(timings.createDocument || 0) - Number(timings.createLinkToSignature || 0);
+    timings.total = Date.now() - t0;
+    
     console.log("[autentique-create-by-token] Sucesso! Documento criado:", document.id);
+    console.log("[autentique-create-by-token] Timings (ms):", JSON.stringify(timings));
 
     return new Response(
       JSON.stringify({
@@ -671,6 +698,7 @@ serve(async (req) => {
         documentId: document.id,
         signatureLink,
         message: "Contrato enviado para assinatura com sucesso",
+        timingsMs: timings,
       }),
       {
         status: 200,
