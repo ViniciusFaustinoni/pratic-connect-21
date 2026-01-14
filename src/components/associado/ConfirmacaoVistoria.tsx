@@ -216,13 +216,15 @@ export function ConfirmacaoVistoria({
               Pagamento da adesão confirmado
             </li>
             <li className="flex items-start gap-2">
-              {autentiqueUrl ? (
+              {contratoAssinado ? (
+                <CheckCircle className="h-4 w-4 text-green-500 mt-0.5" />
+              ) : autentiqueUrl ? (
                 <div className="h-4 w-4 rounded-full border-2 border-primary bg-primary/20 mt-0.5 animate-pulse" />
               ) : (
                 <div className="h-4 w-4 rounded-full border-2 border-muted-foreground/30 mt-0.5" />
               )}
-              <span className={autentiqueUrl ? "text-primary font-medium" : ""}>
-                Assinatura do contrato {autentiqueUrl && "(aguardando)"}
+              <span className={contratoAssinado ? "text-green-700 dark:text-green-400 font-medium" : autentiqueUrl ? "text-primary font-medium" : ""}>
+                Assinatura do contrato{!contratoAssinado && autentiqueUrl && " (aguardando)"}
               </span>
             </li>
             <li className="flex items-start gap-2">
