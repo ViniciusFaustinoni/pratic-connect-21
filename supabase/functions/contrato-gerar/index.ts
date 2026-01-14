@@ -36,8 +36,7 @@ serve(async (req) => {
       .select(`
         *,
         lead:leads!cotacoes_lead_id_fkey (
-          id, nome, email, telefone, cpf,
-          cidade, estado, endereco, bairro, cep
+          id, nome, email, telefone, cpf
         ),
         plano:planos (
           id, nome, coberturas
@@ -108,14 +107,11 @@ serve(async (req) => {
       }
     }
 
-    // 5. Montar endereço completo
+    // 5. Montar endereço completo (leads não possui colunas de endereço)
     const endereco = [
-      lead?.endereco,
-      lead?.bairro,
-      lead?.cidade,
-      lead?.estado,
-      lead?.cep
-    ].filter(Boolean).join(', ');
+      cotacao.cidade,
+      cotacao.regiao,
+    ].filter(Boolean).join(' - ');
 
     // 5. Criar o contrato (sem colunas veiculo_* que não existem na tabela)
     const timestamp = new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 14);
