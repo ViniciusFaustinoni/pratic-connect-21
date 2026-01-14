@@ -566,14 +566,57 @@ serve(async (req) => {
       throw new Error("Documento não foi criado no Autentique");
     }
 
-    // Obter link de assinatura
-    const signatureLink = document.signatures?.[0]?.link?.short_link;
+    console.log("[autentique-create-by-token] Documento criado com ID:", document.id);
 
-    if (!signatureLink) {
-      throw new Error("Link de assinatura não foi retornado pelo Autentique");
+    // Encontrar a assinatura do cliente (action = SIGN)
+    const signerSignature = document.signatures?.find(
+      (sig: any) => sig.action?.name === "SIGN"
+    );
+
+    if (!signerSignature || !signerSignature.public_id) {
+      console.error("[autentique-create-by-token] Assinatura não encontrada:", document.signatures);
+      throw new Error("Assinatura do cliente não encontrada no documento");
     }
 
-    console.log("[autentique-create-by-token] Link de assinatura:", signatureLink);
+    console.log("[autentique-create-by-token] Public ID da assinatura:", signerSignature.public_id);
+
+    // O Autentique NÃO retorna short_link quando o signatário é adicionado por email
+    // Por isso, precisamos chamar createLinkToSignature para obter o link
+    const linkMutation = `
+      mutation {
+        createLinkToSignature(public_id: "${signerSignature.public_id}") {
+          short_link
+        }
+      }
+    `;
+
+    console.log("[autentique-create-by-token] Buscando link de assinatura via createLinkToSignature...");
+
+    const linkResponse = await fetch(AUTENTIQUE_API_URL, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${autentiqueApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ query: linkMutation }),
+    });
+
+    const linkData = await linkResponse.json();
+    
+    console.log("[autentique-create-by-token] Resposta createLinkToSignature:", JSON.stringify(linkData, null, 2));
+
+    if (linkData.errors) {
+      console.error("[autentique-create-by-token] Erro ao obter link:", linkData.errors);
+      throw new Error(`Erro ao obter link de assinatura: ${JSON.stringify(linkData.errors)}`);
+    }
+
+    const signatureLink = linkData.data?.createLinkToSignature?.short_link;
+
+    if (!signatureLink) {
+      throw new Error("Link de assinatura não foi retornado pelo Autentique (createLinkToSignature)");
+    }
+
+    console.log("[autentique-create-by-token] Link de assinatura obtido:", signatureLink);
 
     // Atualizar contrato com dados do Autentique
     const { error: updateError } = await supabase
