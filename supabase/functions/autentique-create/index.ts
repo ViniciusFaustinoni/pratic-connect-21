@@ -890,15 +890,13 @@ serve(async (req) => {
 
     console.log(`Template selecionado para plano "${planoCodigo}": ${templateGenerator.name}`);
 
-    // Converter HTML para base64 para envio
-    const htmlBase64 = btoa(unescape(encodeURIComponent(contratoHTML)));
-
-    // Criar documento no Autentique via GraphQL
+    // Criar documento no Autentique via GraphQL Multipart Request Spec
+    // Referência: https://github.com/jaydenseric/graphql-multipart-request-spec
     const mutation = `
-      mutation CreateDocument(
+      mutation CreateDocumentMutation(
         $document: DocumentInput!
         $signers: [SignerInput!]!
-        $file: FileInput!
+        $file: Upload!
       ) {
         createDocument(
           document: $document
@@ -923,42 +921,60 @@ serve(async (req) => {
       }
     `;
 
-    const variables = {
-      document: {
-        name: `Contrato ${contrato.numero} - ${clienteNome || contrato.leads?.nome} - ${contrato.planos?.nome || 'Plano'}`,
-      },
-      signers: [
-        {
-          email: clienteEmail || contrato.leads?.email,
-          action: "SIGN",
-          positions: [
-            {
-              x: "65.0",
-              y: "80.0",
-              z: "1",
-              element: "SIGNATURE",
-            },
-          ],
+    const signerEmail = clienteEmail || contrato.leads?.email;
+    const documentName = `Contrato ${contrato.numero} - ${clienteNome || contrato.leads?.nome} - ${contrato.planos?.nome || 'Plano'}`;
+    
+    // Preparar operations JSON (com file: null como placeholder)
+    const operations = {
+      query: mutation,
+      variables: {
+        document: {
+          name: documentName,
         },
-      ],
-      file: {
-        name: `contrato-${contrato.numero}.html`,
-        content_base64: htmlBase64,
+        signers: [
+          {
+            email: signerEmail,
+            action: "SIGN",
+            positions: [
+              {
+                x: "65.0",
+                y: "80.0",
+                z: "1",
+                element: "SIGNATURE",
+              },
+            ],
+          },
+        ],
+        file: null, // Placeholder - será mapeado pelo FormData
       },
     };
 
-    console.log("Enviando para Autentique...");
+    // Map indica onde o arquivo será injetado
+    const map = {
+      "0": ["variables.file"],
+    };
+
+    // Criar FormData seguindo GraphQL Multipart Request Spec
+    const formData = new FormData();
+    formData.append("operations", JSON.stringify(operations));
+    formData.append("map", JSON.stringify(map));
+    
+    // Criar Blob do HTML e anexar ao FormData
+    const htmlBlob = new Blob([contratoHTML], { type: "text/html" });
+    formData.append("0", htmlBlob, `contrato-${contrato.numero}.html`);
+
+    console.log("Enviando para Autentique via multipart/form-data...");
+    console.log("Document name:", documentName);
+    console.log("Signer email:", signerEmail);
+    console.log("HTML size:", contratoHTML.length, "bytes");
 
     const autentiqueResponse = await fetch(AUTENTIQUE_API_URL, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${autentiqueApiKey}`,
-        "Content-Type": "application/json",
+        // NÃO definir Content-Type - FormData define automaticamente com boundary
       },
-      body: JSON.stringify({
-        query: mutation,
-        variables,
-      }),
+      body: formData,
     });
 
     const autentiqueData = await autentiqueResponse.json();
