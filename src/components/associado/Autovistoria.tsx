@@ -27,6 +27,7 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
   const [vistoriaId, setVistoriaId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [kmIdentificado, setKmIdentificado] = useState<number | null>(null);
+  const [previewLocal, setPreviewLocal] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const criarAutovistoria = useCriarAutovistoria();
@@ -45,12 +46,14 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
   const avancarFoto = () => {
     if (indiceAtual < totalFotos - 1) {
       setIndiceAtual(prev => prev + 1);
+      setPreviewLocal(null);
     }
   };
 
   const voltarFoto = () => {
     if (indiceAtual > 0) {
       setIndiceAtual(prev => prev - 1);
+      setPreviewLocal(null);
     }
   };
 
@@ -89,6 +92,13 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
       return;
     }
 
+    // Criar preview local IMEDIATAMENTE
+    const reader = new FileReader();
+    reader.onload = () => {
+      setPreviewLocal(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+
     setUploading(true);
     try {
       const result = await uploadFoto.mutateAsync({
@@ -102,6 +112,9 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
         ...prev,
         [fotoAtual.id]: result.url,
       }));
+
+      // Limpar preview local após sucesso (URL real assume)
+      setPreviewLocal(null);
 
       // Se for odômetro e KM foi extraído, mostrar
       if (fotoAtual.id === 'odometro' && result.kmExtraido) {
@@ -201,13 +214,30 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
 
       <CardContent className="space-y-5">
         {/* Ícone ilustrativo */}
-        <div className="bg-muted rounded-xl p-8 flex flex-col items-center justify-center">
-          {fotoAtualEnviada ? (
-            <img 
-              src={fotosEnviadas[fotoAtual.id]} 
-              alt={fotoAtual.label}
-              className="w-full max-h-48 object-contain rounded-lg"
-            />
+        <div className="bg-muted rounded-xl p-8 flex flex-col items-center justify-center min-h-[200px]">
+          {(fotoAtualEnviada || previewLocal) ? (
+            <div className="relative w-full">
+              <img 
+                src={fotosEnviadas[fotoAtual.id] || previewLocal || ''} 
+                alt={fotoAtual.label}
+                className="w-full max-h-48 object-contain rounded-lg"
+              />
+              {/* Overlay de loading durante upload */}
+              {uploading && (
+                <div className="absolute inset-0 bg-black/40 rounded-lg flex items-center justify-center">
+                  <div className="flex flex-col items-center gap-2">
+                    <Loader2 className="h-8 w-8 animate-spin text-white" />
+                    <span className="text-white text-sm font-medium">Enviando...</span>
+                  </div>
+                </div>
+              )}
+              {/* Check de sucesso quando enviada */}
+              {fotoAtualEnviada && !uploading && (
+                <div className="absolute top-2 right-2 w-8 h-8 rounded-full bg-green-500 flex items-center justify-center">
+                  <Check className="h-5 w-5 text-white" />
+                </div>
+              )}
+            </div>
           ) : (
             <>
               <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-3">
