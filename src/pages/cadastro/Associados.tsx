@@ -332,8 +332,8 @@ export default function Associados() {
                 <Users className="h-5 w-5 text-muted-foreground" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{contagem?.total?.toLocaleString() ?? 0}</p>
-                <p className="text-xs text-muted-foreground">Total de associados</p>
+                <p className="text-2xl font-bold">{contagem?.ativo?.toLocaleString() ?? 0}</p>
+                <p className="text-xs text-muted-foreground">Total de ativos</p>
               </div>
             </div>
           </CardContent>

@@ -92,7 +92,8 @@ export function useAssociados({ filters, pagination, enabled = true }: UseAssoci
         .select(`
           *,
           planos (*),
-          contratos!fk_contratos_associado (*)
+          contratos!fk_contratos_associado (*),
+          veiculos (*)
         `, { count: 'exact' });
 
       // Filtro por status (pode ser array)
