@@ -35,7 +35,7 @@ serve(async (req) => {
       .from('cotacoes')
       .select(`
         *,
-        lead:leads (
+        lead:leads!cotacoes_lead_id_fkey (
           id, nome, email, telefone, cpf,
           cidade, estado, endereco, bairro, cep
         ),
