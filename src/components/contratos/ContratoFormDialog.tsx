@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Loader2, Search, User, Check, FileCheck, AlertTriangle } from 'lucide-react';
+import { Loader2, Search, User, Check, FileCheck, AlertTriangle, UserCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -56,6 +56,7 @@ import { useAllLeads } from '@/hooks/useLeads';
 import { usePlanos } from '@/hooks/usePlanos';
 import { useCreateContrato } from '@/hooks/useContratos';
 import { useCotacoesByLead } from '@/hooks/useCotacoesByLead';
+import { useVendedores } from '@/hooks/useVendedores';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -65,6 +66,7 @@ const formSchema = z.object({
   valor_adesao: z.number().min(1, 'O valor de adesão é obrigatório e deve ser maior que zero'),
   valor_mensal: z.number().min(0, 'Informe o valor mensal'),
   dia_vencimento: z.number().min(1).max(28).optional(),
+  vendedor_id: z.string().optional().nullable(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -104,6 +106,7 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
   const { data: leads } = useAllLeads();
   const { data: planos } = usePlanos();
   const createContrato = useCreateContrato();
+  const { data: vendedores = [], isLoading: vendedoresLoading } = useVendedores();
 
   // Filter leads that can become contracts (not lost, not already won)
   const availableLeads = leads?.filter(l => 
@@ -118,6 +121,7 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
       valor_adesao: 0,
       valor_mensal: 0,
       dia_vencimento: 10,
+      vendedor_id: null,
     },
   });
 
@@ -214,6 +218,7 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
         data_inicio: new Date().toISOString().split('T')[0],
         status: 'rascunho',
         cotacao_id: cotacaoPrioritaria?.id || null,
+        vendedor_id: pendingFormData.vendedor_id || null,
       });
 
       toast.success('Proposta criada como rascunho');
@@ -308,6 +313,44 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
                       </Command>
                     </PopoverContent>
                   </Popover>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Consultor Responsável */}
+            <FormField
+              control={form.control}
+              name="vendedor_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="flex items-center gap-2">
+                    <UserCheck className="h-4 w-4 text-primary" />
+                    Consultor Responsável
+                  </FormLabel>
+                  <Select 
+                    onValueChange={(value) => field.onChange(value === '_none' ? null : value)} 
+                    value={field.value || '_none'}
+                    disabled={vendedoresLoading}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        {vendedoresLoading ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <SelectValue placeholder="Selecione um consultor" />
+                        )}
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="_none">Não atribuído</SelectItem>
+                      {vendedores.map((v) => (
+                        <SelectItem key={v.id} value={v.user_id}>
+                          {v.nome}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}
