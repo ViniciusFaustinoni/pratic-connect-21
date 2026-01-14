@@ -69,8 +69,46 @@ serve(async (req) => {
       throw new Error(`Já existe contrato ${contratoExistente.numero} para esta cotação`);
     }
 
-    // 4. Montar endereço completo
-    const lead = cotacao.lead;
+    // 4. Criar lead retroativo se cotação não tem lead vinculado
+    let leadId = cotacao.lead_id;
+    let lead = cotacao.lead;
+    
+    if (!leadId && cotacao.veiculo_marca) {
+      console.log('Criando lead retroativo para cotação sem lead');
+      
+      const { data: novoLead, error: leadError } = await supabase
+        .from('leads')
+        .insert({
+          nome: `Cliente Cotação ${cotacao.numero}`,
+          telefone: cotacao.lead?.telefone || '00000000000', // telefone é obrigatório
+          origem: 'site', // Usando 'site' para leads gerados pelo cotador
+          etapa: 'contrato_enviado',
+          vendedor_id: vendedor_id || cotacao.vendedor_id,
+          veiculo_marca: cotacao.veiculo_marca,
+          veiculo_modelo: cotacao.veiculo_modelo,
+          veiculo_ano: cotacao.veiculo_ano,
+          veiculo_placa: cotacao.veiculo_placa,
+          veiculo_fipe: cotacao.valor_fipe,
+        })
+        .select()
+        .single();
+
+      if (leadError) {
+        console.warn('Erro ao criar lead retroativo:', leadError);
+      } else if (novoLead) {
+        leadId = novoLead.id;
+        lead = novoLead;
+        console.log('Lead retroativo criado:', leadId);
+        
+        // Atualizar cotação com o lead criado
+        await supabase
+          .from('cotacoes')
+          .update({ lead_id: leadId })
+          .eq('id', cotacao_id);
+      }
+    }
+
+    // 5. Montar endereço completo
     const endereco = [
       lead?.endereco,
       lead?.bairro,

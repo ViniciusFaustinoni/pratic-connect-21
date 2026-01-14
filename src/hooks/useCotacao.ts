@@ -393,17 +393,30 @@ export function useCriarCotacao() {
 
       const resultado = resultados[0];
 
-      // Buscar vendedor logado
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Usuário não autenticado');
+      // Buscar vendedor logado - com fallback robusto
+      let vendedorId: string | null = null;
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          console.log('[useCriarCotacao] Usuário autenticado:', user.id);
+          const { data: perfil, error: perfilError } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('user_id', user.id)
+            .single();
 
-      const { data: perfil } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('user_id', user.id)
-        .single();
-
-      if (!perfil) throw new Error('Perfil não encontrado');
+          if (perfilError) {
+            console.warn('[useCriarCotacao] Erro ao buscar perfil:', perfilError);
+          } else if (perfil) {
+            vendedorId = perfil.id;
+            console.log('[useCriarCotacao] Vendedor atribuído:', vendedorId);
+          }
+        } else {
+          console.warn('[useCriarCotacao] Usuário não autenticado, cotação será criada sem vendedor');
+        }
+      } catch (err) {
+        console.warn('[useCriarCotacao] Erro ao obter vendedor (continuando sem):', err);
+      }
 
       // Gerar número da cotação
       const dataAtual = new Date();
@@ -414,7 +427,7 @@ export function useCriarCotacao() {
         numero,
         lead_id: payload.lead_id,
         plano_id: payload.plano_id,
-        vendedor_id: perfil.id,
+        vendedor_id: vendedorId, // Pode ser null se não autenticado
         veiculo_marca: payload.veiculo_marca,
         veiculo_modelo: payload.veiculo_modelo,
         veiculo_ano: payload.veiculo_ano,
