@@ -907,9 +907,9 @@ Adesão: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
                           )}
                         </ul>
                         <Separator className="my-3" />
-                        <div className="text-xs">
+                        <div className="text-xs flex items-center gap-1">
                           <span className="text-muted-foreground">Adesão: </span>
-                          <span className="font-medium">{formatCurrency(valorAdesao || 0)}</span>
+                          <span className="font-medium text-primary">{formatCurrency(valorAdesao || 0)}</span>
                         </div>
                       </CardContent>
                     </Card>
