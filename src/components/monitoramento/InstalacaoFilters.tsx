@@ -56,14 +56,14 @@ const periodoOptions = [
 ];
 
 const instaladorOptions = [
-  { value: '', label: 'Todos' },
+  { value: 'all', label: 'Todos' },
   { value: 'joao', label: 'João Técnico' },
   { value: 'pedro', label: 'Pedro Instalador' },
   { value: 'maria', label: 'Maria Técnica' },
 ];
 
 const regiaoOptions = [
-  { value: '', label: 'Todas' },
+  { value: 'all', label: 'Todas' },
   { value: 'sp_centro', label: 'São Paulo - Centro' },
   { value: 'sp_zona_sul', label: 'São Paulo - Zona Sul' },
   { value: 'campinas', label: 'Campinas' },
@@ -204,9 +204,9 @@ export function InstalacaoFilters({ open, onClose, onApply }: InstalacaoFiltersP
             <div className="space-y-3">
               <Label className="text-sm font-medium">Instalador</Label>
               <Select
-                value={filters.instalador}
+                value={filters.instalador || 'all'}
                 onValueChange={(value) =>
-                  setFilters((prev) => ({ ...prev, instalador: value }))
+                  setFilters((prev) => ({ ...prev, instalador: value === 'all' ? '' : value }))
                 }
               >
                 <SelectTrigger>
@@ -214,7 +214,7 @@ export function InstalacaoFilters({ open, onClose, onApply }: InstalacaoFiltersP
                 </SelectTrigger>
                 <SelectContent>
                   {instaladorOptions.map((option) => (
-                    <SelectItem key={option.value || 'all'} value={option.value || 'all'}>
+                    <SelectItem key={option.value} value={option.value}>
                       {option.label}
                     </SelectItem>
                   ))}
@@ -226,15 +226,15 @@ export function InstalacaoFilters({ open, onClose, onApply }: InstalacaoFiltersP
             <div className="space-y-3">
               <Label className="text-sm font-medium">Região</Label>
               <Select
-                value={filters.regiao}
-                onValueChange={(value) => setFilters((prev) => ({ ...prev, regiao: value }))}
+                value={filters.regiao || 'all'}
+                onValueChange={(value) => setFilters((prev) => ({ ...prev, regiao: value === 'all' ? '' : value }))}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione a região" />
                 </SelectTrigger>
                 <SelectContent>
                   {regiaoOptions.map((option) => (
-                    <SelectItem key={option.value || 'all'} value={option.value || 'all'}>
+                    <SelectItem key={option.value} value={option.value}>
                       {option.label}
                     </SelectItem>
                   ))}
