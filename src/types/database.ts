@@ -98,7 +98,7 @@ export type TipoDocumento =
 
 export type StatusCotacao = 'rascunho' | 'enviada' | 'aceita' | 'recusada' | 'expirada';
 
-export type StatusContrato = 'rascunho' | 'pendente' | 'enviado' | 'assinado' | 'ativo' | 'suspenso' | 'cancelado';
+export type StatusContrato = 'rascunho' | 'pendente' | 'pendente_assinatura' | 'enviado' | 'visualizado' | 'assinado' | 'ativo' | 'suspenso' | 'cancelado' | 'expirado';
 
 // Novos tipos para as tabelas adicionadas
 export type StatusRastreador = 'estoque' | 'instalado' | 'manutencao' | 'baixado';
@@ -675,11 +675,14 @@ export const STATUS_SINISTRO_LABELS: Record<StatusSinistro, string> = {
 export const STATUS_CONTRATO_LABELS: Record<StatusContrato, string> = {
   rascunho: 'Rascunho',
   pendente: 'Pendente',
+  pendente_assinatura: 'Aguardando Assinatura',
   enviado: 'Enviado',
+  visualizado: 'Visualizado',
   assinado: 'Assinado',
   ativo: 'Ativo',
   suspenso: 'Suspenso',
   cancelado: 'Cancelado',
+  expirado: 'Expirado',
 };
 
 export const TIPO_VISTORIA_LABELS: Record<TipoVistoria, string> = {

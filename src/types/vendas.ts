@@ -100,11 +100,14 @@ export const STATUS_COTACAO_COLORS: Record<StatusCotacao, string> = {
 export const STATUS_CONTRATO_COLORS: Record<StatusContrato, string> = {
   rascunho: 'bg-gray-100 text-gray-800',
   pendente: 'bg-yellow-100 text-yellow-800',
+  pendente_assinatura: 'bg-amber-100 text-amber-800',
   enviado: 'bg-blue-100 text-blue-800',
+  visualizado: 'bg-indigo-100 text-indigo-800',
   assinado: 'bg-purple-100 text-purple-800',
   ativo: 'bg-green-100 text-green-800',
   suspenso: 'bg-orange-100 text-orange-800',
   cancelado: 'bg-red-100 text-red-800',
+  expirado: 'bg-gray-100 text-gray-600',
 };
 
 // ============================================
