@@ -405,12 +405,19 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
           <Button 
             variant="outline" 
             onClick={avancarFoto}
-            disabled={isUltimaFoto || uploading}
+            disabled={isUltimaFoto || uploading || !fotoAtualEnviada}
           >
-            {fotoAtualEnviada ? 'Próxima' : 'Pular'}
+            Próxima
             <ArrowRight className="h-4 w-4 ml-2" />
           </Button>
         </div>
+
+        {/* Aviso de foto obrigatória */}
+        {!fotoAtualEnviada && !uploading && (
+          <p className="text-xs text-center text-amber-600 dark:text-amber-400 py-2">
+            Esta foto é obrigatória para continuar
+          </p>
+        )}
 
         {/* Resumo rápido das fotos */}
         <div className="flex flex-wrap gap-1.5 justify-center pt-2">
