@@ -110,20 +110,31 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
 
   // Pré-preencher dados da cotação/lead
   useEffect(() => {
-    if (cotacao?.leads) {
-      const lead = cotacao.leads;
-      form.setValue('nome', lead.nome);
-      form.setValue('telefone', lead.telefone);
-      if (lead.email) form.setValue('email', lead.email);
-      if (lead.cpf) form.setValue('cpf', lead.cpf);
-      if (lead.veiculo_marca) form.setValue('marca', lead.veiculo_marca);
-      if (lead.veiculo_modelo) form.setValue('modelo', lead.veiculo_modelo);
-      if (lead.veiculo_ano) {
-        form.setValue('ano_fabricacao', lead.veiculo_ano);
-        form.setValue('ano_modelo', lead.veiculo_ano);
+    if (cotacao) {
+      // Primeiro: pegar valor FIPE da cotação (fonte principal)
+      if (cotacao.valor_fipe) {
+        form.setValue('valor_fipe', cotacao.valor_fipe);
       }
-      if (lead.veiculo_placa) form.setValue('placa', lead.veiculo_placa);
-      if (lead.veiculo_fipe) form.setValue('valor_fipe', lead.veiculo_fipe);
+      
+      if (cotacao.leads) {
+        const lead = cotacao.leads;
+        form.setValue('nome', lead.nome);
+        form.setValue('telefone', lead.telefone);
+        if (lead.email) form.setValue('email', lead.email);
+        if (lead.cpf) form.setValue('cpf', lead.cpf);
+        if (lead.veiculo_marca) form.setValue('marca', lead.veiculo_marca);
+        if (lead.veiculo_modelo) form.setValue('modelo', lead.veiculo_modelo);
+        if (lead.veiculo_ano) {
+          form.setValue('ano_fabricacao', lead.veiculo_ano);
+          form.setValue('ano_modelo', lead.veiculo_ano);
+        }
+        if (lead.veiculo_placa) form.setValue('placa', lead.veiculo_placa);
+        
+        // Fallback: se a cotação não tiver valor FIPE, usa do lead
+        if (!cotacao.valor_fipe && lead.veiculo_fipe) {
+          form.setValue('valor_fipe', lead.veiculo_fipe);
+        }
+      }
     }
   }, [cotacao, form]);
 
