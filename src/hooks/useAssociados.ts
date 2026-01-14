@@ -34,7 +34,7 @@ export async function buscarAssociadoPorCpf(cpf: string): Promise<Associado | nu
 
 export interface AssociadoWithRelations extends Associado {
   planos?: Tables<'planos'> | null;
-  contratos?: Tables<'contratos'> | null;
+  contratos?: Tables<'contratos'>[] | null;
   veiculos?: Tables<'veiculos'>[];
   veiculos_count?: number;
   documentos_pendentes?: number;
@@ -92,7 +92,7 @@ export function useAssociados({ filters, pagination, enabled = true }: UseAssoci
         .select(`
           *,
           planos (*),
-          contratos (*)
+          contratos!fk_contratos_associado (*)
         `, { count: 'exact' });
 
       // Filtro por status (pode ser array)
@@ -174,7 +174,7 @@ export function useAssociado(id: string | undefined) {
         .select(`
           *,
           planos (*),
-          contratos (*)
+          contratos!fk_contratos_associado (*)
         `)
         .eq('id', id)
         .single();
