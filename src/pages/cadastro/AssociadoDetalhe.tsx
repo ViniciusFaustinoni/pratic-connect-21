@@ -556,7 +556,7 @@ export default function AssociadoDetalhe() {
                 </div>
                 <div>
                   <p className="text-muted-foreground">Contrato</p>
-                  <p className="font-medium">{associado.contratos?.numero || 'CTR-2024-00123'}</p>
+                  <p className="font-medium">{associado.contratos?.[0]?.numero || 'CTR-2024-00123'}</p>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
