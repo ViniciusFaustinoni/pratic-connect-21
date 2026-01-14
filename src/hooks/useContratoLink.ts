@@ -334,6 +334,27 @@ export function useUploadFotoAutovistoria() {
   });
 }
 
+// Hook para gerar link Autentique via token público
+export function useGerarAutentiqueByToken() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (contratoToken: string) => {
+      const { data, error } = await supabase.functions.invoke('autentique-create-by-token', {
+        body: { contratoToken },
+      });
+      
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'Erro ao gerar link de assinatura');
+      
+      return data as { success: boolean; signatureLink: string; message: string };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contrato-publico'] });
+    },
+  });
+}
+
 // Gerar URL do link do associado
 export function getAssociadoLinkUrl(token: string): string {
   const baseUrl = window.location.origin;
