@@ -133,6 +133,78 @@ const formatPlaca = (value: string): string => {
   return `${cleaned.slice(0, 3)}-${cleaned.slice(3, 7)}`;
 };
 
+// Normalizar marca da API para o valor exato da lista MARCAS
+const normalizarMarca = (marcaAPI: string): string => {
+  if (!marcaAPI) return 'Outras';
+  
+  const marcaNormalizada = marcaAPI.toLowerCase().trim();
+  
+  // Mapeamento de variações comuns
+  const mapeamento: Record<string, string> = {
+    'toyota': 'Toyota',
+    'volkswagen': 'Volkswagen',
+    'vw': 'Volkswagen',
+    'chevrolet': 'Chevrolet',
+    'gm': 'Chevrolet',
+    'fiat': 'Fiat',
+    'ford': 'Ford',
+    'hyundai': 'Hyundai',
+    'honda': 'Honda',
+    'renault': 'Renault',
+    'nissan': 'Nissan',
+    'jeep': 'Jeep',
+    'peugeot': 'Peugeot',
+    'citroën': 'Citroën',
+    'citroen': 'Citroën',
+    'mitsubishi': 'Mitsubishi',
+    'kia': 'Kia',
+    'byd': 'BYD',
+    'caoa chery': 'Caoa Chery',
+    'chery': 'Caoa Chery',
+    'ram': 'RAM',
+  };
+  
+  // Tenta encontrar no mapeamento
+  if (mapeamento[marcaNormalizada]) {
+    return mapeamento[marcaNormalizada];
+  }
+  
+  // Tenta encontrar correspondência exata na lista MARCAS
+  const marcaExata = MARCAS.find(m => m.toLowerCase() === marcaNormalizada);
+  if (marcaExata) return marcaExata;
+  
+  // Tenta encontrar por inclusão parcial
+  const marcaParcial = MARCAS.find(m => 
+    marcaNormalizada.includes(m.toLowerCase()) || 
+    m.toLowerCase().includes(marcaNormalizada)
+  );
+  if (marcaParcial) return marcaParcial;
+  
+  return 'Outras';
+};
+
+// Normalizar ano da API (formato "2013/2014") para número
+const normalizarAno = (anoAPI: string): number => {
+  if (!anoAPI) return new Date().getFullYear();
+  
+  // Se vier no formato "2013/2014", pegar o segundo (ano modelo)
+  if (anoAPI.includes('/')) {
+    const partes = anoAPI.split('/');
+    const anoModelo = parseInt(partes[1], 10);
+    if (!isNaN(anoModelo)) return anoModelo;
+  }
+  
+  // Extrair apenas números
+  const apenasNumeros = anoAPI.replace(/\D/g, '').slice(0, 4);
+  const anoNumero = parseInt(apenasNumeros, 10);
+  
+  if (!isNaN(anoNumero) && anoNumero >= 1990 && anoNumero <= 2030) {
+    return anoNumero;
+  }
+  
+  return new Date().getFullYear();
+};
+
 const calcularFipeMock = (marca: string, _modelo: string, ano: number): number => {
   let valor = 30000;
   const ajusteMarca: Record<string, number> = {
@@ -230,6 +302,10 @@ export default function CotadorPage() {
   const [usoApp, setUsoApp] = useState(false);
   const [valorFipe, setValorFipe] = useState<number | null>(null);
   const [categoriaVeiculo, setCategoriaVeiculo] = useState<string | null>(null);
+  
+  // Estados para valores customizados da API (fora das listas estáticas)
+  const [modeloCustom, setModeloCustom] = useState<string | null>(null);
+  const [anoCustom, setAnoCustom] = useState<number | null>(null);
   const [erroCategoriaVeiculo, setErroCategoriaVeiculo] = useState(false);
 
   // Lead
@@ -269,11 +345,24 @@ export default function CotadorPage() {
     ).slice(0, 15);
   }, [buscaLead, leads]);
 
-  // Modelos disponíveis
+  // Modelos disponíveis (inclui modelo customizado da API se houver)
   const modelosDisponiveis = useMemo(() => {
     if (!marca) return [];
-    return MODELOS_POR_MARCA[marca] || [];
-  }, [marca]);
+    const modelos = MODELOS_POR_MARCA[marca] || [];
+    // Adiciona modelo customizado da API se não estiver na lista
+    if (modeloCustom && !modelos.includes(modeloCustom)) {
+      return [modeloCustom, ...modelos];
+    }
+    return modelos;
+  }, [marca, modeloCustom]);
+  
+  // Anos disponíveis (inclui ano customizado da API se houver)
+  const anosDisponiveis = useMemo(() => {
+    if (anoCustom && !ANOS.includes(anoCustom)) {
+      return [...ANOS, anoCustom].sort((a, b) => b - a);
+    }
+    return ANOS;
+  }, [anoCustom]);
 
   // Planos calculados
   const planos = useMemo(() => {
@@ -314,6 +403,9 @@ export default function CotadorPage() {
     setCotacaoSalva(null);
     setCategoriaVeiculo(null);
     setErroCategoriaVeiculo(false);
+    // Limpar valores customizados
+    setModeloCustom(null);
+    setAnoCustom(null);
   };
 
   const handleBuscarPlaca = async () => {
@@ -331,27 +423,49 @@ export default function CotadorPage() {
       if (result.success && result.vehicleData) {
         const { vehicleData, fipeData } = result;
         
+        // Normalizar dados para compatibilidade com as listas
+        const marcaNormalizada = normalizarMarca(vehicleData.marca);
+        const modeloOriginal = vehicleData.modelo; // Modelo exato da API
+        const anoNormalizado = normalizarAno(vehicleData.ano);
+        
+        // Configurar modelo e ano customizados se não estiverem nas listas
+        const modelosLista = MODELOS_POR_MARCA[marcaNormalizada] || [];
+        if (!modelosLista.includes(modeloOriginal)) {
+          setModeloCustom(modeloOriginal);
+        } else {
+          setModeloCustom(null);
+        }
+        
+        if (!ANOS.includes(anoNormalizado)) {
+          setAnoCustom(anoNormalizado);
+        } else {
+          setAnoCustom(null);
+        }
+        
+        // Armazenar dados originais para exibição no card verde
         setVeiculoEncontrado({
           placa: vehicleData.placa,
-          marca: vehicleData.marca,
-          modelo: vehicleData.modelo,
-          ano: vehicleData.ano,
+          marca: vehicleData.marca, // Manter original para exibição
+          modelo: vehicleData.modelo, // Manter original para exibição
+          ano: vehicleData.ano, // Manter original para exibição (ex: "2013/2014")
           cor: vehicleData.cor,
           combustivel: vehicleData.combustivel,
           codigoFipe: fipeData?.codigo,
           valorFipe: fipeData?.valor,
         });
 
-        setMarca(vehicleData.marca);
-        setModelo(vehicleData.modelo);
-        setAno(vehicleData.ano);
+        // Usar valores normalizados para os selects
+        setMarca(marcaNormalizada);
+        setModelo(modeloOriginal);
+        setAno(String(anoNormalizado));
         setCor(vehicleData.cor || '');
         
-        if (fipeData?.valor) {
+        // PRIORIZAR valor FIPE da API (não usar mock)
+        if (fipeData?.valor && fipeData.valor > 0) {
           setValorFipe(fipeData.valor);
         } else {
-          const anoNum = parseInt(vehicleData.ano) || new Date().getFullYear();
-          setValorFipe(calcularFipeMock(vehicleData.marca, vehicleData.modelo, anoNum));
+          // Fallback para mock apenas se API não retornar valor
+          setValorFipe(calcularFipeMock(marcaNormalizada, modeloOriginal, anoNormalizado));
         }
 
         setCotacaoCalculada(false);
@@ -379,6 +493,8 @@ export default function CotadorPage() {
     setCotacaoCalculada(false);
     setPlanoFinalSelecionado(null);
     setCotacaoSalva(null);
+    // Limpar modelo customizado ao trocar marca
+    setModeloCustom(null);
   };
 
   const handleSelecionarLead = (lead: LeadDB) => {
@@ -836,7 +952,7 @@ _Cotação válida por 7 dias_
                         <SelectValue placeholder="Selecione" />
                       </SelectTrigger>
                       <SelectContent>
-                        {ANOS.map((a) => (
+                        {anosDisponiveis.map((a) => (
                           <SelectItem key={a} value={String(a)}>{a}</SelectItem>
                         ))}
                       </SelectContent>
