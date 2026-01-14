@@ -2,12 +2,13 @@ import { useState } from 'react';
 import { Plus, Search, Clock, RefreshCw, CheckCircle, XCircle, ClipboardList } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { cn } from '@/lib/utils';
 import { useVistorias, useVistoriasMetricas, VistoriaStatus } from '@/hooks/useVistorias';
 import { VistoriaListItem } from '@/components/vistorias/VistoriaListItem';
 import { RealizarVistoriaDialog } from '@/components/vistorias/RealizarVistoriaDialog';
+import { VistoriaDetailDrawer } from '@/components/vistorias/VistoriaDetailDrawer';
 import { Loader2 } from 'lucide-react';
 
 type FilterStatus = VistoriaStatus | 'todos';
@@ -16,6 +17,8 @@ export default function Vistorias() {
   const [filter, setFilter] = useState<FilterStatus>('todos');
   const [search, setSearch] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedVistoriaId, setSelectedVistoriaId] = useState<string | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const { data: vistorias = [], isLoading } = useVistorias({ status: filter, search });
   const { data: metricas } = useVistoriasMetricas();
@@ -52,8 +55,8 @@ export default function Vistorias() {
   ];
 
   const handleVistoriaClick = (vistoria: any) => {
-    // TODO: Abrir drawer de detalhes
-    console.log('Vistoria selecionada:', vistoria);
+    setSelectedVistoriaId(vistoria.id);
+    setDrawerOpen(true);
   };
 
   return (
@@ -165,6 +168,13 @@ export default function Vistorias() {
       <RealizarVistoriaDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
+      />
+
+      {/* Drawer de detalhes da vistoria */}
+      <VistoriaDetailDrawer
+        vistoriaId={selectedVistoriaId}
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
       />
     </div>
   );
