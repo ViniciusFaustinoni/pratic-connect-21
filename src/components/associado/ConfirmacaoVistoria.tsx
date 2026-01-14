@@ -181,7 +181,7 @@ export function ConfirmacaoVistoria({
             <div className="bg-yellow-50 dark:bg-yellow-950/20 p-4 rounded-lg">
               <p className="text-sm text-yellow-700 dark:text-yellow-400">
                 <strong>Próximos passos:</strong> Você será notificado quando a análise for concluída.
-                Em caso de aprovação, receberá o link para assinatura do contrato.
+                Em caso de aprovação, receberá o link para assinatura da proposta.
               </p>
             </div>
           </div>

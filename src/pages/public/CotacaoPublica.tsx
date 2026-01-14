@@ -246,7 +246,7 @@ export default function CotacaoPublica() {
             {/* Valores */}
             <div className="bg-primary/5 p-4 rounded-lg space-y-3">
               <div className="flex justify-between items-center">
-                <span className="text-muted-foreground">Taxa de Adesão:</span>
+                <span className="text-muted-foreground">Taxa de Filiação:</span>
                 <span className="font-semibold text-lg">
                   {formatarMoeda(cotacao.valor_adesao || 0)}
                 </span>

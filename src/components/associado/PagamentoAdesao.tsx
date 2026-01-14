@@ -153,7 +153,7 @@ export function PagamentoAdesao({
       <CardHeader className="text-center">
         <CardTitle className="flex items-center justify-center gap-2">
           <CreditCard className="h-5 w-5" />
-          Pagamento da Adesão
+          Pagamento da Taxa de Filiação
         </CardTitle>
         <CardDescription>
           Valor: <span className="font-bold text-foreground text-lg">{formatCurrency(valorAdesao)}</span>

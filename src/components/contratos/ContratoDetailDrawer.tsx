@@ -95,7 +95,7 @@ export function ContratoDetailDrawer({ contratoId, open, onClose }: ContratoDeta
     
     const client = contrato.associados || contrato.leads;
     if (!client?.email) {
-      toast.error('Email do cliente não informado');
+      toast.error('Email do associado não informado');
       return;
     }
 
@@ -251,7 +251,7 @@ export function ContratoDetailDrawer({ contratoId, open, onClose }: ContratoDeta
                     <p className="font-medium text-primary">{formatCurrency(contrato.valor_mensal)}</p>
                   </div>
                   <div>
-                    <span className="text-muted-foreground">Valor Adesão:</span>
+                    <span className="text-muted-foreground">Taxa de Filiação:</span>
                     <p>{formatCurrency(contrato.valor_adesao)}</p>
                   </div>
                   {/* Só exibe dia de vencimento após contrato assinado/ativo */}
@@ -469,7 +469,7 @@ export function ContratoDetailDrawer({ contratoId, open, onClose }: ContratoDeta
                                 <AlertDialogHeader>
                                   <AlertDialogTitle>Cancelar Documento?</AlertDialogTitle>
                                   <AlertDialogDescription>
-                                    Esta ação cancelará o documento no Autentique. O cliente não poderá mais assinar este contrato.
+                                    Esta ação cancelará o documento no Autentique. O associado não poderá mais assinar esta proposta.
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
@@ -640,7 +640,7 @@ export function ContratoDetailDrawer({ contratoId, open, onClose }: ContratoDeta
                 {contrato.status === 'assinado' && (
                   <Button onClick={handleAtivar} className="w-full">
                     <CheckCircle className="mr-2 h-4 w-4" />
-                    Ativar Contrato
+                    Ativar Proposta
                   </Button>
                 )}
               </section>
@@ -652,7 +652,7 @@ export function ContratoDetailDrawer({ contratoId, open, onClose }: ContratoDeta
           </Tabs>
         ) : (
           <div className="text-center text-muted-foreground py-8">
-            Contrato não encontrado
+            Proposta não encontrada
           </div>
         )}
       </SheetContent>

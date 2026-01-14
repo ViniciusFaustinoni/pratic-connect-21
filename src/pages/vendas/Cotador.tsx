@@ -623,7 +623,7 @@ ${planoFinalSelecionado.naoInclui.length > 0 ? `*Não incluído:*\n${planoFinalS
 💰 *VALORES*
 ━━━━━━━━━━━━━━━━━━━━
 
-*Adesão:* ${formatCurrency(planoFinalSelecionado.valorAdesao)}
+*Taxa de Filiação:* ${formatCurrency(planoFinalSelecionado.valorAdesao)}
 *Mensalidade:* ${formatCurrency(planoFinalSelecionado.valorMensal)}
 *1ª Parcela:* ${formatCurrency(planoFinalSelecionado.valorAdesao + planoFinalSelecionado.valorMensal)}
 

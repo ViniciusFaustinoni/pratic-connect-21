@@ -729,9 +729,9 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Novo Contrato</DialogTitle>
+          <DialogTitle>Nova Proposta</DialogTitle>
           <DialogDescription>
-            Finalize o contrato a partir da cotação aceita
+            Finalize a proposta a partir da cotação aceita
           </DialogDescription>
         </DialogHeader>
 
@@ -794,7 +794,7 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
                       <p className="font-medium text-primary">{formatCurrency(cotacao.valor_total_mensal)}</p>
                     </div>
                     <div>
-                      <span className="text-muted-foreground">Adesão:</span>
+                      <span className="text-muted-foreground">Filiação:</span>
                       <p>{formatCurrency(cotacao.valor_adesao)}</p>
                     </div>
                   </div>
