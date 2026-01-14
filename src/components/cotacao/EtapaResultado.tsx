@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
 import { 
   Receipt, 
   AlertTriangle,
@@ -17,6 +18,7 @@ import {
 } from 'lucide-react';
 import { CATEGORIAS_VEICULO } from '@/components/cotador/VehicleCategorySelect';
 import { PlanoCardCotacao } from './PlanoCardCotacao';
+import { CurrencyInput } from '@/components/inputs/MaskedInputs';
 import { cn } from '@/lib/utils';
 import type { PlanoOficial } from '@/hooks/usePlanosOficiais';
 
@@ -44,6 +46,8 @@ interface EtapaResultadoProps {
   planos: PlanoOficial[];
   planoSelecionado: PlanoOficial | null;
   setPlanoSelecionado: (plano: PlanoOficial | null) => void;
+  valorAdesao?: number | null;
+  onValorAdesaoChange?: (valor: number) => void;
   onNovaCotacao: () => void;
   onGerarPDF: () => void;
   onIniciarCadastro: () => void;
@@ -83,6 +87,8 @@ export function EtapaResultado({
   planos,
   planoSelecionado,
   setPlanoSelecionado,
+  valorAdesao,
+  onValorAdesaoChange,
   onNovaCotacao,
   onGerarPDF,
   onIniciarCadastro,
@@ -220,7 +226,27 @@ export function EtapaResultado({
 
       {/* Ações */}
       <Card className="border-border bg-card">
-        <CardContent className="pt-6">
+        <CardContent className="pt-6 space-y-4">
+          {/* Campo de Adesão Editável - quando plano selecionado */}
+          {planoSelecionado && onValorAdesaoChange && (
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pb-4 border-b border-border">
+              <Label className="text-sm font-medium text-muted-foreground whitespace-nowrap">
+                Valor de Adesão:
+              </Label>
+              <CurrencyInput
+                value={valorAdesao ?? planoSelecionado.valorAdesao ?? 0}
+                onChange={onValorAdesaoChange}
+                className="w-40 text-center font-semibold"
+              />
+              {(valorAdesao ?? 0) <= 0 && (
+                <span className="text-xs text-destructive flex items-center gap-1">
+                  <AlertTriangle className="h-3 w-3" />
+                  Valor inválido
+                </span>
+              )}
+            </div>
+          )}
+
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button
               variant="outline"
@@ -243,7 +269,7 @@ export function EtapaResultado({
             
             <Button
               onClick={onIniciarCadastro}
-              disabled={!planoSelecionado}
+              disabled={!planoSelecionado || (valorAdesao !== undefined && valorAdesao !== null && valorAdesao <= 0)}
               className="sm:min-w-[160px]"
             >
               <UserPlus className="mr-2 h-4 w-4" />

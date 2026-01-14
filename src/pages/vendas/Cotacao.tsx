@@ -71,6 +71,17 @@ export default function CotacaoPage() {
   // Etapa 4 - Resultado
   const [isCalculando, setIsCalculando] = useState(false);
   const [planoSelecionado, setPlanoSelecionado] = useState<PlanoOficial | null>(null);
+  const [valorAdesaoCustomizado, setValorAdesaoCustomizado] = useState<number | null>(null);
+
+  // Atualizar valor de adesão quando plano é selecionado
+  const handleSelecionarPlano = useCallback((plano: PlanoOficial | null) => {
+    setPlanoSelecionado(plano);
+    if (plano) {
+      setValorAdesaoCustomizado(plano.valorAdesao);
+    } else {
+      setValorAdesaoCustomizado(null);
+    }
+  }, []);
 
   // Hook de planos oficiais - calcula automaticamente baseado nos parâmetros
   const { planos: planosOficiais, isLoading: isLoadingPlanos } = usePlanosOficiais({
@@ -185,6 +196,13 @@ export default function CotacaoPage() {
       return;
     }
     
+    // Validar valor de adesão
+    const valorAdesaoFinal = valorAdesaoCustomizado ?? planoSelecionado.valorAdesao ?? 0;
+    if (valorAdesaoFinal <= 0) {
+      toast.error('O valor de adesão deve ser maior que zero');
+      return;
+    }
+    
     // Dados da cotação para pré-preencher o contrato
     const dadosCotacao = {
       veiculo: {
@@ -197,7 +215,7 @@ export default function CotacaoPage() {
       plano: {
         id: planoSelecionado.idReal || planoSelecionado.id,
         nome: planoSelecionado.nome,
-        valorAdesao: planoSelecionado.valorAdesao || 0,
+        valorAdesao: valorAdesaoFinal,
         valorMensal: planoSelecionado.valorMensal || 0,
       },
       categoria: categoria,
@@ -207,7 +225,7 @@ export default function CotacaoPage() {
     
     toast.success('Redirecionando para cadastro de contrato...');
     navigate('/vendas/contratos', { state: { fromCotacao: true, dadosCotacao } });
-  }, [planoSelecionado, navigate, veiculoEncontrado, placa, marca, modelo, ano, valorFipe, categoria, regiao, usoApp]);
+  }, [planoSelecionado, navigate, veiculoEncontrado, placa, marca, modelo, ano, valorFipe, categoria, regiao, usoApp, valorAdesaoCustomizado]);
 
   // Click no stepper
   const handleStepClick = useCallback((step: number) => {
@@ -305,7 +323,9 @@ export default function CotacaoPage() {
             combustivel={combustivel}
             planos={planosOficiais}
             planoSelecionado={planoSelecionado}
-            setPlanoSelecionado={setPlanoSelecionado}
+            setPlanoSelecionado={handleSelecionarPlano}
+            valorAdesao={valorAdesaoCustomizado}
+            onValorAdesaoChange={setValorAdesaoCustomizado}
             onNovaCotacao={handleNovaCotacao}
             onGerarPDF={handleGerarPDF}
             onIniciarCadastro={handleIniciarCadastro}
