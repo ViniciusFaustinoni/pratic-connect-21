@@ -109,7 +109,7 @@ export function AgendarVistoria({ contratoId, associadoId, veiculoId, onAgendar,
             </div>
             
             <p className="text-sm text-muted-foreground text-center">
-              Para confirmar o agendamento, você precisará realizar o pagamento da taxa de adesão.
+              Para confirmar o agendamento, você precisará realizar o pagamento da taxa de filiação.
             </p>
             
             <Button 
@@ -121,7 +121,7 @@ export function AgendarVistoria({ contratoId, associadoId, veiculoId, onAgendar,
               {criarVistoria.isPending ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : null}
-              Confirmar e Pagar Adesão
+              Confirmar e Pagar Filiação
             </Button>
           </div>
         )}

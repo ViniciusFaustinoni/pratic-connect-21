@@ -108,10 +108,10 @@ export function useContratoActions() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['contratos'] });
-      toast.success('Contrato reenviado para assinatura!');
+      toast.success('Proposta reenviada para assinatura!');
     },
     onError: () => {
-      toast.error('Erro ao reenviar contrato');
+      toast.error('Erro ao reenviar proposta');
     },
   });
 
@@ -129,10 +129,10 @@ export function useContratoActions() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['contratos'] });
-      toast.success('Contrato cancelado');
+      toast.success('Proposta cancelada');
     },
     onError: () => {
-      toast.error('Erro ao cancelar contrato');
+      toast.error('Erro ao cancelar proposta');
     },
   });
 
@@ -390,10 +390,10 @@ export function useGerarContrato() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['contratos'] });
       queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
-      toast.success('Contrato gerado com sucesso!');
+      toast.success('Proposta gerada com sucesso!');
     },
     onError: (error: Error) => {
-      toast.error(error.message || 'Erro ao gerar contrato');
+      toast.error(error.message || 'Erro ao gerar proposta');
     },
   });
 }

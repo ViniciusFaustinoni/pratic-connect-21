@@ -263,7 +263,7 @@ export function ProdutoFormModal({ open, onClose, produto }: ProdutoFormModalPro
 
           <div className="grid grid-cols-3 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="valor_adesao">Valor Adesão (R$)</Label>
+              <Label htmlFor="valor_adesao">Taxa de Filiação (R$)</Label>
               <Input
                 id="valor_adesao"
                 type="number"

@@ -143,7 +143,7 @@ export default function Contratos() {
 
     const client = contrato.associados || contrato.leads;
     if (!client?.email) {
-      toast.error('Email do cliente não informado');
+      toast.error('Email do associado não informado');
       return;
     }
 
@@ -164,9 +164,9 @@ export default function Contratos() {
       await ativarContrato.mutateAsync(contratoId);
       
       if (!hadAssociado) {
-        toast.success('Contrato ativado! Associado e veículo criados automaticamente.');
+        toast.success('Proposta ativada! Associado e veículo criados automaticamente.');
       } else {
-        toast.success('Contrato ativado com sucesso!');
+        toast.success('Proposta ativada com sucesso!');
       }
     } catch (error: any) {
       toast.error(error?.message || 'Erro ao ativar contrato');
@@ -249,14 +249,14 @@ export default function Contratos() {
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Contratos</h1>
+          <h1 className="text-2xl font-bold">Propostas</h1>
           <p className="text-muted-foreground">
-            Visualize e gerencie contratos de adesão
+            Visualize e gerencie propostas de filiação
           </p>
         </div>
         <Button onClick={() => setFormDialogOpen(true)}>
           <Plus className="mr-2 h-4 w-4" />
-          Novo Contrato
+          Nova Proposta
         </Button>
       </div>
 
@@ -344,11 +344,11 @@ export default function Contratos() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Nº Contrato</TableHead>
+                <TableHead>Nº Proposta</TableHead>
                 <TableHead>Lead/Associado</TableHead>
                 <TableHead>Veículo</TableHead>
                 <TableHead>Plano</TableHead>
-                <TableHead>Adesão</TableHead>
+                <TableHead>Filiação</TableHead>
                 <TableHead>Mensal</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Data</TableHead>
@@ -359,7 +359,7 @@ export default function Contratos() {
               {filteredContratos.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
-                    Nenhum contrato encontrado
+                    Nenhuma proposta encontrada
                   </TableCell>
                 </TableRow>
               ) : (
@@ -514,7 +514,7 @@ export default function Contratos() {
                                     <DropdownMenuItem 
                                       className="text-destructive"
                                       onClick={async () => {
-                                        if (!confirm('Tem certeza que deseja excluir este contrato definitivamente? Esta ação não pode ser desfeita.')) {
+                                        if (!confirm('Tem certeza que deseja excluir esta proposta definitivamente? Esta ação não pode ser desfeita.')) {
                                           return;
                                         }
                                         try {
@@ -543,11 +543,11 @@ export default function Contratos() {
                                             .eq('id', contrato.id);
                                           if (error) throw error;
                                           
-                                          toast.success('Contrato excluído com sucesso');
+                                          toast.success('Proposta excluída com sucesso');
                                           queryClient.invalidateQueries({ queryKey: ['contratos'] });
                                         } catch (error) {
-                                          console.error('Erro ao excluir contrato:', error);
-                                          toast.error('Erro ao excluir contrato. Verifique se há registros dependentes.');
+                                          console.error('Erro ao excluir proposta:', error);
+                                          toast.error('Erro ao excluir proposta. Verifique se há registros dependentes.');
                                         }
                                       }}
                                     >

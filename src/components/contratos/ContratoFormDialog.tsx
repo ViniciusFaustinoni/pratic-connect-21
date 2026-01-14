@@ -188,7 +188,7 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
   const onSubmit = (data: FormData) => {
     // Validação extra (redundante mas segura)
     if (data.valor_adesao <= 0) {
-      toast.error('O valor de adesão deve ser maior que zero!');
+      toast.error('A taxa de filiação deve ser maior que zero!');
       return;
     }
     
@@ -216,12 +216,12 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
         cotacao_id: cotacaoPrioritaria?.id || null,
       });
 
-      toast.success('Contrato criado como rascunho');
+      toast.success('Proposta criada como rascunho');
       onOpenChange(false);
       form.reset();
       setPendingFormData(null);
     } catch (error) {
-      toast.error('Erro ao criar contrato');
+      toast.error('Erro ao criar proposta');
       console.error(error);
     } finally {
       setIsSubmitting(false);
@@ -232,9 +232,9 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Novo Contrato</DialogTitle>
+          <DialogTitle>Nova Proposta</DialogTitle>
           <DialogDescription>
-            Crie um contrato manualmente selecionando um lead e plano
+            Crie uma proposta manualmente selecionando um lead e plano
           </DialogDescription>
         </DialogHeader>
 
@@ -354,12 +354,12 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
 
                 {/* Alerta se lead não tiver email */}
                 {!selectedLead.email && (
-                  <div className="pt-2 border-t border-amber-500/50 flex items-start gap-2">
-                    <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-                    <div className="text-xs">
-                      <p className="font-medium text-amber-500">Email não informado</p>
-                      <p className="text-muted-foreground">
-                        O email é obrigatório para enviar o contrato para assinatura. Edite o lead antes de criar o contrato.
+                    <div className="pt-2 border-t border-amber-500/50 flex items-start gap-2">
+                      <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                      <div className="text-xs">
+                        <p className="font-medium text-amber-500">Email não informado</p>
+                        <p className="text-muted-foreground">
+                          O email é obrigatório para enviar a proposta para assinatura. Edite o lead antes de criar a proposta.
                       </p>
                     </div>
                   </div>
@@ -383,7 +383,7 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
                     <SelectContent>
                       {planos?.filter(p => p.ativo).map((plano) => (
                         <SelectItem key={plano.id} value={plano.id}>
-                          {plano.nome} - Adesão: {formatCurrency(plano.valor_adesao)}
+                          {plano.nome} - Filiação: {formatCurrency(plano.valor_adesao)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -399,8 +399,8 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
                 control={form.control}
                 name="valor_adesao"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Valor Adesão *</FormLabel>
+                <FormItem>
+                    <FormLabel>Taxa de Filiação *</FormLabel>
                     <FormControl>
                       <CurrencyInput
                         value={field.value}
@@ -413,7 +413,7 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
                     {field.value <= 0 && (
                       <p className="text-xs text-destructive flex items-center gap-1 mt-1">
                         <AlertTriangle className="h-3 w-3" />
-                        O valor de adesão não pode ser zero
+                        A taxa de filiação não pode ser zero
                       </p>
                     )}
                     <FormMessage />

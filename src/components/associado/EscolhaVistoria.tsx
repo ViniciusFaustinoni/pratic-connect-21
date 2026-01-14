@@ -69,7 +69,7 @@ export function EscolhaVistoria({ contratoId, onEscolher }: EscolhaVistoriaProps
 
         {/* Info */}
         <p className="text-xs text-center text-muted-foreground pt-4">
-          Em ambas as opções, você precisará pagar a taxa de adesão para confirmar.
+          Em ambas as opções, você precisará pagar a taxa de filiação para confirmar.
         </p>
       </CardContent>
     </Card>

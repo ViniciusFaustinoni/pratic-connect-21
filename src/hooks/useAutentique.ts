@@ -56,13 +56,13 @@ export function useSendToAutentique() {
       return data;
     },
     onSuccess: (data) => {
-      toast.success('Contrato enviado para assinatura!', {
-        description: 'O cliente receberá um email com o link para assinar.',
+      toast.success('Proposta enviada para assinatura!', {
+        description: 'O associado receberá um email com o link para assinar.',
       });
       queryClient.invalidateQueries({ queryKey: ['contratos'] });
     },
     onError: (error: any) => {
-      toast.error('Erro ao enviar contrato', {
+      toast.error('Erro ao enviar proposta', {
         description: error.message,
       });
     },
@@ -155,7 +155,7 @@ export function useCancelAutentique() {
     },
     onSuccess: () => {
       toast.success('Documento cancelado!', {
-        description: 'O contrato foi cancelado e o cliente não poderá mais assinar.',
+        description: 'A proposta foi cancelada e o associado não poderá mais assinar.',
       });
       queryClient.invalidateQueries({ queryKey: ['contratos'] });
     },
@@ -188,7 +188,7 @@ export function getWhatsAppLink(phone: string, url: string, clientName?: string)
   const formattedPhone = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
   const greeting = clientName ? `Olá ${clientName}! ` : 'Olá! ';
   const message = encodeURIComponent(
-    `${greeting}Segue o link para assinar seu contrato de adesão: ${url}`
+    `${greeting}Segue o link para assinar sua proposta de filiação: ${url}`
   );
   return `https://wa.me/${formattedPhone}?text=${message}`;
 }

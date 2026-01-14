@@ -49,8 +49,8 @@ const statusDocConfig: Record<string, { label: string; icon: typeof CheckCircle;
 
 // Mock data for contractual documents
 const documentosContratuaisMock: DocumentoContratual[] = [
-  { id: '1', tipo: 'contrato', nome: 'Contrato de Adesão', subtitulo: 'Assinado em 15/01/2024', formato: 'PDF', icon: FileText, cor: 'blue' },
-  { id: '2', tipo: 'certificado', nome: 'Certificado de Adesão', subtitulo: 'Emitido em 20/01/2024', formato: 'PDF', icon: Award, cor: 'green' },
+  { id: '1', tipo: 'contrato', nome: 'Proposta de Filiação', subtitulo: 'Assinado em 15/01/2024', formato: 'PDF', icon: FileText, cor: 'blue' },
+  { id: '2', tipo: 'certificado', nome: 'Certificado de Filiação', subtitulo: 'Emitido em 20/01/2024', formato: 'PDF', icon: Award, cor: 'green' },
   { id: '3', tipo: 'regulamento', nome: 'Regulamento Geral', subtitulo: 'Versão 2024.1', formato: 'PDF', icon: BookOpen, cor: 'purple' },
   { id: '4', tipo: 'cobertura', nome: 'Tabela de Coberturas', subtitulo: 'Plano Proteção Total', formato: 'PDF', icon: Shield, cor: 'amber' },
 ];

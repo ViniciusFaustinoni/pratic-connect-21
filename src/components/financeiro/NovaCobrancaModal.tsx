@@ -42,7 +42,7 @@ interface NovaCobrancaModalProps {
 
 const tipoOptions = [
   { value: 'mensalidade', label: 'Mensalidade' },
-  { value: 'adesao', label: 'Adesão' },
+  { value: 'adesao', label: 'Taxa de Filiação' },
   { value: 'taxa_instalacao', label: 'Taxa de Instalação' },
   { value: 'taxa_vistoria', label: 'Taxa de Vistoria' },
   { value: 'participacao_sinistro', label: 'Participação Sinistro' },

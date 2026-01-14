@@ -28,7 +28,7 @@ const statusConfig: Record<string, { label: string; class: string }> = {
 
 const tipoConfig: Record<string, { label: string; class: string }> = {
   'mensalidade': { label: 'Mensalidade', class: 'bg-blue-100 text-blue-800' },
-  'adesao': { label: 'Adesão', class: 'bg-purple-100 text-purple-800' },
+  'adesao': { label: 'Taxa de Filiação', class: 'bg-purple-100 text-purple-800' },
   'taxa_instalacao': { label: 'Taxa Instalação', class: 'bg-indigo-100 text-indigo-800' },
   'taxa_vistoria': { label: 'Taxa Vistoria', class: 'bg-cyan-100 text-cyan-800' },
   'participacao_sinistro': { label: 'Participação Sinistro', class: 'bg-orange-100 text-orange-800' },

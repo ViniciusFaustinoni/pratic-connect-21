@@ -530,7 +530,7 @@ Veículo: ${veiculoInfo}
 FIPE: ${formatCurrency(valorFipe)}
 Plano: ${planoSelecionadoData.plano.nome}
 Valor Mensal: ${formatCurrency(planoSelecionadoData.totalMensal)}
-Adesão: ${formatCurrency(form.getValues('valor_adesao') || 0)}
+Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}
 Validade: ${validadeDias} dias`;
     
     navigator.clipboard.writeText(texto);
@@ -550,7 +550,7 @@ Veículo: ${veiculoInfo}
 FIPE: ${formatCurrency(valorFipe)}
 Plano: ${planoSelecionadoData.plano.nome}
 Valor Mensal: ${formatCurrency(planoSelecionadoData.totalMensal)}
-Adesão: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
+Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
     
     window.open(`https://wa.me/?text=${texto}`, '_blank');
   };
