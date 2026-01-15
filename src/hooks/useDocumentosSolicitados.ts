@@ -235,6 +235,8 @@ export function useVerificarDocumentosCompletos() {
 
   return useMutation({
     mutationFn: async (associadoId: string) => {
+      console.log('[useVerificarDocumentosCompletos] Verificando associado:', associadoId);
+      
       // Verificar se ainda há documentos pendentes
       const { data: pendentes, error } = await supabase
         .from('documentos_solicitados')
@@ -242,19 +244,37 @@ export function useVerificarDocumentosCompletos() {
         .eq('associado_id', associadoId)
         .eq('status', 'pendente');
 
-      if (error) throw error;
+      if (error) {
+        console.error('[useVerificarDocumentosCompletos] Erro ao buscar pendentes:', error);
+        throw error;
+      }
+
+      console.log('[useVerificarDocumentosCompletos] Documentos pendentes:', pendentes?.length || 0);
 
       // Se não há mais pendentes, atualizar status do associado
       if (!pendentes || pendentes.length === 0) {
-        const { error: updateError } = await supabase
+        console.log('[useVerificarDocumentosCompletos] Atualizando status para em_analise...');
+        
+        const { error: updateError, data: updateData } = await supabase
           .from('associados')
           .update({
             status: 'em_analise',
             updated_at: new Date().toISOString(),
           })
-          .eq('id', associadoId);
+          .eq('id', associadoId)
+          .select('id, status');
 
-        if (updateError) throw updateError;
+        if (updateError) {
+          console.error('[useVerificarDocumentosCompletos] Erro ao atualizar status:', updateError);
+          throw updateError;
+        }
+
+        // Verificar se o update realmente afetou alguma linha
+        if (!updateData || updateData.length === 0) {
+          console.warn('[useVerificarDocumentosCompletos] Nenhuma linha atualizada - verificar RLS');
+        } else {
+          console.log('[useVerificarDocumentosCompletos] Status atualizado:', updateData);
+        }
 
         return { todosEnviados: true };
       }
@@ -267,6 +287,7 @@ export function useVerificarDocumentosCompletos() {
       }
       queryClient.invalidateQueries({ queryKey: ['associados'] });
       queryClient.invalidateQueries({ queryKey: ['propostas-pendentes'] });
+      queryClient.invalidateQueries({ queryKey: ['contrato-publico'] });
     },
   });
 }

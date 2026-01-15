@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { Loader2, Car, Calendar, Camera, CheckCircle, AlertCircle } from 'lucide-react';
+import { Loader2, Car, Calendar, Camera, CheckCircle, AlertCircle, Clock, FileCheck, Search } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useContratoByToken, useGerarAutentiqueByToken } from '@/hooks/useContratoLink';
 import { EscolhaVistoria } from '@/components/associado/EscolhaVistoria';
@@ -10,6 +11,15 @@ import { Autovistoria } from '@/components/associado/Autovistoria';
 import { PagamentoAdesao } from '@/components/associado/PagamentoAdesao';
 import { ConfirmacaoVistoria } from '@/components/associado/ConfirmacaoVistoria';
 import { DocumentosPendentes } from '@/components/associado/DocumentosPendentes';
+
+// Mapeamento de status do associado para exibição
+const STATUS_ASSOCIADO_CONFIG: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; icon: React.ReactNode }> = {
+  'em_cadastro': { label: 'Aguardando Vistoria', variant: 'secondary', icon: <Clock className="h-3 w-3" /> },
+  'documentacao_pendente': { label: 'Aguardando Documentos', variant: 'destructive', icon: <AlertCircle className="h-3 w-3" /> },
+  'em_analise': { label: 'Em Análise', variant: 'default', icon: <Search className="h-3 w-3" /> },
+  'aprovado': { label: 'Aprovado', variant: 'outline', icon: <CheckCircle className="h-3 w-3" /> },
+  'ativo': { label: 'Ativo', variant: 'outline', icon: <CheckCircle className="h-3 w-3" /> },
+};
 
 type Etapa = 'escolha' | 'agendar' | 'autovistoria' | 'pagamento' | 'confirmacao';
 
@@ -102,12 +112,22 @@ export default function AssociadoVistoria() {
               <div className="bg-primary/10 p-2 rounded-lg">
                 <Car className="h-5 w-5 text-primary" />
               </div>
-              <div>
+              <div className="flex-1">
                 <p className="font-medium">{veiculoInfo}</p>
                 <p className="text-sm text-muted-foreground">
                   Plano: {contrato.planos?.nome || 'Não informado'}
                 </p>
               </div>
+              {/* Status do Associado */}
+              {contrato.associados?.status && STATUS_ASSOCIADO_CONFIG[contrato.associados.status] && (
+                <Badge 
+                  variant={STATUS_ASSOCIADO_CONFIG[contrato.associados.status].variant}
+                  className="flex items-center gap-1"
+                >
+                  {STATUS_ASSOCIADO_CONFIG[contrato.associados.status].icon}
+                  {STATUS_ASSOCIADO_CONFIG[contrato.associados.status].label}
+                </Badge>
+              )}
             </div>
           </CardContent>
         </Card>
