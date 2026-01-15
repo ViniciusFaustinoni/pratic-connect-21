@@ -135,6 +135,37 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
         if (!cotacao.valor_fipe && lead.veiculo_fipe) {
           form.setValue('valor_fipe', lead.veiculo_fipe);
         }
+        
+        // Fallback: se o lead não tiver email/telefone, usa da cotação
+        if (!lead.email && cotacao.email_solicitante) {
+          form.setValue('email', cotacao.email_solicitante);
+        }
+        if (!lead.telefone && cotacao.telefone1_solicitante) {
+          form.setValue('telefone', cotacao.telefone1_solicitante);
+        }
+      } else {
+        // Sem lead vinculado: usar dados do solicitante da cotação
+        if (cotacao.nome_solicitante) {
+          form.setValue('nome', cotacao.nome_solicitante);
+        }
+        if (cotacao.email_solicitante) {
+          form.setValue('email', cotacao.email_solicitante);
+        }
+        if (cotacao.telefone1_solicitante) {
+          form.setValue('telefone', cotacao.telefone1_solicitante);
+        }
+      }
+      
+      // Preencher dados do veículo da cotação (caso não tenha lead ou lead não tenha veículo)
+      const currentMarca = form.getValues('marca');
+      if (!currentMarca) {
+        if (cotacao.veiculo_marca) form.setValue('marca', cotacao.veiculo_marca);
+        if (cotacao.veiculo_modelo) form.setValue('modelo', cotacao.veiculo_modelo);
+        if (cotacao.veiculo_ano) {
+          form.setValue('ano_fabricacao', cotacao.veiculo_ano);
+          form.setValue('ano_modelo', cotacao.veiculo_ano);
+        }
+        if (cotacao.veiculo_placa) form.setValue('placa', cotacao.veiculo_placa);
       }
     }
   }, [cotacao, form]);
