@@ -108,15 +108,11 @@ export function CotacaoCard({
 }: CotacaoCardProps) {
   const status = statusConfig[cotacao.status as StatusCotacaoExtended] || statusConfig.rascunho;
   const hasLead = !!cotacao.lead_id;
-  const isWithoutLead = !hasLead && cotacao.status === 'rascunho';
   const vendedorNome = cotacao.vendedor?.nome;
   
   // Cores de fundo baseadas no tipo
   const getBgClass = () => {
-    if (tipo === 'andamento') {
-      if (isWithoutLead) return 'border-l-orange-500 bg-orange-500/5';
-      return 'border-l-yellow-500 bg-yellow-500/5';
-    }
+    if (tipo === 'andamento') return 'border-l-yellow-500 bg-yellow-500/5';
     if (cotacao.status === 'aceita') return 'border-l-green-500 bg-green-500/5';
     if (cotacao.status === 'recusada') return 'border-l-red-500 bg-red-500/5';
     return status.borderColor;
@@ -135,7 +131,7 @@ export function CotacaoCard({
         <div className="flex items-center gap-3">
           <Badge className={cn(status.bgColor, status.color, "font-medium border-0")}>
             <status.icon className="h-3 w-3 mr-1" />
-            {isWithoutLead ? 'SEM LEAD' : status.label.toUpperCase()}
+            {status.label.toUpperCase()}
           </Badge>
           {vendedorNome && (
             <div className="flex items-center gap-1 text-xs text-muted-foreground">
