@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Loader2, Car, Search, CheckCircle2, Shield, Check, AlertCircle, Copy, MessageCircle, Zap, User, Link, UserCheck } from 'lucide-react';
+import { Loader2, Car, Search, CheckCircle2, Shield, Check, AlertCircle, Copy, MessageCircle, Zap, User, Link, UserCheck, Phone, Mail, AlertTriangle, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { LeadCombobox } from '@/components/leads/LeadCombobox';
 import type { Lead } from '@/types/vendas';
@@ -42,16 +42,50 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
-import { CurrencyInput } from '@/components/inputs/MaskedInputs';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { CurrencyInput, TelefoneInput } from '@/components/inputs/MaskedInputs';
 import { cotacaoSchema, type CotacaoFormData } from '@/lib/validations';
 import { useCreateCotacao } from '@/hooks/useCotacoes';
-import { usePlanos, useTabelaPrecoByFipe } from '@/hooks/usePlanos';
+import { usePlanosCotacao, type PlanoCotacao } from '@/hooks/usePlanosCotacao';
 import { useLead } from '@/hooks/useLeads';
 import { useFipe, type PlateResult, type FipeMarca, type FipeModelo, type FipeAno } from '@/hooks/useFipe';
 import { useVendedores } from '@/hooks/useVendedores';
 import { toast } from 'sonner';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
+import { VehicleCategorySelect, CATEGORIAS_VEICULO } from '@/components/cotador/VehicleCategorySelect';
+
+// Alertas baseados na categoria selecionada
+const ALERTAS_CATEGORIA: Record<string, { tipo: 'warning' | 'info'; mensagem: string }> = {
+  leilao: {
+    tipo: 'warning',
+    mensagem: 'Veículos de leilão não possuem cobertura de incêndio.',
+  },
+  aplicativo: {
+    tipo: 'info',
+    mensagem: 'Categoria APP: cota de participação será 8% (mínimo R$ 3.000).',
+  },
+  chassi_remarcado: {
+    tipo: 'warning',
+    mensagem: 'Veículo sujeito à análise de aceitação prévia.',
+  },
+  taxi: {
+    tipo: 'info',
+    mensagem: 'Categoria especial: valores diferenciados podem ser aplicados.',
+  },
+  ex_taxi: {
+    tipo: 'info',
+    mensagem: 'Categoria especial: valores diferenciados podem ser aplicados.',
+  },
+  placa_vermelha: {
+    tipo: 'info',
+    mensagem: 'Veículo de aluguel: valores diferenciados podem ser aplicados.',
+  },
+  ressarcimento_integral: {
+    tipo: 'warning',
+    mensagem: 'Veículo com histórico de ressarcimento integral. Sujeito à análise.',
+  },
+};
 
 interface CotacaoFormDialogProps {
   open: boolean;
@@ -59,29 +93,18 @@ interface CotacaoFormDialogProps {
   leadId?: string;
 }
 
-interface PlanoComPreco {
-  plano: {
-    id: string;
-    nome: string;
-    codigo: string;
-    valor_adesao: number;
-    tipo_uso: string | null;
-    descricao: string | null;
-  };
-  valorCota: number;
-  taxaAdmin: number;
-  rastreamento: number;
-  assistencia: number;
-  totalMensal: number;
-}
-
 export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDialogProps) {
   const navigate = useNavigate();
   const createCotacao = useCreateCotacao();
-  const { data: planos, isLoading: planosLoading } = usePlanos();
   const { data: lead } = useLead(leadId);
   const { getMarcas, getModelos, getAnos, getPreco, getByPlaca, buscarPorNome, loading: fipeLoading } = useFipe();
   const { data: vendedores = [], isLoading: vendedoresLoading } = useVendedores();
+  
+  // Estados para dados do cliente
+  const [nomeCliente, setNomeCliente] = useState('');
+  const [telefoneCliente, setTelefoneCliente] = useState('');
+  const [emailCliente, setEmailCliente] = useState('');
+  
   // Estados para busca por placa
   const [placa, setPlaca] = useState('');
   const [buscandoPlaca, setBuscandoPlaca] = useState(false);
@@ -99,6 +122,9 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
   const [modeloSelecionado, setModeloSelecionado] = useState('');
   const [anoSelecionado, setAnoSelecionado] = useState('');
   
+  // Estado para categoria/deságio
+  const [categoria, setCategoria] = useState<string | null>('nenhuma');
+  
   // Loading states
   const [loadingMarcas, setLoadingMarcas] = useState(false);
   const [loadingModelos, setLoadingModelos] = useState(false);
@@ -106,7 +132,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
   const [buscandoFipe, setBuscandoFipe] = useState(false);
 
   // Estado para plano selecionado
-  const [planoSelecionadoData, setPlanoSelecionadoData] = useState<PlanoComPreco | null>(null);
+  const [planoSelecionadoData, setPlanoSelecionadoData] = useState<PlanoCotacao | null>(null);
 
   const form = useForm<CotacaoFormData>({
     resolver: zodResolver(cotacaoSchema),
@@ -128,34 +154,39 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
   const planoId = form.watch('plano_id');
   const validadeDias = form.watch('validade_dias');
   const valorAdesao = form.watch('valor_adesao');
-  const { data: tabelasPreco } = useTabelaPrecoByFipe(valorFipe);
+  
+  // Extrair ano numérico para o hook de planos
+  const anoTexto = useMemo(() => {
+    if (veiculoEncontrado?.vehicleData?.ano) return veiculoEncontrado.vehicleData.ano;
+    const ano = anos.find(a => a.codigo === anoSelecionado);
+    return ano?.nome || '';
+  }, [veiculoEncontrado, anos, anoSelecionado]);
+  
+  const anoNumerico = useMemo(() => {
+    return anoTexto ? parseInt(anoTexto.split(' ')[0]) : undefined;
+  }, [anoTexto]);
 
-  // Combinar planos com seus preços para o valor FIPE atual
-  const planosComPrecos = useMemo<PlanoComPreco[]>(() => {
-    if (!planos || !tabelasPreco || valorFipe <= 0) return [];
+  // Hook de planos calculados dinamicamente do banco
+  const { planos: planosCalculados, isLoading: planosLoading } = usePlanosCotacao({
+    valorFipe,
+    regiao: 'rj', // Default RJ - pode ser ajustado
+    combustivel: veiculoEncontrado?.vehicleData?.combustivel || undefined,
+    categoria: categoria || undefined,
+    anoVeiculo: anoNumerico,
+  });
 
-    return planos.map(plano => {
-      const tabela = tabelasPreco.find(t => t.plano_id === plano.id);
-      if (!tabela) return null;
+  // Validação de dados do cliente
+  const dadosClienteValidos = useMemo(() => {
+    const nomeValido = nomeCliente.trim().length >= 3;
+    const telefoneValido = telefoneCliente.replace(/\D/g, '').length >= 10;
+    return nomeValido && telefoneValido;
+  }, [nomeCliente, telefoneCliente]);
 
-      return {
-        plano: {
-          id: plano.id,
-          nome: plano.nome,
-          codigo: plano.codigo,
-          valor_adesao: plano.valor_adesao || 0,
-          tipo_uso: plano.tipo_uso,
-          descricao: plano.descricao,
-        },
-        valorCota: tabela.valor_cota,
-        taxaAdmin: tabela.taxa_administrativa,
-        rastreamento: tabela.valor_rastreamento,
-        assistencia: tabela.valor_assistencia || 0,
-        totalMensal: tabela.valor_cota + tabela.taxa_administrativa + 
-                     tabela.valor_rastreamento + (tabela.valor_assistencia || 0),
-      };
-    }).filter((p): p is PlanoComPreco => p !== null);
-  }, [planos, tabelasPreco, valorFipe]);
+  // Alerta da categoria selecionada
+  const alertaCategoria = useMemo(() => {
+    if (!categoria) return null;
+    return ALERTAS_CATEGORIA[categoria] || null;
+  }, [categoria]);
 
   // Resetar formulário quando o modal abre sem leadId
   useEffect(() => {
@@ -181,6 +212,10 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
       setAnoSelecionado('');
       setModelos([]);
       setAnos([]);
+      setNomeCliente('');
+      setTelefoneCliente('');
+      setEmailCliente('');
+      setCategoria('nenhuma');
     }
   }, [open, leadId, form]);
 
@@ -269,7 +304,6 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
   const fuzzyMatchModelo = (modeloVeiculo: string, modeloFipe: string): number => {
     if (!modeloVeiculo || !modeloFipe) return 0;
     
-    // Normalizar strings removendo caracteres especiais
     const veiculoNorm = modeloVeiculo.toLowerCase()
       .replace(/[^a-z0-9\s]/g, ' ')
       .replace(/\s+/g, ' ')
@@ -280,18 +314,15 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
       .replace(/\s+/g, ' ')
       .trim();
     
-    // Match exato ou contido
     if (fipeNorm.includes(veiculoNorm) || veiculoNorm.includes(fipeNorm)) {
       return 100;
     }
     
-    // Extrair palavra principal (primeiro termo significativo)
     const palavraChave = veiculoNorm.split(' ')[0];
     if (palavraChave.length >= 3 && fipeNorm.includes(palavraChave)) {
-      return 50; // Match na palavra principal
+      return 50;
     }
     
-    // Match por partes
     const veiculoParts = veiculoNorm.split(' ').filter(p => p.length >= 2);
     const fipeParts = fipeNorm.split(' ').filter(p => p.length >= 2);
     
@@ -302,7 +333,6 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
       }
     }
     
-    // Bonus para match do primeiro termo (geralmente o nome principal do modelo)
     if (veiculoParts[0] && fipeParts.some(fp => fp.includes(veiculoParts[0]))) {
       matches += 3;
     }
@@ -337,7 +367,6 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
           setLoadingMarcas(false);
         }
 
-        // Buscar marca com match mais flexível
         const marcaEncontrada = marcasCarregadas.find(m => {
           const mNome = m.nome.toLowerCase();
           return mNome.includes(marcaNome) || 
@@ -353,7 +382,6 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
           setModelos(modelosData);
           setLoadingModelos(false);
 
-          // Usar fuzzy match para encontrar o melhor modelo
           const modelosComScore = modelosData.map(m => ({
             ...m,
             score: fuzzyMatchModelo(modeloNome, m.nome)
@@ -363,7 +391,6 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
             .filter(m => m.score > 0)
             .sort((a, b) => b.score - a.score)[0];
 
-          // Fallback: se não encontrou match exato, buscar por nome base
           if (!melhorModelo && modelosData.length > 0) {
             const nomeBase = modeloNome.toLowerCase().split(' ')[0];
             if (nomeBase.length >= 3) {
@@ -384,15 +411,12 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
             setAnos(anosData);
             setLoadingAnos(false);
 
-            // Buscar ano com match flexível
             let anoEncontrado = anosData.find(a => {
-              const anoFipe = a.nome.split(' ')[0]; // "2018" de "2018 Gasolina"
+              const anoFipe = a.nome.split(' ')[0];
               return anoFipe === anoVeiculo;
             });
 
-            // Se não encontrou ano exato, tentar o mais próximo ou o primeiro disponível
             if (!anoEncontrado && anosData.length > 0) {
-              // Tentar encontrar ano aproximado (ex: 2018 quando temos 2017 ou 2019)
               const anoNum = parseInt(anoVeiculo);
               if (!isNaN(anoNum)) {
                 const anosComDiff = anosData.map(a => {
@@ -403,7 +427,6 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
                 anoEncontrado = anosComDiff.sort((a, b) => a.diff - b.diff)[0];
               }
               
-              // Fallback: selecionar o primeiro (geralmente mais recente)
               if (!anoEncontrado) {
                 anoEncontrado = anosData[0];
               }
@@ -420,7 +443,6 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
           toast.success(`Veículo encontrado! FIPE: R$ ${resultado.fipeData.valor.toLocaleString('pt-BR')}`);
         } else {
           toast.success(`Veículo encontrado: ${resultado.vehicleData.marca} ${resultado.vehicleData.modelo}`);
-          // Se não encontrou via seleção, tentar busca por nome
           if (!marcaEncontrada) {
             const fipeResult = await buscarPorNome(
               resultado.vehicleData.marca,
@@ -451,13 +473,17 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
   useEffect(() => {
     if (lead) {
       form.setValue('lead_id', lead.id);
+      // Preencher dados do cliente do lead
+      setNomeCliente(lead.nome || '');
+      setTelefoneCliente(lead.telefone || '');
+      setEmailCliente(lead.email || '');
+      
       if (lead.veiculo_fipe) {
         form.setValue('valor_fipe', lead.veiculo_fipe);
       }
       if (lead.veiculo_placa) {
         setPlaca(lead.veiculo_placa);
       }
-      // Preencher informações do veículo diretamente do lead
       if (lead.veiculo_marca && lead.veiculo_modelo) {
         setVeiculoEncontrado({
           success: true,
@@ -484,14 +510,18 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
   }, [lead, form]);
 
   // Handler de seleção de plano
-  const handleSelectPlano = (planoPreco: PlanoComPreco) => {
-    form.setValue('plano_id', planoPreco.plano.id);
-    form.setValue('valor_cota', planoPreco.valorCota);
-    form.setValue('taxa_administrativa', planoPreco.taxaAdmin);
-    form.setValue('valor_rastreamento', planoPreco.rastreamento);
-    // valor_adesao não é mais definido automaticamente - o consultor preenche manualmente
-    form.setValue('valor_total_mensal', planoPreco.totalMensal);
-    setPlanoSelecionadoData(planoPreco);
+  const handleSelectPlano = (plano: PlanoCotacao) => {
+    form.setValue('plano_id', plano.id);
+    form.setValue('valor_cota', plano.valorCota || 0);
+    form.setValue('taxa_administrativa', plano.taxaAdministrativa || 0);
+    form.setValue('valor_rastreamento', plano.valorRastreamento || 0);
+    form.setValue('valor_total_mensal', plano.valorMensal);
+    setPlanoSelecionadoData(plano);
+  };
+
+  // Handler para mudança de categoria
+  const handleCategoriaChange = (value: string) => {
+    setCategoria(value);
   };
 
   const formatCurrency = (value: number) => {
@@ -529,10 +559,11 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
       : 'Veículo não informado';
     
     const texto = `*Cotação Protecar*
+Cliente: ${nomeCliente}
 Veículo: ${veiculoInfo}
 FIPE: ${formatCurrency(valorFipe)}
-Plano: ${planoSelecionadoData.plano.nome}
-Valor Mensal: ${formatCurrency(planoSelecionadoData.totalMensal)}
+Plano: ${planoSelecionadoData.nome}
+Valor Mensal: ${formatCurrency(planoSelecionadoData.valorMensal)}
 Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}
 Validade: ${validadeDias} dias`;
     
@@ -548,18 +579,30 @@ Validade: ${validadeDias} dias`;
       ? `${getMarcaNome()} ${getModeloNome()} ${getAnoNome()}`
       : 'Veículo não informado';
     
+    const telefoneFormatado = telefoneCliente.replace(/\D/g, '');
     const texto = encodeURIComponent(`*Cotação Protecar*
+Cliente: ${nomeCliente}
 Veículo: ${veiculoInfo}
 FIPE: ${formatCurrency(valorFipe)}
-Plano: ${planoSelecionadoData.plano.nome}
-Valor Mensal: ${formatCurrency(planoSelecionadoData.totalMensal)}
+Plano: ${planoSelecionadoData.nome}
+Valor Mensal: ${formatCurrency(planoSelecionadoData.valorMensal)}
 Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
     
-    window.open(`https://wa.me/?text=${texto}`, '_blank');
+    const whatsappUrl = telefoneFormatado.length >= 10 
+      ? `https://wa.me/55${telefoneFormatado}?text=${texto}`
+      : `https://wa.me/?text=${texto}`;
+    
+    window.open(whatsappUrl, '_blank');
   };
 
   // Abre o popup de confirmação de adesão
   const onSubmit = (data: CotacaoFormData) => {
+    // Validar dados do cliente
+    if (!dadosClienteValidos) {
+      toast.error('Preencha o nome e telefone do cliente!');
+      return;
+    }
+    
     // Validação extra (redundante mas segura)
     if (data.valor_adesao <= 0) {
       toast.error('O valor de adesão deve ser maior que zero!');
@@ -579,8 +622,8 @@ Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
     
     try {
       // Extrair ano numérico do texto (ex: "2022 Gasolina" -> 2022)
-      const anoTexto = getAnoNome();
-      const anoNumerico = anoTexto ? parseInt(anoTexto.split(' ')[0]) : null;
+      const anoTextoLocal = getAnoNome();
+      const anoNumericoLocal = anoTextoLocal ? parseInt(anoTextoLocal.split(' ')[0]) : null;
       
       await createCotacao.mutateAsync({
         lead_id: pendingFormData.lead_id,
@@ -591,17 +634,19 @@ Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
         valor_rastreamento: pendingFormData.valor_rastreamento,
         valor_adesao: pendingFormData.valor_adesao,
         valor_total_mensal: pendingFormData.valor_total_mensal,
-        valor_assistencia: planoSelecionadoData?.assistencia || 0,
+        valor_assistencia: planoSelecionadoData?.valorAssistencia || 0,
         validade_dias: pendingFormData.validade_dias,
         status: 'rascunho',
         // Dados do veículo
         veiculo_marca: getMarcaNome() || null,
         veiculo_modelo: getModeloNome() || null,
-        veiculo_ano: anoNumerico,
+        veiculo_ano: anoNumericoLocal,
         veiculo_placa: placa || veiculoEncontrado?.extractedPlate || null,
         codigo_fipe: veiculoEncontrado?.fipeData?.codigo || null,
         // Consultor responsável
         vendedor_id: pendingFormData.vendedor_id || null,
+        // Dados do cliente (campos adicionais que serão salvos via lead ou observações)
+        observacoes: `Cliente: ${nomeCliente} | Tel: ${telefoneCliente}${emailCliente ? ` | Email: ${emailCliente}` : ''}${categoria && categoria !== 'nenhuma' ? ` | Categoria: ${CATEGORIAS_VEICULO.find(c => c.value === categoria)?.label || categoria}` : ''}`,
       });
       
       toast.success('Cotação criada com sucesso!');
@@ -617,6 +662,10 @@ Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
       setModelos([]);
       setAnos([]);
       setPendingFormData(null);
+      setNomeCliente('');
+      setTelefoneCliente('');
+      setEmailCliente('');
+      setCategoria('nenhuma');
       
       // Fechar modal
       onOpenChange(false);
@@ -645,7 +694,69 @@ Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
             
-            {/* BLOCO 0: VINCULAR A LEAD (opcional) - só aparece quando não tem leadId */}
+            {/* BLOCO 0: DADOS DO CLIENTE */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                <User className="h-4 w-4 text-primary" />
+                Dados do Cliente
+              </h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* Nome do Cliente */}
+                <div className="md:col-span-2 space-y-1.5">
+                  <Label className="text-sm">
+                    Nome do Cliente <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    placeholder="Nome completo do cliente"
+                    value={nomeCliente}
+                    onChange={(e) => setNomeCliente(e.target.value)}
+                    className={cn(
+                      nomeCliente.trim().length > 0 && nomeCliente.trim().length < 3 && "border-destructive"
+                    )}
+                  />
+                  {nomeCliente.trim().length > 0 && nomeCliente.trim().length < 3 && (
+                    <p className="text-xs text-destructive">Nome deve ter pelo menos 3 caracteres</p>
+                  )}
+                </div>
+                
+                {/* Telefone/WhatsApp */}
+                <div className="space-y-1.5">
+                  <Label className="text-sm flex items-center gap-1.5">
+                    <Phone className="h-3.5 w-3.5" />
+                    Telefone/WhatsApp <span className="text-destructive">*</span>
+                  </Label>
+                  <TelefoneInput
+                    value={telefoneCliente}
+                    onChange={setTelefoneCliente}
+                    className={cn(
+                      telefoneCliente.length > 0 && telefoneCliente.replace(/\D/g, '').length < 10 && "border-destructive"
+                    )}
+                  />
+                  {telefoneCliente.length > 0 && telefoneCliente.replace(/\D/g, '').length < 10 && (
+                    <p className="text-xs text-destructive">Telefone inválido</p>
+                  )}
+                </div>
+                
+                {/* E-mail */}
+                <div className="space-y-1.5">
+                  <Label className="text-sm flex items-center gap-1.5">
+                    <Mail className="h-3.5 w-3.5" />
+                    E-mail (opcional)
+                  </Label>
+                  <Input
+                    type="email"
+                    placeholder="email@exemplo.com"
+                    value={emailCliente}
+                    onChange={(e) => setEmailCliente(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* BLOCO 0.5: VINCULAR A LEAD (opcional) - só aparece quando não tem leadId */}
             {!leadId && (
               <div className="space-y-3">
                 <h3 className="text-sm font-semibold flex items-center gap-2">
@@ -658,6 +769,10 @@ Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
                   onSelect={(selectedLeadId, selectedLead) => {
                     form.setValue('lead_id', selectedLeadId);
                     if (selectedLead) {
+                      // Preencher dados do cliente
+                      setNomeCliente(selectedLead.nome || '');
+                      setTelefoneCliente(selectedLead.telefone || '');
+                      setEmailCliente(selectedLead.email || '');
                       // Preencher dados do veículo se disponíveis
                       if (selectedLead.veiculo_fipe) {
                         form.setValue('valor_fipe', selectedLead.veiculo_fipe);
@@ -694,6 +809,9 @@ Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
                       setVeiculoEncontrado(null);
                       setPlaca('');
                       form.setValue('valor_fipe', 0);
+                      setNomeCliente('');
+                      setTelefoneCliente('');
+                      setEmailCliente('');
                     }
                   }}
                   placeholder="Buscar lead por nome ou telefone..."
@@ -705,7 +823,7 @@ Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
               </div>
             )}
 
-            {/* BLOCO 0.5: CONSULTOR RESPONSÁVEL */}
+            {/* BLOCO 0.6: CONSULTOR RESPONSÁVEL */}
             <div className="space-y-3">
               <h3 className="text-sm font-semibold flex items-center gap-2">
                 <UserCheck className="h-4 w-4 text-primary" />
@@ -745,6 +863,8 @@ Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
                 )}
               />
             </div>
+
+            <Separator />
 
             {/* BLOCO 1: VEÍCULO */}
             <div className="space-y-3">
@@ -879,7 +999,7 @@ Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
 
             <Separator />
 
-            {/* BLOCO 2: VALOR FIPE */}
+            {/* BLOCO 1.5: VALOR FIPE */}
             <div>
               <div className="flex items-center justify-between mb-2">
                 <Label className="text-sm font-semibold">Valor FIPE</Label>
@@ -919,7 +1039,48 @@ Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
               />
             </div>
 
-            {/* Campo de Taxa de Filiação - Obrigatório */}
+            <Separator />
+
+            {/* BLOCO 2: CONDIÇÕES ESPECIAIS / DESÁGIOS */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-amber-500" />
+                Condições Especiais / Deságios
+              </h3>
+              
+              <VehicleCategorySelect
+                value={categoria}
+                onChange={handleCategoriaChange}
+              />
+
+              {/* Alerta dinâmico baseado na categoria */}
+              {alertaCategoria && (
+                <Alert 
+                  className={
+                    alertaCategoria.tipo === 'warning' 
+                      ? 'border-amber-500/50 bg-amber-500/10' 
+                      : 'border-blue-500/50 bg-blue-500/10'
+                  }
+                >
+                  {alertaCategoria.tipo === 'warning' ? (
+                    <AlertTriangle className="h-4 w-4 text-amber-500" />
+                  ) : (
+                    <Info className="h-4 w-4 text-blue-500" />
+                  )}
+                  <AlertDescription className={
+                    alertaCategoria.tipo === 'warning'
+                      ? 'text-amber-700 dark:text-amber-400'
+                      : 'text-blue-700 dark:text-blue-400'
+                  }>
+                    {alertaCategoria.mensagem}
+                  </AlertDescription>
+                </Alert>
+              )}
+            </div>
+
+            <Separator />
+
+            {/* BLOCO 2.5: TAXA DE FILIAÇÃO */}
             <div>
               <Label className="text-sm font-semibold">Taxa de Filiação *</Label>
               <FormField
@@ -956,36 +1117,47 @@ Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin text-primary" />
                 </div>
-              ) : valorFipe > 0 && planosComPrecos.length > 0 ? (
+              ) : valorFipe > 0 && planosCalculados.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {planosComPrecos.map((planoPreco) => (
+                  {planosCalculados.map((plano) => (
                     <Card 
-                      key={planoPreco.plano.id}
+                      key={plano.id}
                       className={cn(
                         "cursor-pointer transition-all hover:shadow-md",
-                        planoId === planoPreco.plano.id 
+                        planoId === plano.id 
                           ? "ring-2 ring-primary border-primary bg-primary/5" 
-                          : "hover:border-primary/50"
+                          : "hover:border-primary/50",
+                        plano.destaque && "border-amber-500/50"
                       )}
-                      onClick={() => handleSelectPlano(planoPreco)}
+                      onClick={() => handleSelectPlano(plano)}
                     >
                       <CardContent className="p-4">
                         <div className="flex items-center justify-between mb-2">
-                          <h4 className="font-semibold text-sm">{planoPreco.plano.nome}</h4>
-                          {planoId === planoPreco.plano.id && (
+                          <h4 className="font-semibold text-sm">{plano.nome}</h4>
+                          {planoId === plano.id ? (
                             <CheckCircle2 className="h-4 w-4 text-primary" />
-                          )}
+                          ) : plano.destaque ? (
+                            <Badge variant="secondary" className="text-xs bg-amber-500/10 text-amber-600">
+                              Recomendado
+                            </Badge>
+                          ) : null}
                         </div>
                         <p className="text-xl font-bold text-primary mb-3">
-                          {formatCurrency(planoPreco.totalMensal)}
+                          {formatCurrency(plano.valorMensal)}
                           <span className="text-xs font-normal text-muted-foreground">/mês</span>
                         </p>
                         <ul className="text-xs space-y-1 text-muted-foreground">
-                          <li>• Cota: {formatCurrency(planoPreco.valorCota)}</li>
-                          <li>• Taxa: {formatCurrency(planoPreco.taxaAdmin)}</li>
-                          <li>• Rast.: {formatCurrency(planoPreco.rastreamento)}</li>
-                          {planoPreco.assistencia > 0 && (
-                            <li>• Assist.: {formatCurrency(planoPreco.assistencia)}</li>
+                          {plano.valorCota !== undefined && (
+                            <li>• Cota: {formatCurrency(plano.valorCota)}</li>
+                          )}
+                          {plano.taxaAdministrativa !== undefined && (
+                            <li>• Taxa: {formatCurrency(plano.taxaAdministrativa)}</li>
+                          )}
+                          {plano.valorRastreamento !== undefined && (
+                            <li>• Rast.: {formatCurrency(plano.valorRastreamento)}</li>
+                          )}
+                          {(plano.valorAssistencia || 0) > 0 && (
+                            <li>• Assist.: {formatCurrency(plano.valorAssistencia || 0)}</li>
                           )}
                         </ul>
                         <Separator className="my-3" />
@@ -993,6 +1165,12 @@ Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
                           <span className="text-muted-foreground">Filiação: </span>
                           <span className="font-medium text-primary">{formatCurrency(valorAdesao || 0)}</span>
                         </div>
+                        {plano.alertaDesagio && (
+                          <p className="text-xs text-amber-600 mt-2 flex items-center gap-1">
+                            <AlertTriangle className="h-3 w-3" />
+                            {plano.alertaDesagio}
+                          </p>
+                        )}
                       </CardContent>
                     </Card>
                   ))}
@@ -1005,7 +1183,7 @@ Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
                       Nenhum plano disponível para este valor FIPE
                     </p>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Verifique se há tabelas de preço cadastradas para a faixa de R$ {valorFipe.toLocaleString('pt-BR')}
+                      Verifique se há planos cadastrados para a faixa de R$ {valorFipe.toLocaleString('pt-BR')}
                     </p>
                   </CardContent>
                 </Card>
@@ -1024,6 +1202,8 @@ Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
                   <CardContent className="p-4">
                     <div className="flex flex-wrap items-start justify-between gap-4">
                       <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground">Cliente</p>
+                        <p className="font-medium">{nomeCliente || 'Não informado'}</p>
                         <p className="text-xs text-muted-foreground">Veículo</p>
                         <p className="font-medium">
                           {getMarcaNome() && getModeloNome() 
@@ -1034,9 +1214,9 @@ Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
                         <p className="text-sm text-muted-foreground">FIPE: {formatCurrency(valorFipe)}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-xs text-muted-foreground">{planoSelecionadoData.plano.nome}</p>
+                        <p className="text-xs text-muted-foreground">{planoSelecionadoData.nome}</p>
                         <p className="text-2xl font-bold text-primary">
-                          {formatCurrency(planoSelecionadoData.totalMensal)}
+                          {formatCurrency(planoSelecionadoData.valorMensal)}
                         </p>
                         <p className="text-xs text-muted-foreground">/mês</p>
                       </div>
@@ -1126,7 +1306,7 @@ Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
               </div>
               <Button 
                 type="submit" 
-                disabled={createCotacao.isPending || !planoSelecionadoData || valorAdesao <= 0}
+                disabled={createCotacao.isPending || !planoSelecionadoData || valorAdesao <= 0 || !dadosClienteValidos}
               >
                 {createCotacao.isPending ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-1" />
@@ -1152,6 +1332,9 @@ Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
                 <div className="text-3xl font-bold text-center text-primary py-4 bg-primary/5 rounded-lg">
                   {formatCurrency(pendingFormData?.valor_adesao || 0)}
                 </div>
+                <p className="text-sm text-muted-foreground text-center">
+                  Cliente: <strong>{nomeCliente}</strong>
+                </p>
                 <p className="text-sm text-muted-foreground text-center">
                   Este valor será cobrado do associado. Confirma?
                 </p>
