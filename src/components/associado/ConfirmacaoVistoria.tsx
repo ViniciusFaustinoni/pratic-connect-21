@@ -8,6 +8,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useGerarAutentiqueByToken } from '@/hooks/useContratoLink';
 import { useContratoRealtimeByToken } from '@/hooks/useContratosRealtime';
 import { useAutentiqueStatusPublico } from '@/hooks/useAutentiqueStatusPublico';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface ConfirmacaoVistoriaProps {
   tipoVistoria: 'agendada' | 'autovistoria';
@@ -42,6 +44,12 @@ export function ConfirmacaoVistoria({
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [progressoGeracao, setProgressoGeracao] = useState<ProgressoEtapa>(null);
   const [linkGerado, setLinkGerado] = useState<string | null>(null);
+  
+  // Estados para reenvio de email após 30 segundos
+  const [showResendOption, setShowResendOption] = useState(false);
+  const [timeWaiting, setTimeWaiting] = useState(0);
+  const [isResending, setIsResending] = useState(false);
+  const [showEmailIncorrect, setShowEmailIncorrect] = useState(false);
   
   const gerarAutentique = useGerarAutentiqueByToken();
   
@@ -120,6 +128,54 @@ export function ConfirmacaoVistoria({
     }
   }, [adesaoPaga, autentiqueUrl, linkGerado, hasTriedGeneration, gerarAutentique.isPending, isGeneratingLink, contratoToken]);
   
+  const isGenerating = gerarAutentique.isPending || isGeneratingLink || progressoGeracao !== null;
+  const urlAssinatura = autentiqueUrl || linkGerado;
+  
+  // Timer de 30 segundos para mostrar opção de reenvio
+  useEffect(() => {
+    // Só iniciar timer quando houver URL mas ainda não foi assinado
+    if (urlAssinatura && !contratoFoiAssinado) {
+      const interval = setInterval(() => {
+        setTimeWaiting(prev => {
+          const newTime = prev + 1;
+          if (newTime >= 30) {
+            setShowResendOption(true);
+          }
+          return newTime;
+        });
+      }, 1000);
+
+      return () => clearInterval(interval);
+    }
+  }, [urlAssinatura, contratoFoiAssinado]);
+  
+  // Função para reenviar email
+  const handleResendEmail = async () => {
+    if (!autentiqueDocumentoId) {
+      toast.error('ID do documento não disponível');
+      return;
+    }
+    
+    setIsResending(true);
+    try {
+      const { error } = await supabase.functions.invoke('autentique-resend', {
+        body: { documentId: autentiqueDocumentoId }
+      });
+      
+      if (error) throw error;
+      
+      toast.success('Email reenviado com sucesso!');
+      setShowResendOption(false);
+      setTimeWaiting(0);
+      setShowEmailIncorrect(false);
+    } catch (err: any) {
+      console.error('[ConfirmacaoVistoria] Erro ao reenviar email:', err);
+      toast.error('Erro ao reenviar email. Tente novamente.');
+    } finally {
+      setIsResending(false);
+    }
+  };
+  
   // Função para tentar novamente
   const handleRetry = () => {
     if (contratoToken) {
@@ -129,9 +185,6 @@ export function ConfirmacaoVistoria({
       onRetryAutentique?.();
     }
   };
-  
-  const isGenerating = gerarAutentique.isPending || isGeneratingLink || progressoGeracao !== null;
-  const urlAssinatura = autentiqueUrl || linkGerado;
   
   // Função para exibir mensagem de erro amigável baseada no código de erro
   const getMensagemErro = (error: string) => {
@@ -272,6 +325,59 @@ export function ConfirmacaoVistoria({
               <RefreshCw className={`h-3 w-3 ${isCheckingStatus ? 'animate-spin' : ''}`} />
               <span>Verificando assinatura automaticamente a cada 15 segundos...</span>
             </div>
+
+            {/* Opção de reenvio após 30 segundos */}
+            {showResendOption && (
+              <div className="mt-4 bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 dark:border-yellow-800 p-4 rounded-lg space-y-3">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="h-5 w-5 text-yellow-600" />
+                  <p className="text-sm font-medium text-yellow-700 dark:text-yellow-400">
+                    Ainda não recebeu o email?
+                  </p>
+                </div>
+                
+                <p className="text-sm text-yellow-700 dark:text-yellow-400">
+                  Confirme se o email <strong>{clienteEmail || 'cadastrado'}</strong> está correto.
+                </p>
+                
+                <div className="flex flex-col gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full border-yellow-500 text-yellow-700 hover:bg-yellow-100 dark:text-yellow-400 dark:hover:bg-yellow-900"
+                    onClick={handleResendEmail}
+                    disabled={isResending}
+                  >
+                    {isResending ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                    )}
+                    Reenviar Email
+                  </Button>
+                  
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full text-yellow-600 dark:text-yellow-400"
+                    onClick={() => setShowEmailIncorrect(true)}
+                  >
+                    O email está incorreto
+                  </Button>
+                </div>
+
+                {/* Alerta quando email está incorreto */}
+                {showEmailIncorrect && (
+                  <Alert className="bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-800">
+                    <AlertCircle className="h-4 w-4 text-orange-600" />
+                    <AlertDescription className="text-orange-700 dark:text-orange-400">
+                      Para corrigir o email, entre em contato com seu vendedor ou 
+                      nossa central de atendimento pelo WhatsApp.
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </div>
+            )}
           </div>
         ) : (isAutentiqueTimeout || generationError) ? (
           <div className="bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-900 p-4 rounded-lg space-y-3">
