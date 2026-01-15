@@ -632,7 +632,7 @@ Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
       const anoNumericoLocal = anoTextoLocal ? parseInt(anoTextoLocal.split(' ')[0]) : null;
       
       await createCotacao.mutateAsync({
-        lead_id: pendingFormData.lead_id,
+        lead_id: pendingFormData.lead_id || null,
         plano_id: pendingFormData.plano_id,
         valor_fipe: pendingFormData.valor_fipe,
         valor_cota: pendingFormData.valor_cota,
@@ -651,7 +651,11 @@ Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
         codigo_fipe: veiculoEncontrado?.fipeData?.codigo || null,
         // Consultor responsável
         vendedor_id: pendingFormData.vendedor_id || null,
-        // Dados do cliente (campos adicionais que serão salvos via lead ou observações)
+        // Dados do solicitante (para exibição no card quando não há lead)
+        nome_solicitante: nomeAssociado.trim() || null,
+        telefone1_solicitante: telefoneAssociado.replace(/\D/g, '') || null,
+        email_solicitante: emailAssociado.trim() || null,
+        // Categoria do veículo
         categoria: categoria && categoria !== 'nenhuma' ? categoria : null,
       });
       
