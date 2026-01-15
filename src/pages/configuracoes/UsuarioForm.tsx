@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -236,14 +236,14 @@ export default function UsuarioForm() {
     }
   });
 
-  const handlePerfilToggle = (perfil: string) => {
+  const handleProfileChange = useCallback((perfilId: string, checked: boolean) => {
     setFormData(prev => ({
       ...prev,
-      perfis: prev.perfis.includes(perfil)
-        ? prev.perfis.filter(p => p !== perfil)
-        : [...prev.perfis, perfil]
+      perfis: checked
+        ? [...prev.perfis, perfilId].sort()
+        : prev.perfis.filter(p => p !== perfilId)
     }));
-  };
+  }, []);
 
   if (isLoading) {
     return (
@@ -356,7 +356,6 @@ export default function UsuarioForm() {
                 <div className="space-y-2">
                   <Label htmlFor="tipo">Tipo de usuário *</Label>
                   <Select 
-                    key={`tipo-${formData.tipo}`}
                     value={formData.tipo} 
                     onValueChange={(v) => setFormData(prev => ({ ...prev, tipo: v }))}
                   >
@@ -385,24 +384,25 @@ export default function UsuarioForm() {
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {perfisDisponiveis.map((perfil) => (
-                    <div 
+                    <label 
                       key={perfil.value}
+                      htmlFor={`perfil-${perfil.value}`}
                       className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
                         formData.perfis.includes(perfil.value) 
                           ? 'border-primary bg-primary/5' 
                           : 'border-border/50 hover:border-border'
                       }`}
-                      onClick={() => handlePerfilToggle(perfil.value)}
                     >
                       <Checkbox 
+                        id={`perfil-${perfil.value}`}
                         checked={formData.perfis.includes(perfil.value)}
-                        onClick={(e) => e.stopPropagation()}
+                        onCheckedChange={(checked) => handleProfileChange(perfil.value, checked === true)}
                       />
                       <div>
                         <p className="font-medium text-sm">{perfil.label}</p>
                         <p className="text-xs text-muted-foreground">{perfil.desc}</p>
                       </div>
-                    </div>
+                    </label>
                   ))}
                 </div>
               </CardContent>
