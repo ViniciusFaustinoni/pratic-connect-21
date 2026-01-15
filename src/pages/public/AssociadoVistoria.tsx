@@ -132,7 +132,7 @@ export default function AssociadoVistoria() {
           </CardContent>
         </Card>
 
-        {/* Progresso */}
+        {/* Progresso - Etapas clicáveis */}
         <div className="flex items-center justify-center gap-2">
           {['escolha', 'vistoria', 'pagamento', 'confirmacao'].map((step, index) => {
             const isActive = 
@@ -146,19 +146,41 @@ export default function AssociadoVistoria() {
               (step === 'vistoria' && (etapa === 'pagamento' || etapa === 'confirmacao')) ||
               (step === 'pagamento' && etapa === 'confirmacao');
 
+            // Permitir navegação para etapas completadas
+            const handleStepClick = () => {
+              if (!isCompleted) return;
+              
+              if (step === 'escolha') {
+                setEtapa('escolha');
+              } else if (step === 'vistoria') {
+                // Voltar para a etapa de vistoria correta
+                if (contrato?.tipo_vistoria === 'agendada') {
+                  setEtapa('agendar');
+                } else if (contrato?.tipo_vistoria === 'autovistoria') {
+                  setEtapa('autovistoria');
+                }
+              } else if (step === 'pagamento') {
+                setEtapa('pagamento');
+              }
+            };
+
             return (
               <div key={step} className="flex items-center gap-2">
-                <div
+                <button
+                  type="button"
+                  onClick={handleStepClick}
+                  disabled={!isCompleted}
                   className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
                     isCompleted
-                      ? 'bg-green-500 text-white'
+                      ? 'bg-green-500 text-white cursor-pointer hover:bg-green-600'
                       : isActive
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted text-muted-foreground'
+                      ? 'bg-primary text-primary-foreground cursor-default'
+                      : 'bg-muted text-muted-foreground cursor-default'
                   }`}
+                  title={isCompleted ? `Voltar para ${step}` : undefined}
                 >
                   {isCompleted ? <CheckCircle className="h-4 w-4" /> : index + 1}
-                </div>
+                </button>
                 {index < 3 && (
                   <div className={`w-8 h-0.5 ${isCompleted ? 'bg-green-500' : 'bg-muted'}`} />
                 )}
@@ -257,6 +279,7 @@ export default function AssociadoVistoria() {
             isGeneratingLink={gerarAutentique.isPending}
             autentiqueDocumentoId={contrato.autentique_documento_id}
             clienteEmail={contrato.associados?.email || contrato.leads?.email || contrato.cliente_email || ''}
+            onVoltar={() => setEtapa('pagamento')}
           />
         )}
       </div>

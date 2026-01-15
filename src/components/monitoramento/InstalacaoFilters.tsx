@@ -20,7 +20,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { Camera, Wrench, RefreshCw } from 'lucide-react';
+import { Camera, Wrench, RefreshCw, Search } from 'lucide-react';
 
 interface FilterState {
   tipo: string;
@@ -44,6 +44,7 @@ interface InstalacaoFiltersProps {
 
 const tipoOptions = [
   { value: 'todos', label: 'Todos', icon: null },
+  { value: 'vistoria_presencial', label: 'Vistoria Presencial', icon: Search },
   { value: 'autovistoria', label: 'Autovistoria', icon: Camera },
   { value: 'instalacao', label: 'Instalação', icon: Wrench },
   { value: 'reinstalacao', label: 'Reinstalação', icon: RefreshCw },

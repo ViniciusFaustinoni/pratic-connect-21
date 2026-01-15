@@ -23,6 +23,7 @@ interface ConfirmacaoVistoriaProps {
   isGeneratingLink?: boolean;
   autentiqueDocumentoId?: string | null;
   clienteEmail?: string;
+  onVoltar?: () => void;
 }
 
 type ProgressoEtapa = 'preparando' | 'enviando' | 'finalizando' | null;
@@ -39,6 +40,7 @@ export function ConfirmacaoVistoria({
   isGeneratingLink = false,
   autentiqueDocumentoId,
   clienteEmail,
+  onVoltar,
 }: ConfirmacaoVistoriaProps) {
   const [hasTriedGeneration, setHasTriedGeneration] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
@@ -228,31 +230,37 @@ export function ConfirmacaoVistoria({
       </CardHeader>
       <CardContent className="pt-6 space-y-6">
         {/* O feedback de contrato assinado agora é exibido junto com as instruções de email */}
-        {tipoVistoria === 'agendada' && dadosAgendamento ? (
+        {tipoVistoria === 'agendada' ? (
           <div className="space-y-4">
             <div className="bg-muted/50 p-4 rounded-lg space-y-3">
               <h4 className="font-medium flex items-center gap-2">
                 <Calendar className="h-4 w-4 text-primary" />
-                Vistoria Agendada
+                Vistoria Presencial Agendada
               </h4>
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-muted-foreground" />
-                  <div>
-                    <p className="text-muted-foreground">Data</p>
-                    <p className="font-medium">
-                      {format(new Date(dadosAgendamento.data), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
-                    </p>
+              {dadosAgendamento ? (
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                    <div>
+                      <p className="text-muted-foreground">Data</p>
+                      <p className="font-medium">
+                        {format(new Date(dadosAgendamento.data), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-muted-foreground" />
+                    <div>
+                      <p className="text-muted-foreground">Horário</p>
+                      <p className="font-medium">{dadosAgendamento.horario}</p>
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-muted-foreground" />
-                  <div>
-                    <p className="text-muted-foreground">Horário</p>
-                    <p className="font-medium">{dadosAgendamento.horario}</p>
-                  </div>
-                </div>
-              </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Sua vistoria presencial foi agendada. Você receberá os detalhes por SMS/WhatsApp.
+                </p>
+              )}
             </div>
 
             <div className="bg-blue-50 dark:bg-blue-950/20 p-4 rounded-lg">
@@ -488,6 +496,19 @@ export function ConfirmacaoVistoria({
         <p className="text-center text-sm text-muted-foreground">
           Em caso de dúvidas, entre em contato conosco.
         </p>
+
+        {/* Botão Voltar */}
+        {onVoltar && (
+          <div className="pt-4 border-t">
+            <Button
+              variant="outline"
+              onClick={onVoltar}
+              className="w-full"
+            >
+              Voltar para etapa anterior
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

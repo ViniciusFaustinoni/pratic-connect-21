@@ -161,7 +161,7 @@ export function useSelecionarTipoVistoria() {
   });
 }
 
-// Hook para criar vistoria agendada
+// Hook para criar vistoria agendada (e também criar instalação para o módulo de rotas)
 export function useCriarVistoriaAgendada() {
   const queryClient = useQueryClient();
   
@@ -172,12 +172,21 @@ export function useCriarVistoriaAgendada() {
       horarioAgendado,
       veiculoId,
       associadoId,
+      endereco,
     }: { 
       contratoId: string; 
       dataAgendada: string; 
       horarioAgendado: string;
       veiculoId?: string;
-      associadoId: string; // Agora obrigatório
+      associadoId: string;
+      endereco?: {
+        cep?: string;
+        logradouro?: string;
+        numero?: string;
+        bairro?: string;
+        cidade?: string;
+        uf?: string;
+      };
     }) => {
       if (!associadoId) {
         throw new Error('Associado não vinculado ao contrato. Entre em contato com a associação.');
@@ -201,6 +210,40 @@ export function useCriarVistoriaAgendada() {
       
       if (vistoriaError) throw vistoriaError;
       
+      // Determinar período baseado no horário
+      const hora = parseInt(horarioAgendado.split(':')[0], 10);
+      let periodo: 'manha' | 'tarde' | 'noite' = 'manha';
+      if (hora >= 12 && hora < 18) {
+        periodo = 'tarde';
+      } else if (hora >= 18) {
+        periodo = 'noite';
+      }
+      
+      // Criar instalação para integrar com módulo de rotas/monitoramento
+      // Isso permite que a vistoria presencial apareça no painel de rotas
+      const { error: instalacaoError } = await supabase
+        .from('instalacoes')
+        .insert({
+          associado_id: associadoId,
+          veiculo_id: veiculoId || null,
+          data_agendada: dataAgendada,
+          hora_agendada: horarioAgendado,
+          periodo: periodo,
+          status: 'agendada',
+          observacoes: `Vistoria presencial - Contrato: ${contratoId}`,
+          cep: endereco?.cep,
+          logradouro: endereco?.logradouro,
+          numero: endereco?.numero,
+          bairro: endereco?.bairro,
+          cidade: endereco?.cidade,
+          uf: endereco?.uf,
+        });
+      
+      if (instalacaoError) {
+        console.error('[useCriarVistoriaAgendada] Erro ao criar instalação para rotas:', instalacaoError);
+        // Não falhar a operação principal, apenas logar
+      }
+      
       // Registrar no histórico do contrato
       await supabase.from('contratos_historico').insert({
         contrato_id: contratoId,
@@ -213,6 +256,8 @@ export function useCriarVistoriaAgendada() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['contrato-publico'] });
+      queryClient.invalidateQueries({ queryKey: ['instalacoes'] });
+      queryClient.invalidateQueries({ queryKey: ['rotas'] });
       toast.success('Vistoria agendada com sucesso!');
     },
     onError: (error: any) => {
