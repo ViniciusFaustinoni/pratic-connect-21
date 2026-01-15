@@ -100,10 +100,13 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
   const { getMarcas, getModelos, getAnos, getPreco, getByPlaca, buscarPorNome, loading: fipeLoading } = useFipe();
   const { data: vendedores = [], isLoading: vendedoresLoading } = useVendedores();
   
-  // Estados para dados do cliente
-  const [nomeCliente, setNomeCliente] = useState('');
-  const [telefoneCliente, setTelefoneCliente] = useState('');
-  const [emailCliente, setEmailCliente] = useState('');
+  // Estados para dados do associado
+  const [nomeAssociado, setNomeAssociado] = useState('');
+  const [telefoneAssociado, setTelefoneAssociado] = useState('');
+  const [emailAssociado, setEmailAssociado] = useState('');
+  
+  // Estado para uso do veículo (passeio ou aplicativo)
+  const [usoVeiculo, setUsoVeiculo] = useState<'particular' | 'aplicativo'>('particular');
   
   // Estados para busca por placa
   const [placa, setPlaca] = useState('');
@@ -171,16 +174,16 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
     valorFipe,
     regiao: 'rj', // Default RJ - pode ser ajustado
     combustivel: veiculoEncontrado?.vehicleData?.combustivel || undefined,
-    categoria: categoria || undefined,
+    categoria: usoVeiculo === 'aplicativo' ? 'aplicativo' : (categoria || undefined),
     anoVeiculo: anoNumerico,
   });
 
-  // Validação de dados do cliente
-  const dadosClienteValidos = useMemo(() => {
-    const nomeValido = nomeCliente.trim().length >= 3;
-    const telefoneValido = telefoneCliente.replace(/\D/g, '').length >= 10;
+  // Validação de dados do associado
+  const dadosAssociadoValidos = useMemo(() => {
+    const nomeValido = nomeAssociado.trim().length >= 3;
+    const telefoneValido = telefoneAssociado.replace(/\D/g, '').length >= 10;
     return nomeValido && telefoneValido;
-  }, [nomeCliente, telefoneCliente]);
+  }, [nomeAssociado, telefoneAssociado]);
 
   // Alerta da categoria selecionada
   const alertaCategoria = useMemo(() => {
@@ -212,10 +215,11 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
       setAnoSelecionado('');
       setModelos([]);
       setAnos([]);
-      setNomeCliente('');
-      setTelefoneCliente('');
-      setEmailCliente('');
+      setNomeAssociado('');
+      setTelefoneAssociado('');
+      setEmailAssociado('');
       setCategoria('nenhuma');
+      setUsoVeiculo('particular');
     }
   }, [open, leadId, form]);
 
@@ -473,10 +477,10 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
   useEffect(() => {
     if (lead) {
       form.setValue('lead_id', lead.id);
-      // Preencher dados do cliente do lead
-      setNomeCliente(lead.nome || '');
-      setTelefoneCliente(lead.telefone || '');
-      setEmailCliente(lead.email || '');
+      // Preencher dados do associado do lead
+      setNomeAssociado(lead.nome || '');
+      setTelefoneAssociado(lead.telefone || '');
+      setEmailAssociado(lead.email || '');
       
       if (lead.veiculo_fipe) {
         form.setValue('valor_fipe', lead.veiculo_fipe);
@@ -559,8 +563,9 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
       : 'Veículo não informado';
     
     const texto = `*Cotação Protecar*
-Cliente: ${nomeCliente}
+Associado: ${nomeAssociado}
 Veículo: ${veiculoInfo}
+Uso: ${usoVeiculo === 'particular' ? 'Passeio' : 'Aplicativo'}
 FIPE: ${formatCurrency(valorFipe)}
 Plano: ${planoSelecionadoData.nome}
 Valor Mensal: ${formatCurrency(planoSelecionadoData.valorMensal)}
@@ -579,10 +584,11 @@ Validade: ${validadeDias} dias`;
       ? `${getMarcaNome()} ${getModeloNome()} ${getAnoNome()}`
       : 'Veículo não informado';
     
-    const telefoneFormatado = telefoneCliente.replace(/\D/g, '');
+    const telefoneFormatado = telefoneAssociado.replace(/\D/g, '');
     const texto = encodeURIComponent(`*Cotação Protecar*
-Cliente: ${nomeCliente}
+Associado: ${nomeAssociado}
 Veículo: ${veiculoInfo}
+Uso: ${usoVeiculo === 'particular' ? 'Passeio' : 'Aplicativo'}
 FIPE: ${formatCurrency(valorFipe)}
 Plano: ${planoSelecionadoData.nome}
 Valor Mensal: ${formatCurrency(planoSelecionadoData.valorMensal)}
@@ -597,9 +603,9 @@ Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
 
   // Abre o popup de confirmação de adesão
   const onSubmit = (data: CotacaoFormData) => {
-    // Validar dados do cliente
-    if (!dadosClienteValidos) {
-      toast.error('Preencha o nome e telefone do cliente!');
+    // Validar dados do associado
+    if (!dadosAssociadoValidos) {
+      toast.error('Preencha o nome e telefone do associado!');
       return;
     }
     
@@ -662,10 +668,11 @@ Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
       setModelos([]);
       setAnos([]);
       setPendingFormData(null);
-      setNomeCliente('');
-      setTelefoneCliente('');
-      setEmailCliente('');
+      setNomeAssociado('');
+      setTelefoneAssociado('');
+      setEmailAssociado('');
       setCategoria('nenhuma');
+      setUsoVeiculo('particular');
       
       // Fechar modal
       onOpenChange(false);
@@ -694,28 +701,28 @@ Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
             
-            {/* BLOCO 0: DADOS DO CLIENTE */}
+            {/* BLOCO 0: DADOS DO ASSOCIADO */}
             <div className="space-y-3">
               <h3 className="text-sm font-semibold flex items-center gap-2">
                 <User className="h-4 w-4 text-primary" />
-                Dados do Cliente
+                Dados do Associado
               </h3>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {/* Nome do Cliente */}
+                {/* Nome do Associado */}
                 <div className="md:col-span-2 space-y-1.5">
                   <Label className="text-sm">
-                    Nome do Cliente <span className="text-destructive">*</span>
+                    Nome do Associado <span className="text-destructive">*</span>
                   </Label>
                   <Input
-                    placeholder="Nome completo do cliente"
-                    value={nomeCliente}
-                    onChange={(e) => setNomeCliente(e.target.value)}
+                    placeholder="Nome completo do associado"
+                    value={nomeAssociado}
+                    onChange={(e) => setNomeAssociado(e.target.value)}
                     className={cn(
-                      nomeCliente.trim().length > 0 && nomeCliente.trim().length < 3 && "border-destructive"
+                      nomeAssociado.trim().length > 0 && nomeAssociado.trim().length < 3 && "border-destructive"
                     )}
                   />
-                  {nomeCliente.trim().length > 0 && nomeCliente.trim().length < 3 && (
+                  {nomeAssociado.trim().length > 0 && nomeAssociado.trim().length < 3 && (
                     <p className="text-xs text-destructive">Nome deve ter pelo menos 3 caracteres</p>
                   )}
                 </div>
@@ -727,13 +734,13 @@ Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
                     Telefone/WhatsApp <span className="text-destructive">*</span>
                   </Label>
                   <TelefoneInput
-                    value={telefoneCliente}
-                    onChange={setTelefoneCliente}
+                    value={telefoneAssociado}
+                    onChange={setTelefoneAssociado}
                     className={cn(
-                      telefoneCliente.length > 0 && telefoneCliente.replace(/\D/g, '').length < 10 && "border-destructive"
+                      telefoneAssociado.length > 0 && telefoneAssociado.replace(/\D/g, '').length < 10 && "border-destructive"
                     )}
                   />
-                  {telefoneCliente.length > 0 && telefoneCliente.replace(/\D/g, '').length < 10 && (
+                  {telefoneAssociado.length > 0 && telefoneAssociado.replace(/\D/g, '').length < 10 && (
                     <p className="text-xs text-destructive">Telefone inválido</p>
                   )}
                 </div>
@@ -747,11 +754,101 @@ Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
                   <Input
                     type="email"
                     placeholder="email@exemplo.com"
-                    value={emailCliente}
-                    onChange={(e) => setEmailCliente(e.target.value)}
+                    value={emailAssociado}
+                    onChange={(e) => setEmailAssociado(e.target.value)}
                   />
                 </div>
               </div>
+            </div>
+
+            <Separator />
+
+            {/* BLOCO 0.3: USO DO VEÍCULO */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                <Car className="h-4 w-4 text-primary" />
+                Uso do Veículo
+              </h3>
+              
+              <div className="grid grid-cols-2 gap-3">
+                {/* Passeio */}
+                <div
+                  onClick={() => setUsoVeiculo('particular')}
+                  className={cn(
+                    "relative cursor-pointer rounded-lg border-2 p-4 transition-all hover:shadow-md",
+                    usoVeiculo === 'particular'
+                      ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+                      : "border-border hover:border-primary/50"
+                  )}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      "flex h-10 w-10 items-center justify-center rounded-full",
+                      usoVeiculo === 'particular'
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground"
+                    )}>
+                      <Car className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className={cn(
+                        "font-semibold",
+                        usoVeiculo === 'particular' && "text-primary"
+                      )}>Passeio</p>
+                      <p className="text-xs text-muted-foreground">Uso particular</p>
+                    </div>
+                  </div>
+                  {usoVeiculo === 'particular' && (
+                    <div className="absolute top-2 right-2">
+                      <CheckCircle2 className="h-5 w-5 text-primary" />
+                    </div>
+                  )}
+                </div>
+                
+                {/* Aplicativo */}
+                <div
+                  onClick={() => setUsoVeiculo('aplicativo')}
+                  className={cn(
+                    "relative cursor-pointer rounded-lg border-2 p-4 transition-all hover:shadow-md",
+                    usoVeiculo === 'aplicativo'
+                      ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+                      : "border-border hover:border-primary/50"
+                  )}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      "flex h-10 w-10 items-center justify-center rounded-full",
+                      usoVeiculo === 'aplicativo'
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground"
+                    )}>
+                      <Zap className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className={cn(
+                        "font-semibold",
+                        usoVeiculo === 'aplicativo' && "text-primary"
+                      )}>Aplicativo</p>
+                      <p className="text-xs text-muted-foreground">Uber, 99, etc</p>
+                    </div>
+                  </div>
+                  {usoVeiculo === 'aplicativo' && (
+                    <div className="absolute top-2 right-2">
+                      <CheckCircle2 className="h-5 w-5 text-primary" />
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              {/* Alerta quando aplicativo é selecionado */}
+              {usoVeiculo === 'aplicativo' && (
+                <Alert className="border-blue-500/50 bg-blue-500/10">
+                  <Info className="h-4 w-4 text-blue-500" />
+                  <AlertDescription className="text-blue-700 dark:text-blue-400">
+                    Categoria APP: cota de participação será 8% (mínimo R$ 3.000).
+                  </AlertDescription>
+                </Alert>
+              )}
             </div>
 
             <Separator />
@@ -769,10 +866,10 @@ Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
                   onSelect={(selectedLeadId, selectedLead) => {
                     form.setValue('lead_id', selectedLeadId);
                     if (selectedLead) {
-                      // Preencher dados do cliente
-                      setNomeCliente(selectedLead.nome || '');
-                      setTelefoneCliente(selectedLead.telefone || '');
-                      setEmailCliente(selectedLead.email || '');
+                      // Preencher dados do associado
+                      setNomeAssociado(selectedLead.nome || '');
+                      setTelefoneAssociado(selectedLead.telefone || '');
+                      setEmailAssociado(selectedLead.email || '');
                       // Preencher dados do veículo se disponíveis
                       if (selectedLead.veiculo_fipe) {
                         form.setValue('valor_fipe', selectedLead.veiculo_fipe);
@@ -809,9 +906,9 @@ Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
                       setVeiculoEncontrado(null);
                       setPlaca('');
                       form.setValue('valor_fipe', 0);
-                      setNomeCliente('');
-                      setTelefoneCliente('');
-                      setEmailCliente('');
+                      setNomeAssociado('');
+                      setTelefoneAssociado('');
+                      setEmailAssociado('');
                     }
                   }}
                   placeholder="Buscar lead por nome ou telefone..."
@@ -1202,8 +1299,8 @@ Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
                   <CardContent className="p-4">
                     <div className="flex flex-wrap items-start justify-between gap-4">
                       <div className="space-y-1">
-                        <p className="text-xs text-muted-foreground">Cliente</p>
-                        <p className="font-medium">{nomeCliente || 'Não informado'}</p>
+                        <p className="text-xs text-muted-foreground">Associado</p>
+                        <p className="font-medium">{nomeAssociado || 'Não informado'}</p>
                         <p className="text-xs text-muted-foreground">Veículo</p>
                         <p className="font-medium">
                           {getMarcaNome() && getModeloNome() 
@@ -1306,7 +1403,7 @@ Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
               </div>
               <Button 
                 type="submit" 
-                disabled={createCotacao.isPending || !planoSelecionadoData || valorAdesao <= 0 || !dadosClienteValidos}
+                disabled={createCotacao.isPending || !planoSelecionadoData || valorAdesao <= 0 || !dadosAssociadoValidos}
               >
                 {createCotacao.isPending ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-1" />
@@ -1333,7 +1430,7 @@ Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
                   {formatCurrency(pendingFormData?.valor_adesao || 0)}
                 </div>
                 <p className="text-sm text-muted-foreground text-center">
-                  Cliente: <strong>{nomeCliente}</strong>
+                  Associado: <strong>{nomeAssociado}</strong>
                 </p>
                 <p className="text-sm text-muted-foreground text-center">
                   Este valor será cobrado do associado. Confirma?
