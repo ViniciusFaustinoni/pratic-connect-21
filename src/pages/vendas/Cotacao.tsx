@@ -1,10 +1,10 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { CotacaoStepper } from '@/components/cotacao/CotacaoStepper';
+import { EtapaDadosAssociado } from '@/components/cotacao/EtapaDadosAssociado';
 import { EtapaConsultaFipe } from '@/components/cotacao/EtapaConsultaFipe';
-import { EtapaCategoriaVeiculo } from '@/components/cotacao/EtapaCategoriaVeiculo';
-import { EtapaDadosVeiculo } from '@/components/cotacao/EtapaDadosVeiculo';
+import { EtapaCriteriosCotacao } from '@/components/cotacao/EtapaCriteriosCotacao';
 import { EtapaResultado } from '@/components/cotacao/EtapaResultado';
 import { usePlanosOficiais, type PlanoOficial } from '@/hooks/usePlanosOficiais';
 
@@ -51,24 +51,37 @@ export default function CotacaoPage() {
   const [etapaAtual, setEtapaAtual] = useState(1);
   const [etapasCompletas, setEtapasCompletas] = useState<number[]>([]);
 
-  // Etapa 1 - Consulta FIPE
+  // ============================================
+  // ETAPA 1 - DADOS DO ASSOCIADO/SOLICITANTE
+  // ============================================
+  const [leadId, setLeadId] = useState<string | null>(null);
+  const [nomeAssociado, setNomeAssociado] = useState('');
+  const [emailAssociado, setEmailAssociado] = useState('');
+  const [telefone1, setTelefone1] = useState('');
+  const [telefone2, setTelefone2] = useState('');
+  const [consultorId, setConsultorId] = useState('');
+
+  // ============================================
+  // ETAPA 2 - IDENTIFICAÇÃO DO VEÍCULO
+  // ============================================
   const [placa, setPlaca] = useState('');
   const [veiculoEncontrado, setVeiculoEncontrado] = useState<VeiculoEncontrado | null>(null);
   const [modoEntrada, setModoEntrada] = useState<'fipe' | 'manual'>('fipe');
-
-  // Etapa 2 - Categoria
-  const [categoria, setCategoria] = useState<string | null>(null);
-  const [usoApp, setUsoApp] = useState(false);
-
-  // Etapa 3 - Dados do Veículo
   const [marca, setMarca] = useState('');
   const [modelo, setModelo] = useState('');
   const [ano, setAno] = useState('');
   const [valorFipe, setValorFipe] = useState<number | null>(null);
-  const [combustivel, setCombustivel] = useState('');
+
+  // ============================================
+  // ETAPA 3 - CRITÉRIOS DA COTAÇÃO
+  // ============================================
   const [regiao, setRegiao] = useState('');
+  const [modalidade, setModalidade] = useState<'passeio' | 'aplicativo'>('passeio');
+  const [combustivel, setCombustivel] = useState('');
   
-  // Etapa 4 - Resultado
+  // ============================================
+  // ETAPA 4 - RESULTADO
+  // ============================================
   const [isCalculando, setIsCalculando] = useState(false);
   const [planoSelecionado, setPlanoSelecionado] = useState<PlanoOficial | null>(null);
   const [valorAdesaoCustomizado, setValorAdesaoCustomizado] = useState<number | null>(null);
@@ -88,7 +101,7 @@ export default function CotacaoPage() {
     valorFipe: valorFipe || 0,
     regiao: regiao || 'rio_de_janeiro',
     combustivel: combustivel || 'gasolina',
-    categoria: categoria || 'passeio',
+    categoria: modalidade === 'aplicativo' ? 'aplicativo' : 'passeio',
     anoVeiculo: ano ? parseInt(ano) : undefined,
     tipoVeiculo: 'carro',
   });
@@ -103,36 +116,34 @@ export default function CotacaoPage() {
     );
   }, []);
 
-  // Etapa 1 -> 2
+  // Etapa 1 -> 2 (Dados Associado -> Veículo)
   const handleEtapa1Next = useCallback(() => {
+    marcarEtapaCompleta(1);
+    setEtapaAtual(2);
+  }, [marcarEtapaCompleta]);
+
+  // Etapa 2 -> 3 (Veículo -> Critérios)
+  const handleEtapa2Next = useCallback(() => {
     if (veiculoEncontrado) {
-      // Preencher dados do veículo a partir da consulta FIPE
       setMarca(veiculoEncontrado.marca);
       setModelo(veiculoEncontrado.modelo);
       setAno(veiculoEncontrado.ano);
       setValorFipe(veiculoEncontrado.valorFipe || null);
       setModoEntrada('fipe');
     }
-    marcarEtapaCompleta(1);
-    setEtapaAtual(2);
+    marcarEtapaCompleta(2);
+    setEtapaAtual(3);
   }, [veiculoEncontrado, marcarEtapaCompleta]);
 
-  // Etapa 1 -> 3 (entrada manual)
+  // Entrada manual na etapa 2 -> vai direto para etapa 3
   const handleEntradaManual = useCallback(() => {
     setModoEntrada('manual');
     setVeiculoEncontrado(null);
-    marcarEtapaCompleta(1);
-    marcarEtapaCompleta(2); // Pula categoria também se entrar manual
-    setEtapaAtual(3);
-  }, [marcarEtapaCompleta]);
-
-  // Etapa 2 -> 3
-  const handleEtapa2Next = useCallback(() => {
     marcarEtapaCompleta(2);
     setEtapaAtual(3);
   }, [marcarEtapaCompleta]);
 
-  // Etapa 2 <- Voltar
+  // Etapa 2 <- Voltar para Etapa 1
   const handleEtapa2Back = useCallback(() => {
     setEtapaAtual(1);
   }, []);
@@ -148,40 +159,43 @@ export default function CotacaoPage() {
       setValorFipe(fipeParaCalculo);
     }
     
-    // Os planos são calculados automaticamente pelo hook usePlanosOficiais
-    // Apenas precisamos avançar para a próxima etapa
-    
     toast.success('Cotação calculada com sucesso!');
     setIsCalculando(false);
     marcarEtapaCompleta(3);
     setEtapaAtual(4);
   }, [marca, modelo, ano, valorFipe, marcarEtapaCompleta]);
 
-  // Etapa 3 <- Voltar
+  // Etapa 3 <- Voltar para Etapa 2
   const handleEtapa3Back = useCallback(() => {
-    if (modoEntrada === 'manual') {
-      setEtapaAtual(1);
-    } else {
-      setEtapaAtual(2);
-    }
-  }, [modoEntrada]);
+    setEtapaAtual(2);
+  }, []);
 
   // Nova Cotação (reset)
   const handleNovaCotacao = useCallback(() => {
     setEtapaAtual(1);
     setEtapasCompletas([]);
+    // Reset Etapa 1
+    setLeadId(null);
+    setNomeAssociado('');
+    setEmailAssociado('');
+    setTelefone1('');
+    setTelefone2('');
+    setConsultorId('');
+    // Reset Etapa 2
     setPlaca('');
     setVeiculoEncontrado(null);
     setModoEntrada('fipe');
-    setCategoria(null);
-    setUsoApp(false);
     setMarca('');
     setModelo('');
     setAno('');
     setValorFipe(null);
-    setCombustivel('');
+    // Reset Etapa 3
     setRegiao('');
+    setModalidade('passeio');
+    setCombustivel('');
+    // Reset Etapa 4
     setPlanoSelecionado(null);
+    setValorAdesaoCustomizado(null);
   }, []);
 
   // Gerar PDF
@@ -196,7 +210,6 @@ export default function CotacaoPage() {
       return;
     }
     
-    // Validar taxa de filiação
     const valorAdesaoFinal = valorAdesaoCustomizado ?? planoSelecionado.valorAdesao ?? 0;
     if (valorAdesaoFinal <= 0) {
       toast.error('A taxa de filiação deve ser maior que zero');
@@ -205,6 +218,12 @@ export default function CotacaoPage() {
     
     // Dados da cotação para pré-preencher o contrato
     const dadosCotacao = {
+      associado: {
+        nome: nomeAssociado,
+        email: emailAssociado,
+        telefone: telefone1,
+        telefone2: telefone2,
+      },
       veiculo: {
         placa: veiculoEncontrado?.placa || placa,
         marca: marca,
@@ -218,14 +237,15 @@ export default function CotacaoPage() {
         valorAdesao: valorAdesaoFinal,
         valorMensal: planoSelecionado.valorMensal || 0,
       },
-      categoria: categoria,
+      lead_id: leadId,
+      consultor_id: consultorId,
       regiao: regiao,
-      usoApp: usoApp,
+      modalidade: modalidade,
     };
     
     toast.success('Redirecionando para cadastro de contrato...');
     navigate('/vendas/contratos', { state: { fromCotacao: true, dadosCotacao } });
-  }, [planoSelecionado, navigate, veiculoEncontrado, placa, marca, modelo, ano, valorFipe, categoria, regiao, usoApp, valorAdesaoCustomizado]);
+  }, [planoSelecionado, navigate, veiculoEncontrado, placa, marca, modelo, ano, valorFipe, nomeAssociado, emailAssociado, telefone1, telefone2, leadId, consultorId, regiao, modalidade, valorAdesaoCustomizado]);
 
   // Click no stepper
   const handleStepClick = useCallback((step: number) => {
@@ -259,57 +279,72 @@ export default function CotacaoPage() {
 
       {/* Conteúdo da Etapa */}
       <div className="flex-1">
+        {/* ETAPA 1 - DADOS DO ASSOCIADO */}
         {etapaAtual === 1 && (
-          <EtapaConsultaFipe
-            placa={placa}
-            setPlaca={setPlaca}
-            veiculoEncontrado={veiculoEncontrado}
-            setVeiculoEncontrado={setVeiculoEncontrado}
-            marca={marca}
-            setMarca={setMarca}
-            modelo={modelo}
-            setModelo={setModelo}
-            ano={ano}
-            setAno={setAno}
-            valorFipe={valorFipe}
-            setValorFipe={setValorFipe}
+          <EtapaDadosAssociado
+            nome={nomeAssociado}
+            setNome={setNomeAssociado}
+            email={emailAssociado}
+            setEmail={setEmailAssociado}
+            telefone1={telefone1}
+            setTelefone1={setTelefone1}
+            telefone2={telefone2}
+            setTelefone2={setTelefone2}
+            consultorId={consultorId}
+            setConsultorId={setConsultorId}
+            leadId={leadId}
+            setLeadId={setLeadId}
             onNext={handleEtapa1Next}
-            onManualEntry={handleEntradaManual}
           />
         )}
 
+        {/* ETAPA 2 - IDENTIFICAÇÃO DO VEÍCULO */}
         {etapaAtual === 2 && (
-          <EtapaCategoriaVeiculo
-            categoria={categoria}
-            setCategoria={setCategoria}
-            setUsoApp={setUsoApp}
-            onBack={handleEtapa2Back}
-            onNext={handleEtapa2Next}
-          />
+          <div className="space-y-4">
+            <EtapaConsultaFipe
+              placa={placa}
+              setPlaca={setPlaca}
+              veiculoEncontrado={veiculoEncontrado}
+              setVeiculoEncontrado={setVeiculoEncontrado}
+              marca={marca}
+              setMarca={setMarca}
+              modelo={modelo}
+              setModelo={setModelo}
+              ano={ano}
+              setAno={setAno}
+              valorFipe={valorFipe}
+              setValorFipe={setValorFipe}
+              onNext={handleEtapa2Next}
+              onManualEntry={handleEntradaManual}
+            />
+            {/* Botão Voltar */}
+            <div className="flex justify-start">
+              <button
+                onClick={handleEtapa2Back}
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                ← Voltar para Dados do Solicitante
+              </button>
+            </div>
+          </div>
         )}
 
+        {/* ETAPA 3 - CRITÉRIOS DA COTAÇÃO */}
         {etapaAtual === 3 && (
-          <EtapaDadosVeiculo
-            veiculoFipe={veiculoEncontrado}
-            modoEntrada={modoEntrada}
-            marca={marca}
-            setMarca={setMarca}
-            modelo={modelo}
-            setModelo={setModelo}
-            ano={ano}
-            setAno={setAno}
-            valorFipe={valorFipe}
-            setValorFipe={setValorFipe}
-            combustivel={combustivel}
-            setCombustivel={setCombustivel}
+          <EtapaCriteriosCotacao
             regiao={regiao}
             setRegiao={setRegiao}
+            modalidade={modalidade}
+            setModalidade={setModalidade}
+            combustivel={combustivel}
+            setCombustivel={setCombustivel}
             onBack={handleEtapa3Back}
             onCalcular={handleCalcular}
             isCalculando={isCalculando}
           />
         )}
 
+        {/* ETAPA 4 - RESULTADO */}
         {etapaAtual === 4 && (
           <EtapaResultado
             veiculoFipe={veiculoEncontrado}
@@ -318,7 +353,7 @@ export default function CotacaoPage() {
             ano={ano}
             valorFipe={valorFipe}
             placa={placa}
-            categoria={categoria}
+            categoria={modalidade}
             regiao={regiao}
             combustivel={combustivel}
             planos={planosOficiais}
