@@ -152,6 +152,7 @@ const menuConfig: {
       permission: 'canManageCadastro',
       color: MENU_COLORS.cadastro,
       items: [
+        { title: 'Propostas Pendentes', url: '/cadastro/propostas', icon: ClipboardCheck },
         { title: 'Associados', url: '/cadastro/associados', icon: Users },
         { title: 'Veículos', url: '/cadastro/veiculos', icon: Car },
         { title: 'Documentos', url: '/cadastro/documentos', icon: FileCheck },
@@ -454,6 +455,7 @@ export function AppSidebar() {
         .map(group => ({
           ...group,
           items: group.items.filter(item => 
+            item.url === '/cadastro/propostas' ||
             item.url === '/cadastro/documentos' || 
             item.url === '/cadastro/associados'
           ),

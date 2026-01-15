@@ -321,6 +321,22 @@ export function DashboardCadastro() {
             <Button 
               variant="outline" 
               className="w-full justify-start h-auto py-4 border-border hover:border-purple-500 hover:bg-purple-500/10"
+              onClick={() => navigate('/cadastro/propostas')}
+            >
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-purple-500/10">
+                  <CheckCircle className="h-5 w-5 text-purple-500" />
+                </div>
+                <div className="text-left">
+                  <p className="font-medium text-foreground">Propostas Pendentes</p>
+                  <p className="text-sm text-muted-foreground">Analisar contratos assinados</p>
+                </div>
+              </div>
+            </Button>
+
+            <Button 
+              variant="outline" 
+              className="w-full justify-start h-auto py-4 border-border hover:border-purple-500 hover:bg-purple-500/10"
               onClick={() => navigate('/cadastro/documentos')}
             >
               <div className="flex items-center gap-3">
