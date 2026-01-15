@@ -146,6 +146,7 @@ import FeriasGestao from "./pages/rh/FeriasGestao";
 import Organograma from "./pages/rh/Organograma";
 import DepartamentosCargos from "./pages/rh/DepartamentosCargos";
 import Beneficios from "./pages/rh/Beneficios";
+import FolhaPagamento from "./pages/rh/FolhaPagamento";
 
 // Marketing
 import MarketingDashboard from "./pages/marketing/MarketingDashboard";
@@ -354,6 +355,7 @@ const App = () => (
               <Route path="/rh/funcionarios/novo" element={<FuncionarioForm />} />
               <Route path="/rh/funcionarios/:id" element={<FuncionarioDetalhe />} />
               <Route path="/rh/funcionarios/:id/editar" element={<FuncionarioForm />} />
+              <Route path="/rh/folha-pagamento" element={<FolhaPagamento />} />
               <Route path="/rh/ponto" element={<ControlePonto />} />
               <Route path="/rh/ferias" element={<FeriasGestao />} />
               <Route path="/rh/organograma" element={<Organograma />} />
