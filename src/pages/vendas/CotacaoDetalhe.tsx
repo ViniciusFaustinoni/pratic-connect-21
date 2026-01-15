@@ -506,7 +506,7 @@ Ficou com alguma dúvida? Estou à disposição!
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Placa</p>
-                <p>{cotacao.leads?.veiculo_placa || '—'}</p>
+                <p>{cotacao.veiculo_placa || '—'}</p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Valor FIPE</p>
