@@ -129,7 +129,7 @@ export function CotacaoCard({
       {/* Header do Card: Status + Vendedor + Tempo */}
       <div className="flex items-center justify-between px-4 py-2 bg-muted/30">
         <div className="flex items-center gap-3">
-          {(cotacao.status !== 'rascunho' || hasLead) && (
+          {cotacao.status !== 'rascunho' && (
             <Badge className={cn(status.bgColor, status.color, "font-medium border-0")}>
               <status.icon className="h-3 w-3 mr-1" />
               {status.label.toUpperCase()}
