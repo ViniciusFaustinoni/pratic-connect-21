@@ -343,7 +343,7 @@ export function useSolicitarDocumentos() {
         .insert({
           associado_id: associadoId,
           contrato_id: contratoId,
-          tipo: 'solicitacao_documentos',
+          tipo: 'status_alterado',
           descricao: `Documentos solicitados: ${documentos.join(', ')}. ${observacoes}`,
           usuario_id: user?.id,
         });
@@ -408,7 +408,7 @@ export function useReprovarProposta() {
         .insert({
           associado_id: associadoId,
           contrato_id: contratoId,
-          tipo: 'reprovacao',
+          tipo: 'status_alterado',
           descricao: `Proposta reprovada. Motivo: ${motivo}. ${justificativa}`,
           usuario_id: user?.id,
         });
