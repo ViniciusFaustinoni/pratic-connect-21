@@ -9,6 +9,7 @@ import { AgendarVistoria } from '@/components/associado/AgendarVistoria';
 import { Autovistoria } from '@/components/associado/Autovistoria';
 import { PagamentoAdesao } from '@/components/associado/PagamentoAdesao';
 import { ConfirmacaoVistoria } from '@/components/associado/ConfirmacaoVistoria';
+import { DocumentosPendentes } from '@/components/associado/DocumentosPendentes';
 
 type Etapa = 'escolha' | 'agendar' | 'autovistoria' | 'pagamento' | 'confirmacao';
 
@@ -145,6 +146,17 @@ export default function AssociadoVistoria() {
             );
           })}
         </div>
+
+        {/* DOCUMENTOS PENDENTES - Mostra se houver documentos solicitados */}
+        {contrato.associado_id && (
+          <DocumentosPendentes 
+            associadoId={contrato.associado_id} 
+            onTodosEnviados={() => {
+              // Recarregar dados do contrato
+              console.log('[AssociadoVistoria] Todos documentos enviados, recarregando...');
+            }}
+          />
+        )}
 
         {/* Conteúdo da Etapa */}
         {etapa === 'escolha' && (

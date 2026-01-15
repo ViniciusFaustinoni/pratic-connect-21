@@ -4190,6 +4190,121 @@ export type Database = {
           },
         ]
       }
+      documentos_solicitados: {
+        Row: {
+          associado_id: string
+          contrato_id: string | null
+          created_at: string | null
+          descricao: string | null
+          documento_id: string | null
+          enviado_em: string | null
+          id: string
+          observacao_cliente: string | null
+          observacao_solicitacao: string | null
+          solicitado_em: string | null
+          solicitado_por: string | null
+          status: string | null
+          tipo_documento: string
+          updated_at: string | null
+        }
+        Insert: {
+          associado_id: string
+          contrato_id?: string | null
+          created_at?: string | null
+          descricao?: string | null
+          documento_id?: string | null
+          enviado_em?: string | null
+          id?: string
+          observacao_cliente?: string | null
+          observacao_solicitacao?: string | null
+          solicitado_em?: string | null
+          solicitado_por?: string | null
+          status?: string | null
+          tipo_documento: string
+          updated_at?: string | null
+        }
+        Update: {
+          associado_id?: string
+          contrato_id?: string | null
+          created_at?: string | null
+          descricao?: string | null
+          documento_id?: string | null
+          enviado_em?: string | null
+          id?: string
+          observacao_cliente?: string | null
+          observacao_solicitacao?: string | null
+          solicitado_em?: string | null
+          solicitado_por?: string | null
+          status?: string | null
+          tipo_documento?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documentos_solicitados_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documentos_solicitados_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "documentos_solicitados_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "documentos_solicitados_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "documentos_solicitados_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "documentos_solicitados_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "documentos_solicitados_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "contratos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documentos_solicitados_documento_id_fkey"
+            columns: ["documento_id"]
+            isOneToOne: false
+            referencedRelation: "documentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documentos_solicitados_solicitado_por_fkey"
+            columns: ["solicitado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       estoque_movimentacoes: {
         Row: {
           created_at: string | null
