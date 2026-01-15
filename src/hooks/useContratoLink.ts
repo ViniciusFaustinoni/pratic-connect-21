@@ -20,7 +20,7 @@ export function useContratoByToken(token: string | undefined) {
         .select(`
           *,
           planos:plano_id (nome, descricao),
-          associados:associado_id (nome, email, telefone, cpf),
+          associados:associado_id (nome, email, telefone, cpf, status),
           leads:lead_id (nome, email, telefone, cpf)
         `)
         .eq('link_token', token)
