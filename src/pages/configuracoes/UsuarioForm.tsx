@@ -105,6 +105,7 @@ export default function UsuarioForm() {
     email: '',
     telefone: '',
     cpf: '',
+    senha: '',
     tipo: 'funcionario',
     ativo: true,
     perfis: preselectedPerfil ? [preselectedPerfil] : [] as string[],
@@ -147,6 +148,7 @@ export default function UsuarioForm() {
       email: usuario.email || '',
       telefone: usuario.telefone || '',
       cpf: usuario.cpf || '',
+      senha: '',
       tipo: usuario.tipo || 'funcionario',
       ativo: usuario.ativo ?? true,
       perfis: usuario.roles || [],
@@ -214,6 +216,7 @@ export default function UsuarioForm() {
             email: formData.email,
             telefone: formData.telefone,
             cpf: formData.cpf,
+            senha: formData.senha,
             tipo: formData.tipo,
             perfis: formData.perfis,
           }
@@ -327,8 +330,28 @@ export default function UsuarioForm() {
                       placeholder="(00) 00000-0000" 
                       className="bg-background" 
                     />
+                    </div>
                   </div>
-                </div>
+
+                {/* Campo de senha - apenas para novos usuários */}
+                {!isEditing && (
+                  <div className="space-y-2">
+                    <Label htmlFor="senha">Senha de acesso *</Label>
+                    <Input 
+                      id="senha" 
+                      type="password" 
+                      value={formData.senha} 
+                      onChange={(e) => setFormData({ ...formData, senha: e.target.value })} 
+                      placeholder="Mínimo 6 caracteres" 
+                      className="bg-background" 
+                      required 
+                      minLength={6}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Senha inicial para o usuário acessar o sistema
+                    </p>
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <Label htmlFor="tipo">Tipo de usuário *</Label>
@@ -373,7 +396,6 @@ export default function UsuarioForm() {
                     >
                       <Checkbox 
                         checked={formData.perfis.includes(perfil.value)}
-                        onCheckedChange={() => handlePerfilToggle(perfil.value)}
                       />
                       <div>
                         <p className="font-medium text-sm">{perfil.label}</p>
