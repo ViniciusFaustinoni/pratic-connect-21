@@ -15,30 +15,30 @@ serve(async (req) => {
   }
 
   try {
-    // Validar autenticação
+    // Autenticação opcional - permite chamadas públicas (verify_jwt = false no config.toml)
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(
-        JSON.stringify({ code: 401, message: "Unauthorized" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } }
-    );
-
-    const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
+    let isAuthenticated = false;
     
-    if (claimsError || !claimsData?.claims) {
-      console.error("Auth error:", claimsError?.message);
-      return new Response(
-        JSON.stringify({ code: 401, message: "Invalid JWT" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    if (authHeader?.startsWith("Bearer ")) {
+      try {
+        const supabase = createClient(
+          Deno.env.get("SUPABASE_URL")!,
+          Deno.env.get("SUPABASE_ANON_KEY")!,
+          { global: { headers: { Authorization: authHeader } } }
+        );
+        
+        const token = authHeader.replace("Bearer ", "");
+        const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
+        isAuthenticated = !claimsError && !!claimsData?.claims?.sub;
+        
+        if (isAuthenticated) {
+          console.log("Chamada autenticada - usuário:", claimsData?.claims?.sub);
+        }
+      } catch (authError) {
+        console.log("Token inválido ou ausente, continuando como chamada pública");
+      }
+    } else {
+      console.log("Chamada pública (sem token de autenticação)");
     }
 
     const autentiqueApiKey = Deno.env.get("AUTENTIQUE_API_KEY");
