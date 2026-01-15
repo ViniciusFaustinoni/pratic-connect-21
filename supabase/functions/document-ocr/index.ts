@@ -290,13 +290,32 @@ serve(async (req) => {
       );
     }
 
-    const data = await response.json();
+    // Ler resposta com tratamento robusto de erro
+    let data;
+    try {
+      const responseText = await response.text();
+      if (!responseText || responseText.trim() === '') {
+        console.error('Empty response from AI Gateway');
+        return new Response(
+          JSON.stringify({ error: 'Resposta vazia do gateway de IA. Tente novamente.' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      data = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error('Failed to parse AI Gateway response:', parseError);
+      return new Response(
+        JSON.stringify({ error: 'Erro ao processar resposta do gateway de IA. Tente novamente.' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const content = data.choices?.[0]?.message?.content;
 
     if (!content) {
-      console.error('No content in AI response');
+      console.error('No content in AI response:', JSON.stringify(data));
       return new Response(
-        JSON.stringify({ error: 'Resposta vazia da IA' }),
+        JSON.stringify({ error: 'Resposta vazia da IA. Tente novamente.' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
