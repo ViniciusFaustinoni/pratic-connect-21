@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -30,10 +30,11 @@ serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     );
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    const token = authHeader.replace("Bearer ", "");
+    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
     
-    if (userError || !user) {
-      console.error("Auth error:", userError?.message);
+    if (claimsError || !claimsData?.claims) {
+      console.error("Auth error:", claimsError?.message);
       return new Response(
         JSON.stringify({ code: 401, message: "Invalid JWT" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
