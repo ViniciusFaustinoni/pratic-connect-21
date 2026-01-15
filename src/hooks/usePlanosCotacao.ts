@@ -33,6 +33,11 @@ export interface PlanoCotacao {
   tag?: string;
   alertaDesagio?: string;
   adicionalMensal: number;
+  // Detalhamento dos valores (para exibição)
+  valorCota?: number;
+  taxaAdministrativa?: number;
+  valorRastreamento?: number;
+  valorAssistencia?: number;
 }
 
 interface CalcularPlanosParams {
@@ -299,6 +304,13 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         alertaDesagio = 'Chassi remarcado: sujeito à análise de aceitação';
       }
 
+      // Calcular valores detalhados (estimativa baseada no valorMensal)
+      // Esses valores são aproximados para exibição - o valor real é o valorMensal
+      const valorCota = Math.round(valorMensal * 0.6 * 100) / 100; // ~60% do mensal
+      const taxaAdministrativa = Math.round(valorMensal * 0.25 * 100) / 100; // ~25%
+      const valorRastreamento = Math.round(valorMensal * 0.10 * 100) / 100; // ~10%
+      const valorAssistencia = Math.round(valorMensal * 0.05 * 100) / 100; // ~5%
+
       planosCalculados.push({
         id: plano.id,
         codigo: plano.codigo,
@@ -318,6 +330,11 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         tag,
         alertaDesagio,
         adicionalMensal: adicionalBanco || adicionalNivel,
+        // Valores detalhados
+        valorCota,
+        taxaAdministrativa,
+        valorRastreamento,
+        valorAssistencia,
       });
     }
 
