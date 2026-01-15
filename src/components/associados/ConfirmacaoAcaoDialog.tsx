@@ -15,7 +15,7 @@ import { AlertTriangle, Loader2 } from 'lucide-react';
 interface ConfirmacaoAcaoDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  acao: 'bloquear' | 'suspender' | 'cancelar';
+  acao: 'bloquear' | 'suspender' | 'cancelar' | 'excluir';
   nomeAssociado: string;
   onConfirm: (motivo: string) => Promise<void>;
 }
@@ -37,6 +37,12 @@ const acaoConfig = {
     titulo: 'Cancelar Associado',
     descricao: 'Esta ação encerra o vínculo do associado. O histórico será mantido.',
     botao: 'Cancelar Associado',
+    cor: 'bg-destructive hover:bg-destructive/90',
+  },
+  excluir: {
+    titulo: 'Excluir Associado Permanentemente',
+    descricao: 'ATENÇÃO: Esta ação é irreversível! O associado e todos os seus dados serão excluídos permanentemente do sistema.',
+    botao: 'Excluir Permanentemente',
     cor: 'bg-destructive hover:bg-destructive/90',
   },
 };

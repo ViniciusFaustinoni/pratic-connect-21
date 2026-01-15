@@ -4,8 +4,10 @@ import {
   Search, Plus, MoreVertical, Loader2, 
   UserCheck, Clock, AlertTriangle, UserX,
   Eye, Edit, FileText, Receipt, Lock, Unlock, Pause, XCircle,
-  MessageCircle, X, ChevronLeft, ChevronRight, Users, Download, Filter, DollarSign
+  MessageCircle, X, ChevronLeft, ChevronRight, Users, Download, Filter, DollarSign, Trash2
 } from 'lucide-react';
+import { usePermissions } from '@/hooks/usePermissions';
+import { supabase } from '@/integrations/supabase/client';
 import * as XLSX from 'xlsx';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -58,6 +60,8 @@ const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 export default function Associados() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { isDiretor, isDesenvolvedor, isAdminMaster } = usePermissions();
+  const canDeleteAssociados = isDiretor || isDesenvolvedor || isAdminMaster;
   
   // State
   const [search, setSearch] = useState('');
@@ -69,7 +73,7 @@ export default function Associados() {
   const [formDialogOpen, setFormDialogOpen] = useState(false);
   const [acaoDialog, setAcaoDialog] = useState<{
     open: boolean;
-    acao: 'bloquear' | 'suspender' | 'cancelar';
+    acao: 'bloquear' | 'suspender' | 'cancelar' | 'excluir';
     associadoId: string;
     nomeAssociado: string;
   } | null>(null);
@@ -209,6 +213,29 @@ export default function Associados() {
   const handleAcaoConfirm = async (motivo: string) => {
     if (!acaoDialog) return;
     
+    // Handle exclusão separadamente
+    if (acaoDialog.acao === 'excluir') {
+      const { error } = await supabase
+        .from('associados')
+        .delete()
+        .eq('id', acaoDialog.associadoId);
+      
+      if (error) {
+        toast({
+          title: 'Erro ao excluir',
+          description: error.message,
+          variant: 'destructive',
+        });
+        throw error;
+      }
+      
+      toast({
+        title: 'Associado excluído',
+        description: 'O associado foi removido permanentemente do sistema.',
+      });
+      return;
+    }
+    
     const statusMap = {
       bloquear: 'bloqueado' as StatusAssociado,
       suspender: 'suspenso' as StatusAssociado,
@@ -217,7 +244,7 @@ export default function Associados() {
     
     await updateStatus.mutateAsync({
       id: acaoDialog.associadoId,
-      status: statusMap[acaoDialog.acao],
+      status: statusMap[acaoDialog.acao as keyof typeof statusMap],
       motivo,
     });
     
@@ -596,6 +623,23 @@ export default function Associados() {
                               <XCircle className="mr-2 h-4 w-4" />
                               Cancelar
                             </DropdownMenuItem>
+                          )}
+                          {canDeleteAssociados && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem 
+                                onClick={() => setAcaoDialog({
+                                  open: true,
+                                  acao: 'excluir',
+                                  associadoId: associado.id,
+                                  nomeAssociado: associado.nome
+                                })}
+                                className="text-destructive font-semibold"
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Excluir Permanentemente
+                              </DropdownMenuItem>
+                            </>
                           )}
                         </DropdownMenuContent>
                       </DropdownMenu>
