@@ -359,6 +359,12 @@ Ficou com alguma dúvida? Estou à disposição!
                   onClick={() => aceitarEGerar.mutate({ 
                     cotacaoId: cotacao.id, 
                     vendedorId: profile?.id 
+                  }, {
+                    onSuccess: (data) => {
+                      if (data?.contrato?.id) {
+                        navigate(`/vendas/contratos/${data.contrato.id}`);
+                      }
+                    }
                   })}
                   disabled={aceitarEGerar.isPending}
                   className="bg-emerald-600 hover:bg-emerald-700"
@@ -378,6 +384,12 @@ Ficou com alguma dúvida? Estou à disposição!
                   onClick={() => gerarContrato.mutate({ 
                     cotacaoId: cotacao.id, 
                     vendedorId: profile?.id 
+                  }, {
+                    onSuccess: (data) => {
+                      if (data?.contrato?.id) {
+                        navigate(`/vendas/contratos/${data.contrato.id}`);
+                      }
+                    }
                   })}
                   disabled={gerarContrato.isPending}
                 >
