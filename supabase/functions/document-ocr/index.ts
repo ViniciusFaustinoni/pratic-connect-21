@@ -305,7 +305,12 @@ serve(async (req) => {
     let result;
     try {
       // Remover possíveis backticks de markdown
-      const cleanContent = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      let cleanContent = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      
+      // Corrigir placeholders que a IA pode retornar ao invés de valores reais
+      cleanContent = cleanContent.replace(/_CONFIDENCE_/g, '0.95');
+      cleanContent = cleanContent.replace(/:\s*_[A-Z_]+_/g, ': null');
+      
       result = JSON.parse(cleanContent);
     } catch (parseError) {
       console.error('Failed to parse OCR result:', content);
