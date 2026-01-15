@@ -312,6 +312,9 @@ export default function CotadorPage() {
   const [leadSelecionado, setLeadSelecionado] = useState<LeadDB | null>(null);
   const [buscaLead, setBuscaLead] = useState('');
   const [comboboxAberto, setComboboxAberto] = useState(false);
+  
+  // Nome do associado (quando não vinculado a lead)
+  const [nomeAssociado, setNomeAssociado] = useState('');
 
   // Cotação
   const [isCalculando, setIsCalculando] = useState(false);
@@ -577,6 +580,8 @@ export default function CotadorPage() {
         codigo_fipe: veiculoEncontrado?.codigoFipe,
         uso_aplicativo: usoApp,
         categoria_veiculo: categoriaVeiculo || undefined,
+        nome_solicitante: leadSelecionado?.nome || nomeAssociado || null,
+        veiculo_placa: veiculoEncontrado?.placa || placaBusca.replace(/[^A-Za-z0-9]/g, '').toUpperCase() || null,
       });
 
       setCotacaoSalva(cotacaoData);
@@ -1116,6 +1121,23 @@ _Cotação válida por 7 dias_
                 Vincule a um lead para manter histórico e facilitar conversão
               </p>
             </div>
+            
+            {/* Nome do Associado (quando não tem lead) */}
+            {!leadSelecionado && (
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  Nome do Associado <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  placeholder="Nome completo do associado"
+                  value={nomeAssociado}
+                  onChange={(e) => setNomeAssociado(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Informe o nome do cliente para identificar a cotação
+                </p>
+              </div>
+            )}
 
             {/* Uso para aplicativo */}
             <div className="space-y-2">
