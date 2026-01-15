@@ -81,7 +81,45 @@ serve(async (req) => {
   try {
     const { contratoId, valor, cliente }: CobrancaAdesaoRequest = await req.json();
 
-    console.log(`[asaas-cobranca-adesao] Criando cobrança para contrato ${contratoId}`);
+    console.log(`[asaas-cobranca-adesao] Verificando cobrança existente para contrato ${contratoId}`);
+
+    // PROTEÇÃO CONTRA DUPLICIDADE: Verificar se já existe cobrança de adesão pendente
+    const { data: cobrancaExistente, error: existenteError } = await supabase
+      .from('asaas_cobrancas')
+      .select('*')
+      .eq('contrato_id', contratoId)
+      .eq('tipo', 'adesao')
+      .in('status', ['PENDING', 'OVERDUE'])
+      .maybeSingle();
+
+    if (existenteError) {
+      console.warn('[asaas-cobranca-adesao] Erro ao verificar cobrança existente:', existenteError);
+    }
+
+    // Se já existe cobrança pendente, retornar ela ao invés de criar nova
+    if (cobrancaExistente) {
+      console.log(`[asaas-cobranca-adesao] Cobrança existente encontrada: ${cobrancaExistente.id}, retornando dados existentes`);
+      
+      return new Response(
+        JSON.stringify({
+          success: true,
+          cobranca_id: cobrancaExistente.id,
+          asaas_id: cobrancaExistente.asaas_id,
+          pix_copia_cola: cobrancaExistente.pix_copia_cola,
+          pix_qrcode: cobrancaExistente.pix_qrcode,
+          boleto_url: cobrancaExistente.boleto_url,
+          linha_digitavel: cobrancaExistente.linha_digitavel,
+          valor: cobrancaExistente.valor,
+          vencimento: cobrancaExistente.data_vencimento,
+          message: 'Cobrança existente retornada',
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    console.log(`[asaas-cobranca-adesao] Nenhuma cobrança existente, criando nova para contrato ${contratoId}`);
 
     // Buscar contrato para obter associado_id
     const { data: contrato, error: contratoError } = await supabase
