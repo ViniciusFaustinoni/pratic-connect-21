@@ -35,26 +35,55 @@ export function PagamentoAdesao({
   const [loading, setLoading] = useState(true);
   const [verificando, setVerificando] = useState(false);
 
-  // Criar cobrança ao montar componente
+  // Verificar cobrança existente ou criar nova ao montar componente
   useEffect(() => {
-    criarCobranca();
+    verificarOuCriarCobranca();
   }, []);
 
-  // Polling para verificar pagamento
-  useEffect(() => {
-    if (!cobranca) return;
-
-    const interval = setInterval(async () => {
-      await verificarPagamento();
-    }, 10000); // Verificar a cada 10 segundos
-
-    return () => clearInterval(interval);
-  }, [cobranca]);
-
-  const criarCobranca = async () => {
+  const verificarOuCriarCobranca = async () => {
     try {
       setLoading(true);
       
+      // 1. Primeiro verificar se já existe cobrança de adesão pendente para este contrato
+      const { data: cobrancaExistente, error: fetchError } = await supabase
+        .from('asaas_cobrancas')
+        .select('*')
+        .eq('contrato_id', contratoId)
+        .eq('tipo', 'adesao')
+        .in('status', ['PENDING', 'OVERDUE'])
+        .maybeSingle();
+
+      if (fetchError) {
+        console.error('Erro ao buscar cobrança existente:', fetchError);
+      }
+
+      // 2. Se já existe, usar a cobrança existente
+      if (cobrancaExistente) {
+        console.log('[PagamentoAdesao] Cobrança existente encontrada:', cobrancaExistente.id);
+        setCobranca({
+          id: cobrancaExistente.id,
+          pixCopiaECola: cobrancaExistente.pix_copia_cola,
+          pixQrCode: cobrancaExistente.pix_qrcode,
+          boletoUrl: cobrancaExistente.boleto_url,
+          linhaDigitavel: cobrancaExistente.linha_digitavel,
+          status: cobrancaExistente.status,
+        });
+        return;
+      }
+
+      // 3. Se não existe, criar nova cobrança
+      console.log('[PagamentoAdesao] Nenhuma cobrança existente, criando nova...');
+      await criarCobranca();
+    } catch (error: any) {
+      console.error('Erro ao verificar/criar cobrança:', error);
+      toast.error('Erro ao processar cobrança. Tente novamente.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const criarCobranca = async () => {
+    try {
       // Chamar edge function para criar cobrança no Asaas
       const { data, error } = await supabase.functions.invoke('asaas-cobranca-adesao', {
         body: {
@@ -80,9 +109,7 @@ export function PagamentoAdesao({
       });
     } catch (error: any) {
       console.error('Erro ao criar cobrança:', error);
-      toast.error('Erro ao gerar cobrança. Tente novamente.');
-    } finally {
-      setLoading(false);
+      throw error; // Propagar erro para verificarOuCriarCobranca tratar
     }
   };
 
