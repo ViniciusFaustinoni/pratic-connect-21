@@ -27,7 +27,6 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { ArrowLeft, Save, User, Car, Settings, AlertCircle } from 'lucide-react';
-import { LeadDocumentUploader } from '@/components/leads/LeadDocumentUploader';
 import { ORIGEM_LABELS, ETAPA_LABELS } from '@/types/database';
 import type { OrigemLead, EtapaLead } from '@/types/database';
 
@@ -217,16 +216,6 @@ export default function LeadEditar() {
 
   const etapaAtual = form.watch('etapa');
 
-  // Handler para dados extraídos do OCR
-  const handleOcrDataExtracted = (dados: { nome?: string; cpf?: string }) => {
-    if (dados.nome && !form.getValues('nome')) {
-      form.setValue('nome', dados.nome);
-    }
-    if (dados.cpf) {
-      form.setValue('cpf', formatCPFForDisplay(dados.cpf));
-    }
-  };
-
   useEffect(() => {
     if (lead) {
       // Map legacy values to valid schema values
@@ -371,11 +360,6 @@ export default function LeadEditar() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Upload de documento com OCR */}
-              <LeadDocumentUploader
-                leadId={id!}
-                onDataExtracted={handleOcrDataExtracted}
-              />
 
               <FormField
                 control={form.control}
