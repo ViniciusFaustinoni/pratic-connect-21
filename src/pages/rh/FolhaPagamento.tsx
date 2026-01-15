@@ -153,17 +153,22 @@ const FolhaPagamento = () => {
         .select('id, nome_completo')
         .in('id', funcIds);
       
-      const funcsMap = new Map((funcsData || []).map((f: any) => [f.id, f]));
+      const funcsMap = new Map<string, { id: string; nome_completo: string }>(
+        (funcsData || []).map((f: any) => [f.id, { id: f.id, nome_completo: f.nome_completo }])
+      );
       
-      return folhasData.map((f: any) => ({
-        ...f,
-        funcionario: funcsMap.get(f.funcionario_id) ? {
-          id: funcsMap.get(f.funcionario_id)!.id,
-          nome_completo: (funcsMap.get(f.funcionario_id) as any)!.nome_completo,
-          cargo: null,
-          salario_atual: null,
-        } : undefined,
-      }));
+      return folhasData.map((f: any) => {
+        const func = funcsMap.get(f.funcionario_id);
+        return {
+          ...f,
+          funcionario: func ? {
+            id: func.id,
+            nome_completo: func.nome_completo,
+            cargo: null,
+            salario_atual: null,
+          } : undefined,
+        };
+      });
     },
   });
 
