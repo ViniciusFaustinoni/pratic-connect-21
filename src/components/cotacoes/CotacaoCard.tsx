@@ -271,7 +271,7 @@ export function CotacaoCard({
               disabled={isGerandoContrato}
             >
               <FileSignature className="h-4 w-4 mr-1" />
-              {isGerandoContrato ? 'Gerando...' : 'Gerar Contrato'}
+              {isGerandoContrato ? 'Gerando...' : 'Gerar Proposta'}
             </Button>
           )}
           
@@ -295,7 +295,7 @@ export function CotacaoCard({
               disabled={isGerandoContrato}
             >
               <FileSignature className="h-4 w-4 mr-1" />
-              {isGerandoContrato ? 'Gerando...' : 'Gerar Contrato'}
+              {isGerandoContrato ? 'Gerando...' : 'Gerar Proposta'}
             </Button>
           )}
           
