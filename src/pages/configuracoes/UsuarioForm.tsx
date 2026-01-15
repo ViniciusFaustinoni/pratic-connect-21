@@ -358,7 +358,7 @@ export default function UsuarioForm() {
                   <Select 
                     key={`tipo-${formData.tipo}`}
                     value={formData.tipo} 
-                    onValueChange={(v) => setFormData({ ...formData, tipo: v })}
+                    onValueChange={(v) => setFormData(prev => ({ ...prev, tipo: v }))}
                   >
                     <SelectTrigger className="bg-background">
                       <SelectValue placeholder="Selecione o tipo" />
@@ -396,6 +396,7 @@ export default function UsuarioForm() {
                     >
                       <Checkbox 
                         checked={formData.perfis.includes(perfil.value)}
+                        onClick={(e) => e.stopPropagation()}
                       />
                       <div>
                         <p className="font-medium text-sm">{perfil.label}</p>
