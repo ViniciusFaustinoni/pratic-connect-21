@@ -35,7 +35,7 @@ const CHECKLIST_ITEMS = [
   { id: 'local_seguro', label: 'Local de instalação seguro' },
   { id: 'bateria_ok', label: 'Bateria do veículo em boas condições' },
   { id: 'eletrica_ok', label: 'Acessórios elétricos funcionando' },
-  { id: 'cliente_ciente', label: 'Cliente ciente do procedimento' },
+  { id: 'cliente_ciente', label: 'Associado ciente do procedimento' },
 ];
 
 const ETAPAS = [
@@ -376,7 +376,7 @@ export default function InstaladorChecklist() {
             <Card className="border-slate-700 bg-slate-800">
               <CardHeader>
                 <CardTitle className="text-base text-white">
-                  Assinatura do Cliente
+                  Assinatura do Associado
                 </CardTitle>
                 <p className="text-sm text-slate-400">
                   {instalacao.associados?.nome}

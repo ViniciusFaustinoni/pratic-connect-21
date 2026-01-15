@@ -23,7 +23,7 @@
  * const tipo: TipoUsuario = 'funcionario';
  * 
  * - 'funcionario': Colaboradores internos da PRATIC
- * - 'associado': Clientes que possuem veículos protegidos
+ * - 'associado': Associados que possuem veículos protegidos
  * - 'prestador': Parceiros externos (guincheiros, oficinas)
  */
 export type TipoUsuario = 'funcionario' | 'associado' | 'prestador';

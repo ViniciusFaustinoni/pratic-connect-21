@@ -72,7 +72,7 @@ export function SolicitarDocumentosDialog({
             Solicitar Documentos
           </DialogTitle>
           <DialogDescription>
-            Selecione os documentos que precisam ser enviados pelo cliente.
+            Selecione os documentos que precisam ser enviados pelo associado.
           </DialogDescription>
         </DialogHeader>
 
@@ -106,7 +106,7 @@ export function SolicitarDocumentosDialog({
           {/* Campo de observações */}
           <div className="space-y-2">
             <Label htmlFor="observacoes" className="text-foreground font-medium">
-              Observações para o cliente (opcional)
+              Observações para o associado (opcional)
             </Label>
             <Textarea
               id="observacoes"

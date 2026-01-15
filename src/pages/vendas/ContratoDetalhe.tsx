@@ -220,7 +220,7 @@ const gerarTimeline = (contrato: any): TimelineEvento[] => {
     eventos.push({
       id: eventId++,
       tipo: 'visualizacao',
-      descricao: 'Visualizado pelo cliente',
+      descricao: 'Visualizado pelo associado',
       data: vizDate.toISOString(),
       icone: Eye,
       cor: 'text-yellow-500',
@@ -235,7 +235,7 @@ const gerarTimeline = (contrato: any): TimelineEvento[] => {
     eventos.push({
       id: eventId++,
       tipo: 'assinatura',
-      descricao: 'Assinado pelo cliente',
+      descricao: 'Assinado pelo associado',
       data: assDate.toISOString(),
       icone: PenLine,
       cor: 'text-green-500',
@@ -304,7 +304,7 @@ const gerarTimeline = (contrato: any): TimelineEvento[] => {
     eventos.push({
       id: 3,
       tipo: 'assinatura',
-      descricao: 'Aguardando assinatura do cliente',
+      descricao: 'Aguardando assinatura do associado',
       data: null,
       icone: Clock,
       cor: 'text-muted-foreground',
