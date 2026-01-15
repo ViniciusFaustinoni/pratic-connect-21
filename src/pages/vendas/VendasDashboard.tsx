@@ -735,7 +735,7 @@ export default function VendasDashboard() {
                 <FileText className="h-5 w-5 text-purple-500" />
                 <div>
                   <CardTitle className="text-lg">Contratos Aguardando Assinatura</CardTitle>
-                  <CardDescription>{metricas.contratosPendentes.length} contratos enviados aguardando cliente</CardDescription>
+                  <CardDescription>{metricas.contratosPendentes.length} contratos enviados aguardando associado</CardDescription>
                 </div>
               </div>
               <Link to="/vendas/contratos?status=pendente">

@@ -86,7 +86,7 @@ export function VistoriaFotosCard({ fotos, vistoriaStatus }: VistoriaFotosCardPr
             <Camera className="h-5 w-5 text-purple-500" />
             Auto Vistoria
           </CardTitle>
-          <CardDescription>Fotos enviadas pelo cliente</CardDescription>
+          <CardDescription>Fotos enviadas pelo associado</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="text-center py-6 text-muted-foreground">

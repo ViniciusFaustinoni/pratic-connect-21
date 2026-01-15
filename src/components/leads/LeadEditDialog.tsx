@@ -136,7 +136,7 @@ export function LeadEditDialog({ open, onOpenChange, lead }: LeadEditDialogProps
                   <FormItem>
                     <FormLabel>Nome Completo *</FormLabel>
                     <FormControl>
-                      <Input placeholder="Nome do cliente" {...field} />
+                      <Input placeholder="Nome do associado" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

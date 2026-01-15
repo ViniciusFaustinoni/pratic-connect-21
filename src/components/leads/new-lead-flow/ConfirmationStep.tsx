@@ -136,7 +136,7 @@ export function ConfirmationStep({ state, updateState, onBack, onSubmit, isSubmi
               onChange={(e) => updateState({ 
                 personalData: { ...state.personalData!, nome: e.target.value } 
               })}
-              placeholder="Nome do cliente"
+              placeholder="Nome do associado"
               className={state.personalData?.nome ? autoFilledClass : ''}
             />
           </div>

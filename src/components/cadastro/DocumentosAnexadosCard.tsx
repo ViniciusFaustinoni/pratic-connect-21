@@ -61,7 +61,7 @@ export function DocumentosAnexadosCard({ documentos }: DocumentosAnexadosCardPro
             <FileText className="h-5 w-5 text-purple-500" />
             Documentos Anexados
           </CardTitle>
-          <CardDescription>Documentos enviados pelo cliente</CardDescription>
+          <CardDescription>Documentos enviados pelo associado</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="text-center py-6 text-muted-foreground">
