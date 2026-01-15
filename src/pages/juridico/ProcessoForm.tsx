@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -87,8 +87,12 @@ const parseCurrencyValue = (value: string): number | null => {
 export default function ProcessoForm() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const isEditing = !!id;
+  
+  // Obter sinistro_id da URL (quando vindo de um sinistro)
+  const sinistroIdFromUrl = searchParams.get('sinistro_id');
 
   // Estados para campos monetários
   const [valorCausaDisplay, setValorCausaDisplay] = useState('');
@@ -128,7 +132,7 @@ export default function ProcessoForm() {
       parte_contraria_advogado: null,
       parte_contraria_oab: null,
       associado_id: null,
-      sinistro_id: null,
+      sinistro_id: sinistroIdFromUrl || null,
       advogado_id: null,
       valor_causa: null,
       valor_condenacao: null,
@@ -174,6 +178,32 @@ export default function ProcessoForm() {
       setValorAcordoDisplay(formatCurrencyValue(processo.valor_acordo));
     }
   }, [processo, form]);
+
+  // Buscar sinistro quando vindo da URL (para pré-preencher associado)
+  const { data: sinistroFromUrl } = useQuery({
+    queryKey: ['sinistro-from-url', sinistroIdFromUrl],
+    queryFn: async () => {
+      if (!sinistroIdFromUrl) return null;
+      const { data, error } = await supabase
+        .from('sinistros')
+        .select(`
+          id, protocolo, tipo,
+          associado:associados(id, nome, cpf)
+        `)
+        .eq('id', sinistroIdFromUrl)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!sinistroIdFromUrl && !isEditing,
+  });
+
+  // Auto-preencher associado do sinistro quando vindo da URL
+  useEffect(() => {
+    if (sinistroFromUrl?.associado && !isEditing) {
+      form.setValue('associado_id', sinistroFromUrl.associado.id);
+    }
+  }, [sinistroFromUrl, isEditing, form]);
 
   const saveMutation = useMutation({
     mutationFn: async (formData: ProcessoFormData) => {

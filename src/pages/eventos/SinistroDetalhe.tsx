@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useParams, useNavigate, Link } from 'react-router-dom';
@@ -8,8 +9,9 @@ import {
   Car, ShieldAlert, ShieldX, Flame, CloudRain, Square, 
   HelpCircle, FileText, Clock, MoreHorizontal, Loader2,
   ExternalLink, Download, CheckCircle, XCircle, AlertCircle,
-  User, FileCheck, FilePlus
+  User, FileCheck, FilePlus, Scale, Plus, Link as LinkIcon
 } from 'lucide-react';
+import { ModalVincularProcesso } from '@/components/sinistros/ModalVincularProcesso';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -97,6 +99,7 @@ const handleWhatsApp = (phone: string | null) => {
 export default function SinistroDetalhe() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [modalVincularOpen, setModalVincularOpen] = useState(false);
 
   const { data: sinistro, isLoading } = useQuery({
     queryKey: ['sinistro', id],
@@ -146,6 +149,24 @@ export default function SinistroDetalhe() {
         .eq('sinistro_id', id!);
       if (error) throw error;
       return data;
+    },
+    enabled: !!id,
+  });
+
+  // Query para processos vinculados ao sinistro
+  const { data: processosVinculados = [] } = useQuery({
+    queryKey: ['processos-sinistro', id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('processos')
+        .select(`
+          id, numero, numero_processo, tipo, natureza, status, fase, vara, comarca,
+          advogado:advogados(id, nome)
+        `)
+        .eq('sinistro_id', id!)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data || [];
     },
     enabled: !!id,
   });
@@ -248,6 +269,15 @@ export default function SinistroDetalhe() {
             <DropdownMenuItem onClick={() => handleWhatsApp(sinistro.associado?.whatsapp || sinistro.associado?.telefone)}>
               <MessageCircle className="h-4 w-4 mr-2" />
               Enviar WhatsApp
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => navigate(`/juridico/processos/novo?sinistro_id=${id}`)}>
+              <Scale className="h-4 w-4 mr-2" />
+              Criar Processo Jurídico
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setModalVincularOpen(true)}>
+              <LinkIcon className="h-4 w-4 mr-2" />
+              Vincular Processo Existente
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -539,6 +569,55 @@ export default function SinistroDetalhe() {
               )}
             </CardContent>
           </Card>
+
+          {/* Processos Jurídicos */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <Scale className="h-5 w-5" />
+                Processos Jurídicos
+              </CardTitle>
+              <Button variant="outline" size="sm" onClick={() => setModalVincularOpen(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Vincular
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {processosVinculados.length > 0 ? (
+                <div className="space-y-3">
+                  {processosVinculados.map((processo) => (
+                    <div 
+                      key={processo.id} 
+                      className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
+                      onClick={() => navigate(`/juridico/processos/${processo.id}`)}
+                    >
+                      <div>
+                        <p className="font-medium">{processo.numero_processo || processo.numero || 'Sem número'}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {processo.tipo} • {processo.vara || 'Vara não definida'}
+                        </p>
+                      </div>
+                      <Badge variant="outline">{processo.status || 'Ativo'}</Badge>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-6">
+                  <Scale className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                  <p className="text-sm text-muted-foreground">Nenhum processo vinculado</p>
+                  <Button 
+                    variant="link" 
+                    size="sm" 
+                    className="mt-2"
+                    onClick={() => setModalVincularOpen(true)}
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Vincular Processo
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
 
@@ -598,6 +677,13 @@ export default function SinistroDetalhe() {
           )}
         </CardContent>
       </Card>
+
+      {/* Modal para Vincular Processo */}
+      <ModalVincularProcesso
+        sinistroId={id!}
+        open={modalVincularOpen}
+        onOpenChange={setModalVincularOpen}
+      />
     </div>
   );
 }
