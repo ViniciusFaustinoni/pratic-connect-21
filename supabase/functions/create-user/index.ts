@@ -24,17 +24,18 @@ serve(async (req) => {
   }
 
   try {
-    // Verificar autenticação
+    // Verificar autenticação via header
     const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
+    if (!authHeader?.startsWith('Bearer ')) {
       return new Response(
-        JSON.stringify({ error: 'Não autorizado' }),
+        JSON.stringify({ code: 401, message: 'Não autorizado' }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     
     // Cliente com service role para operações admin
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
@@ -42,24 +43,28 @@ serve(async (req) => {
     });
 
     // Cliente com token do usuário para verificar permissões
-    const supabaseUser = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    const supabaseUser = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } }
     });
 
-    // Verificar se usuário logado tem permissão
-    const { data: { user: currentUser } } = await supabaseUser.auth.getUser();
-    if (!currentUser) {
+    // Validar usuário autenticado
+    const { data: { user: currentUser }, error: userError } = await supabaseUser.auth.getUser();
+    
+    if (userError || !currentUser) {
+      console.error('Erro ao validar usuário:', userError);
       return new Response(
-        JSON.stringify({ error: 'Usuário não autenticado' }),
+        JSON.stringify({ code: 401, message: 'Token inválido ou expirado' }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    const currentUserId = currentUser.id;
 
     // Verificar se tem role de gerência
     const { data: roles } = await supabaseAdmin
       .from('user_roles')
       .select('role')
-      .eq('user_id', currentUser.id);
+      .eq('user_id', currentUserId);
 
     const allowedRoles = ['diretor', 'gerente_comercial', 'supervisor_vendas'];
     const hasPermission = roles?.some(r => allowedRoles.includes(r.role));
@@ -209,7 +214,7 @@ serve(async (req) => {
         email: email.toLowerCase(),
         acao: 'usuario_criado',
         metadata: {
-          criado_por: currentUser.id,
+          criado_por: currentUserId,
           tipo,
           perfis: perfisParaAdicionar,
           com_senha: !!senha,
