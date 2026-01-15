@@ -97,6 +97,7 @@ const MENU_COLORS: Record<string, string> = {
   marketing: '#d946ef',      // Magenta
   ouvidoria: '#38bdf8',      // Azul claro
   diretoria: '#fbbf24',      // Dourado
+  relatorios: '#6366f1',     // Índigo
   configuracoes: '#94a3b8',  // Cinza
 };
 
@@ -348,6 +349,16 @@ const menuConfig: {
         { title: 'Perfis', url: '/diretoria/perfis', icon: Shield },
         { title: 'Logs', url: '/diretoria/logs', icon: FileText },
         { title: 'Relatórios', url: '/diretoria/relatorios', icon: ClipboardList },
+      ],
+    },
+    {
+      id: 'relatorios',
+      label: 'Relatórios',
+      icon: PieChart,
+      permission: 'canViewDashboard',
+      color: MENU_COLORS.relatorios,
+      items: [
+        { title: 'Central de Relatórios', url: '/relatorios', icon: BarChart3 },
       ],
     },
   ],
