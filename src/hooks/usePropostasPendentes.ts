@@ -17,6 +17,20 @@ export interface DocumentoAnexado {
   created_at: string;
 }
 
+export interface VistoriaFotoInfo {
+  id: string;
+  tipo: string;
+  arquivo_url: string;
+  created_at: string;
+}
+
+export interface VistoriaInfo {
+  id: string;
+  status: string;
+  tipo: string;
+  fotos: VistoriaFotoInfo[];
+}
+
 export interface PropostaPendente {
   id: string;
   numero: string | null;
@@ -41,6 +55,7 @@ export interface PropostaPendente {
   documentos: DocumentoAnexado[];
   tem_documento_pendente: boolean;
   associado_status: string | null;
+  vistoria: VistoriaInfo | null;
 }
 
 export interface PropostaStats {
@@ -144,6 +159,30 @@ export function usePropostasPendentes() {
             temDocumentoPendente = (count || 0) > 0;
           }
 
+          // Buscar vistoria vinculada ao contrato
+          let vistoria: VistoriaInfo | null = null;
+          const { data: vistoriaData } = await supabase
+            .from('vistorias')
+            .select(`
+              id,
+              status,
+              tipo,
+              fotos:vistoria_fotos(id, tipo, arquivo_url, created_at)
+            `)
+            .eq('contrato_id', contrato.id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (vistoriaData) {
+            vistoria = {
+              id: vistoriaData.id,
+              status: vistoriaData.status || 'pendente',
+              tipo: vistoriaData.tipo || 'auto_vistoria',
+              fotos: (vistoriaData.fotos || []) as VistoriaFotoInfo[],
+            };
+          }
+
           return {
             ...contrato,
             associado,
@@ -152,6 +191,7 @@ export function usePropostasPendentes() {
             documentos,
             tem_documento_pendente: temDocumentoPendente,
             associado_status: associado?.status || null,
+            vistoria,
           } as PropostaPendente;
         })
       );
@@ -253,6 +293,30 @@ export function useProposta(contratoId: string | undefined) {
         temDocumentoPendente = (count || 0) > 0;
       }
 
+      // Buscar vistoria vinculada ao contrato
+      let vistoria: VistoriaInfo | null = null;
+      const { data: vistoriaData } = await supabase
+        .from('vistorias')
+        .select(`
+          id,
+          status,
+          tipo,
+          fotos:vistoria_fotos(id, tipo, arquivo_url, created_at)
+        `)
+        .eq('contrato_id', contratoId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (vistoriaData) {
+        vistoria = {
+          id: vistoriaData.id,
+          status: vistoriaData.status || 'pendente',
+          tipo: vistoriaData.tipo || 'auto_vistoria',
+          fotos: (vistoriaData.fotos || []) as VistoriaFotoInfo[],
+        };
+      }
+
       return {
         ...contrato,
         associado,
@@ -261,6 +325,7 @@ export function useProposta(contratoId: string | undefined) {
         documentos,
         tem_documento_pendente: temDocumentoPendente,
         associado_status: associado?.status || null,
+        vistoria,
       } as PropostaPendente;
     },
     enabled: !!contratoId,

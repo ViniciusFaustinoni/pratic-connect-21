@@ -44,6 +44,7 @@ import {
 } from '@/hooks/usePropostasPendentes';
 import { SolicitarDocumentosDialog } from '@/components/cadastro/SolicitarDocumentosDialog';
 import { DocumentosAnexadosCard } from '@/components/cadastro/DocumentosAnexadosCard';
+import { VistoriaFotosCard } from '@/components/cadastro/VistoriaFotosCard';
 import { ReprovarPropostaDialog } from '@/components/cadastro/ReprovarPropostaDialog';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -414,6 +415,14 @@ export default function PropostaAnalise() {
 
           {/* Documentos Anexados */}
           <DocumentosAnexadosCard documentos={proposta.documentos || []} />
+
+          {/* Fotos da Auto Vistoria */}
+          {proposta.vistoria && (
+            <VistoriaFotosCard 
+              fotos={proposta.vistoria.fotos || []} 
+              vistoriaStatus={proposta.vistoria.status}
+            />
+          )}
 
           {/* Ações */}
           <Card className="border-border bg-card">
