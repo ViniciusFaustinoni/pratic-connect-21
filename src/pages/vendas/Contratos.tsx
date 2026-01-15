@@ -429,8 +429,8 @@ export default function Contratos() {
                                 <Trash className="mr-2 h-4 w-4" /> Excluir
                               </DropdownMenuItem>
                             )}
-                            {/* Enviado */}
-                            {contrato.status === 'enviado' && (
+                            {/* Enviado / Pendente Assinatura / Visualizado */}
+                            {(contrato.status === 'enviado' || contrato.status === 'pendente_assinatura' || contrato.status === 'visualizado') && (
                               <>
                                 <DropdownMenuItem onClick={() => handleEnviar(contrato.id)}>
                                   <RefreshCw className="mr-2 h-4 w-4" /> Reenviar
@@ -452,6 +452,25 @@ export default function Contratos() {
                                 >
                                   <XCircle className="mr-2 h-4 w-4" /> Cancelar
                                 </DropdownMenuItem>
+                              </>
+                            )}
+                            {/* Expirado */}
+                            {contrato.status === 'expirado' && (
+                              <>
+                                <DropdownMenuItem onClick={() => setDrawerContratoId(contrato.id)}>
+                                  <Eye className="mr-2 h-4 w-4" /> Ver Detalhes
+                                </DropdownMenuItem>
+                                {canDeleteContratos && (
+                                  <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem 
+                                      className="text-destructive"
+                                      onClick={() => handleCancelar(contrato.id)}
+                                    >
+                                      <Trash className="mr-2 h-4 w-4" /> Excluir
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
                               </>
                             )}
                             {/* Assinado */}
