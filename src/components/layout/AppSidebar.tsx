@@ -268,6 +268,7 @@ const menuConfig: {
         { title: 'Plano de Contas', url: '/contabilidade/plano-contas', icon: List },
         { title: 'Lançamentos', url: '/contabilidade/lancamentos', icon: FileText },
         { title: 'Balancete', url: '/contabilidade/balancete', icon: ClipboardList },
+        { title: 'Balanço Patrimonial', url: '/contabilidade/balanco-patrimonial', icon: Scale },
         { title: 'DRE', url: '/contabilidade/dre', icon: TrendingUp },
         { title: 'Fechamento', url: '/contabilidade/fechamento', icon: Lock },
       ],

@@ -125,6 +125,7 @@ import Balancete from "./pages/contabilidade/Balancete";
 import DRE from "./pages/contabilidade/DRE";
 import Fechamentos from "./pages/contabilidade/Fechamentos";
 import RazaoConta from "./pages/contabilidade/RazaoConta";
+import BalancoPatrimonial from "./pages/contabilidade/BalancoPatrimonial";
 
 // Jurídico
 import JuridicoDashboard from "./pages/juridico/JuridicoDashboard";
@@ -334,6 +335,7 @@ const App = () => (
               <Route path="/contabilidade/lancamentos/novo" element={<NovoLancamento />} />
               <Route path="/contabilidade/lancamentos/:id" element={<LancamentoDetalhe />} />
               <Route path="/contabilidade/balancete" element={<Balancete />} />
+              <Route path="/contabilidade/balanco-patrimonial" element={<BalancoPatrimonial />} />
               <Route path="/contabilidade/dre" element={<DRE />} />
               <Route path="/contabilidade/fechamento" element={<Fechamentos />} />
               <Route path="/contabilidade/razao/:contaId" element={<RazaoConta />} />
