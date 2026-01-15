@@ -3505,13 +3505,17 @@ export type Database = {
           dados_extras: Json | null
           desagio_aplicado: number | null
           email_enviado_em: string | null
+          email_solicitante: string | null
           id: string
           lead_id: string | null
+          nome_solicitante: string | null
           numero: string
           plano_id: string | null
           regiao: string | null
           status: Database["public"]["Enums"]["status_cotacao"]
           taxa_administrativa: number
+          telefone1_solicitante: string | null
+          telefone2_solicitante: string | null
           token_publico: string | null
           updated_at: string
           uso_aplicativo: boolean | null
@@ -3541,13 +3545,17 @@ export type Database = {
           dados_extras?: Json | null
           desagio_aplicado?: number | null
           email_enviado_em?: string | null
+          email_solicitante?: string | null
           id?: string
           lead_id?: string | null
+          nome_solicitante?: string | null
           numero: string
           plano_id?: string | null
           regiao?: string | null
           status?: Database["public"]["Enums"]["status_cotacao"]
           taxa_administrativa?: number
+          telefone1_solicitante?: string | null
+          telefone2_solicitante?: string | null
           token_publico?: string | null
           updated_at?: string
           uso_aplicativo?: boolean | null
@@ -3577,13 +3585,17 @@ export type Database = {
           dados_extras?: Json | null
           desagio_aplicado?: number | null
           email_enviado_em?: string | null
+          email_solicitante?: string | null
           id?: string
           lead_id?: string | null
+          nome_solicitante?: string | null
           numero?: string
           plano_id?: string | null
           regiao?: string | null
           status?: Database["public"]["Enums"]["status_cotacao"]
           taxa_administrativa?: number
+          telefone1_solicitante?: string | null
+          telefone2_solicitante?: string | null
           token_publico?: string | null
           updated_at?: string
           uso_aplicativo?: boolean | null

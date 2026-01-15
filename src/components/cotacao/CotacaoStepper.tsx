@@ -8,9 +8,9 @@ interface Step {
 }
 
 const STEPS: Step[] = [
-  { id: 1, title: 'Consulta FIPE', description: 'Buscar veículo pela placa' },
-  { id: 2, title: 'Categoria', description: 'Situação do veículo' },
-  { id: 3, title: 'Dados Veículo', description: 'Confirmar informações' },
+  { id: 1, title: 'Solicitante', description: 'Dados do associado' },
+  { id: 2, title: 'Veículo', description: 'Identificação' },
+  { id: 3, title: 'Critérios', description: 'Região e modalidade' },
   { id: 4, title: 'Resultado', description: 'Planos disponíveis' },
 ];
 
