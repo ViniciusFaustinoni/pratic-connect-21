@@ -115,13 +115,78 @@ serve(async (req) => {
       }
     }
 
-    // 5. Montar endereço completo (leads não possui colunas de endereço)
+    // 5. Validar se lead tem dados mínimos para criar associado
+    if (!lead?.cpf || lead.cpf.replace(/\D/g, '').length !== 11) {
+      throw new Error('O lead precisa ter CPF cadastrado para gerar o contrato. Complete os dados do lead antes de continuar.');
+    }
+
+    if (!lead?.nome || lead.nome.includes('Cliente Cotação')) {
+      throw new Error('O lead precisa ter nome cadastrado para gerar o contrato. Complete os dados do lead antes de continuar.');
+    }
+
+    // 6. Criar ou encontrar associado
+    let associadoId = null;
+    
+    // Verificar se já existe associado com mesmo CPF
+    const cpfLimpo = lead.cpf.replace(/\D/g, '');
+    const { data: associadoExistente } = await supabase
+      .from('associados')
+      .select('id')
+      .eq('cpf', cpfLimpo)
+      .maybeSingle();
+    
+    if (associadoExistente) {
+      associadoId = associadoExistente.id;
+      console.log('Associado existente encontrado pelo CPF:', associadoId);
+    } else {
+      // Verificar por email se existir
+      if (lead.email) {
+        const { data: byEmail } = await supabase
+          .from('associados')
+          .select('id')
+          .eq('email', lead.email)
+          .maybeSingle();
+        
+        if (byEmail) {
+          associadoId = byEmail.id;
+          console.log('Associado existente encontrado pelo email:', associadoId);
+        }
+      }
+    }
+    
+    // Se não encontrou, criar novo associado
+    if (!associadoId) {
+      const { data: novoAssociado, error: associadoError } = await supabase
+        .from('associados')
+        .insert({
+          nome: lead.nome,
+          email: lead.email || `${cpfLimpo}@temp.associado.local`,
+          telefone: lead.telefone,
+          cpf: cpfLimpo,
+          plano_id: cotacao.plano_id,
+          status: 'em_analise',
+          data_adesao: new Date().toISOString().split('T')[0],
+          dia_vencimento: 10,
+        })
+        .select('id')
+        .single();
+
+      if (associadoError) {
+        console.error('Erro ao criar associado:', associadoError);
+        throw new Error(`Erro ao criar associado: ${associadoError.message}`);
+      }
+      
+      associadoId = novoAssociado.id;
+      console.log('Novo associado criado:', associadoId);
+    }
+
+    // 7. Montar endereço completo (leads não possui colunas de endereço)
     const endereco = [
       cotacao.cidade,
       cotacao.regiao,
     ].filter(Boolean).join(' - ');
 
-    // 5. Criar o contrato (sem colunas veiculo_* que não existem na tabela)
+    // 8. Criar o contrato
     const timestamp = new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 14);
     const random = Math.random().toString(36).substring(2, 8).toUpperCase();
     const numeroTemp = `CTR-${timestamp}-${random}`;
@@ -132,7 +197,7 @@ serve(async (req) => {
         numero: numeroTemp,
         cotacao_id,
         lead_id: leadId, // Usa o lead original ou o criado retroativamente
-        associado_id: cotacao.associado_id,
+        associado_id: associadoId, // Usa o associado criado/encontrado
         plano_id: cotacao.plano_id,
         valor_adesao: cotacao.valor_adesao || 0,
         valor_mensal: cotacao.valor_total_mensal || cotacao.valor_mensal,
@@ -166,7 +231,7 @@ serve(async (req) => {
 
     console.log('Contrato criado:', contrato.numero);
 
-    // 6. Registrar no histórico (trigger já faz automaticamente, mas podemos adicionar detalhes)
+    // 9. Registrar no histórico (trigger já faz automaticamente, mas podemos adicionar detalhes)
     await supabase.from('contratos_historico').insert({
       contrato_id: contrato.id,
       evento: 'gerado_de_cotacao',
@@ -179,7 +244,16 @@ serve(async (req) => {
       },
     });
 
-    // 7. Atualizar status da cotação para "convertida"
+    // 10. Vincular associado ao contrato
+    if (associadoId) {
+      await supabase
+        .from('associados')
+        .update({ contrato_id: contrato.id })
+        .eq('id', associadoId);
+      console.log('Associado vinculado ao contrato:', associadoId);
+    }
+
+    // 11. Atualizar status da cotação para "convertida"
     const { error: updateCotacaoError } = await supabase
       .from('cotacoes')
       .update({ status: 'convertida' })
@@ -189,12 +263,12 @@ serve(async (req) => {
       console.warn('Erro ao atualizar status da cotação:', updateCotacaoError);
     }
 
-    // 8. Atualizar etapa do lead para "proposta_enviada" ou "fechado"
-    if (lead?.id) {
+    // 12. Atualizar etapa do lead para "contrato_enviado"
+    if (leadId) {
       await supabase
         .from('leads')
-        .update({ etapa: 'proposta_enviada', updated_at: new Date().toISOString() })
-        .eq('id', lead.id);
+        .update({ etapa: 'contrato_enviado', updated_at: new Date().toISOString() })
+        .eq('id', leadId);
     }
 
     console.log('Contrato gerado com sucesso:', contrato.numero);

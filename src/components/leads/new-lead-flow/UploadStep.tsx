@@ -148,11 +148,14 @@ export function UploadStep({ state, updateState, lookupPlate, onCancel, onNext }
         )}
       </div>
 
-      {/* Seção 3: Documento (Opcional) */}
+      {/* Seção 3: Documento */}
       <div className="space-y-4">
         <h3 className="font-semibold text-sm text-muted-foreground border-b pb-2 uppercase tracking-wide flex items-center gap-2">
           <FileText className="h-4 w-4" />
-          Documento CNH (Opcional)
+          Documento CNH
+          <Badge variant="secondary" className="text-xs font-normal">
+            Recomendado
+          </Badge>
         </h3>
 
         <div className="space-y-2">
@@ -189,7 +192,10 @@ export function UploadStep({ state, updateState, lookupPlate, onCancel, onNext }
             </div>
           )}
           <p className="text-xs text-muted-foreground">
-            A CNH será usada para preencher nome e CPF automaticamente
+            A CNH será usada para preencher nome e CPF automaticamente.
+            <span className="block mt-1 text-yellow-600 dark:text-yellow-400">
+              ⚠️ Para gerar contratos, será necessário o CPF do cliente.
+            </span>
           </p>
         </div>
       </div>

@@ -354,28 +354,48 @@ Ficou com alguma dúvida? Estou à disposição!
               
               {/* Botão Aceitar e Gerar Contrato - para status enviada */}
               {(cotacao.status === 'enviada' || cotacao.status === 'rascunho') && cotacao.lead_id && (
-                <Button
-                  size="sm"
-                  onClick={() => aceitarEGerar.mutate({ 
-                    cotacaoId: cotacao.id, 
-                    vendedorId: profile?.id 
-                  }, {
-                    onSuccess: (data) => {
-                      if (data?.contrato?.id) {
-                        navigate(`/vendas/contratos/${data.contrato.id}`);
-                      }
-                    }
-                  })}
-                  disabled={aceitarEGerar.isPending}
-                  className="bg-emerald-600 hover:bg-emerald-700"
-                >
-                  {aceitarEGerar.isPending ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <>
+                  {/* Verificar se lead tem dados completos */}
+                  {(!cotacao.leads?.cpf || !cotacao.leads?.nome) ? (
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-yellow-500/10 border border-yellow-500/30 text-sm">
+                      <AlertCircle className="h-4 w-4 text-yellow-600" />
+                      <span className="text-yellow-700 dark:text-yellow-400">
+                        Complete os dados do lead
+                      </span>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        className="ml-2 h-7"
+                        onClick={() => navigate(`/vendas/leads/${cotacao.lead_id}/editar`)}
+                      >
+                        Completar
+                      </Button>
+                    </div>
                   ) : (
-                    <Check className="mr-2 h-4 w-4" />
+                    <Button
+                      size="sm"
+                      onClick={() => aceitarEGerar.mutate({ 
+                        cotacaoId: cotacao.id, 
+                        vendedorId: profile?.id 
+                      }, {
+                        onSuccess: (data) => {
+                          if (data?.contrato?.id) {
+                            navigate(`/vendas/contratos/${data.contrato.id}`);
+                          }
+                        }
+                      })}
+                      disabled={aceitarEGerar.isPending}
+                      className="bg-emerald-600 hover:bg-emerald-700"
+                    >
+                      {aceitarEGerar.isPending ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Check className="mr-2 h-4 w-4" />
+                      )}
+                      {aceitarEGerar.isPending ? 'Processando...' : 'Aceitar e Gerar Contrato'}
+                    </Button>
                   )}
-                  {aceitarEGerar.isPending ? 'Processando...' : 'Aceitar e Gerar Contrato'}
-                </Button>
+                </>
               )}
               
               {cotacao.status === 'aceita' && (
