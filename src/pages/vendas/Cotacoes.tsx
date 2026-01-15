@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, Search, FileText, Send, Check, X, Loader2, MessageCircle, FileDown, Mail, FileSignature, Eye, Link2, Copy, Trash2, MoreHorizontal, Car, Calendar, User, Phone, RefreshCw, Clock, CheckCircle, TrendingUp, Users } from 'lucide-react';
-import { formatDistanceToNow, format, isToday, startOfDay, endOfDay } from 'date-fns';
+import { Plus, Search, FileText, Send, Check, X, Loader2, MessageCircle, FileDown, Mail, FileSignature, Eye, Link2, Copy, Trash2, MoreHorizontal, Car, Calendar, User, Phone, RefreshCw, Clock, CheckCircle, TrendingUp } from 'lucide-react';
+import { formatDistanceToNow, format, startOfDay, endOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -47,7 +47,6 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
-import { UserAvatar } from '@/components/UserAvatar';
 
 type StatusCotacaoExtended = StatusCotacao | 'visualizada';
 
@@ -360,36 +359,6 @@ export default function Cotacoes() {
     ['aceita', 'recusada', 'expirada'].includes(c.status)
   );
 
-  // Ranking diário de consultores
-  const hoje = new Date();
-  const cotacoesHoje = (cotacoes || []).filter(c => {
-    const dataCotacao = new Date(c.created_at);
-    return isToday(dataCotacao);
-  });
-
-  const rankingConsultores = cotacoesHoje.reduce((acc, cotacao) => {
-    const vendedorId = cotacao.vendedor_id;
-    const vendedorNome = cotacao.vendedor?.nome || 'Sem vendedor';
-    
-    if (!acc[vendedorId || 'sem']) {
-      acc[vendedorId || 'sem'] = {
-        id: vendedorId,
-        nome: vendedorNome,
-        cotacoes: 0,
-        aceitas: 0
-      };
-    }
-    acc[vendedorId || 'sem'].cotacoes++;
-    if (cotacao.status === 'aceita') {
-      acc[vendedorId || 'sem'].aceitas++;
-    }
-    return acc;
-  }, {} as Record<string, { id: string | null; nome: string; cotacoes: number; aceitas: number }>);
-
-  const rankingOrdenado = Object.values(rankingConsultores)
-    .sort((a, b) => b.cotacoes - a.cotacoes)
-    .slice(0, 5);
-
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -472,49 +441,6 @@ export default function Cotacoes() {
           </CardContent>
         </Card>
       </div>
-
-      {/* Ranking Diário de Consultores */}
-      {rankingOrdenado.length > 0 && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Users className="h-4 w-4" />
-              Ranking de Hoje - {format(hoje, "dd 'de' MMMM", { locale: ptBR })}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="flex flex-wrap gap-3">
-              {rankingOrdenado.map((consultor, index) => (
-                <div 
-                  key={consultor.id || index}
-                  className={cn(
-                    "flex items-center gap-2 px-3 py-2 rounded-lg border",
-                    index === 0 && "bg-yellow-500/10 border-yellow-500/30",
-                    index === 1 && "bg-slate-300/10 border-slate-400/30",
-                    index === 2 && "bg-orange-500/10 border-orange-500/30",
-                    index > 2 && "bg-muted/50"
-                  )}
-                >
-                  <span className="font-bold text-lg w-6">
-                    {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}º`}
-                  </span>
-                  <UserAvatar 
-                    name={consultor.nome} 
-                    size="sm"
-                  />
-                  <div className="text-sm">
-                    <p className="font-medium">{consultor.nome}</p>
-                    <p className="text-muted-foreground text-xs">
-                      {consultor.cotacoes} cotação(ões)
-                      {consultor.aceitas > 0 && ` • ${consultor.aceitas} aceita(s)`}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Filters */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">

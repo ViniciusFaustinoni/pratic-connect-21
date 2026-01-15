@@ -1,10 +1,15 @@
 import { useState } from 'react';
 import { Users, FileText, CheckCircle, TrendingUp } from 'lucide-react';
+import { format, isToday } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
+import { UserAvatar } from '@/components/UserAvatar';
+import { useCotacoes } from '@/hooks/useCotacoes';
 import {
   BarChart,
   Bar,
@@ -32,6 +37,37 @@ const periodos: { value: Periodo; label: string }[] = [
 export default function DashboardVendas() {
   const [periodo, setPeriodo] = useState<Periodo>('30dias');
   const { data: metricas, isLoading } = useVendasMetricas(periodo);
+  const { data: cotacoes } = useCotacoes();
+
+  // Ranking diário de consultores
+  const hoje = new Date();
+  const cotacoesHoje = (cotacoes || []).filter(c => {
+    const dataCotacao = new Date(c.created_at);
+    return isToday(dataCotacao);
+  });
+
+  const rankingConsultores = cotacoesHoje.reduce((acc, cotacao) => {
+    const vendedorId = cotacao.vendedor_id;
+    const vendedorNome = cotacao.vendedor?.nome || 'Sem vendedor';
+    
+    if (!acc[vendedorId || 'sem']) {
+      acc[vendedorId || 'sem'] = {
+        id: vendedorId,
+        nome: vendedorNome,
+        cotacoes: 0,
+        aceitas: 0
+      };
+    }
+    acc[vendedorId || 'sem'].cotacoes++;
+    if (cotacao.status === 'aceita') {
+      acc[vendedorId || 'sem'].aceitas++;
+    }
+    return acc;
+  }, {} as Record<string, { id: string | null; nome: string; cotacoes: number; aceitas: number }>);
+
+  const rankingOrdenado = Object.values(rankingConsultores)
+    .sort((a, b) => b.cotacoes - a.cotacoes)
+    .slice(0, 5);
 
   const kpis = [
     {
@@ -116,6 +152,49 @@ export default function DashboardVendas() {
           </Card>
         ))}
       </div>
+
+      {/* Ranking Diário de Consultores */}
+      {rankingOrdenado.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              Ranking de Hoje - {format(hoje, "dd 'de' MMMM", { locale: ptBR })}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="flex flex-wrap gap-3">
+              {rankingOrdenado.map((consultor, index) => (
+                <div 
+                  key={consultor.id || index}
+                  className={cn(
+                    "flex items-center gap-2 px-3 py-2 rounded-lg border",
+                    index === 0 && "bg-yellow-500/10 border-yellow-500/30",
+                    index === 1 && "bg-slate-300/10 border-slate-400/30",
+                    index === 2 && "bg-orange-500/10 border-orange-500/30",
+                    index > 2 && "bg-muted/50"
+                  )}
+                >
+                  <span className="font-bold text-lg w-6">
+                    {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}º`}
+                  </span>
+                  <UserAvatar 
+                    name={consultor.nome} 
+                    size="sm"
+                  />
+                  <div className="text-sm">
+                    <p className="font-medium">{consultor.nome}</p>
+                    <p className="text-muted-foreground text-xs">
+                      {consultor.cotacoes} cotação(ões)
+                      {consultor.aceitas > 0 && ` • ${consultor.aceitas} aceita(s)`}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Gráficos - Linha 1 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
