@@ -1,4 +1,4 @@
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { LogOut, Settings, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -16,13 +16,11 @@ import { UserAvatar } from '@/components/UserAvatar';
 import { NotificationBell } from '@/components/layout/NotificationBell';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { GlobalSearch } from '@/components/layout/GlobalSearch';
+import { GlobalBreadcrumb } from '@/components/layout/GlobalBreadcrumb';
 
 export function AppHeader() {
   const navigate = useNavigate();
-  const location = useLocation();
   const { profile, roles, signOut } = useAuth();
-  
-  const isDashboard = location.pathname === '/dashboard';
 
   const handleSignOut = async () => {
     await signOut();
@@ -31,12 +29,24 @@ export function AppHeader() {
 
   return (
     <header className="sticky top-0 z-40 flex h-[60px] items-center justify-between border-b border-border bg-card px-4">
-      <div className="flex items-center gap-2">
-        <SidebarTrigger className="-ml-2 text-muted-foreground hover:text-foreground" />
-        {isDashboard && <GlobalSearch />}
+      {/* Lado Esquerdo - SidebarTrigger + Breadcrumb */}
+      <div className="flex items-center gap-3 min-w-0 flex-1">
+        <SidebarTrigger className="-ml-2 text-muted-foreground hover:text-foreground flex-shrink-0" />
+        
+        {/* Separador visual */}
+        <div className="h-5 w-px bg-border hidden md:block" />
+        
+        {/* Breadcrumb - esconde em telas muito pequenas */}
+        <div className="hidden sm:flex overflow-hidden">
+          <GlobalBreadcrumb />
+        </div>
       </div>
 
-      <div className="flex items-center gap-3">
+      {/* Lado Direito - Ações */}
+      <div className="flex items-center gap-2 flex-shrink-0">
+        {/* Global Search - sempre visível */}
+        <GlobalSearch />
+        
         {/* Theme Toggle */}
         <ThemeToggle />
         
