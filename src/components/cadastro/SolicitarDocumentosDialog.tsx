@@ -24,8 +24,12 @@ const DOCUMENTOS_DISPONIVEIS = [
   { id: 'cnh', label: 'CNH (Carteira Nacional de Habilitação)' },
   { id: 'crlv', label: 'CRLV (Documento do Veículo)' },
   { id: 'comprovante_residencia', label: 'Comprovante de Residência' },
-  { id: 'fotos_veiculo', label: 'Fotos do Veículo (frente, traseira, laterais)' },
-  { id: 'selfie_documento', label: 'Selfie com Documento' },
+  { id: 'foto_frontal_veiculo', label: 'Foto do Veículo - Frente' },
+  { id: 'foto_traseira_veiculo', label: 'Foto do Veículo - Traseira' },
+  { id: 'foto_lateral_esquerda', label: 'Foto do Veículo - Lateral Esquerda' },
+  { id: 'foto_lateral_direita', label: 'Foto do Veículo - Lateral Direita' },
+  { id: 'foto_painel', label: 'Foto do Painel/Hodômetro' },
+  { id: 'outro', label: 'Outro Documento' },
 ];
 
 export function SolicitarDocumentosDialog({

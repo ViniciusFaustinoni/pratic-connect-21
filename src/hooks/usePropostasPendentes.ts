@@ -323,11 +323,34 @@ interface SolicitarDocumentosParams {
 
 export function useSolicitarDocumentos() {
   const queryClient = useQueryClient();
-  const { user } = useAuth();
+  const { profile } = useAuth(); // Usar profile.id (da tabela profiles)
 
   return useMutation({
     mutationFn: async ({ contratoId, associadoId, documentos, observacoes }: SolicitarDocumentosParams) => {
-      // Atualizar status do associado
+      if (!profile?.id) {
+        throw new Error('Usuário não autenticado');
+      }
+
+      // 1. Criar registros na tabela documentos_solicitados
+      const docsParaInserir = documentos.map((tipo) => ({
+        associado_id: associadoId,
+        contrato_id: contratoId,
+        tipo_documento: tipo,
+        status: 'pendente',
+        solicitado_por: profile.id,
+        observacao_solicitacao: observacoes || null,
+      }));
+
+      const { error: docsError } = await supabase
+        .from('documentos_solicitados')
+        .insert(docsParaInserir);
+
+      if (docsError) {
+        console.error('Erro ao criar docs solicitados:', docsError);
+        throw docsError;
+      }
+
+      // 2. Atualizar status do associado
       const { error: associadoError } = await supabase
         .from('associados')
         .update({
@@ -337,26 +360,30 @@ export function useSolicitarDocumentos() {
 
       if (associadoError) throw associadoError;
 
-      // Registrar histórico
+      // 3. Registrar histórico (usando profile.id que referencia profiles)
       const { error: historicoError } = await supabase
         .from('associados_historico')
         .insert({
           associado_id: associadoId,
           contrato_id: contratoId,
           tipo: 'status_alterado',
-          descricao: `Documentos solicitados: ${documentos.join(', ')}. ${observacoes}`,
-          usuario_id: user?.id,
+          descricao: `Documentos solicitados: ${documentos.join(', ')}. ${observacoes || ''}`,
+          usuario_id: profile.id,
         });
 
-      if (historicoError) throw historicoError;
+      if (historicoError) {
+        console.warn('Erro ao registrar histórico (não crítico):', historicoError);
+        // Não falhar por causa do histórico
+      }
 
       return { contratoId, associadoId };
     },
     onSuccess: () => {
-      toast.success('Solicitação de documentos enviada com sucesso.');
+      toast.success('Documentos solicitados! O cliente será notificado no link de acompanhamento.');
       queryClient.invalidateQueries({ queryKey: ['propostas-pendentes'] });
       queryClient.invalidateQueries({ queryKey: ['propostas-stats'] });
       queryClient.invalidateQueries({ queryKey: ['associados'] });
+      queryClient.invalidateQueries({ queryKey: ['docs-solicitados'] });
     },
     onError: (error) => {
       console.error('Erro ao solicitar documentos:', error);
@@ -377,10 +404,14 @@ interface ReprovarPropostaParams {
 
 export function useReprovarProposta() {
   const queryClient = useQueryClient();
-  const { user } = useAuth();
+  const { profile } = useAuth(); // Usar profile.id (da tabela profiles)
 
   return useMutation({
     mutationFn: async ({ contratoId, associadoId, motivo, justificativa }: ReprovarPropostaParams) => {
+      if (!profile?.id) {
+        throw new Error('Usuário não autenticado');
+      }
+
       // Atualizar contrato (usar 'cancelado' pois 'reprovado' não existe no enum)
       const { error: contratoError } = await supabase
         .from('contratos')
@@ -402,18 +433,20 @@ export function useReprovarProposta() {
 
       if (associadoError) throw associadoError;
 
-      // Registrar histórico
+      // Registrar histórico (usando profile.id)
       const { error: historicoError } = await supabase
         .from('associados_historico')
         .insert({
           associado_id: associadoId,
           contrato_id: contratoId,
           tipo: 'status_alterado',
-          descricao: `Proposta reprovada. Motivo: ${motivo}. ${justificativa}`,
-          usuario_id: user?.id,
+          descricao: `Proposta reprovada. Motivo: ${motivo}. ${justificativa || ''}`,
+          usuario_id: profile.id,
         });
 
-      if (historicoError) throw historicoError;
+      if (historicoError) {
+        console.warn('Erro ao registrar histórico (não crítico):', historicoError);
+      }
 
       return { contratoId, associadoId };
     },
