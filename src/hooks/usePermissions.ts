@@ -12,6 +12,7 @@ export type PermissionKey =
   | 'isVendedorClt'
   | 'isVendedorExterno'
   | 'isAnalistaCadastro'
+  | 'isAnalistaCadastroOnly'
   | 'isCoordenadorMonitoramento'
   | 'isAnalistaPlataforma'
   | 'isInstaladorVistoriador'
@@ -56,6 +57,14 @@ export function usePermissions() {
   const isDesenvolvedor = hasRoleByName('desenvolvedor');
   const isAdminMaster = hasRoleByName('admin_master');
   const isDiretor = hasRole('diretor');
+  const isAnalistaCadastro = hasRole('analista_cadastro');
+  
+  // Verifica se é APENAS analista de cadastro (sem perfis de gerência ou admin)
+  const isAnalistaCadastroOnly = isAnalistaCadastro && 
+    !isDiretor && 
+    !isGerencia() && 
+    !isDesenvolvedor && 
+    !isAdminMaster;
 
   const permissions = {
     // Verificações de tipo de usuário
@@ -75,7 +84,8 @@ export function usePermissions() {
     isGerenciaOrSupervisor: isGerencia() || hasRole('supervisor_vendas'),
     isVendedorClt: hasRole('vendedor_clt'),
     isVendedorExterno: hasRole('vendedor_externo'),
-    isAnalistaCadastro: hasRole('analista_cadastro'),
+    isAnalistaCadastro,
+    isAnalistaCadastroOnly,
     isCoordenadorMonitoramento: hasRole('coordenador_monitoramento'),
     isAnalistaPlataforma: hasRole('analista_plataforma'),
     isInstaladorVistoriador: hasRole('instalador_vistoriador'),

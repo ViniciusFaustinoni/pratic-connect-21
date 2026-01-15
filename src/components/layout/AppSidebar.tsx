@@ -443,9 +443,30 @@ export function AppSidebar() {
       }))
       .filter(group => group.items.length > 0);
 
+  // Se é apenas analista de cadastro, filtrar menu para mostrar apenas Cadastro
+  const getVisibleGroups = () => {
+    const baseGroups = filterGroups(menuConfig.groups);
+    
+    if (permissions.isAnalistaCadastroOnly) {
+      // Mostrar apenas grupo Cadastro com itens específicos
+      return baseGroups
+        .filter(g => g.id === 'cadastro')
+        .map(group => ({
+          ...group,
+          items: group.items.filter(item => 
+            item.url === '/cadastro/documentos' || 
+            item.url === '/cadastro/associados'
+          ),
+        }));
+    }
+    
+    return baseGroups;
+  };
+
   const visibleMainItems = filterByPermission(menuConfig.main);
-  const visibleGroups = filterGroups(menuConfig.groups);
-  const visibleConfigItems = filterByPermission(configItems);
+  const visibleGroups = getVisibleGroups();
+  // Analista de cadastro não vê Configurações no menu (só via /perfil)
+  const visibleConfigItems = permissions.isAnalistaCadastroOnly ? [] : filterByPermission(configItems);
 
   const [openGroups, setOpenGroups] = useState<string[]>(() => 
     visibleGroups.filter(g => isGroupActive(g.items)).map(g => g.id)
