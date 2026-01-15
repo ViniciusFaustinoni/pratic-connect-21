@@ -82,7 +82,26 @@ function KPICard({ titulo, valor, icon, cor, loading }: KPICardProps) {
 // ============================================
 // COMPONENTE: Status Badge
 // ============================================
-function StatusBadge({ status }: { status: string | null }) {
+interface StatusBadgeProps {
+  status: string | null;
+  associadoStatus?: string | null;
+  temDocumentoPendente?: boolean;
+}
+
+function StatusBadge({ status, associadoStatus, temDocumentoPendente }: StatusBadgeProps) {
+  // Verificar se está aguardando documentos do cliente
+  const aguardandoDocumentoCliente = 
+    (associadoStatus === 'documentacao_pendente' || temDocumentoPendente) && 
+    status === 'assinado';
+
+  if (aguardandoDocumentoCliente) {
+    return (
+      <Badge variant="secondary" className="bg-orange-500/20 text-orange-400 border-orange-500">
+        Aguardando Documento (Cliente)
+      </Badge>
+    );
+  }
+
   const config: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
     assinado: { label: 'Aguardando Análise', variant: 'secondary' },
     em_analise: { label: 'Em Análise', variant: 'default' },
@@ -310,7 +329,11 @@ export default function PropostasPendentes() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <StatusBadge status={proposta.status} />
+                        <StatusBadge 
+                          status={proposta.status}
+                          associadoStatus={proposta.associado_status}
+                          temDocumentoPendente={proposta.tem_documento_pendente}
+                        />
                       </TableCell>
                       <TableCell className="text-right">
                         <Button

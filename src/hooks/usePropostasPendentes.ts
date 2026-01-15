@@ -39,6 +39,8 @@ export interface PropostaPendente {
   plano: { nome: string; valor_mensal: number } | null;
   vendedor: { nome: string | null } | null;
   documentos: DocumentoAnexado[];
+  tem_documento_pendente: boolean;
+  associado_status: string | null;
 }
 
 export interface PropostaStats {
@@ -131,12 +133,25 @@ export function usePropostasPendentes() {
             documentos = (docs || []) as DocumentoAnexado[];
           }
 
+          // Verificar se há documentos pendentes
+          let temDocumentoPendente = false;
+          if (contrato.associado_id) {
+            const { count } = await supabase
+              .from('documentos_solicitados')
+              .select('*', { count: 'exact', head: true })
+              .eq('associado_id', contrato.associado_id)
+              .eq('status', 'pendente');
+            temDocumentoPendente = (count || 0) > 0;
+          }
+
           return {
             ...contrato,
             associado,
             plano,
             vendedor,
             documentos,
+            tem_documento_pendente: temDocumentoPendente,
+            associado_status: associado?.status || null,
           } as PropostaPendente;
         })
       );
@@ -227,12 +242,25 @@ export function useProposta(contratoId: string | undefined) {
         documentos = (docs || []) as DocumentoAnexado[];
       }
 
+      // Verificar se há documentos pendentes
+      let temDocumentoPendente = false;
+      if (contrato.associado_id) {
+        const { count } = await supabase
+          .from('documentos_solicitados')
+          .select('*', { count: 'exact', head: true })
+          .eq('associado_id', contrato.associado_id)
+          .eq('status', 'pendente');
+        temDocumentoPendente = (count || 0) > 0;
+      }
+
       return {
         ...contrato,
         associado,
         plano,
         vendedor,
         documentos,
+        tem_documento_pendente: temDocumentoPendente,
+        associado_status: associado?.status || null,
       } as PropostaPendente;
     },
     enabled: !!contratoId,
