@@ -30,12 +30,14 @@ import {
   Shield,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePermissions } from '@/hooks/usePermissions';
 import { useLeads } from '@/hooks/useLeads';
 import { useCotacoes } from '@/hooks/useCotacoes';
 import { useContratos } from '@/hooks/useContratos';
 import { usePendingDocumentos, useDocumentosContagem } from '@/hooks/useDocumentos';
 import { useInstalacoesDoDia, useInstalacoesMetricas } from '@/hooks/useInstalacoes';
 import { FollowupWidget } from '@/components/vendas/FollowupWidget';
+import { DashboardCadastro } from '@/components/cadastro/DashboardCadastro';
 
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -405,7 +407,13 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { profile } = useAuth();
+  const { isAnalistaCadastroOnly } = usePermissions();
   const [lastUpdate, setLastUpdate] = useState(new Date());
+
+  // Se é analista de cadastro, mostrar dashboard específico
+  if (isAnalistaCadastroOnly) {
+    return <DashboardCadastro />;
+  }
 
   // Queries de dados
   const { data: leadsData, isLoading: leadsLoading } = useLeads({ page: 1, perPage: 100 });

@@ -8,6 +8,7 @@ import { SessionTimeoutProvider } from '@/components/auth/SessionTimeoutProvider
 import { ColaboradorOnboarding } from './ColaboradorOnboarding';
 import { useNotificacoesRealtime } from '@/hooks/useNotificacoesRealtime';
 import { useNotificacoesPreferencias } from '@/hooks/useNotificacoesPreferencias';
+import { useRouteGuard } from '@/hooks/useRouteGuard';
 
 export function AppLayout() {
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -17,6 +18,9 @@ export function AppLayout() {
   useNotificacoesRealtime({ 
     enableSound: preferencias?.som_notificacao ?? true 
   });
+
+  // Proteção de rotas baseada no perfil
+  useRouteGuard();
 
   // Mostrar onboarding se não foi completado
   useEffect(() => {
