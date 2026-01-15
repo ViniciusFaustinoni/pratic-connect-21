@@ -48,8 +48,10 @@ serve(async (req) => {
     });
 
     // Validar usuário autenticado
-    const { data: { user: currentUser }, error: userError } = await supabaseUser.auth.getUser();
-    
+    // Importante: em Edge Functions não existe "sessão" persistida; então precisamos validar passando o JWT explicitamente.
+    const token = authHeader.replace('Bearer ', '').trim();
+    const { data: { user: currentUser }, error: userError } = await supabaseUser.auth.getUser(token);
+
     if (userError || !currentUser) {
       console.error('Erro ao validar usuário:', userError);
       return new Response(
