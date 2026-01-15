@@ -198,15 +198,21 @@ export function CotacaoCard({
               <p className="font-medium truncate">
                 {cotacao.veiculo_marca} {cotacao.veiculo_modelo} {cotacao.veiculo_ano}
               </p>
-              <p className="text-sm text-muted-foreground">
-                {cotacao.veiculo_placa ? (
+              <div className="flex items-center gap-2 flex-wrap text-sm text-muted-foreground">
+                {cotacao.veiculo_placa && (
                   <Badge variant="outline" className="font-mono text-xs">
                     {cotacao.veiculo_placa}
                   </Badge>
-                ) : (
-                  'Placa não informada'
                 )}
-              </p>
+                {cotacao.leads?.nome && (
+                  <span className="text-xs text-primary font-medium truncate max-w-[150px]">
+                    {cotacao.leads.nome}
+                  </span>
+                )}
+                {!cotacao.veiculo_placa && !cotacao.leads?.nome && (
+                  <span>Placa não informada</span>
+                )}
+              </div>
             </div>
           </div>
         </div>
