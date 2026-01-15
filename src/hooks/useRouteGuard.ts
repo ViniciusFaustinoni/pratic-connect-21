@@ -17,6 +17,7 @@ export function useRouteGuard() {
     // Rotas permitidas para analista de cadastro
     const allowedPaths = [
       '/dashboard',
+      '/cadastro/propostas',
       '/cadastro/documentos',
       '/cadastro/associados',
       '/perfil',
