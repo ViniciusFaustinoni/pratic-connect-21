@@ -1011,6 +1011,8 @@ export type Database = {
       }
       associados: {
         Row: {
+          aprovado_em: string | null
+          aprovado_por: string | null
           avatar_url: string | null
           bairro: string | null
           bloqueado: boolean | null
@@ -1021,17 +1023,20 @@ export type Database = {
           cpf: string
           created_at: string
           data_adesao: string | null
+          data_ativacao: string | null
           data_bloqueio: string | null
           data_nascimento: string | null
           dia_vencimento: number | null
           email: string
           estado_civil: string | null
           id: string
+          instalacao_agendada: boolean | null
           logradouro: string | null
           motivo_bloqueio: string | null
           nome: string
           numero: string | null
           plano_id: string | null
+          primeiro_boleto_gerado: boolean | null
           profissao: string | null
           rg: string | null
           sexo: string | null
@@ -1044,6 +1049,8 @@ export type Database = {
           whatsapp: string | null
         }
         Insert: {
+          aprovado_em?: string | null
+          aprovado_por?: string | null
           avatar_url?: string | null
           bairro?: string | null
           bloqueado?: boolean | null
@@ -1054,17 +1061,20 @@ export type Database = {
           cpf: string
           created_at?: string
           data_adesao?: string | null
+          data_ativacao?: string | null
           data_bloqueio?: string | null
           data_nascimento?: string | null
           dia_vencimento?: number | null
           email: string
           estado_civil?: string | null
           id?: string
+          instalacao_agendada?: boolean | null
           logradouro?: string | null
           motivo_bloqueio?: string | null
           nome: string
           numero?: string | null
           plano_id?: string | null
+          primeiro_boleto_gerado?: boolean | null
           profissao?: string | null
           rg?: string | null
           sexo?: string | null
@@ -1077,6 +1087,8 @@ export type Database = {
           whatsapp?: string | null
         }
         Update: {
+          aprovado_em?: string | null
+          aprovado_por?: string | null
           avatar_url?: string | null
           bairro?: string | null
           bloqueado?: boolean | null
@@ -1087,17 +1099,20 @@ export type Database = {
           cpf?: string
           created_at?: string
           data_adesao?: string | null
+          data_ativacao?: string | null
           data_bloqueio?: string | null
           data_nascimento?: string | null
           dia_vencimento?: number | null
           email?: string
           estado_civil?: string | null
           id?: string
+          instalacao_agendada?: boolean | null
           logradouro?: string | null
           motivo_bloqueio?: string | null
           nome?: string
           numero?: string | null
           plano_id?: string | null
+          primeiro_boleto_gerado?: boolean | null
           profissao?: string | null
           rg?: string | null
           sexo?: string | null
@@ -1110,6 +1125,13 @@ export type Database = {
           whatsapp?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "associados_aprovado_por_fkey"
+            columns: ["aprovado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "associados_contrato_id_fkey"
             columns: ["contrato_id"]
@@ -3108,6 +3130,9 @@ export type Database = {
           adesao_cobranca_id: string | null
           adesao_paga: boolean | null
           adesao_paga_em: string | null
+          analista_id: string | null
+          aprovado_em: string | null
+          aprovado_por: string | null
           associado_id: string | null
           autentique_documento_id: string | null
           autentique_status: string | null
@@ -3137,6 +3162,7 @@ export type Database = {
           link_gerado_em: string | null
           link_token: string | null
           numero: string
+          observacao_aprovacao: string | null
           pdf_assinado_url: string | null
           pdf_url: string | null
           plano_id: string
@@ -3160,6 +3186,9 @@ export type Database = {
           adesao_cobranca_id?: string | null
           adesao_paga?: boolean | null
           adesao_paga_em?: string | null
+          analista_id?: string | null
+          aprovado_em?: string | null
+          aprovado_por?: string | null
           associado_id?: string | null
           autentique_documento_id?: string | null
           autentique_status?: string | null
@@ -3189,6 +3218,7 @@ export type Database = {
           link_gerado_em?: string | null
           link_token?: string | null
           numero: string
+          observacao_aprovacao?: string | null
           pdf_assinado_url?: string | null
           pdf_url?: string | null
           plano_id: string
@@ -3212,6 +3242,9 @@ export type Database = {
           adesao_cobranca_id?: string | null
           adesao_paga?: boolean | null
           adesao_paga_em?: string | null
+          analista_id?: string | null
+          aprovado_em?: string | null
+          aprovado_por?: string | null
           associado_id?: string | null
           autentique_documento_id?: string | null
           autentique_status?: string | null
@@ -3241,6 +3274,7 @@ export type Database = {
           link_gerado_em?: string | null
           link_token?: string | null
           numero?: string
+          observacao_aprovacao?: string | null
           pdf_assinado_url?: string | null
           pdf_url?: string | null
           plano_id?: string
@@ -3261,6 +3295,20 @@ export type Database = {
           vendedor_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "contratos_analista_id_fkey"
+            columns: ["analista_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contratos_aprovado_por_fkey"
+            columns: ["aprovado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "contratos_cotacao_id_fkey"
             columns: ["cotacao_id"]
