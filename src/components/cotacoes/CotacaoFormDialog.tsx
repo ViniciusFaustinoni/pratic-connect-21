@@ -646,7 +646,7 @@ Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
         // Consultor responsável
         vendedor_id: pendingFormData.vendedor_id || null,
         // Dados do cliente (campos adicionais que serão salvos via lead ou observações)
-        observacoes: `Cliente: ${nomeCliente} | Tel: ${telefoneCliente}${emailCliente ? ` | Email: ${emailCliente}` : ''}${categoria && categoria !== 'nenhuma' ? ` | Categoria: ${CATEGORIAS_VEICULO.find(c => c.value === categoria)?.label || categoria}` : ''}`,
+        categoria: categoria && categoria !== 'nenhuma' ? categoria : null,
       });
       
       toast.success('Cotação criada com sucesso!');
