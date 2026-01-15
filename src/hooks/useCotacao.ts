@@ -431,6 +431,7 @@ export function useCriarCotacao() {
         veiculo_marca: payload.veiculo_marca,
         veiculo_modelo: payload.veiculo_modelo,
         veiculo_ano: payload.veiculo_ano,
+        veiculo_placa: payload.veiculo_placa || null,
         codigo_fipe: payload.codigo_fipe,
         valor_fipe: payload.valor_fipe,
         valor_cota: resultado.valores.valor_cota,
@@ -442,6 +443,7 @@ export function useCriarCotacao() {
         status: 'rascunho' as const,
         validade_dias: 7,
         categoria: payload.categoria_veiculo,
+        nome_solicitante: payload.nome_solicitante || null,
       };
 
       const { data, error } = await supabase

@@ -166,14 +166,15 @@ export interface CalcularCotacaoPayload {
 }
 
 export interface CriarCotacaoPayload {
-  lead_id: string;
+  lead_id: string | null;
   plano_id: string;
   veiculo_marca: string;
   veiculo_modelo: string;
   veiculo_ano: number;
-  veiculo_placa?: string;
+  veiculo_placa?: string | null;
   codigo_fipe?: string;
   valor_fipe: number;
   uso_aplicativo: boolean;
   categoria_veiculo?: string;
+  nome_solicitante?: string | null;
 }
