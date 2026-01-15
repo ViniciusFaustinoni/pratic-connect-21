@@ -347,13 +347,13 @@ function BreadcrumbItem({ path, segment, isLast, previousPath }: BreadcrumbItemP
 
   return (
     <div className="flex items-center gap-1">
-      <ChevronRight className="h-4 w-4 text-muted-foreground" />
+      <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
       {isLast ? (
-        <span className="font-medium text-foreground">{label}</span>
+        <span className="font-medium text-foreground truncate max-w-[200px]">{label}</span>
       ) : (
         <Link
           to={path}
-          className="text-muted-foreground transition-colors hover:text-foreground"
+          className="text-muted-foreground transition-colors hover:text-foreground truncate max-w-[150px]"
         >
           {label}
         </Link>
@@ -369,7 +369,7 @@ export function GlobalBreadcrumb() {
   if (pathParts.length === 0) return null;
 
   return (
-    <nav className="flex items-center gap-1 text-sm" aria-label="Breadcrumb">
+    <nav className="flex items-center gap-1 text-sm overflow-hidden whitespace-nowrap" aria-label="Breadcrumb">
       <Link
         to="/dashboard"
         className="flex items-center text-muted-foreground transition-colors hover:text-foreground"
