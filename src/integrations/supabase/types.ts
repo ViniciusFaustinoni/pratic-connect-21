@@ -7971,6 +7971,7 @@ export type Database = {
           adicional_mensal: number | null
           ano_fabricacao_maximo: number | null
           ano_fabricacao_minimo: number | null
+          ano_minimo: number | null
           ano_minimo_veiculo: number | null
           ativo: boolean
           categoria: string | null
@@ -8002,6 +8003,7 @@ export type Database = {
           adicional_mensal?: number | null
           ano_fabricacao_maximo?: number | null
           ano_fabricacao_minimo?: number | null
+          ano_minimo?: number | null
           ano_minimo_veiculo?: number | null
           ativo?: boolean
           categoria?: string | null
@@ -8033,6 +8035,7 @@ export type Database = {
           adicional_mensal?: number | null
           ano_fabricacao_maximo?: number | null
           ano_fabricacao_minimo?: number | null
+          ano_minimo?: number | null
           ano_minimo_veiculo?: number | null
           ativo?: boolean
           categoria?: string | null

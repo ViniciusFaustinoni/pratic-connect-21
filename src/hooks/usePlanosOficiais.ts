@@ -1,4 +1,6 @@
 import { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import {
   PLANOS_RESUMO,
   PRECOS_SELECT_RJ,
@@ -15,6 +17,7 @@ import {
 // ============================================
 
 export interface PlanoOficial {
+  idBanco?: string | null; // ID real do banco de dados
   id: string;
   idReal: string;
   codigo: string;
@@ -257,6 +260,21 @@ const planoAplicavel = (
 // ============================================
 
 export function usePlanosOficiais(params: CalcularPlanosParams) {
+  // Buscar IDs reais do banco de dados
+  const { data: planosBanco } = useQuery({
+    queryKey: ['planos_banco_ids'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('planos')
+        .select('id, codigo')
+        .eq('ativo', true);
+      
+      if (error) throw error;
+      return data as { id: string; codigo: string | null }[];
+    },
+    staleTime: 1000 * 60 * 5, // 5 minutos
+  });
+
   const planos = useMemo<PlanoOficial[]>(() => {
     const { valorFipe, regiao, combustivel = 'gasolina', categoria, anoVeiculo } = params;
 
@@ -312,8 +330,12 @@ export function usePlanosOficiais(params: CalcularPlanosParams) {
         tag = 'Recomendado';
       }
 
+      // Buscar ID real do banco de dados
+      const planoDB = planosBanco?.find(p => p.codigo === planoResumo.id);
+
       planosCalculados.push({
         id: planoResumo.id,
+        idBanco: planoDB?.id || null, // ID real do banco
         idReal: planoResumo.id,
         codigo: planoResumo.id.toUpperCase().replace(/-/g, '_'),
         nome: planoResumo.nome,
@@ -348,7 +370,7 @@ export function usePlanosOficiais(params: CalcularPlanosParams) {
       // Por valor
       return a.valorMensal - b.valorMensal;
     });
-  }, [params]);
+  }, [params, planosBanco]);
 
   return {
     planos,
