@@ -140,7 +140,6 @@ const menuConfig: {
       color: MENU_COLORS.vendas,
       items: [
         { title: 'Leads', url: '/vendas/leads', icon: UserPlus },
-        { title: 'Pipeline', url: '/vendas/kanban', icon: Kanban },
         { title: 'Cotação', url: '/vendas/cotacoes', icon: Calculator },
         { title: 'Propostas', url: '/vendas/contratos', icon: FileCheck },
         { title: 'Ativações', url: '/vendas/ativacoes', icon: Rocket },
