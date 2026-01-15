@@ -156,35 +156,19 @@ export function CotacaoCard({
           <div className="flex items-start gap-3">
             <div className={cn(
               "flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-medium",
-              hasLead ? "bg-primary/10 text-primary" : "bg-orange-500/10 text-orange-500"
+              "bg-primary/10 text-primary"
             )}>
-              {hasLead ? cotacao.leads?.nome?.charAt(0).toUpperCase() : <User className="h-5 w-5" />}
+              {cotacao.leads?.nome?.charAt(0).toUpperCase() || cotacao.nome_solicitante?.charAt(0).toUpperCase() || <User className="h-5 w-5" />}
             </div>
             <div className="flex-1 min-w-0">
-              <p className={cn(
-                "font-semibold text-lg truncate",
-                !hasLead && "text-orange-600 dark:text-orange-400"
-              )}>
-                {cotacao.leads?.nome || 'Sem lead vinculado'}
+              <p className="font-semibold text-lg truncate">
+                {cotacao.leads?.nome || cotacao.nome_solicitante || ''}
               </p>
-              {hasLead && cotacao.leads?.telefone ? (
+              {hasLead && cotacao.leads?.telefone && (
                 <p className="text-sm text-muted-foreground flex items-center gap-1">
                   <Phone className="h-3 w-3" />
                   {formatPhone(cotacao.leads.telefone)}
                 </p>
-              ) : !hasLead && (
-                <Button
-                  size="sm"
-                  variant="link"
-                  className="p-0 h-auto text-orange-600 dark:text-orange-400"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onVincular(cotacao);
-                  }}
-                >
-                  <Link2 className="h-3 w-3 mr-1" />
-                  Vincular Lead
-                </Button>
               )}
             </div>
           </div>
