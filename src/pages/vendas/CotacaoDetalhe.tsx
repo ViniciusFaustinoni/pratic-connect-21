@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { useCotacao, useCotacaoActions, useAceitarCotacaoEGerarContrato } from '@/hooks/useCotacoes';
-import { useGerarContrato } from '@/hooks/useContratos';
+import { useCotacao, useCotacaoActions, useAtualizarStatusCotacao } from '@/hooks/useCotacoes';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -42,6 +41,7 @@ import { cn } from '@/lib/utils';
 import { BotaoGerarPdf } from '@/components/cotacoes/BotaoGerarPdf';
 import { EnviarEmailModal } from '@/components/cotacoes/EnviarEmailModal';
 import { VincularLeadModal } from '@/components/cotacoes/VincularLeadModal';
+import { ContratoWizard } from '@/components/contratos/ContratoWizard';
 import {
   STATUS_COTACAO_LABELS,
   STATUS_COTACAO_COLORS,
@@ -135,12 +135,12 @@ export default function CotacaoDetalhe() {
   const navigate = useNavigate();
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [showVincularModal, setShowVincularModal] = useState(false);
+  const [showContratoWizard, setShowContratoWizard] = useState(false);
   const queryClient = useQueryClient();
 
   const { data: cotacao, isLoading, error } = useCotacao(id);
   const { reenviarCotacao, atualizarStatus, isReenviando, isAtualizando } = useCotacaoActions();
-  const gerarContrato = useGerarContrato();
-  const aceitarEGerar = useAceitarCotacaoEGerarContrato();
+  const atualizarStatusMutation = useAtualizarStatusCotacao();
   const { profile } = useAuth();
 
   // Handler WhatsApp - agora também atualiza status e etapa do lead
@@ -352,73 +352,41 @@ Ficou com alguma dúvida? Estou à disposição!
                 </div>
               )}
               
-              {/* Botão Aceitar e Gerar Contrato - para status enviada */}
+              {/* Botão Aceitar e Continuar para Documentos - abre o wizard */}
               {(cotacao.status === 'enviada' || cotacao.status === 'rascunho') && cotacao.lead_id && (
-                <>
-                  {/* Verificar se lead tem dados completos */}
-                  {(!cotacao.leads?.cpf || !cotacao.leads?.nome) ? (
-                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-yellow-500/10 border border-yellow-500/30 text-sm">
-                      <AlertCircle className="h-4 w-4 text-yellow-600" />
-                      <span className="text-yellow-700 dark:text-yellow-400">
-                        Complete os dados do lead
-                      </span>
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        className="ml-2 h-7"
-                        onClick={() => navigate(`/vendas/leads/${cotacao.lead_id}/editar`)}
-                      >
-                        Completar
-                      </Button>
-                    </div>
-                  ) : (
-                    <Button
-                      size="sm"
-                      onClick={() => aceitarEGerar.mutate({ 
-                        cotacaoId: cotacao.id, 
-                        vendedorId: profile?.id 
-                      }, {
-                        onSuccess: (data) => {
-                          if (data?.contrato?.id) {
-                            navigate(`/vendas/contratos/${data.contrato.id}`);
-                          }
-                        }
-                      })}
-                      disabled={aceitarEGerar.isPending}
-                      className="bg-emerald-600 hover:bg-emerald-700"
-                    >
-                      {aceitarEGerar.isPending ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <Check className="mr-2 h-4 w-4" />
-                      )}
-                      {aceitarEGerar.isPending ? 'Processando...' : 'Aceitar e Gerar Contrato'}
-                    </Button>
-                  )}
-                </>
-              )}
-              
-              {cotacao.status === 'aceita' && (
                 <Button
                   size="sm"
-                  onClick={() => gerarContrato.mutate({ 
-                    cotacaoId: cotacao.id, 
-                    vendedorId: profile?.id 
-                  }, {
-                    onSuccess: (data) => {
-                      if (data?.contrato?.id) {
-                        navigate(`/vendas/contratos/${data.contrato.id}`);
-                      }
+                  onClick={() => {
+                    // Se não estiver aceita, primeiro aceita e depois abre wizard
+                    if (cotacao.status !== 'aceita') {
+                      atualizarStatusMutation.mutate(
+                        { id: cotacao.id, status: 'aceita' },
+                        { onSuccess: () => setShowContratoWizard(true) }
+                      );
+                    } else {
+                      setShowContratoWizard(true);
                     }
-                  })}
-                  disabled={gerarContrato.isPending}
+                  }}
+                  disabled={atualizarStatusMutation.isPending}
+                  className="bg-emerald-600 hover:bg-emerald-700"
                 >
-                  {gerarContrato.isPending ? (
+                  {atualizarStatusMutation.isPending ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
                     <FileSignature className="mr-2 h-4 w-4" />
                   )}
-                  {gerarContrato.isPending ? 'Gerando...' : 'Gerar Contrato'}
+                  {atualizarStatusMutation.isPending ? 'Processando...' : 'Aceitar e Gerar Contrato'}
+                </Button>
+              )}
+              
+              {/* Para cotação já aceita, abrir wizard diretamente */}
+              {cotacao.status === 'aceita' && cotacao.lead_id && (
+                <Button
+                  size="sm"
+                  onClick={() => setShowContratoWizard(true)}
+                >
+                  <FileSignature className="mr-2 h-4 w-4" />
+                  Continuar para Documentos
                 </Button>
               )}
               <DropdownMenu>
@@ -654,6 +622,19 @@ Ficou com alguma dúvida? Estou à disposição!
           queryClient.invalidateQueries({ queryKey: ['cotacoes', id] });
         }}
       />
+
+      {/* Wizard de Contrato - fluxo de documentos convergente */}
+      {cotacao.lead_id && (
+        <ContratoWizard
+          open={showContratoWizard}
+          onOpenChange={setShowContratoWizard}
+          cotacaoId={cotacao.id}
+          onContratoCreated={(contratoId) => {
+            setShowContratoWizard(false);
+            navigate(`/vendas/contratos/${contratoId}`);
+          }}
+        />
+      )}
     </div>
   );
 }
