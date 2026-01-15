@@ -4778,6 +4778,141 @@ export type Database = {
           },
         ]
       }
+      folha_pagamento: {
+        Row: {
+          adiantamento: number | null
+          adicional_noturno: number | null
+          ano: number
+          aprovado_em: string | null
+          aprovado_por: string | null
+          bonus: number | null
+          calculado_em: string | null
+          calculado_por: string | null
+          comissoes: number | null
+          created_at: string | null
+          emprestimo_consignado: number | null
+          funcionario_id: string
+          horas_extras_qtd: number | null
+          horas_extras_valor: number | null
+          id: string
+          inss: number
+          irrf: number
+          mes: number
+          observacoes: string | null
+          outros_descontos: number | null
+          outros_proventos: number | null
+          plano_saude: number | null
+          salario_base: number
+          salario_liquido: number
+          status: string | null
+          total_descontos: number
+          total_proventos: number
+          updated_at: string | null
+          vale_refeicao: number | null
+          vale_transporte: number | null
+        }
+        Insert: {
+          adiantamento?: number | null
+          adicional_noturno?: number | null
+          ano: number
+          aprovado_em?: string | null
+          aprovado_por?: string | null
+          bonus?: number | null
+          calculado_em?: string | null
+          calculado_por?: string | null
+          comissoes?: number | null
+          created_at?: string | null
+          emprestimo_consignado?: number | null
+          funcionario_id: string
+          horas_extras_qtd?: number | null
+          horas_extras_valor?: number | null
+          id?: string
+          inss?: number
+          irrf?: number
+          mes: number
+          observacoes?: string | null
+          outros_descontos?: number | null
+          outros_proventos?: number | null
+          plano_saude?: number | null
+          salario_base?: number
+          salario_liquido?: number
+          status?: string | null
+          total_descontos?: number
+          total_proventos?: number
+          updated_at?: string | null
+          vale_refeicao?: number | null
+          vale_transporte?: number | null
+        }
+        Update: {
+          adiantamento?: number | null
+          adicional_noturno?: number | null
+          ano?: number
+          aprovado_em?: string | null
+          aprovado_por?: string | null
+          bonus?: number | null
+          calculado_em?: string | null
+          calculado_por?: string | null
+          comissoes?: number | null
+          created_at?: string | null
+          emprestimo_consignado?: number | null
+          funcionario_id?: string
+          horas_extras_qtd?: number | null
+          horas_extras_valor?: number | null
+          id?: string
+          inss?: number
+          irrf?: number
+          mes?: number
+          observacoes?: string | null
+          outros_descontos?: number | null
+          outros_proventos?: number | null
+          plano_saude?: number | null
+          salario_base?: number
+          salario_liquido?: number
+          status?: string | null
+          total_descontos?: number
+          total_proventos?: number
+          updated_at?: string | null
+          vale_refeicao?: number | null
+          vale_transporte?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "folha_pagamento_aprovado_por_fkey"
+            columns: ["aprovado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "folha_pagamento_calculado_por_fkey"
+            columns: ["calculado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "folha_pagamento_funcionario_id_fkey"
+            columns: ["funcionario_id"]
+            isOneToOne: false
+            referencedRelation: "funcionarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "folha_pagamento_funcionario_id_fkey"
+            columns: ["funcionario_id"]
+            isOneToOne: false
+            referencedRelation: "view_aniversariantes_mes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "folha_pagamento_funcionario_id_fkey"
+            columns: ["funcionario_id"]
+            isOneToOne: false
+            referencedRelation: "view_funcionarios_ativos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       funcionarios: {
         Row: {
           agencia: string | null
