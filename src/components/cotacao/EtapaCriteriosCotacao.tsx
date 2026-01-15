@@ -4,8 +4,9 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Settings, ArrowLeft, ArrowRight, Car, Smartphone, AlertTriangle } from 'lucide-react';
+import { Settings, ArrowLeft, ArrowRight, Car, Smartphone, AlertTriangle, Tag } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { VehicleCategorySelect } from '@/components/cotador/VehicleCategorySelect';
 
 interface EtapaCriteriosCotacaoProps {
   // Região
@@ -19,6 +20,10 @@ interface EtapaCriteriosCotacaoProps {
   // Combustível
   combustivel: string;
   setCombustivel: (combustivel: string) => void;
+  
+  // Categoria/Deságio
+  categoria: string;
+  setCategoria: (categoria: string) => void;
   
   // Navegação
   onBack: () => void;
@@ -51,12 +56,23 @@ export function EtapaCriteriosCotacao({
   setModalidade,
   combustivel,
   setCombustivel,
+  categoria,
+  setCategoria,
   onBack,
   onCalcular,
   isCalculando = false,
 }: EtapaCriteriosCotacaoProps) {
   // Pode calcular se todos os campos obrigatórios estão preenchidos
-  const canCalculate = regiao !== '' && modalidade && combustivel !== '';
+  const canCalculate = regiao !== '' && modalidade && combustivel !== '' && categoria !== '';
+
+  // Handler para mudança de categoria
+  const handleCategoriaChange = (value: string) => {
+    setCategoria(value);
+    // Se selecionar aplicativo na categoria, atualizar modalidade
+    if (value === 'aplicativo') {
+      setModalidade('aplicativo');
+    }
+  };
 
   return (
     <Card className="border-border bg-card">
@@ -191,6 +207,56 @@ export function EtapaCriteriosCotacao({
               ))}
             </SelectContent>
           </Select>
+        </div>
+
+        {/* Categoria/Deságio */}
+        <div className="space-y-3 pt-4 border-t border-border">
+          <div className="flex items-center gap-2">
+            <Tag className="h-4 w-4 text-primary" />
+            <span className="text-sm font-medium text-foreground">Condições Especiais / Deságios</span>
+          </div>
+          
+          <VehicleCategorySelect
+            value={categoria}
+            onChange={handleCategoriaChange}
+          />
+
+          {/* Alertas baseados na categoria */}
+          {categoria === 'leilao' && (
+            <Alert className="border-amber-500/50 bg-amber-50 dark:bg-amber-950/20">
+              <AlertTriangle className="h-4 w-4 text-amber-600" />
+              <AlertDescription className="text-amber-700 dark:text-amber-400">
+                <strong>Atenção:</strong> Veículos de leilão não possuem cobertura de incêndio em nenhum plano.
+              </AlertDescription>
+            </Alert>
+          )}
+          
+          {categoria === 'chassi_remarcado' && (
+            <Alert className="border-amber-500/50 bg-amber-50 dark:bg-amber-950/20">
+              <AlertTriangle className="h-4 w-4 text-amber-600" />
+              <AlertDescription className="text-amber-700 dark:text-amber-400">
+                <strong>Atenção:</strong> Chassi remarcado está sujeito à análise de aceitação pela associação.
+              </AlertDescription>
+            </Alert>
+          )}
+          
+          {categoria === 'ressarcimento_integral' && (
+            <Alert className="border-amber-500/50 bg-amber-50 dark:bg-amber-950/20">
+              <AlertTriangle className="h-4 w-4 text-amber-600" />
+              <AlertDescription className="text-amber-700 dark:text-amber-400">
+                <strong>Atenção:</strong> Veículos com ressarcimento integral anterior possuem cobertura de 80% da tabela FIPE.
+              </AlertDescription>
+            </Alert>
+          )}
+          
+          {(categoria === 'taxi' || categoria === 'ex_taxi') && (
+            <Alert className="border-blue-500/50 bg-blue-50 dark:bg-blue-950/20">
+              <AlertTriangle className="h-4 w-4 text-blue-600" />
+              <AlertDescription className="text-blue-700 dark:text-blue-400">
+                <strong>Informação:</strong> Veículos de táxi possuem condições especiais de proteção.
+              </AlertDescription>
+            </Alert>
+          )}
         </div>
 
         {/* Botões de Navegação */}

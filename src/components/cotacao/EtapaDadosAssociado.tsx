@@ -92,8 +92,9 @@ export function EtapaDadosAssociado({
     setTelefone2('');
   };
   
-  // Pode avançar se Nome e Consultor estão preenchidos
-  const canProceed = nome.trim() !== '' && consultorId !== '';
+  // Pode avançar se Nome, Telefone e Consultor estão preenchidos
+  const telefoneValido = telefone1.replace(/\D/g, '').length >= 10;
+  const canProceed = nome.trim() !== '' && telefoneValido && consultorId !== '';
 
   return (
     <Card className="border-border bg-card">
@@ -219,11 +220,11 @@ export function EtapaDadosAssociado({
             />
           </div>
 
-          {/* Telefone 1 */}
+          {/* Telefone/WhatsApp */}
           <div className="space-y-2">
             <Label htmlFor="telefone1" className="flex items-center gap-2">
               <Phone className="h-3 w-3" />
-              Telefone 1 (opcional)
+              Telefone/WhatsApp <span className="text-destructive">*</span>
             </Label>
             <Input
               id="telefone1"

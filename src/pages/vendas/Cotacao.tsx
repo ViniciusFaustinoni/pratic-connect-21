@@ -6,7 +6,7 @@ import { EtapaDadosAssociado } from '@/components/cotacao/EtapaDadosAssociado';
 import { EtapaConsultaFipe } from '@/components/cotacao/EtapaConsultaFipe';
 import { EtapaCriteriosCotacao } from '@/components/cotacao/EtapaCriteriosCotacao';
 import { EtapaResultado } from '@/components/cotacao/EtapaResultado';
-import { usePlanosOficiais, type PlanoOficial } from '@/hooks/usePlanosOficiais';
+import { usePlanosCotacao, type PlanoCotacao } from '@/hooks/usePlanosCotacao';
 
 // ============================================
 // INTERFACES
@@ -78,16 +78,17 @@ export default function CotacaoPage() {
   const [regiao, setRegiao] = useState('');
   const [modalidade, setModalidade] = useState<'passeio' | 'aplicativo'>('passeio');
   const [combustivel, setCombustivel] = useState('');
+  const [categoria, setCategoria] = useState(''); // Categoria/Deságio
   
   // ============================================
   // ETAPA 4 - RESULTADO
   // ============================================
   const [isCalculando, setIsCalculando] = useState(false);
-  const [planoSelecionado, setPlanoSelecionado] = useState<PlanoOficial | null>(null);
+  const [planoSelecionado, setPlanoSelecionado] = useState<PlanoCotacao | null>(null);
   const [valorAdesaoCustomizado, setValorAdesaoCustomizado] = useState<number | null>(null);
 
   // Atualizar valor de adesão quando plano é selecionado
-  const handleSelecionarPlano = useCallback((plano: PlanoOficial | null) => {
+  const handleSelecionarPlano = useCallback((plano: PlanoCotacao | null) => {
     setPlanoSelecionado(plano);
     if (plano) {
       setValorAdesaoCustomizado(plano.valorAdesao);
@@ -96,12 +97,12 @@ export default function CotacaoPage() {
     }
   }, []);
 
-  // Hook de planos oficiais - calcula automaticamente baseado nos parâmetros
-  const { planos: planosOficiais, isLoading: isLoadingPlanos } = usePlanosOficiais({
+  // Hook de planos - busca do banco de dados e calcula baseado nos parâmetros
+  const { planos: planosCalculados, isLoading: isLoadingPlanos } = usePlanosCotacao({
     valorFipe: valorFipe || 0,
     regiao: regiao || 'rio_de_janeiro',
     combustivel: combustivel || 'gasolina',
-    categoria: modalidade === 'aplicativo' ? 'aplicativo' : 'passeio',
+    categoria: categoria || modalidade,
     anoVeiculo: ano ? parseInt(ano) : undefined,
     tipoVeiculo: 'carro',
   });
@@ -193,6 +194,7 @@ export default function CotacaoPage() {
     setRegiao('');
     setModalidade('passeio');
     setCombustivel('');
+    setCategoria('');
     // Reset Etapa 4
     setPlanoSelecionado(null);
     setValorAdesaoCustomizado(null);
@@ -232,7 +234,7 @@ export default function CotacaoPage() {
         valorFipe: valorFipe,
       },
       plano: {
-        id: planoSelecionado.idReal || planoSelecionado.id,
+        id: planoSelecionado.id,
         nome: planoSelecionado.nome,
         valorAdesao: valorAdesaoFinal,
         valorMensal: planoSelecionado.valorMensal || 0,
@@ -338,6 +340,8 @@ export default function CotacaoPage() {
             setModalidade={setModalidade}
             combustivel={combustivel}
             setCombustivel={setCombustivel}
+            categoria={categoria}
+            setCategoria={setCategoria}
             onBack={handleEtapa3Back}
             onCalcular={handleCalcular}
             isCalculando={isCalculando}
@@ -353,10 +357,10 @@ export default function CotacaoPage() {
             ano={ano}
             valorFipe={valorFipe}
             placa={placa}
-            categoria={modalidade}
+            categoria={categoria || modalidade}
             regiao={regiao}
             combustivel={combustivel}
-            planos={planosOficiais}
+            planos={planosCalculados}
             planoSelecionado={planoSelecionado}
             setPlanoSelecionado={handleSelecionarPlano}
             valorAdesao={valorAdesaoCustomizado}
