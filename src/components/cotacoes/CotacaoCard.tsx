@@ -324,10 +324,6 @@ export function CotacaoCard({
                 <FileDown className="h-4 w-4 mr-2" />
                 Baixar PDF
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onDuplicar(cotacao)}>
-                <Copy className="h-4 w-4 mr-2" />
-                Duplicar
-              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem 
                 className="text-destructive focus:text-destructive"
