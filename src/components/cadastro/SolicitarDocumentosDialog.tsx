@@ -65,7 +65,7 @@ export function SolicitarDocumentosDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[500px] bg-card border-border">
+      <DialogContent className="sm:max-w-[450px] max-h-[85vh] bg-card border-border flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-foreground">
             <FileText className="h-5 w-5 text-warning" />
@@ -76,16 +76,16 @@ export function SolicitarDocumentosDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
+        <div className="space-y-4 py-4 overflow-y-auto flex-1 pr-2">
           {/* Lista de documentos */}
-          <div className="space-y-3">
+          <div className="space-y-2">
             <Label className="text-foreground font-medium">
               Documentos necessários
             </Label>
             {DOCUMENTOS_DISPONIVEIS.map((doc) => (
               <div
                 key={doc.id}
-                className="flex items-center space-x-3 p-3 rounded-lg border border-border hover:border-border-hover transition-colors"
+                className="flex items-center space-x-3 p-2.5 rounded-lg border border-border hover:border-border-hover transition-colors"
               >
                 <Checkbox
                   id={doc.id}
@@ -110,10 +110,10 @@ export function SolicitarDocumentosDialog({
             </Label>
             <Textarea
               id="observacoes"
-              placeholder="Ex: Por favor, envie as fotos em boa resolução e com o veículo limpo..."
+              placeholder="Ex: Por favor, envie as fotos em boa resolução..."
               value={observacoes}
               onChange={(e) => setObservacoes(e.target.value)}
-              className="min-h-[100px] bg-background border-border"
+              className="min-h-[80px] bg-background border-border"
             />
           </div>
         </div>
