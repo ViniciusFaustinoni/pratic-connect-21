@@ -30,6 +30,7 @@ import {
   useReprovarProposta,
 } from '@/hooks/usePropostasPendentes';
 import { SolicitarDocumentosDialog } from '@/components/cadastro/SolicitarDocumentosDialog';
+import { DocumentosAnexadosCard } from '@/components/cadastro/DocumentosAnexadosCard';
 import { ReprovarPropostaDialog } from '@/components/cadastro/ReprovarPropostaDialog';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -392,24 +393,8 @@ export default function PropostaAnalise() {
             </CardContent>
           </Card>
 
-          {/* Documentos (placeholder) */}
-          <Card className="border-border bg-card">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-foreground">
-                <FileText className="h-5 w-5 text-purple-500" />
-                Documentos Anexados
-              </CardTitle>
-              <CardDescription>
-                Documentos enviados pelo cliente
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-6 text-muted-foreground">
-                <FileText className="h-10 w-10 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">Nenhum documento anexado</p>
-              </div>
-            </CardContent>
-          </Card>
+          {/* Documentos Anexados */}
+          <DocumentosAnexadosCard documentos={proposta.documentos || []} />
 
           {/* Ações */}
           <Card className="border-border bg-card">

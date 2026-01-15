@@ -8,6 +8,15 @@ type Contrato = Database['public']['Tables']['contratos']['Row'];
 type Associado = Database['public']['Tables']['associados']['Row'];
 type Plano = Database['public']['Tables']['planos']['Row'];
 
+export interface DocumentoAnexado {
+  id: string;
+  tipo: string;
+  arquivo_nome: string | null;
+  arquivo_url: string;
+  status: string;
+  created_at: string;
+}
+
 export interface PropostaPendente {
   id: string;
   numero: string | null;
@@ -25,9 +34,11 @@ export interface PropostaPendente {
   veiculo_cor: string | null;
   dia_vencimento: number | null;
   associado_id: string | null;
+  cotacao_id: string | null;
   associado: Associado | null;
   plano: { nome: string; valor_mensal: number } | null;
   vendedor: { nome: string | null } | null;
+  documentos: DocumentoAnexado[];
 }
 
 export interface PropostaStats {
@@ -64,6 +75,7 @@ export function usePropostasPendentes() {
           veiculo_cor,
           dia_vencimento,
           associado_id,
+          cotacao_id,
           plano_id,
           vendedor_id
         `)
@@ -105,7 +117,18 @@ export function usePropostasPendentes() {
               .select('nome')
               .eq('id', contrato.vendedor_id)
               .single();
-            vendedor = data;
+          vendedor = data;
+          }
+
+          // Buscar documentos anexados via cotacao_id
+          let documentos: DocumentoAnexado[] = [];
+          if (contrato.cotacao_id) {
+            const { data: docs } = await supabase
+              .from('contratos_documentos')
+              .select('id, tipo, arquivo_nome, arquivo_url, status, created_at')
+              .eq('cotacao_id', contrato.cotacao_id)
+              .order('created_at', { ascending: false });
+            documentos = (docs || []) as DocumentoAnexado[];
           }
 
           return {
@@ -113,6 +136,7 @@ export function usePropostasPendentes() {
             associado,
             plano,
             vendedor,
+            documentos,
           } as PropostaPendente;
         })
       );
@@ -151,6 +175,7 @@ export function useProposta(contratoId: string | undefined) {
           veiculo_cor,
           dia_vencimento,
           associado_id,
+          cotacao_id,
           plano_id,
           vendedor_id
         `)
@@ -191,11 +216,23 @@ export function useProposta(contratoId: string | undefined) {
         vendedor = data;
       }
 
+      // Buscar documentos anexados via cotacao_id
+      let documentos: DocumentoAnexado[] = [];
+      if (contrato.cotacao_id) {
+        const { data: docs } = await supabase
+          .from('contratos_documentos')
+          .select('id, tipo, arquivo_nome, arquivo_url, status, created_at')
+          .eq('cotacao_id', contrato.cotacao_id)
+          .order('created_at', { ascending: false });
+        documentos = (docs || []) as DocumentoAnexado[];
+      }
+
       return {
         ...contrato,
         associado,
         plano,
         vendedor,
+        documentos,
       } as PropostaPendente;
     },
     enabled: !!contratoId,
