@@ -85,11 +85,16 @@ export function LeadKanbanCard({ lead, onClick, onQuote, onWhatsAppClick, onActi
     isDragging,
   } = useSortable({ id: lead.id });
 
-  const style = {
+  const style: React.CSSProperties = {
     transform: CSS.Translate.toString(transform),
-    transition,
-    opacity: isDragging ? 0 : 1,
-    visibility: isDragging ? 'hidden' as const : 'visible' as const,
+    transition: transition || 'all 200ms cubic-bezier(0.18, 0.67, 0.6, 1.22)',
+    opacity: isDragging ? 0.5 : 1,
+    scale: isDragging ? 1.05 : 1,
+    rotate: isDragging ? '3deg' : '0deg',
+    boxShadow: isDragging 
+      ? '0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 0 0 2px hsl(var(--primary))' 
+      : undefined,
+    zIndex: isDragging ? 50 : undefined,
   };
 
   const formatCurrency = (value: number | null) => {
@@ -131,7 +136,8 @@ export function LeadKanbanCard({ lead, onClick, onQuote, onWhatsAppClick, onActi
       {...attributes}
       {...listeners}
       className={cn(
-        "cursor-grab active:cursor-grabbing transition-all hover:shadow-md group relative",
+        "cursor-grab active:cursor-grabbing transition-all duration-200 hover:shadow-md group relative",
+        isDragging && "ring-2 ring-primary shadow-2xl animate-pulse",
         indicador?.cardClass,
         indicador?.borderClass || (isStale ? 'border-l-4 border-l-destructive' : 'border-l-2 border-l-transparent hover:border-l-primary')
       )}

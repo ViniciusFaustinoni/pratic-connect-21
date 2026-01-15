@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { Plus, Loader2, Calendar, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Loader2, Calendar, X, ChevronLeft, ChevronRight, CheckCircle, Phone, Car } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
@@ -46,6 +46,7 @@ import {
   DragStartEvent,
   closestCenter,
   PointerSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   useDroppable,
@@ -62,20 +63,33 @@ interface DroppableColumnProps {
 }
 
 function DroppableColumn({ etapa, children, count }: DroppableColumnProps) {
-  const { setNodeRef, isOver } = useDroppable({ id: etapa });
+  const { setNodeRef, isOver, active } = useDroppable({ id: etapa });
 
   return (
     <div
       ref={setNodeRef}
       className={cn(
-        "w-[280px] min-w-[280px] flex-shrink-0 flex flex-col rounded-lg bg-muted/50 min-h-[calc(100vh-320px)] transition-colors",
-        isOver && "bg-primary/10 ring-2 ring-primary/50"
+        "w-[280px] min-w-[280px] flex-shrink-0 flex flex-col rounded-lg bg-muted/50 min-h-[calc(100vh-320px)] transition-all duration-300 relative",
+        isOver && [
+          "bg-primary/10 ring-2 ring-primary ring-offset-2 ring-offset-background",
+          "shadow-lg shadow-primary/20 scale-[1.02]"
+        ]
       )}
     >
+      {/* Indicador "Solte aqui!" */}
+      {isOver && active && (
+        <div className="absolute inset-x-3 top-14 py-6 border-2 border-dashed border-primary rounded-lg bg-primary/10 flex items-center justify-center animate-pulse z-10">
+          <span className="text-primary font-semibold text-sm">Solte aqui!</span>
+        </div>
+      )}
+      
       <div className="p-3 border-b border-border/50">
         <div className="flex items-center justify-between">
           <Badge className={etapaColors[etapa]}>{ETAPA_LABELS[etapa]}</Badge>
-          <span className="w-6 h-6 rounded-full bg-muted text-xs font-medium flex items-center justify-center">
+          <span className={cn(
+            "w-6 h-6 rounded-full text-xs font-medium flex items-center justify-center transition-all",
+            isOver ? "bg-primary text-primary-foreground scale-110" : "bg-muted"
+          )}>
             {count}
           </span>
         </div>
@@ -147,6 +161,9 @@ export default function LeadKanban() {
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 8 },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 250, tolerance: 5 },
     })
   );
 
@@ -193,7 +210,14 @@ export default function LeadKanban() {
         etapaAnterior: lead.etapa as EtapaLead,
         etapaNova: targetEtapa,
       });
-      toast.success(`Lead movido para ${ETAPA_LABELS[targetEtapa]}`);
+      toast.success(
+        <div className="flex items-center gap-2">
+          <CheckCircle className="h-4 w-4 text-green-500" />
+          <span>
+            <strong>{lead.nome}</strong> movido para <Badge variant="outline" className="ml-1">{ETAPA_LABELS[targetEtapa]}</Badge>
+          </span>
+        </div>
+      );
     } catch (error) {
       toast.error('Erro ao mover lead');
     }
@@ -448,15 +472,32 @@ export default function LeadKanban() {
             })}
           </div>
 
-          <DragOverlay>
+          <DragOverlay dropAnimation={{
+            duration: 300,
+            easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)',
+          }}>
             {activeLead ? (
-              <Card className="shadow-lg rotate-3">
-                <CardContent className="p-3">
-                  <div className="flex items-center gap-2">
-                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
-                      {activeLead.nome.charAt(0)}
+              <Card className="shadow-2xl rotate-3 scale-105 ring-2 ring-primary animate-in fade-in-0 zoom-in-95 duration-200 w-[260px]">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/70 text-sm font-bold text-primary-foreground shadow-md">
+                      {activeLead.nome.charAt(0).toUpperCase()}
                     </div>
-                    <span className="font-medium">{activeLead.nome}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-foreground truncate">{activeLead.nome}</p>
+                      {activeLead.telefone && (
+                        <p className="text-sm text-muted-foreground flex items-center gap-1">
+                          <Phone className="h-3 w-3" />
+                          {activeLead.telefone}
+                        </p>
+                      )}
+                      {activeLead.veiculo_marca && (
+                        <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                          <Car className="h-3 w-3" />
+                          {activeLead.veiculo_marca} {activeLead.veiculo_modelo}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </CardContent>
               </Card>
