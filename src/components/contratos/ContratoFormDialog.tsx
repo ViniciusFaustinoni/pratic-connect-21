@@ -53,7 +53,8 @@ import {
 } from '@/components/ui/popover';
 import { CurrencyInput } from '@/components/inputs/MaskedInputs';
 import { useAllLeads } from '@/hooks/useLeads';
-import { usePlanos } from '@/hooks/usePlanos';
+import { usePlanosUnificados } from '@/hooks/usePlanosUnificados';
+import { PlanoCardSelecao } from '@/components/planos/PlanoCardSelecao';
 import { useCreateContrato } from '@/hooks/useContratos';
 import { useCotacoesByLead } from '@/hooks/useCotacoesByLead';
 import { useVendedores } from '@/hooks/useVendedores';
@@ -104,7 +105,7 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
   const [pendingFormData, setPendingFormData] = useState<FormData | null>(null);
 
   const { data: leads } = useAllLeads();
-  const { data: planos } = usePlanos();
+  const { data: planos } = usePlanosUnificados();
   const createContrato = useCreateContrato();
   const { data: vendedores = [], isLoading: vendedoresLoading } = useVendedores();
 
@@ -410,27 +411,27 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
               </div>
             )}
 
-            {/* Plano Selection */}
+            {/* Plano Selection - Visual Cards */}
             <FormField
               control={form.control}
               name="plano_id"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Plano *</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione um plano" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
+                  <FormControl>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[300px] overflow-y-auto p-1">
                       {planos?.filter(p => p.ativo).map((plano) => (
-                        <SelectItem key={plano.id} value={plano.id}>
-                          {plano.nome} - Filiação: {formatCurrency(plano.valor_adesao)}
-                        </SelectItem>
+                        <PlanoCardSelecao
+                          key={plano.id}
+                          plano={plano}
+                          selecionado={field.value === plano.id}
+                          onSelecionar={() => field.onChange(plano.id)}
+                          compact
+                          mostrarCoberturas
+                        />
                       ))}
-                    </SelectContent>
-                  </Select>
+                    </div>
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}

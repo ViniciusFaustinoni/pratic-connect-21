@@ -21,7 +21,8 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { CpfInput, TelefoneInput, PlacaInput, CepInput } from '@/components/inputs/MaskedInputs';
-import { usePlanos } from '@/hooks/usePlanos';
+import { usePlanosUnificados } from '@/hooks/usePlanosUnificados';
+import { PlanoCardSelecao } from '@/components/planos/PlanoCardSelecao';
 import { useCreateAssociado } from '@/hooks/useAssociados';
 import { useCreateVeiculo } from '@/hooks/useVeiculos';
 import { buscarCep } from '@/lib/cep';
@@ -108,7 +109,7 @@ export function AssociadoFormDialog({ open, onOpenChange, onSuccess }: Associado
   const [step, setStep] = useState(1);
   const [buscandoCep, setBuscandoCep] = useState(false);
   const { toast } = useToast();
-  const { data: planos } = usePlanos();
+  const { data: planos } = usePlanosUnificados();
   const createAssociado = useCreateAssociado();
   const createVeiculo = useCreateVeiculo();
 
@@ -529,53 +530,54 @@ export function AssociadoFormDialog({ open, onOpenChange, onSuccess }: Associado
             </div>
           )}
 
-          {/* Step 4 - Plano */}
           {step === 4 && (
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="sm:col-span-2">
-                <Label htmlFor="plano_id">Plano *</Label>
-                <Select value={watch('plano_id')} onValueChange={(v) => setValue('plano_id', v)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o plano" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {planos?.map((plano) => (
-                      <SelectItem key={plano.id} value={plano.id}>
-                        {plano.nome} - {plano.codigo}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            <div className="space-y-4">
+              <div>
+                <Label>Plano *</Label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2 max-h-[300px] overflow-y-auto">
+                  {planos?.map((plano) => (
+                    <PlanoCardSelecao
+                      key={plano.id}
+                      plano={plano}
+                      selecionado={watch('plano_id') === plano.id}
+                      onSelecionar={() => setValue('plano_id', plano.id)}
+                      compact
+                      mostrarCoberturas
+                    />
+                  ))}
+                </div>
                 {errors.plano_id && <p className="text-sm text-destructive mt-1">{errors.plano_id.message}</p>}
               </div>
               
-              <div>
-                <Label htmlFor="dia_vencimento">Dia de Vencimento *</Label>
-                <Select 
-                  value={watch('dia_vencimento')?.toString()} 
-                  onValueChange={(v) => setValue('dia_vencimento', parseInt(v))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Array.from({ length: 28 }, (_, i) => i + 1).map((dia) => (
-                      <SelectItem key={dia} value={dia.toString()}>
-                        Dia {dia}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {errors.dia_vencimento && <p className="text-sm text-destructive mt-1">{errors.dia_vencimento.message}</p>}
-              </div>
-              
-              <div>
-                <Label htmlFor="data_adesao">Data de Adesão</Label>
-                <Input
-                  id="data_adesao"
-                  type="date"
-                  {...form.register('data_adesao')}
-                />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <Label htmlFor="dia_vencimento">Dia de Vencimento *</Label>
+                  <Select 
+                    value={watch('dia_vencimento')?.toString()} 
+                    onValueChange={(v) => setValue('dia_vencimento', parseInt(v))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 28 }, (_, i) => i + 1).map((dia) => (
+                        <SelectItem key={dia} value={dia.toString()}>
+                          Dia {dia}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {errors.dia_vencimento && <p className="text-sm text-destructive mt-1">{errors.dia_vencimento.message}</p>}
+                </div>
+                
+                <div>
+                  <Label htmlFor="data_adesao">Data de Adesão</Label>
+                  <Input
+                    id="data_adesao"
+                    type="date"
+                    {...form.register('data_adesao')}
+                  />
+                </div>
               </div>
             </div>
           )}
