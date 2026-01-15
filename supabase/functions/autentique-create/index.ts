@@ -861,6 +861,26 @@ serve(async (req) => {
       throw new Error(`Contrato não encontrado: ${contratoError?.message}`);
     }
 
+    // PROTEÇÃO CONTRA DUPLICIDADE: Verificar se já existe documento Autentique para este contrato
+    if (contrato.autentique_documento_id) {
+      console.log(`[autentique-create] Contrato já possui documento Autentique: ${contrato.autentique_documento_id}`);
+      
+      return new Response(
+        JSON.stringify({
+          success: true,
+          documentId: contrato.autentique_documento_id,
+          signatureLink: contrato.autentique_url,
+          message: "Documento existente retornado - contrato já foi enviado para assinatura",
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    console.log(`[autentique-create] Nenhum documento existente, criando novo para contrato ${contratoId}`);
+
     // Preparar dados do template
     const templateData: ContratoTemplateData = {
       numero: contrato.numero,
