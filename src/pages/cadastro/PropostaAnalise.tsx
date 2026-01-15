@@ -6,6 +6,16 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   ArrowLeft,
   ArrowRight,
   CheckCircle,
@@ -21,6 +31,9 @@ import {
   Calendar,
   DollarSign,
   AlertTriangle,
+  Wrench,
+  CreditCard,
+  Smartphone,
 } from 'lucide-react';
 import {
   useProposta,
@@ -115,6 +128,7 @@ export default function PropostaAnalise() {
 
   const [showSolicitarDocs, setShowSolicitarDocs] = useState(false);
   const [showReprovar, setShowReprovar] = useState(false);
+  const [showConfirmAprovar, setShowConfirmAprovar] = useState(false);
 
   const { data: proposta, isLoading } = useProposta(id);
   const { data: todasPropostas } = usePropostasPendentes();
@@ -127,8 +141,13 @@ export default function PropostaAnalise() {
   const currentIndex = todasPropostas?.findIndex((p) => p.id === id) ?? -1;
   const nextProposta = currentIndex >= 0 && todasPropostas ? todasPropostas[currentIndex + 1] : null;
 
-  const handleAprovar = async () => {
+  const handleAprovar = () => {
+    setShowConfirmAprovar(true);
+  };
+
+  const handleConfirmarAprovacao = async () => {
     if (!id) return;
+    setShowConfirmAprovar(false);
     await aprovarMutation.mutateAsync(id);
     // Navegar para próxima ou voltar para lista
     if (nextProposta) {
@@ -464,6 +483,68 @@ export default function PropostaAnalise() {
         onConfirm={handleReprovar}
         loading={reprovarMutation.isPending}
       />
+
+      {/* Dialog de confirmação de aprovação */}
+      <AlertDialog open={showConfirmAprovar} onOpenChange={setShowConfirmAprovar}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-success" />
+              Confirmar Aprovação
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p>Ao aprovar esta proposta, o sistema irá:</p>
+                
+                <div className="bg-muted rounded-lg p-3 space-y-2">
+                  <div className="flex items-center gap-2 text-sm">
+                    <div className="w-6 h-6 rounded-full bg-success/20 flex items-center justify-center">
+                      <User className="h-3 w-3 text-success" />
+                    </div>
+                    <span>Ativar o associado no sistema</span>
+                  </div>
+                  
+                  <div className="flex items-center gap-2 text-sm">
+                    <div className="w-6 h-6 rounded-full bg-info/20 flex items-center justify-center">
+                      <Wrench className="h-3 w-3 text-info" />
+                    </div>
+                    <span>Criar instalação pendente (rastreador)</span>
+                  </div>
+                  
+                  <div className="flex items-center gap-2 text-sm">
+                    <div className="w-6 h-6 rounded-full bg-warning/20 flex items-center justify-center">
+                      <CreditCard className="h-3 w-3 text-warning" />
+                    </div>
+                    <span>Gerar primeira cobrança</span>
+                  </div>
+                  
+                  <div className="flex items-center gap-2 text-sm">
+                    <div className="w-6 h-6 rounded-full bg-purple-500/20 flex items-center justify-center">
+                      <Smartphone className="h-3 w-3 text-purple-500" />
+                    </div>
+                    <span>Liberar acesso ao App do Associado</span>
+                  </div>
+                </div>
+                
+                <p className="text-sm text-muted-foreground">
+                  O cliente receberá uma notificação sobre a aprovação.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmarAprovacao}
+              className="bg-success hover:bg-success/90 text-white"
+              disabled={aprovarMutation.isPending}
+            >
+              <CheckCircle className="h-4 w-4 mr-2" />
+              {aprovarMutation.isPending ? 'Aprovando...' : 'Confirmar Aprovação'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

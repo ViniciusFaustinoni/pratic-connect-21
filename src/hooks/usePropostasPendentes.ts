@@ -322,52 +322,173 @@ export function usePropostaStats() {
 // ============================================
 export function useAprovarProposta() {
   const queryClient = useQueryClient();
-  const { user } = useAuth();
+  const { profile } = useAuth();
 
   return useMutation({
     mutationFn: async (contratoId: string) => {
-      // Buscar contrato para pegar associado_id
+      if (!profile?.id) {
+        throw new Error('Usuário não autenticado');
+      }
+
+      const agora = new Date().toISOString();
+
+      // 1. Buscar contrato com dados do associado e veículo
       const { data: contrato, error: fetchError } = await supabase
         .from('contratos')
-        .select('associado_id')
+        .select(`
+          id,
+          associado_id,
+          plano_id,
+          valor_mensal,
+          dia_vencimento,
+          associado:associados (
+            id,
+            nome,
+            dia_vencimento,
+            logradouro,
+            numero,
+            bairro,
+            cidade,
+            uf,
+            cep
+          )
+        `)
         .eq('id', contratoId)
         .single();
 
       if (fetchError) throw fetchError;
+      if (!contrato?.associado_id) throw new Error('Associado não encontrado');
 
-      // Atualizar contrato para ativo
+      const associadoId = contrato.associado_id;
+      const diaVencimento = contrato.dia_vencimento || (contrato.associado as any)?.dia_vencimento || 15;
+
+      // 2. Atualizar CONTRATO para ativo
       const { error: contratoError } = await supabase
         .from('contratos')
         .update({
           status: 'ativo',
-          data_ativacao: new Date().toISOString(),
-          aprovado_por: user?.id,
+          data_ativacao: agora,
+          aprovado_por: profile.id,
+          aprovado_em: agora,
         })
         .eq('id', contratoId);
 
       if (contratoError) throw contratoError;
 
-      // Atualizar associado para ativo
-      if (contrato?.associado_id) {
-        const { error: associadoError } = await supabase
-          .from('associados')
-          .update({
-            status: 'ativo',
-            data_adesao: new Date().toISOString().split('T')[0],
-          })
-          .eq('id', contrato.associado_id);
+      // 3. Atualizar ASSOCIADO para ativo
+      const { error: associadoError } = await supabase
+        .from('associados')
+        .update({
+          status: 'ativo',
+          data_adesao: agora.split('T')[0],
+          data_ativacao: agora,
+          aprovado_por: profile.id,
+          aprovado_em: agora,
+        })
+        .eq('id', associadoId);
 
-        if (associadoError) throw associadoError;
+      if (associadoError) throw associadoError;
+
+      // 4. Registrar histórico
+      await supabase
+        .from('associados_historico')
+        .insert({
+          associado_id: associadoId,
+          contrato_id: contratoId,
+          tipo: 'status_alterado',
+          descricao: 'Proposta aprovada. Associado ativado.',
+          usuario_id: profile.id,
+        });
+
+      // 5. Buscar veículo do associado para criar instalação
+      const { data: veiculos } = await supabase
+        .from('veiculos')
+        .select('id, placa, modelo')
+        .eq('associado_id', associadoId)
+        .limit(1);
+
+      // 6. Criar INSTALAÇÃO pendente (se tiver veículo)
+      if (veiculos && veiculos.length > 0) {
+        const associadoData = contrato.associado as any;
+        await supabase
+          .from('instalacoes')
+          .insert({
+            associado_id: associadoId,
+            veiculo_id: veiculos[0].id,
+            status: 'pendente',
+            logradouro: associadoData?.logradouro || null,
+            numero: associadoData?.numero || null,
+            bairro: associadoData?.bairro || null,
+            cidade: associadoData?.cidade || null,
+            uf: associadoData?.uf || null,
+            cep: associadoData?.cep || null,
+          } as any);
       }
 
-      return { contratoId, associadoId: contrato?.associado_id };
+      // 7. Buscar plano para criar cobranças
+      const { data: plano } = await supabase
+        .from('planos')
+        .select('valor_adesao')
+        .eq('id', contrato.plano_id)
+        .single();
+
+      const hoje = new Date();
+      
+      // Cobrança de adesão (se houver valor)
+      if (plano?.valor_adesao && plano.valor_adesao > 0) {
+        const dataVencimentoAdesao = new Date(hoje.getTime() + 3 * 24 * 60 * 60 * 1000); // 3 dias
+        await supabase
+          .from('cobrancas')
+          .insert({
+            associado_id: associadoId,
+            tipo: 'adesao',
+            descricao: 'Taxa de adesão',
+            valor: plano.valor_adesao,
+            data_vencimento: dataVencimentoAdesao.toISOString().split('T')[0],
+            data_emissao: hoje.toISOString().split('T')[0],
+            status: 'pendente',
+          } as any);
+      }
+
+      // Primeira mensalidade (usar valor do contrato)
+      if (contrato.valor_mensal && contrato.valor_mensal > 0) {
+        let dataVencimento = new Date(hoje.getFullYear(), hoje.getMonth(), diaVencimento);
+        if (dataVencimento <= hoje) {
+          dataVencimento = new Date(hoje.getFullYear(), hoje.getMonth() + 1, diaVencimento);
+        }
+
+        const mesAno = dataVencimento.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+
+        await supabase
+          .from('cobrancas')
+          .insert({
+            associado_id: associadoId,
+            tipo: 'mensalidade',
+            referencia_mes: dataVencimento.getMonth() + 1,
+            referencia_ano: dataVencimento.getFullYear(),
+            descricao: `Mensalidade ${mesAno}`,
+            valor: contrato.valor_mensal,
+            data_vencimento: dataVencimento.toISOString().split('T')[0],
+            data_emissao: hoje.toISOString().split('T')[0],
+            status: 'pendente',
+          } as any);
+      }
+
+      return { 
+        contratoId, 
+        associadoId,
+        mensagem: 'Associado ativado! Instalação criada e cobrança gerada.'
+      };
     },
     onSuccess: () => {
       toast.success('Proposta aprovada! Associado ativado com sucesso.');
       queryClient.invalidateQueries({ queryKey: ['propostas-pendentes'] });
       queryClient.invalidateQueries({ queryKey: ['propostas-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['proposta'] });
       queryClient.invalidateQueries({ queryKey: ['associados'] });
       queryClient.invalidateQueries({ queryKey: ['contratos'] });
+      queryClient.invalidateQueries({ queryKey: ['instalacoes'] });
+      queryClient.invalidateQueries({ queryKey: ['cobrancas'] });
     },
     onError: (error) => {
       console.error('Erro ao aprovar proposta:', error);
