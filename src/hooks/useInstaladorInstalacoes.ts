@@ -1,8 +1,16 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { format } from 'date-fns';
+import { format, startOfWeek, startOfMonth } from 'date-fns';
 import type { Tables } from '@/integrations/supabase/types';
+
+// Tipos para estatísticas do instalador
+interface EstatisticasInstalador {
+  hoje: number;
+  semana: number;
+  mes: number;
+  pendentes: number;
+}
 
 export type Instalacao = Tables<'instalacoes'>;
 
@@ -26,6 +34,42 @@ export interface InstalacaoComRelacoes extends Instalacao {
   } | null;
 }
 
+// Hook para estatísticas do instalador
+export function useEstatisticasInstalador() {
+  const { profile } = useAuth();
+  
+  return useQuery({
+    queryKey: ['instalador-estatisticas', profile?.id],
+    queryFn: async (): Promise<EstatisticasInstalador> => {
+      if (!profile?.id) return { hoje: 0, semana: 0, mes: 0, pendentes: 0 };
+      
+      const hoje = format(new Date(), 'yyyy-MM-dd');
+      const inicioSemana = format(startOfWeek(new Date(), { weekStartsOn: 0 }), 'yyyy-MM-dd');
+      const inicioMes = format(startOfMonth(new Date()), 'yyyy-MM-dd');
+
+      const [hojeConcluidas, semanaConcluidas, mesConcluidas, pendentes] = await Promise.all([
+        supabase.from('instalacoes').select('*', { count: 'exact', head: true })
+          .eq('instalador_id', profile.id).eq('data_agendada', hoje).eq('status', 'concluida'),
+        supabase.from('instalacoes').select('*', { count: 'exact', head: true })
+          .eq('instalador_id', profile.id).gte('data_agendada', inicioSemana).eq('status', 'concluida'),
+        supabase.from('instalacoes').select('*', { count: 'exact', head: true })
+          .eq('instalador_id', profile.id).gte('data_agendada', inicioMes).eq('status', 'concluida'),
+        supabase.from('instalacoes').select('*', { count: 'exact', head: true })
+          .eq('instalador_id', profile.id).in('status', ['agendada', 'em_andamento', 'em_rota']),
+      ]);
+
+      return {
+        hoje: hojeConcluidas.count || 0,
+        semana: semanaConcluidas.count || 0,
+        mes: mesConcluidas.count || 0,
+        pendentes: pendentes.count || 0,
+      };
+    },
+    enabled: !!profile?.id,
+    staleTime: 5 * 60 * 1000, // Cache por 5 minutos
+  });
+}
+
 export function useInstaladorInstalacoes(data?: Date) {
   const { profile } = useAuth();
   const dataFormatada = data ? format(data, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');
@@ -43,7 +87,7 @@ export function useInstaladorInstalacoes(data?: Date) {
         `)
         .eq('instalador_id', profile?.id)
         .eq('data_agendada', dataFormatada)
-        .in('status', ['agendada', 'em_rota', 'em_andamento'])
+        .in('status', ['agendada', 'em_rota', 'em_andamento', 'concluida'])
         .order('periodo', { ascending: true });
 
       if (error) throw error;
