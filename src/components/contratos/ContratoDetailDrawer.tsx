@@ -93,6 +93,12 @@ export function ContratoDetailDrawer({ contratoId, open, onClose }: ContratoDeta
   const handleEnviar = async () => {
     if (!contrato) return;
     
+    // PROTEÇÃO CONTRA DUPLICIDADE: Verificar se já foi enviado
+    if (contrato.autentique_documento_id) {
+      toast.info('Este contrato já foi enviado para assinatura');
+      return;
+    }
+    
     const client = contrato.associados || contrato.leads;
     if (!client?.email) {
       toast.error('Email do associado não informado');
