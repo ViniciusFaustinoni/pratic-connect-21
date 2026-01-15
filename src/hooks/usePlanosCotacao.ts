@@ -1,0 +1,347 @@
+import { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import {
+  PRECOS_SELECT_RJ,
+  PRECOS_MOTOS_RJ,
+  PRECOS_ELETRICOS,
+  ADICIONAL_NIVEL,
+  calcularPrecoRegiao,
+  type Regiao,
+} from '@/data/planosPrecos';
+
+// ============================================
+// INTERFACES
+// ============================================
+
+export interface PlanoCotacao {
+  id: string;
+  codigo: string;
+  nome: string;
+  descricao: string;
+  linha: string | null;
+  nivel: string | null;
+  coberturas: string[];
+  naoInclui: string[];
+  coberturaFipe: number;
+  cota: string;
+  cotaPercentual: number;
+  cotaMinima: number;
+  valorMensal: number;
+  valorAdesao: number;
+  destaque: boolean;
+  tag?: string;
+  alertaDesagio?: string;
+  adicionalMensal: number;
+}
+
+interface CalcularPlanosParams {
+  valorFipe: number;
+  regiao: string;
+  combustivel?: string;
+  categoria?: string;
+  anoVeiculo?: number;
+  tipoVeiculo?: 'carro' | 'moto';
+}
+
+// ============================================
+// MAPEAMENTO DE REGIÃO
+// ============================================
+
+const mapearRegiao = (regiao: string): Regiao => {
+  const mapa: Record<string, Regiao> = {
+    'rio_de_janeiro': 'rj',
+    'rj': 'rj',
+    'regiao_lagos': 'lagos',
+    'lagos': 'lagos',
+    'sao_paulo': 'sp',
+    'sp': 'sp',
+    'interior_rj': 'rj',
+    'interior_sp': 'sp',
+  };
+  return mapa[regiao.toLowerCase()] || 'rj';
+};
+
+// ============================================
+// O QUE NÃO ESTÁ INCLUÍDO POR LINHA/NIVEL
+// ============================================
+
+const NAO_INCLUI_POR_CODIGO: Record<string, string[]> = {
+  'select-basic': [
+    '1000km Reboque',
+    'Danos a Terceiros',
+    'Vidros e Faróis',
+    'Kit Gás',
+    'Carro Reserva',
+  ],
+  'select-premium': [
+    'Kit Gás',
+    'Carro Reserva em roubo',
+  ],
+  'select-exclusive': [],
+  'select-one': [],
+  'especial': [
+    'Colisão',
+    'Incêndio',
+    'Perda Total',
+    'Alagamento',
+    'Danos a Terceiros',
+    'Vidros e Faróis',
+  ],
+  'especial-plus': [
+    '1000km Reboque',
+    'Danos a Terceiros',
+    'Vidros e Faróis',
+  ],
+  'lancamento-basic': [
+    '1000km Reboque',
+    'Danos a Terceiros',
+    'Vidros e Faróis',
+    'Kit Gás',
+    'Carro Reserva',
+  ],
+  'lancamento-premium': [
+    'Kit Gás',
+    'Carro Reserva em roubo',
+  ],
+  'lancamento-exclusive': [],
+  'advanced': [
+    'Colisão',
+    'Danos a Terceiros',
+    'Assistência 600km',
+  ],
+  'advanced-plus': [],
+  'eletricos': [],
+};
+
+// ============================================
+// CÁLCULO DO VALOR BASE
+// ============================================
+
+const calcularValorBase = (
+  valorFipe: number,
+  combustivel: string,
+  linha: string | null
+): number | null => {
+  // Motos
+  if (linha === 'advanced') {
+    const faixa = PRECOS_MOTOS_RJ.find(
+      f => valorFipe >= f.fipeMin && valorFipe <= f.fipeMax
+    );
+    return faixa?.advanced || null;
+  }
+
+  // Elétricos
+  if (linha === 'eletricos') {
+    const faixa = PRECOS_ELETRICOS.find(
+      f => valorFipe >= f.fipeMin && valorFipe <= f.fipeMax
+    );
+    return faixa?.mensal || null;
+  }
+
+  // Carros (SELECT, ESPECIAL, LANÇAMENTO)
+  const faixa = PRECOS_SELECT_RJ.find(
+    f => valorFipe >= f.fipeMin && valorFipe <= f.fipeMax
+  );
+
+  if (!faixa) return null;
+
+  // Diesel usa valor específico
+  const isDiesel = combustivel?.toLowerCase().includes('diesel');
+  return isDiesel ? faixa.diesel : faixa.gasolina;
+};
+
+// ============================================
+// EXTRAÇÃO DO NÍVEL DO PLANO
+// ============================================
+
+const extrairNivel = (codigo: string): 'basic' | 'premium' | 'exclusive' | null => {
+  const codigoLower = codigo?.toLowerCase() || '';
+  if (codigoLower.includes('basic') || codigoLower.includes('basico')) return 'basic';
+  if (codigoLower.includes('premium')) return 'premium';
+  if (codigoLower.includes('exclusive')) return 'exclusive';
+  return null;
+};
+
+// ============================================
+// HOOK PRINCIPAL
+// ============================================
+
+export function usePlanosCotacao(params: CalcularPlanosParams) {
+  // Buscar planos reais do banco de dados
+  const { data: planosBanco, isLoading } = useQuery({
+    queryKey: ['planos_cotacao'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('planos')
+        .select('*')
+        .eq('ativo', true)
+        .order('ordem', { ascending: true });
+      
+      if (error) throw error;
+      return data;
+    },
+    staleTime: 1000 * 60 * 5, // 5 minutos
+  });
+
+  const planos = useMemo<PlanoCotacao[]>(() => {
+    const { valorFipe, regiao, combustivel = 'gasolina', categoria, anoVeiculo } = params;
+
+    if (!valorFipe || valorFipe <= 0 || !planosBanco) {
+      return [];
+    }
+
+    const regiaoMapeada = mapearRegiao(regiao);
+    const tipoVeiculo = params.tipoVeiculo || 'carro';
+    const anoAtual = new Date().getFullYear();
+    const anoVeiculoNum = anoVeiculo || anoAtual;
+
+    const planosCalculados: PlanoCotacao[] = [];
+
+    for (const plano of planosBanco) {
+      const linha = plano.linha?.toLowerCase() || null;
+      const codigo = plano.codigo?.toLowerCase() || '';
+
+      // Filtrar motos - só podem usar planos ADVANCED
+      if (tipoVeiculo === 'moto' && linha !== 'advanced') {
+        continue;
+      }
+
+      // Carros não podem usar planos ADVANCED
+      if (tipoVeiculo === 'carro' && linha === 'advanced') {
+        continue;
+      }
+
+      // Verificar ano mínimo do plano
+      const anoMinimo = plano.ano_minimo || plano.ano_minimo_veiculo || plano.ano_fabricacao_minimo || 0;
+      if (anoMinimo > 0 && anoVeiculoNum < anoMinimo) {
+        continue;
+      }
+
+      // Verificar FIPE dentro da faixa
+      if (plano.fipe_minima && valorFipe < Number(plano.fipe_minima)) {
+        continue;
+      }
+      if (plano.fipe_maxima && valorFipe > Number(plano.fipe_maxima)) {
+        continue;
+      }
+
+      // Lançamento só para veículos do ano atual ou anterior
+      if (linha === 'lancamento') {
+        if (anoVeiculoNum < anoAtual - 1) {
+          continue;
+        }
+      }
+
+      // Calcular valor base
+      let valorBase = calcularValorBase(valorFipe, combustivel, linha);
+      
+      if (valorBase === null) {
+        // Se não encontrou na tabela, usar um valor padrão baseado no FIPE
+        valorBase = Math.round(valorFipe * 0.025 / 12); // ~2.5% ao ano / 12 meses
+      }
+
+      // Aplicar ajuste de região (Lagos e SP = 90% do RJ)
+      valorBase = calcularPrecoRegiao(valorBase, regiaoMapeada);
+
+      // Aplicar adicional por nível do plano (do banco ou calculado)
+      const adicionalBanco = Number(plano.adicional_mensal) || 0;
+      const nivel = plano.nivel || extrairNivel(codigo);
+      const adicionalNivel = nivel ? (ADICIONAL_NIVEL[nivel as keyof typeof ADICIONAL_NIVEL] || 0) : 0;
+      const valorMensal = valorBase + (adicionalBanco || adicionalNivel);
+
+      // Usar valor de adesão do banco
+      const valorAdesao = Number(plano.valor_adesao) || 199.90;
+
+      // Cota de participação
+      const cotaBase = Number(plano.cota_participacao) || 6;
+      const cotaMinima = Number(plano.cota_minima) || 1200;
+      let cotaPercentual = cotaBase;
+      let cotaMinimaFinal = cotaMinima;
+
+      // Ajustar cota para categoria aplicativo
+      if (categoria === 'aplicativo') {
+        cotaPercentual = Number(plano.cota_desagio) || 8;
+        cotaMinimaFinal = Number(plano.cota_minima_desagio) || 3000;
+      }
+
+      // Montar string da cota
+      const cotaString = `${cotaPercentual}% (mín R$ ${cotaMinimaFinal.toLocaleString('pt-BR')})`;
+
+      // Coberturas do banco
+      const coberturas = Array.isArray(plano.coberturas) 
+        ? plano.coberturas 
+        : [];
+
+      // O que não está incluído
+      const naoInclui = NAO_INCLUI_POR_CODIGO[codigo] || [];
+
+      // Determinar destaque
+      const isDestaque = plano.destaque || 
+                         codigo === 'select-premium' ||
+                         codigo === 'select-basic';
+
+      // Determinar tag
+      let tag: string | undefined;
+      if (codigo === 'select-premium' || codigo === 'select-basic') {
+        tag = 'Recomendado';
+      } else if (plano.destaque) {
+        tag = 'Destaque';
+      }
+
+      // Alerta para categorias especiais
+      let alertaDesagio: string | undefined;
+      if (categoria === 'leilao' && !coberturas.some(c => 
+        typeof c === 'string' && c.toLowerCase().includes('incêndio')
+      )) {
+        alertaDesagio = 'Veículo de leilão: sem cobertura de incêndio';
+      } else if (categoria === 'chassi_remarcado') {
+        alertaDesagio = 'Chassi remarcado: sujeito à análise de aceitação';
+      }
+
+      planosCalculados.push({
+        id: plano.id,
+        codigo: plano.codigo,
+        nome: plano.nome,
+        descricao: plano.descricao || '',
+        linha,
+        nivel: nivel || null,
+        coberturas: coberturas as string[],
+        naoInclui,
+        coberturaFipe: plano.cobertura_fipe || 100,
+        cota: cotaString,
+        cotaPercentual,
+        cotaMinima: cotaMinimaFinal,
+        valorMensal: Math.round(valorMensal * 100) / 100,
+        valorAdesao: Math.round(valorAdesao * 100) / 100,
+        destaque: isDestaque,
+        tag,
+        alertaDesagio,
+        adicionalMensal: adicionalBanco || adicionalNivel,
+      });
+    }
+
+    // Ordenar: SELECT vem primeiro, depois por ordem do banco
+    return planosCalculados.sort((a, b) => {
+      // SELECT vem primeiro
+      if (a.linha === 'select' && b.linha !== 'select') return -1;
+      if (a.linha !== 'select' && b.linha === 'select') return 1;
+      
+      // Dentro do SELECT: BASIC, PREMIUM, EXCLUSIVE
+      if (a.linha === 'select' && b.linha === 'select') {
+        const ordem = ['select-basic', 'select-premium', 'select-exclusive', 'select-one'];
+        return ordem.indexOf(a.codigo) - ordem.indexOf(b.codigo);
+      }
+      
+      // Por valor
+      return a.valorMensal - b.valorMensal;
+    });
+  }, [params, planosBanco]);
+
+  return {
+    planos,
+    isLoading,
+  };
+}
+
+export type { CalcularPlanosParams };

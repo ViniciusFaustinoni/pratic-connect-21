@@ -3,12 +3,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Check, X, Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { PlanoOficial } from '@/hooks/usePlanosOficiais';
+import type { PlanoCotacao } from '@/hooks/usePlanosCotacao';
 
 interface PlanoCardCotacaoProps {
-  plano: PlanoOficial;
-  onSelect: (plano: PlanoOficial) => void;
-  planoBasico?: PlanoOficial;
+  plano: PlanoCotacao;
+  onSelect: (plano: PlanoCotacao) => void;
+  planoBasico?: PlanoCotacao;
   isSelected?: boolean;
 }
 

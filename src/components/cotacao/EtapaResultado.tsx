@@ -20,7 +20,7 @@ import { CATEGORIAS_VEICULO } from '@/components/cotador/VehicleCategorySelect';
 import { PlanoCardCotacao } from './PlanoCardCotacao';
 import { CurrencyInput } from '@/components/inputs/MaskedInputs';
 import { cn } from '@/lib/utils';
-import type { PlanoOficial } from '@/hooks/usePlanosOficiais';
+import type { PlanoCotacao } from '@/hooks/usePlanosCotacao';
 
 interface VeiculoEncontrado {
   placa: string;
@@ -43,9 +43,9 @@ interface EtapaResultadoProps {
   categoria: string | null;
   regiao: string;
   combustivel?: string;
-  planos: PlanoOficial[];
-  planoSelecionado: PlanoOficial | null;
-  setPlanoSelecionado: (plano: PlanoOficial | null) => void;
+  planos: PlanoCotacao[];
+  planoSelecionado: PlanoCotacao | null;
+  setPlanoSelecionado: (plano: PlanoCotacao | null) => void;
   valorAdesao?: number | null;
   onValorAdesaoChange?: (valor: number) => void;
   onNovaCotacao: () => void;
@@ -104,7 +104,7 @@ export function EtapaResultado({
   const planosVisiveis = showAllPlanos ? planos : planos.slice(0, 3);
   const planoBasico = planos[0];
 
-  const handleSelectPlano = (plano: PlanoOficial) => {
+  const handleSelectPlano = (plano: PlanoCotacao) => {
     setPlanoSelecionado(plano);
   };
 
