@@ -11,6 +11,8 @@
  * - user_id === auth_id (referência ao auth.users)
  */
 
+import type { User, Session } from '@supabase/supabase-js';
+
 // ============================================================
 // TIPOS BASE
 // ============================================================
@@ -293,10 +295,8 @@ export const PERFIL_ACESSO_LABELS: Record<PerfilAcesso, string> = {
 };
 
 // ============================================================
-// IMPORTS DO SUPABASE PARA ESTADO DO CONTEXTO
+// ESTADO DO CONTEXTO DE AUTENTICAÇÃO
 // ============================================================
-
-import type { User, Session } from '@supabase/supabase-js';
 
 // ============================================================
 // ESTADO DO CONTEXTO DE AUTENTICAÇÃO
