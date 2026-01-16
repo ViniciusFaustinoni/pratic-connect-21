@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -103,6 +104,9 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [pendingFormData, setPendingFormData] = useState<FormData | null>(null);
+
+  const { user, isVendedor } = useAuth();
+  const usuarioEhVendedor = isVendedor();
 
   const { data: leads } = useAllLeads();
   const { data: planos } = usePlanosUnificados();
@@ -219,7 +223,7 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
         data_inicio: new Date().toISOString().split('T')[0],
         status: 'rascunho',
         cotacao_id: cotacaoPrioritaria?.id || null,
-        vendedor_id: pendingFormData.vendedor_id || null,
+        vendedor_id: usuarioEhVendedor ? user?.id : (pendingFormData.vendedor_id || null),
       });
 
       toast.success('Proposta criada como rascunho');
@@ -319,43 +323,45 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
               )}
             />
 
-            {/* Consultor Responsável */}
-            <FormField
-              control={form.control}
-              name="vendedor_id"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="flex items-center gap-2">
-                    <UserCheck className="h-4 w-4 text-primary" />
-                    Consultor Responsável
-                  </FormLabel>
-                  <Select 
-                    onValueChange={(value) => field.onChange(value === '_none' ? null : value)} 
-                    value={field.value || '_none'}
-                    disabled={vendedoresLoading}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        {vendedoresLoading ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <SelectValue placeholder="Selecione um consultor" />
-                        )}
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="_none">Não atribuído</SelectItem>
-                      {vendedores.map((v) => (
-                        <SelectItem key={v.id} value={v.user_id}>
-                          {v.nome}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {/* Consultor Responsável - Apenas para não-vendedores */}
+            {!usuarioEhVendedor && (
+              <FormField
+                control={form.control}
+                name="vendedor_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center gap-2">
+                      <UserCheck className="h-4 w-4 text-primary" />
+                      Consultor Responsável
+                    </FormLabel>
+                    <Select 
+                      onValueChange={(value) => field.onChange(value === '_none' ? null : value)} 
+                      value={field.value || '_none'}
+                      disabled={vendedoresLoading}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          {vendedoresLoading ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <SelectValue placeholder="Selecione um consultor" />
+                          )}
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="_none">Não atribuído</SelectItem>
+                        {vendedores.map((v) => (
+                          <SelectItem key={v.id} value={v.user_id}>
+                            {v.nome}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             {/* Lead Info Preview - com dados da cotação */}
             {selectedLead && (
