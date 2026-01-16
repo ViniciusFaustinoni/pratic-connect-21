@@ -171,7 +171,6 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
 
   const valorFipe = form.watch('valor_fipe');
   const valorAdicional = form.watch('valor_adicional') || 0;
-  const valorTotalProtegido = valorFipe + valorAdicional;
   const planoId = form.watch('plano_id');
   const validadeDias = form.watch('validade_dias');
   const valorAdesao = form.watch('valor_adesao');
@@ -540,7 +539,9 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
     form.setValue('valor_cota', plano.valorCota || 0);
     form.setValue('taxa_administrativa', plano.taxaAdministrativa || 0);
     form.setValue('valor_rastreamento', plano.valorRastreamento || 0);
-    form.setValue('valor_total_mensal', plano.valorMensal);
+    // Valor total mensal = proteção + adicional
+    const adicional = form.getValues('valor_adicional') || 0;
+    form.setValue('valor_total_mensal', plano.valorMensal + adicional);
     setPlanoSelecionadoData(plano);
   };
 
@@ -583,13 +584,17 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
       ? `${getMarcaNome()} ${getModeloNome()} ${getAnoNome()}`
       : 'Veículo não informado';
     
+    const valorMensalTotal = planoSelecionadoData.valorMensal + valorAdicional;
+    
     const texto = `*Cotação Protecar*
 Associado: ${nomeAssociado}
 Veículo: ${veiculoInfo}
 Uso: ${usoVeiculo === 'particular' ? 'Passeio' : 'Aplicativo'}
 FIPE: ${formatCurrency(valorFipe)}
 Plano: ${planoSelecionadoData.nome}
-Valor Mensal: ${formatCurrency(planoSelecionadoData.valorMensal)}
+${valorAdicional > 0 ? `Proteção Mensal: ${formatCurrency(planoSelecionadoData.valorMensal)}
++ Adicional: ${formatCurrency(valorAdicional)}
+Total Mensal: ${formatCurrency(valorMensalTotal)}` : `Valor Mensal: ${formatCurrency(valorMensalTotal)}`}
 Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}
 Validade: ${validadeDias} dias`;
     
@@ -606,13 +611,16 @@ Validade: ${validadeDias} dias`;
       : 'Veículo não informado';
     
     const telefoneFormatado = telefoneAssociado.replace(/\D/g, '');
+    const valorMensalTotal = planoSelecionadoData.valorMensal + valorAdicional;
     const texto = encodeURIComponent(`*Cotação Protecar*
 Associado: ${nomeAssociado}
 Veículo: ${veiculoInfo}
 Uso: ${usoVeiculo === 'particular' ? 'Passeio' : 'Aplicativo'}
 FIPE: ${formatCurrency(valorFipe)}
 Plano: ${planoSelecionadoData.nome}
-Valor Mensal: ${formatCurrency(planoSelecionadoData.valorMensal)}
+${valorAdicional > 0 ? `Proteção Mensal: ${formatCurrency(planoSelecionadoData.valorMensal)}
++ Adicional: ${formatCurrency(valorAdicional)}
+Total Mensal: ${formatCurrency(valorMensalTotal)}` : `Valor Mensal: ${formatCurrency(valorMensalTotal)}`}
 Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
     
     const whatsappUrl = telefoneFormatado.length >= 10 
@@ -1203,14 +1211,9 @@ Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
                 <div className="relative group">
                   <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
                   <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-64 p-2 text-xs bg-popover text-popover-foreground border rounded-md shadow-md z-50">
-                    Valor de equipamentos, som, rodas, acessórios ou outros agregados que serão somados ao valor FIPE para cálculo da proteção.
+                    Valor fixo que será acrescido à mensalidade (equipamentos, som, rodas, acessórios, etc.)
                   </div>
                 </div>
-                {valorAdicional > 0 && (
-                  <Badge variant="outline" className="text-xs bg-blue-50 dark:bg-blue-950/30 text-blue-600 border-blue-200">
-                    +{formatCurrency(valorAdicional)}
-                  </Badge>
-                )}
               </div>
               <FormField
                 control={form.control}
@@ -1228,29 +1231,7 @@ Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
                   </FormItem>
                 )}
               />
-              <p className="text-xs text-muted-foreground mt-1">
-                (Opcional) Equipamentos, som, rodas, acessórios, etc.
-              </p>
             </div>
-
-            {/* Exibir Valor Total Protegido quando há adicional */}
-            {valorAdicional > 0 && (
-              <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Valor FIPE:</span>
-                  <span>{formatCurrency(valorFipe)}</span>
-                </div>
-                <div className="flex items-center justify-between text-sm text-blue-600">
-                  <span>+ Valor Adicional:</span>
-                  <span>{formatCurrency(valorAdicional)}</span>
-                </div>
-                <Separator className="my-2" />
-                <div className="flex items-center justify-between font-semibold">
-                  <span>Valor Total Protegido:</span>
-                  <span className="text-primary">{formatCurrency(valorTotalProtegido)}</span>
-                </div>
-              </div>
-            )}
 
             <Separator />
 
@@ -1355,10 +1336,25 @@ Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
                             </Badge>
                           ) : null}
                         </div>
-                        <p className="text-xl font-bold text-primary mb-3">
-                          {formatCurrency(plano.valorMensal)}
-                          <span className="text-xs font-normal text-muted-foreground">/mês</span>
-                        </p>
+                        {valorAdicional > 0 ? (
+                          <div className="mb-3">
+                            <p className="text-sm text-muted-foreground">
+                              Proteção: {formatCurrency(plano.valorMensal)}
+                            </p>
+                            <p className="text-xs text-blue-600">
+                              + Adicional: {formatCurrency(valorAdicional)}
+                            </p>
+                            <p className="text-xl font-bold text-primary">
+                              Total: {formatCurrency(plano.valorMensal + valorAdicional)}
+                              <span className="text-xs font-normal text-muted-foreground">/mês</span>
+                            </p>
+                          </div>
+                        ) : (
+                          <p className="text-xl font-bold text-primary mb-3">
+                            {formatCurrency(plano.valorMensal)}
+                            <span className="text-xs font-normal text-muted-foreground">/mês</span>
+                          </p>
+                        )}
                         <ul className="text-xs space-y-1 text-muted-foreground">
                           {plano.valorCota !== undefined && (
                             <li>• Cota: {formatCurrency(plano.valorCota)}</li>
@@ -1428,10 +1424,28 @@ Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
                       </div>
                       <div className="text-right">
                         <p className="text-xs text-muted-foreground">{planoSelecionadoData.nome}</p>
-                        <p className="text-2xl font-bold text-primary">
-                          {formatCurrency(planoSelecionadoData.valorMensal)}
-                        </p>
-                        <p className="text-xs text-muted-foreground">/mês</p>
+                        {valorAdicional > 0 ? (
+                          <>
+                            <p className="text-sm text-muted-foreground">
+                              Proteção: {formatCurrency(planoSelecionadoData.valorMensal)}
+                            </p>
+                            <p className="text-xs text-blue-600">
+                              + Adicional: {formatCurrency(valorAdicional)}
+                            </p>
+                            <Separator className="my-1" />
+                            <p className="text-2xl font-bold text-primary">
+                              {formatCurrency(planoSelecionadoData.valorMensal + valorAdicional)}
+                            </p>
+                            <p className="text-xs text-muted-foreground">/mês</p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-2xl font-bold text-primary">
+                              {formatCurrency(planoSelecionadoData.valorMensal)}
+                            </p>
+                            <p className="text-xs text-muted-foreground">/mês</p>
+                          </>
+                        )}
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-4 mt-3 pt-3 border-t text-sm">
