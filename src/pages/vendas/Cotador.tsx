@@ -205,17 +205,17 @@ const normalizarAno = (anoAPI: string): number => {
   return new Date().getFullYear();
 };
 
-const calcularFipeMock = (marca: string, _modelo: string, ano: number): number => {
-  let valor = 30000;
+// Função estimativa de FIPE quando API não retorna valor
+const estimarValorFipe = (marca: string, ano: number): number => {
+  const baseValor = 35000;
   const ajusteMarca: Record<string, number> = {
     Toyota: 1.3, Honda: 1.25, Hyundai: 1.15, Volkswagen: 1.1, Chevrolet: 1.05,
-    Fiat: 1.0, Renault: 0.95, Nissan: 1.1, Jeep: 1.4, Ford: 1.0, Outras: 1.0,
+    Fiat: 1.0, Renault: 0.95, Nissan: 1.1, Jeep: 1.4, Ford: 1.0,
   };
-  valor *= ajusteMarca[marca] || 1.0;
+  const fatorMarca = ajusteMarca[marca] || 1.0;
   const anoAtual = new Date().getFullYear();
-  const idadeVeiculo = anoAtual - ano;
-  valor *= Math.max(0.5, 1 - (idadeVeiculo * 0.07));
-  return Math.round(valor / 100) * 100;
+  const depreciacao = Math.max(0.5, 1 - (anoAtual - ano) * 0.06);
+  return Math.round(baseValor * fatorMarca * depreciacao / 100) * 100;
 };
 
 // Mapear planos do banco para interface de exibição
@@ -367,12 +367,10 @@ export default function CotadorPage() {
     return ANOS;
   }, [anoCustom]);
 
-  // Planos calculados
+  // Planos calculados - busca diretamente do banco
   const planos = useMemo(() => {
     if (!valorFipe || !planosDB || planosDB.length === 0) {
-      // Fallback para planos mock se não tiver dados do banco
-      if (!valorFipe) return [];
-      return calcularPlanosMock(valorFipe, usoApp);
+      return [];
     }
     return mapearPlanosParaExibicao(planosDB, valorFipe, usoApp);
   }, [valorFipe, usoApp, planosDB]);
@@ -463,12 +461,12 @@ export default function CotadorPage() {
         setAno(String(anoNormalizado));
         setCor(vehicleData.cor || '');
         
-        // PRIORIZAR valor FIPE da API (não usar mock)
+        // PRIORIZAR valor FIPE da API
         if (fipeData?.valor && fipeData.valor > 0) {
           setValorFipe(fipeData.valor);
         } else {
-          // Fallback para mock apenas se API não retornar valor
-          setValorFipe(calcularFipeMock(marcaNormalizada, modeloOriginal, anoNormalizado));
+          // Fallback para estimativa apenas se API não retornar valor
+          setValorFipe(estimarValorFipe(marcaNormalizada, anoNormalizado));
         }
 
         setCotacaoCalculada(false);
@@ -511,9 +509,8 @@ export default function CotadorPage() {
       if (lead.veiculo_ano) setAno(String(lead.veiculo_ano));
       if (lead.veiculo_placa) setPlacaBusca(lead.veiculo_placa);
       
-      const fipe = calcularFipeMock(
+      const fipe = estimarValorFipe(
         lead.veiculo_marca, 
-        lead.veiculo_modelo, 
         lead.veiculo_ano || new Date().getFullYear()
       );
       setValorFipe(fipe);
@@ -545,8 +542,8 @@ export default function CotadorPage() {
     setIsCalculando(true);
     await new Promise(resolve => setTimeout(resolve, 600));
     
-    if (!valorFipe && marca && modelo && ano) {
-      const fipe = calcularFipeMock(marca, modelo, parseInt(ano));
+    if (!valorFipe && marca && ano) {
+      const fipe = estimarValorFipe(marca, parseInt(ano));
       setValorFipe(fipe);
     }
     
@@ -946,8 +943,8 @@ _Cotação válida por 7 dias_
                       value={ano}
                       onValueChange={(v) => {
                         setAno(v);
-                        if (marca && modelo && v) {
-                          const fipe = calcularFipeMock(marca, modelo, parseInt(v));
+                        if (marca && v) {
+                          const fipe = estimarValorFipe(marca, parseInt(v));
                           setValorFipe(fipe);
                         }
                         setCotacaoCalculada(false);
@@ -1476,76 +1473,4 @@ _Cotação válida por 7 dias_
       )}
     </div>
   );
-}
-
-// Fallback para planos mock se não houver dados do banco
-function calcularPlanosMock(valorFipe: number, usoApp: boolean): PlanoCalculado[] {
-  const multiplicadorApp = usoApp ? 1.3 : 1.0;
-  
-  return [
-    {
-      id: 'basico',
-      idReal: '',
-      codigo: 'BASICO',
-      nome: 'Básico',
-      descricao: 'Proteção essencial para seu veículo',
-      coberturas: [
-        'Colisão (100% FIPE)',
-        'Roubo e Furto (100% FIPE)',
-        'Incêndio Total',
-        'Perda Total',
-        'Assistência 24h básica',
-      ],
-      naoInclui: ['Vidros', 'App de rastreamento', 'Carro reserva'],
-      valorAdesao: Math.round(350 * multiplicadorApp),
-      valorMensal: Math.round((valorFipe * 0.004) * multiplicadorApp * 100) / 100,
-      destaque: false,
-    },
-    {
-      id: 'total',
-      idReal: '',
-      codigo: 'TOTAL',
-      nome: 'Completo',
-      descricao: 'O mais vendido - melhor custo-benefício',
-      coberturas: [
-        'Colisão (100% FIPE)',
-        'Roubo e Furto (100% FIPE)',
-        'Incêndio Total',
-        'Perda Total',
-        'Vidros completos',
-        'App de Rastreamento 24h',
-        'Assistência 24h completa',
-        'Reboque ilimitado',
-      ],
-      naoInclui: ['Carro reserva', 'Proteção para terceiros'],
-      valorAdesao: Math.round(450 * multiplicadorApp),
-      valorMensal: Math.round((valorFipe * 0.0055) * multiplicadorApp * 100) / 100,
-      destaque: true,
-    },
-    {
-      id: 'premium',
-      idReal: '',
-      codigo: 'PREMIUM',
-      nome: 'Premium',
-      descricao: 'Proteção máxima com todos os benefícios',
-      coberturas: [
-        'Colisão (100% FIPE)',
-        'Roubo e Furto (100% FIPE)',
-        'Incêndio Total',
-        'Perda Total',
-        'Vidros completos',
-        'App de Rastreamento 24h',
-        'Assistência 24h VIP',
-        'Reboque ilimitado',
-        'Carro reserva (7 dias)',
-        'Proteção para terceiros',
-        'Faróis e lanternas',
-        'Retrovisores',
-      ],
-      naoInclui: [],
-      valorAdesao: Math.round(550 * multiplicadorApp),
-      valorMensal: Math.round((valorFipe * 0.007) * multiplicadorApp * 100) / 100,
-      destaque: false,
-    },
-  ];
 }

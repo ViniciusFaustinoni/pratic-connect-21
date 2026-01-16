@@ -1,11 +1,13 @@
 // ============================================
-// DADOS DO GUIA DO CONSULTOR v11 - OUTUBRO 2025
+// DADOS DE REFERÊNCIA DO GUIA DO CONSULTOR v11
+// Dados estáticos mantidos para referência e validação
+// Os planos e tabelas de preços agora vêm do banco de dados
 // ============================================
 
 export type Regiao = 'rj' | 'lagos' | 'sp';
 export type TipoCombustivel = 'gasolina' | 'diesel';
 
-// Interfaces
+// Interfaces mantidas para compatibilidade
 export interface FaixaPreco {
   fipeMin: number;
   fipeMax: number;
@@ -28,31 +30,6 @@ export interface FaixaPrecoEletrico {
   mensal: number;
 }
 
-export interface PlanoResumo {
-  id: string;
-  nome: string;
-  badge?: string;
-  coberturaFipe: number;
-  anoMinimo: number;
-  cotaPasesio?: string;
-  cotaPasesioDesagio?: string;
-  cotaApp?: string;
-  niveis?: string[];
-  destaque?: string;
-  cor: string;
-  beneficios: string[];
-  adicional?: string;
-  linha: 'select' | 'select-one' | 'especial' | 'lancamento' | 'advanced' | 'eletricos';
-  alertaDesagio?: string;
-}
-
-export interface BeneficioNivel {
-  nome: string;
-  basic: boolean;
-  premium: boolean;
-  exclusive: boolean;
-}
-
 export interface TermoGlossario {
   termo: string;
   definicao: string;
@@ -73,140 +50,16 @@ export interface CotasTaxas {
 }
 
 // ============================================
-// TABELA DE PREÇOS - LINHA SELECT (RIO DE JANEIRO)
-// ============================================
-export const PRECOS_SELECT_RJ: FaixaPreco[] = [
-  { fipeMin: 0, fipeMax: 10000, gasolina: 81.90, desagioGasolina: 75.90, diesel: 116.90, desagioDiesel: 107.90 },
-  { fipeMin: 10001, fipeMax: 15000, gasolina: 101.90, desagioGasolina: 92.90, diesel: 136.90, desagioDiesel: 123.40 },
-  { fipeMin: 15001, fipeMax: 20000, gasolina: 112.40, desagioGasolina: 100.40, diesel: 147.40, desagioDiesel: 129.40 },
-  { fipeMin: 20001, fipeMax: 25000, gasolina: 132.40, desagioGasolina: 117.40, diesel: 167.20, desagioDiesel: 144.70 },
-  { fipeMin: 25001, fipeMax: 30000, gasolina: 143.90, desagioGasolina: 125.90, diesel: 177.70, desagioDiesel: 150.70 },
-  { fipeMin: 30001, fipeMax: 35000, gasolina: 162.90, desagioGasolina: 141.90, diesel: 197.53, desagioDiesel: 166.03 },
-  { fipeMin: 35001, fipeMax: 40000, gasolina: 173.40, desagioGasolina: 149.40, diesel: 208.00, desagioDiesel: 172.00 },
-  { fipeMin: 40001, fipeMax: 45000, gasolina: 208.90, desagioGasolina: 181.90, diesel: 238.30, desagioDiesel: 197.80 },
-  { fipeMin: 45001, fipeMax: 50000, gasolina: 218.90, desagioGasolina: 188.90, diesel: 253.20, desagioDiesel: 208.20 },
-  { fipeMin: 50001, fipeMax: 55000, gasolina: 259.40, desagioGasolina: 226.40, diesel: 288.46, desagioDiesel: 238.96 },
-  { fipeMin: 55001, fipeMax: 60000, gasolina: 274.40, desagioGasolina: 238.40, diesel: 305.85, desagioDiesel: 251.85 },
-  { fipeMin: 60001, fipeMax: 65000, gasolina: 294.90, desagioGasolina: 255.90, diesel: 331.18, desagioDiesel: 272.68 },
-  { fipeMin: 65001, fipeMax: 70000, gasolina: 311.40, desagioGasolina: 269.40, diesel: 344.10, desagioDiesel: 281.10 },
-  { fipeMin: 70001, fipeMax: 75000, gasolina: 344.00, desagioGasolina: 299.00, diesel: 374.40, desagioDiesel: 306.90 },
-  { fipeMin: 75001, fipeMax: 80000, gasolina: 360.90, desagioGasolina: 312.90, diesel: 389.30, desagioDiesel: 317.30 },
-  { fipeMin: 80001, fipeMax: 85000, gasolina: 398.50, desagioGasolina: 347.50, diesel: 419.66, desagioDiesel: 343.16 },
-  { fipeMin: 85001, fipeMax: 90000, gasolina: 416.40, desagioGasolina: 362.40, diesel: 434.60, desagioDiesel: 353.60 },
-  { fipeMin: 90001, fipeMax: 95000, gasolina: 446.90, desagioGasolina: 389.90, diesel: 454.96, desagioDiesel: 369.46 },
-  { fipeMin: 95001, fipeMax: 100000, gasolina: 477.40, desagioGasolina: 417.40, diesel: 485.40, desagioDiesel: 395.40 },
-  { fipeMin: 100001, fipeMax: 105000, gasolina: 497.90, desagioGasolina: 434.90, diesel: 506.90, desagioDiesel: 412.40 },
-  { fipeMin: 105001, fipeMax: 110000, gasolina: 508.40, desagioGasolina: 442.40, diesel: 522.40, desagioDiesel: 423.40 },
-  { fipeMin: 110001, fipeMax: 115000, gasolina: 528.90, desagioGasolina: 459.90, diesel: 537.90, desagioDiesel: 434.40 },
-  { fipeMin: 115001, fipeMax: 120000, gasolina: 539.90, desagioGasolina: 467.90, diesel: 553.90, desagioDiesel: 445.90 },
-  { fipeMin: 120001, fipeMax: 125000, gasolina: 549.90, desagioGasolina: 477.90, diesel: 563.90, desagioDiesel: 455.90 },
-  { fipeMin: 125001, fipeMax: 130000, gasolina: 569.90, desagioGasolina: 497.90, diesel: 583.90, desagioDiesel: 475.90 },
-  { fipeMin: 130001, fipeMax: 135000, gasolina: 594.90, desagioGasolina: 522.90, diesel: 608.90, desagioDiesel: 500.90 },
-  { fipeMin: 135001, fipeMax: 140000, gasolina: 619.90, desagioGasolina: 547.90, diesel: 633.90, desagioDiesel: 525.90 },
-  { fipeMin: 140001, fipeMax: 145000, gasolina: 644.90, desagioGasolina: 572.90, diesel: 658.90, desagioDiesel: 550.90 },
-  { fipeMin: 145001, fipeMax: 150000, gasolina: 669.90, desagioGasolina: 597.90, diesel: 683.90, desagioDiesel: 575.90 },
-  { fipeMin: 150001, fipeMax: 155000, gasolina: 699.90, desagioGasolina: 627.90, diesel: 713.90, desagioDiesel: 605.90 },
-  { fipeMin: 155001, fipeMax: 160000, gasolina: 729.90, desagioGasolina: 657.90, diesel: 743.90, desagioDiesel: 635.90 },
-  { fipeMin: 160001, fipeMax: 165000, gasolina: 764.90, desagioGasolina: 692.90, diesel: 778.90, desagioDiesel: 670.90 },
-  { fipeMin: 165001, fipeMax: 170000, gasolina: 799.90, desagioGasolina: 727.90, diesel: 813.90, desagioDiesel: 705.90 },
-  { fipeMin: 170001, fipeMax: 175000, gasolina: 874.90, desagioGasolina: 802.90, diesel: 888.90, desagioDiesel: 780.90 },
-  { fipeMin: 175001, fipeMax: 180000, gasolina: 909.90, desagioGasolina: 837.90, diesel: 923.90, desagioDiesel: 815.90 },
-];
-
+// FUNÇÃO DE AJUSTE DE REGIÃO
 // Lagos e SP: 90% do valor RJ
+// ============================================
 export function calcularPrecoRegiao(precoRJ: number, regiao: Regiao): number {
   if (regiao === 'rj') return precoRJ;
   return Math.round(precoRJ * 0.90 * 100) / 100;
 }
 
 // ============================================
-// TABELA DE PREÇOS - MOTOS (RIO DE JANEIRO)
-// ============================================
-export const PRECOS_MOTOS_RJ: FaixaPrecoMoto[] = [
-  { fipeMin: 0, fipeMax: 6000, advanced: 113.70, advancedPlus: 133.70 },
-  { fipeMin: 6001, fipeMax: 9000, advanced: 128.70, advancedPlus: 148.70 },
-  { fipeMin: 9001, fipeMax: 12000, advanced: 148.70, advancedPlus: 168.70 },
-  { fipeMin: 12001, fipeMax: 15000, advanced: 174.70, advancedPlus: 194.70 },
-  { fipeMin: 15001, fipeMax: 18000, advanced: 198.70, advancedPlus: 218.70 },
-  { fipeMin: 18001, fipeMax: 21000, advanced: 218.70, advancedPlus: 238.70 },
-  { fipeMin: 21001, fipeMax: 24000, advanced: 268.70, advancedPlus: 288.70 },
-  { fipeMin: 24001, fipeMax: 27000, advanced: 298.70, advancedPlus: 318.70 },
-  { fipeMin: 27001, fipeMax: 30000, advanced: 333.70, advancedPlus: 353.70 },
-  { fipeMin: 30001, fipeMax: 33000, advanced: 368.70, advancedPlus: 388.70 },
-  { fipeMin: 33001, fipeMax: 36000, advanced: 403.70, advancedPlus: null },
-  { fipeMin: 36001, fipeMax: 39000, advanced: 438.70, advancedPlus: null },
-  { fipeMin: 39001, fipeMax: 41000, advanced: 473.70, advancedPlus: null },
-  { fipeMin: 41001, fipeMax: 44000, advanced: 508.70, advancedPlus: null },
-  { fipeMin: 44001, fipeMax: 47000, advanced: 543.70, advancedPlus: null },
-  { fipeMin: 47001, fipeMax: 50000, advanced: 578.70, advancedPlus: null },
-];
-
-// ============================================
-// TABELA DE PREÇOS - ELÉTRICOS
-// ============================================
-export const PRECOS_ELETRICOS: FaixaPrecoEletrico[] = [
-  { fipeMin: 80001, fipeMax: 85000, mensal: 797.00 },
-  { fipeMin: 85001, fipeMax: 90000, mensal: 832.80 },
-  { fipeMin: 90001, fipeMax: 95000, mensal: 893.80 },
-  { fipeMin: 95001, fipeMax: 100000, mensal: 954.80 },
-  { fipeMin: 100001, fipeMax: 105000, mensal: 995.80 },
-  { fipeMin: 105001, fipeMax: 110000, mensal: 1016.80 },
-  { fipeMin: 110001, fipeMax: 115000, mensal: 1057.80 },
-  { fipeMin: 115001, fipeMax: 120000, mensal: 1079.80 },
-  { fipeMin: 120001, fipeMax: 125000, mensal: 1099.80 },
-  { fipeMin: 125001, fipeMax: 130000, mensal: 1139.80 },
-  { fipeMin: 130001, fipeMax: 135000, mensal: 1189.80 },
-  { fipeMin: 135001, fipeMax: 140000, mensal: 1239.80 },
-  { fipeMin: 140001, fipeMax: 145000, mensal: 1289.80 },
-  { fipeMin: 145001, fipeMax: 150000, mensal: 1339.80 },
-  { fipeMin: 150001, fipeMax: 155000, mensal: 1399.80 },
-  { fipeMin: 155001, fipeMax: 160000, mensal: 1459.80 },
-  { fipeMin: 160001, fipeMax: 165000, mensal: 1529.80 },
-  { fipeMin: 165001, fipeMax: 170000, mensal: 1599.80 },
-  { fipeMin: 170001, fipeMax: 175000, mensal: 1679.80 },
-  { fipeMin: 175001, fipeMax: 180000, mensal: 1759.80 },
-];
-
-// ============================================
-// BENEFÍCIOS POR NÍVEL (SELECT)
-// ============================================
-export const BENEFICIOS_NIVEL: BeneficioNivel[] = [
-  { nome: 'Roubo e Furto', basic: true, premium: true, exclusive: true },
-  { nome: 'Colisão', basic: true, premium: true, exclusive: true },
-  { nome: 'Perda Total', basic: true, premium: true, exclusive: true },
-  { nome: 'Incêndio', basic: true, premium: true, exclusive: true },
-  { nome: 'Alagamento', basic: true, premium: true, exclusive: true },
-  { nome: 'Chuva de Granizo', basic: true, premium: true, exclusive: true },
-  { nome: 'Assistência 24h 400km', basic: true, premium: true, exclusive: true },
-  { nome: 'Rastreador/Monitoramento (acima de R$30mil)', basic: true, premium: true, exclusive: true },
-  { nome: '1000km Reboque', basic: false, premium: true, exclusive: true },
-  { nome: 'Danos Terceiros R$40mil', basic: false, premium: true, exclusive: true },
-  { nome: 'Vidros e Faróis (após 120 dias)', basic: false, premium: true, exclusive: true },
-  { nome: 'Reboque Excedente (1 utilização a cada 6 meses)', basic: false, premium: true, exclusive: true },
-  { nome: 'Kit Gás', basic: false, premium: false, exclusive: true },
-  { nome: '100% FIPE APP + Carro Reserva (somente em casos de colisão)', basic: false, premium: false, exclusive: true },
-];
-
-export const ADICIONAL_NIVEL = {
-  basic: 0,
-  premium: 30,
-  exclusive: 60,
-};
-
-// ============================================
-// BENEFÍCIOS POR NÍVEL (MOTOS)
-// ============================================
-export const BENEFICIOS_MOTOS = [
-  { nome: 'Roubo e Furto', advanced: true, advancedPlus: true },
-  { nome: 'Monitoramento/Rastreador (acima de R$9mil)', advanced: true, advancedPlus: true },
-  { nome: 'Assistência 24h 400km', advanced: true, advancedPlus: false },
-  { nome: 'Assistência 24h 600km', advanced: false, advancedPlus: true },
-  { nome: 'Colisão (cota 10%)', advanced: false, advancedPlus: true },
-  { nome: 'Danos Terceiros R$10mil (participação R$750)', advanced: false, advancedPlus: true },
-];
-
-// ============================================
-// VEÍCULOS ACEITOS
+// VEÍCULOS ACEITOS (para validação de cadastro)
 // ============================================
 export const VEICULOS_ACEITOS = {
   CHEVROLET: [
@@ -405,7 +258,7 @@ export const TAXAS_PROCEDIMENTOS = [
 ];
 
 // ============================================
-// BENEFÍCIOS ADICIONAIS (com categorias)
+// BENEFÍCIOS ADICIONAIS (referência)
 // ============================================
 export const BENEFICIOS_ADICIONAIS_COMPLETO = [
   { categoria: 'Reboque', nome: '1000km Reboque', preco: 2.90, descricao: 'Amplia cobertura de reboque' },
@@ -425,299 +278,7 @@ export const BENEFICIOS_ADICIONAIS_COMPLETO = [
 ];
 
 // ============================================
-// RESUMO DOS PLANOS (para cards da Visão Geral)
-// ============================================
-export const PLANOS_RESUMO: PlanoResumo[] = [
-  // SELECT BASIC
-  {
-    id: 'select-basic',
-    nome: 'SELECT BASIC',
-    badge: 'Mais Popular',
-    coberturaFipe: 100,
-    anoMinimo: 2005,
-    cotaPasesio: '6% (mín R$1.200)',
-    cotaPasesioDesagio: '8% (mín R$2.000)',
-    cor: 'from-blue-500 to-blue-600',
-    linha: 'select',
-    alertaDesagio: 'Deságio de leilão: sem cobertura de incêndio',
-    beneficios: [
-      'Roubo e Furto',
-      'Colisão',
-      'Perda Total',
-      'Incêndio',
-      'Alagamento',
-      'Chuva de Granizo',
-      'Assistência 24h 400km',
-      'Rastreador/Monitoramento (acima de R$30mil)',
-    ],
-  },
-  // SELECT PREMIUM
-  {
-    id: 'select-premium',
-    nome: 'SELECT PREMIUM',
-    coberturaFipe: 100,
-    anoMinimo: 2005,
-    cotaPasesio: '6% (mín R$1.200)',
-    cotaPasesioDesagio: '8% (mín R$2.000)',
-    adicional: '+R$30/mês',
-    cor: 'from-blue-600 to-blue-700',
-    linha: 'select',
-    alertaDesagio: 'Deságio de leilão: sem cobertura de incêndio',
-    beneficios: [
-      'Roubo e Furto',
-      'Colisão',
-      'Perda Total',
-      'Incêndio',
-      'Alagamento',
-      'Chuva de Granizo',
-      'Assistência 24h 400km',
-      'Rastreador/Monitoramento (acima de R$30mil)',
-      '1000km Reboque',
-      'Danos Terceiros R$40mil',
-      'Vidros e Faróis (após 120 dias)',
-      'Reboque Excedente (1x a cada 6 meses)',
-    ],
-  },
-  // SELECT EXCLUSIVE
-  {
-    id: 'select-exclusive',
-    nome: 'SELECT EXCLUSIVE',
-    badge: 'Completo',
-    coberturaFipe: 100,
-    anoMinimo: 2005,
-    cotaPasesio: '6% (mín R$1.200)',
-    cotaPasesioDesagio: '8% (mín R$2.000)',
-    cotaApp: '8% (mín R$3.000)',
-    adicional: '+R$60/mês',
-    cor: 'from-blue-700 to-indigo-800',
-    linha: 'select',
-    alertaDesagio: 'Deságio de leilão: sem cobertura de incêndio',
-    beneficios: [
-      'Roubo e Furto',
-      'Colisão',
-      'Perda Total',
-      'Incêndio',
-      'Alagamento',
-      'Chuva de Granizo',
-      'Assistência 24h 400km',
-      'Rastreador/Monitoramento (acima de R$30mil)',
-      '1000km Reboque',
-      'Danos Terceiros R$40mil',
-      'Vidros e Faróis (após 120 dias)',
-      'Reboque Excedente (1x a cada 6 meses)',
-      'Kit Gás',
-      '100% FIPE APP + Carro Reserva (somente em colisão)',
-    ],
-  },
-  // SELECT ONE
-  {
-    id: 'select-one',
-    nome: 'SELECT ONE',
-    badge: 'Tudo Incluído',
-    coberturaFipe: 100,
-    anoMinimo: 2005,
-    cotaPasesio: '6% (mín R$1.200)',
-    cotaPasesioDesagio: '8% (mín R$2.000)',
-    cotaApp: '8% (mín R$3.000)',
-    cor: 'from-emerald-500 to-green-600',
-    linha: 'select-one',
-    alertaDesagio: 'Deságio de leilão: sem cobertura de incêndio',
-    beneficios: [
-      'Roubo e Furto',
-      'Colisão',
-      'Perda Total',
-      'Incêndio',
-      'Alagamento',
-      'Chuva de Granizo',
-      'Assistência 24h 1000km',
-      'Rastreador/Monitoramento (acima de R$30mil)',
-      'Danos Terceiros R$100mil',
-      'Vidros e Faróis (após 120 dias)',
-      'Reboque Excedente (1x a cada 6 meses)',
-      'Kit Gás',
-      'Carro Reserva (somente em colisão)',
-      'Clube Gás (10% desconto)',
-    ],
-  },
-  // ESPECIAL
-  {
-    id: 'especial',
-    nome: 'ESPECIAL',
-    coberturaFipe: 80,
-    anoMinimo: 2002,
-    cotaPasesio: '6% (mín R$1.200)',
-    cotaPasesioDesagio: '8% (mín R$2.000)',
-    cor: 'from-orange-500 to-amber-600',
-    linha: 'especial',
-    beneficios: [
-      'Roubo e Furto',
-      'Assistência 24h 400km',
-      'Rastreador/Monitoramento (obrigatório)',
-    ],
-  },
-  // ESPECIAL PLUS
-  {
-    id: 'especial-plus',
-    nome: 'ESPECIAL PLUS',
-    coberturaFipe: 80,
-    anoMinimo: 2002,
-    cotaPasesio: '10% (mín R$3.000)',
-    cor: 'from-amber-500 to-orange-600',
-    linha: 'especial',
-    alertaDesagio: 'Deságio de leilão: sem cobertura de incêndio',
-    beneficios: [
-      'Roubo e Furto',
-      'Colisão',
-      'Perda Total',
-      'Incêndio',
-      'Alagamento',
-      'Chuva de Granizo',
-      'Assistência 24h 400km',
-      'Rastreador/Monitoramento (acima de R$30mil)',
-    ],
-  },
-  // LANÇAMENTO BASIC
-  {
-    id: 'lancamento-basic',
-    nome: 'LANÇAMENTO BASIC',
-    badge: 'Veículos Novos',
-    coberturaFipe: 100,
-    anoMinimo: 2024,
-    cotaPasesio: '10% (mín R$3.000)',
-    destaque: 'Sem alteração com deságio',
-    cor: 'from-violet-500 to-purple-600',
-    linha: 'lancamento',
-    alertaDesagio: 'Deságio de leilão: sem cobertura de incêndio',
-    beneficios: [
-      'Roubo e Furto',
-      'Colisão',
-      'Perda Total',
-      'Incêndio',
-      'Alagamento',
-      'Chuva de Granizo',
-      'Assistência 24h 400km',
-      'Rastreador/Monitoramento (acima de R$30mil)',
-    ],
-  },
-  // LANÇAMENTO PREMIUM
-  {
-    id: 'lancamento-premium',
-    nome: 'LANÇAMENTO PREMIUM',
-    coberturaFipe: 100,
-    anoMinimo: 2024,
-    cotaPasesio: '10% (mín R$3.000)',
-    destaque: 'Sem alteração com deságio',
-    adicional: '+R$30/mês',
-    cor: 'from-violet-600 to-purple-700',
-    linha: 'lancamento',
-    alertaDesagio: 'Deságio de leilão: sem cobertura de incêndio',
-    beneficios: [
-      'Roubo e Furto',
-      'Colisão',
-      'Perda Total',
-      'Incêndio',
-      'Alagamento',
-      'Chuva de Granizo',
-      'Assistência 24h 400km',
-      'Rastreador/Monitoramento (acima de R$30mil)',
-      '1000km Reboque',
-      'Danos Terceiros R$40mil',
-      'Vidros e Faróis (após 120 dias)',
-      'Reboque Excedente (1x a cada 6 meses)',
-    ],
-  },
-  // LANÇAMENTO EXCLUSIVE
-  {
-    id: 'lancamento-exclusive',
-    nome: 'LANÇAMENTO EXCLUSIVE',
-    coberturaFipe: 100,
-    anoMinimo: 2024,
-    cotaPasesio: '10% (mín R$3.000)',
-    destaque: 'Sem alteração com deságio',
-    adicional: '+R$60/mês',
-    cor: 'from-violet-700 to-purple-800',
-    linha: 'lancamento',
-    alertaDesagio: 'Deságio de leilão: sem cobertura de incêndio',
-    beneficios: [
-      'Roubo e Furto',
-      'Colisão',
-      'Perda Total',
-      'Incêndio',
-      'Alagamento',
-      'Chuva de Granizo',
-      'Assistência 24h 400km',
-      'Rastreador/Monitoramento (acima de R$30mil)',
-      '1000km Reboque',
-      'Danos Terceiros R$40mil',
-      'Vidros e Faróis (após 120 dias)',
-      'Reboque Excedente (1x a cada 6 meses)',
-      'Kit Gás',
-      '100% FIPE APP + Carro Reserva (somente em colisão)',
-    ],
-  },
-  // ADVANCED (Motos)
-  {
-    id: 'advanced',
-    nome: 'ADVANCED',
-    coberturaFipe: 0,
-    anoMinimo: 2005,
-    destaque: 'Honda e Yamaha (20 anos)',
-    cor: 'from-red-500 to-rose-600',
-    linha: 'advanced',
-    beneficios: [
-      'Roubo e Furto',
-      'Assistência 24h 400km',
-      'Monitoramento/Rastreador (acima de R$9mil)',
-    ],
-  },
-  // ADVANCED+
-  {
-    id: 'advanced-plus',
-    nome: 'ADVANCED+',
-    badge: 'Motos Completo',
-    coberturaFipe: 0,
-    anoMinimo: 2005,
-    cotaPasesio: '10% (mín R$1.500)',
-    destaque: 'Honda e Yamaha (20 anos)',
-    cor: 'from-red-600 to-rose-700',
-    linha: 'advanced',
-    beneficios: [
-      'Roubo e Furto',
-      'Assistência 24h 600km',
-      'Monitoramento/Rastreador (acima de R$9mil)',
-      'Colisão (cota 10%)',
-      'Danos Terceiros R$10mil (participação R$750)',
-    ],
-  },
-  // ELÉTRICOS
-  {
-    id: 'eletricos',
-    nome: 'ELÉTRICOS',
-    badge: 'Proteção Especializada',
-    coberturaFipe: 100,
-    anoMinimo: 2020,
-    cotaPasesio: '10% (sem mínimo)',
-    destaque: 'Veículos elétricos e híbridos',
-    cor: 'from-teal-500 to-cyan-600',
-    linha: 'eletricos',
-    beneficios: [
-      'Roubo e Furto',
-      'Colisão',
-      'Perda Total',
-      'Incêndio',
-      'Alagamento',
-      'Chuva de Granizo',
-      'Assistência 24h 1000km',
-      'Danos Terceiros R$40mil',
-      '30 dias Carro Reserva (somente em colisão)',
-      'Reboque Excedente (1x a cada 6 meses)',
-      'Cobertura APP 100%',
-    ],
-  },
-];
-
-// ============================================
-// COBERTURAS PRINCIPAIS (ícones)
+// COBERTURAS PRINCIPAIS (ícones para UI)
 // ============================================
 export const COBERTURAS_ICONES = [
   { icone: '🔒', nome: 'Roubo e Furto', descricao: 'Indenização 60 dias úteis' },
