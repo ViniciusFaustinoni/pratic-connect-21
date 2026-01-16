@@ -16,10 +16,12 @@ import {
 } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { cn } from '@/lib/utils';
 import type { PlanWithDetails } from '@/types/plans';
 
 interface PlanCardProps {
   plan: PlanWithDetails;
+  lineColor?: string;
   onEdit: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
@@ -34,6 +36,14 @@ const BADGE_COLORS: Record<string, string> = {
   orange: 'bg-orange-100 text-orange-800 border-orange-300',
 };
 
+const LINE_BORDER_COLORS: Record<string, string> = {
+  green: 'border-t-green-500',
+  orange: 'border-t-orange-500',
+  purple: 'border-t-purple-500',
+  red: 'border-t-red-500',
+  blue: 'border-t-blue-500',
+};
+
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat('pt-BR', {
     style: 'currency',
@@ -41,7 +51,7 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
-export function PlanCard({ plan, onEdit, onDuplicate, onDelete }: PlanCardProps) {
+export function PlanCard({ plan, lineColor, onEdit, onDuplicate, onDelete }: PlanCardProps) {
   const [expanded, setExpanded] = useState(false);
 
   const {
@@ -69,7 +79,11 @@ export function PlanCard({ plan, onEdit, onDuplicate, onDelete }: PlanCardProps)
     <Card
       ref={setNodeRef}
       style={style}
-      className={`${!plan.is_active ? 'opacity-60' : ''}`}
+      className={cn(
+        'border-t-4',
+        LINE_BORDER_COLORS[lineColor || 'blue'],
+        !plan.is_active && 'opacity-60'
+      )}
     >
       <Collapsible open={expanded} onOpenChange={setExpanded}>
         <CardHeader className="py-3">
@@ -114,8 +128,8 @@ export function PlanCard({ plan, onEdit, onDuplicate, onDelete }: PlanCardProps)
                   </Badge>
                 )}
                 {plan.additional_price && plan.additional_price > 0 && (
-                  <Badge className="bg-amber-100 text-amber-800 border-amber-300 text-xs">
-                    +{formatCurrency(plan.additional_price)}
+                  <Badge className="bg-green-100 text-green-800 border-green-300 text-xs">
+                    +{formatCurrency(plan.additional_price)}/mês
                   </Badge>
                 )}
               </div>
@@ -155,8 +169,8 @@ export function PlanCard({ plan, onEdit, onDuplicate, onDelete }: PlanCardProps)
               </Badge>
             )}
             {plan.additional_price && plan.additional_price > 0 && (
-              <Badge className="bg-amber-100 text-amber-800 border-amber-300 text-xs">
-                +{formatCurrency(plan.additional_price)}
+              <Badge className="bg-green-100 text-green-800 border-green-300 text-xs">
+                +{formatCurrency(plan.additional_price)}/mês
               </Badge>
             )}
           </div>
@@ -180,12 +194,12 @@ export function PlanCard({ plan, onEdit, onDuplicate, onDelete }: PlanCardProps)
                 </div>
               )}
               {plan.cota_desagio_percent && (
-                <div className="bg-muted/50 p-3 rounded-lg">
-                  <p className="text-muted-foreground text-xs">Deságio</p>
-                  <p className="font-semibold">
+                <div className="bg-cyan-500/10 border border-cyan-500/20 p-3 rounded-lg">
+                  <p className="text-cyan-400 text-xs">Deságio</p>
+                  <p className="font-semibold text-cyan-300">
                     {plan.cota_desagio_percent}%
                     {plan.cota_desagio_min && (
-                      <span className="text-xs text-muted-foreground ml-1">
+                      <span className="text-xs text-cyan-400/70 ml-1">
                         (mín {formatCurrency(plan.cota_desagio_min)})
                       </span>
                     )}
