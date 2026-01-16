@@ -34,12 +34,27 @@ import {
 } from '@dnd-kit/sortable';
 import type { PlanWithDetails } from '@/types/plans';
 
-const LINE_COLORS: Record<string, string> = {
-  green: 'border-green-500 text-green-700 hover:bg-green-50',
-  orange: 'border-orange-500 text-orange-700 hover:bg-orange-50',
-  purple: 'border-purple-500 text-purple-700 hover:bg-purple-50',
-  red: 'border-red-500 text-red-700 hover:bg-red-50',
-  blue: 'border-blue-500 text-blue-700 hover:bg-blue-50',
+const LINE_COLORS: Record<string, { active: string; inactive: string }> = {
+  green: { 
+    active: 'border-2 border-green-500 bg-green-500/20 text-green-400', 
+    inactive: 'border border-slate-600 text-slate-300 hover:border-green-500/50 hover:bg-green-500/10' 
+  },
+  orange: { 
+    active: 'border-2 border-orange-500 bg-orange-500/20 text-orange-400', 
+    inactive: 'border border-slate-600 text-slate-300 hover:border-orange-500/50 hover:bg-orange-500/10' 
+  },
+  purple: { 
+    active: 'border-2 border-purple-500 bg-purple-500/20 text-purple-400', 
+    inactive: 'border border-slate-600 text-slate-300 hover:border-purple-500/50 hover:bg-purple-500/10' 
+  },
+  red: { 
+    active: 'border-2 border-red-500 bg-red-500/20 text-red-400', 
+    inactive: 'border border-slate-600 text-slate-300 hover:border-red-500/50 hover:bg-red-500/10' 
+  },
+  blue: { 
+    active: 'border-2 border-blue-500 bg-blue-500/20 text-blue-400', 
+    inactive: 'border border-slate-600 text-slate-300 hover:border-blue-500/50 hover:bg-blue-500/10' 
+  },
 };
 
 const LINE_ICONS: Record<string, React.ReactNode> = {
@@ -130,31 +145,36 @@ export function PlanosTab() {
 
   return (
     <div className="space-y-4">
-      {/* Line Selector */}
-      <div className="flex flex-wrap gap-2">
-        {productLines?.map((line) => (
-          <Button
-            key={line.id}
-            variant={selectedLineId === line.id ? 'default' : 'outline'}
-            className={selectedLineId !== line.id ? LINE_COLORS[line.color || 'blue'] : ''}
-            onClick={() => setSelectedLineId(line.id)}
-          >
-            {LINE_ICONS[line.vehicle_type || 'car']}
-            <span className="ml-2">{line.icon}</span>
-            {line.name}
-          </Button>
-        ))}
-      </div>
-
-      {/* Action Bar */}
+      {/* Header with New Plan Button */}
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-semibold">
-          {selectedLine?.name || 'Selecione uma linha'}
+          Planos por Linha de Produto
         </h3>
         <Button onClick={handleNewPlan} disabled={!selectedLineId}>
           <Plus className="h-4 w-4 mr-2" />
           Novo Plano
         </Button>
+      </div>
+
+      {/* Line Selector */}
+      <div className="flex flex-wrap gap-2">
+        {productLines?.map((line) => {
+          const isSelected = selectedLineId === line.id;
+          const colorConfig = LINE_COLORS[line.color || 'blue'];
+          return (
+            <button
+              key={line.id}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all font-medium ${
+                isSelected ? colorConfig.active : colorConfig.inactive
+              }`}
+              onClick={() => setSelectedLineId(line.id)}
+            >
+              {LINE_ICONS[line.vehicle_type || 'car']}
+              <span>{line.icon}</span>
+              {line.name}
+            </button>
+          );
+        })}
       </div>
 
       {/* Plans List */}
@@ -181,6 +201,7 @@ export function PlanosTab() {
                   <PlanCard
                     key={plan.id}
                     plan={plan}
+                    lineColor={selectedLine?.color}
                     onEdit={() => handleEdit(plan)}
                     onDuplicate={() => handleDuplicate(plan.id)}
                     onDelete={() => setDeleteId(plan.id)}
