@@ -48,6 +48,7 @@ import AnaliseDocumento from "./pages/cadastro/AnaliseDocumento";
 import PropostasPendentes from "./pages/cadastro/PropostasPendentes";
 import PropostaAnalise from "./pages/cadastro/PropostaAnalise";
 import SinistrosList from "./pages/eventos/SinistrosList";
+import PlanosAdmin from "./pages/admin/PlanosAdmin";
 import SinistroDetalhe from "./pages/eventos/SinistroDetalhe";
 import SinistrosDashboard from "./pages/eventos/SinistrosDashboard";
 import InstalacoesList from "./pages/monitoramento/InstalacoesList";
@@ -392,6 +393,9 @@ const App = () => (
               <Route path="/marketing/distribuicao" element={<DistribuicaoConfig />} />
               <Route path="/marketing/relatorios" element={<RelatoriosMarketing />} />
               
+              {/* Admin */}
+              <Route path="/admin/planos" element={<PlanosAdmin />} />
+
               {/* Diretoria */}
               <Route path="/diretoria" element={<DiretoriaDashboard />} />
               <Route path="/diretoria/produtos" element={<ProdutosGestao />} />
