@@ -11,6 +11,7 @@ import { Autovistoria } from '@/components/associado/Autovistoria';
 import { PagamentoAdesao } from '@/components/associado/PagamentoAdesao';
 import { ConfirmacaoVistoria } from '@/components/associado/ConfirmacaoVistoria';
 import { DocumentosPendentes } from '@/components/associado/DocumentosPendentes';
+import { SyncStatusIndicator } from '@/components/associado/SyncStatusIndicator';
 
 // Mapeamento de status do associado para exibição
 const STATUS_ASSOCIADO_CONFIG: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; icon: React.ReactNode }> = {
@@ -281,6 +282,11 @@ export default function AssociadoVistoria() {
             clienteEmail={contrato.associados?.email || contrato.leads?.email || contrato.cliente_email || ''}
             onVoltar={() => setEtapa('pagamento')}
           />
+        )}
+
+        {/* Indicador de sincronização automática - só mostra se contrato não finalizado */}
+        {contrato.status !== 'assinado' && contrato.status !== 'cancelado' && contrato.status !== 'ativo' && (
+          <SyncStatusIndicator />
         )}
       </div>
     </div>

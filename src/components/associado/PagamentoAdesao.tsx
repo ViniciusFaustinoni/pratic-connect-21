@@ -40,6 +40,36 @@ export function PagamentoAdesao({
     verificarOuCriarCobranca();
   }, []);
 
+  // Polling automático de 10 segundos para verificar pagamento
+  useEffect(() => {
+    if (!cobranca || cobranca.status !== 'PENDING') return;
+    
+    const interval = setInterval(async () => {
+      try {
+        const { data, error } = await supabase
+          .from('contratos')
+          .select('adesao_paga')
+          .eq('id', contratoId)
+          .single();
+        
+        if (error) {
+          console.error('[PagamentoAdesao] Erro ao verificar pagamento:', error);
+          return;
+        }
+        
+        if (data?.adesao_paga) {
+          console.log('[PagamentoAdesao] Pagamento detectado automaticamente!');
+          toast.success('Pagamento confirmado!');
+          onPagamentoConfirmado();
+        }
+      } catch (error) {
+        console.error('[PagamentoAdesao] Erro no polling:', error);
+      }
+    }, 10000); // 10 segundos
+    
+    return () => clearInterval(interval);
+  }, [cobranca, contratoId, onPagamentoConfirmado]);
+
   const verificarOuCriarCobranca = async () => {
     try {
       setLoading(true);
@@ -252,7 +282,7 @@ export function PagamentoAdesao({
             )}
           </div>
           <p className="text-xs text-muted-foreground mt-2">
-            O status será atualizado automaticamente após o pagamento
+            Verificando pagamento a cada 10 segundos...
           </p>
         </div>
 
