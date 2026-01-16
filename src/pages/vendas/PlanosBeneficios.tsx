@@ -7,9 +7,10 @@ import { Button } from '@/components/ui/button';
 import { 
   Shield, Car, Zap, Bike, Star, Check, AlertTriangle, 
   Umbrella, Flame, CloudRain, Users, Wrench, Phone, MapPin, Fuel,
-  ChevronDown, ChevronUp
+  ChevronDown, ChevronUp, Settings
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { usePermissions } from '@/hooks/usePermissions';
 
 // Componentes
 import { TabelaPrecosCarros, TabelaPrecosMotos, TabelaPrecosEletricos } from '@/components/planos/TabelaPrecos';
@@ -20,6 +21,7 @@ import { ContatosInline } from '@/components/planos/ContatosRapidos';
 import { BuscaPlanos } from '@/components/planos/BuscaPlanos';
 import { ComparadorNiveisSelect, ComparadorNiveisMotos } from '@/components/planos/ComparadorNiveis';
 import { RankingPlanos } from '@/components/planos/RankingPlanos';
+import { RegioesConfig } from '@/components/planos/RegioesConfig';
 
 // Dados
 import { 
@@ -171,6 +173,8 @@ const BENEFICIOS_ELETRICOS = [
 export default function PlanosBeneficios() {
   const [activeTab, setActiveTab] = useState('visao-geral');
   const [searchTerm, setSearchTerm] = useState('');
+  const { isDiretor, isDesenvolvedor } = usePermissions();
+  const podeEditar = isDiretor || isDesenvolvedor;
 
   const handleSearch = (term: string) => {
     setSearchTerm(term.toLowerCase());
@@ -189,6 +193,12 @@ export default function PlanosBeneficios() {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Planos e Benefícios</h1>
+          {podeEditar && (
+            <p className="text-sm text-muted-foreground mt-1">
+              <Settings className="h-3.5 w-3.5 inline mr-1" />
+              Modo Diretor: Você pode editar configurações
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <BuscaPlanos onSearch={handleSearch} />
@@ -198,12 +208,16 @@ export default function PlanosBeneficios() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3 lg:grid-cols-6 lg:w-auto">
+        <TabsList className="grid w-full grid-cols-4 lg:grid-cols-7 lg:w-auto">
           <TabsTrigger value="visao-geral">Visão Geral</TabsTrigger>
           <TabsTrigger value="carros">Carros</TabsTrigger>
           <TabsTrigger value="motos">Motos</TabsTrigger>
           <TabsTrigger value="adicionais">Adicionais</TabsTrigger>
           <TabsTrigger value="ranking">Ranking</TabsTrigger>
+          <TabsTrigger value="regioes" className="flex items-center gap-1">
+            <MapPin className="h-3.5 w-3.5" />
+            Regiões
+          </TabsTrigger>
           <TabsTrigger value="glossario">Glossário</TabsTrigger>
         </TabsList>
 
@@ -355,6 +369,11 @@ export default function PlanosBeneficios() {
         {/* Tab Ranking */}
         <TabsContent value="ranking" className="space-y-8">
           <RankingPlanos />
+        </TabsContent>
+
+        {/* Tab Regiões */}
+        <TabsContent value="regioes" className="space-y-8">
+          <RegioesConfig />
         </TabsContent>
 
         {/* Tab Glossário */}

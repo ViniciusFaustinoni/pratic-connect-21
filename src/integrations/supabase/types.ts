@@ -1777,6 +1777,87 @@ export type Database = {
         }
         Relationships: []
       }
+      beneficios_adicionais: {
+        Row: {
+          ativo: boolean | null
+          categoria: string
+          codigo: string
+          created_at: string | null
+          descricao: string | null
+          id: string
+          nome: string
+          ordem: number | null
+          preco: number
+          updated_at: string | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          categoria: string
+          codigo: string
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          nome: string
+          ordem?: number | null
+          preco?: number
+          updated_at?: string | null
+        }
+        Update: {
+          ativo?: boolean | null
+          categoria?: string
+          codigo?: string
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          nome?: string
+          ordem?: number | null
+          preco?: number
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      beneficios_regioes: {
+        Row: {
+          ativo: boolean | null
+          beneficio_id: string
+          created_at: string | null
+          id: string
+          preco_regional: number | null
+          regiao_id: string
+        }
+        Insert: {
+          ativo?: boolean | null
+          beneficio_id: string
+          created_at?: string | null
+          id?: string
+          preco_regional?: number | null
+          regiao_id: string
+        }
+        Update: {
+          ativo?: boolean | null
+          beneficio_id?: string
+          created_at?: string | null
+          id?: string
+          preco_regional?: number | null
+          regiao_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "beneficios_regioes_beneficio_id_fkey"
+            columns: ["beneficio_id"]
+            isOneToOne: false
+            referencedRelation: "beneficios_adicionais"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "beneficios_regioes_regiao_id_fkey"
+            columns: ["regiao_id"]
+            isOneToOne: false
+            referencedRelation: "regioes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       campanhas: {
         Row: {
           canal_id: string | null
@@ -8295,6 +8376,45 @@ export type Database = {
           },
         ]
       }
+      planos_regioes: {
+        Row: {
+          ativo: boolean | null
+          created_at: string | null
+          id: string
+          plano_id: string
+          regiao_id: string
+        }
+        Insert: {
+          ativo?: boolean | null
+          created_at?: string | null
+          id?: string
+          plano_id: string
+          regiao_id: string
+        }
+        Update: {
+          ativo?: boolean | null
+          created_at?: string | null
+          id?: string
+          plano_id?: string
+          regiao_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planos_regioes_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "planos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "planos_regioes_regiao_id_fkey"
+            columns: ["regiao_id"]
+            isOneToOne: false
+            referencedRelation: "regioes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       planos_restricoes: {
         Row: {
           categoria_veiculo: string
@@ -9725,6 +9845,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      regioes: {
+        Row: {
+          ativa: boolean | null
+          cidades: string[] | null
+          codigo: string
+          created_at: string | null
+          descricao: string | null
+          id: string
+          multiplicador_preco: number | null
+          nome: string
+          ordem: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          ativa?: boolean | null
+          cidades?: string[] | null
+          codigo: string
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          multiplicador_preco?: number | null
+          nome: string
+          ordem?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          ativa?: boolean | null
+          cidades?: string[] | null
+          codigo?: string
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          multiplicador_preco?: number | null
+          nome?: string
+          ordem?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
       }
       regras_categorizacao: {
         Row: {
@@ -11802,6 +11961,7 @@ export type Database = {
       is_associado: { Args: { _user_id: string }; Returns: boolean }
       is_desenvolvedor: { Args: { _user_id: string }; Returns: boolean }
       is_diretor: { Args: { _user_id: string }; Returns: boolean }
+      is_diretor_for_crud: { Args: { _user_id: string }; Returns: boolean }
       is_diretor_or_admin: { Args: { _user_id: string }; Returns: boolean }
       is_funcionario: { Args: { _user_id: string }; Returns: boolean }
       is_gerencia: { Args: { _user_id: string }; Returns: boolean }
