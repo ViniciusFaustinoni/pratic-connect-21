@@ -2,12 +2,15 @@ import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Check, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, AlertTriangle, Pencil, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { PlanWithDetails } from '@/types/plans';
 
 interface PlanoCardDynamicProps {
   plan: PlanWithDetails;
+  canEdit?: boolean;
+  onEdit?: (plan: PlanWithDetails) => void;
+  onDelete?: (plan: PlanWithDetails) => void;
 }
 
 // Mapeamento de cores da linha para classes Tailwind
@@ -35,7 +38,7 @@ const formatCurrency = (value: number) => {
   }).format(value);
 };
 
-export function PlanoCardDynamic({ plan }: PlanoCardDynamicProps) {
+export function PlanoCardDynamic({ plan, canEdit, onEdit, onDelete }: PlanoCardDynamicProps) {
   const [expanded, setExpanded] = useState(false);
   const BENEFICIOS_VISIVEIS = 4;
 
@@ -85,15 +88,43 @@ export function PlanoCardDynamic({ plan }: PlanoCardDynamicProps) {
 
   return (
     <Card className={cn(
-      'relative overflow-hidden transition-all hover:shadow-lg h-full flex flex-col',
+      'group relative overflow-hidden transition-all hover:shadow-lg h-full flex flex-col',
       plan.badge_text && 'ring-2 ring-primary'
     )}>
       {/* Borda colorida superior */}
       <div className={cn('h-2 bg-gradient-to-r', gradientClass)} />
       
+      {/* Botões de Edição */}
+      {canEdit && (
+        <div className="absolute top-4 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 bg-background/80 hover:bg-background"
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit?.(plan);
+            }}
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 bg-background/80 hover:bg-destructive hover:text-destructive-foreground"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete?.(plan);
+            }}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      )}
+      
       {/* Badge do plano */}
       {plan.badge_text && (
-        <Badge className={cn('absolute top-4 right-4 text-xs', badgeColorClass)}>
+        <Badge className={cn('absolute top-4 text-xs', badgeColorClass, canEdit ? 'right-20' : 'right-4')}>
           ⭐ {plan.badge_text}
         </Badge>
       )}

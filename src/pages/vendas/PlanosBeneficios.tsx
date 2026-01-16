@@ -4,13 +4,26 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { 
-  AlertTriangle, MapPin, Settings
+  AlertTriangle, MapPin, Settings, Plus, Loader2
 } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
+import { toast } from 'sonner';
 
 // Hooks para dados do Supabase
 import { useProductLines, usePlans, useMainCoverages } from '@/hooks/usePlans';
+import { useDeletePlan } from '@/hooks/usePlansAdmin';
 
 // Componentes
 import { TabelaPrecosCarros, TabelaPrecosMotos, TabelaPrecosEletricos } from '@/components/planos/TabelaPrecos';
@@ -25,9 +38,13 @@ import { RegioesConfig } from '@/components/planos/RegioesConfig';
 import { PlanosConfig } from '@/components/planos/PlanosConfig';
 import { BeneficiosAdicionaisConfig } from '@/components/planos/BeneficiosAdicionaisConfig';
 import { PlanoLineSection } from '@/components/planos/PlanoLineSection';
+import { PlanFormModal } from '@/components/admin/planos/PlanFormModal';
 
 // Dados hardcoded que continuam
 import { BENEFICIOS_ADICIONAIS_COMPLETO } from '@/data/planosPrecos';
+
+// Types
+import type { PlanWithDetails } from '@/types/plans';
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('pt-BR', {
@@ -60,13 +77,57 @@ export default function PlanosBeneficios() {
   const { isDiretor, isDesenvolvedor } = usePermissions();
   const podeEditar = isDiretor || isDesenvolvedor;
 
+  // Estados para edição de planos
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [planToEdit, setPlanToEdit] = useState<PlanWithDetails | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [planToDelete, setPlanToDelete] = useState<PlanWithDetails | null>(null);
+
   // Hooks para dados do Supabase
-  const { data: productLines, isLoading: loadingLines, error: errorLines } = useProductLines();
-  const { data: plans, isLoading: loadingPlans, error: errorPlans } = usePlans();
+  const { data: productLines, isLoading: loadingLines, error: errorLines, refetch: refetchLines } = useProductLines();
+  const { data: plans, isLoading: loadingPlans, error: errorPlans, refetch: refetchPlans } = usePlans();
   const { data: mainCoverages, isLoading: loadingCoverages } = useMainCoverages();
+  const deletePlan = useDeletePlan();
 
   const isLoading = loadingLines || loadingPlans;
   const hasError = errorLines || errorPlans;
+
+  // Handlers para edição/exclusão de planos
+  const handleEditPlan = (plan: PlanWithDetails) => {
+    setPlanToEdit(plan);
+    setEditModalOpen(true);
+  };
+
+  const handleCreatePlan = () => {
+    setPlanToEdit(null);
+    setEditModalOpen(true);
+  };
+
+  const handleDeletePlan = (plan: PlanWithDetails) => {
+    setPlanToDelete(plan);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!planToDelete) return;
+    
+    try {
+      await deletePlan.mutateAsync(planToDelete.id);
+      toast.success('Plano excluído com sucesso!');
+      setDeleteDialogOpen(false);
+      setPlanToDelete(null);
+      refetchPlans();
+    } catch (error) {
+      toast.error('Erro ao excluir plano');
+    }
+  };
+
+  const handleModalClose = (open: boolean) => {
+    setEditModalOpen(open);
+    if (!open) {
+      refetchPlans();
+    }
+  };
 
   const handleSearch = (term: string) => {
     setSearchTerm(term.toLowerCase());
@@ -102,6 +163,12 @@ export default function PlanosBeneficios() {
           )}
         </div>
         <div className="flex items-center gap-2">
+          {podeEditar && (
+            <Button onClick={handleCreatePlan}>
+              <Plus className="h-4 w-4 mr-2" />
+              Novo Plano
+            </Button>
+          )}
           <BuscaPlanos onSearch={handleSearch} />
           <CalculadoraPreco />
         </div>
@@ -150,6 +217,9 @@ export default function PlanosBeneficios() {
               key={line.id}
               productLine={line}
               plans={getPlansByLineId(line.id)}
+              canEdit={podeEditar}
+              onEditPlan={handleEditPlan}
+              onDeletePlan={handleDeletePlan}
             />
           ))}
 
@@ -192,6 +262,9 @@ export default function PlanosBeneficios() {
               key={line.id}
               productLine={line}
               plans={getPlansByLineId(line.id)}
+              canEdit={podeEditar}
+              onEditPlan={handleEditPlan}
+              onDeletePlan={handleDeletePlan}
             />
           ))}
 
@@ -210,6 +283,9 @@ export default function PlanosBeneficios() {
               key={line.id}
               productLine={line}
               plans={getPlansByLineId(line.id)}
+              canEdit={podeEditar}
+              onEditPlan={handleEditPlan}
+              onDeletePlan={handleDeletePlan}
             />
           ))}
 
@@ -276,6 +352,43 @@ export default function PlanosBeneficios() {
           <ContatosInline />
         </TabsContent>
       </Tabs>
+
+      {/* Modal de Edição de Plano */}
+      <PlanFormModal
+        open={editModalOpen}
+        onOpenChange={handleModalClose}
+        plan={planToEdit}
+      />
+
+      {/* Dialog de Confirmação de Exclusão */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir Plano</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir o plano "{planToDelete?.name}"?
+              Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={confirmDelete} 
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deletePlan.isPending}
+            >
+              {deletePlan.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Excluindo...
+                </>
+              ) : (
+                'Excluir'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
