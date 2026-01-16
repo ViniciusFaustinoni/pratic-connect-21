@@ -15,7 +15,7 @@ function formatCurrency(value: number) {
 
 export function CalculadoraPreco() {
   const [valorFipe, setValorFipe] = useState<string>('');
-  const [resultado, setResultado] = useState<{ taxa: number; faixa: string } | null>(null);
+  const [resultado, setResultado] = useState<{ taxa: number; faixa: string; estimado?: boolean } | null>(null);
   const { data: tabelas } = useTabelasPreco();
 
   const calcular = () => {
@@ -31,9 +31,14 @@ export function CalculadoraPreco() {
     );
 
     if (faixa) {
+      const taxaComercial = Number(faixa.taxa_comercial);
+      // Fallback: se taxa_comercial for 0, estimar 2.5% do FIPE ao ano / 12 meses
+      const taxaEstimada = taxaComercial > 0 ? taxaComercial : Math.round(valor * 0.025 / 12);
+      
       setResultado({
-        taxa: Number(faixa.taxa_comercial) || 0,
+        taxa: taxaEstimada,
         faixa: `${formatCurrency(Number(faixa.fipe_de))} - ${formatCurrency(Number(faixa.fipe_ate))}`,
+        estimado: taxaComercial === 0,
       });
     } else {
       setResultado(null);
@@ -83,6 +88,11 @@ export function CalculadoraPreco() {
               <p className="text-lg font-semibold">
                 Mensalidade estimada: {formatCurrency(resultado.taxa)}
               </p>
+              {resultado.estimado && (
+                <p className="text-xs text-muted-foreground">
+                  * Valor estimado. Entre em contato para valores precisos.
+                </p>
+              )}
             </div>
           )}
           {valorFipe && !resultado && (
