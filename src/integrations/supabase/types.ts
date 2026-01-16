@@ -4254,6 +4254,65 @@ export type Database = {
         }
         Relationships: []
       }
+      documento_assinaturas: {
+        Row: {
+          assinado_em: string | null
+          autentique_documento_id: string | null
+          autentique_url: string | null
+          autentique_url_download: string | null
+          created_at: string | null
+          documento_gerado_id: string
+          enviado_em: string | null
+          expira_em: string | null
+          id: string
+          signatarios: Json | null
+          status: string | null
+          tentativas: number | null
+          ultimo_erro: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          assinado_em?: string | null
+          autentique_documento_id?: string | null
+          autentique_url?: string | null
+          autentique_url_download?: string | null
+          created_at?: string | null
+          documento_gerado_id: string
+          enviado_em?: string | null
+          expira_em?: string | null
+          id?: string
+          signatarios?: Json | null
+          status?: string | null
+          tentativas?: number | null
+          ultimo_erro?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          assinado_em?: string | null
+          autentique_documento_id?: string | null
+          autentique_url?: string | null
+          autentique_url_download?: string | null
+          created_at?: string | null
+          documento_gerado_id?: string
+          enviado_em?: string | null
+          expira_em?: string | null
+          id?: string
+          signatarios?: Json | null
+          status?: string | null
+          tentativas?: number | null
+          ultimo_erro?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documento_assinaturas_documento_gerado_id_fkey"
+            columns: ["documento_gerado_id"]
+            isOneToOne: false
+            referencedRelation: "documento_gerados"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       documento_categorias: {
         Row: {
           ativo: boolean | null
@@ -4296,6 +4355,7 @@ export type Database = {
           arquivo_url: string | null
           assinado: boolean | null
           assinado_em: string | null
+          assinatura_id: string | null
           assinatura_ip: string | null
           associado_id: string | null
           autentique_id: string | null
@@ -4311,6 +4371,7 @@ export type Database = {
           arquivo_url?: string | null
           assinado?: boolean | null
           assinado_em?: string | null
+          assinatura_id?: string | null
           assinatura_ip?: string | null
           associado_id?: string | null
           autentique_id?: string | null
@@ -4326,6 +4387,7 @@ export type Database = {
           arquivo_url?: string | null
           assinado?: boolean | null
           assinado_em?: string | null
+          assinatura_id?: string | null
           assinatura_ip?: string | null
           associado_id?: string | null
           autentique_id?: string | null
@@ -4337,6 +4399,13 @@ export type Database = {
           template_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "documento_gerados_assinatura_id_fkey"
+            columns: ["assinatura_id"]
+            isOneToOne: false
+            referencedRelation: "documento_assinaturas"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "documento_gerados_associado_id_fkey"
             columns: ["associado_id"]
