@@ -41,6 +41,7 @@ interface CalcularPlanosParams {
   categoria?: string;
   anoVeiculo?: number;
   tipoVeiculo?: 'carro' | 'moto';
+  usoApp?: boolean; // Se true, mostra apenas planos de aplicativo. Se false, exclui planos de aplicativo.
 }
 
 // ============================================
@@ -144,6 +145,26 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     for (const plano of planosBanco) {
       const linha = plano.linha?.toLowerCase() || null;
       const codigo = plano.codigo?.toLowerCase() || '';
+      const tipoUsoPlano = plano.tipo_uso?.toLowerCase() || '';
+      const categoriaPlano = plano.categoria?.toLowerCase() || '';
+
+      // ================================================
+      // FILTRO POR USO DO VEÍCULO (APLICATIVO vs PASSEIO)
+      // ================================================
+      const isPlanoAplicativo = tipoUsoPlano === 'aplicativo' || categoriaPlano === 'aplicativo';
+      
+      if (params.usoApp === true) {
+        // Uso = Aplicativo: mostrar APENAS planos de aplicativo
+        if (!isPlanoAplicativo) {
+          continue;
+        }
+      } else if (params.usoApp === false) {
+        // Uso = Passeio: EXCLUIR planos de aplicativo
+        if (isPlanoAplicativo) {
+          continue;
+        }
+      }
+      // Se usoApp for undefined, não aplica filtro (mostra todos)
 
       // Filtrar motos - só podem usar planos ADVANCED
       if (tipoVeiculo === 'moto' && linha !== 'advanced') {

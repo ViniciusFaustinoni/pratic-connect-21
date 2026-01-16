@@ -46,7 +46,8 @@ import { toast } from 'sonner';
 import { useFipe } from '@/hooks/useFipe';
 import { cn } from '@/lib/utils';
 import { useAllLeads, useUpdateLead } from '@/hooks/useLeads';
-import { usePlanosCotacao, useCriarCotacao } from '@/hooks/useCotacao';
+import { useCriarCotacao } from '@/hooks/useCotacao';
+import { usePlanosCotacao } from '@/hooks/usePlanosCotacao';
 import { VehicleCategorySelect, CATEGORIAS_VEICULO } from '@/components/cotador/VehicleCategorySelect';
 import { supabase } from '@/integrations/supabase/client';
 import type { Tables } from '@/integrations/supabase/types';
@@ -340,7 +341,18 @@ export default function CotadorPage() {
 
   // Hooks Supabase
   const { data: leadsData, isLoading: loadingLeads } = useAllLeads();
-  const { data: planosDB, isLoading: loadingPlanos } = usePlanosCotacao();
+  
+  // Hook de planos com filtro por uso (aplicativo vs passeio)
+  const parametrosPlanos = useMemo(() => ({
+    valorFipe: valorFipe || 0,
+    regiao: 'rj',
+    anoVeiculo: parseInt(ano) || undefined,
+    tipoVeiculo: 'carro' as const,
+    usoApp: usoApp, // Filtra planos por uso
+    categoria: categoriaVeiculo || undefined,
+  }), [valorFipe, ano, usoApp, categoriaVeiculo]);
+  
+  const { planos: planosDB, isLoading: loadingPlanos } = usePlanosCotacao(parametrosPlanos);
   const criarCotacao = useCriarCotacao();
   const atualizarLead = useUpdateLead();
 
@@ -378,12 +390,12 @@ export default function CotadorPage() {
     return ANOS;
   }, [anoCustom]);
 
-  // Planos calculados - busca diretamente do banco
+  // Planos calculados - agora vem já filtrado do hook
   const planos = useMemo(() => {
     if (!valorFipe || !planosDB || planosDB.length === 0) {
       return [];
     }
-    return mapearPlanosParaExibicao(planosDB, valorFipe, usoApp);
+    return mapearPlanosParaExibicao(planosDB as any[], valorFipe, usoApp);
   }, [valorFipe, usoApp, planosDB]);
 
   // Plano atual selecionado nas tabs
