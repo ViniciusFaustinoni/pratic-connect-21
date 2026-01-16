@@ -50,6 +50,8 @@ import { usePlanosCotacao, useCriarCotacao } from '@/hooks/useCotacao';
 import { VehicleCategorySelect, CATEGORIAS_VEICULO } from '@/components/cotador/VehicleCategorySelect';
 import { supabase } from '@/integrations/supabase/client';
 import type { Tables } from '@/integrations/supabase/types';
+import { BotaoGerarProposta } from '@/components/vendas/BotaoGerarProposta';
+import { DadosProposta } from '@/types/proposta';
 
 // ============================================
 // INTERFACES
@@ -388,6 +390,43 @@ export default function CotadorPage() {
   const planoAtual = useMemo(() => {
     return planos.find(p => p.id === planoSelecionadoTab || p.codigo?.toLowerCase() === planoSelecionadoTab) || planos[1] || planos[0] || null;
   }, [planos, planoSelecionadoTab]);
+
+  // Dados para geração de proposta PDF
+  const dadosProposta: DadosProposta | null = useMemo(() => {
+    if (!cotacaoCalculada || !planoFinalSelecionado || !valorFipe) return null;
+    
+    return {
+      cliente: {
+        nome: leadSelecionado?.nome || nomeAssociado || 'Cliente',
+        cpf: leadSelecionado?.cpf || '000.000.000-00',
+        telefone: leadSelecionado?.telefone || '(00) 00000-0000',
+        email: leadSelecionado?.email || '',
+        cidade: '',
+        estado: '',
+      },
+      veiculo: {
+        marca: marca,
+        modelo: modelo,
+        ano: parseInt(ano) || new Date().getFullYear(),
+        placa: veiculoEncontrado?.placa || placaBusca || 'AAA-0000',
+        cor: cor || undefined,
+        valorFipe: valorFipe,
+      },
+      plano: {
+        nome: planoFinalSelecionado.nome,
+        coberturas: planoFinalSelecionado.coberturas,
+        valorAdesao: planoFinalSelecionado.valorAdesao,
+        valorMensal: planoFinalSelecionado.valorMensal,
+        valorExtra: valorExtra > 0 ? valorExtra : undefined,
+      },
+      cotacao: {
+        numero: cotacaoSalva?.numero || `COT-${Date.now()}`,
+        dataValidade: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        vendedor: 'Vendedor',
+        observacoes: undefined,
+      },
+    };
+  }, [cotacaoCalculada, planoFinalSelecionado, valorFipe, leadSelecionado, nomeAssociado, marca, modelo, ano, veiculoEncontrado, placaBusca, cor, valorExtra, cotacaoSalva]);
 
   // Verificar se pode calcular
   const podeCalcular = (modo === 'busca_placa' 
@@ -1517,6 +1556,13 @@ _Cotação válida por 7 dias_
                   <FileText className="h-4 w-4 mr-2" />
                   Gerar Contrato
                 </Button>
+              )}
+              {dadosProposta && (
+                <BotaoGerarProposta 
+                  dados={dadosProposta}
+                  disabled={!planoFinalSelecionado}
+                  variant="outline"
+                />
               )}
               <Button
                 onClick={handleEnviarEmail}
