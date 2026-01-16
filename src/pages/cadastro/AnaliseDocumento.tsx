@@ -8,6 +8,8 @@ import {
 } from '@/hooks/useDocumentos';
 import { DocumentoReprovacaoDialog } from '@/components/cadastro/DocumentoReprovacaoDialog';
 import { ImageViewer } from '@/components/cadastro/ImageViewer';
+import { DocumentosAnexadosPanel } from '@/components/cadastro/DocumentosAnexadosPanel';
+import { VisualizadorDocumentoModal } from '@/components/cadastro/VisualizadorDocumentoModal';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -33,6 +35,7 @@ import {
   STATUS_DOCUMENTO_LABELS,
   STATUS_DOCUMENTO_COLORS,
 } from '@/types/cadastro';
+import type { DocumentoAnexadoCompleto } from '@/types/documentos';
 
 // ============================================
 // UTILITÁRIOS
@@ -83,8 +86,12 @@ export default function AnaliseDocumentoPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  // Estado do modal
+  // Estado do modal de reprovação
   const [reprovacaoOpen, setReprovacaoOpen] = useState(false);
+  
+  // Estado para visualizador de documento anexado
+  const [documentoSelecionado, setDocumentoSelecionado] = useState<DocumentoAnexadoCompleto | null>(null);
+  const [visualizadorAberto, setVisualizadorAberto] = useState(false);
 
   // Buscar documento
   const { data: documento, isLoading, error } = useDocumento(id);
@@ -125,6 +132,42 @@ export default function AnaliseDocumentoPage() {
       navigate('/cadastro/fila-documentos');
     }
   };
+
+  // Handler para abrir visualizador de documento anexado
+  const handleViewDocumento = (documento: DocumentoAnexadoCompleto) => {
+    setDocumentoSelecionado(documento);
+    setVisualizadorAberto(true);
+  };
+
+  // Handler para fechar visualizador
+  const handleCloseVisualizador = () => {
+    setVisualizadorAberto(false);
+    setDocumentoSelecionado(null);
+  };
+
+  // Mock de documentos anexados (será substituído por query real)
+  const mockDocumentosAnexados: DocumentoAnexadoCompleto[] = [
+    { 
+      id: 'contract-1', 
+      tipo: 'contrato_assinado',
+      nome_arquivo: 'proposta_filiacao_CTR-2026-001.pdf',
+      arquivo_url: '/placeholder.svg',
+      status: 'aprovado',
+      created_at: '2026-01-10T14:30:00',
+      assinado_em: '2026-01-10T15:45:00',
+      assinado_por: documento?.associado?.nome || 'Associado',
+      autentique_id: 'doc_abc123xyz',
+      validado_autentique: true,
+    },
+    ...(historicoDocumentos || []).map(doc => ({
+      id: doc.id,
+      tipo: doc.tipo as DocumentoAnexadoCompleto['tipo'],
+      nome_arquivo: doc.nome_arquivo,
+      arquivo_url: doc.arquivo_url,
+      status: doc.status,
+      created_at: doc.created_at,
+    })),
+  ];
 
   // ============================================
   // LOADING STATE
@@ -395,6 +438,12 @@ export default function AnaliseDocumentoPage() {
         </Card>
       )}
 
+      {/* DOCUMENTAÇÕES ANEXADAS */}
+      <DocumentosAnexadosPanel 
+        documentos={mockDocumentosAnexados}
+        onViewDocumento={handleViewDocumento}
+      />
+
       {/* HISTÓRICO DO ASSOCIADO */}
       {outrosDocumentos.length > 0 && (
         <Card>
@@ -435,6 +484,13 @@ export default function AnaliseDocumentoPage() {
         onClose={() => setReprovacaoOpen(false)}
         onConfirm={handleReprovar}
         isLoading={isReprovando}
+      />
+
+      {/* MODAL VISUALIZADOR DE DOCUMENTO ANEXADO */}
+      <VisualizadorDocumentoModal 
+        documento={documentoSelecionado}
+        open={visualizadorAberto}
+        onClose={handleCloseVisualizador}
       />
     </div>
   );
