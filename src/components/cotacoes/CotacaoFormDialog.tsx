@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Loader2, Car, Search, CheckCircle2, Shield, Check, AlertCircle, Copy, MessageCircle, Zap, User, Link, UserCheck, Phone, Mail, AlertTriangle, Info, MapPin } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { LeadCombobox } from '@/components/leads/LeadCombobox';
 import type { Lead } from '@/types/vendas';
@@ -108,6 +109,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
   const { data: lead } = useLead(leadId);
   const { getMarcas, getModelos, getAnos, getPreco, getByPlaca, buscarPorNome, loading: fipeLoading } = useFipe();
   const { data: vendedores = [], isLoading: vendedoresLoading } = useVendedores();
+  const { user, isVendedor } = useAuth();
+  const usuarioEhVendedor = isVendedor();
   
   // Estados para dados do associado
   const [nomeAssociado, setNomeAssociado] = useState('');
@@ -662,8 +665,8 @@ Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
         veiculo_ano: anoNumericoLocal,
         veiculo_placa: placa || veiculoEncontrado?.extractedPlate || null,
         codigo_fipe: veiculoEncontrado?.fipeData?.codigo || null,
-        // Consultor responsável
-        vendedor_id: pendingFormData.vendedor_id || null,
+        // Consultor responsável - se vendedor, usa próprio ID
+        vendedor_id: usuarioEhVendedor ? user?.id : (pendingFormData.vendedor_id || null),
         // Dados do solicitante (para exibição no card quando não há lead)
         nome_solicitante: nomeAssociado.trim() || null,
         telefone1_solicitante: telefoneAssociado.replace(/\D/g, '') || null,
@@ -969,46 +972,48 @@ Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
               </div>
             )}
 
-            {/* BLOCO 0.6: CONSULTOR RESPONSÁVEL */}
-            <div className="space-y-3">
-              <h3 className="text-sm font-semibold flex items-center gap-2">
-                <UserCheck className="h-4 w-4 text-primary" />
-                Consultor Responsável
-              </h3>
-              
-              <FormField
-                control={form.control}
-                name="vendedor_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <Select 
-                      onValueChange={(value) => field.onChange(value === '_none' ? null : value)} 
-                      value={field.value || '_none'}
-                      disabled={vendedoresLoading}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          {vendedoresLoading ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <SelectValue placeholder="Selecione um consultor" />
-                          )}
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="_none">Não atribuído</SelectItem>
-                        {vendedores.map((v) => (
-                          <SelectItem key={v.id} value={v.user_id}>
-                            {v.nome}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+            {/* BLOCO 0.6: CONSULTOR RESPONSÁVEL - Apenas para não-vendedores */}
+            {!usuarioEhVendedor && (
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold flex items-center gap-2">
+                  <UserCheck className="h-4 w-4 text-primary" />
+                  Consultor Responsável
+                </h3>
+                
+                <FormField
+                  control={form.control}
+                  name="vendedor_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <Select 
+                        onValueChange={(value) => field.onChange(value === '_none' ? null : value)} 
+                        value={field.value || '_none'}
+                        disabled={vendedoresLoading}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            {vendedoresLoading ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <SelectValue placeholder="Selecione um consultor" />
+                            )}
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="_none">Não atribuído</SelectItem>
+                          {vendedores.map((v) => (
+                            <SelectItem key={v.id} value={v.user_id}>
+                              {v.nome}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            )}
 
             <Separator />
 
