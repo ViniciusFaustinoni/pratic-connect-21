@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { 
   Shield, Car, Zap, Bike, Star, Check, AlertTriangle, 
   Umbrella, Flame, CloudRain, Users, Wrench, Phone, MapPin, Fuel,
-  ChevronDown, ChevronUp, Settings
+  ChevronDown, ChevronUp, Settings, FileText, Gift
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -22,6 +22,8 @@ import { BuscaPlanos } from '@/components/planos/BuscaPlanos';
 import { ComparadorNiveisSelect, ComparadorNiveisMotos } from '@/components/planos/ComparadorNiveis';
 import { RankingPlanos } from '@/components/planos/RankingPlanos';
 import { RegioesConfig } from '@/components/planos/RegioesConfig';
+import { PlanosConfig } from '@/components/planos/PlanosConfig';
+import { BeneficiosAdicionaisConfig } from '@/components/planos/BeneficiosAdicionaisConfig';
 
 // Dados
 import { 
