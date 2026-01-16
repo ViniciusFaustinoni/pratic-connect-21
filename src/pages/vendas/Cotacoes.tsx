@@ -37,12 +37,13 @@ import type { StatusCotacao } from '@/types/database';
 import { useCotacoes, useUpdateCotacao, useDuplicarCotacao, useExcluirCotacao, type CotacaoWithRelations } from '@/hooks/useCotacoes';
 import { useGerarContrato } from '@/hooks/useContratos';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePermissions } from '@/hooks/usePermissions';
 import { CotacaoFormDialog } from '@/components/cotacoes/CotacaoFormDialog';
 import { ContratoWizard } from '@/components/contratos/ContratoWizard';
 import { EnviarEmailModal } from '@/components/cotacoes/EnviarEmailModal';
 import { VincularLeadModal } from '@/components/cotacoes/VincularLeadModal';
 import { gerarPdfCotacao } from '@/lib/gerarPdfCotacao';
-import { CotacaoCard } from '@/components/cotacoes/CotacaoCard';
+import { CotacaoCard, type CotacaoCardPermissions } from '@/components/cotacoes/CotacaoCard';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
@@ -117,12 +118,20 @@ export default function Cotacoes() {
   const [cotacaoParaExcluir, setCotacaoParaExcluir] = useState<string | null>(null);
   const [mesFilter, setMesFilter] = useState<string>('all');
 
-  const { data: cotacoes, isLoading } = useCotacoes();
+  // Permissões
+  const permissions = usePermissions();
+  const { profile, user } = useAuth();
+  
+  // Buscar cotações com filtro baseado em permissão
+  const { data: cotacoes, isLoading } = useCotacoes({
+    vendedorId: permissions.userId,
+    viewScope: permissions.cotacao.viewScope,
+  });
+  
   const updateCotacao = useUpdateCotacao();
   const gerarContrato = useGerarContrato();
   const duplicarCotacao = useDuplicarCotacao();
   const excluirCotacao = useExcluirCotacao();
-  const { profile } = useAuth();
   const queryClient = useQueryClient();
 
   // Detectar parâmetro ?lead=xxx para abrir modal com dados do lead
@@ -374,13 +383,17 @@ export default function Cotacoes() {
         <div>
           <h1 className="text-2xl font-bold">Cotação</h1>
           <p className="text-muted-foreground">
-            Gerencie cotações em andamento e acompanhe propostas
+            {permissions.cotacao.viewScope === 'all' 
+              ? 'Gerencie todas as cotações e acompanhe propostas'
+              : 'Gerencie suas cotações e acompanhe propostas'}
           </p>
         </div>
-        <Button className="gap-2" onClick={() => setShowCotacaoForm(true)}>
-          <Plus className="h-4 w-4" />
-          Nova Cotação
-        </Button>
+        {permissions.cotacao.canCreate && (
+          <Button className="gap-2" onClick={() => setShowCotacaoForm(true)}>
+            <Plus className="h-4 w-4" />
+            Nova Cotação
+          </Button>
+        )}
       </div>
 
       {/* Stats Cards - Mais chamativo */}
@@ -512,32 +525,45 @@ export default function Cotacoes() {
               </CardContent>
             </Card>
           ) : (
-            emAndamento.map((cotacao) => (
-              <CotacaoCard 
-                key={cotacao.id}
-                cotacao={cotacao}
-                tipo="andamento"
-                navigate={navigate}
-                formatRelativeTime={formatRelativeTime}
-                formatPhone={formatPhone}
-                formatCurrency={formatCurrency}
-                onVincular={(c) => {
-                  setCotacaoParaVincular(c);
-                  setShowVincularModal(true);
-                }}
-                onWhatsApp={enviarWhatsApp}
-                onEmail={handleOpenEmailModal}
-                onAceitar={(id) => {
-                  updateCotacao.mutate({ id, status: 'aceita' });
-                }}
-                onPdf={handleBaixarPdf}
-                onDuplicar={handleDuplicar}
-                onExcluir={handleExcluir}
-                onCopiarWhatsApp={copiarParaWhatsApp}
-                onGerarContrato={handleOpenContratoWizard}
-                isGerandoContrato={gerarContrato.isPending}
-              />
-            ))
+            emAndamento.map((cotacao) => {
+              // Calcular permissões específicas para cada cotação
+              const isOwner = cotacao.vendedor_id === permissions.userId;
+              const cardPermissions: CotacaoCardPermissions = {
+                canEdit: permissions.cotacao.canEdit && (!permissions.cotacao.canEditOwnOnly || isOwner),
+                canDelete: permissions.cotacao.canDelete,
+                canSend: permissions.cotacao.canSend && (!permissions.cotacao.canEditOwnOnly || isOwner),
+                canDuplicate: permissions.cotacao.canDuplicate,
+                canGenerateContract: permissions.cotacao.canGenerateContract && (!permissions.cotacao.canEditOwnOnly || isOwner),
+              };
+
+              return (
+                <CotacaoCard 
+                  key={cotacao.id}
+                  cotacao={cotacao}
+                  tipo="andamento"
+                  navigate={navigate}
+                  formatRelativeTime={formatRelativeTime}
+                  formatPhone={formatPhone}
+                  formatCurrency={formatCurrency}
+                  onVincular={(c) => {
+                    setCotacaoParaVincular(c);
+                    setShowVincularModal(true);
+                  }}
+                  onWhatsApp={enviarWhatsApp}
+                  onEmail={handleOpenEmailModal}
+                  onAceitar={(id) => {
+                    updateCotacao.mutate({ id, status: 'aceita' });
+                  }}
+                  onPdf={handleBaixarPdf}
+                  onDuplicar={handleDuplicar}
+                  onExcluir={handleExcluir}
+                  onCopiarWhatsApp={copiarParaWhatsApp}
+                  onGerarContrato={handleOpenContratoWizard}
+                  isGerandoContrato={gerarContrato.isPending}
+                  permissions={cardPermissions}
+                />
+              );
+            })
           )}
         </TabsContent>
 
@@ -551,32 +577,45 @@ export default function Cotacoes() {
               </CardContent>
             </Card>
           ) : (
-            fechadas.map((cotacao) => (
-              <CotacaoCard 
-                key={cotacao.id}
-                cotacao={cotacao}
-                tipo="fechada"
-                navigate={navigate}
-                formatRelativeTime={formatRelativeTime}
-                formatPhone={formatPhone}
-                formatCurrency={formatCurrency}
-                onVincular={(c) => {
-                  setCotacaoParaVincular(c);
-                  setShowVincularModal(true);
-                }}
-                onWhatsApp={enviarWhatsApp}
-                onEmail={handleOpenEmailModal}
-                onAceitar={(id) => {
-                  updateCotacao.mutate({ id, status: 'aceita' });
-                }}
-                onPdf={handleBaixarPdf}
-                onDuplicar={handleDuplicar}
-                onExcluir={handleExcluir}
-                onCopiarWhatsApp={copiarParaWhatsApp}
-                onGerarContrato={handleOpenContratoWizard}
-                isGerandoContrato={gerarContrato.isPending}
-              />
-            ))
+            fechadas.map((cotacao) => {
+              // Calcular permissões específicas para cada cotação
+              const isOwner = cotacao.vendedor_id === permissions.userId;
+              const cardPermissions: CotacaoCardPermissions = {
+                canEdit: permissions.cotacao.canEdit && (!permissions.cotacao.canEditOwnOnly || isOwner),
+                canDelete: permissions.cotacao.canDelete,
+                canSend: permissions.cotacao.canSend && (!permissions.cotacao.canEditOwnOnly || isOwner),
+                canDuplicate: permissions.cotacao.canDuplicate,
+                canGenerateContract: permissions.cotacao.canGenerateContract && (!permissions.cotacao.canEditOwnOnly || isOwner),
+              };
+
+              return (
+                <CotacaoCard 
+                  key={cotacao.id}
+                  cotacao={cotacao}
+                  tipo="fechada"
+                  navigate={navigate}
+                  formatRelativeTime={formatRelativeTime}
+                  formatPhone={formatPhone}
+                  formatCurrency={formatCurrency}
+                  onVincular={(c) => {
+                    setCotacaoParaVincular(c);
+                    setShowVincularModal(true);
+                  }}
+                  onWhatsApp={enviarWhatsApp}
+                  onEmail={handleOpenEmailModal}
+                  onAceitar={(id) => {
+                    updateCotacao.mutate({ id, status: 'aceita' });
+                  }}
+                  onPdf={handleBaixarPdf}
+                  onDuplicar={handleDuplicar}
+                  onExcluir={handleExcluir}
+                  onCopiarWhatsApp={copiarParaWhatsApp}
+                  onGerarContrato={handleOpenContratoWizard}
+                  isGerandoContrato={gerarContrato.isPending}
+                  permissions={cardPermissions}
+                />
+              );
+            })
           )}
         </TabsContent>
       </Tabs>

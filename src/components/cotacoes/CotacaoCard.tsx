@@ -69,6 +69,14 @@ const statusConfig: Record<StatusCotacaoExtended, {
   },
 };
 
+export interface CotacaoCardPermissions {
+  canEdit: boolean;
+  canDelete: boolean;
+  canSend: boolean;
+  canDuplicate: boolean;
+  canGenerateContract: boolean;
+}
+
 interface CotacaoCardProps {
   cotacao: CotacaoWithRelations;
   tipo: 'andamento' | 'fechada';
@@ -86,6 +94,7 @@ interface CotacaoCardProps {
   onGerarContrato?: (id: string) => void;
   isGerandoContrato?: boolean;
   onCopiarWhatsApp?: (cotacao: CotacaoWithRelations) => void;
+  permissions?: CotacaoCardPermissions;
 }
 
 export function CotacaoCard({
@@ -105,6 +114,7 @@ export function CotacaoCard({
   onGerarContrato,
   isGerandoContrato = false,
   onCopiarWhatsApp,
+  permissions,
 }: CotacaoCardProps) {
   const status = statusConfig[cotacao.status as StatusCotacaoExtended] || statusConfig.rascunho;
   const hasLead = !!cotacao.lead_id;
@@ -226,8 +236,8 @@ export function CotacaoCard({
             Ver Detalhes
           </Button>
           
-          {/* Ações por Status */}
-          {cotacao.status === 'rascunho' && hasLead && (
+          {/* Ações por Status - com controle de permissão */}
+          {cotacao.status === 'rascunho' && hasLead && permissions?.canSend !== false && (
             <>
               <Button size="sm" variant="outline" onClick={() => onWhatsApp(cotacao)}>
                 <MessageCircle className="h-4 w-4 mr-1 text-green-600" />
@@ -240,7 +250,7 @@ export function CotacaoCard({
             </>
           )}
           
-          {cotacao.status === 'rascunho' && !hasLead && onCopiarWhatsApp && (
+          {cotacao.status === 'rascunho' && !hasLead && onCopiarWhatsApp && permissions?.canSend !== false && (
             <Button
               size="sm"
               className="bg-green-600 hover:bg-green-700 text-white"
@@ -251,7 +261,7 @@ export function CotacaoCard({
             </Button>
           )}
           
-          {cotacao.status === 'rascunho' && !hasLead && onGerarContrato && (
+          {cotacao.status === 'rascunho' && !hasLead && onGerarContrato && permissions?.canGenerateContract !== false && (
             <Button 
               size="sm"
               variant="outline"
@@ -265,18 +275,22 @@ export function CotacaoCard({
           
           {cotacao.status === 'enviada' && (
             <>
-              <Button size="sm" variant="outline" onClick={() => onWhatsApp(cotacao)}>
-                <RefreshCw className="h-4 w-4 mr-1" />
-                Reenviar
-              </Button>
-              <Button size="sm" onClick={() => onAceitar(cotacao.id)}>
-                <Check className="h-4 w-4 mr-1" />
-                Aceitar
-              </Button>
+              {permissions?.canSend !== false && (
+                <Button size="sm" variant="outline" onClick={() => onWhatsApp(cotacao)}>
+                  <RefreshCw className="h-4 w-4 mr-1" />
+                  Reenviar
+                </Button>
+              )}
+              {permissions?.canEdit !== false && (
+                <Button size="sm" onClick={() => onAceitar(cotacao.id)}>
+                  <Check className="h-4 w-4 mr-1" />
+                  Aceitar
+                </Button>
+              )}
             </>
           )}
           
-          {cotacao.status === 'aceita' && onGerarContrato && !cotacao.contrato && (
+          {cotacao.status === 'aceita' && onGerarContrato && !cotacao.contrato && permissions?.canGenerateContract !== false && (
             <Button 
               size="sm"
               onClick={() => onGerarContrato(cotacao.id)}
@@ -312,14 +326,27 @@ export function CotacaoCard({
                 <FileDown className="h-4 w-4 mr-2" />
                 Baixar PDF
               </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem 
-                className="text-destructive focus:text-destructive"
-                onClick={() => onExcluir(cotacao.id)}
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Excluir
-              </DropdownMenuItem>
+              {permissions?.canDuplicate !== false && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => onDuplicar(cotacao)}>
+                    <Copy className="h-4 w-4 mr-2" />
+                    Duplicar
+                  </DropdownMenuItem>
+                </>
+              )}
+              {permissions?.canDelete !== false && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem 
+                    className="text-destructive focus:text-destructive"
+                    onClick={() => onExcluir(cotacao.id)}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Excluir
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

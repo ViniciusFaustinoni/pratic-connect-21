@@ -1,5 +1,10 @@
 import { useAuth } from '@/contexts/AuthContext';
 
+// Grupos de perfis para cotações
+const PERFIS_VENDEDOR = ['vendedor_clt', 'vendedor_externo'];
+const PERFIS_CADASTRO = ['analista_cadastro'];
+const PERFIS_GESTOR = ['diretor', 'gerente_comercial', 'supervisor_vendas'];
+
 export type PermissionKey = 
   | 'isFuncionario'
   | 'isAssociado'
@@ -44,11 +49,42 @@ export type PermissionKey =
   | 'canApprovePermissionChanges'
   | 'canCreateRoles';
 
+export type CotacaoViewScope = 'own' | 'team' | 'all';
+
+export interface CotacaoPermissions {
+  // Visualização
+  canView: boolean;
+  canViewAll: boolean;
+  viewScope: CotacaoViewScope;
+  
+  // CRUD
+  canCreate: boolean;
+  canEdit: boolean;
+  canEditOwnOnly: boolean;
+  canDelete: boolean;
+  
+  // Ações
+  canSend: boolean;
+  canCancel: boolean;
+  canDuplicate: boolean;
+  
+  // Validação (analista/gestor)
+  canValidate: boolean;
+  canEditClientData: boolean;
+  canEditVehicleData: boolean;
+  canViewHistory: boolean;
+  
+  // Exportação e valores
+  canExport: boolean;
+  canOverrideValue: boolean;
+  canGenerateContract: boolean;
+}
+
 /**
  * Hook centralizado de permissões para verificar acessos de forma declarativa
  */
 export function usePermissions() {
-  const { profile, roles, hasRole, isGerencia, isVendedor, isFuncionario } = useAuth();
+  const { profile, roles, hasRole, isGerencia, isVendedor, isFuncionario, user } = useAuth();
 
   // Verificar roles usando busca direta no array (para novos perfis não tipados ainda)
   const hasRoleByName = (roleName: string) => roles?.includes(roleName as any) ?? false;
@@ -65,6 +101,48 @@ export function usePermissions() {
     !isGerencia() && 
     !isDesenvolvedor && 
     !isAdminMaster;
+
+  // Verificações de grupo para cotações
+  const isVendedorCotacao = hasRole('vendedor_clt') || hasRole('vendedor_externo');
+  const isAnalistaCotacao = hasRole('analista_cadastro');
+  const isGestorCotacao = isDiretor || hasRole('gerente_comercial') || hasRole('supervisor_vendas');
+  const isSuperAdmin = isDesenvolvedor || isAdminMaster;
+
+  // Escopo de visualização de cotações
+  let cotacaoViewScope: CotacaoViewScope = 'own';
+  if (isGestorCotacao || isAnalistaCotacao || isSuperAdmin) {
+    cotacaoViewScope = 'all';
+  }
+
+  // Permissões específicas de Cotação
+  const cotacao: CotacaoPermissions = {
+    // Visualização
+    canView: true,
+    canViewAll: isGestorCotacao || isAnalistaCotacao || isSuperAdmin,
+    viewScope: cotacaoViewScope,
+    
+    // CRUD
+    canCreate: isVendedorCotacao || isGestorCotacao || isSuperAdmin,
+    canEdit: isVendedorCotacao || isGestorCotacao || isSuperAdmin,
+    canEditOwnOnly: isVendedorCotacao && !isGestorCotacao && !isSuperAdmin,
+    canDelete: isGestorCotacao || isSuperAdmin,
+    
+    // Ações
+    canSend: isVendedorCotacao || isGestorCotacao || isSuperAdmin,
+    canCancel: isVendedorCotacao || isGestorCotacao || isSuperAdmin,
+    canDuplicate: isVendedorCotacao || isGestorCotacao || isSuperAdmin,
+    
+    // Validação (analista/gestor)
+    canValidate: isAnalistaCotacao || isGestorCotacao || isSuperAdmin,
+    canEditClientData: isAnalistaCotacao || isGestorCotacao || isSuperAdmin,
+    canEditVehicleData: isAnalistaCotacao || isGestorCotacao || isSuperAdmin,
+    canViewHistory: isAnalistaCotacao || isGestorCotacao || isSuperAdmin,
+    
+    // Exportação e valores
+    canExport: isGestorCotacao || isSuperAdmin,
+    canOverrideValue: isGestorCotacao || isSuperAdmin,
+    canGenerateContract: isVendedorCotacao || isGestorCotacao || isSuperAdmin,
+  };
 
   const permissions = {
     // Verificações de tipo de usuário
@@ -125,6 +203,8 @@ export function usePermissions() {
   return {
     ...permissions,
     roles,
+    userId: user?.id,
+    cotacao,
     hasPermission: (key: PermissionKey) => permissions[key] ?? false,
   };
 }
