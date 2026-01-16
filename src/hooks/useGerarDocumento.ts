@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { PDFDocument, rgb, StandardFonts, PDFPage, PDFFont } from 'pdf-lib';
+import { PDFDocument, rgb, StandardFonts, PDFPage, PDFFont, PDFImage } from 'pdf-lib';
 import { supabase } from '@/integrations/supabase/client';
 import { DocumentoTemplate, DadosMerge, OpcaoGeracaoPDF, DocumentoGerado } from '@/types/documentos';
 import { toast } from 'sonner';
@@ -8,6 +8,9 @@ import { toast } from 'sonner';
 const A4_WIDTH = 595;
 const A4_HEIGHT = 842;
 const LINE_HEIGHT = 16;
+
+// Logo padrão da PRATICCAR em Base64 (vazio por enquanto - pode ser preenchido depois)
+const LOGO_PADRAO_BASE64 = '';
 
 // Helper para evitar deep type instantiation em veiculos
 const queryVeiculoPrincipal = async (associadoId: string): Promise<any> => {
@@ -204,9 +207,73 @@ export function useGerarDocumento() {
     let yPosition = pageHeight - marginTop;
     let pageNumber = 1;
 
-    // Função para adicionar cabeçalho
-    const adicionarCabecalho = (p: PDFPage, numPag: number) => {
+    // Função para carregar logo (do URL ou Base64)
+    const carregarLogo = async (logoUrl?: string): Promise<PDFImage | null> => {
+      try {
+        let logoBytes: ArrayBuffer;
+
+        if (logoUrl) {
+          // Carregar do URL fornecido
+          const response = await fetch(logoUrl);
+          if (!response.ok) throw new Error('Falha ao carregar logo');
+          logoBytes = await response.arrayBuffer();
+        } else if (LOGO_PADRAO_BASE64) {
+          // Usar logo padrão em Base64
+          const binaryString = atob(LOGO_PADRAO_BASE64);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          logoBytes = bytes.buffer;
+        } else {
+          return null;
+        }
+
+        // Detectar tipo de imagem e embedar
+        const uint8Array = new Uint8Array(logoBytes);
+
+        // Verificar se é PNG (começa com 89 50 4E 47)
+        if (uint8Array[0] === 0x89 && uint8Array[1] === 0x50) {
+          return await pdfDoc.embedPng(logoBytes);
+        }
+
+        // Verificar se é JPEG (começa com FF D8 FF)
+        if (uint8Array[0] === 0xFF && uint8Array[1] === 0xD8) {
+          return await pdfDoc.embedJpg(logoBytes);
+        }
+
+        console.warn('Formato de imagem não suportado para logo');
+        return null;
+      } catch (error) {
+        console.error('Erro ao carregar logo:', error);
+        return null;
+      }
+    };
+
+    // Função para adicionar cabeçalho (agora assíncrona para suportar logo)
+    const adicionarCabecalho = async (p: PDFPage, numPag: number) => {
       if (!config.mostrarCabecalho) return;
+
+      let xTexto = marginLeft;
+
+      // Desenhar logo se habilitado
+      if (config.mostrarLogo) {
+        const logo = await carregarLogo(config.logoUrl);
+
+        if (logo) {
+          const logoWidth = 60;
+          const logoHeight = (logo.height / logo.width) * logoWidth;
+
+          p.drawImage(logo, {
+            x: marginLeft,
+            y: pageHeight - marginTop + 10,
+            width: logoWidth,
+            height: logoHeight,
+          });
+
+          xTexto = marginLeft + logoWidth + 10;
+        }
+      }
       
       // Linha do cabeçalho
       p.drawLine({
@@ -218,7 +285,7 @@ export function useGerarDocumento() {
 
       // Nome da empresa
       p.drawText('PRATICCAR', {
-        x: marginLeft,
+        x: xTexto,
         y: pageHeight - marginTop + 30,
         size: 12,
         font: fontBold,
@@ -272,7 +339,7 @@ export function useGerarDocumento() {
     };
 
     // Adicionar cabeçalho da primeira página
-    adicionarCabecalho(page, pageNumber);
+    await adicionarCabecalho(page, pageNumber);
     setProgresso(40);
 
     // Processar cada parágrafo
@@ -295,7 +362,7 @@ export function useGerarDocumento() {
           page = pdfDoc.addPage([pageWidth, pageHeight]);
           pageNumber++;
           yPosition = pageHeight - marginTop;
-          adicionarCabecalho(page, pageNumber);
+          await adicionarCabecalho(page, pageNumber);
         }
 
         // Desenhar linha
