@@ -175,3 +175,62 @@ export const CORES_CATEGORIAS = [
   { id: 'pink', nome: 'Rosa', classe: 'bg-pink-500' },
   { id: 'teal', nome: 'Verde-água', classe: 'bg-teal-500' },
 ] as const;
+
+// =============================================
+// TIPOS PARA DOCUMENTAÇÕES ANEXADAS
+// Com suporte especial para Contrato Assinado via Autentique
+// =============================================
+
+import type { StatusDocumento } from './database';
+
+// Tipos de documento para anexos (incluindo contrato assinado)
+export type TipoDocumentoAnexo = 
+  | 'cnh'
+  | 'crlv'
+  | 'comprovante_residencia'
+  | 'selfie_documento'
+  | 'contrato_assinado'
+  | 'foto_veiculo_frente'
+  | 'foto_veiculo_traseira'
+  | 'foto_veiculo_lateral_esquerda'
+  | 'foto_veiculo_lateral_direita'
+  | 'foto_hodometro'
+  | 'foto_chassi'
+  | 'outro';
+
+// Interface completa para documento anexado
+export interface DocumentoAnexadoCompleto {
+  id: string;
+  tipo: TipoDocumentoAnexo;
+  nome_arquivo: string | null;
+  arquivo_url: string;
+  status: StatusDocumento;
+  created_at: string;
+  
+  // Campos específicos para Contrato Assinado (Autentique)
+  assinado_em?: string;
+  assinado_por?: string;
+  autentique_id?: string;
+  validado_autentique?: boolean;
+  
+  // Campos de análise
+  analisado_por?: string;
+  analisado_em?: string;
+  motivo_reprovacao?: string;
+}
+
+// Labels para tipos de documento anexo
+export const TIPO_DOCUMENTO_ANEXO_LABELS: Record<TipoDocumentoAnexo, string> = {
+  cnh: 'CNH',
+  crlv: 'CRLV',
+  comprovante_residencia: 'Comprovante de Residência',
+  selfie_documento: 'Selfie com Documento',
+  contrato_assinado: 'Contrato Assinado',
+  foto_veiculo_frente: 'Foto Frente',
+  foto_veiculo_traseira: 'Foto Traseira',
+  foto_veiculo_lateral_esquerda: 'Foto Lateral Esquerda',
+  foto_veiculo_lateral_direita: 'Foto Lateral Direita',
+  foto_hodometro: 'Hodômetro',
+  foto_chassi: 'Chassi',
+  outro: 'Outro',
+};
