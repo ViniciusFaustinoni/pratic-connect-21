@@ -194,6 +194,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
     combustivel: veiculoEncontrado?.vehicleData?.combustivel || undefined,
     categoria: usoVeiculo === 'aplicativo' ? 'aplicativo' : (categoria || undefined),
     anoVeiculo: anoNumerico,
+    usoApp: usoVeiculo === 'aplicativo',
   });
 
   // Validação de dados do associado
