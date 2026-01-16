@@ -63,7 +63,7 @@ export function useAutentiqueStatusPublico({
         console.log('[useAutentiqueStatusPublico] Polling parado - status final:', data?.document?.status);
         return false;
       }
-      return 15000; // 15 segundos
+      return 10000; // 10 segundos - sincronização automática
     },
     staleTime: 10000,
     retry: 2,

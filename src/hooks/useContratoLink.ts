@@ -30,21 +30,23 @@ export function useContratoByToken(token: string | undefined) {
       return data;
     },
     enabled: !!token,
-    // Polling inteligente para múltiplos cenários
+    // Polling inteligente para múltiplos cenários - 10 segundos padrão
     refetchInterval: (queryState) => {
       const data = queryState.state.data;
       
-      // Polling para aguardar autentique_url após adesão paga
+      // Parar polling apenas quando contrato estiver finalizado
+      if (data?.status === 'assinado' || data?.status === 'cancelado' || data?.status === 'ativo') {
+        return false;
+      }
+      
+      // Polling mais rápido enquanto aguarda autentique_url
       if (data?.adesao_paga && !data?.autentique_url && !isAutentiqueTimeout) {
         return 3000; // 3 segundos
       }
       
-      // Polling para aguardar assinatura do contrato
-      if (data?.status === 'pendente_assinatura' || data?.status === 'visualizado' || data?.status === 'enviado') {
-        return 5000; // 5 segundos enquanto aguarda assinatura
-      }
-      
-      return false; // Parar polling quando assinado ou em outro status
+      // Polling padrão de 10 segundos para todos os outros casos
+      // Isso garante que pagamentos e assinaturas sejam detectados automaticamente
+      return 10000;
     },
   });
 
