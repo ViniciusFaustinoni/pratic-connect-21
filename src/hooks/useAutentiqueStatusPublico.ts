@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useEffect } from 'react';
 
 interface AutentiqueStatusPublicoParams {
   documentoId: string | undefined;
@@ -34,7 +35,7 @@ export function useAutentiqueStatusPublico({
 }: AutentiqueStatusPublicoParams) {
   const queryClient = useQueryClient();
 
-  return useQuery<AutentiqueStatusResponse>({
+  const query = useQuery<AutentiqueStatusResponse>({
     queryKey: ['autentique-status-publico', documentoId],
     queryFn: async () => {
       if (!documentoId) throw new Error('Document ID não fornecido');
@@ -52,12 +53,6 @@ export function useAutentiqueStatusPublico({
 
       console.log('[useAutentiqueStatusPublico] Resposta:', data);
 
-      // Se assinado, invalidar queries do contrato para atualizar a UI
-      if (data?.document?.status === 'signed' && contratoToken) {
-        console.log('[useAutentiqueStatusPublico] Documento assinado! Invalidando queries...');
-        queryClient.invalidateQueries({ queryKey: ['contrato-publico', contratoToken] });
-      }
-
       return data;
     },
     enabled: enabled && !!documentoId,
@@ -73,4 +68,30 @@ export function useAutentiqueStatusPublico({
     staleTime: 10000,
     retry: 2,
   });
+
+  // Efeito para atualizar queries quando status mudar para assinado
+  useEffect(() => {
+    if (query.data?.document?.status === 'signed' && contratoToken) {
+      console.log('[useAutentiqueStatusPublico] Documento assinado! Atualizando UI...');
+      
+      // Atualização otimista dos dados do contrato
+      queryClient.setQueryData(['contrato-publico', contratoToken], (old: any) => {
+        if (old) {
+          return { 
+            ...old, 
+            status: 'assinado', 
+            autentique_status: 'signed',
+            data_assinatura: new Date().toISOString()
+          };
+        }
+        return old;
+      });
+      
+      // Invalidar e forçar refetch
+      queryClient.invalidateQueries({ queryKey: ['contrato-publico', contratoToken] });
+      queryClient.refetchQueries({ queryKey: ['contrato-publico', contratoToken] });
+    }
+  }, [query.data?.document?.status, contratoToken, queryClient]);
+
+  return query;
 }
