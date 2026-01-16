@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDocumentoTemplates, useDocumentoCategorias, useDeleteTemplate, useDuplicateTemplate } from '@/hooks/useDocumentoTemplates';
+import { useDocumentoPermissoes } from '@/hooks/useDocumentoPermissoes';
 import type { DocumentoTemplateView } from '@/hooks/useDocumentoTemplates';
 import type { DocumentoCategoria } from '@/types/documentos';
 import { Card, CardContent } from '@/components/ui/card';
@@ -25,7 +26,8 @@ import {
   FileCheck, 
   ClipboardList, 
   Mail,
-  PenTool 
+  PenTool,
+  Lock
 } from 'lucide-react';
 
 // Mapeamento de ícones por nome
@@ -54,12 +56,18 @@ interface TemplateCardProps {
   onDuplicate: (id: string) => void;
   onView: (id: string) => void;
   onDelete: (id: string) => void;
+  podeEditar: boolean;
+  podeDuplicar: boolean;
+  podeExcluir: boolean;
 }
 
-function TemplateCard({ template, onEdit, onDuplicate, onView, onDelete }: TemplateCardProps) {
+function TemplateCard({ template, onEdit, onDuplicate, onView, onDelete, podeEditar, podeDuplicar, podeExcluir }: TemplateCardProps) {
   const categoria = template.categoria;
   const cor = coresCategorias[categoria?.cor || 'gray'];
   const IconeCategoria = iconesCategorias[categoria?.icone || 'FileText'] || FileText;
+
+  // Verificar se o template está restrito
+  const temAcoesDisponiveis = podeEditar || podeDuplicar || podeExcluir;
 
   return (
     <Card className="group hover:shadow-md transition-all duration-200 border-border/50">
@@ -90,22 +98,40 @@ function TemplateCard({ template, onEdit, onDuplicate, onView, onDelete }: Templ
                     <Eye className="h-4 w-4 mr-2" />
                     Visualizar
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => onEdit(template.id)}>
-                    <Edit className="h-4 w-4 mr-2" />
-                    Editar
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => onDuplicate(template.id)}>
-                    <Copy className="h-4 w-4 mr-2" />
-                    Duplicar
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem 
-                    onClick={() => onDelete(template.id)}
-                    className="text-destructive focus:text-destructive"
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Excluir
-                  </DropdownMenuItem>
+                  
+                  {podeEditar && (
+                    <DropdownMenuItem onClick={() => onEdit(template.id)}>
+                      <Edit className="h-4 w-4 mr-2" />
+                      Editar
+                    </DropdownMenuItem>
+                  )}
+                  
+                  {podeDuplicar && (
+                    <DropdownMenuItem onClick={() => onDuplicate(template.id)}>
+                      <Copy className="h-4 w-4 mr-2" />
+                      Duplicar
+                    </DropdownMenuItem>
+                  )}
+                  
+                  {podeExcluir && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem 
+                        onClick={() => onDelete(template.id)}
+                        className="text-destructive focus:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Excluir
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                  
+                  {!temAcoesDisponiveis && (
+                    <DropdownMenuItem disabled className="text-muted-foreground">
+                      <Lock className="h-4 w-4 mr-2" />
+                      Sem permissão para editar
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
@@ -172,6 +198,14 @@ export default function TemplatesList() {
   const { data: categorias } = useDocumentoCategorias();
   const deleteTemplate = useDeleteTemplate();
   const duplicateTemplate = useDuplicateTemplate();
+  
+  // Permissões do módulo de documentos
+  const { 
+    podeCriarTemplate, 
+    podeEditarTemplate, 
+    podeExcluirTemplate,
+    podeEditarTemplateEspecifico 
+  } = useDocumentoPermissoes();
 
   // Filtrar templates
   const templatesFiltrados = templates?.filter(template => {
@@ -218,12 +252,14 @@ export default function TemplatesList() {
             Gerencie os modelos de documentos do sistema
           </p>
         </div>
-        <Button asChild>
-          <Link to="/documentos/templates/novo">
-            <Plus className="h-4 w-4 mr-2" />
-            Novo Template
-          </Link>
-        </Button>
+        {podeCriarTemplate && (
+          <Button asChild>
+            <Link to="/documentos/templates/novo">
+              <Plus className="h-4 w-4 mr-2" />
+              Novo Template
+            </Link>
+          </Button>
+        )}
       </div>
 
       {/* Filtros */}
@@ -261,16 +297,24 @@ export default function TemplatesList() {
         </div>
       ) : templatesFiltrados && templatesFiltrados.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {templatesFiltrados.map((template) => (
-            <TemplateCard
-              key={template.id}
-              template={template}
-              onEdit={handleEdit}
-              onDuplicate={handleDuplicate}
-              onView={handleView}
-              onDelete={handleDelete}
-            />
-          ))}
+          {templatesFiltrados.map((template) => {
+            // Verificar permissão específica para este template
+            const podeEditarEste = podeEditarTemplateEspecifico((template as any).perfis_permitidos);
+            
+            return (
+              <TemplateCard
+                key={template.id}
+                template={template}
+                onEdit={handleEdit}
+                onDuplicate={handleDuplicate}
+                onView={handleView}
+                onDelete={handleDelete}
+                podeEditar={podeEditarEste}
+                podeDuplicar={podeCriarTemplate}
+                podeExcluir={podeExcluirTemplate}
+              />
+            );
+          })}
         </div>
       ) : (
         <Card className="p-12">
