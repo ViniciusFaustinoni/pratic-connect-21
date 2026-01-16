@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ModalVisualizarTemplate } from '@/components/documentos/ModalVisualizarTemplate';
 import { 
   Plus, 
   Search, 
@@ -193,6 +194,7 @@ export default function TemplatesList() {
   const [busca, setBusca] = useState('');
   const [categoriaFiltro, setCategoriaFiltro] = useState<string>('all');
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [viewId, setViewId] = useState<string | null>(null);
 
   const { data: templates, isLoading: loadingTemplates } = useDocumentoTemplates();
   const { data: categorias } = useDocumentoCategorias();
@@ -223,8 +225,7 @@ export default function TemplatesList() {
   };
 
   const handleView = (id: string) => {
-    // TODO: Abrir modal de visualização
-    console.log('Visualizar:', id);
+    setViewId(id);
   };
 
   const handleDuplicate = (id: string) => {
@@ -360,6 +361,14 @@ export default function TemplatesList() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Modal de visualização de template */}
+      <ModalVisualizarTemplate
+        templateId={viewId}
+        open={!!viewId}
+        onOpenChange={(open) => !open && setViewId(null)}
+        onEdit={podeEditarTemplate ? handleEdit : undefined}
+      />
     </div>
   );
 }
