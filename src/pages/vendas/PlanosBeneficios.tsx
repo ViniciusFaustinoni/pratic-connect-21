@@ -16,7 +16,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { 
-  AlertTriangle, MapPin, Settings, Plus, Loader2
+  AlertTriangle, MapPin, Settings, Plus, Loader2, Pencil, Trash2
 } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { toast } from 'sonner';
@@ -24,6 +24,7 @@ import { toast } from 'sonner';
 // Hooks para dados do Supabase
 import { useProductLines, usePlans, useMainCoverages } from '@/hooks/usePlans';
 import { useDeletePlan } from '@/hooks/usePlansAdmin';
+import { useBeneficiosAtivos, useDeleteBeneficio } from '@/hooks/useBeneficiosAdmin';
 
 // Componentes
 import { TabelaPrecosCarros, TabelaPrecosMotos, TabelaPrecosEletricos } from '@/components/planos/TabelaPrecos';
@@ -39,12 +40,13 @@ import { PlanosConfig } from '@/components/planos/PlanosConfig';
 import { BeneficiosAdicionaisConfig } from '@/components/planos/BeneficiosAdicionaisConfig';
 import { PlanoLineSection } from '@/components/planos/PlanoLineSection';
 import { PlanFormModal } from '@/components/admin/planos/PlanFormModal';
-
-// Dados hardcoded que continuam
-import { BENEFICIOS_ADICIONAIS_COMPLETO } from '@/data/planosPrecos';
+import { BeneficioAdicionalModal } from '@/components/planos/BeneficioAdicionalModal';
 
 // Types
 import type { PlanWithDetails } from '@/types/plans';
+import type { Tables } from '@/integrations/supabase/types';
+
+type BeneficioAdicional = Tables<'beneficios_adicionais'>;
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('pt-BR', {
@@ -83,11 +85,19 @@ export default function PlanosBeneficios() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [planToDelete, setPlanToDelete] = useState<PlanWithDetails | null>(null);
 
+  // Estados para edição de benefícios adicionais
+  const [beneficioModalOpen, setBeneficioModalOpen] = useState(false);
+  const [beneficioToEdit, setBeneficioToEdit] = useState<BeneficioAdicional | null>(null);
+  const [deleteBeneficioDialogOpen, setDeleteBeneficioDialogOpen] = useState(false);
+  const [beneficioToDelete, setBeneficioToDelete] = useState<BeneficioAdicional | null>(null);
+
   // Hooks para dados do Supabase
   const { data: productLines, isLoading: loadingLines, error: errorLines, refetch: refetchLines } = useProductLines();
   const { data: plans, isLoading: loadingPlans, error: errorPlans, refetch: refetchPlans } = usePlans();
   const { data: mainCoverages, isLoading: loadingCoverages } = useMainCoverages();
+  const { data: beneficiosAdicionais, isLoading: loadingBeneficios } = useBeneficiosAtivos();
   const deletePlan = useDeletePlan();
+  const deleteBeneficio = useDeleteBeneficio();
 
   const isLoading = loadingLines || loadingPlans;
   const hasError = errorLines || errorPlans;
@@ -129,16 +139,44 @@ export default function PlanosBeneficios() {
     }
   };
 
+  // Handlers para benefícios adicionais
+  const handleEditBeneficio = (beneficio: BeneficioAdicional) => {
+    setBeneficioToEdit(beneficio);
+    setBeneficioModalOpen(true);
+  };
+
+  const handleCreateBeneficio = () => {
+    setBeneficioToEdit(null);
+    setBeneficioModalOpen(true);
+  };
+
+  const handleDeleteBeneficio = (beneficio: BeneficioAdicional) => {
+    setBeneficioToDelete(beneficio);
+    setDeleteBeneficioDialogOpen(true);
+  };
+
+  const confirmDeleteBeneficio = async () => {
+    if (!beneficioToDelete) return;
+    
+    try {
+      await deleteBeneficio.mutateAsync(beneficioToDelete.id);
+      setDeleteBeneficioDialogOpen(false);
+      setBeneficioToDelete(null);
+    } catch (error) {
+      // Erro já tratado no hook
+    }
+  };
+
   const handleSearch = (term: string) => {
     setSearchTerm(term.toLowerCase());
   };
 
   // Filtrar benefícios adicionais
-  const beneficiosFiltrados = BENEFICIOS_ADICIONAIS_COMPLETO.filter(b => 
+  const beneficiosFiltrados = beneficiosAdicionais?.filter(b => 
     searchTerm === '' || 
     b.nome.toLowerCase().includes(searchTerm) ||
-    b.descricao.toLowerCase().includes(searchTerm)
-  );
+    b.descricao?.toLowerCase().includes(searchTerm)
+  ) || [];
 
   // Helper para obter planos de uma linha específica
   const getPlansByLineId = (lineId: string) => {
@@ -299,33 +337,75 @@ export default function PlanosBeneficios() {
         <TabsContent value="adicionais" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Benefícios Adicionais</CardTitle>
-              <CardDescription>
-                Complemente seu plano com benefícios extras conforme sua necessidade
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Benefícios Adicionais</CardTitle>
+                  <CardDescription>
+                    Complemente seu plano com benefícios extras conforme sua necessidade
+                  </CardDescription>
+                </div>
+                {podeEditar && (
+                  <Button onClick={handleCreateBeneficio}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Novo Adicional
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="grid gap-3 md:grid-cols-2">
-                {beneficiosFiltrados.map((beneficio, index) => (
-                  <div 
-                    key={index}
-                    className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
-                  >
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="text-xs">
-                          {beneficio.categoria}
-                        </Badge>
-                        <span className="font-medium">{beneficio.nome}</span>
+              {loadingBeneficios ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : beneficiosFiltrados.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  Nenhum benefício adicional encontrado.
+                </div>
+              ) : (
+                <div className="grid gap-3 md:grid-cols-2">
+                  {beneficiosFiltrados.map((beneficio) => (
+                    <div 
+                      key={beneficio.id}
+                      className="group relative flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-xs">
+                            {beneficio.categoria}
+                          </Badge>
+                          <span className="font-medium">{beneficio.nome}</span>
+                        </div>
+                        <p className="text-sm text-muted-foreground mt-1 truncate">{beneficio.descricao}</p>
                       </div>
-                      <p className="text-sm text-muted-foreground mt-1">{beneficio.descricao}</p>
+                      <Badge className="text-lg font-bold whitespace-nowrap ml-4 bg-primary shrink-0">
+                        {formatCurrency(beneficio.preco)}/mês
+                      </Badge>
+                      
+                      {/* Botões de ação - visíveis no hover */}
+                      {podeEditar && (
+                        <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-7 w-7 bg-background/80 hover:bg-background"
+                            onClick={(e) => { e.stopPropagation(); handleEditBeneficio(beneficio); }}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-7 w-7 text-destructive bg-background/80 hover:bg-background"
+                            onClick={(e) => { e.stopPropagation(); handleDeleteBeneficio(beneficio); }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      )}
                     </div>
-                    <Badge className="text-lg font-bold whitespace-nowrap ml-4 bg-primary">
-                      {formatCurrency(beneficio.preco)}/mês
-                    </Badge>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -360,7 +440,14 @@ export default function PlanosBeneficios() {
         plan={planToEdit}
       />
 
-      {/* Dialog de Confirmação de Exclusão */}
+      {/* Modal de Edição de Benefício Adicional */}
+      <BeneficioAdicionalModal
+        open={beneficioModalOpen}
+        onOpenChange={setBeneficioModalOpen}
+        beneficio={beneficioToEdit}
+      />
+
+      {/* Dialog de Confirmação de Exclusão de Plano */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -378,6 +465,36 @@ export default function PlanosBeneficios() {
               disabled={deletePlan.isPending}
             >
               {deletePlan.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Excluindo...
+                </>
+              ) : (
+                'Excluir'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Dialog de Confirmação de Exclusão de Benefício */}
+      <AlertDialog open={deleteBeneficioDialogOpen} onOpenChange={setDeleteBeneficioDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir Benefício Adicional</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir o benefício "{beneficioToDelete?.nome}"?
+              Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={confirmDeleteBeneficio} 
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteBeneficio.isPending}
+            >
+              {deleteBeneficio.isPending ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   Excluindo...

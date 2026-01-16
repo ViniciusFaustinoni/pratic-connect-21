@@ -209,10 +209,14 @@ export function useToggleBeneficioStatus() {
 
 // Categorias disponíveis para benefícios
 export const CATEGORIAS_BENEFICIO = [
-  { value: 'protecao', label: 'Proteção' },
-  { value: 'conveniencia', label: 'Conveniência' },
-  { value: 'pessoal', label: 'Pessoal' },
-  { value: 'terceiros', label: 'Terceiros' },
-  { value: 'assistencia', label: 'Assistência' },
-  { value: 'outros', label: 'Outros' },
+  { value: 'Reboque', label: 'Reboque' },
+  { value: 'Terceiros', label: 'Terceiros' },
+  { value: 'Vidros', label: 'Vidros' },
+  { value: 'Kit', label: 'Kit' },
+  { value: 'Combustivel', label: 'Combustível' },
+  { value: 'Passageiros', label: 'Passageiros' },
+  { value: 'Rastreador', label: 'Rastreador' },
+  { value: 'Reserva', label: 'Carro Reserva' },
+  { value: 'Combo', label: 'Combo' },
+  { value: 'Outro', label: 'Outro' },
 ] as const;
