@@ -166,6 +166,7 @@ import { VendasNotificationListener } from "./components/notifications/VendasNot
 
 // Documentos
 import TemplatesList from "./pages/documentos/TemplatesList";
+import GerarDocumento from "./pages/documentos/GerarDocumento";
 
 // Diretoria
 import DiretoriaDashboard from "./pages/diretoria/DiretoriaDashboard";
@@ -401,6 +402,7 @@ const App = () => (
               
               {/* Documentos */}
               <Route path="/documentos/templates" element={<TemplatesList />} />
+              <Route path="/documentos/gerar" element={<GerarDocumento />} />
 
               {/* Diretoria */}
               <Route path="/diretoria" element={<DiretoriaDashboard />} />
