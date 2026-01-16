@@ -4477,6 +4477,7 @@ export type Database = {
           descricao: string | null
           id: string
           nome: string
+          perfis_permitidos: string[] | null
           requer_assinatura: boolean | null
           rodape_html: string | null
           updated_at: string | null
@@ -4495,6 +4496,7 @@ export type Database = {
           descricao?: string | null
           id?: string
           nome: string
+          perfis_permitidos?: string[] | null
           requer_assinatura?: boolean | null
           rodape_html?: string | null
           updated_at?: string | null
@@ -4513,6 +4515,7 @@ export type Database = {
           descricao?: string | null
           id?: string
           nome?: string
+          perfis_permitidos?: string[] | null
           requer_assinatura?: boolean | null
           rodape_html?: string | null
           updated_at?: string | null
