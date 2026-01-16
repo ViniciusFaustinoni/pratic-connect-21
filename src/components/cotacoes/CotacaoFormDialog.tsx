@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Loader2, Car, Search, CheckCircle2, Shield, Check, AlertCircle, Copy, MessageCircle, Zap, User, Link, UserCheck, Phone, Mail, AlertTriangle, Info } from 'lucide-react';
+import { Loader2, Car, Search, CheckCircle2, Shield, Check, AlertCircle, Copy, MessageCircle, Zap, User, Link, UserCheck, Phone, Mail, AlertTriangle, Info, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { LeadCombobox } from '@/components/leads/LeadCombobox';
 import type { Lead } from '@/types/vendas';
@@ -54,6 +54,15 @@ import { toast } from 'sonner';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { VehicleCategorySelect, CATEGORIAS_VEICULO } from '@/components/cotador/VehicleCategorySelect';
+
+// Regiões disponíveis no sistema
+const REGIOES = [
+  { value: 'rio_de_janeiro', label: 'Rio de Janeiro - Capital e Região Metropolitana' },
+  { value: 'regiao_lagos', label: 'Região dos Lagos' },
+  { value: 'sao_paulo', label: 'São Paulo - Capital e Região Metropolitana' },
+  { value: 'interior_rj', label: 'Interior do Rio de Janeiro' },
+  { value: 'interior_sp', label: 'Interior de São Paulo' },
+];
 
 // Alertas baseados na categoria selecionada
 const ALERTAS_CATEGORIA: Record<string, { tipo: 'warning' | 'info'; mensagem: string }> = {
@@ -127,6 +136,9 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
   
   // Estado para categoria/deságio
   const [categoria, setCategoria] = useState<string | null>('nenhuma');
+  
+  // Estado para região selecionada
+  const [regiaoSelecionada, setRegiaoSelecionada] = useState<string>('');
   
   // Loading states
   const [loadingMarcas, setLoadingMarcas] = useState(false);
@@ -220,6 +232,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
       setEmailAssociado('');
       setCategoria('nenhuma');
       setUsoVeiculo('particular');
+      setRegiaoSelecionada('');
     }
   }, [open, leadId, form]);
 
@@ -657,6 +670,8 @@ Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
         email_solicitante: emailAssociado.trim() || null,
         // Categoria do veículo
         categoria: categoria && categoria !== 'nenhuma' ? categoria : null,
+        // Região selecionada
+        regiao: regiaoSelecionada || null,
       });
       
       toast.success('Cotação criada com sucesso!');
@@ -677,6 +692,7 @@ Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
       setEmailAssociado('');
       setCategoria('nenhuma');
       setUsoVeiculo('particular');
+      setRegiaoSelecionada('');
       
       // Fechar modal
       onOpenChange(false);
@@ -763,6 +779,35 @@ Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
                   />
                 </div>
               </div>
+            </div>
+
+            <Separator />
+
+            {/* BLOCO: REGIÃO */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-primary" />
+                Região
+              </h3>
+              
+              <Select
+                value={regiaoSelecionada}
+                onValueChange={setRegiaoSelecionada}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione a região" />
+                </SelectTrigger>
+                <SelectContent>
+                  {REGIOES.map((regiao) => (
+                    <SelectItem key={regiao.value} value={regiao.value}>
+                      {regiao.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                A região define a tabela de preços aplicada
+              </p>
             </div>
 
             <Separator />
