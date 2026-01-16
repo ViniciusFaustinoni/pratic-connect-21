@@ -176,8 +176,8 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       let valorBase: number | null = null;
       
       if (faixaPreco) {
-        // Usar valor_mensal ou taxa_passeio da tabela
-        valorBase = Number(faixaPreco.valor_mensal) || Number(faixaPreco.taxa_passeio) || 0;
+        // Usar taxa_comercial como valor base da tabela de preços
+        valorBase = Number(faixaPreco.taxa_comercial) || 0;
       }
       
       if (valorBase === null || valorBase === 0) {
