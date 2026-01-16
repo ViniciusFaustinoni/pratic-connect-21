@@ -1858,6 +1858,42 @@ export type Database = {
           },
         ]
       }
+      benefits: {
+        Row: {
+          category: string | null
+          created_at: string | null
+          description: string | null
+          display_order: number | null
+          icon: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          slug: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string | null
+          description?: string | null
+          display_order?: number | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          slug: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string | null
+          description?: string | null
+          display_order?: number | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          slug?: string
+        }
+        Relationships: []
+      }
       campanhas: {
         Row: {
           canal_id: string | null
@@ -6679,6 +6715,36 @@ export type Database = {
           },
         ]
       }
+      main_coverages: {
+        Row: {
+          created_at: string | null
+          display_order: number | null
+          icon: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          subtitle: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          display_order?: number | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          subtitle?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          display_order?: number | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          subtitle?: string | null
+        }
+        Relationships: []
+      }
       materiais_marketing: {
         Row: {
           altura: number | null
@@ -8123,6 +8189,57 @@ export type Database = {
           },
         ]
       }
+      plan_benefits: {
+        Row: {
+          additional_info: string | null
+          benefit_id: string
+          created_at: string | null
+          custom_text: string | null
+          custom_value: string | null
+          display_order: number | null
+          id: string
+          is_highlighted: boolean | null
+          plan_id: string
+        }
+        Insert: {
+          additional_info?: string | null
+          benefit_id: string
+          created_at?: string | null
+          custom_text?: string | null
+          custom_value?: string | null
+          display_order?: number | null
+          id?: string
+          is_highlighted?: boolean | null
+          plan_id: string
+        }
+        Update: {
+          additional_info?: string | null
+          benefit_id?: string
+          created_at?: string | null
+          custom_text?: string | null
+          custom_value?: string | null
+          display_order?: number | null
+          id?: string
+          is_highlighted?: boolean | null
+          plan_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_benefits_benefit_id_fkey"
+            columns: ["benefit_id"]
+            isOneToOne: false
+            referencedRelation: "benefits"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_benefits_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       plano_contas: {
         Row: {
           aceita_lancamento: boolean | null
@@ -8449,6 +8566,86 @@ export type Database = {
             columns: ["plano_id"]
             isOneToOne: false
             referencedRelation: "planos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plans: {
+        Row: {
+          additional_price: number | null
+          badge_color: string | null
+          badge_text: string | null
+          cota_app_min: number | null
+          cota_app_percent: number | null
+          cota_desagio_min: number | null
+          cota_desagio_percent: number | null
+          cota_passeio_min: number | null
+          cota_passeio_percent: number | null
+          coverage_type: string | null
+          created_at: string | null
+          display_order: number | null
+          footer_note: string | null
+          id: string
+          is_active: boolean | null
+          min_vehicle_year: string | null
+          name: string
+          product_line_id: string
+          restriction_alert: string | null
+          slug: string
+          updated_at: string | null
+        }
+        Insert: {
+          additional_price?: number | null
+          badge_color?: string | null
+          badge_text?: string | null
+          cota_app_min?: number | null
+          cota_app_percent?: number | null
+          cota_desagio_min?: number | null
+          cota_desagio_percent?: number | null
+          cota_passeio_min?: number | null
+          cota_passeio_percent?: number | null
+          coverage_type?: string | null
+          created_at?: string | null
+          display_order?: number | null
+          footer_note?: string | null
+          id?: string
+          is_active?: boolean | null
+          min_vehicle_year?: string | null
+          name: string
+          product_line_id: string
+          restriction_alert?: string | null
+          slug: string
+          updated_at?: string | null
+        }
+        Update: {
+          additional_price?: number | null
+          badge_color?: string | null
+          badge_text?: string | null
+          cota_app_min?: number | null
+          cota_app_percent?: number | null
+          cota_desagio_min?: number | null
+          cota_desagio_percent?: number | null
+          cota_passeio_min?: number | null
+          cota_passeio_percent?: number | null
+          coverage_type?: string | null
+          created_at?: string | null
+          display_order?: number | null
+          footer_note?: string | null
+          id?: string
+          is_active?: boolean | null
+          min_vehicle_year?: string | null
+          name?: string
+          product_line_id?: string
+          restriction_alert?: string | null
+          slug?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plans_product_line_id_fkey"
+            columns: ["product_line_id"]
+            isOneToOne: false
+            referencedRelation: "product_lines"
             referencedColumns: ["id"]
           },
         ]
@@ -9163,6 +9360,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      product_lines: {
+        Row: {
+          color: string | null
+          created_at: string | null
+          display_order: number | null
+          icon: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          slug: string
+          updated_at: string | null
+          vehicle_type: string | null
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string | null
+          display_order?: number | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          slug: string
+          updated_at?: string | null
+          vehicle_type?: string | null
+        }
+        Update: {
+          color?: string | null
+          created_at?: string | null
+          display_order?: number | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          slug?: string
+          updated_at?: string | null
+          vehicle_type?: string | null
+        }
+        Relationships: []
       }
       profiles: {
         Row: {
