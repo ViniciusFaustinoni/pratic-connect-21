@@ -49,6 +49,9 @@ import {
   Key,
   MessageCircle,
   Kanban,
+  FilePlus,
+  History,
+  FileCode,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
@@ -157,11 +160,23 @@ const menuConfig: {
         { title: 'Propostas Pendentes', url: '/cadastro/propostas', icon: ClipboardCheck },
         { title: 'Associados', url: '/cadastro/associados', icon: Users },
         { title: 'Veículos', url: '/cadastro/veiculos', icon: Car },
-        { title: 'Documentos', url: '/cadastro/documentos', icon: FileCheck },
-      ],
-    },
-    {
-      id: 'monitoramento',
+        { title: 'Análise de Docs', url: '/cadastro/documentos', icon: FileCheck },
+    ],
+  },
+  {
+    id: 'documentos',
+    label: 'Documentos',
+    icon: FileText,
+    permission: 'canManageCadastro',
+    color: MENU_COLORS.documentos,
+    items: [
+      { title: 'Gerar Documento', url: '/documentos/gerar', icon: FilePlus },
+      { title: 'Histórico', url: '/documentos/historico', icon: History },
+      { title: 'Templates', url: '/documentos/templates', icon: FileCode },
+    ],
+  },
+  {
+    id: 'monitoramento',
       label: 'Monitoramento',
       icon: MapPin,
       permission: 'canManageInstalacoes',
