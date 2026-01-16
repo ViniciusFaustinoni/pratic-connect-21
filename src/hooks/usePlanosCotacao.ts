@@ -1,14 +1,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import {
-  PRECOS_SELECT_RJ,
-  PRECOS_MOTOS_RJ,
-  PRECOS_ELETRICOS,
-  ADICIONAL_NIVEL,
-  calcularPrecoRegiao,
-  type Regiao,
-} from '@/data/planosPrecos';
+import { calcularPrecoRegiao, type Regiao } from '@/data/planosPrecos';
 
 // ============================================
 // INTERFACES
@@ -68,92 +61,13 @@ const mapearRegiao = (regiao: string): Regiao => {
 };
 
 // ============================================
-// O QUE NÃO ESTÁ INCLUÍDO POR LINHA/NIVEL
+// ADICIONAL POR NÍVEL (valores do banco ou padrão)
 // ============================================
 
-const NAO_INCLUI_POR_CODIGO: Record<string, string[]> = {
-  'select-basic': [
-    '1000km Reboque',
-    'Danos a Terceiros',
-    'Vidros e Faróis',
-    'Kit Gás',
-    'Carro Reserva',
-  ],
-  'select-premium': [
-    'Kit Gás',
-    'Carro Reserva em roubo',
-  ],
-  'select-exclusive': [],
-  'select-one': [],
-  'especial': [
-    'Colisão',
-    'Incêndio',
-    'Perda Total',
-    'Alagamento',
-    'Danos a Terceiros',
-    'Vidros e Faróis',
-  ],
-  'especial-plus': [
-    '1000km Reboque',
-    'Danos a Terceiros',
-    'Vidros e Faróis',
-  ],
-  'lancamento-basic': [
-    '1000km Reboque',
-    'Danos a Terceiros',
-    'Vidros e Faróis',
-    'Kit Gás',
-    'Carro Reserva',
-  ],
-  'lancamento-premium': [
-    'Kit Gás',
-    'Carro Reserva em roubo',
-  ],
-  'lancamento-exclusive': [],
-  'advanced': [
-    'Colisão',
-    'Danos a Terceiros',
-    'Assistência 600km',
-  ],
-  'advanced-plus': [],
-  'eletricos': [],
-};
-
-// ============================================
-// CÁLCULO DO VALOR BASE
-// ============================================
-
-const calcularValorBase = (
-  valorFipe: number,
-  combustivel: string,
-  linha: string | null
-): number | null => {
-  // Motos
-  if (linha === 'advanced') {
-    const faixa = PRECOS_MOTOS_RJ.find(
-      f => valorFipe >= f.fipeMin && valorFipe <= f.fipeMax
-    );
-    return faixa?.advanced || null;
-  }
-
-  // Elétricos
-  if (linha === 'eletricos') {
-    const faixa = PRECOS_ELETRICOS.find(
-      f => valorFipe >= f.fipeMin && valorFipe <= f.fipeMax
-    );
-    return faixa?.mensal || null;
-  }
-
-  // Carros (SELECT, ESPECIAL, LANÇAMENTO)
-  const faixa = PRECOS_SELECT_RJ.find(
-    f => valorFipe >= f.fipeMin && valorFipe <= f.fipeMax
-  );
-
-  if (!faixa) return null;
-
-  // Diesel usa valor específico
-  const isDiesel = combustivel?.toLowerCase().includes('diesel');
-  return isDiesel ? faixa.diesel : faixa.gasolina;
+const ADICIONAL_NIVEL_PADRAO = {
+  basic: 0,
+  premium: 30,
+  exclusive: 60,
 };
 
 // ============================================
@@ -189,6 +103,21 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     staleTime: 1000 * 60 * 5, // 5 minutos
   });
 
+  // Buscar tabelas de preço do banco
+  const { data: tabelasPreco } = useQuery({
+    queryKey: ['tabelas_preco_cotacao'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('tabelas_preco')
+        .select('*')
+        .eq('ativo', true);
+      
+      if (error) throw error;
+      return data;
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
   const planos = useMemo<PlanoCotacao[]>(() => {
     const { valorFipe, regiao, combustivel = 'gasolina', categoria, anoVeiculo } = params;
 
@@ -200,6 +129,11 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     const tipoVeiculo = params.tipoVeiculo || 'carro';
     const anoAtual = new Date().getFullYear();
     const anoVeiculoNum = anoVeiculo || anoAtual;
+
+    // Encontrar faixa de preço aplicável
+    const faixaPreco = tabelasPreco?.find(
+      f => valorFipe >= Number(f.fipe_de) && valorFipe <= Number(f.fipe_ate)
+    );
 
     const planosCalculados: PlanoCotacao[] = [];
 
@@ -238,11 +172,16 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         }
       }
 
-      // Calcular valor base
-      let valorBase = calcularValorBase(valorFipe, combustivel, linha);
+      // Calcular valor base da tabela de preços
+      let valorBase: number | null = null;
       
-      if (valorBase === null) {
-        // Se não encontrou na tabela, usar um valor padrão baseado no FIPE
+      if (faixaPreco) {
+        // Usar valor_mensal ou taxa_passeio da tabela
+        valorBase = Number(faixaPreco.valor_mensal) || Number(faixaPreco.taxa_passeio) || 0;
+      }
+      
+      if (valorBase === null || valorBase === 0) {
+        // Fallback: usar um valor padrão baseado no FIPE
         valorBase = Math.round(valorFipe * 0.025 / 12); // ~2.5% ao ano / 12 meses
       }
 
@@ -252,7 +191,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       // Aplicar adicional por nível do plano (do banco ou calculado)
       const adicionalBanco = Number(plano.adicional_mensal) || 0;
       const nivel = plano.nivel || extrairNivel(codigo);
-      const adicionalNivel = nivel ? (ADICIONAL_NIVEL[nivel as keyof typeof ADICIONAL_NIVEL] || 0) : 0;
+      const adicionalNivel = nivel ? (ADICIONAL_NIVEL_PADRAO[nivel as keyof typeof ADICIONAL_NIVEL_PADRAO] || 0) : 0;
       const valorMensal = valorBase + (adicionalBanco || adicionalNivel);
 
       // Usar valor de adesão do banco
@@ -278,8 +217,8 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         ? plano.coberturas 
         : [];
 
-      // O que não está incluído
-      const naoInclui = NAO_INCLUI_POR_CODIGO[codigo] || [];
+      // O que não está incluído (buscar do banco ou lista vazia)
+      const naoInclui: string[] = [];
 
       // Determinar destaque
       const isDestaque = plano.destaque || 
@@ -305,11 +244,10 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       }
 
       // Calcular valores detalhados (estimativa baseada no valorMensal)
-      // Esses valores são aproximados para exibição - o valor real é o valorMensal
-      const valorCota = Math.round(valorMensal * 0.6 * 100) / 100; // ~60% do mensal
-      const taxaAdministrativa = Math.round(valorMensal * 0.25 * 100) / 100; // ~25%
-      const valorRastreamento = Math.round(valorMensal * 0.10 * 100) / 100; // ~10%
-      const valorAssistencia = Math.round(valorMensal * 0.05 * 100) / 100; // ~5%
+      const valorCota = Math.round(valorMensal * 0.6 * 100) / 100;
+      const taxaAdministrativa = Math.round(valorMensal * 0.25 * 100) / 100;
+      const valorRastreamento = Math.round(valorMensal * 0.10 * 100) / 100;
+      const valorAssistencia = Math.round(valorMensal * 0.05 * 100) / 100;
 
       planosCalculados.push({
         id: plano.id,
@@ -330,7 +268,6 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         tag,
         alertaDesagio,
         adicionalMensal: adicionalBanco || adicionalNivel,
-        // Valores detalhados
         valorCota,
         taxaAdministrativa,
         valorRastreamento,
@@ -340,20 +277,17 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
 
     // Ordenar: SELECT vem primeiro, depois por ordem do banco
     return planosCalculados.sort((a, b) => {
-      // SELECT vem primeiro
       if (a.linha === 'select' && b.linha !== 'select') return -1;
       if (a.linha !== 'select' && b.linha === 'select') return 1;
       
-      // Dentro do SELECT: BASIC, PREMIUM, EXCLUSIVE
       if (a.linha === 'select' && b.linha === 'select') {
         const ordem = ['select-basic', 'select-premium', 'select-exclusive', 'select-one'];
         return ordem.indexOf(a.codigo) - ordem.indexOf(b.codigo);
       }
       
-      // Por valor
       return a.valorMensal - b.valorMensal;
     });
-  }, [params, planosBanco]);
+  }, [params, planosBanco, tabelasPreco]);
 
   return {
     planos,

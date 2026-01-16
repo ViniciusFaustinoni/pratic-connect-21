@@ -27,17 +27,17 @@ interface VeiculoEncontrado {
 // FUNÇÕES AUXILIARES
 // ============================================
 
-const calcularFipeMock = (marca: string, _modelo: string, ano: number): number => {
-  let valor = 30000;
+// Função estimativa de FIPE quando API não retorna valor
+const estimarValorFipe = (marca: string, ano: number): number => {
+  const baseValor = 35000;
   const ajusteMarca: Record<string, number> = {
     Toyota: 1.3, Honda: 1.25, Hyundai: 1.15, Volkswagen: 1.1, Chevrolet: 1.05,
-    Fiat: 1.0, Renault: 0.95, Nissan: 1.1, Jeep: 1.4, Ford: 1.0, Outras: 1.0,
+    Fiat: 1.0, Renault: 0.95, Nissan: 1.1, Jeep: 1.4, Ford: 1.0,
   };
-  valor *= ajusteMarca[marca] || 1.0;
+  const fatorMarca = ajusteMarca[marca] || 1.0;
   const anoAtual = new Date().getFullYear();
-  const idadeVeiculo = anoAtual - ano;
-  valor *= Math.max(0.5, 1 - (idadeVeiculo * 0.07));
-  return Math.round(valor / 100) * 100;
+  const depreciacao = Math.max(0.5, 1 - (anoAtual - ano) * 0.06);
+  return Math.round(baseValor * fatorMarca * depreciacao / 100) * 100;
 };
 
 // ============================================
@@ -153,10 +153,10 @@ export default function CotacaoPage() {
   const handleCalcular = useCallback(async () => {
     setIsCalculando(true);
     
-    // Se não tem valor FIPE, calcular mock
+    // Se não tem valor FIPE, usar estimativa
     let fipeParaCalculo = valorFipe;
-    if (!fipeParaCalculo && marca && modelo && ano) {
-      fipeParaCalculo = calcularFipeMock(marca, modelo, parseInt(ano));
+    if (!fipeParaCalculo && marca && ano) {
+      fipeParaCalculo = estimarValorFipe(marca, parseInt(ano));
       setValorFipe(fipeParaCalculo);
     }
     
