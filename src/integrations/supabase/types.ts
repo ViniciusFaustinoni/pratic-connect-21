@@ -12115,6 +12115,7 @@ export type Database = {
         }[]
       }
       can_access_api_settings: { Args: { _user_id: string }; Returns: boolean }
+      can_create_contracts: { Args: { _user_id: string }; Returns: boolean }
       can_manage_juridico: { Args: { _user_id: string }; Returns: boolean }
       can_manage_marketing: { Args: { _user_id: string }; Returns: boolean }
       can_manage_permissions: { Args: { _user_id: string }; Returns: boolean }
