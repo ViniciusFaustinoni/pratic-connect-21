@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useDocumentoTemplates, useDocumentoCategorias, useDeleteTemplate, useDuplicateTemplate } from '@/hooks/useDocumentoTemplates';
 import type { DocumentoTemplateView } from '@/hooks/useDocumentoTemplates';
 import type { DocumentoCategoria } from '@/types/documentos';
@@ -163,6 +163,7 @@ function TemplateCardSkeleton() {
 }
 
 export default function TemplatesList() {
+  const navigate = useNavigate();
   const [busca, setBusca] = useState('');
   const [categoriaFiltro, setCategoriaFiltro] = useState<string>('all');
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -184,8 +185,7 @@ export default function TemplatesList() {
   });
 
   const handleEdit = (id: string) => {
-    // TODO: Navegar para página de edição
-    console.log('Editar:', id);
+    navigate(`/documentos/templates/${id}`);
   };
 
   const handleView = (id: string) => {
