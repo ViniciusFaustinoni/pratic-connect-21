@@ -164,18 +164,6 @@ const menuConfig: {
     ],
   },
   {
-    id: 'documentos',
-    label: 'Documentos',
-    icon: FileText,
-    permission: 'canManageCadastro',
-    color: MENU_COLORS.documentos,
-    items: [
-      { title: 'Gerar Documento', url: '/documentos/gerar', icon: FilePlus },
-      { title: 'Histórico', url: '/documentos/historico', icon: History },
-      { title: 'Templates', url: '/documentos/templates', icon: FileCode },
-    ],
-  },
-  {
     id: 'monitoramento',
       label: 'Monitoramento',
       icon: MapPin,
@@ -363,6 +351,18 @@ const menuConfig: {
         { title: 'Perfis', url: '/diretoria/perfis', icon: Shield },
         { title: 'Logs', url: '/diretoria/logs', icon: FileText },
         { title: 'Relatórios', url: '/diretoria/relatorios', icon: ClipboardList },
+      ],
+    },
+    {
+      id: 'documentos',
+      label: 'Documentos',
+      icon: FileText,
+      permission: 'canManageCadastro',
+      color: MENU_COLORS.documentos,
+      items: [
+        { title: 'Gerar Documento', url: '/documentos/gerar', icon: FilePlus },
+        { title: 'Histórico', url: '/documentos/historico', icon: History },
+        { title: 'Templates', url: '/documentos/templates', icon: FileCode },
       ],
     },
     {
