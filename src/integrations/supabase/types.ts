@@ -3639,6 +3639,7 @@ export type Database = {
           validade_dias: number
           valor_adesao: number
           valor_adesao_original: number | null
+          valor_adicional: number | null
           valor_assistencia: number | null
           valor_cota: number
           valor_fipe: number
@@ -3679,6 +3680,7 @@ export type Database = {
           validade_dias?: number
           valor_adesao: number
           valor_adesao_original?: number | null
+          valor_adicional?: number | null
           valor_assistencia?: number | null
           valor_cota: number
           valor_fipe: number
@@ -3719,6 +3721,7 @@ export type Database = {
           validade_dias?: number
           valor_adesao?: number
           valor_adesao_original?: number | null
+          valor_adicional?: number | null
           valor_assistencia?: number | null
           valor_cota?: number
           valor_fipe?: number

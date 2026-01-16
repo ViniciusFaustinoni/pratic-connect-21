@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Loader2, Car, Search, CheckCircle2, Shield, Check, AlertCircle, Copy, MessageCircle, Zap, User, Link, UserCheck, Phone, Mail, AlertTriangle, Info, MapPin } from 'lucide-react';
+import { Loader2, Car, Search, CheckCircle2, Shield, Check, AlertCircle, Copy, MessageCircle, Zap, User, Link, UserCheck, Phone, Mail, AlertTriangle, Info, MapPin, HelpCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { LeadCombobox } from '@/components/leads/LeadCombobox';
@@ -158,6 +158,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
       lead_id: leadId || null,
       plano_id: '',
       valor_fipe: 0,
+      valor_adicional: 0,
       valor_cota: 0,
       taxa_administrativa: 0,
       valor_rastreamento: 0,
@@ -169,6 +170,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
   });
 
   const valorFipe = form.watch('valor_fipe');
+  const valorAdicional = form.watch('valor_adicional') || 0;
+  const valorTotalProtegido = valorFipe + valorAdicional;
   const planoId = form.watch('plano_id');
   const validadeDias = form.watch('validade_dias');
   const valorAdesao = form.watch('valor_adesao');
@@ -187,6 +190,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
   // Hook de planos calculados dinamicamente do banco
   const { planos: planosCalculados, isLoading: planosLoading } = usePlanosCotacao({
     valorFipe,
+    valorAdicional,
     regiao: 'rj', // Default RJ - pode ser ajustado
     combustivel: veiculoEncontrado?.vehicleData?.combustivel || undefined,
     categoria: usoVeiculo === 'aplicativo' ? 'aplicativo' : (categoria || undefined),
@@ -214,6 +218,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
         lead_id: null,
         plano_id: '',
         valor_fipe: 0,
+        valor_adicional: 0,
         valor_cota: 0,
         taxa_administrativa: 0,
         valor_rastreamento: 0,
@@ -651,6 +656,7 @@ Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
         lead_id: pendingFormData.lead_id || null,
         plano_id: pendingFormData.plano_id,
         valor_fipe: pendingFormData.valor_fipe,
+        valor_adicional: pendingFormData.valor_adicional || 0,
         valor_cota: pendingFormData.valor_cota,
         taxa_administrativa: pendingFormData.taxa_administrativa,
         valor_rastreamento: pendingFormData.valor_rastreamento,
@@ -1189,6 +1195,62 @@ Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
                 )}
               />
             </div>
+
+            {/* BLOCO 1.6: VALOR ADICIONAL (equipamentos/agregados) */}
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <Label className="text-sm font-semibold">Valor Adicional</Label>
+                <div className="relative group">
+                  <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
+                  <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-64 p-2 text-xs bg-popover text-popover-foreground border rounded-md shadow-md z-50">
+                    Valor de equipamentos, som, rodas, acessórios ou outros agregados que serão somados ao valor FIPE para cálculo da proteção.
+                  </div>
+                </div>
+                {valorAdicional > 0 && (
+                  <Badge variant="outline" className="text-xs bg-blue-50 dark:bg-blue-950/30 text-blue-600 border-blue-200">
+                    +{formatCurrency(valorAdicional)}
+                  </Badge>
+                )}
+              </div>
+              <FormField
+                control={form.control}
+                name="valor_adicional"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormControl>
+                      <CurrencyInput 
+                        value={field.value || 0} 
+                        onChange={field.onChange}
+                        placeholder="R$ 0,00"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                (Opcional) Equipamentos, som, rodas, acessórios, etc.
+              </p>
+            </div>
+
+            {/* Exibir Valor Total Protegido quando há adicional */}
+            {valorAdicional > 0 && (
+              <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Valor FIPE:</span>
+                  <span>{formatCurrency(valorFipe)}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm text-blue-600">
+                  <span>+ Valor Adicional:</span>
+                  <span>{formatCurrency(valorAdicional)}</span>
+                </div>
+                <Separator className="my-2" />
+                <div className="flex items-center justify-between font-semibold">
+                  <span>Valor Total Protegido:</span>
+                  <span className="text-primary">{formatCurrency(valorTotalProtegido)}</span>
+                </div>
+              </div>
+            )}
 
             <Separator />
 
