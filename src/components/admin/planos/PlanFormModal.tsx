@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Loader2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -573,7 +574,14 @@ export function PlanFormModal({
                   type="submit"
                   disabled={createPlan.isPending || updatePlan.isPending}
                 >
-                  {isEditing ? 'Salvar' : 'Criar Plano'}
+                  {(createPlan.isPending || updatePlan.isPending) ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Salvando...
+                    </>
+                  ) : (
+                    isEditing ? 'Salvar' : 'Criar Plano'
+                  )}
                 </Button>
               </div>
             </form>
