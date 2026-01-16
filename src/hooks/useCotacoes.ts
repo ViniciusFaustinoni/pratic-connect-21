@@ -38,11 +38,16 @@ export interface CotacaoWithRelations extends Cotacao {
   } | null;
 }
 
-export function useCotacoes() {
+export interface UseCotacoesOptions {
+  vendedorId?: string;
+  viewScope?: 'own' | 'team' | 'all';
+}
+
+export function useCotacoes(options?: UseCotacoesOptions) {
   return useQuery({
-    queryKey: ['cotacoes'],
+    queryKey: ['cotacoes', options?.viewScope, options?.vendedorId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('cotacoes')
         .select(`
           *,
@@ -51,6 +56,13 @@ export function useCotacoes() {
           contratos(id, numero, status)
         `)
         .order('created_at', { ascending: false });
+      
+      // Filtrar por vendedor se viewScope = 'own'
+      if (options?.viewScope === 'own' && options?.vendedorId) {
+        query = query.eq('vendedor_id', options.vendedorId);
+      }
+      
+      const { data, error } = await query;
       
       if (error) throw error;
       
