@@ -127,14 +127,58 @@ serve(async (req) => {
             : "pending",
     })) || [];
 
-    // Determinar status geral
-    const allSigned = signatures.every((s: any) => s.status === "signed");
-    const anyRejected = signatures.some((s: any) => s.status === "rejected");
+    // Filtrar apenas signatários que têm ação de ASSINAR (SIGN)
+    // Ignora participantes que são apenas cópias ou testemunhas
+    const signersWithSignAction = signatures.filter((s: any) => 
+      s.action === 'SIGN' || s.action === 'Assinar'
+    );
+    
+    // Determinar status geral baseado apenas nos signatários reais
+    const hasSigners = signersWithSignAction.length > 0;
+    const allSignersSigned = hasSigners && signersWithSignAction.every((s: any) => s.status === "signed");
+    const anySignerRejected = signersWithSignAction.some((s: any) => s.status === "rejected");
+    const anySignerViewed = signersWithSignAction.some((s: any) => s.status === "viewed");
     
     let overallStatus = "pending";
-    if (allSigned) overallStatus = "signed";
-    else if (anyRejected) overallStatus = "rejected";
-    else if (signatures.some((s: any) => s.status === "viewed")) overallStatus = "in_progress";
+    if (allSignersSigned) overallStatus = "signed";
+    else if (anySignerRejected) overallStatus = "rejected";
+    else if (anySignerViewed) overallStatus = "in_progress";
+
+    console.log("Status calculado:", {
+      totalSignatures: signatures.length,
+      signersWithSignAction: signersWithSignAction.length,
+      allSignersSigned,
+      overallStatus
+    });
+
+    // Se documento foi assinado, atualizar o banco de dados (fallback do webhook)
+    if (overallStatus === "signed") {
+      try {
+        const supabaseAdmin = createClient(
+          Deno.env.get("SUPABASE_URL")!,
+          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+        );
+
+        console.log("Atualizando contrato no banco de dados...");
+        
+        const { error: updateError } = await supabaseAdmin
+          .from("contratos")
+          .update({
+            status: "assinado",
+            autentique_status: "signed",
+            data_assinatura: new Date().toISOString()
+          })
+          .eq("autentique_documento_id", documentId);
+
+        if (updateError) {
+          console.error("Erro ao atualizar contrato:", updateError);
+        } else {
+          console.log("Contrato atualizado com sucesso!");
+        }
+      } catch (dbError) {
+        console.error("Erro ao conectar ao banco:", dbError);
+      }
+    }
 
     return new Response(
       JSON.stringify({

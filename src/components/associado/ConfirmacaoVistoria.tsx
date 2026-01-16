@@ -10,6 +10,7 @@ import { useContratoRealtimeByToken } from '@/hooks/useContratosRealtime';
 import { useAutentiqueStatusPublico } from '@/hooks/useAutentiqueStatusPublico';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface ConfirmacaoVistoriaProps {
   tipoVistoria: 'agendada' | 'autovistoria';
@@ -54,6 +55,7 @@ export function ConfirmacaoVistoria({
   const [showEmailIncorrect, setShowEmailIncorrect] = useState(false);
   
   const gerarAutentique = useGerarAutentiqueByToken();
+  const queryClient = useQueryClient();
   
   // Ativar listener realtime para receber atualização quando contrato for assinado
   useContratoRealtimeByToken(contratoToken);
@@ -68,6 +70,14 @@ export function ConfirmacaoVistoria({
   // Detectar quando foi assinado via polling
   const assinadoViaPolling = statusAutentique?.document?.status === 'signed';
   const contratoFoiAssinado = contratoAssinado || assinadoViaPolling;
+
+  // Forçar refetch quando polling detecta assinatura mas prop ainda não atualizou
+  useEffect(() => {
+    if (assinadoViaPolling && !contratoAssinado && contratoToken) {
+      console.log('[ConfirmacaoVistoria] Assinatura detectada via polling, forçando refetch...');
+      queryClient.refetchQueries({ queryKey: ['contrato-publico', contratoToken] });
+    }
+  }, [assinadoViaPolling, contratoAssinado, contratoToken, queryClient]);
   
   // Gerenciar progresso visual quando link está sendo gerado externamente
   useEffect(() => {
