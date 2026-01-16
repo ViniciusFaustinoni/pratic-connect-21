@@ -167,6 +167,8 @@ import { VendasNotificationListener } from "./components/notifications/VendasNot
 // Documentos
 import TemplatesList from "./pages/documentos/TemplatesList";
 import GerarDocumento from "./pages/documentos/GerarDocumento";
+import DocumentosHistorico from "./pages/documentos/DocumentosHistorico";
+import TemplateForm from "./pages/documentos/TemplateForm";
 
 // Diretoria
 import DiretoriaDashboard from "./pages/diretoria/DiretoriaDashboard";
@@ -401,8 +403,12 @@ const App = () => (
               <Route path="/admin/planos" element={<PlanosAdmin />} />
               
               {/* Documentos */}
-              <Route path="/documentos/templates" element={<TemplatesList />} />
+              <Route path="/documentos" element={<Navigate to="/documentos/gerar" replace />} />
               <Route path="/documentos/gerar" element={<GerarDocumento />} />
+              <Route path="/documentos/historico" element={<DocumentosHistorico />} />
+              <Route path="/documentos/templates" element={<TemplatesList />} />
+              <Route path="/documentos/templates/novo" element={<TemplateForm />} />
+              <Route path="/documentos/templates/:id" element={<TemplateForm />} />
 
               {/* Diretoria */}
               <Route path="/diretoria" element={<DiretoriaDashboard />} />
