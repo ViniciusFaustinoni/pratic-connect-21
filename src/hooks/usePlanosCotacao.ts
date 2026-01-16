@@ -35,6 +35,7 @@ export interface PlanoCotacao {
 
 interface CalcularPlanosParams {
   valorFipe: number;
+  valorAdicional?: number; // Valor de equipamentos/agregados
   regiao: string;
   combustivel?: string;
   categoria?: string;
@@ -119,20 +120,23 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
   });
 
   const planos = useMemo<PlanoCotacao[]>(() => {
-    const { valorFipe, regiao, combustivel = 'gasolina', categoria, anoVeiculo } = params;
+    const { valorFipe, valorAdicional = 0, regiao, combustivel = 'gasolina', categoria, anoVeiculo } = params;
 
     if (!valorFipe || valorFipe <= 0 || !planosBanco) {
       return [];
     }
+
+    // Valor total para cálculo = FIPE + Adicional (equipamentos/agregados)
+    const valorTotalCalculo = valorFipe + valorAdicional;
 
     const regiaoMapeada = mapearRegiao(regiao);
     const tipoVeiculo = params.tipoVeiculo || 'carro';
     const anoAtual = new Date().getFullYear();
     const anoVeiculoNum = anoVeiculo || anoAtual;
 
-    // Encontrar faixa de preço aplicável
+    // Encontrar faixa de preço aplicável usando o valor total
     const faixaPreco = tabelasPreco?.find(
-      f => valorFipe >= Number(f.fipe_de) && valorFipe <= Number(f.fipe_ate)
+      f => valorTotalCalculo >= Number(f.fipe_de) && valorTotalCalculo <= Number(f.fipe_ate)
     );
 
     const planosCalculados: PlanoCotacao[] = [];
@@ -157,11 +161,11 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         continue;
       }
 
-      // Verificar FIPE dentro da faixa
-      if (plano.fipe_minima && valorFipe < Number(plano.fipe_minima)) {
+      // Verificar FIPE dentro da faixa (usando valor total)
+      if (plano.fipe_minima && valorTotalCalculo < Number(plano.fipe_minima)) {
         continue;
       }
-      if (plano.fipe_maxima && valorFipe > Number(plano.fipe_maxima)) {
+      if (plano.fipe_maxima && valorTotalCalculo > Number(plano.fipe_maxima)) {
         continue;
       }
 
@@ -181,8 +185,8 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       }
       
       if (valorBase === null || valorBase === 0) {
-        // Fallback: usar um valor padrão baseado no FIPE
-        valorBase = Math.round(valorFipe * 0.025 / 12); // ~2.5% ao ano / 12 meses
+        // Fallback: usar um valor padrão baseado no valor total
+        valorBase = Math.round(valorTotalCalculo * 0.025 / 12); // ~2.5% ao ano / 12 meses
       }
 
       // Aplicar ajuste de região (Lagos e SP = 90% do RJ)

@@ -169,6 +169,7 @@ export const cotacaoSchema = z.object({
   lead_id: z.string().uuid().optional().nullable(),
   plano_id: z.string().uuid('Selecione um plano'),
   valor_fipe: z.number().min(1, 'Valor FIPE é obrigatório'),
+  valor_adicional: z.number().min(0).default(0), // Valor de equipamentos/agregados
   valor_cota: z.number().min(0),
   taxa_administrativa: z.number().min(0),
   valor_rastreamento: z.number().min(0),
