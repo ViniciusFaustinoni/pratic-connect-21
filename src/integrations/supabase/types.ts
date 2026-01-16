@@ -4254,6 +4254,258 @@ export type Database = {
         }
         Relationships: []
       }
+      documento_categorias: {
+        Row: {
+          ativo: boolean | null
+          cor: string | null
+          created_at: string | null
+          descricao: string | null
+          icone: string | null
+          id: string
+          nome: string
+          ordem: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          cor?: string | null
+          created_at?: string | null
+          descricao?: string | null
+          icone?: string | null
+          id?: string
+          nome: string
+          ordem?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          ativo?: boolean | null
+          cor?: string | null
+          created_at?: string | null
+          descricao?: string | null
+          icone?: string | null
+          id?: string
+          nome?: string
+          ordem?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      documento_gerados: {
+        Row: {
+          arquivo_nome: string | null
+          arquivo_url: string | null
+          assinado: boolean | null
+          assinado_em: string | null
+          assinatura_ip: string | null
+          associado_id: string | null
+          autentique_id: string | null
+          dados_utilizados: Json
+          gerado_em: string | null
+          gerado_por: string | null
+          id: string
+          numero_documento: string | null
+          template_id: string | null
+        }
+        Insert: {
+          arquivo_nome?: string | null
+          arquivo_url?: string | null
+          assinado?: boolean | null
+          assinado_em?: string | null
+          assinatura_ip?: string | null
+          associado_id?: string | null
+          autentique_id?: string | null
+          dados_utilizados: Json
+          gerado_em?: string | null
+          gerado_por?: string | null
+          id?: string
+          numero_documento?: string | null
+          template_id?: string | null
+        }
+        Update: {
+          arquivo_nome?: string | null
+          arquivo_url?: string | null
+          assinado?: boolean | null
+          assinado_em?: string | null
+          assinatura_ip?: string | null
+          associado_id?: string | null
+          autentique_id?: string | null
+          dados_utilizados?: Json
+          gerado_em?: string | null
+          gerado_por?: string | null
+          id?: string
+          numero_documento?: string | null
+          template_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documento_gerados_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documento_gerados_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "documento_gerados_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "documento_gerados_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "documento_gerados_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "documento_gerados_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "documento_gerados_gerado_por_fkey"
+            columns: ["gerado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documento_gerados_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "documento_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      documento_templates: {
+        Row: {
+          ativo: boolean | null
+          cabecalho_html: string | null
+          categoria_id: string | null
+          codigo: string
+          config_layout: Json | null
+          conteudo: string
+          created_at: string | null
+          created_by: string | null
+          descricao: string | null
+          id: string
+          nome: string
+          requer_assinatura: boolean | null
+          rodape_html: string | null
+          updated_at: string | null
+          variaveis: Json | null
+          versao: number | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          cabecalho_html?: string | null
+          categoria_id?: string | null
+          codigo: string
+          config_layout?: Json | null
+          conteudo: string
+          created_at?: string | null
+          created_by?: string | null
+          descricao?: string | null
+          id?: string
+          nome: string
+          requer_assinatura?: boolean | null
+          rodape_html?: string | null
+          updated_at?: string | null
+          variaveis?: Json | null
+          versao?: number | null
+        }
+        Update: {
+          ativo?: boolean | null
+          cabecalho_html?: string | null
+          categoria_id?: string | null
+          codigo?: string
+          config_layout?: Json | null
+          conteudo?: string
+          created_at?: string | null
+          created_by?: string | null
+          descricao?: string | null
+          id?: string
+          nome?: string
+          requer_assinatura?: boolean | null
+          rodape_html?: string | null
+          updated_at?: string | null
+          variaveis?: Json | null
+          versao?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documento_templates_categoria_id_fkey"
+            columns: ["categoria_id"]
+            isOneToOne: false
+            referencedRelation: "documento_categorias"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documento_templates_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      documento_variaveis: {
+        Row: {
+          codigo: string
+          created_at: string | null
+          exemplo: string | null
+          formato: string | null
+          grupo: string
+          id: string
+          nome_exibicao: string
+          origem_campo: string | null
+          origem_tabela: string | null
+          tipo: string | null
+        }
+        Insert: {
+          codigo: string
+          created_at?: string | null
+          exemplo?: string | null
+          formato?: string | null
+          grupo: string
+          id?: string
+          nome_exibicao: string
+          origem_campo?: string | null
+          origem_tabela?: string | null
+          tipo?: string | null
+        }
+        Update: {
+          codigo?: string
+          created_at?: string | null
+          exemplo?: string | null
+          formato?: string | null
+          grupo?: string
+          id?: string
+          nome_exibicao?: string
+          origem_campo?: string | null
+          origem_tabela?: string | null
+          tipo?: string | null
+        }
+        Relationships: []
+      }
       documentos: {
         Row: {
           analista_id: string | null
