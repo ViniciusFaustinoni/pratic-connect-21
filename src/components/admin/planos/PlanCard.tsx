@@ -104,6 +104,11 @@ export function PlanCard({ plan, lineColor, onEdit, onDuplicate, onDelete }: Pla
                     Inativo
                   </Badge>
                 )}
+                {plan.name.includes('APLICATIVO') && (
+                  <Badge className="bg-orange-100 text-orange-800 border-orange-300 text-xs font-bold">
+                    APP
+                  </Badge>
+                )}
                 {plan.badge_text && (
                   <Badge
                     className={BADGE_COLORS[plan.badge_color || 'blue']}
