@@ -164,6 +164,9 @@ import PlanosBeneficios from "./pages/vendas/PlanosBeneficios";
 import VendasConfig from "./pages/vendas/VendasConfig";
 import { VendasNotificationListener } from "./components/notifications/VendasNotificationListener";
 
+// Documentos
+import TemplatesList from "./pages/documentos/TemplatesList";
+
 // Diretoria
 import DiretoriaDashboard from "./pages/diretoria/DiretoriaDashboard";
 import ProdutosGestao from "./pages/diretoria/ProdutosGestao";
@@ -395,6 +398,9 @@ const App = () => (
               
               {/* Admin */}
               <Route path="/admin/planos" element={<PlanosAdmin />} />
+              
+              {/* Documentos */}
+              <Route path="/documentos/templates" element={<TemplatesList />} />
 
               {/* Diretoria */}
               <Route path="/diretoria" element={<DiretoriaDashboard />} />

@@ -135,6 +135,11 @@ const ROUTE_CONFIG: Record<string, RouteConfig> = {
   '/oficinas/lista': { label: 'Lista' },
   '/oficinas/ordens': { label: 'Ordens de Serviço' },
   
+  // Documentos
+  '/documentos': { label: 'Documentos' },
+  '/documentos/templates': { label: 'Templates' },
+  '/documentos/templates/novo': { label: 'Novo Template' },
+  
   // Configurações
   '/configuracoes': { label: 'Configurações' },
 };

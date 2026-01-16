@@ -1,0 +1,289 @@
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import type { DocumentoCategoria, ConfiguracaoLayout, VariavelTemplate } from '@/types/documentos';
+import type { Json } from '@/integrations/supabase/types';
+
+// Tipo que representa o template como vem do banco
+interface TemplateFromDB {
+  id: string;
+  categoria_id: string;
+  nome: string;
+  codigo: string;
+  descricao: string;
+  versao: number;
+  conteudo: string;
+  variaveis: Json;
+  config_layout: Json;
+  cabecalho_html: string;
+  rodape_html: string;
+  ativo: boolean;
+  requer_assinatura: boolean;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// Tipo transformado para uso no frontend
+export interface DocumentoTemplateView {
+  id: string;
+  categoria_id: string;
+  nome: string;
+  codigo: string;
+  descricao?: string;
+  versao: number;
+  conteudo: string;
+  variaveis: VariavelTemplate[];
+  config_layout: ConfiguracaoLayout;
+  cabecalho_html?: string;
+  rodape_html?: string;
+  ativo: boolean;
+  requer_assinatura: boolean;
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// Função para transformar dados do banco para o tipo do frontend
+function transformTemplate(data: TemplateFromDB & { categoria: DocumentoCategoria | null }): DocumentoTemplateView & { categoria: DocumentoCategoria } {
+  return {
+    ...data,
+    descricao: data.descricao || undefined,
+    variaveis: Array.isArray(data.variaveis) ? (data.variaveis as unknown as VariavelTemplate[]) : [],
+    config_layout: data.config_layout as unknown as ConfiguracaoLayout,
+    cabecalho_html: data.cabecalho_html || undefined,
+    rodape_html: data.rodape_html || undefined,
+    created_by: data.created_by || undefined,
+    categoria: data.categoria as DocumentoCategoria,
+  };
+}
+
+// ===== QUERIES =====
+
+export function useDocumentoTemplates() {
+  return useQuery({
+    queryKey: ['documento-templates'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('documento_templates')
+        .select(`
+          *,
+          categoria:documento_categorias(*)
+        `)
+        .eq('ativo', true)
+        .order('categoria_id')
+        .order('nome');
+
+      if (error) throw error;
+      return (data || []).map(item => transformTemplate(item as any));
+    },
+  });
+}
+
+export function useDocumentoTemplate(id: string | undefined) {
+  return useQuery({
+    queryKey: ['documento-template', id],
+    queryFn: async () => {
+      if (!id) return null;
+      
+      const { data, error } = await supabase
+        .from('documento_templates')
+        .select(`
+          *,
+          categoria:documento_categorias(*)
+        `)
+        .eq('id', id)
+        .single();
+
+      if (error) throw error;
+      return transformTemplate(data as any);
+    },
+    enabled: !!id,
+  });
+}
+
+export function useDocumentoCategorias() {
+  return useQuery({
+    queryKey: ['documento-categorias'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('documento_categorias')
+        .select('*')
+        .eq('ativo', true)
+        .order('ordem');
+
+      if (error) throw error;
+      return data as DocumentoCategoria[];
+    },
+  });
+}
+
+// ===== MUTATIONS =====
+
+interface CreateTemplateInput {
+  codigo: string;
+  nome: string;
+  descricao?: string;
+  categoria_id: string;
+  conteudo: string;
+  variaveis?: VariavelTemplate[];
+  requer_assinatura?: boolean;
+  config_layout?: ConfiguracaoLayout;
+}
+
+export function useCreateTemplate() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: CreateTemplateInput) => {
+      const { data, error } = await supabase
+        .from('documento_templates')
+        .insert({
+          codigo: input.codigo,
+          nome: input.nome,
+          descricao: input.descricao || '',
+          categoria_id: input.categoria_id,
+          conteudo: input.conteudo,
+          variaveis: (input.variaveis || []) as unknown as Json,
+          requer_assinatura: input.requer_assinatura || false,
+          config_layout: (input.config_layout || {}) as unknown as Json,
+          versao: 1,
+          ativo: true,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documento-templates'] });
+      toast.success('Template criado com sucesso!');
+    },
+    onError: (error: Error) => {
+      console.error('Erro ao criar template:', error);
+      toast.error('Erro ao criar template');
+    },
+  });
+}
+
+interface UpdateTemplateInput {
+  id: string;
+  codigo?: string;
+  nome?: string;
+  descricao?: string;
+  categoria_id?: string;
+  conteudo?: string;
+  variaveis?: VariavelTemplate[];
+  requer_assinatura?: boolean;
+  config_layout?: ConfiguracaoLayout;
+}
+
+export function useUpdateTemplate() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, ...input }: UpdateTemplateInput) => {
+      const updateData: Record<string, unknown> = {
+        updated_at: new Date().toISOString(),
+      };
+
+      if (input.codigo !== undefined) updateData.codigo = input.codigo;
+      if (input.nome !== undefined) updateData.nome = input.nome;
+      if (input.descricao !== undefined) updateData.descricao = input.descricao;
+      if (input.categoria_id !== undefined) updateData.categoria_id = input.categoria_id;
+      if (input.conteudo !== undefined) updateData.conteudo = input.conteudo;
+      if (input.variaveis !== undefined) updateData.variaveis = input.variaveis as unknown as Json;
+      if (input.requer_assinatura !== undefined) updateData.requer_assinatura = input.requer_assinatura;
+      if (input.config_layout !== undefined) updateData.config_layout = input.config_layout as unknown as Json;
+
+      const { data, error } = await supabase
+        .from('documento_templates')
+        .update(updateData)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documento-templates'] });
+      toast.success('Template atualizado com sucesso!');
+    },
+    onError: (error: Error) => {
+      console.error('Erro ao atualizar template:', error);
+      toast.error('Erro ao atualizar template');
+    },
+  });
+}
+
+export function useDeleteTemplate() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      // Soft delete - apenas marca como inativo
+      const { error } = await supabase
+        .from('documento_templates')
+        .update({ ativo: false, updated_at: new Date().toISOString() })
+        .eq('id', id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documento-templates'] });
+      toast.success('Template excluído com sucesso!');
+    },
+    onError: (error: Error) => {
+      console.error('Erro ao excluir template:', error);
+      toast.error('Erro ao excluir template');
+    },
+  });
+}
+
+export function useDuplicateTemplate() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      // Buscar template original
+      const { data: original, error: fetchError } = await supabase
+        .from('documento_templates')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      // Criar cópia com novo código
+      const { data, error } = await supabase
+        .from('documento_templates')
+        .insert({
+          codigo: `${original.codigo}-COPIA`,
+          nome: `${original.nome} (Cópia)`,
+          descricao: original.descricao,
+          categoria_id: original.categoria_id,
+          conteudo: original.conteudo,
+          variaveis: original.variaveis,
+          requer_assinatura: original.requer_assinatura,
+          config_layout: original.config_layout,
+          versao: 1,
+          ativo: true,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documento-templates'] });
+      toast.success('Template duplicado com sucesso!');
+    },
+    onError: (error: Error) => {
+      console.error('Erro ao duplicar template:', error);
+      toast.error('Erro ao duplicar template');
+    },
+  });
+}
