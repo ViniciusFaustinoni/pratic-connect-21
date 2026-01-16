@@ -137,9 +137,10 @@ const ROUTE_CONFIG: Record<string, RouteConfig> = {
   
   // Documentos
   '/documentos': { label: 'Documentos' },
+  '/documentos/gerar': { label: 'Gerar Documento' },
+  '/documentos/historico': { label: 'Histórico' },
   '/documentos/templates': { label: 'Templates' },
   '/documentos/templates/novo': { label: 'Novo Template' },
-  '/documentos/gerar': { label: 'Gerar' },
   
   // Configurações
   '/configuracoes': { label: 'Configurações' },
