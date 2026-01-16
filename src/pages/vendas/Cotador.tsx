@@ -39,6 +39,7 @@ import {
   XCircle,
   FileText,
   AlertCircle,
+  DollarSign,
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -124,6 +125,11 @@ const formatCurrency = (value: number) => {
     style: 'currency',
     currency: 'BRL',
   }).format(value);
+};
+
+// Formatar moeda para input
+const formatarMoeda = (valor: number): string => {
+  return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 };
 
 const formatPlaca = (value: string): string => {
@@ -307,6 +313,9 @@ export default function CotadorPage() {
   const [modeloCustom, setModeloCustom] = useState<string | null>(null);
   const [anoCustom, setAnoCustom] = useState<number | null>(null);
   const [erroCategoriaVeiculo, setErroCategoriaVeiculo] = useState(false);
+  
+  // Valor extra do vendedor
+  const [valorExtra, setValorExtra] = useState<number>(0);
 
   // Lead
   const [leadSelecionado, setLeadSelecionado] = useState<LeadDB | null>(null);
@@ -407,6 +416,15 @@ export default function CotadorPage() {
     // Limpar valores customizados
     setModeloCustom(null);
     setAnoCustom(null);
+    // Limpar valor extra
+    setValorExtra(0);
+  };
+  
+  // Handler para input de valor extra
+  const handleValorExtraChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value.replace(/\D/g, '');
+    const numeric = parseInt(raw || '0') / 100;
+    setValorExtra(numeric);
   };
 
   const handleBuscarPlaca = async () => {
@@ -1201,6 +1219,29 @@ _Cotação válida por 7 dias_
               )}
             </div>
 
+            {/* Valor Extra do Vendedor */}
+            <div className="border-t pt-4 mt-4">
+              <div className="flex items-center gap-2 mb-2">
+                <DollarSign className="h-4 w-4 text-green-600" />
+                <Label htmlFor="valorExtra">Valor Extra (Vendedor)</Label>
+              </div>
+              <p className="text-xs text-muted-foreground mb-2">
+                Valor adicional para margem de negociação
+              </p>
+              <Input
+                id="valorExtra"
+                type="text"
+                placeholder="R$ 0,00"
+                value={valorExtra > 0 ? formatarMoeda(valorExtra) : ''}
+                onChange={handleValorExtraChange}
+              />
+              {valorExtra > 0 && (
+                <p className="text-xs text-green-600 mt-1">
+                  + {formatarMoeda(valorExtra)} será adicionado à mensalidade
+                </p>
+              )}
+            </div>
+
             {/* Botão Calcular */}
             <Button
               onClick={handleCalcular}
@@ -1321,7 +1362,7 @@ _Cotação válida por 7 dias_
                     </div>
 
                     {/* Preços */}
-                    <div className="rounded-lg border bg-muted/30 p-4">
+                    <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
                       <div className="grid grid-cols-3 gap-4 text-center">
                         <div>
                           <p className="text-xs text-muted-foreground uppercase">Adesão</p>
@@ -1334,10 +1375,24 @@ _Cotação válida por 7 dias_
                         <div>
                           <p className="text-xs text-muted-foreground uppercase">1ª Parcela</p>
                           <p className="text-lg font-bold text-primary">
-                            {formatCurrency(planoAtual.valorAdesao + planoAtual.valorMensal)}
+                            {formatCurrency(planoAtual.valorAdesao + planoAtual.valorMensal + valorExtra)}
                           </p>
                         </div>
                       </div>
+                      
+                      {/* Linha de valor extra - só aparece quando > 0 */}
+                      {valorExtra > 0 && (
+                        <div className="border-t pt-3 space-y-1">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-green-600 font-medium">+ Extra vendedor:</span>
+                            <span className="text-green-600 font-medium">{formatarMoeda(valorExtra)}</span>
+                          </div>
+                          <div className="flex justify-between font-semibold">
+                            <span>Total mensal:</span>
+                            <span className="text-primary">{formatarMoeda(planoAtual.valorMensal + valorExtra)}</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Botão selecionar */}
@@ -1403,7 +1458,7 @@ _Cotação válida por 7 dias_
             </div>
 
             {/* Box de valores */}
-            <div className="rounded-lg border-2 border-primary/30 bg-primary/5 p-4">
+            <div className="rounded-lg border-2 border-primary/30 bg-primary/5 p-4 space-y-3">
               <div className="grid grid-cols-3 gap-4 text-center">
                 <div>
                   <p className="text-xs text-muted-foreground uppercase">Adesão</p>
@@ -1411,15 +1466,25 @@ _Cotação válida por 7 dias_
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground uppercase">Mensal</p>
-                  <p className="text-xl font-bold">{formatCurrency(planoFinalSelecionado.valorMensal)}</p>
+                  <p className="text-xl font-bold">
+                    {formatCurrency(planoFinalSelecionado.valorMensal + valorExtra)}
+                  </p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground uppercase">1ª Parcela</p>
                   <p className="text-2xl font-bold text-primary">
-                    {formatCurrency(planoFinalSelecionado.valorAdesao + planoFinalSelecionado.valorMensal)}
+                    {formatCurrency(planoFinalSelecionado.valorAdesao + planoFinalSelecionado.valorMensal + valorExtra)}
                   </p>
                 </div>
               </div>
+              
+              {valorExtra > 0 && (
+                <div className="text-center pt-2 border-t">
+                  <p className="text-sm text-green-600">
+                    Inclui {formatarMoeda(valorExtra)} de valor extra do vendedor
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Botões de ação */}
