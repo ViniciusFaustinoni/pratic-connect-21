@@ -126,17 +126,17 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       return [];
     }
 
-    // Valor total para cálculo = FIPE + Adicional (equipamentos/agregados)
-    const valorTotalCalculo = valorFipe + valorAdicional;
+    // Nota: valorAdicional não é usado para cálculo da cota/proteção
+    // Ele é um acréscimo fixo na mensalidade final (somado no componente)
 
     const regiaoMapeada = mapearRegiao(regiao);
     const tipoVeiculo = params.tipoVeiculo || 'carro';
     const anoAtual = new Date().getFullYear();
     const anoVeiculoNum = anoVeiculo || anoAtual;
 
-    // Encontrar faixa de preço aplicável usando o valor total
+    // Encontrar faixa de preço aplicável usando apenas o Valor FIPE
     const faixaPreco = tabelasPreco?.find(
-      f => valorTotalCalculo >= Number(f.fipe_de) && valorTotalCalculo <= Number(f.fipe_ate)
+      f => valorFipe >= Number(f.fipe_de) && valorFipe <= Number(f.fipe_ate)
     );
 
     const planosCalculados: PlanoCotacao[] = [];
@@ -161,11 +161,11 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         continue;
       }
 
-      // Verificar FIPE dentro da faixa (usando valor total)
-      if (plano.fipe_minima && valorTotalCalculo < Number(plano.fipe_minima)) {
+      // Verificar FIPE dentro da faixa (usando apenas Valor FIPE)
+      if (plano.fipe_minima && valorFipe < Number(plano.fipe_minima)) {
         continue;
       }
-      if (plano.fipe_maxima && valorTotalCalculo > Number(plano.fipe_maxima)) {
+      if (plano.fipe_maxima && valorFipe > Number(plano.fipe_maxima)) {
         continue;
       }
 
@@ -185,8 +185,8 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       }
       
       if (valorBase === null || valorBase === 0) {
-        // Fallback: usar um valor padrão baseado no valor total
-        valorBase = Math.round(valorTotalCalculo * 0.025 / 12); // ~2.5% ao ano / 12 meses
+        // Fallback: usar um valor padrão baseado no Valor FIPE
+        valorBase = Math.round(valorFipe * 0.025 / 12); // ~2.5% ao ano / 12 meses
       }
 
       // Aplicar ajuste de região (Lagos e SP = 90% do RJ)
