@@ -31,6 +31,8 @@ export interface ConfiguracaoLayout {
   mostrarRodape: boolean;
   mostrarNumeroPagina: boolean;
   orientacao: 'retrato' | 'paisagem';
+  mostrarLogo?: boolean;
+  logoUrl?: string;
 }
 
 /**
