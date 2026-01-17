@@ -9,9 +9,11 @@ export interface CustoBeneficio {
   nome: string;
   categoria: string;
   preco_sugerido: number;
+  variacao_por_cota: boolean;
   gasto_total_60d: number;
   qtd_utilizacoes_60d: number;
   total_associados: number;
+  total_veiculos: number;
   total_cotas: number;
   custo_real: number;
   margem: number;
@@ -35,7 +37,7 @@ export function useCustoBeneficios() {
     queryKey: ['custo-real-beneficios'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('vw_custo_real_beneficios')
+        .from('vw_custo_real_adicionais')
         .select('*')
         .order('categoria')
         .order('nome');

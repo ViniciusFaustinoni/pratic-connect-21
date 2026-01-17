@@ -13,6 +13,7 @@ export interface BeneficioInput {
   preco: number;
   ativo?: boolean;
   ordem?: number;
+  variacao_por_cota?: boolean;
 }
 
 export interface BeneficioComRegioes extends BeneficioAdicional {
@@ -67,6 +68,7 @@ export function useCreateBeneficio() {
           preco: input.preco,
           ativo: input.ativo ?? true,
           ordem: input.ordem ?? 0,
+          variacao_por_cota: input.variacao_por_cota ?? true,
         })
         .select()
         .single();
@@ -118,6 +120,7 @@ export function useUpdateBeneficio() {
           preco: input.preco,
           ativo: input.ativo,
           ordem: input.ordem,
+          variacao_por_cota: input.variacao_por_cota,
         })
         .eq('id', id)
         .select()
