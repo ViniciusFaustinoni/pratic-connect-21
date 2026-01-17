@@ -33,6 +33,11 @@ import { cn } from '@/lib/utils';
 import { useVistorias, Vistoria } from '@/hooks/useVistorias';
 import { REGIOES_ATENDIMENTO } from '@/types/monitoramento';
 import { toast } from 'sonner';
+import { 
+  AgendarVistoriaModal, 
+  VistoriaParaAgendar, 
+  AgendarVistoriaFormData 
+} from '@/components/monitoramento/AgendarVistoriaModal';
 
 // ============================================
 // TIPOS E CONSTANTES
@@ -129,6 +134,10 @@ export default function FilaVistorias() {
   const [regiaoFilter, setRegiaoFilter] = useState('todas');
   const [dataFilter, setDataFilter] = useState<Date | undefined>();
   const [vistoriadorFilter, setVistoriadorFilter] = useState('todos');
+  
+  // Estado do modal de agendamento
+  const [agendarModalOpen, setAgendarModalOpen] = useState(false);
+  const [vistoriaSelecionada, setVistoriaSelecionada] = useState<VistoriaParaAgendar | null>(null);
 
   // Dados
   const { data: vistoriasRaw, isLoading } = useVistorias({});
@@ -265,9 +274,37 @@ export default function FilaVistorias() {
     setVistoriadorFilter('todos');
   };
 
-  // Ações (placeholders)
+  // Handler para abrir modal de agendamento
+  const handleAgendar = (vistoria: VistoriaFila) => {
+    setVistoriaSelecionada({
+      id: vistoria.id,
+      protocolo: vistoria.protocolo,
+      cliente: vistoria.cliente,
+      veiculo: vistoria.veiculo,
+      placa: vistoria.placa,
+      regiao: vistoria.regiao,
+    });
+    setAgendarModalOpen(true);
+  };
+
+  // Handler para salvar agendamento
+  const handleSaveAgendamento = async (data: AgendarVistoriaFormData) => {
+    // TODO: Implementar mutação real para salvar no banco
+    console.log('Agendamento:', data);
+    toast.success('Vistoria agendada com sucesso!');
+    setAgendarModalOpen(false);
+  };
+
+  // Ações 
   const handleAction = (action: string, vistoria: VistoriaFila) => {
-    toast.info(`Ação: ${action} - Vistoria: ${vistoria.protocolo}`);
+    switch (action) {
+      case 'agendar':
+      case 'reagendar':
+        handleAgendar(vistoria);
+        break;
+      default:
+        toast.info(`Ação: ${action} - Vistoria: ${vistoria.protocolo}`);
+    }
   };
 
   // Renderizar ações contextuais
@@ -547,6 +584,14 @@ export default function FilaVistorias() {
           )}
         </div>
       </Tabs>
+
+      {/* Modal de Agendamento */}
+      <AgendarVistoriaModal
+        open={agendarModalOpen}
+        onOpenChange={setAgendarModalOpen}
+        vistoria={vistoriaSelecionada}
+        onSave={handleSaveAgendamento}
+      />
     </div>
   );
 }
