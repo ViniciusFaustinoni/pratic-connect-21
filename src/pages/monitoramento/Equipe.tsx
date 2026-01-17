@@ -45,6 +45,8 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
+import { ProfissionalModal, Profissional as ProfissionalModalData, ProfissionalFormData } from '@/components/monitoramento/ProfissionalModal';
+import { toast } from 'sonner';
 
 type StatusProfissional = 'disponivel' | 'indisponivel' | 'ferias' | 'afastado';
 type FuncaoProfissional = 'vistoriador' | 'instalador';
@@ -54,6 +56,14 @@ interface Profissional {
   nome: string;
   email: string;
   telefone: string;
+  cpf?: string;
+  whatsapp?: string;
+  cep?: string;
+  logradouro?: string;
+  numero?: string;
+  bairro?: string;
+  cidade?: string;
+  uf?: string;
   status: StatusProfissional;
   regioes: string[];
   funcoes: FuncaoProfissional[];
@@ -148,6 +158,30 @@ export default function Equipe() {
   const [statusFilter, setStatusFilter] = useState<string>('todos');
   const [regiaoFilter, setRegiaoFilter] = useState<string>('todas');
   const [funcaoFilter, setFuncaoFilter] = useState<string>('todos');
+  
+  // Estado do modal
+  const [modalOpen, setModalOpen] = useState(false);
+  const [profissionalSelecionado, setProfissionalSelecionado] = useState<Profissional | null>(null);
+
+  const handleNovoProfissional = () => {
+    setProfissionalSelecionado(null);
+    setModalOpen(true);
+  };
+
+  const handleEditar = (prof: Profissional) => {
+    setProfissionalSelecionado(prof);
+    setModalOpen(true);
+  };
+
+  const handleSave = (data: ProfissionalFormData) => {
+    if (profissionalSelecionado) {
+      toast.success(`Profissional ${data.nome} atualizado com sucesso!`);
+    } else {
+      toast.success(`Profissional ${data.nome} cadastrado com sucesso!`);
+    }
+    // TODO: Integrar com Supabase
+    console.log('Dados salvos:', data);
+  };
 
   const profissionaisFiltrados = mockProfissionais.filter((prof) => {
     const matchSearch = prof.nome.toLowerCase().includes(searchTerm.toLowerCase());
@@ -206,11 +240,38 @@ export default function Equipe() {
           <h1 className="text-2xl font-bold text-foreground">Equipe de Vistoriadores e Instaladores</h1>
           <p className="text-muted-foreground">Gerencie sua equipe de campo</p>
         </div>
-        <Button>
+        <Button onClick={handleNovoProfissional}>
           <Plus className="mr-2 h-4 w-4" />
           Novo Profissional
         </Button>
       </div>
+
+      {/* Modal */}
+      <ProfissionalModal
+        open={modalOpen}
+        onOpenChange={setModalOpen}
+        profissional={profissionalSelecionado ? {
+          id: profissionalSelecionado.id,
+          nome: profissionalSelecionado.nome,
+          cpf: profissionalSelecionado.cpf || '',
+          email: profissionalSelecionado.email,
+          telefone: profissionalSelecionado.telefone,
+          whatsapp: profissionalSelecionado.whatsapp,
+          cep: profissionalSelecionado.cep,
+          logradouro: profissionalSelecionado.logradouro,
+          numero: profissionalSelecionado.numero,
+          bairro: profissionalSelecionado.bairro,
+          cidade: profissionalSelecionado.cidade,
+          uf: profissionalSelecionado.uf,
+          regioes: profissionalSelecionado.regioes,
+          funcoes: profissionalSelecionado.funcoes,
+          capacidadeDiaria: profissionalSelecionado.capacidadeDiaria,
+          status: profissionalSelecionado.status === 'ferias' || profissionalSelecionado.status === 'afastado' 
+            ? 'indisponivel' 
+            : profissionalSelecionado.status,
+        } : null}
+        onSave={handleSave}
+      />
 
       {/* Filtros */}
       <div className="flex flex-col sm:flex-row gap-4">
@@ -296,7 +357,7 @@ export default function Equipe() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleEditar(profissional)}>
                         <Edit className="mr-2 h-4 w-4" />
                         Editar
                       </DropdownMenuItem>
