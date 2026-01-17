@@ -33,7 +33,7 @@ export default function CotacaoPublica() {
         .from('cotacoes')
         .select(`
           *,
-          planos (*)
+          planos:planos!plano_id(*)
         `)
         .eq('token_publico', token)
         .single();

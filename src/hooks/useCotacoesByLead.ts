@@ -18,7 +18,7 @@ export function useCotacoesByLead(leadId: string | undefined) {
         .from('cotacoes')
         .select(`
           *,
-          planos (*)
+          planos:planos!plano_id(*)
         `)
         .eq('lead_id', leadId)
         .order('created_at', { ascending: false });
