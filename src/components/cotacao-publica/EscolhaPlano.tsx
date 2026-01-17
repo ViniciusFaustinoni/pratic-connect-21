@@ -109,9 +109,9 @@ export function EscolhaPlano({
         </p>
       </motion.div>
 
-      {/* Grid de Planos - Premium Dark Cards */}
+      {/* Cards de Planos - Premium Dark Cards */}
       <motion.div 
-        className="grid gap-5 md:gap-6 md:grid-cols-2 lg:grid-cols-3 justify-items-center"
+        className="flex flex-wrap justify-center gap-6"
         variants={containerVariants}
         initial="hidden"
         animate="visible"
@@ -129,10 +129,11 @@ export function EscolhaPlano({
                 transition: { duration: 0.2 },
               }}
               whileTap={{ scale: 0.98 }}
+              className="w-full sm:w-80"
             >
               <Card
                 className={cn(
-                  'plan-card-premium relative cursor-pointer overflow-hidden w-full max-w-sm',
+                  'plan-card-premium relative cursor-pointer overflow-hidden',
                   'bg-card/60 backdrop-blur-xl border border-border/50',
                   'transition-all duration-300',
                   isSelected && 'plan-card-selected',

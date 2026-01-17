@@ -241,12 +241,11 @@ export default function CotacaoContratacao() {
 
       {/* Main Content */}
       <main className="max-w-5xl mx-auto px-4 py-8 relative z-10">
-        <div className="grid md:grid-cols-[280px_1fr] gap-8">
-          {/* Stepper Sidebar */}
-          <motion.aside 
-            className="md:sticky md:top-28 md:self-start"
-            initial={{ opacity: 0, x: -30 }}
-            animate={{ opacity: 1, x: 0 }}
+        <div className="space-y-8">
+          {/* Stepper - Horizontal no Desktop, compacto no Mobile */}
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3, duration: 0.5 }}
           >
             <Card className="p-4 stepper-card-premium">
@@ -256,10 +255,10 @@ export default function CotacaoContratacao() {
                 onStepClick={(step) => step < etapaAtual && setEtapaAtual(step)}
               />
             </Card>
-          </motion.aside>
+          </motion.div>
 
-          {/* Step Content */}
-          <div className="min-w-0">
+          {/* Step Content - Largura Total */}
+          <div className="w-full">
             <AnimatePresence mode="wait">
               {/* Etapa 0: Escolha do Plano */}
               {etapaAtual === 0 && (
