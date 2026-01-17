@@ -165,11 +165,37 @@ export function useCotacaoContratacao(token: string | undefined) {
     },
   });
 
+  // Gerar proposta/contrato automaticamente
+  const gerarPropostaAutomatica = useMutation({
+    mutationFn: async (cotacaoId: string) => {
+      console.log('[useCotacaoContratacao] Gerando proposta automaticamente...');
+      
+      const { data, error } = await publicSupabase.functions.invoke('contrato-gerar', {
+        body: { cotacao_id: cotacaoId },
+      });
+
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'Erro ao gerar proposta');
+
+      // Atualizar cotação com ID do contrato gerado
+      if (data?.contrato?.id) {
+        await publicSupabase
+          .from('cotacoes')
+          .update({ contrato_gerado_id: data.contrato.id })
+          .eq('id', cotacaoId);
+      }
+
+      console.log('[useCotacaoContratacao] Proposta gerada:', data.contrato?.numero);
+      return data;
+    },
+  });
+
   // Salvar dados pessoais
   const salvarDadosPessoais = useMutation({
     mutationFn: async (dados: DadosPessoaisForm) => {
       if (!cotacao) throw new Error('Cotação não encontrada');
 
+      // 1. Salvar dados pessoais
       const { error } = await publicSupabase
         .from('cotacoes')
         .update({
@@ -190,6 +216,17 @@ export function useCotacaoContratacao(token: string | undefined) {
         .eq('id', cotacao.id);
 
       if (error) throw error;
+
+      // 2. Gerar proposta automaticamente se ainda não existir
+      if (!cotacao.contrato_gerado_id) {
+        try {
+          await gerarPropostaAutomatica.mutateAsync(cotacao.id);
+          console.log('[useCotacaoContratacao] Proposta gerada automaticamente após dados pessoais');
+        } catch (propostaError) {
+          console.error('[useCotacaoContratacao] Erro ao gerar proposta automática:', propostaError);
+          // Não impede o fluxo - proposta pode ser gerada depois
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cotacao-contratacao', token] });

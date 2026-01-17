@@ -54,15 +54,19 @@ serve(async (req) => {
 
     // 2. Verificar se cotação está pronta para gerar contrato
     // Aceita tanto cotações com status='aceita' (fluxo vendedor)
-    // quanto cotações com status_contratacao='vistoria_ok' (fluxo link público)
+    // quanto cotações com status_contratacao em etapas avançadas (fluxo link público)
     const isFluxoVendedor = cotacao.status === 'aceita';
-    const isFluxoPublico = cotacao.status_contratacao === 'vistoria_ok';
+    const statusContratacaoValidos = ['dados_preenchidos', 'documentos_ok', 'vistoria_ok'];
+    const isFluxoPublico = statusContratacaoValidos.includes(cotacao.status_contratacao || '');
     
-    if (!isFluxoVendedor && !isFluxoPublico) {
+    // Também aceitar cotações sem lead (rascunho) para geração direta pelo vendedor
+    const isRascunhoSemLead = cotacao.status === 'rascunho' && !cotacao.lead_id;
+    
+    if (!isFluxoVendedor && !isFluxoPublico && !isRascunhoSemLead) {
       throw new Error(`Cotação não está pronta para gerar contrato. Status: ${cotacao.status}, Status Contratação: ${cotacao.status_contratacao}`);
     }
     
-    console.log(`Gerando contrato via fluxo: ${isFluxoVendedor ? 'vendedor' : 'público'}`)
+    console.log(`Gerando contrato via fluxo: ${isFluxoVendedor ? 'vendedor' : isFluxoPublico ? 'público' : 'rascunho'}`)
 
     // 3. Verificar se já existe contrato para esta cotação
     const { data: contratoExistente } = await supabase

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { toast } from 'sonner';
 import { useState, useEffect } from 'react';
 
@@ -15,7 +16,8 @@ export function useContratoByToken(token: string | undefined) {
     queryFn: async () => {
       if (!token) return null;
       
-      const { data, error } = await supabase
+      // Usar publicSupabase para garantir funcionamento em contexto público
+      const { data, error } = await publicSupabase
         .from('contratos')
         .select(`
           *,

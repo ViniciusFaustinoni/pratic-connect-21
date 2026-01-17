@@ -286,7 +286,13 @@ export function CotacaoCard({
             </Button>
           )}
           
-          {cotacao.status === 'rascunho' && !hasLead && onGerarContrato && permissions?.canGenerateContract !== false && !cotacao.contrato && !cotacao.contrato_gerado_id && (
+          {/* Só mostra botão Gerar Proposta se:
+              - Cotação é rascunho sem lead
+              - Não existe contrato vinculado
+              - Não existe contrato_gerado_id
+              - Não está em status de contratação avançado (cliente já está no fluxo público)
+          */}
+          {cotacao.status === 'rascunho' && !hasLead && onGerarContrato && permissions?.canGenerateContract !== false && !cotacao.contrato && !cotacao.contrato_gerado_id && !['dados_preenchidos', 'documentos_ok', 'vistoria_ok', 'pagamento_ok', 'contrato_gerado'].includes(cotacao.status_contratacao || '') && (
             <Button 
               size="sm"
               variant="outline"
@@ -315,7 +321,8 @@ export function CotacaoCard({
             </>
           )}
           
-          {cotacao.status === 'aceita' && onGerarContrato && !cotacao.contrato && permissions?.canGenerateContract !== false && (
+          {/* Só mostra botão Gerar Proposta para cotação aceita se não existe contrato nem contrato_gerado_id */}
+          {cotacao.status === 'aceita' && onGerarContrato && !cotacao.contrato && !cotacao.contrato_gerado_id && permissions?.canGenerateContract !== false && (
             <Button 
               size="sm"
               onClick={() => onGerarContrato(cotacao.id)}
