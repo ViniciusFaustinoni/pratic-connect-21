@@ -356,6 +356,25 @@ serve(async (req) => {
 
               console.log(`[asaas-webhook] Adesão paga para contrato ${cobranca.contrato_id}`);
 
+              // === ATUALIZAR STATUS DA COTAÇÃO ===
+              const { data: contratoData } = await supabase
+                .from('contratos')
+                .select('cotacao_id')
+                .eq('id', cobranca.contrato_id)
+                .maybeSingle();
+
+              if (contratoData?.cotacao_id) {
+                await supabase
+                  .from('cotacoes')
+                  .update({ 
+                    status_contratacao: 'pagamento_ok',
+                    status: 'aceita'
+                  })
+                  .eq('id', contratoData.cotacao_id);
+
+                console.log(`[asaas-webhook] Cotação ${contratoData.cotacao_id} atualizada para pagamento_ok`);
+              }
+
               // === CRIAR DOCUMENTO NO AUTENTIQUE AUTOMATICAMENTE ===
               try {
                 // Buscar dados completos do contrato para criação do documento
