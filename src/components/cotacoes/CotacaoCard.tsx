@@ -286,7 +286,7 @@ export function CotacaoCard({
             </Button>
           )}
           
-          {cotacao.status === 'rascunho' && !hasLead && onGerarContrato && permissions?.canGenerateContract !== false && (
+          {cotacao.status === 'rascunho' && !hasLead && onGerarContrato && permissions?.canGenerateContract !== false && !cotacao.contrato && !cotacao.contrato_gerado_id && (
             <Button 
               size="sm"
               variant="outline"
