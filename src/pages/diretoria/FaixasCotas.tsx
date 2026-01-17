@@ -19,10 +19,13 @@ import {
   useAtualizarAjusteGrupo,
   useLimitesFipe,
   useTotalCotasAtivas,
+  useSimulacaoFaixas,
   formatFipe,
   formatPercentual,
+  formatCurrency,
   type FaixaCota,
 } from '@/hooks/useFaixasCotas';
+import { SimulacaoImpactoCard } from '@/components/diretoria/SimulacaoImpactoCard';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -54,6 +57,10 @@ export default function FaixasCotas() {
     
     return { comDesconto, comAdicao, neutras, total: faixas.length };
   }, [faixas]);
+
+  // Simulação em tempo real (custo base de R$ 500.000 para demonstração)
+  const custoSimulado = 500000;
+  const simulacao = useSimulacaoFaixas(faixas, custoSimulado, totalCotas || 0);
   
   // Opções para select de faixas
   const faixaOptions = useMemo(() => {
@@ -212,6 +219,9 @@ export default function FaixasCotas() {
           </CardContent>
         </Card>
       </div>
+      
+      {/* Simulação de Impacto */}
+      <SimulacaoImpactoCard simulacao={simulacao} />
       
       <Tabs defaultValue="faixas">
         <TabsList>
