@@ -36,17 +36,15 @@ export default function AssociadoVistoria() {
 
   // Calcular se está em modo somente leitura (bloqueia edição)
   // IMPORTANTE: Este useMemo deve ficar ANTES de qualquer early return
+  // NÃO bloqueia por status 'em_analise' do associado - ele deve poder escolher vistoria
   const isReadOnly = useMemo(() => {
     if (!contrato) return false;
     
-    // Status do associado em análise
-    if (contrato.associados?.status === 'em_analise') return true;
-    
-    // Contrato aguardando assinatura
+    // Contrato aguardando assinatura no Autentique
     if (contrato.status === 'pendente_assinatura') return true;
     if (contrato.autentique_url) return true;
     
-    // Adesão paga mas não assinado ainda (em fluxo de assinatura)
+    // Adesão já foi paga - aguardando assinatura digital
     if (contrato.adesao_paga && contrato.status !== 'assinado') return true;
     
     return false;
