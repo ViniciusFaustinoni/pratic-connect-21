@@ -115,57 +115,102 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
       // Primeiro: pegar valor FIPE da cotação (fonte principal)
       if (cotacao.valor_fipe) {
         form.setValue('valor_fipe', cotacao.valor_fipe);
+        setDadosExtraidos(prev => ({ ...prev, valor_fipe: { value: String(cotacao.valor_fipe), fonte: 'Cotação' } }));
       }
       
       if (cotacao.leads) {
         const lead = cotacao.leads;
         form.setValue('nome', lead.nome);
+        setDadosExtraidos(prev => ({ ...prev, nome: { value: lead.nome, fonte: 'Lead' } }));
+        
         form.setValue('telefone', lead.telefone);
-        if (lead.email) form.setValue('email', lead.email);
-        if (lead.cpf) form.setValue('cpf', lead.cpf);
-        if (lead.veiculo_marca) form.setValue('marca', lead.veiculo_marca);
-        if (lead.veiculo_modelo) form.setValue('modelo', lead.veiculo_modelo);
+        setDadosExtraidos(prev => ({ ...prev, telefone: { value: lead.telefone, fonte: 'Lead' } }));
+        
+        if (lead.email) {
+          form.setValue('email', lead.email);
+          setDadosExtraidos(prev => ({ ...prev, email: { value: lead.email, fonte: 'Lead' } }));
+        }
+        if (lead.cpf) {
+          form.setValue('cpf', lead.cpf);
+          setDadosExtraidos(prev => ({ ...prev, cpf: { value: lead.cpf, fonte: 'Lead' } }));
+        }
+        if (lead.veiculo_marca) {
+          form.setValue('marca', lead.veiculo_marca);
+          setDadosExtraidos(prev => ({ ...prev, marca: { value: lead.veiculo_marca, fonte: 'Lead' } }));
+        }
+        if (lead.veiculo_modelo) {
+          form.setValue('modelo', lead.veiculo_modelo);
+          setDadosExtraidos(prev => ({ ...prev, modelo: { value: lead.veiculo_modelo, fonte: 'Lead' } }));
+        }
         if (lead.veiculo_ano) {
           form.setValue('ano_fabricacao', lead.veiculo_ano);
           form.setValue('ano_modelo', lead.veiculo_ano);
+          setDadosExtraidos(prev => ({ 
+            ...prev, 
+            ano_fabricacao: { value: String(lead.veiculo_ano), fonte: 'Lead' },
+            ano_modelo: { value: String(lead.veiculo_ano), fonte: 'Lead' }
+          }));
         }
-        if (lead.veiculo_placa) form.setValue('placa', lead.veiculo_placa);
+        if (lead.veiculo_placa) {
+          form.setValue('placa', lead.veiculo_placa);
+          setDadosExtraidos(prev => ({ ...prev, placa: { value: lead.veiculo_placa, fonte: 'Lead' } }));
+        }
         
         // Fallback: se a cotação não tiver valor FIPE, usa do lead
         if (!cotacao.valor_fipe && lead.veiculo_fipe) {
           form.setValue('valor_fipe', lead.veiculo_fipe);
+          setDadosExtraidos(prev => ({ ...prev, valor_fipe: { value: String(lead.veiculo_fipe), fonte: 'Lead' } }));
         }
         
         // Fallback: se o lead não tiver email/telefone, usa da cotação
         if (!lead.email && cotacao.email_solicitante) {
           form.setValue('email', cotacao.email_solicitante);
+          setDadosExtraidos(prev => ({ ...prev, email: { value: cotacao.email_solicitante!, fonte: 'Cotação' } }));
         }
         if (!lead.telefone && cotacao.telefone1_solicitante) {
           form.setValue('telefone', cotacao.telefone1_solicitante);
+          setDadosExtraidos(prev => ({ ...prev, telefone: { value: cotacao.telefone1_solicitante!, fonte: 'Cotação' } }));
         }
       } else {
         // Sem lead vinculado: usar dados do solicitante da cotação
         if (cotacao.nome_solicitante) {
           form.setValue('nome', cotacao.nome_solicitante);
+          setDadosExtraidos(prev => ({ ...prev, nome: { value: cotacao.nome_solicitante!, fonte: 'Cotação' } }));
         }
         if (cotacao.email_solicitante) {
           form.setValue('email', cotacao.email_solicitante);
+          setDadosExtraidos(prev => ({ ...prev, email: { value: cotacao.email_solicitante!, fonte: 'Cotação' } }));
         }
         if (cotacao.telefone1_solicitante) {
           form.setValue('telefone', cotacao.telefone1_solicitante);
+          setDadosExtraidos(prev => ({ ...prev, telefone: { value: cotacao.telefone1_solicitante!, fonte: 'Cotação' } }));
         }
       }
       
       // Preencher dados do veículo da cotação (caso não tenha lead ou lead não tenha veículo)
       const currentMarca = form.getValues('marca');
       if (!currentMarca) {
-        if (cotacao.veiculo_marca) form.setValue('marca', cotacao.veiculo_marca);
-        if (cotacao.veiculo_modelo) form.setValue('modelo', cotacao.veiculo_modelo);
+        if (cotacao.veiculo_marca) {
+          form.setValue('marca', cotacao.veiculo_marca);
+          setDadosExtraidos(prev => ({ ...prev, marca: { value: cotacao.veiculo_marca!, fonte: 'Cotação' } }));
+        }
+        if (cotacao.veiculo_modelo) {
+          form.setValue('modelo', cotacao.veiculo_modelo);
+          setDadosExtraidos(prev => ({ ...prev, modelo: { value: cotacao.veiculo_modelo!, fonte: 'Cotação' } }));
+        }
         if (cotacao.veiculo_ano) {
           form.setValue('ano_fabricacao', cotacao.veiculo_ano);
           form.setValue('ano_modelo', cotacao.veiculo_ano);
+          setDadosExtraidos(prev => ({ 
+            ...prev, 
+            ano_fabricacao: { value: String(cotacao.veiculo_ano), fonte: 'Cotação' },
+            ano_modelo: { value: String(cotacao.veiculo_ano), fonte: 'Cotação' }
+          }));
         }
-        if (cotacao.veiculo_placa) form.setValue('placa', cotacao.veiculo_placa);
+        if (cotacao.veiculo_placa) {
+          form.setValue('placa', cotacao.veiculo_placa);
+          setDadosExtraidos(prev => ({ ...prev, placa: { value: cotacao.veiculo_placa!, fonte: 'Cotação' } }));
+        }
       }
     }
   }, [cotacao, form]);
