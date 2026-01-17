@@ -110,22 +110,21 @@ export function useCotacaoContratacao(token: string | undefined) {
   })();
 
   // Determinar etapa atual baseado no status
+  // Etapas: 0=Plano, 1=Documentos+Dados, 2=Vistoria, 3=Pagamento, 4=Contrato
   const determinarEtapa = useCallback((status: string | null) => {
     switch (status) {
       case 'aguardando':
         return 0; // Escolha de plano
       case 'plano_escolhido':
-        return 1; // Dados pessoais
+        return 1; // Documentos e dados (unificado)
       case 'dados_preenchidos':
-        return 2; // Documentos
       case 'documentos_ok':
-        return 3; // Vistoria
+        return 2; // Vistoria
       case 'vistoria_ok':
-        return 4; // Pagamento
+        return 3; // Pagamento
       case 'pagamento_ok':
-        return 5; // Assinatura
       case 'contrato_gerado':
-        return 6; // Conclusão
+        return 4; // Contrato/Conclusão
       default:
         return 0;
     }
@@ -183,7 +182,7 @@ export function useCotacaoContratacao(token: string | undefined) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cotacao-contratacao', token] });
-      setEtapaAtual(2);
+      setEtapaAtual(2); // Ir para vistoria (etapa 2 no novo fluxo)
       toast.success('Dados salvos com sucesso!');
     },
     onError: (error: Error) => {
@@ -218,7 +217,7 @@ export function useCotacaoContratacao(token: string | undefined) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cotacao-contratacao', token] });
-      setEtapaAtual(3);
+      setEtapaAtual(2); // Ir para vistoria (etapa 2 no novo fluxo)
       toast.success('Documentos enviados com sucesso!');
     },
     onError: (error: Error) => {
@@ -244,7 +243,7 @@ export function useCotacaoContratacao(token: string | undefined) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cotacao-contratacao', token] });
-      setEtapaAtual(4);
+      setEtapaAtual(3); // Ir para pagamento (etapa 3 no novo fluxo)
     },
     onError: (error: Error) => {
       toast.error('Erro ao salvar vistoria: ' + error.message);
@@ -287,7 +286,7 @@ export function useCotacaoContratacao(token: string | undefined) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cotacao-contratacao', token] });
-      setEtapaAtual(5);
+      setEtapaAtual(4); // Ir para conclusão (etapa 4 no novo fluxo)
       toast.success('Contrato gerado com sucesso!');
     },
     onError: (error: Error) => {
