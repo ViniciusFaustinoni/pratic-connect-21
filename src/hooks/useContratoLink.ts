@@ -417,6 +417,7 @@ export function useUploadFotoAutovistoria() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['contrato-publico'] });
       queryClient.invalidateQueries({ queryKey: ['autovistoria-fotos'] });
+      queryClient.invalidateQueries({ queryKey: ['autovistoria-existente'] });
     },
   });
 }

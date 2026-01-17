@@ -30,6 +30,7 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
   const [kmIdentificado, setKmIdentificado] = useState<number | null>(null);
   const [previewsLocais, setPreviewsLocais] = useState<Record<string, string>>({});
   const [hidratado, setHidratado] = useState(false);
+  const [imagensComErro, setImagensComErro] = useState<Record<string, boolean>>({});
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Buscar autovistoria existente para reidratar fotos após refresh
@@ -264,12 +265,21 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
       <CardContent className="space-y-5">
         {/* Ícone ilustrativo */}
         <div className="bg-muted rounded-xl p-8 flex flex-col items-center justify-center min-h-[200px]">
-          {(fotoAtualEnviada || previewsLocais[fotoAtual.id]) ? (
+          {(fotoAtualEnviada || previewsLocais[fotoAtual.id]) && !imagensComErro[fotoAtual.id] ? (
             <div className="relative w-full">
               <img 
-                src={fotosEnviadas[fotoAtual.id] || previewsLocais[fotoAtual.id] || ''}
+                src={previewsLocais[fotoAtual.id] || fotosEnviadas[fotoAtual.id] || ''}
                 alt={fotoAtual.label}
                 className="w-full max-h-48 object-contain rounded-lg"
+                onError={() => {
+                  console.warn(`[Autovistoria] Erro ao carregar imagem: ${fotoAtual.id}`);
+                  setImagensComErro(prev => ({ ...prev, [fotoAtual.id]: true }));
+                }}
+                onLoad={() => {
+                  if (imagensComErro[fotoAtual.id]) {
+                    setImagensComErro(prev => ({ ...prev, [fotoAtual.id]: false }));
+                  }
+                }}
               />
               {/* Overlay de loading durante upload */}
               {uploading && (
@@ -295,6 +305,9 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
               <span className="text-sm text-muted-foreground text-center font-medium">
                 {fotoAtual.label}
               </span>
+              {imagensComErro[fotoAtual.id] && fotoAtualEnviada && (
+                <span className="text-xs text-amber-600 mt-2">Erro ao carregar preview - foto já enviada</span>
+              )}
             </>
           )}
         </div>
