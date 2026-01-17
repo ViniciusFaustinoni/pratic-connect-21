@@ -105,6 +105,7 @@ export default function CotacaoPage() {
     categoria: categoria || modalidade,
     anoVeiculo: ano ? parseInt(ano) : undefined,
     tipoVeiculo: 'carro',
+    usoApp: modalidade === 'aplicativo',
   });
 
   // ============================================
