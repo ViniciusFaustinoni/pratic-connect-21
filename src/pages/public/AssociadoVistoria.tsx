@@ -16,7 +16,7 @@ import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
 // Logo PRATIC
-import logoPratic from '@/assets/logopratic.png';
+import logoPratic from '@/assets/pratic-logo.png';
 
 // Mapeamento de status do associado para exibição
 const STATUS_ASSOCIADO_CONFIG: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; icon: React.ReactNode }> = {
