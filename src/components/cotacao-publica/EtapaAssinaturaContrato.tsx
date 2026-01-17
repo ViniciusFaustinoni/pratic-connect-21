@@ -221,11 +221,29 @@ export function EtapaAssinaturaContrato({
     const verificarAssinatura = async () => {
       try {
         // Sincronizar status com Autentique
-        await publicSupabase.functions.invoke('autentique-sync-contrato', {
+        const { data: syncResult } = await publicSupabase.functions.invoke('autentique-sync-contrato', {
           body: { contratoId: contrato.id },
         });
 
-        // Verificar se foi assinado
+        console.log('[EtapaAssinatura] Polling sync result:', syncResult);
+
+        // Verificar resposta da sync diretamente (campo 'status')
+        if (syncResult?.status === 'assinado') {
+          console.log('[EtapaAssinatura] Contrato assinado detectado via sync!');
+          toast.success('Contrato assinado com sucesso!');
+          
+          // Atualizar status da cotação
+          await publicSupabase
+            .from('cotacoes')
+            .update({ status_contratacao: 'contrato_assinado' })
+            .eq('id', cotacaoId);
+
+          setEtapaInterna('assinado');
+          onContratoAssinado();
+          return;
+        }
+
+        // Fallback: verificar diretamente no banco
         const { data, error } = await publicSupabase
           .from('contratos')
           .select('status')
@@ -235,10 +253,9 @@ export function EtapaAssinaturaContrato({
         if (error || !data) return;
 
         if (data?.status === 'assinado' || data?.status === 'ativo') {
-          console.log('[EtapaAssinatura] Contrato assinado detectado!');
+          console.log('[EtapaAssinatura] Contrato assinado detectado via banco!');
           toast.success('Contrato assinado com sucesso!');
           
-          // Atualizar status da cotação
           await publicSupabase
             .from('cotacoes')
             .update({ status_contratacao: 'contrato_assinado' })
@@ -271,7 +288,10 @@ export function EtapaAssinaturaContrato({
         body: { contratoId: contrato.id },
       });
 
-      if (syncResult?.novoStatus === 'assinado') {
+      console.log('[EtapaAssinatura] Resultado sync manual:', syncResult);
+
+      // CORRIGIDO: Verificar campo 'status' em vez de 'novoStatus'
+      if (syncResult?.status === 'assinado') {
         toast.success('Contrato assinado com sucesso!');
         
         await publicSupabase
@@ -281,6 +301,8 @@ export function EtapaAssinaturaContrato({
 
         setEtapaInterna('assinado');
         onContratoAssinado();
+      } else if (syncResult?.status === 'rejeitado') {
+        toast.warning('Contrato foi rejeitado pelo signatário.');
       } else {
         toast.info('Assinatura ainda não identificada. Verifique se você completou o processo no link.');
       }
