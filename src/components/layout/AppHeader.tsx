@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePermissions } from '@/hooks/usePermissions';
 import { ROLE_LABELS } from '@/types/database';
 import { UserAvatar } from '@/components/UserAvatar';
 
@@ -21,6 +22,7 @@ import { GlobalBreadcrumb } from '@/components/layout/GlobalBreadcrumb';
 export function AppHeader() {
   const navigate = useNavigate();
   const { profile, roles, signOut } = useAuth();
+  const { isPerfilLimitado } = usePermissions();
 
   const handleSignOut = async () => {
     await signOut();
@@ -89,10 +91,12 @@ export function AppHeader() {
               <User className="mr-2 h-4 w-4" />
               Meu Perfil
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => navigate('/configuracoes')} className="cursor-pointer">
-              <Settings className="mr-2 h-4 w-4" />
-              Configurações
-            </DropdownMenuItem>
+            {!isPerfilLimitado && (
+              <DropdownMenuItem onClick={() => navigate('/configuracoes')} className="cursor-pointer">
+                <Settings className="mr-2 h-4 w-4" />
+                Configurações
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator className="bg-border" />
             <DropdownMenuItem onClick={handleSignOut} className="text-accent cursor-pointer">
               <LogOut className="mr-2 h-4 w-4" />
