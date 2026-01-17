@@ -761,7 +761,10 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase }: C
         veiculo_placa: placa || veiculoEncontrado?.extractedPlate || null,
         codigo_fipe: veiculoEncontrado?.fipeData?.codigo || null,
         // Consultor responsável - liderança escolhe, demais auto-atribuição
-        vendedor_id: podeAtribuirVendedor ? (pendingFormData.vendedor_id || null) : userId,
+        // IMPORTANTE: Nunca deixar vendedor_id como null para garantir visibilidade via RLS
+        vendedor_id: podeAtribuirVendedor 
+          ? (pendingFormData.vendedor_id || userId || user?.id) 
+          : (userId || user?.id),
         // Dados do solicitante (para exibição no card quando não há lead)
         nome_solicitante: nomeAssociado.trim() || null,
         telefone1_solicitante: telefoneAssociado.replace(/\D/g, '') || null,
