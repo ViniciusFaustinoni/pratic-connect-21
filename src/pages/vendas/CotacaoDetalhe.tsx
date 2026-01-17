@@ -517,64 +517,122 @@ Ficou com alguma dúvida? Estou à disposição!
         </Card>
       </div>
 
-      {/* CARD: PLANO */}
+      {/* CARD: PLANO(S) */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Shield className="h-5 w-5" />
-            Plano Selecionado
+            {(() => {
+              const planosComparacao = (cotacao.dados_extras as { planos_comparacao?: { id: string; nome: string; valorMensal: number; coberturas?: string[] }[] } | null)?.planos_comparacao;
+              return planosComparacao && planosComparacao.length > 1 ? 'Planos para Comparação' : 'Plano Selecionado';
+            })()}
           </CardTitle>
           <CardDescription>
             Detalhes da proteção cotada
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Nome do plano */}
-          <div>
-            <h3 className="text-xl font-semibold">
-              {cotacao.planos?.nome || 'Plano'}
-            </h3>
-            <p className="text-muted-foreground">
-              {cotacao.planos?.descricao || '100% FIPE + Coberturas completas'}
-            </p>
-          </div>
-
-          {/* Coberturas */}
-          <div>
-            <p className="mb-2 text-sm font-medium">Coberturas incluídas:</p>
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {coberturas.map((cobertura, index) => (
-                <div key={index} className="flex items-center gap-2 text-sm">
-                  <Check className="h-4 w-4 text-green-600" />
-                  {cobertura}
+          {(() => {
+            const planosComparacao = (cotacao.dados_extras as { planos_comparacao?: { id: string; nome: string; valorMensal: number; coberturas?: string[] }[] } | null)?.planos_comparacao;
+            
+            // Múltiplos planos - exibir em grade comparativa
+            if (planosComparacao && planosComparacao.length > 1) {
+              return (
+                <div className={`grid gap-4 ${planosComparacao.length === 2 ? 'md:grid-cols-2' : 'md:grid-cols-2 lg:grid-cols-3'}`}>
+                  {planosComparacao.map((plano, idx) => (
+                    <Card key={plano.id} className="border-primary/30 bg-muted/30">
+                      <CardContent className="p-4 space-y-4">
+                        {/* Cabeçalho do plano */}
+                        <div className="flex items-center gap-2">
+                          <Badge variant="secondary" className="text-xs">
+                            Opção {idx + 1}
+                          </Badge>
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-semibold">{plano.nome}</h3>
+                        </div>
+                        
+                        {/* Valor mensal destacado */}
+                        <div className="rounded-lg border bg-primary/10 p-3 text-center">
+                          <p className="text-xs text-muted-foreground">Mensalidade</p>
+                          <p className="text-2xl font-bold text-primary">
+                            {formatCurrency(plano.valorMensal)}
+                          </p>
+                        </div>
+                        
+                        {/* Coberturas */}
+                        {plano.coberturas && plano.coberturas.length > 0 && (
+                          <div>
+                            <p className="mb-2 text-xs font-medium text-muted-foreground">Coberturas:</p>
+                            <ul className="space-y-1">
+                              {plano.coberturas.map((cobertura, i) => (
+                                <li key={i} className="flex items-start gap-2 text-xs">
+                                  <Check className="h-3 w-3 text-green-600 mt-0.5 flex-shrink-0" />
+                                  <span>{cobertura}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </div>
+              );
+            }
+            
+            // Plano único - exibição original
+            return (
+              <>
+                {/* Nome do plano */}
+                <div>
+                  <h3 className="text-xl font-semibold">
+                    {cotacao.planos?.nome || 'Plano'}
+                  </h3>
+                  <p className="text-muted-foreground">
+                    {cotacao.planos?.descricao || '100% FIPE + Coberturas completas'}
+                  </p>
+                </div>
 
-          <Separator />
+                {/* Coberturas */}
+                <div>
+                  <p className="mb-2 text-sm font-medium">Coberturas incluídas:</p>
+                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    {coberturas.map((cobertura, index) => (
+                      <div key={index} className="flex items-center gap-2 text-sm">
+                        <Check className="h-4 w-4 text-green-600" />
+                        {cobertura}
+                      </div>
+                    ))}
+                  </div>
+                </div>
 
-          {/* Valores */}
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="rounded-lg border bg-muted/50 p-4 text-center">
-              <p className="text-sm text-muted-foreground">Adesão</p>
-              <p className="text-2xl font-bold text-primary">
-                {formatCurrency(cotacao.valor_adesao)}
-              </p>
-            </div>
-            <div className="rounded-lg border bg-muted/50 p-4 text-center">
-              <p className="text-sm text-muted-foreground">Mensalidade</p>
-              <p className="text-2xl font-bold text-primary">
-                {formatCurrency(cotacao.valor_total_mensal)}
-              </p>
-            </div>
-            <div className="rounded-lg border bg-primary/10 p-4 text-center">
-              <p className="text-sm text-muted-foreground">1º Pagamento</p>
-              <p className="text-2xl font-bold text-primary">
-                {formatCurrency(primeiroPagamento)}
-              </p>
-            </div>
-          </div>
+                <Separator />
+
+                {/* Valores */}
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <div className="rounded-lg border bg-muted/50 p-4 text-center">
+                    <p className="text-sm text-muted-foreground">Adesão</p>
+                    <p className="text-2xl font-bold text-primary">
+                      {formatCurrency(cotacao.valor_adesao)}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border bg-muted/50 p-4 text-center">
+                    <p className="text-sm text-muted-foreground">Mensalidade</p>
+                    <p className="text-2xl font-bold text-primary">
+                      {formatCurrency(cotacao.valor_total_mensal)}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border bg-primary/10 p-4 text-center">
+                    <p className="text-sm text-muted-foreground">1º Pagamento</p>
+                    <p className="text-2xl font-bold text-primary">
+                      {formatCurrency(primeiroPagamento)}
+                    </p>
+                  </div>
+                </div>
+              </>
+            );
+          })()}
         </CardContent>
       </Card>
 
