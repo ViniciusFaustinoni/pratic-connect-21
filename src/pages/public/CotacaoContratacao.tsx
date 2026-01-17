@@ -6,6 +6,7 @@ import { useCotacaoContratacao } from '@/hooks/useCotacaoContratacao';
 import { StepperCotacao, type Step } from '@/components/cotacao-publica/StepperCotacao';
 import { EscolhaPlano } from '@/components/cotacao-publica/EscolhaPlano';
 import { EtapaDadosPessoaisDocumentos } from '@/components/cotacao-publica/EtapaDadosPessoaisDocumentos';
+import { EtapaAssinaturaContrato } from '@/components/cotacao-publica/EtapaAssinaturaContrato';
 import { EtapaVistoria } from '@/components/cotacao-publica/EtapaVistoria';
 import { EtapaPagamentoCotacao } from '@/components/cotacao-publica/EtapaPagamentoCotacao';
 import type { DadosPessoaisForm } from '@/components/cotacao-publica/FormularioDadosPessoais';
@@ -14,12 +15,13 @@ import { Badge } from '@/components/ui/badge';
 import { formatarMoeda } from '@/config/pricing';
 import { motion, AnimatePresence } from 'framer-motion';
 
+// NOVO FLUXO: 1-Plano, 2-Docs, 3-Contrato (Autentique), 4-Vistoria, 5-Pagamento
 const STEPS: Step[] = [
   { id: 'plano', label: 'Escolha do Plano', description: 'Selecione seu plano' },
-  { id: 'documentos', label: 'Documentos e Dados', description: 'Envie seus documentos' },
-  { id: 'vistoria', label: 'Vistoria', description: 'Realize a vistoria' },
-  { id: 'pagamento', label: 'Pagamento', description: 'Pague a adesão' },
-  { id: 'conclusao', label: 'Contrato', description: 'Contrato gerado' },
+  { id: 'documentos', label: 'Documentos', description: 'Envie seus dados' },
+  { id: 'contrato', label: 'Contrato', description: 'Assine digitalmente' },
+  { id: 'vistoria', label: 'Vistoria', description: 'Tire as fotos' },
+  { id: 'pagamento', label: 'Pagamento', description: 'Ative sua cobertura' },
 ];
 
 const pageVariants = {
@@ -298,8 +300,26 @@ export default function CotacaoContratacao() {
                 </motion.div>
               )}
 
-              {/* Etapa 2: Vistoria */}
+              {/* Etapa 2: Assinatura do Contrato (NOVA ETAPA) */}
               {etapaAtual === 2 && (
+                <motion.div
+                  key="contrato"
+                  variants={pageVariants}
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
+                >
+                  <EtapaAssinaturaContrato
+                    cotacaoId={cotacao.id}
+                    clienteNome={cotacao.nome_solicitante || ''}
+                    clienteEmail={cotacao.email_solicitante || ''}
+                    onContratoAssinado={() => setEtapaAtual(3)}
+                  />
+                </motion.div>
+              )}
+
+              {/* Etapa 3: Vistoria */}
+              {etapaAtual === 3 && (
                 <motion.div
                   key="vistoria"
                   variants={pageVariants}
@@ -310,14 +330,14 @@ export default function CotacaoContratacao() {
                   <EtapaVistoria
                     cotacaoId={cotacao.id}
                     tipoVeiculo={cotacao.categoria === 'moto' ? 'moto' : 'carro'}
-                    onComplete={() => setEtapaAtual(3)}
-                    onAgendar={() => setEtapaAtual(3)}
+                    onComplete={() => setEtapaAtual(4)}
+                    onAgendar={() => setEtapaAtual(4)}
                   />
                 </motion.div>
               )}
 
-              {/* Etapa 3: Pagamento */}
-              {etapaAtual === 3 && (
+              {/* Etapa 4: Pagamento */}
+              {etapaAtual === 4 && (
                 <motion.div
                   key="pagamento"
                   variants={pageVariants}
@@ -331,13 +351,13 @@ export default function CotacaoContratacao() {
                     clienteNome={cotacao.nome_solicitante || ''}
                     clienteEmail={cotacao.email_solicitante || ''}
                     clienteCpf={cotacao.cliente_cpf || ''}
-                    onPagamentoConfirmado={() => setEtapaAtual(4)}
+                    onPagamentoConfirmado={() => setEtapaAtual(5)}
                   />
                 </motion.div>
               )}
 
-              {/* Etapa 4: Conclusão */}
-              {etapaAtual === 4 && (
+              {/* Etapa 5: Conclusão */}
+              {etapaAtual === 5 && (
                 <motion.div
                   key="conclusao"
                   variants={pageVariants}
@@ -355,9 +375,9 @@ export default function CotacaoContratacao() {
                       >
                         <CheckCircle2 className="h-10 w-10 text-success" />
                       </motion.div>
-                      <h2 className="text-2xl font-bold mb-3 text-foreground">Processo Concluído!</h2>
+                      <h2 className="text-2xl font-bold mb-3 text-foreground">Proteção Ativada!</h2>
                       <p className="text-muted-foreground max-w-sm mx-auto">
-                        Seu contrato será gerado e você receberá um e-mail para assinatura digital.
+                        Parabéns! Seu veículo está protegido. Você receberá um e-mail com todos os detalhes da sua cobertura.
                       </p>
                     </CardContent>
                   </Card>
