@@ -63,6 +63,8 @@ import Mapa from "./pages/monitoramento/Mapa";
 import CalendarioInstalacoes from "./pages/monitoramento/CalendarioInstalacoes";
 import Vistorias from "./pages/monitoramento/Vistorias";
 import VistoriasInstalacoes from "./pages/monitoramento/VistoriasInstalacoes";
+import DashboardCoordenador from "./pages/monitoramento/DashboardCoordenador";
+import Equipe from "./pages/monitoramento/Equipe";
 import Oficinas from "./pages/oficinas/Oficinas";
 import OrdensServico from "./pages/oficinas/OrdensServico";
 import OrdemServicoDetalhe from "./pages/oficinas/OrdemServicoDetalhe";
@@ -379,6 +381,8 @@ const App = () => (
               <Route path="/rh/beneficios" element={<Beneficios />} />
               
               {/* Monitoramento */}
+              <Route path="/monitoramento/dashboard" element={<DashboardCoordenador />} />
+              <Route path="/monitoramento/equipe" element={<Equipe />} />
               <Route path="/monitoramento/instalacoes" element={<InstalacoesList />} />
               <Route path="/monitoramento/instalacoes/:id" element={<InstalacaoDetalhe />} />
               <Route path="/monitoramento/rotas" element={<Rotas />} />
