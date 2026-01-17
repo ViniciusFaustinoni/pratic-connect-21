@@ -10,6 +10,7 @@ import { motion } from 'framer-motion';
 
 interface EtapaAssinaturaContratoProps {
   cotacaoId: string;
+  tokenPublico: string; // Necessário para satisfazer RLS
   clienteNome: string;
   clienteEmail: string;
   onContratoAssinado: () => void;
@@ -27,6 +28,7 @@ interface ContratoInfo {
 
 export function EtapaAssinaturaContrato({
   cotacaoId,
+  tokenPublico,
   clienteNome,
   clienteEmail,
   onContratoAssinado,
@@ -43,14 +45,22 @@ export function EtapaAssinaturaContrato({
       setErro(null);
       console.log('[EtapaAssinatura] Verificando contrato para cotação:', cotacaoId);
 
-      // Buscar cotação com contrato vinculado
+      // Buscar cotação com contrato vinculado (incluir token_publico para satisfazer RLS)
       const { data: cotacao, error: cotacaoError } = await publicSupabase
         .from('cotacoes')
         .select('contrato_gerado_id')
         .eq('id', cotacaoId)
-        .single();
+        .eq('token_publico', tokenPublico)
+        .maybeSingle();
 
-      if (cotacaoError) throw cotacaoError;
+      if (cotacaoError) {
+        console.error('[EtapaAssinatura] Erro ao buscar cotação:', cotacaoError);
+        throw cotacaoError;
+      }
+      
+      if (!cotacao) {
+        throw new Error('Cotação não encontrada ou acesso negado');
+      }
 
       let contratoId = cotacao?.contrato_gerado_id;
 
@@ -61,9 +71,18 @@ export function EtapaAssinaturaContrato({
           .from('contratos')
           .select('id, numero, autentique_documento_id, autentique_url, status')
           .eq('id', contratoId)
-          .single();
+          .maybeSingle();
 
-        if (contratoError) throw contratoError;
+        if (contratoError) {
+          console.error('[EtapaAssinatura] Erro ao buscar contrato:', contratoError);
+          throw contratoError;
+        }
+        
+        if (!contratoData) {
+          console.warn('[EtapaAssinatura] Contrato não encontrado - RLS pode estar bloqueando');
+          // Continua para gerar novo contrato via edge function (usa service role)
+          contratoId = null;
+        } else {
 
         // Se já foi assinado, ir direto para próxima etapa
         if (contratoData?.status === 'assinado' || contratoData?.status === 'ativo') {
@@ -92,12 +111,15 @@ export function EtapaAssinaturaContrato({
           return contratoData.id;
         }
 
-        setContrato({
-          id: contratoData.id,
-          numero: contratoData.numero,
-          status: contratoData.status,
-        });
-      } else {
+          setContrato({
+            id: contratoData.id,
+            numero: contratoData.numero,
+            status: contratoData.status,
+          });
+        }
+      }
+      
+      if (!contratoId) {
         // Gerar contrato
         setEtapaInterna('gerando_contrato');
         console.log('[EtapaAssinatura] Gerando novo contrato...');
@@ -147,7 +169,7 @@ export function EtapaAssinaturaContrato({
         .from('contratos')
         .select('autentique_url, autentique_documento_id')
         .eq('id', contratoId)
-        .single();
+        .maybeSingle();
 
       // Se já tem link, usar ele
       if (contratoData?.autentique_url) {
@@ -207,9 +229,9 @@ export function EtapaAssinaturaContrato({
           .from('contratos')
           .select('status')
           .eq('id', contrato.id)
-          .single();
+          .maybeSingle();
 
-        if (error) return;
+        if (error || !data) return;
 
         if (data?.status === 'assinado' || data?.status === 'ativo') {
           console.log('[EtapaAssinatura] Contrato assinado detectado!');
