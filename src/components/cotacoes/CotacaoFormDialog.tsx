@@ -365,7 +365,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
     return matches * 10;
   };
 
-  // Buscar por placa
+  // Buscar por placa - SIMPLIFICADO: NÃO chama API FIPE após ter dados
   const buscarPorPlaca = async () => {
     const placaLimpa = placa.replace(/[^A-Za-z0-9]/g, '');
     if (placaLimpa.length < 7) {
@@ -378,97 +378,24 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
       const resultado = await getByPlaca(placa);
       
       if (resultado.success && resultado.vehicleData) {
+        // Armazenar dados do veículo - SEM chamar API FIPE adicional
         setVeiculoEncontrado(resultado);
         
-        const marcaNome = resultado.vehicleData.marca?.toLowerCase() || '';
-        const modeloNome = resultado.vehicleData.modelo || '';
-        const anoVeiculo = resultado.vehicleData.ano?.split('/')[0] || '';
+        // Limpar seleções manuais (não serão usadas)
+        setMarcaSelecionada('');
+        setModeloSelecionado('');
+        setAnoSelecionado('');
+        setModelos([]);
+        setAnos([]);
 
-        let marcasCarregadas = marcas;
-        if (marcasCarregadas.length === 0) {
-          setLoadingMarcas(true);
-          marcasCarregadas = await getMarcas('carros');
-          setMarcas(marcasCarregadas);
-          setLoadingMarcas(false);
-        }
-
-        const marcaEncontrada = marcasCarregadas.find(m => {
-          const mNome = m.nome.toLowerCase();
-          return mNome.includes(marcaNome) || 
-                 marcaNome.includes(mNome.split(' ')[0]) ||
-                 mNome.split(' - ').some(part => marcaNome.includes(part.toLowerCase()));
-        });
-
-        if (marcaEncontrada) {
-          setMarcaSelecionada(marcaEncontrada.codigo);
-          
-          setLoadingModelos(true);
-          const modelosData = await getModelos(marcaEncontrada.codigo, 'carros');
-          setModelos(modelosData);
-          setLoadingModelos(false);
-
-          const modelosComScore = modelosData.map(m => ({
-            ...m,
-            score: fuzzyMatchModelo(modeloNome, m.nome)
-          }));
-
-          let melhorModelo = modelosComScore
-            .filter(m => m.score > 0)
-            .sort((a, b) => b.score - a.score)[0];
-
-          if (!melhorModelo && modelosData.length > 0) {
-            const nomeBase = modeloNome.toLowerCase().split(' ')[0];
-            if (nomeBase.length >= 3) {
-              const modeloFallback = modelosData.find(m => 
-                m.nome.toLowerCase().includes(nomeBase)
-              );
-              if (modeloFallback) {
-                melhorModelo = { ...modeloFallback, score: 1 };
-              }
-            }
-          }
-
-          if (melhorModelo) {
-            setModeloSelecionado(melhorModelo.codigo.toString());
-
-            setLoadingAnos(true);
-            const anosData = await getAnos(marcaEncontrada.codigo, melhorModelo.codigo.toString(), 'carros');
-            setAnos(anosData);
-            setLoadingAnos(false);
-
-            let anoEncontrado = anosData.find(a => {
-              const anoFipe = a.nome.split(' ')[0];
-              return anoFipe === anoVeiculo;
-            });
-
-            if (!anoEncontrado && anosData.length > 0) {
-              const anoNum = parseInt(anoVeiculo);
-              if (!isNaN(anoNum)) {
-                const anosComDiff = anosData.map(a => {
-                  const anoFipeNum = parseInt(a.nome.split(' ')[0]);
-                  return { ...a, diff: Math.abs(anoFipeNum - anoNum) };
-                }).filter(a => !isNaN(a.diff));
-                
-                anoEncontrado = anosComDiff.sort((a, b) => a.diff - b.diff)[0];
-              }
-              
-              if (!anoEncontrado) {
-                anoEncontrado = anosData[0];
-              }
-            }
-
-            if (anoEncontrado) {
-              setAnoSelecionado(anoEncontrado.codigo);
-            }
-          }
-        }
-
+        // Preencher valor FIPE diretamente dos dados retornados
         if (resultado.fipeData?.valor) {
           form.setValue('valor_fipe', resultado.fipeData.valor);
           toast.success(`Veículo encontrado! FIPE: R$ ${resultado.fipeData.valor.toLocaleString('pt-BR')}`);
         } else {
-          toast.success(`Veículo encontrado: ${resultado.vehicleData.marca} ${resultado.vehicleData.modelo}`);
-          if (!marcaEncontrada) {
+          // Se não veio FIPE, tentar buscar por nome (fallback único)
+          const anoVeiculo = resultado.vehicleData.ano?.split('/')[0] || '';
+          try {
             const fipeResult = await buscarPorNome(
               resultado.vehicleData.marca,
               resultado.vehicleData.modelo,
@@ -477,10 +404,14 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
             );
             if (fipeResult?.valorNumerico) {
               form.setValue('valor_fipe', fipeResult.valorNumerico);
-              toast.success(`Valor FIPE: ${fipeResult.valor}`);
+              toast.success(`Veículo encontrado! FIPE: ${fipeResult.valor}`);
             } else {
-              toast.info('Selecione marca/modelo/ano para buscar o valor FIPE');
+              toast.success(`Veículo encontrado: ${resultado.vehicleData.marca} ${resultado.vehicleData.modelo}`);
+              toast.info('Informe o valor FIPE manualmente se necessário');
             }
+          } catch {
+            toast.success(`Veículo encontrado: ${resultado.vehicleData.marca} ${resultado.vehicleData.modelo}`);
+            toast.info('Informe o valor FIPE manualmente se necessário');
           }
         }
       } else {
