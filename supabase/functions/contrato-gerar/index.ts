@@ -221,6 +221,9 @@ serve(async (req) => {
     const timestamp = new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 14);
     const random = Math.random().toString(36).substring(2, 8).toUpperCase();
     const numeroTemp = `CTR-${timestamp}-${random}`;
+    
+    // Gerar link_token para permitir acesso público ao contrato (satisfaz RLS)
+    const linkToken = crypto.randomUUID();
 
     const { data: contrato, error: contratoError } = await supabase
       .from('contratos')
@@ -247,6 +250,10 @@ serve(async (req) => {
         cliente_email: emailFinal,
         cliente_telefone: telefoneFinal,
         cliente_cpf: cpfFinal,
+        
+        // Link público para satisfazer RLS em acesso anônimo
+        link_token: linkToken,
+        link_gerado_em: new Date().toISOString(),
         
         data_inicio: new Date().toISOString().split('T')[0],
         validade_link: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),

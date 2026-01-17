@@ -311,6 +311,7 @@ export default function CotacaoContratacao() {
                 >
                   <EtapaAssinaturaContrato
                     cotacaoId={cotacao.id}
+                    tokenPublico={token || cotacao.token_publico || ''}
                     clienteNome={cotacao.nome_solicitante || ''}
                     clienteEmail={cotacao.email_solicitante || ''}
                     onContratoAssinado={() => setEtapaAtual(3)}
