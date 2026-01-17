@@ -5015,6 +5015,113 @@ export type Database = {
           },
         ]
       }
+      faixas_cotas: {
+        Row: {
+          ajuste_percentual: number | null
+          ativo: boolean | null
+          created_at: string | null
+          fipe_ate: number
+          fipe_de: number
+          id: string
+          quantidade_cotas: number
+          updated_at: string | null
+          updated_by: string | null
+        }
+        Insert: {
+          ajuste_percentual?: number | null
+          ativo?: boolean | null
+          created_at?: string | null
+          fipe_ate: number
+          fipe_de: number
+          id?: string
+          quantidade_cotas: number
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Update: {
+          ajuste_percentual?: number | null
+          ativo?: boolean | null
+          created_at?: string | null
+          fipe_ate?: number
+          fipe_de?: number
+          id?: string
+          quantidade_cotas?: number
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      faixas_cotas_historico: {
+        Row: {
+          ajuste_anterior: number | null
+          ajuste_novo: number | null
+          alterado_em: string | null
+          alterado_por: string | null
+          faixa_id: string | null
+          id: string
+          motivo: string | null
+        }
+        Insert: {
+          ajuste_anterior?: number | null
+          ajuste_novo?: number | null
+          alterado_em?: string | null
+          alterado_por?: string | null
+          faixa_id?: string | null
+          id?: string
+          motivo?: string | null
+        }
+        Update: {
+          ajuste_anterior?: number | null
+          ajuste_novo?: number | null
+          alterado_em?: string | null
+          alterado_por?: string | null
+          faixa_id?: string | null
+          id?: string
+          motivo?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "faixas_cotas_historico_faixa_id_fkey"
+            columns: ["faixa_id"]
+            isOneToOne: false
+            referencedRelation: "faixas_cotas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      faixas_taxa_administrativa: {
+        Row: {
+          ajuste_percentual: number | null
+          ativo: boolean | null
+          created_at: string | null
+          fipe_ate: number
+          fipe_de: number
+          id: string
+          updated_at: string | null
+          valor_taxa: number
+        }
+        Insert: {
+          ajuste_percentual?: number | null
+          ativo?: boolean | null
+          created_at?: string | null
+          fipe_ate: number
+          fipe_de: number
+          id?: string
+          updated_at?: string | null
+          valor_taxa?: number
+        }
+        Update: {
+          ajuste_percentual?: number | null
+          ativo?: boolean | null
+          created_at?: string | null
+          fipe_ate?: number
+          fipe_de?: number
+          id?: string
+          updated_at?: string | null
+          valor_taxa?: number
+        }
+        Relationships: []
+      }
       faturamentos: {
         Row: {
           created_at: string | null
@@ -10431,10 +10538,12 @@ export type Database = {
           percentual_fundo_reserva: number | null
           status: string | null
           total_associados: number | null
+          total_cotas: number | null
           total_sinistros: number | null
           updated_at: string | null
           valor_fundo_reserva: number | null
           valor_rateio_por_associado: number | null
+          valor_rateio_por_cota: number | null
           valor_total_sinistros: number | null
         }
         Insert: {
@@ -10451,10 +10560,12 @@ export type Database = {
           percentual_fundo_reserva?: number | null
           status?: string | null
           total_associados?: number | null
+          total_cotas?: number | null
           total_sinistros?: number | null
           updated_at?: string | null
           valor_fundo_reserva?: number | null
           valor_rateio_por_associado?: number | null
+          valor_rateio_por_cota?: number | null
           valor_total_sinistros?: number | null
         }
         Update: {
@@ -10471,10 +10582,12 @@ export type Database = {
           percentual_fundo_reserva?: number | null
           status?: string | null
           total_associados?: number | null
+          total_cotas?: number | null
           total_sinistros?: number | null
           updated_at?: string | null
           valor_fundo_reserva?: number | null
           valor_rateio_por_associado?: number | null
+          valor_rateio_por_cota?: number | null
           valor_total_sinistros?: number | null
         }
         Relationships: [
@@ -12634,6 +12747,22 @@ export type Database = {
           valor_adicional: number
         }[]
       }
+      fn_calcular_rateio_por_cotas: {
+        Args: { p_custo_total: number; p_percentual_fundo?: number }
+        Returns: {
+          ajuste_percentual: number
+          contratos_na_faixa: number
+          faixa_id: string
+          fipe_ate: number
+          fipe_de: number
+          quantidade_cotas: number
+          total_cotas_faixa: number
+          valor_base_cota: number
+          valor_final_cota: number
+        }[]
+      }
+      fn_calcular_total_cotas_ativos: { Args: never; Returns: number }
+      fn_get_cotas_por_fipe: { Args: { p_valor_fipe: number }; Returns: number }
       fn_resumo_saude_beneficios: {
         Args: never
         Returns: {
