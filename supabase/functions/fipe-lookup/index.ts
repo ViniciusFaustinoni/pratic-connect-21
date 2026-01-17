@@ -6,8 +6,28 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// API FIPE pública (parallelum) - não requer autenticação
-const FIPE_API = 'https://parallelum.com.br/fipe/api/v1';
+// APIs FIPE alternativas
+const FIPE_APIS = [
+  'https://parallelum.com.br/fipe/api/v1',
+  'https://veiculos.fipe.org.br/api/veiculos'
+];
+
+// Cache em memória para reduzir chamadas
+const cache = new Map<string, { data: unknown; timestamp: number }>();
+const CACHE_TTL = 1000 * 60 * 60; // 1 hora
+
+function getCached<T>(key: string): T | null {
+  const cached = cache.get(key);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.data as T;
+  }
+  cache.delete(key);
+  return null;
+}
+
+function setCache(key: string, data: unknown): void {
+  cache.set(key, { data, timestamp: Date.now() });
+}
 
 // Função para normalizar texto para comparação
 function normalizeText(text: string): string {
@@ -33,6 +53,45 @@ function parseValorFipe(valor: string): number {
       .replace(/\./g, "")
       .replace(",", ".")
   );
+}
+
+// Função para fazer fetch com retry e fallback
+async function fetchWithRetry(path: string, maxRetries = 2): Promise<Response> {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const apiUrl = FIPE_APIS[0]; // Usar API principal
+    const url = `${apiUrl}${path}`;
+    
+    try {
+      const response = await fetch(url, {
+        headers: {
+          'Accept': 'application/json',
+          'User-Agent': 'Mozilla/5.0'
+        }
+      });
+      
+      if (response.ok) {
+        return response;
+      }
+      
+      // Se rate limited, esperar e tentar novamente
+      if (response.status === 429) {
+        console.log(`Rate limited, aguardando antes de retry (attempt ${attempt + 1}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+        continue;
+      }
+      
+      // Para outros erros, retornar a resposta para tratamento
+      return response;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      console.error(`Fetch error (attempt ${attempt + 1}):`, lastError.message);
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+  }
+  
+  throw lastError || new Error('Falha ao conectar com API FIPE');
 }
 
 serve(async (req) => {
@@ -74,21 +133,28 @@ serve(async (req) => {
 
     switch (action) {
       case 'marcas': {
-        // GET /carros/marcas - Lista marcas
-        const response = await fetch(`${FIPE_API}/${tipo}/marcas`);
+        const cacheKey = `marcas_${tipo}`;
+        const cached = getCached<Array<{ codigo: string; nome: string }>>(cacheKey);
+        if (cached) {
+          console.log('Usando cache para marcas');
+          result = { success: true, data: cached };
+          break;
+        }
+
+        const response = await fetchWithRetry(`/${tipo}/marcas`);
         const data = await response.json();
         console.log('Resposta marcas:', JSON.stringify(data).substring(0, 200));
         
         if (!response.ok || !Array.isArray(data)) {
           console.error('Erro ao buscar marcas:', response.status, data);
-          throw new Error('Erro ao buscar marcas na API FIPE');
+          throw new Error('Erro ao buscar marcas na API FIPE. Tente novamente em alguns segundos.');
         }
         
-        // Mapear para formato esperado: { codigo, nome }
         const marcas = data.map((m: { codigo: string; nome: string }) => ({
           codigo: m.codigo,
           nome: m.nome
         }));
+        setCache(cacheKey, marcas);
         result = { success: true, data: marcas };
         break;
       }
@@ -101,21 +167,30 @@ serve(async (req) => {
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
-        // GET /carros/marcas/{codigo}/modelos - Lista modelos
-        const response = await fetch(`${FIPE_API}/${tipo}/marcas/${marcaCodigo}/modelos`);
+        
+        const cacheKey = `modelos_${tipo}_${marcaCodigo}`;
+        const cached = getCached<{ modelos: Array<{ codigo: string; nome: string }> }>(cacheKey);
+        if (cached) {
+          console.log('Usando cache para modelos');
+          result = { success: true, data: cached };
+          break;
+        }
+
+        const response = await fetchWithRetry(`/${tipo}/marcas/${marcaCodigo}/modelos`);
         const data = await response.json();
         
         if (!response.ok || !data.modelos) {
           console.error('Erro ao buscar modelos:', response.status, data);
-          throw new Error('Erro ao buscar modelos na API FIPE');
+          throw new Error('Erro ao buscar modelos na API FIPE. Tente novamente em alguns segundos.');
         }
         
-        // Mapear para formato esperado
         const modelos = data.modelos.map((m: { codigo: number; nome: string }) => ({
           codigo: String(m.codigo),
           nome: m.nome
         }));
-        result = { success: true, data: { modelos } };
+        const modelosResult = { modelos };
+        setCache(cacheKey, modelosResult);
+        result = { success: true, data: modelosResult };
         break;
       }
 
@@ -128,20 +203,28 @@ serve(async (req) => {
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
-        // GET /carros/marcas/{codigo}/modelos/{codigo}/anos - Lista anos
-        const response = await fetch(`${FIPE_API}/${tipo}/marcas/${marcaCodigo}/modelos/${modeloCodigo}/anos`);
+        
+        const cacheKey = `anos_${tipo}_${marcaCodigo}_${modeloCodigo}`;
+        const cached = getCached<Array<{ codigo: string; nome: string }>>(cacheKey);
+        if (cached) {
+          console.log('Usando cache para anos');
+          result = { success: true, data: cached };
+          break;
+        }
+
+        const response = await fetchWithRetry(`/${tipo}/marcas/${marcaCodigo}/modelos/${modeloCodigo}/anos`);
         const data = await response.json();
         
         if (!response.ok || !Array.isArray(data)) {
           console.error('Erro ao buscar anos:', response.status, data);
-          throw new Error('Erro ao buscar anos na API FIPE');
+          throw new Error('Erro ao buscar anos na API FIPE. Tente novamente em alguns segundos.');
         }
         
-        // Mapear para formato esperado
         const anos = data.map((a: { codigo: string; nome: string }) => ({
           codigo: a.codigo,
           nome: a.nome
         }));
+        setCache(cacheKey, anos);
         result = { success: true, data: anos };
         break;
       }
@@ -158,13 +241,10 @@ serve(async (req) => {
           );
         }
 
-        // GET /carros/marcas/{codigo}/modelos/{codigo}/anos/{codigo} - Busca preço
-        const response = await fetch(
-          `${FIPE_API}/${tipo}/marcas/${marcaCodigo}/modelos/${modeloCodigo}/anos/${anoCodigo}`
-        );
+        const response = await fetchWithRetry(`/${tipo}/marcas/${marcaCodigo}/modelos/${modeloCodigo}/anos/${anoCodigo}`);
         if (!response.ok) {
           console.error('Erro ao buscar preço:', response.status);
-          throw new Error('Erro ao buscar preço');
+          throw new Error('Erro ao buscar preço. Tente novamente em alguns segundos.');
         }
         const data = await response.json();
 
@@ -199,7 +279,7 @@ serve(async (req) => {
         console.log(`Buscando FIPE: ${marca} ${modelo} ${ano || ''}`);
 
         // 1. Buscar marcas
-        const marcasResp = await fetch(`${FIPE_API}/${tipo}/marcas`);
+        const marcasResp = await fetchWithRetry(`/${tipo}/marcas`);
         if (!marcasResp.ok) throw new Error('Erro ao buscar marcas');
         const marcasData: Array<{ codigo: string; nome: string }> = await marcasResp.json();
 
@@ -217,7 +297,7 @@ serve(async (req) => {
         console.log(`Marca encontrada: ${marcaEncontrada.nome} (${marcaEncontrada.codigo})`);
 
         // 2. Buscar modelos
-        const modelosResp = await fetch(`${FIPE_API}/${tipo}/marcas/${marcaEncontrada.codigo}/modelos`);
+        const modelosResp = await fetchWithRetry(`/${tipo}/marcas/${marcaEncontrada.codigo}/modelos`);
         if (!modelosResp.ok) throw new Error('Erro ao buscar modelos');
         const modelosData = await modelosResp.json();
 
@@ -237,8 +317,8 @@ serve(async (req) => {
         console.log(`Modelo encontrado: ${modeloEncontrado.nome} (${modeloEncontrado.codigo})`);
 
         // 3. Buscar anos
-        const anosResp = await fetch(
-          `${FIPE_API}/${tipo}/marcas/${marcaEncontrada.codigo}/modelos/${modeloEncontrado.codigo}/anos`
+        const anosResp = await fetchWithRetry(
+          `/${tipo}/marcas/${marcaEncontrada.codigo}/modelos/${modeloEncontrado.codigo}/anos`
         );
         if (!anosResp.ok) throw new Error('Erro ao buscar anos');
         const anosData: Array<{ codigo: string; nome: string }> = await anosResp.json();
@@ -255,8 +335,8 @@ serve(async (req) => {
         console.log(`Ano selecionado: ${anoEncontrado.nome} (${anoEncontrado.codigo})`);
 
         // 4. Buscar preço
-        const precoResp = await fetch(
-          `${FIPE_API}/${tipo}/marcas/${marcaEncontrada.codigo}/modelos/${modeloEncontrado.codigo}/anos/${anoEncontrado.codigo}`
+        const precoResp = await fetchWithRetry(
+          `/${tipo}/marcas/${marcaEncontrada.codigo}/modelos/${modeloEncontrado.codigo}/anos/${anoEncontrado.codigo}`
         );
         if (!precoResp.ok) throw new Error('Erro ao buscar preço');
         const preco = await precoResp.json();
