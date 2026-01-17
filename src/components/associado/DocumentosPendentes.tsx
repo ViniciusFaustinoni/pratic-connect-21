@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AlertTriangle, FileText, Upload, Check, Loader2, Send } from 'lucide-react';
+import { AlertTriangle, FileText, Upload, Check, Loader2, Send, Lock } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -22,10 +22,11 @@ import {
 
 interface DocumentosPendentesProps {
   associadoId: string;
+  readOnly?: boolean;
   onTodosEnviados?: () => void;
 }
 
-export function DocumentosPendentes({ associadoId, onTodosEnviados }: DocumentosPendentesProps) {
+export function DocumentosPendentes({ associadoId, readOnly, onTodosEnviados }: DocumentosPendentesProps) {
   const { data: docsPendentes, isLoading, refetch } = useDocumentosSolicitadosPendentes(associadoId);
   const enviarDoc = useEnviarDocumentoSolicitado();
   const verificarCompletos = useVerificarDocumentosCompletos();
@@ -137,9 +138,22 @@ export function DocumentosPendentes({ associadoId, onTodosEnviados }: Documentos
             </div>
           ))}
 
-          <Button onClick={() => setShowUploadDialog(true)} className="w-full mt-4">
-            <Upload className="h-4 w-4 mr-2" />
-            Enviar Documentos
+          <Button 
+            onClick={() => setShowUploadDialog(true)} 
+            className="w-full mt-4"
+            disabled={readOnly}
+          >
+            {readOnly ? (
+              <>
+                <Lock className="h-4 w-4 mr-2" />
+                Envio Bloqueado
+              </>
+            ) : (
+              <>
+                <Upload className="h-4 w-4 mr-2" />
+                Enviar Documentos
+              </>
+            )}
           </Button>
         </CardContent>
       </Card>
