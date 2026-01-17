@@ -84,17 +84,34 @@ export default function CotacaoPage() {
   // ETAPA 4 - RESULTADO
   // ============================================
   const [isCalculando, setIsCalculando] = useState(false);
-  const [planoSelecionado, setPlanoSelecionado] = useState<PlanoCotacao | null>(null);
+  const [planosSelecionados, setPlanosSelecionados] = useState<PlanoCotacao[]>([]);
   const [valorAdesaoCustomizado, setValorAdesaoCustomizado] = useState<number | null>(null);
 
-  // Atualizar valor de adesão quando plano é selecionado
-  const handleSelecionarPlano = useCallback((plano: PlanoCotacao | null) => {
-    setPlanoSelecionado(plano);
-    if (plano) {
-      setValorAdesaoCustomizado(plano.valorAdesao);
-    } else {
-      setValorAdesaoCustomizado(null);
-    }
+  // Limite máximo de planos para comparação
+  const MAX_PLANOS_COMPARACAO = 3;
+
+  // Handler para toggle de seleção de planos
+  const handleTogglePlano = useCallback((plano: PlanoCotacao) => {
+    setPlanosSelecionados(prev => {
+      const jaExiste = prev.some(p => p.id === plano.id);
+      if (jaExiste) {
+        const novos = prev.filter(p => p.id !== plano.id);
+        // Se remover todos, limpa valor de adesão
+        if (novos.length === 0) {
+          setValorAdesaoCustomizado(null);
+        }
+        return novos;
+      }
+      if (prev.length >= MAX_PLANOS_COMPARACAO) {
+        toast.warning(`Máximo de ${MAX_PLANOS_COMPARACAO} planos para comparação`);
+        return prev;
+      }
+      // Se for o primeiro, define valor de adesão
+      if (prev.length === 0) {
+        setValorAdesaoCustomizado(plano.valorAdesao);
+      }
+      return [...prev, plano];
+    });
   }, []);
 
   // Hook de planos - busca do banco de dados e calcula baseado nos parâmetros
@@ -197,23 +214,59 @@ export default function CotacaoPage() {
     setCombustivel('');
     setCategoria('');
     // Reset Etapa 4
-    setPlanoSelecionado(null);
+    setPlanosSelecionados([]);
     setValorAdesaoCustomizado(null);
   }, []);
 
   // Gerar PDF
-  const handleGerarPDF = useCallback(() => {
-    toast.info('Funcionalidade de PDF em desenvolvimento');
-  }, []);
-
-  // Iniciar Cadastro - redireciona para contratos com dados da cotação
-  const handleIniciarCadastro = useCallback(() => {
-    if (!planoSelecionado) {
-      toast.error('Selecione um plano primeiro');
+  const handleGerarPDF = useCallback(async () => {
+    if (planosSelecionados.length === 0) {
+      toast.error('Selecione pelo menos um plano');
       return;
     }
     
-    const valorAdesaoFinal = valorAdesaoCustomizado ?? planoSelecionado.valorAdesao ?? 0;
+    const { gerarPdfCotacaoComparativa } = await import('@/lib/gerarPdfCotacao');
+    
+    try {
+      await gerarPdfCotacaoComparativa({
+        numero: `COT-${Date.now()}`,
+        created_at: new Date().toISOString(),
+        validade_dias: 7,
+        nome_solicitante: nomeAssociado,
+        telefone1_solicitante: telefone1,
+        email_solicitante: emailAssociado,
+        veiculo_marca: marca,
+        veiculo_modelo: modelo,
+        veiculo_ano: ano ? parseInt(ano) : null,
+        veiculo_placa: placa,
+        valor_fipe: valorFipe,
+        planosComparar: planosSelecionados.map(p => ({
+          nome: p.nome,
+          valorMensal: p.valorMensal,
+          valorAdesao: p.valorAdesao,
+          coberturas: p.coberturas,
+          naoInclui: p.naoInclui,
+          coberturaFipe: p.coberturaFipe,
+          cota: p.cota,
+        })),
+      });
+      toast.success('PDF gerado com sucesso!');
+    } catch (error) {
+      console.error('Erro ao gerar PDF:', error);
+      toast.error('Erro ao gerar PDF');
+    }
+  }, [planosSelecionados, nomeAssociado, telefone1, emailAssociado, marca, modelo, ano, placa, valorFipe]);
+
+  // Iniciar Cadastro - redireciona para contratos com dados da cotação
+  const handleIniciarCadastro = useCallback(() => {
+    if (planosSelecionados.length === 0) {
+      toast.error('Selecione pelo menos um plano');
+      return;
+    }
+    
+    // Usa o primeiro plano selecionado para o contrato
+    const planoParaContrato = planosSelecionados[0];
+    const valorAdesaoFinal = valorAdesaoCustomizado ?? planoParaContrato.valorAdesao ?? 0;
     if (valorAdesaoFinal <= 0) {
       toast.error('A taxa de filiação deve ser maior que zero');
       return;
@@ -235,10 +288,10 @@ export default function CotacaoPage() {
         valorFipe: valorFipe,
       },
       plano: {
-        id: planoSelecionado.id,
-        nome: planoSelecionado.nome,
+        id: planoParaContrato.id,
+        nome: planoParaContrato.nome,
         valorAdesao: valorAdesaoFinal,
-        valorMensal: planoSelecionado.valorMensal || 0,
+        valorMensal: planoParaContrato.valorMensal || 0,
       },
       lead_id: leadId,
       consultor_id: consultorId,
@@ -248,7 +301,7 @@ export default function CotacaoPage() {
     
     toast.success('Redirecionando para cadastro de contrato...');
     navigate('/vendas/contratos', { state: { fromCotacao: true, dadosCotacao } });
-  }, [planoSelecionado, navigate, veiculoEncontrado, placa, marca, modelo, ano, valorFipe, nomeAssociado, emailAssociado, telefone1, telefone2, leadId, consultorId, regiao, modalidade, valorAdesaoCustomizado]);
+  }, [planosSelecionados, navigate, veiculoEncontrado, placa, marca, modelo, ano, valorFipe, nomeAssociado, emailAssociado, telefone1, telefone2, leadId, consultorId, regiao, modalidade, valorAdesaoCustomizado]);
 
   // Click no stepper
   const handleStepClick = useCallback((step: number) => {
@@ -360,8 +413,9 @@ export default function CotacaoPage() {
             regiao={regiao}
             combustivel={combustivel}
             planos={planosCalculados}
-            planoSelecionado={planoSelecionado}
-            setPlanoSelecionado={handleSelecionarPlano}
+            planosSelecionados={planosSelecionados}
+            onTogglePlano={handleTogglePlano}
+            maxPlanos={MAX_PLANOS_COMPARACAO}
             valorAdesao={valorAdesaoCustomizado}
             onValorAdesaoChange={setValorAdesaoCustomizado}
             onNovaCotacao={handleNovaCotacao}
