@@ -881,13 +881,13 @@ serve(async (req) => {
 
     console.log(`[autentique-create] Nenhum documento existente, criando novo para contrato ${contratoId}`);
 
-    // Preparar dados do template
+    // Preparar dados do template - PRIORIZAR campos cliente_* do contrato antes de leads
     const templateData: ContratoTemplateData = {
       numero: contrato.numero,
-      clienteNome: clienteNome || contrato.leads?.nome || "Cliente",
-      clienteCpf: clienteCpf || contrato.leads?.cpf || "",
-      clienteEmail: clienteEmail || contrato.leads?.email || "",
-      clienteTelefone: clienteTelefone || contrato.leads?.telefone || "",
+      clienteNome: clienteNome || contrato.cliente_nome || contrato.leads?.nome || "Cliente",
+      clienteCpf: clienteCpf || contrato.cliente_cpf || contrato.leads?.cpf || "",
+      clienteEmail: clienteEmail || contrato.cliente_email || contrato.leads?.email || "",
+      clienteTelefone: clienteTelefone || contrato.cliente_telefone || contrato.leads?.telefone || "",
       planoNome: contrato.planos?.nome || "Plano Padrão",
       planoCodigo: contrato.planos?.codigo || "",
       planoDescricao: contrato.planos?.descricao || "",
@@ -941,8 +941,17 @@ serve(async (req) => {
       }
     `;
 
-    const signerEmail = clienteEmail || contrato.leads?.email;
-    const documentName = `Contrato ${contrato.numero} - ${clienteNome || contrato.leads?.nome} - ${contrato.planos?.nome || 'Plano'}`;
+    // PRIORIZAR campos cliente_* do contrato (preenchidos quando não há lead)
+    const signerName = clienteNome || contrato.cliente_nome || contrato.leads?.nome;
+    const signerEmail = clienteEmail || contrato.cliente_email || contrato.leads?.email;
+    const documentName = `Contrato ${contrato.numero} - ${signerName || 'Cliente'} - ${contrato.planos?.nome || 'Plano'}`;
+    
+    console.log("[autentique-create] Dados do signatário:", { signerName, signerEmail });
+    
+    // Validar que temos dados mínimos do signatário
+    if (!signerEmail && !signerName) {
+      throw new Error("Dados do signatário não encontrados. Preencha nome e email do cliente no contrato.");
+    }
     
     // Preparar operations JSON (com file: null como placeholder)
     const operations = {
@@ -953,6 +962,7 @@ serve(async (req) => {
         },
         signers: [
           {
+            name: signerName || undefined, // Autentique aceita name OU email
             email: signerEmail,
             action: "SIGN",
             positions: [
