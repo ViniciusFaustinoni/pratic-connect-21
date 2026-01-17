@@ -21,7 +21,7 @@ export default function AtivacoesList() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filtro, setFiltro] = useState<FiltroAtivacao>("todos");
   
-  const { isDiretor, isAdminMaster } = usePermissions();
+  const { isDiretor, isAdminMaster, isVendedor } = usePermissions();
   const canDeleteAtivacoes = isDiretor || isAdminMaster;
   
   const { data: ativacoes, isLoading, error, refetch } = useAtivacoes(filtro);
@@ -103,15 +103,17 @@ export default function AtivacoesList() {
             </div>
           </div>
 
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={() => refetch()}
-            disabled={isLoading}
-          >
-            <RefreshCw className={cn("h-4 w-4 mr-2", isLoading && "animate-spin")} />
-            Atualizar
-          </Button>
+          {!isVendedor && (
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => refetch()}
+              disabled={isLoading}
+            >
+              <RefreshCw className={cn("h-4 w-4 mr-2", isLoading && "animate-spin")} />
+              Atualizar
+            </Button>
+          )}
         </div>
 
         {/* Metrics Cards */}

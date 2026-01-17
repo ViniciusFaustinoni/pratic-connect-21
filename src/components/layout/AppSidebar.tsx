@@ -369,7 +369,7 @@ const menuConfig: {
       id: 'relatorios',
       label: 'Relatórios',
       icon: PieChart,
-      permission: 'canViewDashboard',
+      permission: 'canViewReports',
       color: MENU_COLORS.relatorios,
       items: [
         { title: 'Central de Relatórios', url: '/relatorios', icon: BarChart3 },
