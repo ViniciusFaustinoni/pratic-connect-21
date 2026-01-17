@@ -65,6 +65,7 @@ import Vistorias from "./pages/monitoramento/Vistorias";
 import VistoriasInstalacoes from "./pages/monitoramento/VistoriasInstalacoes";
 import DashboardCoordenador from "./pages/monitoramento/DashboardCoordenador";
 import Equipe from "./pages/monitoramento/Equipe";
+import FilaVistorias from "./pages/monitoramento/FilaVistorias";
 import Oficinas from "./pages/oficinas/Oficinas";
 import OrdensServico from "./pages/oficinas/OrdensServico";
 import OrdemServicoDetalhe from "./pages/oficinas/OrdemServicoDetalhe";
@@ -392,8 +393,9 @@ const App = () => (
               <Route path="/monitoramento/config-plataformas" element={<ConfigPlataformas />} />
               <Route path="/monitoramento/credenciais" element={<ConfigCredenciais />} />
               <Route path="/monitoramento/calendario" element={<CalendarioInstalacoes />} />
-              <Route path="/monitoramento/vistorias" element={<Vistorias />} />
+              <Route path="/monitoramento/vistorias" element={<FilaVistorias />} />
               <Route path="/monitoramento/vistorias-instalacoes" element={<VistoriasInstalacoes />} />
+              <Route path="/monitoramento/realizar-vistoria" element={<Vistorias />} />
               
               {/* Marketing */}
               <Route path="/marketing" element={<MarketingDashboard />} />
