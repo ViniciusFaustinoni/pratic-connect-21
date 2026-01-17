@@ -44,6 +44,7 @@ export function BeneficioAdicionalModal({ open, onOpenChange, beneficio }: Benef
     preco: 0,
     ativo: true,
     ordem: 0,
+    variacao_por_cota: true,
   });
 
   useEffect(() => {
@@ -56,6 +57,7 @@ export function BeneficioAdicionalModal({ open, onOpenChange, beneficio }: Benef
         preco: beneficio.preco,
         ativo: beneficio.ativo ?? true,
         ordem: beneficio.ordem ?? 0,
+        variacao_por_cota: beneficio.variacao_por_cota ?? true,
       });
     } else {
       setFormData({
@@ -66,6 +68,7 @@ export function BeneficioAdicionalModal({ open, onOpenChange, beneficio }: Benef
         preco: 0,
         ativo: true,
         ordem: 0,
+        variacao_por_cota: true,
       });
     }
   }, [beneficio, open]);
@@ -95,6 +98,7 @@ export function BeneficioAdicionalModal({ open, onOpenChange, beneficio }: Benef
           preco: formData.preco,
           ativo: formData.ativo,
           ordem: formData.ordem,
+          variacao_por_cota: formData.variacao_por_cota,
         });
       } else {
         await createBeneficio.mutateAsync({
@@ -105,6 +109,7 @@ export function BeneficioAdicionalModal({ open, onOpenChange, beneficio }: Benef
           preco: formData.preco,
           ativo: formData.ativo,
           ordem: formData.ordem,
+          variacao_por_cota: formData.variacao_por_cota,
         });
       }
       onOpenChange(false);
@@ -154,6 +159,29 @@ export function BeneficioAdicionalModal({ open, onOpenChange, beneficio }: Benef
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          {/* Variação por Cota */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div className="space-y-0.5">
+                <Label htmlFor="variacao_por_cota" className="text-sm font-medium">
+                  Variação por Cota
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  {formData.variacao_por_cota 
+                    ? "Custo dividido pelo total de cotas (baseado no valor FIPE)"
+                    : "Custo dividido pelo número de veículos"}
+                </p>
+              </div>
+              <Switch
+                id="variacao_por_cota"
+                checked={formData.variacao_por_cota}
+                onCheckedChange={(checked) => 
+                  setFormData({ ...formData, variacao_por_cota: checked })
+                }
+              />
+            </div>
           </div>
 
           {/* Descrição */}

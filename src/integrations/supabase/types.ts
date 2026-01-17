@@ -1789,6 +1789,7 @@ export type Database = {
           ordem: number | null
           preco: number
           updated_at: string | null
+          variacao_por_cota: boolean
         }
         Insert: {
           ativo?: boolean | null
@@ -1801,6 +1802,7 @@ export type Database = {
           ordem?: number | null
           preco?: number
           updated_at?: string | null
+          variacao_por_cota?: boolean
         }
         Update: {
           ativo?: boolean | null
@@ -1813,6 +1815,7 @@ export type Database = {
           ordem?: number | null
           preco?: number
           updated_at?: string | null
+          variacao_por_cota?: boolean
         }
         Relationships: []
       }
@@ -12548,24 +12551,8 @@ export type Database = {
           tipo_beneficio: string | null
           total_associados: number | null
           total_cotas: number | null
-        }
-        Relationships: []
-      }
-      vw_custo_real_beneficios: {
-        Row: {
-          beneficio_id: string | null
-          categoria: string | null
-          codigo: string | null
-          custo_real: number | null
-          gasto_total_60d: number | null
-          indicador: string | null
-          margem: number | null
-          nome: string | null
-          preco_sugerido: number | null
-          qtd_utilizacoes_60d: number | null
-          tipo_beneficio: string | null
-          total_associados: number | null
-          total_cotas: number | null
+          total_veiculos: number | null
+          variacao_por_cota: boolean | null
         }
         Relationships: []
       }
