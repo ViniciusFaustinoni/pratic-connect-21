@@ -119,3 +119,6 @@ verify_jwt = false
 
 [functions.autentique-create-by-token]
 verify_jwt = false
+
+[functions.autentique-sync-contrato]
+verify_jwt = false

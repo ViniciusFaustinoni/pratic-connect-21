@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 interface AutentiqueStatusPublicoParams {
   documentoId: string | undefined;
@@ -34,6 +34,7 @@ export function useAutentiqueStatusPublico({
   enabled = true
 }: AutentiqueStatusPublicoParams) {
   const queryClient = useQueryClient();
+  const hasSyncedRef = useRef(false);
 
   const query = useQuery<AutentiqueStatusResponse>({
     queryKey: ['autentique-status-publico', documentoId],
@@ -71,9 +72,11 @@ export function useAutentiqueStatusPublico({
   });
 
   // Efeito para atualizar queries quando status mudar para assinado
+  // Também chama a função de sync para garantir que o banco seja atualizado
   useEffect(() => {
-    if (query.data?.document?.status === 'signed' && contratoToken) {
-      console.log('[useAutentiqueStatusPublico] Documento assinado! Atualizando UI...');
+    if (query.data?.document?.status === 'signed' && contratoToken && !hasSyncedRef.current) {
+      console.log('[useAutentiqueStatusPublico] Documento assinado detectado via polling!');
+      hasSyncedRef.current = true;
       
       // Atualização otimista dos dados do contrato
       queryClient.setQueryData(['contrato-publico', contratoToken], (old: any) => {
@@ -88,11 +91,31 @@ export function useAutentiqueStatusPublico({
         return old;
       });
       
-      // Invalidar e forçar refetch
-      queryClient.invalidateQueries({ queryKey: ['contrato-publico', contratoToken] });
-      queryClient.refetchQueries({ queryKey: ['contrato-publico', contratoToken] });
+      // Chamar a função de sync para garantir que o banco foi atualizado
+      // Isso serve como backup caso o webhook não tenha funcionado
+      console.log('[useAutentiqueStatusPublico] Chamando autentique-sync-contrato para garantir atualização...');
+      supabase.functions.invoke('autentique-sync-contrato', {
+        body: { contratoToken }
+      }).then((result) => {
+        console.log('[useAutentiqueStatusPublico] Sync result:', result.data);
+        if (result.data?.atualizado) {
+          console.log('[useAutentiqueStatusPublico] Banco atualizado com sucesso!');
+        }
+        // Invalidar e forçar refetch
+        queryClient.invalidateQueries({ queryKey: ['contrato-publico', contratoToken] });
+        queryClient.refetchQueries({ queryKey: ['contrato-publico', contratoToken] });
+      }).catch((error) => {
+        console.error('[useAutentiqueStatusPublico] Erro ao sincronizar:', error);
+        // Ainda assim invalidar queries
+        queryClient.invalidateQueries({ queryKey: ['contrato-publico', contratoToken] });
+      });
     }
   }, [query.data?.document?.status, contratoToken, queryClient]);
+
+  // Reset sync flag quando contratoToken mudar
+  useEffect(() => {
+    hasSyncedRef.current = false;
+  }, [contratoToken]);
 
   return query;
 }

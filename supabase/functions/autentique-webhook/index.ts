@@ -126,11 +126,11 @@ serve(async (req) => {
       console.log("[autentique-webhook] Telefone do signatário:", signerPhone);
       
       if (signerEmail) {
-        // Buscar por email do cliente + status pendente
+        // FALLBACK 1: Buscar por email do cliente com ILIKE (case-insensitive)
         const { data: contratoByEmail } = await supabase
           .from("contratos")
           .select("*, leads (*)")
-          .eq("cliente_email", signerEmail)
+          .ilike("cliente_email", signerEmail)
           .in("status", ["pendente_assinatura", "enviado", "visualizado"])
           .order("created_at", { ascending: false })
           .limit(1)
@@ -150,9 +150,36 @@ serve(async (req) => {
         }
       }
       
-      // FALLBACK 2: Tentar buscar pelo telefone se email não funcionou
+      // FALLBACK 2: Buscar pelo email do lead associado
+      if (!contrato && signerEmail) {
+        console.log("[autentique-webhook] Tentando fallback por email do lead...");
+        
+        const { data: contratoByLeadEmail } = await supabase
+          .from("contratos")
+          .select("*, leads!inner (*)")
+          .ilike("leads.email", signerEmail)
+          .in("status", ["pendente_assinatura", "enviado", "visualizado"])
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        
+        if (contratoByLeadEmail) {
+          console.log("[autentique-webhook] ✓ Contrato encontrado por email do lead:", contratoByLeadEmail.numero);
+          console.log("[autentique-webhook] Atualizando autentique_documento_id para:", documentId);
+          
+          await supabase
+            .from("contratos")
+            .update({ autentique_documento_id: documentId })
+            .eq("id", contratoByLeadEmail.id);
+          
+          contrato = contratoByLeadEmail;
+        }
+      }
+      
+      // FALLBACK 3: Tentar buscar pelo telefone se email não funcionou
       if (!contrato && signerPhone) {
         const phoneClean = signerPhone.replace(/\D/g, '');
+        console.log("[autentique-webhook] Tentando fallback por telefone:", phoneClean);
         
         const { data: contratoByPhone } = await supabase
           .from("contratos")

@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useGerarAutentiqueByToken } from '@/hooks/useContratoLink';
 import { useContratoRealtimeByToken } from '@/hooks/useContratosRealtime';
 import { useAutentiqueStatusPublico } from '@/hooks/useAutentiqueStatusPublico';
+import { useAutentiqueSyncContrato } from '@/hooks/useAutentiqueSyncContrato';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
@@ -54,7 +55,11 @@ export function ConfirmacaoVistoria({
   const [isResending, setIsResending] = useState(false);
   const [showEmailIncorrect, setShowEmailIncorrect] = useState(false);
   
+  // Estado para botão de sincronização manual (público)
+  const [showSyncOption, setShowSyncOption] = useState(false);
+  
   const gerarAutentique = useGerarAutentiqueByToken();
+  const syncContrato = useAutentiqueSyncContrato();
   const queryClient = useQueryClient();
   
   // Ativar listener realtime para receber atualização quando contrato for assinado
@@ -143,7 +148,7 @@ export function ConfirmacaoVistoria({
   const isGenerating = gerarAutentique.isPending || isGeneratingLink || progressoGeracao !== null;
   const urlAssinatura = autentiqueUrl || linkGerado;
   
-  // Timer de 30 segundos para mostrar opção de reenvio
+  // Timer de 30 segundos para mostrar opção de reenvio e 45 segundos para sync manual
   useEffect(() => {
     // Só iniciar timer quando houver URL mas ainda não foi assinado
     if (urlAssinatura && !contratoFoiAssinado) {
@@ -153,6 +158,9 @@ export function ConfirmacaoVistoria({
           if (newTime >= 30) {
             setShowResendOption(true);
           }
+          if (newTime >= 45) {
+            setShowSyncOption(true);
+          }
           return newTime;
         });
       }, 1000);
@@ -160,6 +168,15 @@ export function ConfirmacaoVistoria({
       return () => clearInterval(interval);
     }
   }, [urlAssinatura, contratoFoiAssinado]);
+  
+  // Função para sincronizar manualmente
+  const handleSyncAssinatura = async () => {
+    if (!contratoToken) {
+      toast.error('Token do contrato não disponível');
+      return;
+    }
+    await syncContrato.mutateAsync({ contratoToken });
+  };
   
   // Função para reenviar email
   const handleResendEmail = async () => {
@@ -338,10 +355,27 @@ export function ConfirmacaoVistoria({
               </ol>
             </div>
 
-            {/* Indicador de verificação automática */}
-            <div className="flex items-center gap-2 text-xs text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/50 px-3 py-2 rounded">
-              <RefreshCw className={`h-3 w-3 ${isCheckingStatus ? 'animate-spin' : ''}`} />
-              <span>Verificando assinatura automaticamente a cada 10 segundos...</span>
+            {/* Indicador de verificação automática + botão manual */}
+            <div className="flex items-center justify-between gap-2 text-xs text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/50 px-3 py-2 rounded">
+              <div className="flex items-center gap-2">
+                <RefreshCw className={`h-3 w-3 ${isCheckingStatus ? 'animate-spin' : ''}`} />
+                <span>Verificando automaticamente...</span>
+              </div>
+              {showSyncOption && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 px-2 text-xs text-blue-700 hover:bg-blue-200 dark:text-blue-300 dark:hover:bg-blue-800"
+                  onClick={handleSyncAssinatura}
+                  disabled={syncContrato.isPending}
+                >
+                  {syncContrato.isPending ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    'Verificar Agora'
+                  )}
+                </Button>
+              )}
             </div>
 
             {/* Opção de reenvio após 30 segundos */}
