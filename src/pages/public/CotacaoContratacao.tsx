@@ -174,11 +174,9 @@ export default function CotacaoContratacao() {
 
   return (
     <div className="dark min-h-screen public-premium-bg relative">
-      {/* Ambient glow effects - fixed background */}
+      {/* Ambient glow - simplified */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-        <div className="absolute top-20 left-1/4 w-[500px] h-[500px] rounded-full bg-primary/8 blur-[150px]" />
-        <div className="absolute bottom-40 right-1/4 w-[400px] h-[400px] rounded-full bg-accent/5 blur-[120px]" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-primary/5 blur-[180px]" />
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[600px] bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,hsl(var(--primary)/0.12),transparent)]" />
       </div>
 
       {/* Header Premium com Logo */}

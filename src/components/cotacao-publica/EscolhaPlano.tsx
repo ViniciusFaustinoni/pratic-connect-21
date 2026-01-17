@@ -162,32 +162,23 @@ export function EscolhaPlano({
                 )}
 
                 <CardContent className="p-6">
-                  {/* Header do Card */}
-                  <div className="flex items-center gap-3 mb-5">
-                    <div className={cn(
-                      'w-12 h-12 rounded-xl flex items-center justify-center',
-                      'bg-gradient-to-br from-muted/80 to-muted/40 border border-border/50',
-                      isSelected && 'from-primary/20 to-primary/10 border-primary/30'
-                    )}>
-                      {getNivelIcon(plano.nivel)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-bold text-lg text-foreground truncate">{plano.nome}</h3>
-                      <Badge 
-                        variant="outline" 
-                        className={cn(
-                          'text-xs border-border/50 bg-muted/30',
-                          plano.nivel === 'exclusive' && 'border-yellow-400/30 text-yellow-400 bg-yellow-400/10',
-                          plano.nivel === 'premium' && 'border-purple-400/30 text-purple-400 bg-purple-400/10'
-                        )}
-                      >
-                        {getNivelLabel(plano.nivel)}
-                      </Badge>
-                    </div>
+                  {/* Header: Nome + Badge */}
+                  <div className="mb-4">
+                    <h3 className="text-xl font-bold text-foreground mb-2">{plano.nome}</h3>
+                    <Badge 
+                      variant="outline" 
+                      className={cn(
+                        'text-xs border-border/50 bg-muted/30',
+                        plano.nivel === 'exclusive' && 'border-yellow-400/30 text-yellow-400 bg-yellow-400/10',
+                        plano.nivel === 'premium' && 'border-purple-400/30 text-purple-400 bg-purple-400/10'
+                      )}
+                    >
+                      {getNivelLabel(plano.nivel)}
+                    </Badge>
                   </div>
 
-                  {/* Preço - Destaque Premium */}
-                  <div className="mb-5">
+                  {/* Preço - Destaque Grande */}
+                  <div className="mb-4">
                     <div className="flex items-baseline gap-1">
                       <span className={cn(
                         'text-4xl font-bold tracking-tight',
@@ -204,8 +195,26 @@ export function EscolhaPlano({
                     )}
                   </div>
 
+                  {/* Descrição curta */}
+                  <p className="text-sm text-muted-foreground mb-6">
+                    Proteção completa para seu veículo com coberturas abrangentes
+                  </p>
+
+                  {/* BOTÃO 3D DE SELEÇÃO */}
+                  <Button
+                    variant={isRecommended ? "default" : "outline"}
+                    className={cn(
+                      'w-full h-12 font-semibold rounded-lg transition-all duration-200',
+                      isRecommended && !isSelected && 'bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/30',
+                      !isRecommended && !isSelected && 'border-2 border-border/60 hover:border-primary/50 hover:bg-primary/5',
+                      isSelected && 'bg-primary text-primary-foreground border-primary shadow-lg shadow-primary/40'
+                    )}
+                  >
+                    {isSelected ? 'Selecionado ✓' : 'Selecionar'}
+                  </Button>
+
                   {/* Divisor com gradiente */}
-                  <div className="h-px bg-gradient-to-r from-transparent via-border/50 to-transparent mb-5" />
+                  <div className="h-px bg-gradient-to-r from-transparent via-border/50 to-transparent my-6" />
 
                   {/* Coberturas */}
                   {plano.coberturas && plano.coberturas.length > 0 && (
@@ -234,28 +243,6 @@ export function EscolhaPlano({
                       )}
                     </div>
                   )}
-
-                  {/* Indicador de Seleção - Premium */}
-                  <div className="mt-6 pt-5 border-t border-border/30">
-                    <div className="flex items-center justify-center gap-2">
-                      <div
-                        className={cn(
-                          'w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all',
-                          isSelected
-                            ? 'border-primary bg-primary shadow-lg shadow-primary/30'
-                            : 'border-muted-foreground/30 bg-transparent'
-                        )}
-                      >
-                        {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
-                      </div>
-                      <span className={cn(
-                        'text-sm font-medium',
-                        isSelected ? 'text-primary' : 'text-muted-foreground'
-                      )}>
-                        {isSelected ? 'Selecionado' : 'Selecionar plano'}
-                      </span>
-                    </div>
-                  </div>
                 </CardContent>
               </Card>
             </motion.div>
