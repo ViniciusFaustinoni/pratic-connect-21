@@ -38,6 +38,10 @@ import {
   VistoriaParaAgendar, 
   AgendarVistoriaFormData 
 } from '@/components/monitoramento/AgendarVistoriaModal';
+import { 
+  AtribuirVistoriadorModal, 
+  VistoriaParaAtribuir 
+} from '@/components/monitoramento/AtribuirVistoriadorModal';
 
 // ============================================
 // TIPOS E CONSTANTES
@@ -138,6 +142,10 @@ export default function FilaVistorias() {
   // Estado do modal de agendamento
   const [agendarModalOpen, setAgendarModalOpen] = useState(false);
   const [vistoriaSelecionada, setVistoriaSelecionada] = useState<VistoriaParaAgendar | null>(null);
+  
+  // Estado do modal de atribuir vistoriador
+  const [atribuirModalOpen, setAtribuirModalOpen] = useState(false);
+  const [vistoriaParaAtribuir, setVistoriaParaAtribuir] = useState<VistoriaParaAtribuir | null>(null);
 
   // Dados
   const { data: vistoriasRaw, isLoading } = useVistorias({});
@@ -295,12 +303,41 @@ export default function FilaVistorias() {
     setAgendarModalOpen(false);
   };
 
+  // Handler para abrir modal de atribuição
+  const handleAtribuir = (vistoria: VistoriaFila) => {
+    setVistoriaParaAtribuir({
+      id: vistoria.id,
+      protocolo: vistoria.protocolo,
+      cliente: vistoria.cliente,
+      veiculo: vistoria.veiculo,
+      placa: vistoria.placa,
+      endereco: vistoria.regiao, // TODO: buscar endereço completo
+      regiao: vistoria.regiao,
+      dataAgendada: vistoria.dataAgendada || '',
+      periodo: 'manha', // TODO: extrair do horário real
+      vistoriadorAtualId: vistoria.vistoriadorId,
+      vistoriadorAtualNome: vistoria.vistoriador,
+    });
+    setAtribuirModalOpen(true);
+  };
+
+  // Handler para salvar atribuição
+  const handleSaveAtribuicao = async (vistoriadorId: string) => {
+    // TODO: Implementar mutação real para salvar no banco
+    console.log('Atribuição vistoriador:', vistoriadorId);
+    toast.success('Vistoriador atribuído com sucesso!');
+    setAtribuirModalOpen(false);
+  };
+
   // Ações 
   const handleAction = (action: string, vistoria: VistoriaFila) => {
     switch (action) {
       case 'agendar':
       case 'reagendar':
         handleAgendar(vistoria);
+        break;
+      case 'atribuir':
+        handleAtribuir(vistoria);
         break;
       default:
         toast.info(`Ação: ${action} - Vistoria: ${vistoria.protocolo}`);
@@ -591,6 +628,14 @@ export default function FilaVistorias() {
         onOpenChange={setAgendarModalOpen}
         vistoria={vistoriaSelecionada}
         onSave={handleSaveAgendamento}
+      />
+
+      {/* Modal de Atribuir Vistoriador */}
+      <AtribuirVistoriadorModal
+        open={atribuirModalOpen}
+        onOpenChange={setAtribuirModalOpen}
+        vistoria={vistoriaParaAtribuir}
+        onSave={handleSaveAtribuicao}
       />
     </div>
   );
