@@ -75,7 +75,7 @@ export function useContrato(id: string | undefined) {
           .from('profiles')
           .select('id, nome, email')
           .eq('id', contratoData.vendedor_id)
-          .single();
+          .maybeSingle();
         vendedor = vendedorData;
       }
       

@@ -24,9 +24,10 @@ export function useContratoByToken(token: string | undefined) {
           leads:lead_id (nome, email, telefone, cpf)
         `)
         .eq('link_token', token)
-        .single();
+        .maybeSingle();
       
       if (error) throw error;
+      if (!data) throw new Error('Link inválido ou expirado');
       return data;
     },
     enabled: !!token,
@@ -110,9 +111,10 @@ export function useGerarLinkAssociado() {
         })
         .eq('id', contratoId)
         .select('link_token')
-        .single();
+        .maybeSingle();
       
       if (error) throw error;
+      if (!data) throw new Error('Contrato não encontrado ou sem permissão de acesso');
       
       // Registrar no histórico
       await supabase.from('contratos_historico').insert({
