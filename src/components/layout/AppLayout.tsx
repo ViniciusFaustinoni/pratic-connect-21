@@ -33,13 +33,13 @@ export function AppLayout() {
     <ProtectedRoute allowedTipos={['funcionario']}>
       <SessionTimeoutProvider variant="internal">
         <SidebarProvider>
-          <div className="flex h-screen w-full bg-background">
+          <div className="flex h-screen w-full bg-background overflow-x-hidden">
             <AppSidebar />
-            <SidebarInset className="flex flex-1 flex-col min-w-0 min-h-0">
+            <SidebarInset className="flex flex-1 flex-col min-w-0 min-h-0 overflow-x-hidden">
               <AppHeader />
               {/* Main content - pages control their own scroll */}
-              <main className="flex-1 flex flex-col min-h-0 overflow-auto">
-                <div className="flex-1 px-4 py-6 lg:px-6 xl:px-8 max-w-screen-2xl mx-auto w-full">
+              <main className="flex-1 flex flex-col min-h-0 overflow-auto overflow-x-hidden">
+                <div className="flex-1 px-3 py-4 sm:px-4 sm:py-6 lg:px-6 xl:px-8 max-w-screen-2xl mx-auto w-full">
                   <Outlet />
                 </div>
               </main>

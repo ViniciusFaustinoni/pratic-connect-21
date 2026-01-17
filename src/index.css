@@ -172,6 +172,14 @@
     @apply border-border;
   }
 
+  /* Prevenir overflow horizontal global */
+  html,
+  body,
+  #root {
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+
   body {
     @apply bg-background text-foreground antialiased;
     font-family: 'Inter', system-ui, sans-serif;
@@ -185,6 +193,28 @@
 }
 
 @layer utilities {
+  /* ===== RESPONSIVIDADE ===== */
+  
+  /* Container responsivo seguro */
+  .responsive-container {
+    @apply w-full max-w-full overflow-x-hidden;
+  }
+
+  /* Tabela responsiva com scroll */
+  .table-responsive {
+    @apply overflow-x-auto -mx-3 px-3 sm:mx-0 sm:px-0;
+  }
+
+  /* Touch targets adequados (44x44px mínimo) */
+  .touch-target {
+    @apply min-h-[44px] min-w-[44px];
+  }
+
+  /* Hint de scroll horizontal para mobile */
+  .scroll-hint {
+    @apply flex items-center justify-center gap-1.5 text-xs text-muted-foreground py-2;
+  }
+
   .scrollbar-thin {
     scrollbar-width: thin;
     scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
