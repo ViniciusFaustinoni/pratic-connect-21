@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 import { useAcompanhamento } from "@/hooks/useAcompanhamento";
 import { AtivacaoCard, AtivacaoItem, Etapa } from "@/components/ativacao/AtivacaoCard";
 import { useAtivacaoMetrics } from "@/hooks/useAtivacaoMetrics";
+import { usePermissions } from "@/hooks/usePermissions";
 
 // Definição das etapas do pipeline
 const ETAPAS_ATIVACAO: Etapa[] = [
@@ -90,6 +91,7 @@ type SlaFilter = 'todos' | 'no-prazo' | 'atencao' | 'atrasado';
 
 export default function Acompanhamento() {
   const { data: rawItems, isLoading, error, refetch } = useAcompanhamento();
+  const { isVendedor } = usePermissions();
   const scrollRef = useRef<HTMLDivElement>(null);
   
   // Filtros
@@ -264,15 +266,17 @@ export default function Acompanhamento() {
               <Download className="h-4 w-4 mr-2" />
               Exportar
             </Button>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => refetch()}
-              disabled={isLoading}
-            >
-              <RefreshCw className={cn("h-4 w-4 mr-2", isLoading && "animate-spin")} />
-              Atualizar
-            </Button>
+            {!isVendedor && (
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => refetch()}
+                disabled={isLoading}
+              >
+                <RefreshCw className={cn("h-4 w-4 mr-2", isLoading && "animate-spin")} />
+                Atualizar
+              </Button>
+            )}
           </div>
         </div>
 

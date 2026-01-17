@@ -42,7 +42,7 @@ export default function Metas() {
 
   const { metas, isLoading, salvarMeta, deletarMeta, atualizarRealizados } = useMetas(mes, ano);
   const { data: vendedores } = useVendedores();
-  const { isGerencia } = usePermissions();
+  const { isGerencia, isVendedor } = usePermissions();
 
   // Atualizar realizados ao carregar
   useEffect(() => {
@@ -188,9 +188,11 @@ export default function Metas() {
               <ChevronRight className="h-4 w-4" />
             </Button>
 
-            <Button variant="ghost" size="icon" onClick={atualizarRealizados} title="Atualizar realizados">
-              <RefreshCw className="h-4 w-4" />
-            </Button>
+            {!isVendedor && (
+              <Button variant="ghost" size="icon" onClick={atualizarRealizados} title="Atualizar realizados">
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
