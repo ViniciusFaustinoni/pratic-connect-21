@@ -38,7 +38,7 @@ serve(async (req) => {
         lead:leads!cotacoes_lead_id_fkey (
           id, nome, email, telefone, cpf
         ),
-        plano:planos (
+        plano:planos!cotacoes_plano_escolhido_id_fkey (
           id, nome, coberturas
         )
       `)
