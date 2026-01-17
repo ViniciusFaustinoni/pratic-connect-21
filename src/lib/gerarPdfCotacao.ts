@@ -128,8 +128,7 @@ export function gerarPdfCotacao(cotacao: CotacaoParaPdf): void {
   
   doc.setTextColor(0, 0, 0);
   doc.setFontSize(10);
-  doc.setFont('helvetica', 'bold');
-  doc.text(`Cotação: ${cotacao.numero || 'N/A'}`, margin + 5, y + 9);
+  doc.setFont('helvetica', 'normal');
   
   const dataValidade = new Date(cotacao.created_at);
   dataValidade.setDate(dataValidade.getDate() + (cotacao.validade_dias || 7));
