@@ -68,7 +68,7 @@ export function useCotacoes(options?: UseCotacoesOptions) {
           leads:leads!fk_cotacoes_lead_id(*),
           planos:planos!plano_id(*),
           contratos:contratos!contratos_cotacao_id_fkey(id, numero, status)
-        `, { count: 'exact' })
+        `)
         .order('created_at', { ascending: false });
       
       // Filtrar por vendedor se viewScope = 'own'
