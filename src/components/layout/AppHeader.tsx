@@ -28,27 +28,29 @@ export function AppHeader() {
   };
 
   return (
-    <header className="sticky top-0 z-40 flex h-[60px] items-center justify-between border-b border-border bg-card px-4">
+    <header className="sticky top-0 z-40 flex h-[56px] sm:h-[60px] items-center justify-between border-b border-border bg-card px-2 sm:px-4">
       {/* Lado Esquerdo - SidebarTrigger + Breadcrumb */}
-      <div className="flex items-center gap-3 min-w-0 flex-1">
-        <SidebarTrigger className="-ml-2 text-muted-foreground hover:text-foreground flex-shrink-0" />
+      <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+        <SidebarTrigger className="-ml-1 sm:-ml-2 text-muted-foreground hover:text-foreground flex-shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center" />
         
         {/* Separador visual */}
         <div className="h-5 w-px bg-border hidden md:block" />
         
-        {/* Breadcrumb - esconde em telas muito pequenas */}
-        <div className="hidden sm:flex overflow-hidden">
+        {/* Breadcrumb - esconde em telas pequenas */}
+        <div className="hidden md:flex overflow-hidden">
           <GlobalBreadcrumb />
         </div>
       </div>
 
       {/* Lado Direito - Ações */}
-      <div className="flex items-center gap-2 flex-shrink-0">
+      <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
         {/* Global Search - sempre visível */}
         <GlobalSearch />
         
-        {/* Theme Toggle */}
-        <ThemeToggle />
+        {/* Theme Toggle - esconde em mobile */}
+        <div className="hidden sm:flex">
+          <ThemeToggle />
+        </div>
         
         {/* Notifications */}
         <NotificationBell variant="internal" />

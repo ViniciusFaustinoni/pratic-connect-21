@@ -379,21 +379,21 @@ function QuickActions() {
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-3">
+    <div className="grid grid-cols-2 gap-2 sm:gap-3">
       {actions.map((action) => (
         <Button
           key={action.label}
           variant="outline"
           className={cn(
-            "h-auto py-4 flex flex-col gap-2 transition-all duration-200 hover:scale-105",
+            "h-auto py-3 sm:py-4 flex flex-col gap-1.5 sm:gap-2 transition-all duration-200 hover:scale-105 touch-target",
             action.primary 
               ? "bg-gradient-to-r from-accent to-accent-hover border-accent text-white hover:shadow-[0_0_20px_hsl(351,84%,49%,0.3)]" 
               : "bg-gradient-to-r from-primary-dark to-primary border-primary text-white hover:shadow-[0_0_20px_hsl(218,67%,36%,0.3)]"
           )}
           onClick={() => navigate(action.url)}
         >
-          <span className="text-2xl">{action.emoji}</span>
-          <span className="text-sm font-medium">{action.label}</span>
+          <span className="text-xl sm:text-2xl">{action.emoji}</span>
+          <span className="text-xs sm:text-sm font-medium">{action.label}</span>
         </Button>
       ))}
     </div>
@@ -486,7 +486,7 @@ export default function Dashboard() {
       <AlertaBanner alertas={alertas} />
 
       {/* KPIs - Grid de 4 */}
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
         <KPICard
           titulo="Associados Ativos"
           valor={contratos?.filter(c => c.status === 'ativo').length || 0}
