@@ -44,8 +44,9 @@ interface EtapaResultadoProps {
   regiao: string;
   combustivel?: string;
   planos: PlanoCotacao[];
-  planoSelecionado: PlanoCotacao | null;
-  setPlanoSelecionado: (plano: PlanoCotacao | null) => void;
+  planosSelecionados: PlanoCotacao[];
+  onTogglePlano: (plano: PlanoCotacao) => void;
+  maxPlanos: number;
   valorAdesao?: number | null;
   onValorAdesaoChange?: (valor: number) => void;
   onNovaCotacao: () => void;
@@ -85,8 +86,9 @@ export function EtapaResultado({
   regiao,
   combustivel,
   planos,
-  planoSelecionado,
-  setPlanoSelecionado,
+  planosSelecionados,
+  onTogglePlano,
+  maxPlanos,
   valorAdesao,
   onValorAdesaoChange,
   onNovaCotacao,
@@ -103,9 +105,18 @@ export function EtapaResultado({
   // Mostrar 3 planos por padrão, ou todos se expandido
   const planosVisiveis = showAllPlanos ? planos : planos.slice(0, 3);
   const planoBasico = planos[0];
+  
+  // Verifica se tem planos selecionados
+  const temPlanosSelecionados = planosSelecionados.length > 0;
+  const primeiroPlanoSelecionado = planosSelecionados[0] || null;
 
-  const handleSelectPlano = (plano: PlanoCotacao) => {
-    setPlanoSelecionado(plano);
+  // Função para verificar se plano está selecionado e sua ordem
+  const getSelectionInfo = (planoId: string) => {
+    const index = planosSelecionados.findIndex(p => p.id === planoId);
+    return {
+      isSelected: index !== -1,
+      order: index !== -1 ? index + 1 : undefined,
+    };
   };
 
   // Loading state
@@ -183,23 +194,35 @@ export function EtapaResultado({
 
       {/* Planos Disponíveis */}
       <div className="space-y-4">
-        <div className="flex items-center gap-2">
-          <h3 className="text-lg font-semibold text-foreground">Planos Disponíveis</h3>
-          <Badge variant="secondary" className="text-xs">
-            {planos.length} opções
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <h3 className="text-lg font-semibold text-foreground">Planos Disponíveis</h3>
+            <Badge variant="secondary" className="text-xs">
+              {planos.length} opções
+            </Badge>
+          </div>
+          <Badge 
+            variant={temPlanosSelecionados ? "default" : "outline"} 
+            className="text-xs"
+          >
+            {planosSelecionados.length}/{maxPlanos} selecionados
           </Badge>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {planosVisiveis.map((plano) => (
-            <PlanoCardCotacao
-              key={plano.id}
-              plano={plano}
-              onSelect={handleSelectPlano}
-              planoBasico={planoBasico}
-              isSelected={planoSelecionado?.id === plano.id}
-            />
-          ))}
+          {planosVisiveis.map((plano) => {
+            const { isSelected, order } = getSelectionInfo(plano.id);
+            return (
+              <PlanoCardCotacao
+                key={plano.id}
+                plano={plano}
+                onSelect={onTogglePlano}
+                planoBasico={planoBasico}
+                isSelected={isSelected}
+                selectionOrder={order}
+              />
+            );
+          })}
         </div>
 
         {/* Ver mais planos */}
@@ -227,14 +250,14 @@ export function EtapaResultado({
       {/* Ações */}
       <Card className="border-border bg-card">
         <CardContent className="pt-6 space-y-4">
-          {/* Campo de Adesão Editável - quando plano selecionado */}
-          {planoSelecionado && onValorAdesaoChange && (
+          {/* Campo de Adesão Editável - quando tem planos selecionados */}
+          {temPlanosSelecionados && primeiroPlanoSelecionado && onValorAdesaoChange && (
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pb-4 border-b border-border">
               <Label className="text-sm font-medium text-muted-foreground whitespace-nowrap">
                 Taxa de Filiação:
               </Label>
               <CurrencyInput
-                value={valorAdesao ?? planoSelecionado.valorAdesao ?? 0}
+                value={valorAdesao ?? primeiroPlanoSelecionado.valorAdesao ?? 0}
                 onChange={onValorAdesaoChange}
                 className="w-40 text-center font-semibold"
               />
@@ -260,16 +283,16 @@ export function EtapaResultado({
             <Button
               variant="outline"
               onClick={onGerarPDF}
-              disabled={!planoSelecionado}
+              disabled={!temPlanosSelecionados}
               className="sm:min-w-[160px]"
             >
               <FileText className="mr-2 h-4 w-4" />
-              Gerar PDF
+              {planosSelecionados.length > 1 ? 'Gerar PDF Comparativo' : 'Gerar PDF'}
             </Button>
             
             <Button
               onClick={onIniciarCadastro}
-              disabled={!planoSelecionado || (valorAdesao !== undefined && valorAdesao !== null && valorAdesao <= 0)}
+              disabled={!temPlanosSelecionados || (valorAdesao !== undefined && valorAdesao !== null && valorAdesao <= 0)}
               className="sm:min-w-[160px]"
             >
               <UserPlus className="mr-2 h-4 w-4" />
@@ -277,9 +300,9 @@ export function EtapaResultado({
             </Button>
           </div>
           
-          {!planoSelecionado && (
+          {!temPlanosSelecionados && (
             <p className="text-sm text-muted-foreground text-center mt-3">
-              Selecione um plano para continuar
+              Selecione até {maxPlanos} planos para comparar
             </p>
           )}
         </CardContent>

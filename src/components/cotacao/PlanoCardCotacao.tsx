@@ -10,6 +10,7 @@ interface PlanoCardCotacaoProps {
   onSelect: (plano: PlanoCotacao) => void;
   planoBasico?: PlanoCotacao;
   isSelected?: boolean;
+  selectionOrder?: number;
 }
 
 const formatCurrency = (value: number) => {
@@ -23,7 +24,8 @@ export function PlanoCardCotacao({
   plano, 
   onSelect, 
   planoBasico,
-  isSelected 
+  isSelected,
+  selectionOrder
 }: PlanoCardCotacaoProps) {
   const diferenca = planoBasico && plano.id !== planoBasico.id
     ? plano.valorMensal - planoBasico.valorMensal
@@ -32,14 +34,22 @@ export function PlanoCardCotacao({
   return (
     <Card 
       className={cn(
-        "relative border-2 transition-all duration-200",
-        plano.destaque && "border-primary shadow-[0_0_20px_hsl(var(--primary)/0.2)]",
-        isSelected && "ring-2 ring-primary ring-offset-2 ring-offset-background",
+        "relative border-2 transition-all duration-200 cursor-pointer",
+        plano.destaque && !isSelected && "border-primary shadow-[0_0_20px_hsl(var(--primary)/0.2)]",
+        isSelected && "ring-2 ring-primary ring-offset-2 ring-offset-background border-primary",
         !plano.destaque && !isSelected && "border-border hover:border-primary/50"
       )}
+      onClick={() => onSelect(plano)}
     >
+      {/* Badge de ordem de seleção */}
+      {isSelected && selectionOrder && (
+        <div className="absolute -top-3 -right-3 w-7 h-7 rounded-full bg-primary text-primary-foreground text-sm font-bold flex items-center justify-center shadow-lg z-10">
+          {selectionOrder}º
+        </div>
+      )}
+      
       {/* Badge Recomendado ou Tag */}
-      {(plano.destaque || plano.tag) && (
+      {(plano.destaque || plano.tag) && !isSelected && (
         <div className="absolute -top-3 left-1/2 -translate-x-1/2">
           <Badge className="bg-primary text-primary-foreground shadow-lg px-3 py-1">
             <Star className="w-3 h-3 mr-1 fill-current" />
@@ -110,14 +120,18 @@ export function PlanoCardCotacao({
 
         {/* Botão Selecionar */}
         <Button
-          onClick={() => onSelect(plano)}
-          variant={plano.destaque ? "default" : "outline"}
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelect(plano);
+          }}
+          variant={isSelected ? "default" : plano.destaque ? "default" : "outline"}
           className={cn(
             "w-full",
-            plano.destaque && "shadow-lg"
+            isSelected && "bg-primary/90",
+            plano.destaque && !isSelected && "shadow-lg"
           )}
         >
-          {isSelected ? 'Plano Selecionado' : 'Selecionar este plano'}
+          {isSelected ? '✓ Selecionado' : 'Adicionar à comparação'}
         </Button>
 
         {/* Filiação */}

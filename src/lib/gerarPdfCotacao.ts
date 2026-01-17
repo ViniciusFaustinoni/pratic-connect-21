@@ -32,6 +32,33 @@ export interface CotacaoParaPdf {
   } | null;
 }
 
+// Interface para plano no PDF comparativo
+export interface PlanoParaPdf {
+  nome: string;
+  valorMensal: number;
+  valorAdesao: number;
+  coberturas: string[];
+  naoInclui: string[];
+  coberturaFipe: number;
+  cota: string;
+}
+
+// Interface para cotação comparativa
+export interface CotacaoComparativaParaPdf {
+  numero: string | null;
+  created_at: string;
+  validade_dias: number | null;
+  nome_solicitante?: string | null;
+  telefone1_solicitante?: string | null;
+  email_solicitante?: string | null;
+  veiculo_marca: string | null;
+  veiculo_modelo: string | null;
+  veiculo_ano: number | null;
+  veiculo_placa: string | null;
+  valor_fipe: number | null;
+  planosComparar: PlanoParaPdf[];
+}
+
 // ============= Cores da Marca PRATICCAR =============
 const brandBlue = { r: 20, g: 55, b: 110 };      // Azul escuro PRATIC
 const brandRed = { r: 200, g: 30, b: 65 };       // Vermelho PRATIC
@@ -472,5 +499,315 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
   // ============= DOWNLOAD =============
   const numeroLimpo = (cotacao.numero || 'PRATICCAR').replace(/[^a-zA-Z0-9-]/g, '');
   const fileName = `cotacao-${numeroLimpo}.pdf`;
+  doc.save(fileName);
+}
+
+// ============= PDF COMPARATIVO DE MÚLTIPLOS PLANOS =============
+
+export async function gerarPdfCotacaoComparativa(cotacao: CotacaoComparativaParaPdf): Promise<void> {
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 15;
+  const contentWidth = pageWidth - margin * 2;
+  let y = 0;
+
+  // Cores do tema
+  const successColor = { r: 22, g: 163, b: 74 };
+  const grayLight = { r: 243, g: 244, b: 246 };
+  const grayText = { r: 107, g: 114, b: 128 };
+
+  // Carregar imagens
+  const [logoBase64, vehicleBase64] = await Promise.all([
+    loadImageAsBase64('/pratic-logo.png'),
+    loadImageAsBase64('/vehicle-silhouette.png'),
+  ]);
+
+  // Background veículo
+  if (vehicleBase64) {
+    const gState = new GState({ opacity: 0.05 });
+    doc.setGState(gState);
+    doc.addImage(vehicleBase64, 'PNG', 30, 100, 150, 80);
+    doc.setGState(new GState({ opacity: 1 }));
+  }
+
+  // ============= HEADER COM GRADIENTE =============
+  const headerHeight = 45;
+  drawGradientRect(doc, 0, 0, pageWidth, headerHeight, brandBlue, brandRed);
+
+  if (logoBase64) {
+    doc.addImage(logoBase64, 'PNG', margin, 6, 32, 32);
+  }
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(22);
+  doc.setFont('helvetica', 'bold');
+  const titleX = logoBase64 ? margin + 38 : margin;
+  doc.text('PRATICCAR', titleX, 18);
+
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Proteção Veicular', titleX, 26);
+
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.text('COMPARATIVO DE PLANOS', titleX, 38);
+
+  y = headerHeight + 8;
+
+  // ============= BARRA DE INFORMAÇÕES =============
+  doc.setFillColor(grayLight.r, grayLight.g, grayLight.b);
+  doc.rect(margin, y, contentWidth, 12, 'F');
+
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+
+  const dataValidade = new Date(cotacao.created_at);
+  dataValidade.setDate(dataValidade.getDate() + (cotacao.validade_dias || 7));
+  doc.text(`Válida até: ${formatDate(dataValidade.toISOString())}`, pageWidth - margin - 5, y + 8, { align: 'right' });
+
+  y += 18;
+
+  // ============= DADOS DO SOLICITANTE =============
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(brandBlue.r, brandBlue.g, brandBlue.b);
+  doc.text('DADOS DO SOLICITANTE', margin, y);
+  y += 2;
+  drawGradientRect(doc, margin, y, contentWidth, 1, brandBlue, brandRed, 50);
+  y += 6;
+
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Nome:', margin, y);
+  doc.setFont('helvetica', 'normal');
+  doc.text(cotacao.nome_solicitante || 'Não informado', margin + 20, y);
+
+  doc.setFont('helvetica', 'bold');
+  doc.text('Telefone:', pageWidth / 2, y);
+  doc.setFont('helvetica', 'normal');
+  doc.text(formatPhone(cotacao.telefone1_solicitante), pageWidth / 2 + 25, y);
+
+  y += 12;
+
+  // ============= DADOS DO VEÍCULO =============
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(brandBlue.r, brandBlue.g, brandBlue.b);
+  doc.text('DADOS DO VEÍCULO', margin, y);
+  y += 2;
+  drawGradientRect(doc, margin, y, contentWidth, 1, brandBlue, brandRed, 50);
+  y += 6;
+
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(9);
+
+  // Linha 1
+  doc.setFont('helvetica', 'bold');
+  doc.text('Veículo:', margin, y);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`${cotacao.veiculo_marca || ''} ${cotacao.veiculo_modelo || ''} ${cotacao.veiculo_ano || ''}`, margin + 22, y);
+
+  doc.setFont('helvetica', 'bold');
+  doc.text('Placa:', pageWidth / 2, y);
+  doc.setFont('helvetica', 'normal');
+  doc.text(formatPlaca(cotacao.veiculo_placa), pageWidth / 2 + 18, y);
+
+  y += 6;
+
+  // Linha 2
+  doc.setFont('helvetica', 'bold');
+  doc.text('Valor FIPE:', margin, y);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(successColor.r, successColor.g, successColor.b);
+  doc.text(formatCurrency(cotacao.valor_fipe), margin + 28, y);
+  doc.setTextColor(0, 0, 0);
+
+  y += 14;
+
+  // ============= QUADRO COMPARATIVO =============
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(brandBlue.r, brandBlue.g, brandBlue.b);
+  doc.text('COMPARATIVO DE PLANOS', margin, y);
+  y += 2;
+  drawGradientRect(doc, margin, y, contentWidth, 1, brandBlue, brandRed, 50);
+  y += 8;
+
+  const numPlanos = cotacao.planosComparar.length;
+  const colWidth = contentWidth / numPlanos;
+  const startX = margin;
+
+  // Cabeçalho dos planos
+  cotacao.planosComparar.forEach((plano, index) => {
+    const colX = startX + (colWidth * index);
+    const centerX = colX + colWidth / 2;
+
+    // Background do nome
+    const bgColors = [
+      { r: 20, g: 55, b: 110 },
+      { r: 45, g: 95, b: 170 },
+      { r: 200, g: 30, b: 65 },
+    ];
+    const bgColor = bgColors[index] || bgColors[0];
+    doc.setFillColor(bgColor.r, bgColor.g, bgColor.b);
+    doc.roundedRect(colX + 2, y, colWidth - 4, 12, 2, 2, 'F');
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text(plano.nome.toUpperCase(), centerX, y + 8, { align: 'center' });
+  });
+
+  y += 18;
+
+  // Valores mensais
+  doc.setTextColor(0, 0, 0);
+  cotacao.planosComparar.forEach((plano, index) => {
+    const colX = startX + (colWidth * index);
+    const centerX = colX + colWidth / 2;
+
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(successColor.r, successColor.g, successColor.b);
+    doc.text(formatCurrency(plano.valorMensal), centerX, y, { align: 'center' });
+
+    doc.setFontSize(8);
+    doc.setTextColor(grayText.r, grayText.g, grayText.b);
+    doc.text('/mês', centerX + 28, y);
+  });
+
+  y += 10;
+
+  // Informações rápidas (Cobertura FIPE e Cota)
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(8);
+  cotacao.planosComparar.forEach((plano, index) => {
+    const colX = startX + (colWidth * index);
+    const centerX = colX + colWidth / 2;
+
+    doc.setFont('helvetica', 'normal');
+    doc.text(`${plano.coberturaFipe}% FIPE • ${plano.cota}`, centerX, y, { align: 'center' });
+  });
+
+  y += 12;
+
+  // Linha separadora
+  doc.setDrawColor(200, 200, 200);
+  doc.setLineWidth(0.3);
+  doc.line(margin, y, pageWidth - margin, y);
+  y += 6;
+
+  // Coberturas - encontrar todas as coberturas únicas
+  const todasCoberturas = new Set<string>();
+  cotacao.planosComparar.forEach(plano => {
+    plano.coberturas.forEach(c => todasCoberturas.add(c));
+  });
+  const coberturasArray = Array.from(todasCoberturas);
+
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(brandBlue.r, brandBlue.g, brandBlue.b);
+  doc.text('Coberturas Incluídas:', margin, y);
+  y += 6;
+
+  doc.setFontSize(8);
+  coberturasArray.slice(0, 8).forEach(cobertura => {
+    // Nome da cobertura (truncado se necessário)
+    doc.setTextColor(0, 0, 0);
+    doc.setFont('helvetica', 'normal');
+    const coberturaText = cobertura.length > 22 ? cobertura.substring(0, 20) + '...' : cobertura;
+    doc.text(`• ${coberturaText}`, margin, y);
+
+    // Check para cada plano
+    cotacao.planosComparar.forEach((plano, index) => {
+      const colX = startX + (colWidth * index);
+      const centerX = colX + colWidth / 2;
+      const temCobertura = plano.coberturas.includes(cobertura);
+
+      if (temCobertura) {
+        doc.setTextColor(successColor.r, successColor.g, successColor.b);
+        doc.setFont('helvetica', 'bold');
+        doc.text('✓', centerX, y, { align: 'center' });
+      } else {
+        doc.setTextColor(180, 180, 180);
+        doc.setFont('helvetica', 'normal');
+        doc.text('—', centerX, y, { align: 'center' });
+      }
+    });
+
+    y += 5;
+  });
+
+  y += 6;
+
+  // Linha separadora
+  doc.setDrawColor(200, 200, 200);
+  doc.line(margin, y, pageWidth - margin, y);
+  y += 8;
+
+  // Taxa de Adesão
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(0, 0, 0);
+  doc.text('Taxa de Adesão:', margin, y);
+
+  cotacao.planosComparar.forEach((plano, index) => {
+    const colX = startX + (colWidth * index);
+    const centerX = colX + colWidth / 2;
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text(formatCurrency(plano.valorAdesao), centerX, y, { align: 'center' });
+  });
+
+  y += 12;
+
+  // Primeiro Pagamento
+  drawGradientRect(doc, margin, y - 4, contentWidth, 14, brandBlue, brandRed, 40);
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.text('PRIMEIRO PAGAMENTO:', margin + 5, y + 5);
+
+  cotacao.planosComparar.forEach((plano, index) => {
+    const colX = startX + (colWidth * index);
+    const centerX = colX + colWidth / 2;
+    const primeiroPagamento = plano.valorAdesao + plano.valorMensal;
+
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text(formatCurrency(primeiroPagamento), centerX, y + 5, { align: 'center' });
+  });
+
+  // ============= RODAPÉ =============
+  const footerY = pageHeight - 25;
+
+  drawGradientRect(doc, margin, footerY - 8, contentWidth, 2, brandBlue, brandRed, 50);
+
+  if (logoBase64) {
+    doc.addImage(logoBase64, 'PNG', margin, footerY - 3, 12, 12);
+  }
+
+  const footerTextX = logoBase64 ? margin + 16 : margin;
+
+  doc.setTextColor(brandBlue.r, brandBlue.g, brandBlue.b);
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.text('PRATICCAR - Proteção Veicular', footerTextX, footerY + 2);
+
+  doc.setTextColor(grayText.r, grayText.g, grayText.b);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.text(`Gerado em: ${formatDate(new Date().toISOString())}`, footerTextX, footerY + 7);
+
+  doc.setFontSize(6);
+  doc.text('Esta cotação não tem valor contratual e está sujeita a análise.', pageWidth - margin, footerY + 5, { align: 'right' });
+
+  // ============= DOWNLOAD =============
+  const numeroLimpo = (cotacao.numero || 'PRATICCAR').replace(/[^a-zA-Z0-9-]/g, '');
+  const fileName = `cotacao-comparativa-${numeroLimpo}.pdf`;
   doc.save(fileName);
 }
