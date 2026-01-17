@@ -73,7 +73,7 @@ export default function RateioSinistros() {
     }
   });
 
-  // Mutation - Calcular Rateio
+  // Mutation - Calcular Rateio (CORRIGIDO: divisão por COTAS conforme PDF)
   const calcularRateio = useMutation({
     mutationFn: async ({ mes, ano }: { mes: number; ano: number }) => {
       const inicioMes = `${ano}-${String(mes).padStart(2, '0')}-01`;
@@ -81,7 +81,8 @@ export default function RateioSinistros() {
       const proximoAno = mes === 12 ? ano + 1 : ano;
       const fimMes = `${proximoAno}-${String(proximoMes).padStart(2, '0')}-01`;
 
-      const [sinistrosRes, associadosRes] = await Promise.all([
+      // Buscar sinistros, associados e total de cotas
+      const [sinistrosRes, associadosRes, cotasRes] = await Promise.all([
         supabase.from('sinistros')
           .select('valor_indenizacao')
           .in('status', ['aprovado', 'indenizado'])
@@ -89,19 +90,29 @@ export default function RateioSinistros() {
           .lt('data_ocorrencia', fimMes),
         supabase.from('associados')
           .select('id, plano_id')
-          .eq('status', 'ativo')
+          .eq('status', 'ativo'),
+        // Buscar total de cotas usando função SQL
+        supabase.rpc('fn_calcular_total_cotas_ativos')
       ]);
 
       const sinistros = sinistrosRes.data || [];
       const associados = associadosRes.data || [];
+      const totalCotas = Number(cotasRes.data) || 0;
 
       const totalAssociados = associados.length;
       const totalSinistros = sinistros.length;
       const valorTotalSinistros = sinistros.reduce((sum, s) => sum + (s.valor_indenizacao || 0), 0);
       const percentualFundo = 10;
       const valorFundo = valorTotalSinistros * (percentualFundo / 100);
-      const valorRateio = totalAssociados > 0 
-        ? (valorTotalSinistros + valorFundo) / totalAssociados 
+      
+      // CORREÇÃO: Dividir por COTAS em vez de associados
+      const valorRateioPorCota = totalCotas > 0 
+        ? (valorTotalSinistros + valorFundo) / totalCotas 
+        : 0;
+      
+      // Manter compatibilidade com campo antigo (valor por associado = média)
+      const valorRateioPorAssociado = totalAssociados > 0
+        ? (valorTotalSinistros + valorFundo) / totalAssociados
         : 0;
 
       const { data, error } = await supabase
@@ -112,11 +123,14 @@ export default function RateioSinistros() {
           total_associados: totalAssociados,
           total_sinistros: totalSinistros,
           valor_total_sinistros: valorTotalSinistros,
-          valor_rateio_por_associado: valorRateio,
+          valor_rateio_por_associado: valorRateioPorAssociado,
           percentual_fundo_reserva: percentualFundo,
           valor_fundo_reserva: valorFundo,
           status: 'calculado',
-          formula_utilizada: '(Sinistros + Fundo) / Associados'
+          formula_utilizada: '(Sinistros + Fundo) / Total Cotas',
+          // Novos campos para sistema de cotas
+          total_cotas: totalCotas,
+          valor_rateio_por_cota: valorRateioPorCota
         }, { onConflict: 'mes,ano' })
         .select()
         .single();
@@ -221,7 +235,7 @@ export default function RateioSinistros() {
           </CardHeader>
           <CardContent className="space-y-4">
             {/* Grid de métricas */}
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-5 gap-4">
               <Card>
                 <CardContent className="pt-4">
                   <div className="flex items-center gap-2 text-muted-foreground text-sm">
@@ -229,6 +243,15 @@ export default function RateioSinistros() {
                     Total Associados
                   </div>
                   <p className="text-2xl font-bold">{rateioAtual.total_associados?.toLocaleString()}</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="pt-4">
+                  <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                    <TrendingUp className="h-4 w-4" />
+                    Total de Cotas
+                  </div>
+                  <p className="text-2xl font-bold">{rateioAtual.total_cotas?.toLocaleString() || '-'}</p>
                 </CardContent>
               </Card>
               <Card>
@@ -255,10 +278,10 @@ export default function RateioSinistros() {
                 <CardContent className="pt-4">
                   <div className="flex items-center gap-2 text-muted-foreground text-sm">
                     <TrendingUp className="h-4 w-4" />
-                    Valor por Associado
+                    Valor por Cota
                   </div>
                   <p className="text-2xl font-bold text-primary">
-                    {formatCurrency(rateioAtual.valor_rateio_por_associado)}
+                    {formatCurrency(rateioAtual.valor_rateio_por_cota || rateioAtual.valor_rateio_por_associado)}
                   </p>
                 </CardContent>
               </Card>

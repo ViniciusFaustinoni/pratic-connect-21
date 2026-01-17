@@ -184,6 +184,7 @@ import UsuarioDetalhePage from "./pages/diretoria/UsuarioDetalhe";
 import UsuarioEditarPage from "./pages/diretoria/UsuarioEditar";
 import LogsAuditoria from "./pages/diretoria/LogsAuditoria";
 import RelatoriosGerenciais from "./pages/diretoria/RelatoriosGerenciais";
+import FaixasCotas from "./pages/diretoria/FaixasCotas";
 
 // Central de Relatórios
 import RelatoriosCentral from "./pages/relatorios/RelatoriosCentral";
@@ -424,6 +425,7 @@ const App = () => (
               <Route path="/diretoria/usuarios/:id/editar" element={<UsuarioEditarPage />} />
               <Route path="/diretoria/logs" element={<LogsAuditoria />} />
               <Route path="/diretoria/relatorios" element={<RelatoriosGerenciais />} />
+              <Route path="/diretoria/faixas-cotas" element={<FaixasCotas />} />
               
               {/* Central de Relatórios */}
               <Route path="/relatorios" element={<RelatoriosCentral />} />
