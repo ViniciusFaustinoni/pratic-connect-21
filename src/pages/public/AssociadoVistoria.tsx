@@ -34,6 +34,24 @@ export default function AssociadoVistoria() {
   const [dadosAgendamento, setDadosAgendamento] = useState<{ data: string; horario: string } | null>(null);
   const [linkGeradoAntecipado, setLinkGeradoAntecipado] = useState<string | null>(null);
 
+  // Calcular se está em modo somente leitura (bloqueia edição)
+  // IMPORTANTE: Este useMemo deve ficar ANTES de qualquer early return
+  const isReadOnly = useMemo(() => {
+    if (!contrato) return false;
+    
+    // Status do associado em análise
+    if (contrato.associados?.status === 'em_analise') return true;
+    
+    // Contrato aguardando assinatura
+    if (contrato.status === 'pendente_assinatura') return true;
+    if (contrato.autentique_url) return true;
+    
+    // Adesão paga mas não assinado ainda (em fluxo de assinatura)
+    if (contrato.adesao_paga && contrato.status !== 'assinado') return true;
+    
+    return false;
+  }, [contrato]);
+
   // Debug logs para diagnosticar problemas
   useEffect(() => {
     console.log('[AssociadoVistoria] Token recebido:', token);
@@ -56,6 +74,7 @@ export default function AssociadoVistoria() {
     }
   }, [contrato, dadosAgendamento]);
 
+  // Early returns APÓS todos os hooks
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 to-primary/10">
@@ -92,23 +111,6 @@ export default function AssociadoVistoria() {
   // Detectar tipo de veículo baseado na marca (heurística simples)
   const MARCAS_MOTOS = ['HONDA', 'YAMAHA', 'SUZUKI', 'KAWASAKI', 'BMW MOTORRAD', 'HARLEY-DAVIDSON', 'TRIUMPH', 'DUCATI', 'KTM', 'DAFRA', 'SHINERAY', 'KASINSKI'];
   const tipoVeiculo = MARCAS_MOTOS.some(marca => contrato.veiculo_marca?.toUpperCase()?.includes(marca)) ? 'moto' : 'carro';
-
-  // Calcular se está em modo somente leitura (bloqueia edição)
-  const isReadOnly = useMemo(() => {
-    if (!contrato) return false;
-    
-    // Status do associado em análise
-    if (contrato.associados?.status === 'em_analise') return true;
-    
-    // Contrato aguardando assinatura
-    if (contrato.status === 'pendente_assinatura') return true;
-    if (contrato.autentique_url) return true;
-    
-    // Adesão paga mas não assinado ainda (em fluxo de assinatura)
-    if (contrato.adesao_paga && contrato.status !== 'assinado') return true;
-    
-    return false;
-  }, [contrato]);
 
   // Mensagem contextual baseada no estado
   const getReadOnlyMessage = () => {
