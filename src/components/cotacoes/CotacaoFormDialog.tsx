@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Loader2, Car, Search, CheckCircle2, Shield, Check, AlertCircle, Copy, MessageCircle, Zap, User, Link, UserCheck, Phone, Mail, AlertTriangle, Info, MapPin, HelpCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePermissions } from '@/hooks/usePermissions';
 import { Button } from '@/components/ui/button';
 import { LeadCombobox } from '@/components/leads/LeadCombobox';
 import type { Lead } from '@/types/vendas';
@@ -109,8 +110,11 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
   const { data: lead } = useLead(leadId);
   const { getMarcas, getModelos, getAnos, getPreco, getByPlaca, buscarPorNome, loading: fipeLoading } = useFipe();
   const { data: vendedores = [], isLoading: vendedoresLoading } = useVendedores();
-  const { user, isVendedor } = useAuth();
-  const usuarioEhVendedor = isVendedor();
+  const { user } = useAuth();
+  const { userId, isDiretor, isGerente, isSupervisor } = usePermissions();
+  
+  // Apenas liderança (diretor, gerente, supervisor) pode atribuir vendedor manualmente
+  const podeAtribuirVendedor = isDiretor || isGerente || isSupervisor;
   
   // Estados para dados do associado
   const [nomeAssociado, setNomeAssociado] = useState('');
@@ -608,8 +612,8 @@ Validade: ${validadeDias} dias`);
         veiculo_ano: anoNumericoLocal,
         veiculo_placa: placa || veiculoEncontrado?.extractedPlate || null,
         codigo_fipe: veiculoEncontrado?.fipeData?.codigo || null,
-        // Consultor responsável - se vendedor, usa próprio ID
-        vendedor_id: usuarioEhVendedor ? user?.id : (pendingFormData.vendedor_id || null),
+        // Consultor responsável - liderança escolhe, demais auto-atribuição
+        vendedor_id: podeAtribuirVendedor ? (pendingFormData.vendedor_id || null) : userId,
         // Dados do solicitante (para exibição no card quando não há lead)
         nome_solicitante: nomeAssociado.trim() || null,
         telefone1_solicitante: telefoneAssociado.replace(/\D/g, '') || null,
@@ -848,8 +852,8 @@ Validade: ${validadeDias} dias`);
 
             <Separator />
 
-            {/* BLOCO 0.6: CONSULTOR RESPONSÁVEL - Apenas para não-vendedores */}
-            {!usuarioEhVendedor && (
+            {/* BLOCO 0.6: CONSULTOR RESPONSÁVEL - Apenas para liderança (diretor/gerente/supervisor) */}
+            {podeAtribuirVendedor && (
               <div className="space-y-3">
                 <h3 className="text-sm font-semibold flex items-center gap-2">
                   <UserCheck className="h-4 w-4 text-primary" />
