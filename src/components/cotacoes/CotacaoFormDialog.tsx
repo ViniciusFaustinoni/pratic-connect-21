@@ -587,15 +587,13 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
     
     const valorMensalTotal = planoSelecionadoData.valorMensal + valorAdicional;
     
-    const texto = `*Cotação Protecar*
+    const texto = `*Cotação Praticcar*
 Associado: ${nomeAssociado}
 Veículo: ${veiculoInfo}
 Uso: ${usoVeiculo === 'particular' ? 'Passeio' : 'Aplicativo'}
 FIPE: ${formatCurrency(valorFipe)}
 Plano: ${planoSelecionadoData.nome}
-${valorAdicional > 0 ? `Proteção Mensal: ${formatCurrency(planoSelecionadoData.valorMensal)}
-+ Adicional: ${formatCurrency(valorAdicional)}
-Total Mensal: ${formatCurrency(valorMensalTotal)}` : `Valor Mensal: ${formatCurrency(valorMensalTotal)}`}
+Proteção Mensal: ${formatCurrency(valorMensalTotal)}
 Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}
 Validade: ${validadeDias} dias`;
     
@@ -613,16 +611,15 @@ Validade: ${validadeDias} dias`;
     
     const telefoneFormatado = telefoneAssociado.replace(/\D/g, '');
     const valorMensalTotal = planoSelecionadoData.valorMensal + valorAdicional;
-    const texto = encodeURIComponent(`*Cotação Protecar*
+    const texto = encodeURIComponent(`*Cotação Praticcar*
 Associado: ${nomeAssociado}
 Veículo: ${veiculoInfo}
 Uso: ${usoVeiculo === 'particular' ? 'Passeio' : 'Aplicativo'}
 FIPE: ${formatCurrency(valorFipe)}
 Plano: ${planoSelecionadoData.nome}
-${valorAdicional > 0 ? `Proteção Mensal: ${formatCurrency(planoSelecionadoData.valorMensal)}
-+ Adicional: ${formatCurrency(valorAdicional)}
-Total Mensal: ${formatCurrency(valorMensalTotal)}` : `Valor Mensal: ${formatCurrency(valorMensalTotal)}`}
-Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}`);
+Proteção Mensal: ${formatCurrency(valorMensalTotal)}
+Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}
+Validade: ${validadeDias} dias`);
     
     const whatsappUrl = telefoneFormatado.length >= 10 
       ? `https://wa.me/55${telefoneFormatado}?text=${texto}`
