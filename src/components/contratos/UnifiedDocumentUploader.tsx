@@ -134,24 +134,28 @@ export function UnifiedDocumentUploader({
       }
 
       // 1. Upload para storage
+      // Usar bucket público para cotações (cliente não autenticado) ou bucket de contratos (autenticado)
+      const bucketName = cotacaoId && !contratoId ? 'cotacoes-docs' : 'contratos-documentos';
+      
       const timestamp = Date.now();
       const sanitizedFileName = finalFileName.replace(/[^a-zA-Z0-9.-]/g, '_');
       const filePath = `${entityId}/documentos/${timestamp}_${sanitizedFileName}`;
 
       const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('contratos-documentos')
+        .from(bucketName)
         .upload(filePath, fileToUpload, {
           cacheControl: '3600',
           upsert: false,
         });
 
       if (uploadError) {
+        console.error('Upload error:', uploadError);
         throw new Error('Erro ao enviar arquivo para o storage.');
       }
 
       // 2. Obter URL pública
       const { data: urlData } = supabase.storage
-        .from('contratos-documentos')
+        .from(bucketName)
         .getPublicUrl(uploadData.path);
 
       const arquivoUrl = urlData.publicUrl;
