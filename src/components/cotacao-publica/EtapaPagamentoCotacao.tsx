@@ -176,11 +176,11 @@ export function EtapaPagamentoCotacao({
 
     const interval = setInterval(async () => {
       try {
-        const { data, error } = await publicSupabase
+      const { data, error } = await publicSupabase
           .from('contratos')
           .select('adesao_paga')
           .eq('id', contratoId)
-          .single();
+          .maybeSingle();
 
         if (error) {
           console.error('[EtapaPagamento] Erro no polling:', error);
@@ -221,7 +221,7 @@ export function EtapaPagamentoCotacao({
         .from('contratos')
         .select('adesao_paga')
         .eq('id', contratoId)
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
 
