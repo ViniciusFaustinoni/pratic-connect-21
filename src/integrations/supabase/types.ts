@@ -9152,6 +9152,7 @@ export type Database = {
           product_line_id: string
           restriction_alert: string | null
           slug: string
+          tipo_uso: string
           updated_at: string | null
         }
         Insert: {
@@ -9175,6 +9176,7 @@ export type Database = {
           product_line_id: string
           restriction_alert?: string | null
           slug: string
+          tipo_uso?: string
           updated_at?: string | null
         }
         Update: {
@@ -9198,6 +9200,7 @@ export type Database = {
           product_line_id?: string
           restriction_alert?: string | null
           slug?: string
+          tipo_uso?: string
           updated_at?: string | null
         }
         Relationships: [
