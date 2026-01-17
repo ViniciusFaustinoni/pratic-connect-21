@@ -822,15 +822,8 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Validar autorização (chamada interna ou usuário autenticado)
-  const authResult = await validateAuthorization(req);
-  if (!authResult.authorized) {
-    console.error('[autentique-create] Acesso não autorizado');
-    return new Response(
-      JSON.stringify({ error: authResult.error }),
-      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-  }
+  // Fluxo público: não exige autenticação (igual ao contrato-gerar)
+  // A segurança é garantida pelo fato de que só quem tem o contratoId pode usá-lo
 
   try {
     const autentiqueApiKey = Deno.env.get("AUTENTIQUE_API_KEY");
@@ -842,7 +835,14 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { contratoId, clienteNome, clienteEmail, clienteCpf, clienteTelefone }: ContratoRequest = await req.json();
+    // Aceita ambos: contratoId ou contrato_id (compatibilidade com frontend)
+    const body = await req.json();
+    const contratoId = body.contratoId || body.contrato_id;
+    const { clienteNome, clienteEmail, clienteCpf, clienteTelefone } = body;
+    
+    if (!contratoId) {
+      throw new Error("contratoId ou contrato_id é obrigatório");
+    }
 
     console.log("Criando documento Autentique para contrato:", contratoId);
 
