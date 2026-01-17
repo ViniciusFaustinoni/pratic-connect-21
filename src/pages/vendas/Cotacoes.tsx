@@ -38,6 +38,7 @@ import { useCotacoes, useUpdateCotacao, useDuplicarCotacao, useExcluirCotacao, t
 import { useGerarContrato } from '@/hooks/useContratos';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
+import { PermissionGate } from '@/components/PermissionGate';
 import { CotacaoFormDialog } from '@/components/cotacoes/CotacaoFormDialog';
 import { ContratoWizard } from '@/components/contratos/ContratoWizard';
 import { EnviarEmailModal } from '@/components/cotacoes/EnviarEmailModal';
@@ -388,12 +389,12 @@ export default function Cotacoes() {
               : 'Gerencie suas cotações e acompanhe propostas'}
           </p>
         </div>
-        {permissions.cotacao.canCreate && (
+        <PermissionGate permission="cotacao.canCreate">
           <Button className="gap-2" onClick={() => setShowCotacaoForm(true)}>
             <Plus className="h-4 w-4" />
             Nova Cotação
           </Button>
-        )}
+        </PermissionGate>
       </div>
 
       {/* Stats Cards - Mais chamativo */}
