@@ -1,3 +1,4 @@
+// PDF Premium - PRATICCAR
 import { jsPDF, GState } from 'jspdf';
 
 export interface CotacaoParaPdf {
