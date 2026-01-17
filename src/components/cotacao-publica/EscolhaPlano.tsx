@@ -1,9 +1,10 @@
+import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Check, Shield, Zap, Crown, Sparkles } from 'lucide-react';
+import { Check, Shield, Zap, Crown, Sparkles, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export interface PlanoOpcao {
   id: string;
@@ -81,6 +82,8 @@ const cardVariants = {
   },
 };
 
+const MAX_VISIBLE_COBERTURAS = 6;
+
 export function EscolhaPlano({
   planos,
   planoSelecionadoId,
@@ -88,6 +91,19 @@ export function EscolhaPlano({
   onConfirmar,
   isLoading,
 }: EscolhaPlanoProps) {
+  const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
+
+  const toggleExpand = (planoId: string) => {
+    setExpandedCards(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(planoId)) {
+        newSet.delete(planoId);
+      } else {
+        newSet.add(planoId);
+      }
+      return newSet;
+    });
+  };
   return (
     <div className="space-y-8">
       {/* Header com título animado - Premium Dark Style */}
@@ -136,6 +152,7 @@ export function EscolhaPlano({
                   'plan-card-premium relative cursor-pointer overflow-hidden',
                   'bg-card/60 backdrop-blur-xl border border-border/50',
                   'transition-all duration-300',
+                  'min-h-[520px] flex flex-col',
                   isSelected && 'plan-card-selected',
                   isRecommended && !isSelected && 'plan-card-recommended',
                   !isSelected && !isRecommended && 'hover:border-primary/30 hover:bg-card/80',
@@ -162,7 +179,7 @@ export function EscolhaPlano({
                   />
                 )}
 
-                <CardContent className="p-6">
+                <CardContent className="p-6 flex flex-col flex-grow">
                   {/* Header: Nome + Badge */}
                   <div className="mb-4 text-center">
                     <h3 className="text-xl font-bold text-foreground mb-2">{plano.nome}</h3>
@@ -218,27 +235,62 @@ export function EscolhaPlano({
                   <div className="h-px bg-gradient-to-r from-transparent via-border/50 to-transparent my-6" />
 
                   {/* Coberturas */}
-                  {plano.coberturas && plano.coberturas.length > 0 && (
-                    <div className="space-y-3">
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        Coberturas incluídas
-                      </p>
-                      {plano.coberturas.map((cobertura, idx) => (
-                        <motion.div
-                          key={idx}
-                          initial={{ opacity: 0, x: -10 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: 0.3 + idx * 0.05 }}
-                          className="flex items-center gap-2.5"
-                        >
-                          <div className="w-5 h-5 rounded-full bg-success/10 border border-success/20 flex items-center justify-center flex-shrink-0">
-                            <Check className="h-3 w-3 text-success" />
-                          </div>
-                          <span className="text-sm text-muted-foreground">{cobertura}</span>
-                        </motion.div>
-                      ))}
-                    </div>
-                  )}
+                  {plano.coberturas && plano.coberturas.length > 0 && (() => {
+                    const coberturas = plano.coberturas || [];
+                    const isExpanded = expandedCards.has(plano.id);
+                    const hasMore = coberturas.length > MAX_VISIBLE_COBERTURAS;
+                    const visibleCoberturas = isExpanded ? coberturas : coberturas.slice(0, MAX_VISIBLE_COBERTURAS);
+                    const hiddenCount = coberturas.length - MAX_VISIBLE_COBERTURAS;
+
+                    return (
+                      <div className="space-y-3 flex-grow">
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                          Coberturas incluídas
+                        </p>
+                        <AnimatePresence mode="sync">
+                          {visibleCoberturas.map((cobertura, idx) => (
+                            <motion.div
+                              key={cobertura}
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: 'auto' }}
+                              exit={{ opacity: 0, height: 0 }}
+                              transition={{ duration: 0.2, delay: idx < MAX_VISIBLE_COBERTURAS ? 0 : 0.05 * (idx - MAX_VISIBLE_COBERTURAS) }}
+                              className="flex items-center gap-2.5"
+                            >
+                              <div className="w-5 h-5 rounded-full bg-success/10 border border-success/20 flex items-center justify-center flex-shrink-0">
+                                <Check className="h-3 w-3 text-success" />
+                              </div>
+                              <span className="text-sm text-muted-foreground">{cobertura}</span>
+                            </motion.div>
+                          ))}
+                        </AnimatePresence>
+
+                        {hasMore && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleExpand(plano.id);
+                            }}
+                            className="w-full mt-2 text-primary hover:text-primary/80 hover:bg-primary/5 h-9"
+                          >
+                            {isExpanded ? (
+                              <>
+                                <ChevronUp className="h-4 w-4 mr-1" />
+                                Ver menos
+                              </>
+                            ) : (
+                              <>
+                                <ChevronDown className="h-4 w-4 mr-1" />
+                                Ver mais {hiddenCount} coberturas
+                              </>
+                            )}
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </CardContent>
               </Card>
             </motion.div>
