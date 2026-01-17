@@ -175,7 +175,10 @@ export function UnifiedDocumentUploader({
       });
 
       if (ocrError) {
-        throw new Error(ocrError.message || 'Erro ao processar documento com IA');
+        console.error('OCR error details:', ocrError);
+        // Tentar extrair mensagem mais específica do erro
+        const errorMessage = ocrError.context?.message || ocrError.message || 'Erro ao processar documento com IA';
+        throw new Error(errorMessage);
       }
 
       const ocrResult = ocrData as OcrResultadoUnificado;

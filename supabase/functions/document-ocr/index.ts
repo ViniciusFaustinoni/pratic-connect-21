@@ -190,30 +190,27 @@ serve(async (req) => {
   }
 
   try {
-    // Validar autenticação
+    // Autenticação OPCIONAL - permite uso público para cotações
     const authHeader = req.headers.get('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return new Response(
-        JSON.stringify({ error: 'Não autorizado' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_ANON_KEY')!,
-      { global: { headers: { Authorization: authHeader } } }
-    );
-
-    const token = authHeader.replace('Bearer ', '');
-    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
+    let isAuthenticated = false;
     
-    if (claimsError || !claimsData?.claims) {
-      return new Response(
-        JSON.stringify({ error: 'Token inválido' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    if (authHeader?.startsWith('Bearer ')) {
+      const supabase = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_ANON_KEY')!,
+        { global: { headers: { Authorization: authHeader } } }
       );
+
+      const token = authHeader.replace('Bearer ', '');
+      const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
+      
+      if (!claimsError && claimsData?.claims) {
+        isAuthenticated = true;
+        console.log('Authenticated request from user:', claimsData.claims.sub);
+      }
     }
+    
+    console.log('Request mode:', isAuthenticated ? 'authenticated' : 'public');
 
     const { url, cpfEsperado, nomeEsperado } = await req.json();
 
@@ -223,6 +220,28 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    // Validação de segurança para requisições públicas
+    // URLs devem ser do storage do próprio projeto
+    const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+    const allowedBuckets = ['cotacoes-docs', 'contratos-documentos', 'documentos'];
+    const isAllowedUrl = allowedBuckets.some(bucket => 
+      url.startsWith(`${SUPABASE_URL}/storage/v1/object/public/${bucket}/`)
+    );
+
+    if (!isAuthenticated && !isAllowedUrl) {
+      console.warn('Blocked public request with external URL:', url);
+      return new Response(
+        JSON.stringify({ 
+          error: 'URL não permitida para requisições públicas',
+          code: 'INVALID_URL',
+          details: 'Apenas URLs do storage do projeto são permitidas sem autenticação'
+        }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('Processing OCR for URL:', url, '| Authenticated:', isAuthenticated);
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {
