@@ -56,10 +56,10 @@ export function useVendedor(id: string | undefined) {
         .from('profiles')
         .select('*')
         .eq('user_id', id)
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
-      return data as Vendedor;
+      return data as Vendedor | null;
     },
     enabled: !!id,
   });
