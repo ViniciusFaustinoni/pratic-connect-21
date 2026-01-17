@@ -341,7 +341,7 @@ export function ConfirmacaoVistoria({
             {/* Indicador de verificação automática */}
             <div className="flex items-center gap-2 text-xs text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/50 px-3 py-2 rounded">
               <RefreshCw className={`h-3 w-3 ${isCheckingStatus ? 'animate-spin' : ''}`} />
-              <span>Verificando assinatura automaticamente a cada 15 segundos...</span>
+              <span>Verificando assinatura automaticamente a cada 10 segundos...</span>
             </div>
 
             {/* Opção de reenvio após 30 segundos */}

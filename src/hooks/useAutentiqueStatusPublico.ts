@@ -65,8 +65,9 @@ export function useAutentiqueStatusPublico({
       }
       return 10000; // 10 segundos - sincronização automática
     },
-    staleTime: 10000,
-    retry: 2,
+    staleTime: 8000,
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000), // Exponential backoff: 1s, 2s, 4s, max 10s
   });
 
   // Efeito para atualizar queries quando status mudar para assinado
