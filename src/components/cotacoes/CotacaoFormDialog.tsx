@@ -98,13 +98,43 @@ const ALERTAS_CATEGORIA: Record<string, { tipo: 'warning' | 'info'; mensagem: st
   },
 };
 
+// Interface para cotação base (duplicação)
+export interface CotacaoBaseParaFormulario {
+  valor_fipe: number | null;
+  valor_adicional: number | null;
+  valor_adesao: number | null;
+  validade_dias: number | null;
+  veiculo_marca: string | null;
+  veiculo_modelo: string | null;
+  veiculo_ano: number | null;
+  veiculo_placa: string | null;
+  codigo_fipe: string | null;
+  categoria: string | null;
+  regiao: string | null;
+  nome_solicitante: string | null;
+  telefone1_solicitante: string | null;
+  email_solicitante: string | null;
+  lead_id: string | null;
+  plano_id: string | null;
+  dados_extras?: {
+    planos_comparacao?: {
+      id: string;
+      nome: string;
+      codigo?: string;
+      valorMensal: number;
+      coberturas?: string[];
+    }[];
+  } | null;
+}
+
 interface CotacaoFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   leadId?: string;
+  cotacaoBase?: CotacaoBaseParaFormulario | null;
 }
 
-export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDialogProps) {
+export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase }: CotacaoFormDialogProps) {
   const navigate = useNavigate();
   const createCotacao = useCreateCotacao();
   const { data: lead } = useLead(leadId);
@@ -470,7 +500,75 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
     }
   }, [lead, form]);
 
-  // Handler de toggle de plano (seleção múltipla)
+  // Efeito para preencher o formulário com dados da cotação base (duplicação)
+  useEffect(() => {
+    if (cotacaoBase && open) {
+      // Preencher dados do formulário
+      if (cotacaoBase.valor_fipe) {
+        form.setValue('valor_fipe', cotacaoBase.valor_fipe);
+      }
+      if (cotacaoBase.valor_adicional) {
+        form.setValue('valor_adicional', cotacaoBase.valor_adicional);
+      }
+      if (cotacaoBase.valor_adesao) {
+        form.setValue('valor_adesao', cotacaoBase.valor_adesao);
+      }
+      if (cotacaoBase.validade_dias) {
+        form.setValue('validade_dias', cotacaoBase.validade_dias);
+      }
+      if (cotacaoBase.lead_id) {
+        form.setValue('lead_id', cotacaoBase.lead_id);
+      }
+      if (cotacaoBase.plano_id) {
+        form.setValue('plano_id', cotacaoBase.plano_id);
+      }
+      
+      // Preencher dados do solicitante
+      setNomeAssociado(cotacaoBase.nome_solicitante || '');
+      setTelefoneAssociado(cotacaoBase.telefone1_solicitante || '');
+      setEmailAssociado(cotacaoBase.email_solicitante || '');
+      
+      // Preencher placa
+      if (cotacaoBase.veiculo_placa) {
+        setPlaca(cotacaoBase.veiculo_placa);
+      }
+      
+      // Preencher categoria
+      if (cotacaoBase.categoria) {
+        setCategoria(cotacaoBase.categoria);
+      }
+      
+      // Preencher região
+      if (cotacaoBase.regiao) {
+        setRegiaoSelecionada(cotacaoBase.regiao);
+      }
+      
+      // Preencher dados do veículo encontrado
+      if (cotacaoBase.veiculo_marca && cotacaoBase.veiculo_modelo) {
+        setVeiculoEncontrado({
+          success: true,
+          vehicleData: {
+            marca: cotacaoBase.veiculo_marca,
+            modelo: cotacaoBase.veiculo_modelo,
+            marca_modelo: `${cotacaoBase.veiculo_marca} ${cotacaoBase.veiculo_modelo}`,
+            ano: cotacaoBase.veiculo_ano ? String(cotacaoBase.veiculo_ano) : '',
+            placa: cotacaoBase.veiculo_placa || '',
+            cor: '',
+            chassi: '',
+            municipio: '',
+            uf: '',
+            combustivel: ''
+          },
+          fipeData: cotacaoBase.valor_fipe ? {
+            valor: cotacaoBase.valor_fipe,
+            codigo: cotacaoBase.codigo_fipe,
+            mesReferencia: null
+          } : null
+        });
+      }
+    }
+  }, [cotacaoBase, open, form]);
+
   const handleTogglePlano = (plano: PlanoCotacao) => {
     setPlanosSelecionados(prev => {
       const jaExiste = prev.some(p => p.id === plano.id);
