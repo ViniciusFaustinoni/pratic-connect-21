@@ -22,9 +22,7 @@ export function BotaoGerarPdf({
   const handleGerarPdf = async () => {
     setIsGenerating(true);
     try {
-      // Pequeno delay para mostrar loading
-      await new Promise(resolve => setTimeout(resolve, 300));
-      gerarPdfCotacao(cotacao);
+      await gerarPdfCotacao(cotacao);
       toast.success('PDF gerado com sucesso!');
     } catch (error) {
       console.error('Erro ao gerar PDF:', error);

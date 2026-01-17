@@ -258,9 +258,9 @@ export default function Cotacoes() {
     }
   };
 
-  const handleBaixarPdf = (cotacao: CotacaoWithRelations) => {
+  const handleBaixarPdf = async (cotacao: CotacaoWithRelations) => {
     try {
-      gerarPdfCotacao(cotacao);
+      await gerarPdfCotacao(cotacao);
       toast.success('PDF gerado com sucesso!');
     } catch (error) {
       toast.error('Erro ao gerar PDF');
