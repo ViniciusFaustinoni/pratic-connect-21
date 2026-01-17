@@ -1,7 +1,7 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Check, Shield, Star, Zap, Crown } from 'lucide-react';
+import { Check, Shield, Zap, Crown, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 
@@ -90,24 +90,28 @@ export function EscolhaPlano({
 }: EscolhaPlanoProps) {
   return (
     <div className="space-y-8">
-      {/* Header com título animado */}
+      {/* Header com título animado - Premium Dark Style */}
       <motion.div 
         className="text-center"
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
       >
-        <h2 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 border border-primary/20 mb-4">
+          <Sparkles className="h-4 w-4 text-primary" />
+          <span className="text-sm font-medium text-primary">Proteção Completa</span>
+        </div>
+        <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-3">
           Escolha o plano ideal
         </h2>
-        <p className="text-muted-foreground mt-2 max-w-md mx-auto">
+        <p className="text-muted-foreground max-w-md mx-auto text-lg">
           Selecione a opção que melhor atende suas necessidades de proteção
         </p>
       </motion.div>
 
-      {/* Grid de Planos */}
+      {/* Grid de Planos - Premium Dark Cards */}
       <motion.div 
-        className="grid gap-4 md:gap-6 md:grid-cols-2 lg:grid-cols-3"
+        className="grid gap-5 md:gap-6 md:grid-cols-2 lg:grid-cols-3"
         variants={containerVariants}
         initial="hidden"
         animate="visible"
@@ -128,47 +132,53 @@ export function EscolhaPlano({
             >
               <Card
                 className={cn(
-                  'relative cursor-pointer overflow-hidden transition-all duration-300',
-                  'border-2 hover:shadow-xl',
-                  isSelected && 'border-primary ring-2 ring-primary/20 shadow-lg',
-                  isRecommended && !isSelected && 'border-accent/50',
-                  !isSelected && !isRecommended && 'border-border hover:border-primary/30',
-                  isRecommended && 'plan-recommended'
+                  'plan-card-premium relative cursor-pointer overflow-hidden',
+                  'bg-card/60 backdrop-blur-xl border border-border/50',
+                  'transition-all duration-300',
+                  isSelected && 'plan-card-selected',
+                  isRecommended && !isSelected && 'plan-card-recommended',
+                  !isSelected && !isRecommended && 'hover:border-primary/30 hover:bg-card/80',
                 )}
                 onClick={() => onSelectPlano(plano.id)}
               >
-                {/* Badge Recomendado */}
+                {/* Badge Recomendado - Premium Style */}
                 {isRecommended && (
                   <div className="absolute top-0 right-0 z-10">
-                    <div className="bg-accent text-accent-foreground text-xs font-semibold px-3 py-1 rounded-bl-lg">
-                      ⭐ Recomendado
+                    <div className="recommended-badge flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-bl-xl">
+                      <Sparkles className="h-3.5 w-3.5" />
+                      Recomendado
                     </div>
                   </div>
                 )}
 
                 {/* Glow effect para selecionado */}
                 {isSelected && (
-                  <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-primary/10 pointer-events-none" />
+                  <motion.div 
+                    className="absolute inset-0 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent pointer-events-none"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.3 }}
+                  />
                 )}
 
-                <CardContent className="p-5 md:p-6">
+                <CardContent className="p-6">
                   {/* Header do Card */}
-                  <div className="flex items-center gap-3 mb-4">
+                  <div className="flex items-center gap-3 mb-5">
                     <div className={cn(
                       'w-12 h-12 rounded-xl flex items-center justify-center',
-                      'bg-gradient-to-br from-muted to-muted/50',
-                      isSelected && 'from-primary/20 to-primary/10'
+                      'bg-gradient-to-br from-muted/80 to-muted/40 border border-border/50',
+                      isSelected && 'from-primary/20 to-primary/10 border-primary/30'
                     )}>
                       {getNivelIcon(plano.nivel)}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-bold text-lg truncate">{plano.nome}</h3>
+                      <h3 className="font-bold text-lg text-foreground truncate">{plano.nome}</h3>
                       <Badge 
                         variant="outline" 
                         className={cn(
-                          'text-xs',
-                          plano.nivel === 'exclusive' && 'border-yellow-400/50 text-yellow-600 dark:text-yellow-400',
-                          plano.nivel === 'premium' && 'border-purple-400/50 text-purple-600 dark:text-purple-400'
+                          'text-xs border-border/50 bg-muted/30',
+                          plano.nivel === 'exclusive' && 'border-yellow-400/30 text-yellow-400 bg-yellow-400/10',
+                          plano.nivel === 'premium' && 'border-purple-400/30 text-purple-400 bg-purple-400/10'
                         )}
                       >
                         {getNivelLabel(plano.nivel)}
@@ -176,11 +186,11 @@ export function EscolhaPlano({
                     </div>
                   </div>
 
-                  {/* Preço */}
-                  <div className="mb-4">
+                  {/* Preço - Destaque Premium */}
+                  <div className="mb-5">
                     <div className="flex items-baseline gap-1">
                       <span className={cn(
-                        'text-3xl font-bold',
+                        'text-4xl font-bold tracking-tight',
                         isSelected ? 'text-primary' : 'text-foreground'
                       )}>
                         {formatarMoeda(plano.valorMensal)}
@@ -188,18 +198,18 @@ export function EscolhaPlano({
                       <span className="text-muted-foreground text-sm">/mês</span>
                     </div>
                     {plano.valorAdesao && plano.valorAdesao > 0 && (
-                      <p className="text-xs text-muted-foreground mt-1">
+                      <p className="text-sm text-muted-foreground mt-1">
                         + {formatarMoeda(plano.valorAdesao)} de adesão
                       </p>
                     )}
                   </div>
 
-                  {/* Divisor */}
-                  <div className="h-px bg-border mb-4" />
+                  {/* Divisor com gradiente */}
+                  <div className="h-px bg-gradient-to-r from-transparent via-border/50 to-transparent mb-5" />
 
                   {/* Coberturas */}
                   {plano.coberturas && plano.coberturas.length > 0 && (
-                    <div className="space-y-2.5">
+                    <div className="space-y-3">
                       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                         Coberturas incluídas
                       </p>
@@ -211,8 +221,8 @@ export function EscolhaPlano({
                           transition={{ delay: 0.3 + idx * 0.05 }}
                           className="flex items-center gap-2.5"
                         >
-                          <div className="w-5 h-5 rounded-full bg-green-500/10 flex items-center justify-center flex-shrink-0">
-                            <Check className="h-3 w-3 text-green-500" />
+                          <div className="w-5 h-5 rounded-full bg-success/10 border border-success/20 flex items-center justify-center flex-shrink-0">
+                            <Check className="h-3 w-3 text-success" />
                           </div>
                           <span className="text-sm text-muted-foreground">{cobertura}</span>
                         </motion.div>
@@ -225,15 +235,15 @@ export function EscolhaPlano({
                     </div>
                   )}
 
-                  {/* Indicador de Seleção */}
-                  <div className="mt-5 pt-4 border-t border-border">
+                  {/* Indicador de Seleção - Premium */}
+                  <div className="mt-6 pt-5 border-t border-border/30">
                     <div className="flex items-center justify-center gap-2">
                       <div
                         className={cn(
                           'w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all',
                           isSelected
-                            ? 'border-primary bg-primary'
-                            : 'border-muted-foreground/30'
+                            ? 'border-primary bg-primary shadow-lg shadow-primary/30'
+                            : 'border-muted-foreground/30 bg-transparent'
                         )}
                       >
                         {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
@@ -253,7 +263,7 @@ export function EscolhaPlano({
         })}
       </motion.div>
 
-      {/* Botão Continuar */}
+      {/* Botão Continuar - Premium Style */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -261,8 +271,10 @@ export function EscolhaPlano({
       >
         <Button
           className={cn(
-            'w-full h-12 text-base font-semibold transition-all',
-            planoSelecionadoId && 'bg-accent hover:bg-accent-hover'
+            'w-full h-14 text-base font-semibold transition-all rounded-xl',
+            'bg-accent hover:bg-accent-hover text-accent-foreground',
+            'shadow-lg shadow-accent/20 hover:shadow-xl hover:shadow-accent/30',
+            !planoSelecionadoId && 'opacity-50 cursor-not-allowed'
           )}
           size="lg"
           onClick={onConfirmar}
@@ -270,7 +282,7 @@ export function EscolhaPlano({
         >
           {isLoading ? (
             <span className="flex items-center gap-2">
-              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               Carregando...
             </span>
           ) : (

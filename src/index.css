@@ -394,19 +394,101 @@
   opacity: 0.85;
 }
 
-/* ===== COTAÇÃO PÚBLICA - PREMIUM STYLES ===== */
+/* ===== COTAÇÃO PÚBLICA - PREMIUM DARK STYLES ===== */
+
+/* Fundo premium com gradiente escuro */
+.public-premium-bg {
+  background: 
+    radial-gradient(ellipse 80% 50% at 50% -10%, hsl(218 67% 36% / 0.15), transparent 60%),
+    radial-gradient(ellipse 60% 40% at 80% 50%, hsl(351 84% 49% / 0.05), transparent 50%),
+    linear-gradient(180deg, hsl(214 63% 6%) 0%, hsl(215 65% 9%) 50%, hsl(214 63% 6%) 100%);
+}
+
+/* Header premium com glow */
+.header-premium-glow {
+  background: linear-gradient(
+    90deg, 
+    hsl(218 80% 18%) 0%, 
+    hsl(218 67% 28%) 50%, 
+    hsl(218 80% 18%) 100%
+  );
+  box-shadow: 
+    0 4px 30px hsl(218 67% 36% / 0.3),
+    inset 0 1px 0 hsl(0 0% 100% / 0.05);
+}
+
+/* Card do stepper - premium */
+.stepper-card-premium {
+  background: hsl(215 65% 9% / 0.8);
+  backdrop-filter: blur(20px);
+  border: 1px solid hsl(213 49% 20% / 0.5);
+  box-shadow: 0 8px 32px hsl(0 0% 0% / 0.3);
+}
+
+/* Cards de placeholder premium */
+.placeholder-card-premium {
+  background: hsl(215 65% 9% / 0.6);
+  backdrop-filter: blur(20px);
+  border: 1px dashed hsl(213 49% 20% / 0.5);
+}
+
+/* Plan card premium base */
+.plan-card-premium {
+  transition: all 0.3s ease;
+}
+
+.plan-card-premium:hover {
+  box-shadow: 
+    0 8px 40px hsl(218 67% 36% / 0.15),
+    0 0 0 1px hsl(218 67% 36% / 0.1);
+}
+
+/* Plan card selected */
+.plan-card-selected {
+  border-color: hsl(218 67% 36%) !important;
+  box-shadow: 
+    0 0 0 1px hsl(218 67% 36%),
+    0 0 40px hsl(218 67% 36% / 0.25),
+    0 8px 32px hsl(0 0% 0% / 0.2);
+}
+
+/* Plan card recommended */
+.plan-card-recommended {
+  border-color: hsl(351 84% 49% / 0.5) !important;
+  box-shadow: 
+    0 0 30px hsl(351 84% 49% / 0.15),
+    0 8px 32px hsl(0 0% 0% / 0.2);
+}
+
+/* Badge recomendado premium */
+.recommended-badge {
+  background: linear-gradient(135deg, hsl(351 84% 49%) 0%, hsl(350 84% 42%) 100%);
+  color: white;
+  box-shadow: 0 4px 15px hsl(351 84% 49% / 0.4);
+}
+
+/* Step glow active */
+.step-glow-active {
+  box-shadow: 
+    0 0 0 4px hsl(218 67% 36% / 0.2),
+    0 0 20px hsl(218 67% 36% / 0.3);
+}
 
 /* Plano recomendado - glow animado */
 @keyframes recommendedGlow {
   0%, 100% { 
-    box-shadow: 0 0 20px hsl(351 84% 49% / 0.15); 
+    box-shadow: 
+      0 0 20px hsl(351 84% 49% / 0.15),
+      0 8px 32px hsl(0 0% 0% / 0.2); 
   }
   50% { 
-    box-shadow: 0 0 40px hsl(351 84% 49% / 0.25); 
+    box-shadow: 
+      0 0 40px hsl(351 84% 49% / 0.25),
+      0 8px 32px hsl(0 0% 0% / 0.2); 
   }
 }
 
-.plan-recommended {
+.plan-card-recommended {
   animation: recommendedGlow 3s ease-in-out infinite;
 }
 
