@@ -81,6 +81,9 @@ const COBERTURAS_PADRAO = [
   'App de Rastreamento',
 ];
 
+// Altura reservada para rodapé
+const FOOTER_HEIGHT = 40;
+
 // ============= Geração do PDF =============
 
 export function gerarPdfCotacao(cotacao: CotacaoParaPdf): void {
@@ -96,6 +99,14 @@ export function gerarPdfCotacao(cotacao: CotacaoParaPdf): void {
   const successColor = { r: 22, g: 163, b: 74 }; // green-600
   const grayLight = { r: 243, g: 244, b: 246 }; // gray-100
   const grayText = { r: 107, g: 114, b: 128 }; // gray-500
+
+  // Função auxiliar para verificar se precisa nova página
+  const checkPageBreak = (requiredSpace: number) => {
+    if (y + requiredSpace > pageHeight - FOOTER_HEIGHT) {
+      doc.addPage();
+      y = margin;
+    }
+  };
 
   // ============= HEADER =============
   doc.setFillColor(primaryColor.r, primaryColor.g, primaryColor.b);
@@ -302,6 +313,9 @@ export function gerarPdfCotacao(cotacao: CotacaoParaPdf): void {
   y = startY + Math.max(coberturasCol1.length, coberturasCol2.length) * 5 + 12;
 
   // ============= COMPOSIÇÃO DO VALOR =============
+  // Precisa de ~90px para toda a seção de composição de valor
+  checkPageBreak(100);
+
   doc.setFontSize(12);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(primaryColor.r, primaryColor.g, primaryColor.b);
@@ -316,7 +330,7 @@ export function gerarPdfCotacao(cotacao: CotacaoParaPdf): void {
   doc.setFontSize(10);
   
   const labelCol = margin + 5;
-  const valueCol = pageWidth - margin - 40;
+  const valueCol = pageWidth - margin - 5;
   
   const valores = [
     { label: 'Cota Base (mensalidade)', valor: cotacao.valor_cota },
@@ -329,7 +343,7 @@ export function gerarPdfCotacao(cotacao: CotacaoParaPdf): void {
     doc.setFont('helvetica', 'normal');
     doc.text(label, labelCol, y);
     doc.text(formatCurrency(valor), valueCol, y, { align: 'right' });
-    y += 7;
+    y += 8;
   });
   
   // Linha separadora
@@ -337,7 +351,7 @@ export function gerarPdfCotacao(cotacao: CotacaoParaPdf): void {
   doc.setDrawColor(200, 200, 200);
   doc.setLineWidth(0.3);
   doc.line(margin, y, pageWidth - margin, y);
-  y += 8;
+  y += 10;
 
   // Total mensal (destaque)
   doc.setFillColor(primaryColor.r, primaryColor.g, primaryColor.b);
@@ -348,7 +362,7 @@ export function gerarPdfCotacao(cotacao: CotacaoParaPdf): void {
   doc.text('MENSALIDADE TOTAL', labelCol, y + 3);
   doc.text(formatCurrency(cotacao.valor_total_mensal), valueCol, y + 3, { align: 'right' });
   
-  y += 18;
+  y += 20;
   doc.setTextColor(0, 0, 0);
 
   // Taxa de adesão
@@ -358,7 +372,7 @@ export function gerarPdfCotacao(cotacao: CotacaoParaPdf): void {
   doc.setFont('helvetica', 'bold');
   doc.text(formatCurrency(cotacao.valor_adesao), valueCol, y, { align: 'right' });
   
-  y += 12;
+  y += 14;
 
   // Primeiro pagamento
   const primeiroPagamento = (cotacao.valor_adesao || 0) + (cotacao.valor_total_mensal || 0);
@@ -371,7 +385,9 @@ export function gerarPdfCotacao(cotacao: CotacaoParaPdf): void {
   doc.text(formatCurrency(primeiroPagamento), valueCol, y + 4, { align: 'right' });
 
   // ============= RODAPÉ =============
-  const footerY = pageHeight - 30;
+  // Posicionar rodapé após o conteúdo ou no final da página (o que for maior)
+  y += 25; // Espaço após "Primeiro Pagamento"
+  const footerY = Math.max(y, pageHeight - 35);
   
   doc.setDrawColor(grayLight.r, grayLight.g, grayLight.b);
   doc.setLineWidth(0.5);
