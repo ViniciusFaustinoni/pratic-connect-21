@@ -6,6 +6,7 @@ import { useCotacaoContratacao } from '@/hooks/useCotacaoContratacao';
 import { StepperCotacao, type Step } from '@/components/cotacao-publica/StepperCotacao';
 import { EscolhaPlano } from '@/components/cotacao-publica/EscolhaPlano';
 import { EtapaDadosPessoaisDocumentos } from '@/components/cotacao-publica/EtapaDadosPessoaisDocumentos';
+import { EtapaVistoria } from '@/components/cotacao-publica/EtapaVistoria';
 import type { DadosPessoaisForm } from '@/components/cotacao-publica/FormularioDadosPessoais';
 import { useState, useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
@@ -297,7 +298,7 @@ export default function CotacaoContratacao() {
                 </motion.div>
               )}
 
-              {/* Etapa 2: Vistoria - Placeholder */}
+              {/* Etapa 2: Vistoria */}
               {etapaAtual === 2 && (
                 <motion.div
                   key="vistoria"
@@ -306,23 +307,12 @@ export default function CotacaoContratacao() {
                   animate="animate"
                   exit="exit"
                 >
-                  <Card className="placeholder-card-premium">
-                    <CardContent className="py-16 text-center">
-                      <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center">
-                        <span className="text-2xl">🔍</span>
-                      </div>
-                      <h2 className="text-xl font-semibold mb-3 text-foreground">Vistoria</h2>
-                      <p className="text-muted-foreground mb-6 max-w-sm mx-auto">
-                        Esta etapa será implementada em breve. Por enquanto, clique em continuar.
-                      </p>
-                      <Button 
-                        onClick={() => setEtapaAtual(3)}
-                        className="bg-accent hover:bg-accent-hover text-accent-foreground"
-                      >
-                        Continuar
-                      </Button>
-                    </CardContent>
-                  </Card>
+                  <EtapaVistoria
+                    cotacaoId={cotacao.id}
+                    tipoVeiculo={cotacao.categoria === 'moto' ? 'moto' : 'carro'}
+                    onComplete={() => setEtapaAtual(3)}
+                    onAgendar={() => setEtapaAtual(3)}
+                  />
                 </motion.div>
               )}
 

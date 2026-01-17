@@ -4171,6 +4171,44 @@ export type Database = {
           },
         ]
       }
+      cotacoes_vistoria_fotos: {
+        Row: {
+          arquivo_url: string
+          cotacao_id: string
+          created_at: string
+          id: string
+          latitude: number | null
+          longitude: number | null
+          tipo: string
+        }
+        Insert: {
+          arquivo_url: string
+          cotacao_id: string
+          created_at?: string
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          tipo: string
+        }
+        Update: {
+          arquivo_url?: string
+          cotacao_id?: string
+          created_at?: string
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cotacoes_vistoria_fotos_cotacao_id_fkey"
+            columns: ["cotacao_id"]
+            isOneToOne: false
+            referencedRelation: "cotacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       departamentos: {
         Row: {
           ativo: boolean | null
