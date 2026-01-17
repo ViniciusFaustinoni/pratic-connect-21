@@ -105,7 +105,7 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [pendingFormData, setPendingFormData] = useState<FormData | null>(null);
 
-  const { user, isVendedor } = useAuth();
+  const { profile, isVendedor } = useAuth();
   const usuarioEhVendedor = isVendedor();
 
   const { data: leads } = useAllLeads();
@@ -223,7 +223,7 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
         data_inicio: new Date().toISOString().split('T')[0],
         status: 'rascunho',
         cotacao_id: cotacaoPrioritaria?.id || null,
-        vendedor_id: usuarioEhVendedor ? user?.id : (pendingFormData.vendedor_id || null),
+        vendedor_id: usuarioEhVendedor ? profile?.id : (pendingFormData.vendedor_id || null),
       });
 
       toast.success('Proposta criada como rascunho');
@@ -351,7 +351,7 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
                       <SelectContent>
                         <SelectItem value="_none">Não atribuído</SelectItem>
                         {vendedores.map((v) => (
-                          <SelectItem key={v.id} value={v.user_id}>
+                          <SelectItem key={v.id} value={v.id}>
                             {v.nome}
                           </SelectItem>
                         ))}
