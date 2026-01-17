@@ -308,8 +308,42 @@ export function useExcluirAtivacao() {
           .delete()
           .eq('associado_id', contrato.associado_id);
       }
+
+      // 8. Excluir documentos do contrato
+      await supabase
+        .from('contratos_documentos')
+        .delete()
+        .eq('contrato_id', contratoId);
+
+      // 9. Excluir gastos/benefícios do contrato
+      await supabase
+        .from('gastos_beneficios')
+        .delete()
+        .eq('contrato_id', contratoId);
+
+      // 10. Excluir documentos solicitados
+      await supabase
+        .from('documentos_solicitados')
+        .delete()
+        .eq('contrato_id', contratoId);
+
+      // 11. Limpar referência na cotação ANTES de excluir o contrato
+      if (contrato?.cotacao_id) {
+        await supabase
+          .from('cotacoes')
+          .update({ contrato_gerado_id: null })
+          .eq('id', contrato.cotacao_id);
+      }
+
+      // 12. Limpar referência no associado
+      if (contrato?.associado_id) {
+        await supabase
+          .from('associados')
+          .update({ contrato_id: null })
+          .eq('id', contrato.associado_id);
+      }
       
-      // 8. Excluir o contrato
+      // 13. Excluir o contrato
       const { error: contratoError } = await supabase
         .from('contratos')
         .delete()
@@ -317,7 +351,7 @@ export function useExcluirAtivacao() {
         
       if (contratoError) throw contratoError;
 
-      // 9. Excluir cotação vinculada (se existir)
+      // 14. Excluir cotação vinculada (se existir)
       if (contrato?.cotacao_id) {
         await supabase
           .from('cotacoes')
