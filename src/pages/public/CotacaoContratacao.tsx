@@ -1,17 +1,17 @@
 import { useParams } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertTriangle, Car, CheckCircle2, Sparkles } from 'lucide-react';
+import { AlertTriangle, Car, CheckCircle2 } from 'lucide-react';
 import { useCotacaoContratacao } from '@/hooks/useCotacaoContratacao';
 import { StepperCotacao, type Step } from '@/components/cotacao-publica/StepperCotacao';
 import { EscolhaPlano } from '@/components/cotacao-publica/EscolhaPlano';
 import { EtapaDadosPessoaisDocumentos } from '@/components/cotacao-publica/EtapaDadosPessoaisDocumentos';
 import { EtapaVistoria } from '@/components/cotacao-publica/EtapaVistoria';
+import { EtapaPagamentoCotacao } from '@/components/cotacao-publica/EtapaPagamentoCotacao';
 import type { DadosPessoaisForm } from '@/components/cotacao-publica/FormularioDadosPessoais';
 import { useState, useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { formatarMoeda } from '@/config/pricing';
-import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const STEPS: Step[] = [
@@ -316,7 +316,7 @@ export default function CotacaoContratacao() {
                 </motion.div>
               )}
 
-              {/* Etapa 3: Pagamento - Placeholder */}
+              {/* Etapa 3: Pagamento */}
               {etapaAtual === 3 && (
                 <motion.div
                   key="pagamento"
@@ -325,23 +325,14 @@ export default function CotacaoContratacao() {
                   animate="animate"
                   exit="exit"
                 >
-                  <Card className="placeholder-card-premium">
-                    <CardContent className="py-16 text-center">
-                      <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center">
-                        <span className="text-2xl">💳</span>
-                      </div>
-                      <h2 className="text-xl font-semibold mb-3 text-foreground">Pagamento</h2>
-                      <p className="text-muted-foreground mb-6 max-w-sm mx-auto">
-                        Esta etapa será implementada em breve. Por enquanto, clique em continuar.
-                      </p>
-                      <Button 
-                        onClick={() => setEtapaAtual(4)}
-                        className="bg-accent hover:bg-accent-hover text-accent-foreground"
-                      >
-                        Continuar
-                      </Button>
-                    </CardContent>
-                  </Card>
+                  <EtapaPagamentoCotacao
+                    cotacaoId={cotacao.id}
+                    valorAdesao={cotacao.valor_adesao || 0}
+                    clienteNome={cotacao.nome_solicitante || ''}
+                    clienteEmail={cotacao.email_solicitante || ''}
+                    clienteCpf={cotacao.cliente_cpf || ''}
+                    onPagamentoConfirmado={() => setEtapaAtual(4)}
+                  />
                 </motion.div>
               )}
 
