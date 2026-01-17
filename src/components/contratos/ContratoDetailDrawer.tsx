@@ -203,8 +203,6 @@ export function ContratoDetailDrawer({ contratoId, open, onClose }: ContratoDeta
     window.open(`https://wa.me/55${phone.replace(/\D/g, '')}?text=${message}`, '_blank');
   };
 
-  if (!contratoId) return null;
-
   const status = contrato ? (statusConfig[contrato.status] || statusConfig.pendente) : null;
   const client = contrato?.associados || contrato?.leads;
   const lead = contrato?.leads;
@@ -212,17 +210,19 @@ export function ContratoDetailDrawer({ contratoId, open, onClose }: ContratoDeta
   return (
     <Sheet open={open} onOpenChange={onClose}>
       <SheetContent className="w-[500px] sm:w-[600px] overflow-y-auto">
-        <SheetHeader className="space-y-4">
-          <div className="flex items-center justify-between">
-            <SheetTitle className="font-mono">{contrato?.numero}</SheetTitle>
-            {status && (
-              <Badge className={status.color}>
-                <status.icon className="mr-1 h-3 w-3" />
-                {status.label}
-              </Badge>
-            )}
-          </div>
-        </SheetHeader>
+        {contratoId && (
+          <>
+            <SheetHeader className="space-y-4">
+              <div className="flex items-center justify-between">
+                <SheetTitle className="font-mono">{contrato?.numero}</SheetTitle>
+                {status && (
+                  <Badge className={status.color}>
+                    <status.icon className="mr-1 h-3 w-3" />
+                    {status.label}
+                  </Badge>
+                )}
+              </div>
+            </SheetHeader>
 
         {isLoading ? (
           <div className="flex items-center justify-center h-32">
@@ -692,6 +692,8 @@ export function ContratoDetailDrawer({ contratoId, open, onClose }: ContratoDeta
           <div className="text-center text-muted-foreground py-8">
             Proposta não encontrada
           </div>
+        )}
+          </>
         )}
       </SheetContent>
     </Sheet>
