@@ -111,7 +111,7 @@ export function EscolhaPlano({
 
       {/* Grid de Planos - Premium Dark Cards */}
       <motion.div 
-        className="grid gap-5 md:gap-6 md:grid-cols-2 lg:grid-cols-3"
+        className="grid gap-5 md:gap-6 md:grid-cols-2 lg:grid-cols-3 justify-items-center"
         variants={containerVariants}
         initial="hidden"
         animate="visible"
@@ -132,7 +132,7 @@ export function EscolhaPlano({
             >
               <Card
                 className={cn(
-                  'plan-card-premium relative cursor-pointer overflow-hidden',
+                  'plan-card-premium relative cursor-pointer overflow-hidden w-full max-w-sm',
                   'bg-card/60 backdrop-blur-xl border border-border/50',
                   'transition-all duration-300',
                   isSelected && 'plan-card-selected',
@@ -163,7 +163,7 @@ export function EscolhaPlano({
 
                 <CardContent className="p-6">
                   {/* Header: Nome + Badge */}
-                  <div className="mb-4">
+                  <div className="mb-4 text-center">
                     <h3 className="text-xl font-bold text-foreground mb-2">{plano.nome}</h3>
                     <Badge 
                       variant="outline" 
@@ -178,15 +178,15 @@ export function EscolhaPlano({
                   </div>
 
                   {/* Preço - Destaque Grande */}
-                  <div className="mb-4">
-                    <div className="flex items-baseline gap-1">
+                  <div className="mb-4 text-center">
+                    <div className="flex items-baseline justify-center gap-1 flex-wrap">
                       <span className={cn(
                         'text-4xl font-bold tracking-tight',
                         isSelected ? 'text-primary' : 'text-foreground'
                       )}>
                         {formatarMoeda(plano.valorMensal)}
                       </span>
-                      <span className="text-muted-foreground text-sm">/mês</span>
+                      <span className="text-muted-foreground text-base">/mês</span>
                     </div>
                     {plano.valorAdesao && plano.valorAdesao > 0 && (
                       <p className="text-sm text-muted-foreground mt-1">
@@ -196,7 +196,7 @@ export function EscolhaPlano({
                   </div>
 
                   {/* Descrição curta */}
-                  <p className="text-sm text-muted-foreground mb-6">
+                  <p className="text-sm text-muted-foreground mb-6 text-center">
                     Proteção completa para seu veículo com coberturas abrangentes
                   </p>
 
@@ -222,7 +222,7 @@ export function EscolhaPlano({
                       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                         Coberturas incluídas
                       </p>
-                      {plano.coberturas.slice(0, 5).map((cobertura, idx) => (
+                      {plano.coberturas.map((cobertura, idx) => (
                         <motion.div
                           key={idx}
                           initial={{ opacity: 0, x: -10 }}
@@ -236,11 +236,6 @@ export function EscolhaPlano({
                           <span className="text-sm text-muted-foreground">{cobertura}</span>
                         </motion.div>
                       ))}
-                      {plano.coberturas.length > 5 && (
-                        <p className="text-xs text-primary font-medium pl-7">
-                          + {plano.coberturas.length - 5} coberturas adicionais
-                        </p>
-                      )}
                     </div>
                   )}
                 </CardContent>
