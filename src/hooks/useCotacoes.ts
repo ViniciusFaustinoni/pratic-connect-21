@@ -68,7 +68,7 @@ export function useCotacoes(options?: UseCotacoesOptions) {
           leads:leads!fk_cotacoes_lead_id(*),
           planos:planos!plano_id(*),
           contratos:contratos!contratos_cotacao_id_fkey(id, numero, status)
-        `)
+        `, { count: 'exact' })
         .order('created_at', { ascending: false });
       
       // Filtrar por vendedor se viewScope = 'own'
@@ -96,10 +96,10 @@ export function useCotacoes(options?: UseCotacoesOptions) {
       if (vendedorIds.length > 0) {
         const { data: vendedores } = await supabase
           .from('profiles')
-          .select('id, nome, email')
-          .in('id', vendedorIds);
+          .select('user_id, nome, email')
+          .in('user_id', vendedorIds);
         
-        const vendedorMap = new Map(vendedores?.map(v => [v.id, v]) || []);
+        const vendedorMap = new Map(vendedores?.map(v => [v.user_id, { id: v.user_id, nome: v.nome, email: v.email }]) || []);
         
         return cotacoes.map(c => mapCotacao(c, vendedorMap)) as CotacaoWithRelations[];
       }
@@ -132,10 +132,10 @@ export function useCotacao(id: string | undefined) {
       if (data.vendedor_id) {
         const { data: v } = await supabase
           .from('profiles')
-          .select('id, nome, email')
-          .eq('id', data.vendedor_id)
+          .select('user_id, nome, email')
+          .eq('user_id', data.vendedor_id)
           .single();
-        vendedor = v;
+        vendedor = v ? { id: v.user_id, nome: v.nome, email: v.email } : null;
       }
       
       return { ...data, vendedor } as CotacaoWithRelations;

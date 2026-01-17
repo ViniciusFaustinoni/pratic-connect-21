@@ -53,8 +53,8 @@ export function useCotacaoContratacao(token: string | undefined) {
         .from('cotacoes')
         .select(`
           *,
-          planos:planos!plano_id(*),
-          plano_escolhido:planos!plano_escolhido_id(*)
+          planos!left(id, nome, codigo, coberturas, valor_adesao),
+          plano_escolhido:planos!left(id, nome, codigo, coberturas, valor_adesao)
         `)
         .eq('token_publico', token)
         .single();
