@@ -65,8 +65,8 @@ import { cn } from '@/lib/utils';
 const formSchema = z.object({
   lead_id: z.string().optional().nullable(),
   plano_id: z.string().min(1, 'Selecione um plano'),
-  valor_adesao: z.number().min(1, 'O valor de adesão é obrigatório e deve ser maior que zero'),
-  valor_mensal: z.number().min(0, 'Informe o valor mensal'),
+  valor_adesao: z.number().min(1, 'A taxa de filiação é obrigatória e deve ser maior que zero'),
+  valor_adicional: z.number().min(0, 'Informe o valor adicional').optional(),
   dia_vencimento: z.number().min(1).max(28).optional(),
   vendedor_id: z.string().optional().nullable(),
   // Campos do cliente (quando não há lead selecionado)
@@ -128,8 +128,8 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
     defaultValues: {
       lead_id: '',
       plano_id: '',
-      valor_adesao: 0,
-      valor_mensal: 0,
+      valor_adesao: 0, // Sempre inicia zerado - preenchimento manual obrigatório
+      valor_adicional: 0,
       dia_vencimento: 10,
       vendedor_id: null,
       cliente_nome: '',
@@ -158,40 +158,26 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
       || null;
   }, [cotacoesLead]);
 
-  // Auto-preencher valores quando encontrar cotação
+  // Auto-preencher APENAS o plano quando encontrar cotação (não preenche valores)
   useEffect(() => {
     if (cotacaoPrioritaria) {
       if (cotacaoPrioritaria.plano_id) {
         form.setValue('plano_id', cotacaoPrioritaria.plano_id);
       }
-      if (cotacaoPrioritaria.valor_total_mensal) {
-        form.setValue('valor_mensal', Number(cotacaoPrioritaria.valor_total_mensal));
-      }
-      if (cotacaoPrioritaria.valor_adesao) {
-        form.setValue('valor_adesao', Number(cotacaoPrioritaria.valor_adesao));
-      }
+      // NÃO preenche valor_adesao - deve ser manual
     }
   }, [cotacaoPrioritaria, form]);
 
-  // Update values when plano changes (se não tiver cotação nem dados pré-preenchidos)
-  useEffect(() => {
-    if (selectedPlano && !cotacaoPrioritaria && !prefilledData?.plano) {
-      form.setValue('valor_adesao', selectedPlano.valor_adesao);
-    }
-  }, [selectedPlano, cotacaoPrioritaria, prefilledData, form]);
+  // Valor adicional do formulário
+  const valorAdicional = form.watch('valor_adicional') || 0;
 
-  // Auto-preencher quando receber dados da cotação (prefilledData)
+  // Auto-preencher APENAS plano quando receber dados da cotação (prefilledData)
   useEffect(() => {
     if (open && prefilledData?.plano) {
       if (prefilledData.plano.id) {
         form.setValue('plano_id', prefilledData.plano.id);
       }
-      if (prefilledData.plano.valorAdesao) {
-        form.setValue('valor_adesao', prefilledData.plano.valorAdesao);
-      }
-      if (prefilledData.plano.valorMensal) {
-        form.setValue('valor_mensal', prefilledData.plano.valorMensal);
-      }
+      // NÃO preenche valor_adesao - deve ser manual
     }
   }, [open, prefilledData, form]);
 
@@ -233,7 +219,7 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
         lead_id: pendingFormData.lead_id || null,
         plano_id: pendingFormData.plano_id,
         valor_adesao: pendingFormData.valor_adesao,
-        valor_mensal: pendingFormData.valor_mensal,
+        valor_mensal: valorAdicional, // Apenas o valor adicional - mensal virá do cálculo do plano
         dia_vencimento: pendingFormData.dia_vencimento,
         data_inicio: new Date().toISOString().split('T')[0],
         status: 'rascunho',
@@ -591,16 +577,19 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
 
               <FormField
                 control={form.control}
-                name="valor_mensal"
+                name="valor_adicional"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Valor Mensal *</FormLabel>
+                    <FormLabel>Valor Adicional</FormLabel>
                     <FormControl>
                       <CurrencyInput
-                        value={field.value}
+                        value={field.value || 0}
                         onChange={field.onChange}
                       />
                     </FormControl>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Opcional: valor extra além do plano
+                    </p>
                     <FormMessage />
                   </FormItem>
                 )}
