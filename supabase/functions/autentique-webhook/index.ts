@@ -98,7 +98,9 @@ serve(async (req) => {
     console.log(`[autentique-webhook] Processando evento: ${eventType} para documento: ${documentId}`);
 
     // Buscar contrato pelo documento_id do Autentique
-    const { data: contrato, error: contratoError } = await supabase
+    let contrato: any = null;
+    
+    const { data: contratoByDocId, error: contratoError } = await supabase
       .from("contratos")
       .select("*, leads (*)")
       .eq("autentique_documento_id", documentId)
@@ -112,9 +114,74 @@ serve(async (req) => {
       });
     }
 
+    contrato = contratoByDocId;
+
+    // FALLBACK: Se não encontrou pelo documento_id, tentar buscar por email do signatário
     if (!contrato) {
-      console.log("[autentique-webhook] Contrato NÃO ENCONTRADO para documento:", documentId);
-      console.log("[autentique-webhook] Verifique se autentique_documento_id está correto no banco");
+      const signerEmail = payload.event?.data?.user?.email;
+      const signerPhone = payload.event?.data?.user?.phone;
+      
+      console.log("[autentique-webhook] Contrato não encontrado por documento_id, tentando fallback por email...");
+      console.log("[autentique-webhook] Email do signatário:", signerEmail);
+      console.log("[autentique-webhook] Telefone do signatário:", signerPhone);
+      
+      if (signerEmail) {
+        // Buscar por email do cliente + status pendente
+        const { data: contratoByEmail } = await supabase
+          .from("contratos")
+          .select("*, leads (*)")
+          .eq("cliente_email", signerEmail)
+          .in("status", ["pendente_assinatura", "enviado", "visualizado"])
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        
+        if (contratoByEmail) {
+          console.log("[autentique-webhook] ✓ Contrato encontrado por email:", contratoByEmail.numero);
+          console.log("[autentique-webhook] Atualizando autentique_documento_id para:", documentId);
+          
+          // Atualizar o autentique_documento_id para o ID correto
+          await supabase
+            .from("contratos")
+            .update({ autentique_documento_id: documentId })
+            .eq("id", contratoByEmail.id);
+          
+          contrato = contratoByEmail;
+        }
+      }
+      
+      // FALLBACK 2: Tentar buscar pelo telefone se email não funcionou
+      if (!contrato && signerPhone) {
+        const phoneClean = signerPhone.replace(/\D/g, '');
+        
+        const { data: contratoByPhone } = await supabase
+          .from("contratos")
+          .select("*, leads (*)")
+          .or(`cliente_telefone.ilike.%${phoneClean}%,cliente_whatsapp.ilike.%${phoneClean}%`)
+          .in("status", ["pendente_assinatura", "enviado", "visualizado"])
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        
+        if (contratoByPhone) {
+          console.log("[autentique-webhook] ✓ Contrato encontrado por telefone:", contratoByPhone.numero);
+          console.log("[autentique-webhook] Atualizando autentique_documento_id para:", documentId);
+          
+          await supabase
+            .from("contratos")
+            .update({ autentique_documento_id: documentId })
+            .eq("id", contratoByPhone.id);
+          
+          contrato = contratoByPhone;
+        }
+      }
+    }
+
+    if (!contrato) {
+      console.log("[autentique-webhook] ❌ Contrato NÃO ENCONTRADO após todos os fallbacks");
+      console.log("[autentique-webhook] Documento ID:", documentId);
+      console.log("[autentique-webhook] Email tentado:", payload.event?.data?.user?.email);
+      console.log("[autentique-webhook] Telefone tentado:", payload.event?.data?.user?.phone);
       return new Response(JSON.stringify({ received: true, message: "Contract not found" }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
