@@ -348,12 +348,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // Encerrar sessão customizada se existir
       const sessionToken = localStorage.getItem(SESSION_TOKEN_KEY);
       if (sessionToken) {
-        await encerrarSessao(sessionToken);
+        try {
+          await encerrarSessao(sessionToken);
+        } catch (e) {
+          console.warn('Erro ao encerrar sessão customizada:', e);
+        }
         localStorage.removeItem(SESSION_TOKEN_KEY);
       }
       
-      await supabase.auth.signOut();
+      // Tentar logout no Supabase Auth (ignorar erros de sessão não encontrada)
+      try {
+        await supabase.auth.signOut({ scope: 'local' });
+      } catch (e) {
+        console.warn('Erro ao fazer signOut no Supabase:', e);
+      }
+      
     } finally {
+      // SEMPRE limpar estado local, independente de erros
+      setUser(null);
+      setSession(null);
+      setProfile(null);
+      setPerfis([]);
       setLoading(false);
     }
   }, []);
