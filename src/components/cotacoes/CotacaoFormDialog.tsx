@@ -153,8 +153,9 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
   const [loadingAnos, setLoadingAnos] = useState(false);
   const [buscandoFipe, setBuscandoFipe] = useState(false);
 
-  // Estado para plano selecionado
-  const [planoSelecionadoData, setPlanoSelecionadoData] = useState<PlanoCotacao | null>(null);
+  // Estado para planos selecionados (múltipla seleção)
+  const [planosSelecionados, setPlanosSelecionados] = useState<PlanoCotacao[]>([]);
+  const MAX_PLANOS_COMPARACAO = 3;
 
   const form = useForm<CotacaoFormData>({
     resolver: zodResolver(cotacaoSchema),
@@ -233,7 +234,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
       });
       setVeiculoEncontrado(null);
       setPlaca('');
-      setPlanoSelecionadoData(null);
+      setPlanosSelecionados([]);
       setMarcaSelecionada('');
       setModeloSelecionado('');
       setAnoSelecionado('');
@@ -469,16 +470,45 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
     }
   }, [lead, form]);
 
-  // Handler de seleção de plano
-  const handleSelectPlano = (plano: PlanoCotacao) => {
-    form.setValue('plano_id', plano.id);
-    form.setValue('valor_cota', plano.valorCota || 0);
-    form.setValue('taxa_administrativa', plano.taxaAdministrativa || 0);
-    form.setValue('valor_rastreamento', plano.valorRastreamento || 0);
-    // Valor total mensal = proteção + adicional
-    const adicional = form.getValues('valor_adicional') || 0;
-    form.setValue('valor_total_mensal', plano.valorMensal + adicional);
-    setPlanoSelecionadoData(plano);
+  // Handler de toggle de plano (seleção múltipla)
+  const handleTogglePlano = (plano: PlanoCotacao) => {
+    setPlanosSelecionados(prev => {
+      const jaExiste = prev.some(p => p.id === plano.id);
+      if (jaExiste) {
+        // Remove o plano
+        const novos = prev.filter(p => p.id !== plano.id);
+        // Se restam planos, atualiza o form com o primeiro
+        if (novos.length > 0) {
+          const primeiro = novos[0];
+          form.setValue('plano_id', primeiro.id);
+          form.setValue('valor_cota', primeiro.valorCota || 0);
+          form.setValue('taxa_administrativa', primeiro.taxaAdministrativa || 0);
+          form.setValue('valor_rastreamento', primeiro.valorRastreamento || 0);
+          const adicional = form.getValues('valor_adicional') || 0;
+          form.setValue('valor_total_mensal', primeiro.valorMensal + adicional);
+        } else {
+          form.setValue('plano_id', '');
+        }
+        return novos;
+      }
+      // Verificar limite
+      if (prev.length >= MAX_PLANOS_COMPARACAO) {
+        toast.warning(`Máximo de ${MAX_PLANOS_COMPARACAO} planos para comparação`);
+        return prev;
+      }
+      // Adiciona o plano
+      const novos = [...prev, plano];
+      // Se for o primeiro, define no form
+      if (novos.length === 1) {
+        form.setValue('plano_id', plano.id);
+        form.setValue('valor_cota', plano.valorCota || 0);
+        form.setValue('taxa_administrativa', plano.taxaAdministrativa || 0);
+        form.setValue('valor_rastreamento', plano.valorRastreamento || 0);
+        const adicional = form.getValues('valor_adicional') || 0;
+        form.setValue('valor_total_mensal', plano.valorMensal + adicional);
+      }
+      return novos;
+    });
   };
 
   // Handler para mudança de categoria
@@ -514,23 +544,31 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
 
   // Copiar valores para clipboard
   const copiarValores = () => {
-    if (!planoSelecionadoData) return;
+    if (planosSelecionados.length === 0) return;
     
     const veiculoInfo = getMarcaNome() && getModeloNome() 
       ? `${getMarcaNome()} ${getModeloNome()} ${getAnoNome()}`
       : 'Veículo não informado';
     
-    const valorMensalTotal = planoSelecionadoData.valorMensal + valorAdicional;
+    let texto = `*Cotação Praticcar*\n` +
+      `Associado: ${nomeAssociado}\n` +
+      `Veículo: ${veiculoInfo}\n` +
+      `Uso: ${usoVeiculo === 'particular' ? 'Passeio' : 'Aplicativo'}\n` +
+      `FIPE: ${formatCurrency(valorFipe)}\n\n`;
     
-    const texto = `*Cotação Praticcar*
-Associado: ${nomeAssociado}
-Veículo: ${veiculoInfo}
-Uso: ${usoVeiculo === 'particular' ? 'Passeio' : 'Aplicativo'}
-FIPE: ${formatCurrency(valorFipe)}
-Plano: ${planoSelecionadoData.nome}
-Proteção Mensal: ${formatCurrency(valorMensalTotal)}
-Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}
-Validade: ${validadeDias} dias`;
+    if (planosSelecionados.length === 1) {
+      const plano = planosSelecionados[0];
+      texto += `Plano: ${plano.nome}\n` +
+        `Proteção Mensal: ${formatCurrency(plano.valorMensal + valorAdicional)}\n`;
+    } else {
+      texto += `*Comparativo de Planos:*\n`;
+      planosSelecionados.forEach((plano, idx) => {
+        texto += `${idx + 1}. ${plano.nome}: ${formatCurrency(plano.valorMensal + valorAdicional)}/mês\n`;
+      });
+    }
+    
+    texto += `\nTaxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}\n` +
+      `Validade: ${validadeDias} dias`;
     
     navigator.clipboard.writeText(texto);
     toast.success('Valores copiados!');
@@ -538,27 +576,37 @@ Validade: ${validadeDias} dias`;
 
   // Enviar por WhatsApp
   const enviarWhatsApp = () => {
-    if (!planoSelecionadoData) return;
+    if (planosSelecionados.length === 0) return;
     
     const veiculoInfo = getMarcaNome() && getModeloNome() 
       ? `${getMarcaNome()} ${getModeloNome()} ${getAnoNome()}`
       : 'Veículo não informado';
     
     const telefoneFormatado = telefoneAssociado.replace(/\D/g, '');
-    const valorMensalTotal = planoSelecionadoData.valorMensal + valorAdicional;
-    const texto = encodeURIComponent(`*Cotação Praticcar*
-Associado: ${nomeAssociado}
-Veículo: ${veiculoInfo}
-Uso: ${usoVeiculo === 'particular' ? 'Passeio' : 'Aplicativo'}
-FIPE: ${formatCurrency(valorFipe)}
-Plano: ${planoSelecionadoData.nome}
-Proteção Mensal: ${formatCurrency(valorMensalTotal)}
-Taxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}
-Validade: ${validadeDias} dias`);
+    
+    let texto = `*Cotação Praticcar*\n` +
+      `Associado: ${nomeAssociado}\n` +
+      `Veículo: ${veiculoInfo}\n` +
+      `Uso: ${usoVeiculo === 'particular' ? 'Passeio' : 'Aplicativo'}\n` +
+      `FIPE: ${formatCurrency(valorFipe)}\n\n`;
+    
+    if (planosSelecionados.length === 1) {
+      const plano = planosSelecionados[0];
+      texto += `Plano: ${plano.nome}\n` +
+        `Proteção Mensal: ${formatCurrency(plano.valorMensal + valorAdicional)}\n`;
+    } else {
+      texto += `*Comparativo de Planos:*\n`;
+      planosSelecionados.forEach((plano, idx) => {
+        texto += `${idx + 1}. ${plano.nome}: ${formatCurrency(plano.valorMensal + valorAdicional)}/mês\n`;
+      });
+    }
+    
+    texto += `\nTaxa de Filiação: ${formatCurrency(form.getValues('valor_adesao') || 0)}\n` +
+      `Validade: ${validadeDias} dias`;
     
     const whatsappUrl = telefoneFormatado.length >= 10 
-      ? `https://wa.me/55${telefoneFormatado}?text=${texto}`
-      : `https://wa.me/?text=${texto}`;
+      ? `https://wa.me/55${telefoneFormatado}?text=${encodeURIComponent(texto)}`
+      : `https://wa.me/?text=${encodeURIComponent(texto)}`;
     
     window.open(whatsappUrl, '_blank');
   };
@@ -603,7 +651,7 @@ Validade: ${validadeDias} dias`);
         valor_rastreamento: pendingFormData.valor_rastreamento,
         valor_adesao: pendingFormData.valor_adesao,
         valor_total_mensal: pendingFormData.valor_total_mensal,
-        valor_assistencia: planoSelecionadoData?.valorAssistencia || 0,
+        valor_assistencia: planosSelecionados[0]?.valorAssistencia || 0,
         validade_dias: pendingFormData.validade_dias,
         status: 'rascunho',
         // Dados do veículo
@@ -630,7 +678,7 @@ Validade: ${validadeDias} dias`);
       form.reset();
       setVeiculoEncontrado(null);
       setPlaca('');
-      setPlanoSelecionadoData(null);
+      setPlanosSelecionados([]);
       setMarcaSelecionada('');
       setModeloSelecionado('');
       setAnoSelecionado('');
@@ -1168,10 +1216,17 @@ Validade: ${validadeDias} dias`);
 
             {/* BLOCO 3: PLANOS - Sempre visível */}
             <div>
-              <h3 className="text-sm font-semibold flex items-center gap-2 mb-3">
-                <Shield className="h-4 w-4 text-primary" />
-                Selecione o Plano
-              </h3>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold flex items-center gap-2">
+                  <Shield className="h-4 w-4 text-primary" />
+                  Selecione o Plano
+                </h3>
+                {planosSelecionados.length > 0 && (
+                  <Badge variant="outline" className="text-primary">
+                    {planosSelecionados.length}/{MAX_PLANOS_COMPARACAO} selecionados
+                  </Badge>
+                )}
+              </div>
 
               {planosLoading ? (
                 <div className="flex items-center justify-center py-8">
@@ -1179,29 +1234,40 @@ Validade: ${validadeDias} dias`);
                 </div>
               ) : valorFipe > 0 && planosCalculados.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {planosCalculados.map((plano) => (
-                    <Card 
-                      key={plano.id}
-                      className={cn(
-                        "cursor-pointer transition-all hover:shadow-md",
-                        planoId === plano.id 
-                          ? "ring-2 ring-primary border-primary bg-primary/5" 
-                          : "hover:border-primary/50",
-                        plano.destaque && "border-amber-500/50"
-                      )}
-                      onClick={() => handleSelectPlano(plano)}
-                    >
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <h4 className="font-semibold text-sm">{plano.nome}</h4>
-                          {planoId === plano.id ? (
-                            <CheckCircle2 className="h-4 w-4 text-primary" />
-                          ) : plano.destaque ? (
-                            <Badge variant="secondary" className="text-xs bg-amber-500/10 text-amber-600">
-                              Recomendado
-                            </Badge>
-                          ) : null}
-                        </div>
+                  {planosCalculados.map((plano) => {
+                    const indexSelecionado = planosSelecionados.findIndex(p => p.id === plano.id);
+                    const isSelecionado = indexSelecionado >= 0;
+                    const ordemSelecao = indexSelecionado + 1;
+                    
+                    return (
+                      <Card 
+                        key={plano.id}
+                        className={cn(
+                          "cursor-pointer transition-all hover:shadow-md relative",
+                          isSelecionado 
+                            ? "ring-2 ring-primary border-primary bg-primary/5" 
+                            : "hover:border-primary/50",
+                          plano.destaque && !isSelecionado && "border-amber-500/50"
+                        )}
+                        onClick={() => handleTogglePlano(plano)}
+                      >
+                        {/* Badge de ordem no canto */}
+                        {isSelecionado && (
+                          <div className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs font-bold flex items-center justify-center z-10">
+                            {ordemSelecao}º
+                          </div>
+                        )}
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <h4 className="font-semibold text-sm">{plano.nome}</h4>
+                            {isSelecionado ? (
+                              <CheckCircle2 className="h-4 w-4 text-primary" />
+                            ) : plano.destaque ? (
+                              <Badge variant="secondary" className="text-xs bg-amber-500/10 text-amber-600">
+                                Recomendado
+                              </Badge>
+                            ) : null}
+                          </div>
                         {valorAdicional > 0 ? (
                           <div className="mb-3">
                             <p className="text-sm text-muted-foreground">
@@ -1245,9 +1311,10 @@ Validade: ${validadeDias} dias`);
                             {plano.alertaDesagio}
                           </p>
                         )}
-                      </CardContent>
-                    </Card>
-                  ))}
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
                 </div>
               ) : valorFipe > 0 ? (
                 <Card className="border-amber-500/30 bg-amber-500/5">
@@ -1268,8 +1335,8 @@ Validade: ${validadeDias} dias`);
               )}
             </div>
 
-            {/* BLOCO 4: RESUMO INLINE (quando plano selecionado) */}
-            {planoSelecionadoData && (
+            {/* BLOCO 4: RESUMO INLINE (quando planos selecionados) */}
+            {planosSelecionados.length > 0 && (
               <>
                 <Separator />
                 <Card className="bg-primary/5 border-primary/20">
@@ -1287,29 +1354,51 @@ Validade: ${validadeDias} dias`);
                         </p>
                         <p className="text-sm text-muted-foreground">FIPE: {formatCurrency(valorFipe)}</p>
                       </div>
-                      <div className="text-right">
-                        <p className="text-xs text-muted-foreground">{planoSelecionadoData.nome}</p>
-                        {valorAdicional > 0 ? (
+                      <div className="text-right space-y-1">
+                        <p className="text-xs text-muted-foreground">
+                          {planosSelecionados.length === 1 ? 'Plano Selecionado' : 'Planos para Comparação'}
+                        </p>
+                        <div className="flex flex-wrap gap-1 justify-end">
+                          {planosSelecionados.map((p, idx) => (
+                            <Badge key={p.id} variant="secondary" className="text-xs">
+                              {idx + 1}. {p.nome}
+                            </Badge>
+                          ))}
+                        </div>
+                        {planosSelecionados.length === 1 && (
                           <>
-                            <p className="text-sm text-muted-foreground">
-                              Proteção: {formatCurrency(planoSelecionadoData.valorMensal)}
-                            </p>
-                            <p className="text-xs text-blue-600">
-                              + Adicional: {formatCurrency(valorAdicional)}
-                            </p>
-                            <Separator className="my-1" />
-                            <p className="text-2xl font-bold text-primary">
-                              {formatCurrency(planoSelecionadoData.valorMensal + valorAdicional)}
-                            </p>
-                            <p className="text-xs text-muted-foreground">/mês</p>
+                            {valorAdicional > 0 ? (
+                              <>
+                                <p className="text-sm text-muted-foreground">
+                                  Proteção: {formatCurrency(planosSelecionados[0].valorMensal)}
+                                </p>
+                                <p className="text-xs text-blue-600">
+                                  + Adicional: {formatCurrency(valorAdicional)}
+                                </p>
+                                <Separator className="my-1" />
+                                <p className="text-2xl font-bold text-primary">
+                                  {formatCurrency(planosSelecionados[0].valorMensal + valorAdicional)}
+                                </p>
+                                <p className="text-xs text-muted-foreground">/mês</p>
+                              </>
+                            ) : (
+                              <>
+                                <p className="text-2xl font-bold text-primary">
+                                  {formatCurrency(planosSelecionados[0].valorMensal)}
+                                </p>
+                                <p className="text-xs text-muted-foreground">/mês</p>
+                              </>
+                            )}
                           </>
-                        ) : (
-                          <>
-                            <p className="text-2xl font-bold text-primary">
-                              {formatCurrency(planoSelecionadoData.valorMensal)}
-                            </p>
-                            <p className="text-xs text-muted-foreground">/mês</p>
-                          </>
+                        )}
+                        {planosSelecionados.length > 1 && (
+                          <div className="text-left mt-2 space-y-1">
+                            {planosSelecionados.map((p, idx) => (
+                              <p key={p.id} className="text-sm">
+                                <span className="font-medium">{idx + 1}.</span> {formatCurrency(p.valorMensal + valorAdicional)}/mês
+                              </p>
+                            ))}
+                          </div>
                         )}
                       </div>
                     </div>
@@ -1379,7 +1468,7 @@ Validade: ${validadeDias} dias`);
                   type="button" 
                   variant="outline" 
                   size="sm"
-                  disabled={!planoSelecionadoData}
+                  disabled={planosSelecionados.length === 0}
                   onClick={copiarValores}
                 >
                   <Copy className="h-4 w-4 mr-1" />
@@ -1389,7 +1478,7 @@ Validade: ${validadeDias} dias`);
                   type="button" 
                   variant="outline" 
                   size="sm"
-                  disabled={!planoSelecionadoData}
+                  disabled={planosSelecionados.length === 0}
                   onClick={enviarWhatsApp}
                 >
                   <MessageCircle className="h-4 w-4 mr-1" />
@@ -1398,7 +1487,7 @@ Validade: ${validadeDias} dias`);
               </div>
               <Button 
                 type="submit" 
-                disabled={createCotacao.isPending || !planoSelecionadoData || valorAdesao <= 0 || !dadosAssociadoValidos}
+                disabled={createCotacao.isPending || planosSelecionados.length === 0 || valorAdesao <= 0 || !dadosAssociadoValidos}
               >
                 {createCotacao.isPending ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-1" />
