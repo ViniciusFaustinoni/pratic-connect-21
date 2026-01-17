@@ -18,6 +18,7 @@ export interface PlanInput {
   name: string;
   slug: string;
   product_line_id: string;
+  tipo_uso?: 'passeio' | 'aplicativo';
   badge_text?: string | null;
   badge_color?: string | null;
   coverage_type?: string | null;
