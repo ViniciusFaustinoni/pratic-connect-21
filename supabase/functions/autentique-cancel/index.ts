@@ -33,11 +33,10 @@ serve(async (req) => {
     console.log(`Cancelando documento: ${documentId}`);
 
     // GraphQL mutation para cancelar/deletar documento
+    // deleteDocument retorna Boolean, não objeto - não usar sub-seleção
     const mutation = `
       mutation {
-        deleteDocument(id: "${documentId}") {
-          id
-        }
+        deleteDocument(id: "${documentId}")
       }
     `;
 
