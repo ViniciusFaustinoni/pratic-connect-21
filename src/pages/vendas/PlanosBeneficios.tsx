@@ -25,6 +25,8 @@ import { toast } from 'sonner';
 import { useProductLines, usePlans, useMainCoverages } from '@/hooks/usePlans';
 import { useDeletePlan } from '@/hooks/usePlansAdmin';
 import { useBeneficiosAtivos, useDeleteBeneficio } from '@/hooks/useBeneficiosAdmin';
+import { useResumoSaudeBeneficios } from '@/hooks/useCustoBeneficios';
+import { ResumoSaudeCard } from '@/components/beneficios/ResumoSaudeCard';
 
 // Componentes
 import { TabelaPrecosCarros, TabelaPrecosMotos, TabelaPrecosEletricos } from '@/components/planos/TabelaPrecos';
@@ -96,6 +98,7 @@ export default function PlanosBeneficios() {
   const { data: plans, isLoading: loadingPlans, error: errorPlans, refetch: refetchPlans } = usePlans();
   const { data: mainCoverages, isLoading: loadingCoverages } = useMainCoverages();
   const { data: beneficiosAdicionais, isLoading: loadingBeneficios } = useBeneficiosAtivos();
+  const { data: resumoSaude, isLoading: loadingResumo } = useResumoSaudeBeneficios();
   const deletePlan = useDeletePlan();
   const deleteBeneficio = useDeleteBeneficio();
 
@@ -335,6 +338,17 @@ export default function PlanosBeneficios() {
 
         {/* Tab Adicionais */}
         <TabsContent value="adicionais" className="space-y-4">
+          {/* Resumo de Saúde Financeira */}
+          {podeEditar && (
+            <ResumoSaudeCard
+              superavit={resumoSaude?.superavit || 0}
+              equilibrio={resumoSaude?.equilibrio || 0}
+              prejuizo={resumoSaude?.prejuizo || 0}
+              semDados={resumoSaude?.sem_dados || 0}
+              isLoading={loadingResumo}
+            />
+          )}
+
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
