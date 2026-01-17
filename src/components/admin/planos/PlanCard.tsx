@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   GripVertical,
@@ -17,6 +18,7 @@ import {
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { cn } from '@/lib/utils';
+import { useTogglePlanStatus } from '@/hooks/usePlansAdmin';
 import type { PlanWithDetails } from '@/types/plans';
 
 interface PlanCardProps {
@@ -53,6 +55,7 @@ function formatCurrency(value: number): string {
 
 export function PlanCard({ plan, lineColor, onEdit, onDuplicate, onDelete }: PlanCardProps) {
   const [expanded, setExpanded] = useState(false);
+  const toggleStatus = useTogglePlanStatus();
 
   const {
     attributes,
@@ -140,6 +143,14 @@ export function PlanCard({ plan, lineColor, onEdit, onDuplicate, onDelete }: Pla
               </div>
 
               {/* Actions */}
+              <Switch
+                checked={plan.is_active}
+                onCheckedChange={(checked) => 
+                  toggleStatus.mutate({ id: plan.id, is_active: checked })
+                }
+                disabled={toggleStatus.isPending}
+                className="data-[state=checked]:bg-green-500"
+              />
               <Button size="icon" variant="ghost" onClick={onEdit}>
                 <Edit className="h-4 w-4" />
               </Button>
