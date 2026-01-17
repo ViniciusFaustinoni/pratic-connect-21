@@ -4,7 +4,7 @@ import { format, startOfWeek, startOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
   CalendarDays, Loader2, AlertCircle, CheckCircle2, Play, 
-  Navigation, Phone, MessageSquare, RefreshCw, WifiOff,
+  Navigation, Phone, MessageSquare, WifiOff,
   ChevronRight, Clock, Car
 } from 'lucide-react';
 import { useInstaladorInstalacoes, useIniciarInstalacao, useEstatisticasInstalador } from '@/hooks/useInstaladorInstalacoes';
@@ -20,7 +20,6 @@ export default function InstaladorHome() {
   const { profile } = useAuth();
   const [data] = useState(new Date());
   const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [ultimaAtualizacao, setUltimaAtualizacao] = useState(new Date());
   
   const { data: instalacoes, isLoading, error, refetch } = useInstaladorInstalacoes(data);
   const { data: estatisticas } = useEstatisticasInstalador();
@@ -52,7 +51,6 @@ export default function InstaladorHome() {
     if (instalacoes) {
       localStorage.setItem('instalacoes_cache', JSON.stringify(instalacoes));
       localStorage.setItem('instalacoes_cache_time', new Date().toISOString());
-      setUltimaAtualizacao(new Date());
     }
   }, [instalacoes]);
 
@@ -313,19 +311,9 @@ export default function InstaladorHome() {
 
         {/* Lista de Instalações do Dia */}
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-medium text-slate-300">
-              Instalações de Hoje ({instalacoes?.length || 0})
-            </h2>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-slate-400 hover:text-white"
-              onClick={handleRefresh}
-            >
-              <RefreshCw className="h-4 w-4" />
-            </Button>
-          </div>
+          <h2 className="text-sm font-medium text-slate-300">
+            Instalações de Hoje ({instalacoes?.length || 0})
+          </h2>
 
           {instalacoes && instalacoes.length > 0 ? (
             <div className="space-y-2">
@@ -379,10 +367,6 @@ export default function InstaladorHome() {
           )}
         </div>
 
-        {/* Última Atualização */}
-        <p className="text-center text-xs text-slate-500">
-          Última atualização: {format(ultimaAtualizacao, "HH:mm", { locale: ptBR })}
-        </p>
       </div>
     </div>
   );

@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { AppMobileMenu } from './AppMobileMenu';
 import { AppUserDropdown } from './AppUserDropdown';
-import { NotificationBell } from '@/components/layout/NotificationBell';
+
 
 const navItems = [
   { path: '/app/home', label: 'Início' },
@@ -55,9 +55,6 @@ export function AppHeader() {
 
       {/* Actions */}
       <div className="flex items-center gap-2">
-        {/* Notifications */}
-        <NotificationBell variant="app" />
-        
         {/* Desktop: User dropdown */}
         <div className="hidden md:block">
           <AppUserDropdown />
