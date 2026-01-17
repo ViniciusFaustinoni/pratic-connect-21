@@ -146,7 +146,7 @@ const menuConfig: {
         { title: 'Cotação', url: '/vendas/cotacoes', icon: Calculator },
         { title: 'Propostas', url: '/vendas/contratos', icon: FileCheck },
         { title: 'Ativações', url: '/vendas/ativacoes', icon: Rocket },
-        { title: 'Consultores', url: '/vendas/propostas', icon: FileText },
+        { title: 'Consultores', url: '/vendas/propostas', icon: FileText, permission: 'canManageConsultores' },
         { title: 'Planos e Benefícios', url: '/vendas/planos-beneficios', icon: BookOpen },
       ],
     },
