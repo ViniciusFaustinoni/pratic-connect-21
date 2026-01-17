@@ -87,10 +87,7 @@ export default function CotacaoPage() {
   const [planosSelecionados, setPlanosSelecionados] = useState<PlanoCotacao[]>([]);
   const [valorAdesaoCustomizado, setValorAdesaoCustomizado] = useState<number | null>(null);
 
-  // Limite máximo de planos para comparação
-  const MAX_PLANOS_COMPARACAO = 3;
-
-  // Handler para toggle de seleção de planos
+  // Handler para toggle de seleção de planos (sem limite de quantidade)
   const handleTogglePlano = useCallback((plano: PlanoCotacao) => {
     setPlanosSelecionados(prev => {
       const jaExiste = prev.some(p => p.id === plano.id);
@@ -101,10 +98,6 @@ export default function CotacaoPage() {
           setValorAdesaoCustomizado(null);
         }
         return novos;
-      }
-      if (prev.length >= MAX_PLANOS_COMPARACAO) {
-        toast.warning(`Máximo de ${MAX_PLANOS_COMPARACAO} planos para comparação`);
-        return prev;
       }
       // Se for o primeiro, define valor de adesão
       if (prev.length === 0) {
@@ -415,7 +408,6 @@ export default function CotacaoPage() {
             planos={planosCalculados}
             planosSelecionados={planosSelecionados}
             onTogglePlano={handleTogglePlano}
-            maxPlanos={MAX_PLANOS_COMPARACAO}
             valorAdesao={valorAdesaoCustomizado}
             onValorAdesaoChange={setValorAdesaoCustomizado}
             onNovaCotacao={handleNovaCotacao}
