@@ -1,114 +1,137 @@
-# Plano: Corrigir Exclusao de Leads (RLS DELETE Policy Ausente)
+# Plano: Adicionar Configuracao de Valor por Cota
 
-## Problema Identificado
+## Objetivo
 
-O lead nao e excluido mesmo quando o toast "Lead excluido com sucesso" aparece. Investigacao revelou:
+Criar uma configuracao de sistema para definir o "Valor por Cota" - um valor monetario base que representa uma fracao do valor FIPE do veiculo. Isso permitira que o sistema calcule automaticamente quantas cotas um veiculo possui.
 
-1. **O lead ainda existe no banco de dados** apos a "exclusao"
-2. **Nao existe politica RLS para DELETE** na tabela `leads`
-3. Politicas existentes:
-   - `Sales can insert leads` (INSERT) - OK
-   - `Sales can update own leads` (UPDATE) - OK
-   - `Sales can view own leads` (SELECT) - OK
-   - **DELETE** - AUSENTE!
+**Exemplo pratico:**
+- Valor por Cota configurado: R$ 5.000,00
+- Veiculo com FIPE R$ 50.000 = 10 cotas
+- Veiculo com FIPE R$ 75.000 = 15 cotas
 
-4. O Supabase silenciosamente bloqueia o DELETE (RLS nega por padrao), retornando "0 rows affected" sem erro, e o codigo exibe o toast de sucesso incorretamente.
+## Escopo Inicial
 
-## Solucao
+Nesta primeira fase, a alteracao sera **apenas conceitual e de configuracao** - o sistema entendera o conceito de cotas, mas nao alteraremos (ainda) os calculos de precificacao ou exibicao.
 
-### Passo 1: Criar politica RLS para DELETE na tabela `leads`
+---
 
-**Arquivo afetado:** Migracao SQL no Supabase
+## Etapas de Implementacao
 
-**SQL a executar:**
+### 1. Adicionar nova configuracao no banco de dados (Migration)
+
+Inserir um novo registro na tabela `configuracoes`:
+
 ```sql
--- Criar politica para permitir exclusao de leads
--- Mesmo criterio do UPDATE: proprietario do lead ou gerencia
-CREATE POLICY "Sales can delete own leads" 
-ON public.leads 
-FOR DELETE 
-TO authenticated 
-USING (
-  (vendedor_id = auth.uid()) 
-  OR is_gerencia(auth.uid())
+INSERT INTO configuracoes (chave, valor, tipo, categoria, descricao, editavel)
+VALUES (
+  'atuarial_valor_por_cota',
+  '5000',
+  'moeda',
+  'atuarial',
+  'Valor em reais que representa uma cota. Usado para calcular o numero de cotas de um veiculo (FIPE / valor_cota = quantidade de cotas)',
+  true
 );
 ```
 
-**Logica:**
-- Vendedor pode excluir leads que sao seus (`vendedor_id = auth.uid()`)
-- Gerencia pode excluir qualquer lead (`is_gerencia(auth.uid())`)
-- Segue o mesmo padrao da politica de UPDATE existente
+**Campos:**
+- `chave`: `atuarial_valor_por_cota`
+- `tipo`: `moeda` (exibira input com prefixo R$)
+- `categoria`: `atuarial` (agrupara na aba "Atuarial" junto com margem de seguranca, sinistralidade, etc.)
+- `valor`: `5000` (valor padrao inicial)
+- `editavel`: `true`
 
-### Passo 2: Melhorar feedback de erro no codigo (opcional mas recomendado)
+### 2. Criar hook utilitario para calculo de cotas
 
-**Arquivo:** `src/hooks/useLeadActions.ts`
-
-**Alteracao:** No `excluirLead`, verificar se realmente houve exclusao antes de exibir sucesso.
+Criar `src/hooks/useValorPorCota.ts`:
 
 ```typescript
-// ANTES (linha 105-122)
-const excluirLead = useMutation({
-  mutationFn: async (id: string) => {
-    const { error } = await supabase
-      .from('leads')
-      .delete()
-      .eq('id', id);
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
-    if (error) throw error;
-  },
-  onSuccess: () => {
-    invalidateLeadQueries();
-    toast.success('Lead excluido com sucesso!');
-  },
-  // ...
-});
+export function useValorPorCota() {
+  return useQuery({
+    queryKey: ['configuracao-valor-por-cota'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('configuracoes')
+        .select('valor')
+        .eq('chave', 'atuarial_valor_por_cota')
+        .single();
+      
+      if (error) throw error;
+      return Number(data?.valor) || 5000; // Fallback para 5000
+    },
+    staleTime: 1000 * 60 * 10, // 10 minutos
+  });
+}
 
-// DEPOIS
-const excluirLead = useMutation({
-  mutationFn: async (id: string) => {
-    const { error, count } = await supabase
-      .from('leads')
-      .delete()
-      .eq('id', id)
-      .select('*', { count: 'exact', head: true });
+// Funcao utilitaria para calcular numero de cotas
+export function calcularQuantidadeCotas(valorFipe: number, valorPorCota: number): number {
+  if (!valorPorCota || valorPorCota <= 0) return 0;
+  return Math.ceil(valorFipe / valorPorCota); // Arredonda para cima
+}
 
-    if (error) throw error;
-    
-    // Verificar se algum registro foi realmente excluido
-    if (count === 0) {
-      throw new Error('Nao foi possivel excluir o lead. Verifique suas permissoes.');
-    }
-  },
-  onSuccess: () => {
-    invalidateLeadQueries();
-    toast.success('Lead excluido com sucesso!');
-  },
-  // ...
-});
+// Funcao utilitaria para calcular valor total em cotas
+export function calcularValorEmCotas(quantidadeCotas: number, valorPorCota: number): number {
+  return quantidadeCotas * valorPorCota;
+}
 ```
 
-**Nota:** Alternativa mais simples e apenas adicionar a politica RLS, ja que o problema real e a falta de permissao.
+### 3. (Opcional) Exibir quantidade de cotas na UI de cotacao
 
-## Arquivos Criticos para Implementacao
+Para que o sistema "entenda" o conceito de cotas, podemos adicionar uma exibicao informativa em locais estrategicos:
 
-- **Migracao SQL** - Criar politica RLS para DELETE na tabela `leads`
-- **src/hooks/useLeadActions.ts** - (Opcional) Melhorar verificacao de sucesso na exclusao
+**Exemplo em `usePlanosCotacao.ts`:**
+```typescript
+// Adicionar ao retorno do hook:
+const quantidadeCotas = calcularQuantidadeCotas(valorFipe, valorPorCota);
+```
+
+**Exemplo de exibicao (futura):**
+```
+Veiculo: Honda Civic 2023
+Valor FIPE: R$ 120.000,00
+Cotas: 24 (base R$ 5.000/cota)
+```
+
+---
+
+## Arquivos a Modificar/Criar
+
+| Arquivo | Acao | Descricao |
+|---------|------|-----------|
+| `supabase/migrations/XXXXXX_add_valor_por_cota.sql` | Criar | Migration para inserir a configuracao |
+| `src/hooks/useValorPorCota.ts` | Criar | Hook + funcoes utilitarias de calculo de cotas |
+
+---
 
 ## Resultado Esperado
 
-1. Ao clicar em "Excluir" e confirmar:
-   - Lead e removido do banco de dados
-   - Lead desaparece da lista imediatamente
-   - Toast de sucesso aparece (apenas quando realmente excluido)
+1. **Na tela de Configuracoes (`/diretoria/configuracoes`):**
+   - Aba "Atuarial" exibira novo campo "Atuarial Valor Por Cota"
+   - Input com prefixo "R$" e valor padrao 5000
+   - Editavel pela diretoria
 
-2. Se usuario nao tiver permissao:
-   - Toast de erro aparece
-   - Lead permanece na lista
+2. **No sistema:**
+   - Hook `useValorPorCota()` disponivel para qualquer componente
+   - Funcao `calcularQuantidadeCotas(valorFipe, valorPorCota)` para calculos
+   - Base preparada para futuras implementacoes (ex: usar cotas no calculo de mensalidade)
 
-## Checklist de Validacao
+---
 
-- [ ] Politica RLS `Sales can delete own leads` criada
-- [ ] Vendedor consegue excluir seus proprios leads
-- [ ] Gerencia consegue excluir qualquer lead
-- [ ] Lead realmente desaparece apos exclusao
-- [ ] Lead nao aparece na lista apos refresh
+## Proximos Passos (fora deste escopo)
+
+Apos a implementacao inicial, podemos evoluir para:
+1. Exibir quantidade de cotas na cotacao publica
+2. Usar quantidade de cotas no calculo de mensalidade
+3. Exibir cotas em contratos e propostas
+4. Usar cotas para calculo de sinistro/indenizacao
+
+---
+
+## Validacao
+
+- Acessar `/diretoria/configuracoes` como diretor
+- Verificar que a aba "Atuarial" mostra o campo "Atuarial Valor Por Cota"
+- Editar o valor e confirmar que salva corretamente
+- Usar o hook em um componente de teste para validar o calculo
