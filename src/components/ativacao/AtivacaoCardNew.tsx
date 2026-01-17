@@ -152,12 +152,27 @@ export function AtivacaoCardNew({
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle>Excluir Ativação</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Tem certeza que deseja excluir esta ativação? Esta ação não pode ser desfeita.
-                        <br /><br />
-                        <strong>Contrato:</strong> {contrato.numero}<br />
-                        <strong>Cliente:</strong> {nomeCliente}
+                      <AlertDialogTitle>Excluir Ativação Completa</AlertDialogTitle>
+                      <AlertDialogDescription asChild>
+                        <div className="space-y-3">
+                          <p>Tem certeza que deseja excluir esta ativação? <strong>Esta ação não pode ser desfeita.</strong></p>
+                          
+                          <div className="bg-muted rounded-md p-3 text-sm">
+                            <p><strong>Contrato:</strong> {contrato.numero}</p>
+                            <p><strong>Cliente:</strong> {nomeCliente}</p>
+                          </div>
+                          
+                          <div className="bg-amber-50 border border-amber-200 rounded-md p-3 text-sm text-amber-800">
+                            <p className="font-medium mb-1">⚠️ Serão excluídos também:</p>
+                            <ul className="list-disc list-inside space-y-0.5 text-xs">
+                              <li>Documento no Autentique (se houver)</li>
+                              <li>Cotação vinculada</li>
+                              <li>Cobranças e histórico</li>
+                              <li>Vistorias relacionadas</li>
+                              <li>Associado (se não tiver outros contratos)</li>
+                            </ul>
+                          </div>
+                        </div>
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>

@@ -249,42 +249,112 @@ export function useExcluirAtivacao() {
 
   return useMutation({
     mutationFn: async (contratoId: string) => {
-      // 1. Excluir cobranças Asaas vinculadas
+      // 1. Buscar dados do contrato para obter IDs relacionados
+      const { data: contrato, error: fetchError } = await supabase
+        .from('contratos')
+        .select('autentique_documento_id, cotacao_id, associado_id')
+        .eq('id', contratoId)
+        .single();
+      
+      if (fetchError) throw fetchError;
+
+      // 2. Cancelar documento no Autentique (se existir)
+      if (contrato?.autentique_documento_id) {
+        try {
+          const { error: autentiqueError } = await supabase.functions.invoke('autentique-cancel', {
+            body: { 
+              documentId: contrato.autentique_documento_id,
+              contratoId: contratoId 
+            }
+          });
+          
+          if (autentiqueError) {
+            console.warn('Erro ao cancelar no Autentique:', autentiqueError);
+            // Continuar mesmo com erro (documento pode já ter sido cancelado)
+          }
+        } catch (e) {
+          console.warn('Falha ao comunicar com Autentique:', e);
+        }
+      }
+
+      // 3. Excluir cobranças Asaas vinculadas
       await supabase
         .from('asaas_cobrancas')
         .delete()
         .eq('contrato_id', contratoId);
       
-      // 2. Excluir cobranças antigas
+      // 4. Excluir cobranças antigas
       await supabase
         .from('cobrancas')
         .delete()
         .eq('contrato_id', contratoId);
       
-      // 3. Excluir histórico
+      // 5. Excluir histórico do contrato
       await supabase
         .from('contratos_historico')
         .delete()
         .eq('contrato_id', contratoId);
       
-      // 4. Excluir vistorias vinculadas
+      // 6. Excluir vistorias vinculadas ao contrato
       await supabase
         .from('vistorias')
         .delete()
         .eq('contrato_id', contratoId);
+
+      // 7. Excluir histórico do associado (se existir)
+      if (contrato?.associado_id) {
+        await supabase
+          .from('associados_historico')
+          .delete()
+          .eq('associado_id', contrato.associado_id);
+      }
       
-      // 5. Excluir o contrato
-      const { error } = await supabase
+      // 8. Excluir o contrato
+      const { error: contratoError } = await supabase
         .from('contratos')
         .delete()
         .eq('id', contratoId);
         
-      if (error) throw error;
+      if (contratoError) throw contratoError;
+
+      // 9. Excluir cotação vinculada (se existir)
+      if (contrato?.cotacao_id) {
+        await supabase
+          .from('cotacoes')
+          .delete()
+          .eq('id', contrato.cotacao_id);
+      }
+
+      // 10. Excluir associado vinculado (se existir e não tiver outros contratos)
+      if (contrato?.associado_id) {
+        // Verificar se associado tem outros contratos
+        const { count } = await supabase
+          .from('contratos')
+          .select('*', { count: 'exact', head: true })
+          .eq('associado_id', contrato.associado_id);
+        
+        if (count === 0) {
+          // Excluir vistorias do associado
+          await supabase
+            .from('vistorias')
+            .delete()
+            .eq('associado_id', contrato.associado_id);
+          
+          // Excluir associado
+          await supabase
+            .from('associados')
+            .delete()
+            .eq('id', contrato.associado_id);
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ativacoes'] });
+      queryClient.invalidateQueries({ queryKey: ['contratos'] });
+      queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
       queryClient.invalidateQueries({ queryKey: ['vistorias'] });
-      toast.success('Ativação excluída com sucesso!');
+      queryClient.invalidateQueries({ queryKey: ['associados'] });
+      toast.success('Ativação e registros relacionados excluídos com sucesso!');
     },
     onError: (error) => {
       console.error('Erro ao excluir ativação:', error);
