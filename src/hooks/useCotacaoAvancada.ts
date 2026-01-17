@@ -122,6 +122,11 @@ export function useCotacaoAvancada() {
         valor_adesao_original: cotacao.precoBase.adesao,
         valor_mensal_original: cotacao.precoBase.mensal,
         
+        // Dados do solicitante (para preenchimento automático no link público)
+        nome_solicitante: dados.clienteNome || null,
+        telefone1_solicitante: dados.clienteTelefone?.replace(/\D/g, '') || null,
+        email_solicitante: dados.clienteEmail || null,
+        
         // Adicionais e extras
         adicionais_selecionados: dados.adicionais,
         cidade: dados.cidade,
