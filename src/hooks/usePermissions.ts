@@ -104,6 +104,16 @@ export function usePermissions() {
     !isDesenvolvedor && 
     !isAdminMaster;
 
+  // Verifica se é APENAS vendedor CLT (sem perfis de gerência ou admin)
+  const isVendedorCltOnly = hasRole('vendedor_clt') && 
+    !isDiretor && 
+    !isGerencia() && 
+    !isDesenvolvedor && 
+    !isAdminMaster;
+
+  // Perfis que devem ver "Perfil" ao invés de "Configurações"
+  const isPerfilLimitado = isAnalistaCadastroOnly || isVendedorCltOnly;
+
   // Verificações de grupo para cotações
   const isVendedorCotacao = hasRole('vendedor_clt') || hasRole('vendedor_externo');
   const isAnalistaCotacao = hasRole('analista_cadastro');
@@ -166,6 +176,8 @@ export function usePermissions() {
     isVendedorExterno: hasRole('vendedor_externo'),
     isAnalistaCadastro,
     isAnalistaCadastroOnly,
+    isVendedorCltOnly,
+    isPerfilLimitado,
     isCoordenadorMonitoramento: hasRole('coordenador_monitoramento'),
     isAnalistaPlataforma: hasRole('analista_plataforma'),
     isInstaladorVistoriador: hasRole('instalador_vistoriador'),

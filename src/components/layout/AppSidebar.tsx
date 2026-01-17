@@ -52,6 +52,7 @@ import {
   FilePlus,
   History,
   FileCode,
+  User,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
@@ -496,8 +497,8 @@ export function AppSidebar() {
 
   const visibleMainItems = filterByPermission(menuConfig.main);
   const visibleGroups = getVisibleGroups();
-  // Analista de cadastro não vê Configurações no menu (só via /perfil)
-  const visibleConfigItems = permissions.isAnalistaCadastroOnly ? [] : filterByPermission(configItems);
+  // Perfis limitados (analista de cadastro e vendedor CLT) não veem Configurações no menu (só via /perfil)
+  const visibleConfigItems = permissions.isPerfilLimitado ? [] : filterByPermission(configItems);
 
   const [openGroups, setOpenGroups] = useState<string[]>(() => 
     visibleGroups.filter(g => isGroupActive(g.items)).map(g => g.id)
@@ -728,21 +729,39 @@ export function AppSidebar() {
 
       {!collapsed && (
         <SidebarFooter className="p-3 border-t border-border">
-          <NavLink 
-            to="/configuracoes" 
-            onClick={handleNavigation}
-            className={cn(
-              "flex items-center gap-3 rounded-lg p-3 transition-colors",
-              "text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/50",
-              isActive('/configuracoes') && "bg-sidebar-primary text-sidebar-primary-foreground"
-            )}
-          >
-            <Settings 
-              className="h-5 w-5" 
-              style={{ color: isActive('/configuracoes') ? 'inherit' : MENU_COLORS.configuracoes }}
-            />
-            <span className="text-sm font-medium">Configurações</span>
-          </NavLink>
+          {permissions.isPerfilLimitado ? (
+            <NavLink 
+              to="/perfil" 
+              onClick={handleNavigation}
+              className={cn(
+                "flex items-center gap-3 rounded-lg p-3 transition-colors",
+                "text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/50",
+                isActive('/perfil') && "bg-sidebar-primary text-sidebar-primary-foreground"
+              )}
+            >
+              <User 
+                className="h-5 w-5" 
+                style={{ color: isActive('/perfil') ? 'inherit' : MENU_COLORS.configuracoes }}
+              />
+              <span className="text-sm font-medium">Perfil</span>
+            </NavLink>
+          ) : (
+            <NavLink 
+              to="/configuracoes" 
+              onClick={handleNavigation}
+              className={cn(
+                "flex items-center gap-3 rounded-lg p-3 transition-colors",
+                "text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/50",
+                isActive('/configuracoes') && "bg-sidebar-primary text-sidebar-primary-foreground"
+              )}
+            >
+              <Settings 
+                className="h-5 w-5" 
+                style={{ color: isActive('/configuracoes') ? 'inherit' : MENU_COLORS.configuracoes }}
+              />
+              <span className="text-sm font-medium">Configurações</span>
+            </NavLink>
+          )}
         </SidebarFooter>
       )}
     </Sidebar>
