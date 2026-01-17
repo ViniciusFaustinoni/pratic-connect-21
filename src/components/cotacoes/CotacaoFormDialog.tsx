@@ -1326,11 +1326,12 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
                 <Separator />
                 <Card className="bg-primary/5 border-primary/20">
                   <CardContent className="p-4">
-                    <div className="flex flex-wrap items-start justify-between gap-4">
+                    {/* Info do Associado e Veículo */}
+                    <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
                       <div className="space-y-1">
                         <p className="text-xs text-muted-foreground">Associado</p>
                         <p className="font-medium">{nomeAssociado || 'Não informado'}</p>
-                        <p className="text-xs text-muted-foreground">Veículo</p>
+                        <p className="text-xs text-muted-foreground mt-2">Veículo</p>
                         <p className="font-medium">
                           {getMarcaNome() && getModeloNome() 
                             ? `${getMarcaNome()} ${getModeloNome()} ${getAnoNome()}`
@@ -1339,55 +1340,44 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
                         </p>
                         <p className="text-sm text-muted-foreground">FIPE: {formatCurrency(valorFipe)}</p>
                       </div>
-                      <div className="text-right space-y-1">
-                        <p className="text-xs text-muted-foreground">
-                          {planosSelecionados.length === 1 ? 'Plano Selecionado' : 'Planos para Comparação'}
-                        </p>
-                        <div className="flex flex-wrap gap-1 justify-end">
-                          {planosSelecionados.map((p, idx) => (
-                            <Badge key={p.id} variant="secondary" className="text-xs">
-                              {idx + 1}. {p.nome}
-                            </Badge>
-                          ))}
-                        </div>
-                        {planosSelecionados.length === 1 && (
-                          <>
-                            {valorAdicional > 0 ? (
-                              <>
-                                <p className="text-sm text-muted-foreground">
-                                  Proteção: {formatCurrency(planosSelecionados[0].valorMensal)}
-                                </p>
-                                <p className="text-xs text-blue-600">
-                                  + Adicional: {formatCurrency(valorAdicional)}
-                                </p>
-                                <Separator className="my-1" />
-                                <p className="text-2xl font-bold text-primary">
-                                  {formatCurrency(planosSelecionados[0].valorMensal + valorAdicional)}
-                                </p>
-                                <p className="text-xs text-muted-foreground">/mês</p>
-                              </>
-                            ) : (
-                              <>
-                                <p className="text-2xl font-bold text-primary">
-                                  {formatCurrency(planosSelecionados[0].valorMensal)}
-                                </p>
-                                <p className="text-xs text-muted-foreground">/mês</p>
-                              </>
-                            )}
-                          </>
-                        )}
-                        {planosSelecionados.length > 1 && (
-                          <div className="text-left mt-2 space-y-1">
-                            {planosSelecionados.map((p, idx) => (
-                              <p key={p.id} className="text-sm">
-                                <span className="font-medium">{idx + 1}.</span> {formatCurrency(p.valorMensal + valorAdicional)}/mês
-                              </p>
-                            ))}
-                          </div>
-                        )}
-                      </div>
                     </div>
-                    <div className="flex flex-wrap items-center gap-4 mt-3 pt-3 border-t text-sm">
+
+                    {/* Grade de Planos para Comparação */}
+                    <div className={cn(
+                      "grid gap-3 mb-4",
+                      planosSelecionados.length === 1 && "grid-cols-1",
+                      planosSelecionados.length === 2 && "grid-cols-1 md:grid-cols-2",
+                      planosSelecionados.length >= 3 && "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
+                    )}>
+                      {planosSelecionados.map((plano, idx) => (
+                        <Card key={plano.id} className="border-primary/30 bg-background">
+                          <CardContent className="p-4">
+                            <div className="flex items-center gap-2 mb-3">
+                              <Badge variant="secondary" className="text-xs font-bold">
+                                {idx + 1}º
+                              </Badge>
+                              <p className="font-semibold">{plano.nome}</p>
+                            </div>
+                            <p className="text-2xl font-bold text-primary mb-3">
+                              {formatCurrency(plano.valorMensal + valorAdicional)}
+                              <span className="text-sm font-normal text-muted-foreground">/mês</span>
+                            </p>
+                            {/* Lista COMPLETA de benefícios */}
+                            <ul className="text-sm space-y-1.5 text-muted-foreground">
+                              {plano.coberturas.map((cobertura, i) => (
+                                <li key={i} className="flex items-start gap-2">
+                                  <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                                  <span>{cobertura}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+
+                    {/* Campos de Filiação e Validade */}
+                    <div className="flex flex-wrap items-center gap-4 pt-3 border-t text-sm">
                       <div className="flex flex-col gap-1">
                         <div className="flex items-center gap-1">
                           <span className="text-muted-foreground">Filiação:</span>
@@ -1447,29 +1437,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
             )}
 
             {/* BLOCO 5: AÇÕES */}
-            <div className="flex items-center justify-between pt-2 border-t">
-              <div className="flex gap-2">
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  size="sm"
-                  disabled={planosSelecionados.length === 0}
-                  onClick={copiarValores}
-                >
-                  <Copy className="h-4 w-4 mr-1" />
-                  Copiar
-                </Button>
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  size="sm"
-                  disabled={planosSelecionados.length === 0}
-                  onClick={enviarWhatsApp}
-                >
-                  <MessageCircle className="h-4 w-4 mr-1" />
-                  WhatsApp
-                </Button>
-              </div>
+            <div className="flex items-center justify-end pt-2 border-t">
               <Button 
                 type="submit" 
                 disabled={createCotacao.isPending || planosSelecionados.length === 0 || valorAdesao <= 0 || !dadosAssociadoValidos}
