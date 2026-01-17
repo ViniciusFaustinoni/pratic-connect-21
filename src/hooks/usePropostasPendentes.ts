@@ -159,29 +159,24 @@ export function usePropostasPendentes() {
             temDocumentoPendente = (count || 0) > 0;
           }
 
-          // Buscar vistoria vinculada ao contrato
-          let vistoria: VistoriaInfo | null = null;
-          const { data: vistoriaData } = await supabase
-            .from('vistorias')
-            .select(`
-              id,
-              status,
-              tipo,
-              fotos:vistoria_fotos(id, tipo, arquivo_url, created_at)
-            `)
-            .eq('contrato_id', contrato.id)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
+      // Buscar fotos de autovistoria da cotação (cotacoes_vistoria_fotos)
+      let vistoria: VistoriaInfo | null = null;
+      if (contrato.cotacao_id) {
+        const { data: fotosVistoria } = await supabase
+          .from('cotacoes_vistoria_fotos')
+          .select('id, tipo, arquivo_url, created_at')
+          .eq('cotacao_id', contrato.cotacao_id)
+          .order('created_at', { ascending: true });
 
-          if (vistoriaData) {
-            vistoria = {
-              id: vistoriaData.id,
-              status: vistoriaData.status || 'pendente',
-              tipo: vistoriaData.tipo || 'auto_vistoria',
-              fotos: (vistoriaData.fotos || []) as VistoriaFotoInfo[],
-            };
-          }
+        if (fotosVistoria && fotosVistoria.length > 0) {
+          vistoria = {
+            id: contrato.cotacao_id,
+            status: 'pendente',
+            tipo: 'autovistoria',
+            fotos: fotosVistoria as VistoriaFotoInfo[],
+          };
+        }
+      }
 
           return {
             ...contrato,
@@ -293,28 +288,23 @@ export function useProposta(contratoId: string | undefined) {
         temDocumentoPendente = (count || 0) > 0;
       }
 
-      // Buscar vistoria vinculada ao contrato
+      // Buscar fotos de autovistoria da cotação (cotacoes_vistoria_fotos)
       let vistoria: VistoriaInfo | null = null;
-      const { data: vistoriaData } = await supabase
-        .from('vistorias')
-        .select(`
-          id,
-          status,
-          tipo,
-          fotos:vistoria_fotos(id, tipo, arquivo_url, created_at)
-        `)
-        .eq('contrato_id', contratoId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      if (contrato.cotacao_id) {
+        const { data: fotosVistoria } = await supabase
+          .from('cotacoes_vistoria_fotos')
+          .select('id, tipo, arquivo_url, created_at')
+          .eq('cotacao_id', contrato.cotacao_id)
+          .order('created_at', { ascending: true });
 
-      if (vistoriaData) {
-        vistoria = {
-          id: vistoriaData.id,
-          status: vistoriaData.status || 'pendente',
-          tipo: vistoriaData.tipo || 'auto_vistoria',
-          fotos: (vistoriaData.fotos || []) as VistoriaFotoInfo[],
-        };
+        if (fotosVistoria && fotosVistoria.length > 0) {
+          vistoria = {
+            id: contrato.cotacao_id,
+            status: 'pendente',
+            tipo: 'autovistoria',
+            fotos: fotosVistoria as VistoriaFotoInfo[],
+          };
+        }
       }
 
       return {

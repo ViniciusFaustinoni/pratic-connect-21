@@ -5,7 +5,7 @@ import {
   FileCheck, FileText, Clock, Edit, AlertTriangle, Loader2,
   Receipt, MoreHorizontal, CheckCircle, XCircle, Pause, Play, Plus,
   CreditCard, Shield, Eye, ExternalLink, Wifi, WifiOff, Send, History,
-  TrendingUp, DollarSign
+  TrendingUp, DollarSign, Camera, Image
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -39,6 +39,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+} from '@/components/ui/dialog';
 import { 
   STATUS_ASSOCIADO_LABELS, 
   STATUS_VEICULO_LABELS,
@@ -52,6 +56,8 @@ import {
 } from '@/types/cadastro';
 import { useAssociado, useVeiculosDoAssociado, useAssociadoStats, useAssociadoActions } from '@/hooks/useAssociados';
 import { useDocumentosPorAssociado } from '@/hooks/useDocumentos';
+import { useContratoDoAssociado, useDocumentosCotacao } from '@/hooks/useDocumentosCotacao';
+import { useFotosAutovistoriaCotacao, agruparFotosPorCategoria, formatarTipoFoto } from '@/hooks/useFotosAutovistoria';
 import { cn } from '@/lib/utils';
 
 // ============================================
@@ -133,12 +139,24 @@ export default function AssociadoDetalhe() {
   const [activeTab, setActiveTab] = useState('resumo');
   const [suspenderDialogOpen, setSuspenderDialogOpen] = useState(false);
   const [cancelarDialogOpen, setCancelarDialogOpen] = useState(false);
+  const [fotoModal, setFotoModal] = useState<{ open: boolean; url: string; tipo: string }>({ open: false, url: '', tipo: '' });
 
   // Data fetching
   const { data: associado, isLoading, refetch } = useAssociado(id);
   const { data: veiculos, isLoading: isLoadingVeiculos } = useVeiculosDoAssociado(id);
   const { data: documentos, isLoading: isLoadingDocs } = useDocumentosPorAssociado(id);
   const { data: stats } = useAssociadoStats(id);
+  
+  // Buscar contrato do associado para obter cotacao_id
+  const { data: contrato } = useContratoDoAssociado(id);
+  const cotacaoId = contrato?.cotacao_id;
+  
+  // Buscar documentos da cotação (contratos_documentos)
+  const { data: documentosCotacao, isLoading: isLoadingDocsCotacao } = useDocumentosCotacao(cotacaoId);
+  
+  // Buscar fotos de autovistoria
+  const { data: fotosAutovistoria, isLoading: isLoadingFotos } = useFotosAutovistoriaCotacao(cotacaoId);
+  const fotosAgrupadas = fotosAutovistoria ? agruparFotosPorCategoria(fotosAutovistoria) : null;
   
   // Actions
   const { 
@@ -215,9 +233,21 @@ export default function AssociadoDetalhe() {
   // Computed values
   const status = associado.status as StatusAssociado;
   const idade = calcularIdade(associado.data_nascimento);
-  const docsPendentes = documentos?.filter(d => d.status === 'pendente').length || 0;
-  const docsAprovados = documentos?.filter(d => d.status === 'aprovado').length || 0;
-  const docsReprovados = documentos?.filter(d => d.status === 'reprovado').length || 0;
+  
+  // Combinar documentos das duas fontes
+  const todosDocumentos = [
+    ...(documentos || []).map(d => ({ ...d, fonte: 'documentos' as const })),
+    ...(documentosCotacao || []).map(d => ({ 
+      ...d, 
+      fonte: 'cotacao' as const,
+      veiculo: null,
+    })),
+  ];
+  
+  const docsPendentes = todosDocumentos.filter(d => d.status === 'pendente').length;
+  const docsAprovados = todosDocumentos.filter(d => d.status === 'aprovado').length;
+  const docsReprovados = todosDocumentos.filter(d => d.status === 'reprovado').length;
+  const totalFotos = fotosAutovistoria?.length || 0;
 
   // ============================================
   // RENDER
@@ -687,13 +717,13 @@ export default function AssociadoDetalhe() {
         {/* ============================================ */}
         {/* TAB: DOCUMENTOS */}
         {/* ============================================ */}
-        <TabsContent value="documentos" className="space-y-4">
+        <TabsContent value="documentos" className="space-y-6">
           {/* Summary Cards */}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-4 gap-4">
             <Card>
               <CardContent className="p-4 text-center">
-                <p className="text-2xl font-bold">{documentos?.length || 0}</p>
-                <p className="text-sm text-muted-foreground">Total</p>
+                <p className="text-2xl font-bold">{todosDocumentos.length}</p>
+                <p className="text-sm text-muted-foreground">Documentos</p>
               </CardContent>
             </Card>
             <Card>
@@ -706,6 +736,12 @@ export default function AssociadoDetalhe() {
               <CardContent className="p-4 text-center">
                 <p className="text-2xl font-bold text-yellow-600">{docsPendentes}</p>
                 <p className="text-sm text-muted-foreground">Pendentes</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 text-center">
+                <p className="text-2xl font-bold text-blue-600">{totalFotos}</p>
+                <p className="text-sm text-muted-foreground">Fotos Vistoria</p>
               </CardContent>
             </Card>
           </div>
@@ -731,63 +767,240 @@ export default function AssociadoDetalhe() {
           )}
 
           {/* Documents Table */}
-          {isLoadingDocs ? (
-            <Skeleton className="h-48 w-full" />
-          ) : documentos && documentos.length > 0 ? (
-            <Card>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Documento</TableHead>
-                    <TableHead>Veículo</TableHead>
-                    <TableHead>Enviado</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Ação</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {documentos.map((d) => (
-                    <TableRow key={d.id}>
-                      <TableCell className="font-medium">{TIPO_DOCUMENTO_LABELS[d.tipo]}</TableCell>
-                      <TableCell>
-                        {d.veiculo ? (
-                          <Badge variant="outline">{d.veiculo.placa}</Badge>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell>{formatDate(d.created_at)}</TableCell>
-                      <TableCell>
-                        <Badge className={cn(STATUS_DOCUMENTO_COLORS[d.status])}>
-                          {STATUS_DOCUMENTO_LABELS[d.status]}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Button 
-                          size="sm" 
-                          variant="ghost"
-                          onClick={() => navigate(`/cadastro/documentos/${d.id}`)}
-                        >
-                          {d.status === 'pendente' ? (
-                            <><Eye className="mr-2 h-4 w-4" /> Analisar</>
-                          ) : (
-                            <Eye className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </TableCell>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Documentos Anexados
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoadingDocs || isLoadingDocsCotacao ? (
+                <Skeleton className="h-48 w-full" />
+              ) : todosDocumentos.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Documento</TableHead>
+                      <TableHead>Veículo</TableHead>
+                      <TableHead>Enviado</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Ação</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </Card>
-          ) : (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <FileText className="h-12 w-12 text-muted-foreground/50" />
-                <h3 className="mt-4 font-semibold">Nenhum documento</h3>
-              </CardContent>
-            </Card>
-          )}
+                  </TableHeader>
+                  <TableBody>
+                    {todosDocumentos.map((d) => (
+                      <TableRow key={d.id}>
+                        <TableCell className="font-medium">
+                          {TIPO_DOCUMENTO_LABELS[d.tipo] || d.tipo.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                        </TableCell>
+                        <TableCell>
+                          {'veiculo' in d && d.veiculo ? (
+                            <Badge variant="outline">{d.veiculo.placa}</Badge>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell>{formatDate(d.created_at)}</TableCell>
+                        <TableCell>
+                          <Badge className={cn(
+                            d.status === 'aprovado' && 'bg-green-100 text-green-700 border-green-200',
+                            d.status === 'pendente' && 'bg-yellow-100 text-yellow-700 border-yellow-200',
+                            d.status === 'reprovado' && 'bg-red-100 text-red-700 border-red-200'
+                          )}>
+                            {STATUS_DOCUMENTO_LABELS[d.status] || d.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {'arquivo_url' in d && d.arquivo_url ? (
+                            <Button 
+                              size="sm" 
+                              variant="ghost"
+                              onClick={() => window.open(d.arquivo_url, '_blank')}
+                            >
+                              <Eye className="mr-2 h-4 w-4" /> Ver
+                            </Button>
+                          ) : d.fonte === 'documentos' ? (
+                            <Button 
+                              size="sm" 
+                              variant="ghost"
+                              onClick={() => navigate(`/cadastro/documentos/${d.id}`)}
+                            >
+                              {d.status === 'pendente' ? (
+                                <><Eye className="mr-2 h-4 w-4" /> Analisar</>
+                              ) : (
+                                <Eye className="h-4 w-4" />
+                              )}
+                            </Button>
+                          ) : null}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-8">
+                  <FileText className="h-10 w-10 text-muted-foreground/50" />
+                  <p className="mt-2 text-muted-foreground">Nenhum documento anexado</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Galeria de Autovistoria */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Camera className="h-5 w-5" />
+                Galeria de Autovistoria
+                {totalFotos > 0 && (
+                  <Badge variant="secondary" className="ml-2">{totalFotos} fotos</Badge>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoadingFotos ? (
+                <Skeleton className="h-48 w-full" />
+              ) : fotosAgrupadas && totalFotos > 0 ? (
+                <div className="space-y-6">
+                  {/* Identificação */}
+                  {fotosAgrupadas.identificacao.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
+                        <User className="h-4 w-4" />
+                        Identificação ({fotosAgrupadas.identificacao.length})
+                      </h4>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        {fotosAgrupadas.identificacao.map((foto) => (
+                          <div 
+                            key={foto.id} 
+                            className="relative group cursor-pointer rounded-lg overflow-hidden border bg-muted/50"
+                            onClick={() => setFotoModal({ open: true, url: foto.arquivo_url, tipo: formatarTipoFoto(foto.tipo) })}
+                          >
+                            <img 
+                              src={foto.arquivo_url} 
+                              alt={formatarTipoFoto(foto.tipo)}
+                              className="w-full h-24 object-cover transition-transform group-hover:scale-105"
+                            />
+                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                              <Eye className="h-6 w-6 text-white" />
+                            </div>
+                            <p className="text-xs text-center py-1 bg-background/80">{formatarTipoFoto(foto.tipo)}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Exterior */}
+                  {fotosAgrupadas.exterior.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
+                        <Car className="h-4 w-4" />
+                        Exterior ({fotosAgrupadas.exterior.length})
+                      </h4>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        {fotosAgrupadas.exterior.map((foto) => (
+                          <div 
+                            key={foto.id} 
+                            className="relative group cursor-pointer rounded-lg overflow-hidden border bg-muted/50"
+                            onClick={() => setFotoModal({ open: true, url: foto.arquivo_url, tipo: formatarTipoFoto(foto.tipo) })}
+                          >
+                            <img 
+                              src={foto.arquivo_url} 
+                              alt={formatarTipoFoto(foto.tipo)}
+                              className="w-full h-24 object-cover transition-transform group-hover:scale-105"
+                            />
+                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                              <Eye className="h-6 w-6 text-white" />
+                            </div>
+                            <p className="text-xs text-center py-1 bg-background/80">{formatarTipoFoto(foto.tipo)}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Interior */}
+                  {fotosAgrupadas.interior.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
+                        <Image className="h-4 w-4" />
+                        Interior ({fotosAgrupadas.interior.length})
+                      </h4>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        {fotosAgrupadas.interior.map((foto) => (
+                          <div 
+                            key={foto.id} 
+                            className="relative group cursor-pointer rounded-lg overflow-hidden border bg-muted/50"
+                            onClick={() => setFotoModal({ open: true, url: foto.arquivo_url, tipo: formatarTipoFoto(foto.tipo) })}
+                          >
+                            <img 
+                              src={foto.arquivo_url} 
+                              alt={formatarTipoFoto(foto.tipo)}
+                              className="w-full h-24 object-cover transition-transform group-hover:scale-105"
+                            />
+                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                              <Eye className="h-6 w-6 text-white" />
+                            </div>
+                            <p className="text-xs text-center py-1 bg-background/80">{formatarTipoFoto(foto.tipo)}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Outros */}
+                  {fotosAgrupadas.outros.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
+                        <FileText className="h-4 w-4" />
+                        Outras ({fotosAgrupadas.outros.length})
+                      </h4>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        {fotosAgrupadas.outros.map((foto) => (
+                          <div 
+                            key={foto.id} 
+                            className="relative group cursor-pointer rounded-lg overflow-hidden border bg-muted/50"
+                            onClick={() => setFotoModal({ open: true, url: foto.arquivo_url, tipo: formatarTipoFoto(foto.tipo) })}
+                          >
+                            <img 
+                              src={foto.arquivo_url} 
+                              alt={formatarTipoFoto(foto.tipo)}
+                              className="w-full h-24 object-cover transition-transform group-hover:scale-105"
+                            />
+                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                              <Eye className="h-6 w-6 text-white" />
+                            </div>
+                            <p className="text-xs text-center py-1 bg-background/80">{formatarTipoFoto(foto.tipo)}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-8">
+                  <Camera className="h-10 w-10 text-muted-foreground/50" />
+                  <p className="mt-2 text-muted-foreground">Nenhuma foto de autovistoria</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Modal de Foto */}
+          <Dialog open={fotoModal.open} onOpenChange={(open) => setFotoModal({ ...fotoModal, open })}>
+            <DialogContent className="max-w-3xl">
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">{fotoModal.tipo}</h3>
+                <img 
+                  src={fotoModal.url} 
+                  alt={fotoModal.tipo}
+                  className="w-full max-h-[70vh] object-contain rounded-lg"
+                />
+              </div>
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
         {/* ============================================ */}
