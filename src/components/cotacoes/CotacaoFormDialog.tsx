@@ -1222,17 +1222,16 @@ Validade: ${validadeDias} dias`);
                           </p>
                         )}
                         <ul className="text-xs space-y-1 text-muted-foreground">
-                          {plano.valorCota !== undefined && (
-                            <li>• Cota: {formatCurrency(plano.valorCota)}</li>
-                          )}
-                          {plano.taxaAdministrativa !== undefined && (
-                            <li>• Taxa: {formatCurrency(plano.taxaAdministrativa)}</li>
-                          )}
-                          {plano.valorRastreamento !== undefined && (
-                            <li>• Rast.: {formatCurrency(plano.valorRastreamento)}</li>
-                          )}
-                          {(plano.valorAssistencia || 0) > 0 && (
-                            <li>• Assist.: {formatCurrency(plano.valorAssistencia || 0)}</li>
+                          {plano.coberturas.slice(0, 4).map((cobertura, idx) => (
+                            <li key={idx} className="flex items-center gap-1">
+                              <Check className="h-3 w-3 text-green-500 shrink-0" />
+                              <span className="truncate">{cobertura}</span>
+                            </li>
+                          ))}
+                          {plano.coberturas.length > 4 && (
+                            <li className="text-muted-foreground/70 ml-4">
+                              +{plano.coberturas.length - 4} benefícios
+                            </li>
                           )}
                         </ul>
                         <Separator className="my-3" />
