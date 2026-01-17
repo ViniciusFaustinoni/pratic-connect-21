@@ -10,6 +10,7 @@ import {
   ArrowLeft
 } from 'lucide-react';
 import { VehicleCategorySelect, CATEGORIAS_VEICULO } from '@/components/cotador/VehicleCategorySelect';
+import { getRestricaoCategoria } from '@/data/restricoesCategorias';
 
 interface EtapaCategoriaVeiculoProps {
   categoria: string | null;
@@ -18,30 +19,6 @@ interface EtapaCategoriaVeiculoProps {
   onBack: () => void;
   onNext: () => void;
 }
-
-// Alertas baseados na categoria selecionada
-const ALERTAS_CATEGORIA: Record<string, { tipo: 'warning' | 'info'; mensagem: string }> = {
-  leilao: {
-    tipo: 'warning',
-    mensagem: 'Veículos de leilão não possuem cobertura de incêndio.',
-  },
-  aplicativo: {
-    tipo: 'info',
-    mensagem: 'Categoria APP: cota de participação será 8% (mínimo R$ 3.000).',
-  },
-  chassi_remarcado: {
-    tipo: 'warning',
-    mensagem: 'Veículo sujeito à análise de aceitação prévia.',
-  },
-  taxi: {
-    tipo: 'info',
-    mensagem: 'Categoria especial: valores diferenciados podem ser aplicados.',
-  },
-  ex_taxi: {
-    tipo: 'info',
-    mensagem: 'Categoria especial: valores diferenciados podem ser aplicados.',
-  },
-};
 
 export function EtapaCategoriaVeiculo({
   categoria,
@@ -57,9 +34,15 @@ export function EtapaCategoriaVeiculo({
     setUsoApp(value === 'aplicativo');
   };
 
+  // Usar fonte única de verdade para alertas de categoria
   const alerta = useMemo(() => {
     if (!categoria) return null;
-    return ALERTAS_CATEGORIA[categoria] || null;
+    const restricao = getRestricaoCategoria(categoria);
+    if (!restricao || !restricao.mensagemAlerta) return null;
+    return {
+      tipo: restricao.tipoAlerta,
+      mensagem: restricao.mensagemAlerta,
+    };
   }, [categoria]);
 
   const canProceed = categoria !== null;

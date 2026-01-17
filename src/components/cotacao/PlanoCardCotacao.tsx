@@ -1,9 +1,11 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Check, X, Star } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Check, X, Star, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { PlanoCotacao } from '@/hooks/usePlanosCotacao';
+import { isCoberturaRemovida } from '@/data/restricoesCategorias';
 
 interface PlanoCardCotacaoProps {
   plano: PlanoCotacao;
@@ -30,6 +32,9 @@ export function PlanoCardCotacao({
   const diferenca = planoBasico && plano.id !== planoBasico.id
     ? plano.valorMensal - planoBasico.valorMensal
     : null;
+
+  // Verifica se há coberturas removidas para exibir alerta
+  const temCoberturasRemovidas = plano.coberturasRemovidas && plano.coberturasRemovidas.length > 0;
 
   return (
     <Card 
@@ -91,20 +96,49 @@ export function PlanoCardCotacao({
           Cobertura {plano.coberturaFipe}% FIPE • {plano.cota}
         </div>
 
-        {/* Coberturas */}
+        {/* Coberturas - com indicação visual de restrições */}
         <div className="space-y-1.5">
-          {plano.coberturas.slice(0, 6).map((cobertura, index) => (
-            <div key={index} className="flex items-center gap-2 text-sm">
-              <Check className="w-4 h-4 text-green-500 shrink-0" />
-              <span className="text-foreground/90">{cobertura}</span>
-            </div>
-          ))}
+          {plano.coberturas.slice(0, 6).map((cobertura, index) => {
+            // Verifica se esta cobertura está removida pela categoria do veículo
+            const isRemovida = isCoberturaRemovida(cobertura, plano.categoriaVeiculo);
+
+            return (
+              <div key={index} className="flex items-center gap-2 text-sm">
+                {isRemovida ? (
+                  <>
+                    <X className="w-4 h-4 text-destructive shrink-0" />
+                    <span className="text-muted-foreground line-through">
+                      {cobertura}
+                    </span>
+                    <span className="text-xs text-destructive ml-auto">
+                      (não disponível)
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4 text-green-500 shrink-0" />
+                    <span className="text-foreground/90">{cobertura}</span>
+                  </>
+                )}
+              </div>
+            );
+          })}
           {plano.coberturas.length > 6 && (
             <p className="text-xs text-muted-foreground ml-6">
               +{plano.coberturas.length - 6} coberturas adicionais
             </p>
           )}
         </div>
+
+        {/* Alerta de categoria especial */}
+        {plano.alertaDesagio && temCoberturasRemovidas && (
+          <Alert className="border-amber-500/50 bg-amber-500/10 py-2">
+            <AlertTriangle className="h-4 w-4 text-amber-500" />
+            <AlertDescription className="text-amber-700 dark:text-amber-400 text-xs">
+              {plano.alertaDesagio}
+            </AlertDescription>
+          </Alert>
+        )}
 
         {/* Não incluído */}
         {plano.naoInclui.length > 0 && (

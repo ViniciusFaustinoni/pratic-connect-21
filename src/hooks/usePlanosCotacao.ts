@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { calcularPrecoRegiao, type Regiao } from '@/data/planosPrecos';
+import { getCoberturasRemovidas, getRestricaoCategoria } from '@/data/restricoesCategorias';
 
 // ============================================
 // INTERFACES
@@ -31,6 +32,9 @@ export interface PlanoCotacao {
   taxaAdministrativa?: number;
   valorRastreamento?: number;
   valorAssistencia?: number;
+  // Restrições por categoria de veículo
+  coberturasRemovidas: string[];
+  categoriaVeiculo?: string;
 }
 
 interface CalcularPlanosParams {
@@ -258,15 +262,10 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         tag = 'Destaque';
       }
 
-      // Alerta para categorias especiais
-      let alertaDesagio: string | undefined;
-      if (categoria === 'leilao' && !coberturas.some(c => 
-        typeof c === 'string' && c.toLowerCase().includes('incêndio')
-      )) {
-        alertaDesagio = 'Veículo de leilão: sem cobertura de incêndio';
-      } else if (categoria === 'chassi_remarcado') {
-        alertaDesagio = 'Chassi remarcado: sujeito à análise de aceitação';
-      }
+      // Obter restrições baseadas na categoria do veículo (fonte única de verdade)
+      const restricaoCategoria = getRestricaoCategoria(categoria);
+      const coberturasRemovidas = getCoberturasRemovidas(categoria);
+      const alertaDesagio = restricaoCategoria?.mensagemAlerta || undefined;
 
       // Calcular valores detalhados (estimativa baseada no valorMensal)
       const valorCota = Math.round(valorMensal * 0.6 * 100) / 100;
@@ -297,6 +296,8 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         taxaAdministrativa,
         valorRastreamento,
         valorAssistencia,
+        coberturasRemovidas,
+        categoriaVeiculo: categoria,
       });
     }
 
