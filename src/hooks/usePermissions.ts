@@ -47,7 +47,8 @@ export type PermissionKey =
   | 'canManageOuvidoria'
   | 'canManagePermissions'
   | 'canApprovePermissionChanges'
-  | 'canCreateRoles';
+  | 'canCreateRoles'
+  | 'canManageConsultores';
 
 export type CotacaoViewScope = 'own' | 'team' | 'all';
 
@@ -198,6 +199,7 @@ export function usePermissions() {
     canManageRH: isDiretor || hasRole('gerente_comercial') || isDesenvolvedor,
     canManageMarketing: isDiretor || hasRole('gerente_comercial') || hasRole('analista_marketing') || isDesenvolvedor,
     canManageOuvidoria: isDiretor || hasRole('gerente_comercial') || hasRole('analista_cadastro') || isFuncionario() || isDesenvolvedor,
+    canManageConsultores: isGerencia() || isDiretor || isDesenvolvedor || isAdminMaster,
   };
 
   return {
