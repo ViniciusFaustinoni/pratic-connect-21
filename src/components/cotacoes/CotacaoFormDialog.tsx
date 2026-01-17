@@ -1,4 +1,6 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -185,6 +187,15 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase }: C
 
   // Estado para planos selecionados (múltipla seleção - sem limite)
   const [planosSelecionados, setPlanosSelecionados] = useState<PlanoCotacao[]>([]);
+  
+  // Estado para controlar quais planos têm benefícios expandidos
+  const [expandedPlanos, setExpandedPlanos] = useState<Record<string, boolean>>({});
+  
+  // Toggle para expandir/recolher benefícios de um plano
+  const toggleExpandPlano = useCallback((planoId: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setExpandedPlanos(prev => ({ ...prev, [planoId]: !prev[planoId] }));
+  }, []);
 
   const form = useForm<CotacaoFormData>({
     resolver: zodResolver(cotacaoSchema),
@@ -1386,9 +1397,43 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase }: C
                               <span className="truncate">{cobertura}</span>
                             </li>
                           ))}
+                          <AnimatePresence initial={false}>
+                            {expandedPlanos[plano.id] && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: "auto", opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.2, ease: "easeInOut" }}
+                                className="overflow-hidden"
+                              >
+                                {plano.coberturas.slice(4).map((cobertura, idx) => (
+                                  <li key={idx + 4} className="flex items-center gap-1 mt-1">
+                                    <Check className="h-3 w-3 text-green-500 shrink-0" />
+                                    <span className="truncate">{cobertura}</span>
+                                  </li>
+                                ))}
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
                           {plano.coberturas.length > 4 && (
-                            <li className="text-muted-foreground/70 ml-4">
-                              +{plano.coberturas.length - 4} benefícios
+                            <li className="pt-1">
+                              <button
+                                type="button"
+                                onClick={(e) => toggleExpandPlano(plano.id, e)}
+                                className="flex items-center gap-1 text-primary hover:underline text-xs font-medium"
+                              >
+                                {expandedPlanos[plano.id] ? (
+                                  <>
+                                    <ChevronUp className="h-3 w-3" />
+                                    Ver menos
+                                  </>
+                                ) : (
+                                  <>
+                                    <ChevronDown className="h-3 w-3" />
+                                    Ver mais {plano.coberturas.length - 4}
+                                  </>
+                                )}
+                              </button>
                             </li>
                           )}
                         </ul>
@@ -1451,37 +1496,82 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase }: C
 
                     {/* Grade de Planos para Comparação */}
                     <div className={cn(
-                      "grid gap-3 mb-4",
-                      planosSelecionados.length === 1 && "grid-cols-1",
-                      planosSelecionados.length === 2 && "grid-cols-1 md:grid-cols-2",
+                      "grid gap-3 mb-4 mx-auto max-w-5xl",
+                      planosSelecionados.length === 1 && "grid-cols-1 max-w-md",
+                      planosSelecionados.length === 2 && "grid-cols-1 md:grid-cols-2 max-w-2xl",
                       planosSelecionados.length === 3 && "grid-cols-1 md:grid-cols-2 lg:grid-cols-3",
-                      planosSelecionados.length >= 4 && "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+                      planosSelecionados.length >= 4 && "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
                     )}>
-                      {planosSelecionados.map((plano, idx) => (
-                        <Card key={plano.id} className="border-primary/30 bg-background">
-                          <CardContent className="p-4">
-                            <div className="flex items-center gap-2 mb-3">
-                              <Badge variant="secondary" className="text-xs font-bold">
-                                {idx + 1}º
-                              </Badge>
-                              <p className="font-semibold">{plano.nome}</p>
-                            </div>
-                            <p className="text-2xl font-bold text-primary mb-3">
-                              {formatCurrency(plano.valorMensal + valorAdicional)}
-                              <span className="text-sm font-normal text-muted-foreground">/mês</span>
-                            </p>
-                            {/* Lista COMPLETA de benefícios */}
-                            <ul className="text-sm space-y-1.5 text-muted-foreground">
-                              {plano.coberturas.map((cobertura, i) => (
-                                <li key={i} className="flex items-start gap-2">
-                                  <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                                  <span>{cobertura}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          </CardContent>
-                        </Card>
-                      ))}
+                      {planosSelecionados.map((plano, idx) => {
+                        const isExpanded = expandedPlanos[`preview-${plano.id}`];
+                        const LIMIT = 5;
+                        const hasMore = plano.coberturas.length > LIMIT;
+                        
+                        return (
+                          <Card key={plano.id} className="border-primary/30 bg-background">
+                            <CardContent className="p-4">
+                              <div className="flex items-center gap-2 mb-3">
+                                <Badge variant="secondary" className="text-xs font-bold">
+                                  {idx + 1}º
+                                </Badge>
+                                <p className="font-semibold truncate">{plano.nome}</p>
+                              </div>
+                              <p className="text-2xl font-bold text-primary mb-3">
+                                {formatCurrency(plano.valorMensal + valorAdicional)}
+                                <span className="text-sm font-normal text-muted-foreground">/mês</span>
+                              </p>
+                              {/* Lista de benefícios com Ver mais */}
+                              <ul className="text-sm space-y-1.5 text-muted-foreground">
+                                {plano.coberturas.slice(0, LIMIT).map((cobertura, i) => (
+                                  <li key={i} className="flex items-start gap-2">
+                                    <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                                    <span>{cobertura}</span>
+                                  </li>
+                                ))}
+                                <AnimatePresence initial={false}>
+                                  {isExpanded && hasMore && (
+                                    <motion.div
+                                      initial={{ height: 0, opacity: 0 }}
+                                      animate={{ height: "auto", opacity: 1 }}
+                                      exit={{ height: 0, opacity: 0 }}
+                                      transition={{ duration: 0.2, ease: "easeInOut" }}
+                                      className="overflow-hidden"
+                                    >
+                                      {plano.coberturas.slice(LIMIT).map((cobertura, i) => (
+                                        <li key={i + LIMIT} className="flex items-start gap-2 mt-1.5">
+                                          <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                                          <span>{cobertura}</span>
+                                        </li>
+                                      ))}
+                                    </motion.div>
+                                  )}
+                                </AnimatePresence>
+                                {hasMore && (
+                                  <li className="pt-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleExpandPlano(`preview-${plano.id}`)}
+                                      className="flex items-center gap-1 text-primary hover:underline text-sm font-medium"
+                                    >
+                                      {isExpanded ? (
+                                        <>
+                                          <ChevronUp className="h-4 w-4" />
+                                          Ver menos
+                                        </>
+                                      ) : (
+                                        <>
+                                          <ChevronDown className="h-4 w-4" />
+                                          Ver mais {plano.coberturas.length - LIMIT}
+                                        </>
+                                      )}
+                                    </button>
+                                  </li>
+                                )}
+                              </ul>
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
                     </div>
 
                     {/* Campos de Filiação e Validade */}
