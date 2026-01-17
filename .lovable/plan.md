@@ -1,137 +1,235 @@
-# Plano: Adicionar Configuracao de Valor por Cota
+# Plano: Implementacao do Modelo Pratic de Precificacao
 
-## Objetivo
+## Visao Geral do Modelo
 
-Criar uma configuracao de sistema para definir o "Valor por Cota" - um valor monetario base que representa uma fracao do valor FIPE do veiculo. Isso permitira que o sistema calcule automaticamente quantas cotas um veiculo possui.
+O modelo Pratic define que:
+- **Preco do Plano** = Soma dos Precos dos Beneficios + Valor Adicional
+- **Custo Real do Beneficio** = Gasto Total (60 dias) / Quantidade de Cotas Ativas
+- **Indicadores**: Vermelho (prejuizo), Amarelo (equilibrio), Verde (superavit)
 
-**Exemplo pratico:**
-- Valor por Cota configurado: R$ 5.000,00
-- Veiculo com FIPE R$ 50.000 = 10 cotas
-- Veiculo com FIPE R$ 75.000 = 15 cotas
+---
 
-## Escopo Inicial
+## Analise do Estado Atual
 
-Nesta primeira fase, a alteracao sera **apenas conceitual e de configuracao** - o sistema entendera o conceito de cotas, mas nao alteraremos (ainda) os calculos de precificacao ou exibicao.
+### Tabelas Existentes (que serao REUTILIZADAS/ADAPTADAS)
+
+| Tabela | Situacao | Acao Necessaria |
+|--------|----------|-----------------|
+| `beneficios_adicionais` | Existe com 14 registros | Adicionar campo `preco_sugerido` (renomear logica de `preco`) |
+| `benefits` | Existe com 16 registros (coberturas) | Adicionar campos de precificacao |
+| `planos` | Existe com ~15 planos | Ja tem `adicional_mensal` e `valor_adesao` |
+| `plan_benefits` | Existe (relacao N:N) | Ja funciona |
+| `sinistros` | Existe com `valor_pago` | Usar para calcular gastos de coberturas |
+| `chamados_assistencia` | Existe | Usar para calcular gastos de assistencias |
+
+### Tabelas que PRECISAM SER CRIADAS
+
+| Tabela | Proposito |
+|--------|-----------|
+| `gastos_beneficios` | Registrar cada gasto associado a um beneficio (para calculo de custo real) |
+| `vw_custo_real_beneficios` | View para calcular automaticamente custo real e indicador de saude |
 
 ---
 
 ## Etapas de Implementacao
 
-### 1. Adicionar nova configuracao no banco de dados (Migration)
+### FASE 1: Banco de Dados (Migration)
 
-Inserir um novo registro na tabela `configuracoes`:
-
+#### 1.1 Adicionar campo `preco_sugerido` na tabela `benefits`
 ```sql
-INSERT INTO configuracoes (chave, valor, tipo, categoria, descricao, editavel)
-VALUES (
-  'atuarial_valor_por_cota',
-  '5000',
-  'moeda',
-  'atuarial',
-  'Valor em reais que representa uma cota. Usado para calcular o numero de cotas de um veiculo (FIPE / valor_cota = quantidade de cotas)',
-  true
+ALTER TABLE benefits 
+ADD COLUMN IF NOT EXISTS preco_sugerido DECIMAL(10,2) DEFAULT 0;
+```
+
+#### 1.2 Criar tabela `gastos_beneficios`
+```sql
+CREATE TABLE IF NOT EXISTS gastos_beneficios (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    beneficio_id UUID NOT NULL,
+    beneficio_tipo VARCHAR(20) NOT NULL CHECK (beneficio_tipo IN ('benefit', 'adicional')),
+    sinistro_id UUID REFERENCES sinistros(id),
+    chamado_id UUID REFERENCES chamados_assistencia(id),
+    associado_id UUID NOT NULL REFERENCES associados(id),
+    contrato_id UUID REFERENCES contratos(id),
+    descricao VARCHAR(255),
+    valor_gasto DECIMAL(10,2) NOT NULL,
+    data_ocorrencia DATE NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+CREATE INDEX idx_gastos_beneficio ON gastos_beneficios(beneficio_id, beneficio_tipo);
+CREATE INDEX idx_gastos_data ON gastos_beneficios(data_ocorrencia);
+CREATE INDEX idx_gastos_associado ON gastos_beneficios(associado_id);
 ```
 
-**Campos:**
-- `chave`: `atuarial_valor_por_cota`
-- `tipo`: `moeda` (exibira input com prefixo R$)
-- `categoria`: `atuarial` (agrupara na aba "Atuarial" junto com margem de seguranca, sinistralidade, etc.)
-- `valor`: `5000` (valor padrao inicial)
-- `editavel`: `true`
+#### 1.3 Criar View `vw_custo_real_beneficios`
+View que calcula automaticamente:
+- Gasto total nos ultimos 60 dias
+- Quantidade de cotas ativas
+- Custo real por cota
+- Indicador de saude (prejuizo/equilibrio/superavit)
 
-### 2. Criar hook utilitario para calculo de cotas
+#### 1.4 Criar funcao RPC `fn_calcular_custo_beneficio`
+Para calculo sob demanda de um beneficio especifico.
 
-Criar `src/hooks/useValorPorCota.ts`:
+---
 
+### FASE 2: Hooks e Logica (Frontend)
+
+#### 2.1 Criar `src/hooks/useCustoBeneficios.ts`
 ```typescript
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+// Hook para buscar custo real dos beneficios
+export function useCustoBeneficios() {...}
 
-export function useValorPorCota() {
-  return useQuery({
-    queryKey: ['configuracao-valor-por-cota'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('configuracoes')
-        .select('valor')
-        .eq('chave', 'atuarial_valor_por_cota')
-        .single();
-      
-      if (error) throw error;
-      return Number(data?.valor) || 5000; // Fallback para 5000
-    },
-    staleTime: 1000 * 60 * 10, // 10 minutos
-  });
-}
+// Funcao para calcular indicador de saude
+export function calcularIndicadorSaude(preco: number, custoReal: number): 'prejuizo' | 'equilibrio' | 'superavit' | 'sem_dados'
 
-// Funcao utilitaria para calcular numero de cotas
-export function calcularQuantidadeCotas(valorFipe: number, valorPorCota: number): number {
-  if (!valorPorCota || valorPorCota <= 0) return 0;
-  return Math.ceil(valorFipe / valorPorCota); // Arredonda para cima
-}
-
-// Funcao utilitaria para calcular valor total em cotas
-export function calcularValorEmCotas(quantidadeCotas: number, valorPorCota: number): number {
-  return quantidadeCotas * valorPorCota;
-}
+// Funcao para calcular margem
+export function calcularMargem(preco: number, custoReal: number): number
 ```
 
-### 3. (Opcional) Exibir quantidade de cotas na UI de cotacao
-
-Para que o sistema "entenda" o conceito de cotas, podemos adicionar uma exibicao informativa em locais estrategicos:
-
-**Exemplo em `usePlanosCotacao.ts`:**
+#### 2.2 Criar `src/hooks/usePlanosPrecificacao.ts`
 ```typescript
-// Adicionar ao retorno do hook:
-const quantidadeCotas = calcularQuantidadeCotas(valorFipe, valorPorCota);
-```
+// Hook para calcular preco de um plano
+export function usePrecoPlano(planoId: string) {...}
 
-**Exemplo de exibicao (futura):**
-```
-Veiculo: Honda Civic 2023
-Valor FIPE: R$ 120.000,00
-Cotas: 24 (base R$ 5.000/cota)
+// Retorna: somaBeneficios, valorAdicional, mensalidadeFinal, adesao
 ```
 
 ---
 
-## Arquivos a Modificar/Criar
+### FASE 3: Componentes de UI
 
-| Arquivo | Acao | Descricao |
-|---------|------|-----------|
-| `supabase/migrations/XXXXXX_add_valor_por_cota.sql` | Criar | Migration para inserir a configuracao |
-| `src/hooks/useValorPorCota.ts` | Criar | Hook + funcoes utilitarias de calculo de cotas |
+#### 3.1 Criar `src/components/beneficios/IndicadorSaude.tsx`
+Componente visual que mostra:
+- Icone colorido (verde/amarelo/vermelho/cinza)
+- Valor da margem (+R$ X,XX ou -R$ X,XX)
+- Tooltip com detalhes
+
+#### 3.2 Atualizar `BeneficioAdicionalModal.tsx`
+Adicionar secao "Precificacao" mostrando:
+- Preco sugerido (editavel)
+- Custo real (somente leitura, calculado)
+- Indicador de saude
+- Detalhes: gasto total, total de cotas, custo por cota
+
+#### 3.3 Criar nova Tab "Saude Financeira" em `/vendas/planos-beneficios`
+- Resumo geral: X superavit, Y equilibrio, Z prejuizo
+- Tabela com todos beneficios e seus indicadores
+- Alertas para beneficios em prejuizo
+
+#### 3.4 Atualizar visualizacao de Planos
+- Mostrar soma dos beneficios
+- Mostrar valor adicional
+- Mostrar mensalidade final calculada
+- Indicador de saude geral do plano
+
+---
+
+### FASE 4: Integracao com Sinistros/Chamados
+
+#### 4.1 Trigger para popular `gastos_beneficios`
+Quando um sinistro for pago ou um chamado de assistencia for concluido:
+- Inserir registro em `gastos_beneficios`
+- Vincular ao beneficio correspondente
+
+```sql
+CREATE OR REPLACE FUNCTION fn_registrar_gasto_sinistro()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.status = 'pago' AND OLD.status != 'pago' AND NEW.valor_pago > 0 THEN
+    INSERT INTO gastos_beneficios (beneficio_id, beneficio_tipo, sinistro_id, associado_id, valor_gasto, data_ocorrencia, descricao)
+    VALUES (
+      -- mapear tipo de sinistro para beneficio
+      (SELECT id FROM benefits WHERE slug = CASE NEW.tipo 
+        WHEN 'roubo_furto' THEN 'roubo-furto'
+        WHEN 'colisao' THEN 'colisao'
+        -- etc
+       END),
+      'benefit',
+      NEW.id,
+      NEW.associado_id,
+      NEW.valor_pago,
+      NEW.data_ocorrencia::date,
+      'Sinistro ' || NEW.protocolo
+    );
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+```
+
+---
+
+## Diagrama de Relacionamentos
+
+```
++-------------------+       +---------------------+
+|    benefits       |       | beneficios_adicionais|
++-------------------+       +---------------------+
+| id                |       | id                  |
+| preco_sugerido    |       | preco (=sugerido)   |
++-------------------+       +---------------------+
+         |                           |
+         +-----------+---------------+
+                     |
+                     v
+         +------------------------+
+         |   gastos_beneficios    |
+         +------------------------+
+         | beneficio_id           |
+         | beneficio_tipo         |
+         | valor_gasto            |
+         | data_ocorrencia        |
+         +------------------------+
+                     |
+                     v
+         +------------------------+
+         | vw_custo_real_beneficios|
+         +------------------------+
+         | custo_real             |
+         | indicador              |
+         | gasto_total_60d        |
+         | total_cotas            |
+         +------------------------+
+```
+
+---
+
+## Arquivos a Criar/Modificar
+
+| Arquivo | Acao |
+|---------|------|
+| `supabase/migrations/XXXXX_modelo_pratic_precificacao.sql` | Criar - Migration completa |
+| `src/hooks/useCustoBeneficios.ts` | Criar - Hook de custo real |
+| `src/hooks/usePlanosPrecificacao.ts` | Criar - Hook de preco de planos |
+| `src/components/beneficios/IndicadorSaude.tsx` | Criar - Componente visual |
+| `src/components/beneficios/CustoBeneficioCard.tsx` | Criar - Card com detalhes financeiros |
+| `src/components/planos/BeneficioAdicionalModal.tsx` | Modificar - Adicionar secao precificacao |
+| `src/pages/vendas/PlanosBeneficios.tsx` | Modificar - Adicionar tab "Saude Financeira" |
 
 ---
 
 ## Resultado Esperado
 
-1. **Na tela de Configuracoes (`/diretoria/configuracoes`):**
-   - Aba "Atuarial" exibira novo campo "Atuarial Valor Por Cota"
-   - Input com prefixo "R$" e valor padrao 5000
-   - Editavel pela diretoria
+1. **Gestao de Beneficios**: Cada beneficio mostra seu preco configurado, custo real calculado e indicador visual de saude
 
-2. **No sistema:**
-   - Hook `useValorPorCota()` disponivel para qualquer componente
-   - Funcao `calcularQuantidadeCotas(valorFipe, valorPorCota)` para calculos
-   - Base preparada para futuras implementacoes (ex: usar cotas no calculo de mensalidade)
+2. **Gestao de Planos**: Cada plano mostra a soma dos beneficios inclusos + valor adicional = mensalidade
+
+3. **Dashboard de Saude**: Visao geral de quantos beneficios estao em superavit/equilibrio/prejuizo
+
+4. **Alertas**: Notificacao visual quando beneficios estao com preco abaixo do custo real
 
 ---
 
-## Proximos Passos (fora deste escopo)
+## Observacoes Importantes
 
-Apos a implementacao inicial, podemos evoluir para:
-1. Exibir quantidade de cotas na cotacao publica
-2. Usar quantidade de cotas no calculo de mensalidade
-3. Exibir cotas em contratos e propostas
-4. Usar cotas para calculo de sinistro/indenizacao
+1. **O campo `preco` em `beneficios_adicionais` sera usado como "preco sugerido"** - nao precisa renomear a coluna
 
----
+2. **A view `vw_custo_real_beneficios` unifica `benefits` e `beneficios_adicionais`** para ter uma visao consolidada
 
-## Validacao
+3. **Os gastos serao registrados automaticamente** via triggers quando sinistros forem pagos ou chamados concluidos
 
-- Acessar `/diretoria/configuracoes` como diretor
-- Verificar que a aba "Atuarial" mostra o campo "Atuarial Valor Por Cota"
-- Editar o valor e confirmar que salva corretamente
-- Usar o hook em um componente de teste para validar o calculo
+4. **O calculo de cotas usa o hook `useValorPorCota`** ja implementado anteriormente
+
+5. **RLS necessario**: A tabela `gastos_beneficios` precisara de policies para visualizacao (diretores) e insercao (sistema/triggers)
