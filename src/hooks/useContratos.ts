@@ -29,7 +29,7 @@ export function useContratos() {
         .select(`
           *,
           planos (*),
-          cotacoes (*),
+          cotacoes:cotacoes!contratos_cotacao_id_fkey (*),
           associado:associados!fk_contratos_associado (*),
           leads (*)
         `)
@@ -56,7 +56,7 @@ export function useContrato(id: string | undefined) {
         .select(`
           *,
           planos (*),
-          cotacoes (*),
+          cotacoes:cotacoes!contratos_cotacao_id_fkey (*),
           associado:associados!fk_contratos_associado (*),
           leads (*)
         `)
