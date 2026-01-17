@@ -145,6 +145,31 @@ export function useUpdatePlan() {
   });
 }
 
+export function useTogglePlanStatus() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
+      const { data, error } = await supabase
+        .from('plans')
+        .update({ is_active })
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['plans'] });
+      toast.success(`Plano ${data.is_active ? 'ativado' : 'desativado'}`);
+    },
+    onError: (error: Error) => {
+      toast.error(`Erro ao alterar status: ${error.message}`);
+    },
+  });
+}
+
 export function useDeletePlan() {
   const queryClient = useQueryClient();
 
