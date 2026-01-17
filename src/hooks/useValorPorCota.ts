@@ -2,6 +2,8 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
 const VALOR_POR_COTA_PADRAO = 5000;
+const FIPE_MINIMO_PADRAO = 20000;
+const FIPE_MAXIMO_PADRAO = 180000;
 
 export function useValorPorCota() {
   return useQuery({
@@ -20,8 +22,66 @@ export function useValorPorCota() {
       
       return Number(data?.valor) || VALOR_POR_COTA_PADRAO;
     },
-    staleTime: 1000 * 60 * 10, // 10 minutos - configuração muda raramente
+    staleTime: 1000 * 60 * 10,
   });
+}
+
+/**
+ * Hook para buscar limites FIPE (mínimo e máximo aceitos)
+ */
+export function useLimitesFipe() {
+  return useQuery({
+    queryKey: ['configuracao-limites-fipe'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('configuracoes')
+        .select('chave, valor')
+        .in('chave', ['atuarial_fipe_minimo', 'atuarial_fipe_maximo']);
+      
+      if (error) {
+        console.warn('[useLimitesFipe] Erro ao buscar configuração:', error);
+        return { minimo: FIPE_MINIMO_PADRAO, maximo: FIPE_MAXIMO_PADRAO };
+      }
+      
+      const limites = { minimo: FIPE_MINIMO_PADRAO, maximo: FIPE_MAXIMO_PADRAO };
+      
+      data?.forEach(config => {
+        if (config.chave === 'atuarial_fipe_minimo') {
+          limites.minimo = Number(config.valor) || FIPE_MINIMO_PADRAO;
+        }
+        if (config.chave === 'atuarial_fipe_maximo') {
+          limites.maximo = Number(config.valor) || FIPE_MAXIMO_PADRAO;
+        }
+      });
+      
+      return limites;
+    },
+    staleTime: 1000 * 60 * 10,
+  });
+}
+
+/**
+ * Valida se um valor FIPE está dentro dos limites aceitos
+ */
+export function validarFipe(
+  valorFipe: number, 
+  limites: { minimo: number; maximo: number }
+): { valido: boolean; mensagem?: string } {
+  if (valorFipe < limites.minimo) {
+    return {
+      valido: false,
+      mensagem: `Valor FIPE abaixo do mínimo aceito (R$ ${limites.minimo.toLocaleString('pt-BR')})`,
+    };
+  }
+  
+  if (valorFipe > limites.maximo) {
+    return {
+      valido: false,
+      mensagem: `Valor FIPE acima do máximo aceito (R$ ${limites.maximo.toLocaleString('pt-BR')})`,
+    };
+  }
+  
+  return { valido: true };
 }
 
 /**
