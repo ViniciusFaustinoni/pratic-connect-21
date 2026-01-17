@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { FileText, Send, Check, X, MessageCircle, FileDown, Mail, FileSignature, Eye, Link2, Copy, Trash2, MoreHorizontal, Car, User, Phone, RefreshCw, ClipboardCopy } from 'lucide-react';
+import { FileText, Send, Check, X, MessageCircle, FileDown, Mail, FileSignature, Eye, Link2, Copy, Trash2, MoreHorizontal, Car, User, Phone, RefreshCw, ClipboardCopy, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -359,13 +359,22 @@ export function CotacaoCard({
                 Baixar PDF
               </DropdownMenuItem>
               {cotacao.token_publico && (
-                <DropdownMenuItem onClick={() => {
-                  const link = `${window.location.origin}/cotacao/${cotacao.token_publico}`;
-                  navigator.clipboard.writeText(link);
-                }}>
-                  <Link2 className="h-4 w-4 mr-2" />
-                  Copiar Link
-                </DropdownMenuItem>
+                <>
+                  <DropdownMenuItem onClick={() => {
+                    const link = `${window.location.origin}/cotacao/${cotacao.token_publico}`;
+                    window.open(link, '_blank');
+                  }}>
+                    <ExternalLink className="h-4 w-4 mr-2" />
+                    Acessar Link do Cliente
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => {
+                    const link = `${window.location.origin}/cotacao/${cotacao.token_publico}`;
+                    navigator.clipboard.writeText(link);
+                  }}>
+                    <Link2 className="h-4 w-4 mr-2" />
+                    Copiar Link
+                  </DropdownMenuItem>
+                </>
               )}
               {permissions?.canDuplicate !== false && (
                 <>
