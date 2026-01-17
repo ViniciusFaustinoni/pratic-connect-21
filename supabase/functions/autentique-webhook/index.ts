@@ -76,21 +76,26 @@ serve(async (req) => {
 
     const payload: AutentiqueWebhookPayload = await req.json();
     
-    console.log("Webhook Autentique recebido:", JSON.stringify(payload, null, 2));
+    console.log("[autentique-webhook] ========== WEBHOOK RECEBIDO ==========");
+    console.log("[autentique-webhook] Timestamp:", new Date().toISOString());
+    console.log("[autentique-webhook] Payload completo:", JSON.stringify(payload, null, 2));
 
     // NOVA ESTRUTURA: Extrair o ID do documento de payload.event.data.document
     const documentId = payload.event?.data?.document;
     const eventType = payload.event?.type;
     
+    console.log("[autentique-webhook] Document ID extraído:", documentId);
+    console.log("[autentique-webhook] Tipo de evento:", eventType);
+    
     if (!documentId) {
-      console.error("Document ID não encontrado no payload");
+      console.error("[autentique-webhook] ERRO: Document ID não encontrado no payload");
       return new Response(JSON.stringify({ received: true, error: "Document ID not found" }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    console.log(`Processando evento: ${eventType} para documento: ${documentId}`);
+    console.log(`[autentique-webhook] Processando evento: ${eventType} para documento: ${documentId}`);
 
     // Buscar contrato pelo documento_id do Autentique
     const { data: contrato, error: contratoError } = await supabase
@@ -100,7 +105,7 @@ serve(async (req) => {
       .maybeSingle();
 
     if (contratoError) {
-      console.error("Erro ao buscar contrato:", contratoError);
+      console.error("[autentique-webhook] ERRO ao buscar contrato:", contratoError);
       return new Response(JSON.stringify({ received: true, error: "Database error" }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -108,14 +113,16 @@ serve(async (req) => {
     }
 
     if (!contrato) {
-      console.log("Contrato não encontrado para documento:", documentId);
+      console.log("[autentique-webhook] Contrato NÃO ENCONTRADO para documento:", documentId);
+      console.log("[autentique-webhook] Verifique se autentique_documento_id está correto no banco");
       return new Response(JSON.stringify({ received: true, message: "Contract not found" }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    console.log("Contrato encontrado:", contrato.numero, "- ID:", contrato.id);
+    console.log("[autentique-webhook] ✓ Contrato encontrado:", contrato.numero, "- ID:", contrato.id);
+    console.log("[autentique-webhook] Status atual do contrato:", contrato.status);
 
     // Extrair dados do signatário da NOVA estrutura
     const signerData = payload.event?.data?.user;
@@ -126,7 +133,8 @@ serve(async (req) => {
     switch (eventType) {
       case "signature.accepted": {
         // Documento foi ASSINADO
-        console.log(`Documento ${documentId} foi ASSINADO por ${signerName} (${signerEmail})`);
+        console.log(`[autentique-webhook] 🎉 Documento ${documentId} foi ASSINADO por ${signerName} (${signerEmail})`);
+        console.log("[autentique-webhook] Atualizando contrato para status 'assinado'...");
         
         await supabase
           .from("contratos")
@@ -136,6 +144,8 @@ serve(async (req) => {
             autentique_status: "signed",
           })
           .eq("id", contrato.id);
+
+        console.log("[autentique-webhook] ✓ Contrato atualizado para 'assinado'");
 
         // Registrar histórico do contrato
         await supabase.from("contratos_historico").insert({
@@ -323,6 +333,9 @@ serve(async (req) => {
         console.log("Evento não tratado:", eventType);
     }
 
+    console.log("[autentique-webhook] ========== WEBHOOK PROCESSADO COM SUCESSO ==========");
+    console.log("[autentique-webhook] Evento:", eventType, "| Documento:", documentId);
+    
     return new Response(
       JSON.stringify({ received: true, processed: eventType, documentId }),
       {
@@ -331,7 +344,9 @@ serve(async (req) => {
       }
     );
   } catch (error: any) {
-    console.error("Erro no webhook Autentique:", error);
+    console.error("[autentique-webhook] ========== ERRO NO WEBHOOK ==========");
+    console.error("[autentique-webhook] Erro:", error.message);
+    console.error("[autentique-webhook] Stack:", error.stack);
     return new Response(
       JSON.stringify({ received: true, error: error.message }),
       {
