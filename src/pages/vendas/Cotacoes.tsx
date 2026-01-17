@@ -291,18 +291,18 @@ export default function Cotacoes() {
       return;
     }
 
+    const coberturas = cotacao.planos?.coberturas as string[] | undefined;
+    const beneficiosTexto = coberturas?.slice(0, 5).map(c => `✓ ${c}`).join('\n') || '✓ Proteção completa';
+    
     const mensagem = encodeURIComponent(
       `Olá ${cotacao.leads?.nome || 'Cliente'}! 🚗\n\n` +
       `Segue sua cotação de proteção veicular:\n\n` +
       `📋 *Cotação Nº:* ${cotacao.numero}\n` +
       `📦 *Plano:* ${cotacao.planos?.nome || 'Proteção Veicular'}\n` +
       `💰 *Valor FIPE:* R$ ${cotacao.valor_fipe?.toLocaleString('pt-BR')}\n\n` +
-      `*Valores Mensais:*\n` +
-      `• Cota: R$ ${cotacao.valor_cota?.toFixed(2)}\n` +
-      `• Taxa Adm: R$ ${cotacao.taxa_administrativa?.toFixed(2)}\n` +
-      `• Rastreamento: R$ ${cotacao.valor_rastreamento?.toFixed(2)}\n` +
-      `• Assistência: R$ ${(cotacao.valor_assistencia || 0)?.toFixed(2)}\n\n` +
-      `💵 *TOTAL MENSAL: R$ ${cotacao.valor_total_mensal?.toFixed(2)}*\n\n` +
+      `💵 *VALOR MENSAL: R$ ${cotacao.valor_total_mensal?.toFixed(2)}*\n\n` +
+      `✅ *Principais Benefícios:*\n` +
+      `${beneficiosTexto}\n\n` +
       `📝 Taxa de Adesão: R$ ${cotacao.valor_adesao?.toFixed(2)}\n\n` +
       `⏰ Cotação válida por ${cotacao.validade_dias || 7} dias.\n\n` +
       `Posso te ajudar com mais alguma informação?`
@@ -313,6 +313,9 @@ export default function Cotacoes() {
   };
 
   const copiarParaWhatsApp = async (cotacao: CotacaoWithRelations) => {
+    const coberturas = cotacao.planos?.coberturas as string[] | undefined;
+    const beneficiosTexto = coberturas?.slice(0, 5).map(c => `✓ ${c}`).join('\n') || '✓ Proteção completa';
+    
     const mensagem = 
       `Olá! 🚗\n\n` +
       `Segue sua cotação de proteção veicular:\n\n` +
@@ -320,12 +323,9 @@ export default function Cotacoes() {
       `🚙 *Veículo:* ${cotacao.veiculo_marca} ${cotacao.veiculo_modelo} ${cotacao.veiculo_ano}\n` +
       `📦 *Plano:* ${cotacao.planos?.nome || 'Proteção Veicular'}\n` +
       `💰 *Valor FIPE:* R$ ${cotacao.valor_fipe?.toLocaleString('pt-BR')}\n\n` +
-      `*Valores Mensais:*\n` +
-      `• Cota: R$ ${cotacao.valor_cota?.toFixed(2)}\n` +
-      `• Taxa Adm: R$ ${cotacao.taxa_administrativa?.toFixed(2)}\n` +
-      `• Rastreamento: R$ ${cotacao.valor_rastreamento?.toFixed(2)}\n` +
-      `• Assistência: R$ ${(cotacao.valor_assistencia || 0)?.toFixed(2)}\n\n` +
-      `💵 *TOTAL MENSAL: R$ ${cotacao.valor_total_mensal?.toFixed(2)}*\n\n` +
+      `💵 *VALOR MENSAL: R$ ${cotacao.valor_total_mensal?.toFixed(2)}*\n\n` +
+      `✅ *Principais Benefícios:*\n` +
+      `${beneficiosTexto}\n\n` +
       `📝 Taxa de Adesão: R$ ${cotacao.valor_adesao?.toFixed(2)}\n\n` +
       `⏰ Cotação válida por ${cotacao.validade_dias || 7} dias.\n\n` +
       `Posso te ajudar com mais alguma informação?`;
