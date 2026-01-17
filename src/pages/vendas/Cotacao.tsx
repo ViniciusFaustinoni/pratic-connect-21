@@ -294,8 +294,6 @@ export default function CotacaoPage() {
             setTelefone2={setTelefone2}
             consultorId={consultorId}
             setConsultorId={setConsultorId}
-            leadId={leadId}
-            setLeadId={setLeadId}
             onNext={handleEtapa1Next}
           />
         )}

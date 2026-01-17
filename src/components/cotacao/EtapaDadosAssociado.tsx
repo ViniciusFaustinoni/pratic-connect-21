@@ -1,16 +1,11 @@
-import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { User, Link2, ArrowRight, Search, X, Phone } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { User, ArrowRight, Phone } from 'lucide-react';
 import { useVendedores } from '@/hooks/useVendedores';
-import { useLeads } from '@/hooks/useLeads';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 
 interface EtapaDadosAssociadoProps {
   // Dados do associado/solicitante
@@ -26,10 +21,6 @@ interface EtapaDadosAssociadoProps {
   // Consultor responsável
   consultorId: string;
   setConsultorId: (id: string) => void;
-  
-  // Lead vinculado (opcional)
-  leadId: string | null;
-  setLeadId: (id: string | null) => void;
   
   // Navegação
   onNext: () => void;
@@ -54,43 +45,9 @@ export function EtapaDadosAssociado({
   setTelefone2,
   consultorId,
   setConsultorId,
-  leadId,
-  setLeadId,
   onNext,
 }: EtapaDadosAssociadoProps) {
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  
   const { data: vendedores = [], isLoading: isLoadingVendedores } = useVendedores();
-  const { data: leadsResult } = useLeads({ 
-    filters: { search: searchTerm },
-    enabled: searchTerm.length >= 2 
-  });
-  
-  const leads = leadsResult?.leads || [];
-  
-  // Selecionar lead preenche os campos automaticamente
-  const handleSelectLead = (lead: typeof leads[0]) => {
-    setLeadId(lead.id);
-    setNome(lead.nome);
-    setEmail(lead.email || '');
-    setTelefone1(lead.telefone || '');
-    setTelefone2(''); // Campo secundário não existe na tabela leads
-    if (lead.vendedor_id) {
-      setConsultorId(lead.vendedor_id);
-    }
-    setSearchOpen(false);
-    setSearchTerm('');
-  };
-  
-  // Limpar vínculo com lead
-  const handleClearLead = () => {
-    setLeadId(null);
-    setNome('');
-    setEmail('');
-    setTelefone1('');
-    setTelefone2('');
-  };
   
   // Pode avançar se Nome, Telefone e Consultor estão preenchidos
   const telefoneValido = telefone1.replace(/\D/g, '').length >= 10;
@@ -113,84 +70,6 @@ export function EtapaDadosAssociado({
       </CardHeader>
       
       <CardContent className="space-y-6">
-        {/* Vincular Lead Existente (Opcional) */}
-        <div className="space-y-2">
-          <Label className="flex items-center gap-2 text-sm font-medium">
-            <Link2 className="h-4 w-4" />
-            Vincular Lead Existente (opcional)
-          </Label>
-          
-          {leadId ? (
-            <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg border border-border">
-              <div className="flex-1">
-                <p className="text-sm font-medium">{nome}</p>
-                <p className="text-xs text-muted-foreground">Lead vinculado</p>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleClearLead}
-                className="h-8 w-8 p-0"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          ) : (
-            <Popover open={searchOpen} onOpenChange={setSearchOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  className="w-full justify-start text-muted-foreground"
-                >
-                  <Search className="mr-2 h-4 w-4" />
-                  Buscar lead por nome ou telefone...
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[400px] p-0" align="start">
-                <Command shouldFilter={false}>
-                  <CommandInput 
-                    placeholder="Digite nome ou telefone..." 
-                    value={searchTerm}
-                    onValueChange={setSearchTerm}
-                  />
-                  <CommandList>
-                    <CommandEmpty>
-                      {searchTerm.length < 2 
-                        ? 'Digite ao menos 2 caracteres para buscar'
-                        : 'Nenhum lead encontrado'
-                      }
-                    </CommandEmpty>
-                    <CommandGroup>
-                      {leads.slice(0, 10).map((lead) => (
-                        <CommandItem
-                          key={lead.id}
-                          value={lead.id}
-                          onSelect={() => handleSelectLead(lead)}
-                          className="cursor-pointer"
-                        >
-                          <div className="flex flex-col">
-                            <span className="font-medium">{lead.nome}</span>
-                            <span className="text-xs text-muted-foreground">
-                              {lead.telefone} {lead.email && `• ${lead.email}`}
-                            </span>
-                          </div>
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
-          )}
-        </div>
-
-        <div className="flex items-center gap-4">
-          <Separator className="flex-1" />
-          <span className="text-xs text-muted-foreground">OU PREENCHA MANUALMENTE</span>
-          <Separator className="flex-1" />
-        </div>
-
         {/* Formulário de Dados */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Nome */}
@@ -203,7 +82,6 @@ export function EtapaDadosAssociado({
               value={nome}
               onChange={(e) => setNome(e.target.value)}
               placeholder="Nome completo do solicitante"
-              className={cn(leadId && "bg-muted/30")}
             />
           </div>
 
@@ -216,7 +94,6 @@ export function EtapaDadosAssociado({
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="email@exemplo.com"
-              className={cn(leadId && email && "bg-muted/30")}
             />
           </div>
 
@@ -232,7 +109,6 @@ export function EtapaDadosAssociado({
               onChange={(e) => setTelefone1(formatPhone(e.target.value))}
               placeholder="(00) 00000-0000"
               maxLength={15}
-              className={cn(leadId && telefone1 && "bg-muted/30")}
             />
           </div>
 
@@ -248,7 +124,6 @@ export function EtapaDadosAssociado({
               onChange={(e) => setTelefone2(formatPhone(e.target.value))}
               placeholder="(00) 00000-0000"
               maxLength={15}
-              className={cn(leadId && telefone2 && "bg-muted/30")}
             />
           </div>
         </div>

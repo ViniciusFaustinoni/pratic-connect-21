@@ -1076,134 +1076,20 @@ _Cotação válida por 7 dias_
 
             {/* CAMPOS COMUNS (ambos os modos) */}
             
-            {/* Vincular Lead */}
+            {/* Nome do Associado */}
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label className="flex items-center gap-2">
-                  <Users className="h-4 w-4" />
-                  Vincular a Lead (opcional)
-                </Label>
-                {leadSelecionado && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleLimparLead}
-                    className="h-auto py-1 px-2 text-xs text-muted-foreground hover:text-destructive"
-                  >
-                    <X className="h-3 w-3 mr-1" />
-                    Remover
-                  </Button>
-                )}
-              </div>
-
-              {leadSelecionado ? (
-                <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/50">
-                  <Avatar className="h-10 w-10">
-                    <AvatarFallback className="bg-primary/10 text-primary font-medium">
-                      {leadSelecionado.nome?.charAt(0) || '?'}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">{leadSelecionado.nome}</p>
-                    <p className="text-sm text-muted-foreground">{leadSelecionado.telefone}</p>
-                  </div>
-                  {leadSelecionado.veiculo_modelo && (
-                    <Badge variant="secondary">
-                      {leadSelecionado.veiculo_modelo} {leadSelecionado.veiculo_ano}
-                    </Badge>
-                  )}
-                </div>
-              ) : (
-                <Popover open={comboboxAberto} onOpenChange={setComboboxAberto}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      role="combobox"
-                      aria-expanded={comboboxAberto}
-                      className="w-full justify-between font-normal text-muted-foreground"
-                      disabled={loadingLeads}
-                    >
-                      {loadingLeads ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                          Carregando leads...
-                        </>
-                      ) : (
-                        'Buscar lead por nome, telefone ou placa...'
-                      )}
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-                    <Command shouldFilter={false}>
-                      <CommandInput 
-                        placeholder="Digite para buscar..." 
-                        value={buscaLead}
-                        onValueChange={setBuscaLead}
-                      />
-                      <CommandList>
-                        <CommandEmpty>
-                          <div className="py-6 text-center text-sm text-muted-foreground">
-                            Nenhum lead encontrado
-                          </div>
-                        </CommandEmpty>
-                        <CommandGroup>
-                          {leadsFiltrados.map((lead) => (
-                            <CommandItem
-                              key={lead.id}
-                              value={lead.id}
-                              onSelect={() => handleSelecionarLead(lead)}
-                              className="cursor-pointer"
-                            >
-                              <div className="flex items-center gap-3 w-full">
-                                <Avatar className="h-8 w-8">
-                                  <AvatarFallback className="text-xs">
-                                    {lead.nome?.charAt(0) || '?'}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <div className="flex-1 min-w-0">
-                                  <p className="font-medium truncate">{lead.nome}</p>
-                                  <p className="text-xs text-muted-foreground">
-                                    {lead.telefone}
-                                    {lead.veiculo_modelo && ` • ${lead.veiculo_modelo} ${lead.veiculo_ano || ''}`}
-                                  </p>
-                                </div>
-                                {lead.veiculo_placa && (
-                                  <Badge variant="outline" className="text-xs">
-                                    {lead.veiculo_placa}
-                                  </Badge>
-                                )}
-                              </div>
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-              )}
-              
+              <Label className="flex items-center gap-2">
+                Nome do Associado <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                placeholder="Nome completo do associado"
+                value={nomeAssociado}
+                onChange={(e) => setNomeAssociado(e.target.value)}
+              />
               <p className="text-xs text-muted-foreground">
-                Vincule a um lead para manter histórico e facilitar conversão
+                Informe o nome do cliente para identificar a cotação
               </p>
             </div>
-            
-            {/* Nome do Associado (quando não tem lead) */}
-            {!leadSelecionado && (
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  Nome do Associado <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  placeholder="Nome completo do associado"
-                  value={nomeAssociado}
-                  onChange={(e) => setNomeAssociado(e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Informe o nome do cliente para identificar a cotação
-                </p>
-              </div>
-            )}
 
             {/* Uso para aplicativo */}
             <div className="space-y-2">
