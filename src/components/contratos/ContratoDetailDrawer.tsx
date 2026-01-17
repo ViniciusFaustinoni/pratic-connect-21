@@ -1,8 +1,9 @@
 import { 
   FileText, CheckCircle, XCircle, Clock, Send, Pause, 
   ExternalLink, Phone, Mail, MapPin, Car, User, Link,
-  RefreshCw, Loader2, Eye, Copy, MessageCircle, History, LinkIcon
+  RefreshCw, Loader2, Eye, Copy, MessageCircle, History, LinkIcon, Info
 } from 'lucide-react';
+import { usePermissions } from '@/hooks/usePermissions';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -71,6 +72,10 @@ export function ContratoDetailDrawer({ contratoId, open, onClose }: ContratoDeta
   const syncContrato = useAutentiqueSyncContrato();
   
   const gerarLink = useGerarLinkAssociado();
+  
+  // Permissões para ativação de propostas
+  const { isDiretor, isAnalistaCadastro, isDesenvolvedor, isAdminMaster } = usePermissions();
+  const podeAtivarProposta = isDiretor || isAnalistaCadastro || isDesenvolvedor || isAdminMaster;
   
   // Buscar status do Autentique se houver documento
   const { data: autentiqueStatus, isLoading: isLoadingStatus } = useAutentiqueStatus(
@@ -697,12 +702,22 @@ export function ContratoDetailDrawer({ contratoId, open, onClose }: ContratoDeta
                   </Button>
                 )}
 
-                {/* Ativar - quando assinado */}
-                {contrato.status === 'assinado' && (
-                  <Button onClick={handleAtivar} className="w-full">
-                    <CheckCircle className="mr-2 h-4 w-4" />
-                    Ativar Proposta
-                  </Button>
+                {/* Ativar - apenas Diretor/Analista de Cadastro e após pagamento OK */}
+                {contrato.status === 'assinado' && podeAtivarProposta && (
+                  contrato.cotacoes?.status_contratacao === 'pagamento_ok' ? (
+                    <Button onClick={handleAtivar} className="w-full">
+                      <CheckCircle className="mr-2 h-4 w-4" />
+                      Ativar Proposta
+                    </Button>
+                  ) : (
+                    <div className="p-3 bg-muted rounded-lg text-sm text-muted-foreground flex items-start gap-2">
+                      <Info className="h-4 w-4 mt-0.5 shrink-0" />
+                      <div>
+                        <p className="font-medium">Ativação pendente</p>
+                        <p>A proposta só poderá ser ativada após a confirmação do pagamento.</p>
+                      </div>
+                    </div>
+                  )
                 )}
               </section>
             </TabsContent>
