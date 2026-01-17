@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -63,6 +63,16 @@ export function EtapaDadosPessoaisDocumentos({
   // Campos manuais (não podem ser extraídos de documentos)
   const [email, setEmail] = useState(defaultValues?.email || '');
   const [telefone, setTelefone] = useState(defaultValues?.telefone || '');
+
+  // Sincronizar email e telefone quando defaultValues mudar (dados carregados do banco)
+  useEffect(() => {
+    if (defaultValues?.email && !email) {
+      setEmail(defaultValues.email);
+    }
+    if (defaultValues?.telefone && !telefone) {
+      setTelefone(defaultValues.telefone);
+    }
+  }, [defaultValues?.email, defaultValues?.telefone]);
 
   // Verificar documentos enviados com sucesso
   const tiposIdentificados = documentos
