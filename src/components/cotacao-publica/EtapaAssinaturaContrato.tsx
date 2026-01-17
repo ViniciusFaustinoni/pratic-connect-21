@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { FileSignature, Loader2, AlertCircle, ExternalLink, RefreshCw, CheckCircle2, Shield, Clock } from 'lucide-react';
+import { FileSignature, Loader2, AlertCircle, ExternalLink, RefreshCw, CheckCircle2, Shield, Clock, Mail, MousePointer, PenTool, ArrowRight } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
+import { Separator } from '@/components/ui/separator';
 
 interface EtapaAssinaturaContratoProps {
   cotacaoId: string;
@@ -410,20 +411,108 @@ export function EtapaAssinaturaContrato({
             </div>
           </div>
 
-          {/* Botão de assinatura */}
+          {/* Passo a passo para assinatura via email */}
+          <div className="bg-gradient-to-br from-primary/5 to-primary/10 rounded-xl p-5 border border-primary/20">
+            <h4 className="font-semibold text-sm mb-4 flex items-center gap-2">
+              <Mail className="h-4 w-4 text-primary" />
+              Como assinar via Email
+            </h4>
+            
+            <div className="space-y-4">
+              {/* Passo 1 */}
+              <motion.div 
+                className="flex items-start gap-3"
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.1 }}
+              >
+                <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <span className="text-xs font-bold text-primary">1</span>
+                </div>
+                <div>
+                  <p className="font-medium text-sm">Acesse seu email</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Verifique sua caixa de entrada em <span className="font-medium text-foreground">{clienteEmail}</span>
+                  </p>
+                </div>
+              </motion.div>
+
+              {/* Passo 2 */}
+              <motion.div 
+                className="flex items-start gap-3"
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.2 }}
+              >
+                <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <span className="text-xs font-bold text-primary">2</span>
+                </div>
+                <div>
+                  <p className="font-medium text-sm">Clique no link de assinatura</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Procure o email da Autentique e clique no botão "Assinar documento"
+                  </p>
+                </div>
+              </motion.div>
+
+              {/* Passo 3 */}
+              <motion.div 
+                className="flex items-start gap-3"
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.3 }}
+              >
+                <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <span className="text-xs font-bold text-primary">3</span>
+                </div>
+                <div>
+                  <p className="font-medium text-sm">Assine o contrato</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Siga as instruções na plataforma Autentique para desenhar sua assinatura
+                  </p>
+                </div>
+              </motion.div>
+
+              {/* Passo 4 */}
+              <motion.div 
+                className="flex items-start gap-3"
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.4 }}
+              >
+                <div className="w-7 h-7 rounded-full bg-success/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-success" />
+                </div>
+                <div>
+                  <p className="font-medium text-sm">Pronto!</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Após assinar, volte aqui que a confirmação será automática
+                  </p>
+                </div>
+              </motion.div>
+            </div>
+          </div>
+
+          <Separator className="my-2" />
+
+          {/* Botão de assinatura direta */}
           {contrato?.linkAssinatura && (
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ delay: 0.1 }}
+              className="space-y-2"
             >
+              <p className="text-xs text-center text-muted-foreground">
+                Ou clique abaixo para assinar diretamente:
+              </p>
               <Button 
                 className="w-full h-14 text-lg gap-3" 
                 asChild
               >
                 <a href={contrato.linkAssinatura} target="_blank" rel="noopener noreferrer">
                   <FileSignature className="h-5 w-5" />
-                  Assinar Contrato Digitalmente
+                  Assinar Contrato Agora
                   <ExternalLink className="h-4 w-4" />
                 </a>
               </Button>
