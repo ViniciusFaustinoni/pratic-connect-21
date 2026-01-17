@@ -154,11 +154,16 @@ export function useCreateCotacao() {
         throw new Error('vendedor_id é obrigatório para criar cotações');
       }
       
+      // Gera token público para link do cliente
+      const tokenPublico = crypto.randomUUID().replace(/-/g, '') + 
+                          crypto.randomUUID().replace(/-/g, '').slice(0, 32);
+      
       const { data, error } = await supabase
         .from('cotacoes')
         .insert({
           ...cotacao,
           numero: gerarNumeroCotacao(),
+          token_publico: tokenPublico,
         })
         .select()
         .single();
