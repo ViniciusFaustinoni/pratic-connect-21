@@ -5,7 +5,8 @@ import { AlertTriangle, Car, CheckCircle2, Sparkles } from 'lucide-react';
 import { useCotacaoContratacao } from '@/hooks/useCotacaoContratacao';
 import { StepperCotacao, type Step } from '@/components/cotacao-publica/StepperCotacao';
 import { EscolhaPlano } from '@/components/cotacao-publica/EscolhaPlano';
-import { FormularioDadosPessoais, type DadosPessoaisForm } from '@/components/cotacao-publica/FormularioDadosPessoais';
+import { EtapaDadosPessoaisDocumentos } from '@/components/cotacao-publica/EtapaDadosPessoaisDocumentos';
+import type { DadosPessoaisForm } from '@/components/cotacao-publica/FormularioDadosPessoais';
 import { useState, useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { formatarMoeda } from '@/config/pricing';
@@ -288,7 +289,8 @@ export default function CotacaoContratacao() {
                   animate="animate"
                   exit="exit"
                 >
-                  <FormularioDadosPessoais
+                  <EtapaDadosPessoaisDocumentos
+                    cotacaoId={cotacao.id}
                     onSubmit={handleSalvarDados}
                     defaultValues={dadosPessoaisDefault}
                     isLoading={isPending}
