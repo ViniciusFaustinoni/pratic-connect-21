@@ -158,7 +158,7 @@ serve(async (req) => {
 
     const cobrancaData = await asaasRequest('/payments', 'POST', {
       customer: asaasClienteId,
-      billingType: 'UNDEFINED', // Permite PIX e Boleto
+      billingType: 'PIX', // Apenas PIX (sem boleto)
       value: valor,
       dueDate: vencimento.toISOString().split('T')[0],
       description: `Adesão - Contrato ${contrato.numero || contratoId.slice(0, 8)}`,
