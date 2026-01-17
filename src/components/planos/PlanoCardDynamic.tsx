@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Check, ChevronDown, ChevronUp, AlertTriangle, Pencil, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -124,9 +123,9 @@ export function PlanoCardDynamic({ plan, canEdit, onEdit, onDelete }: PlanoCardD
       
       {/* Badge do plano */}
       {plan.badge_text && (
-        <Badge className={cn('absolute top-4 text-xs', badgeColorClass, canEdit ? 'right-20' : 'right-4')}>
+        <div className={cn('absolute top-4 text-xs', badgeColorClass, canEdit ? 'right-20' : 'right-4', 'inline-flex items-center rounded-full border px-2.5 py-0.5 font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2')}>
           ⭐ {plan.badge_text}
-        </Badge>
+        </div>
       )}
 
       <CardHeader className="pb-2">
@@ -134,23 +133,23 @@ export function PlanoCardDynamic({ plan, canEdit, onEdit, onDelete }: PlanoCardD
           <CardTitle className="text-lg">{plan.name}</CardTitle>
           {/* Badge de preço adicional */}
           {plan.additional_price && plan.additional_price > 0 && (
-            <Badge variant="secondary" className="text-xs">
+            <span className="text-xs inline-flex items-center rounded-full border border-input bg-secondary text-secondary-foreground px-2.5 py-0.5 font-semibold">
               +{formatCurrency(plan.additional_price)}/mês
-            </Badge>
+            </span>
           )}
         </div>
         
         {/* Tags de cobertura e ano */}
         <div className="flex items-center gap-2 mt-1 flex-wrap">
           {plan.coverage_type && (
-            <Badge className={cn('text-xs', getCoverageTypeClass())}>
+            <span className={cn('text-xs inline-flex items-center rounded-full border px-2.5 py-0.5 font-semibold', getCoverageTypeClass())}>
               {plan.coverage_type}
-            </Badge>
+            </span>
           )}
           {plan.min_vehicle_year && (
-            <Badge variant="outline" className="text-xs">
+            <span className="text-xs inline-flex items-center rounded-full border border-input bg-background px-2.5 py-0.5 font-semibold">
               {plan.min_vehicle_year}
-            </Badge>
+            </span>
           )}
         </div>
       </CardHeader>
