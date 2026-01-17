@@ -3,7 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Loader2, Search, User, Check, FileCheck, AlertTriangle, UserCheck } from 'lucide-react';
+import { Loader2, Search, User, Check, FileCheck, AlertTriangle, UserCheck, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -63,12 +63,17 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
 const formSchema = z.object({
-  lead_id: z.string().min(1, 'Selecione um lead'),
+  lead_id: z.string().optional().nullable(),
   plano_id: z.string().min(1, 'Selecione um plano'),
   valor_adesao: z.number().min(1, 'O valor de adesão é obrigatório e deve ser maior que zero'),
   valor_mensal: z.number().min(0, 'Informe o valor mensal'),
   dia_vencimento: z.number().min(1).max(28).optional(),
   vendedor_id: z.string().optional().nullable(),
+  // Campos do cliente (quando não há lead selecionado)
+  cliente_nome: z.string().optional(),
+  cliente_email: z.string().email('Email inválido').optional().or(z.literal('')),
+  cliente_telefone: z.string().optional(),
+  cliente_cpf: z.string().optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -127,6 +132,10 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
       valor_mensal: 0,
       dia_vencimento: 10,
       vendedor_id: null,
+      cliente_nome: '',
+      cliente_email: '',
+      cliente_telefone: '',
+      cliente_cpf: '',
     },
   });
 
@@ -201,6 +210,12 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
       return;
     }
     
+    // Validação: precisa ter lead OU nome do cliente
+    if (!data.lead_id && !data.cliente_nome?.trim()) {
+      toast.error('Selecione um lead ou informe o nome do cliente');
+      return;
+    }
+    
     // Guardar dados e abrir popup de confirmação
     setPendingFormData(data);
     setShowConfirmDialog(true);
@@ -215,7 +230,7 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
     
     try {
       await createContrato.mutateAsync({
-        lead_id: pendingFormData.lead_id,
+        lead_id: pendingFormData.lead_id || null,
         plano_id: pendingFormData.plano_id,
         valor_adesao: pendingFormData.valor_adesao,
         valor_mensal: pendingFormData.valor_mensal,
@@ -224,6 +239,11 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
         status: 'rascunho',
         cotacao_id: cotacaoPrioritaria?.id || null,
         vendedor_id: usuarioEhVendedor ? profile?.id : (pendingFormData.vendedor_id || null),
+        // Dados do cliente (quando não há lead)
+        cliente_nome: pendingFormData.cliente_nome || selectedLead?.nome || null,
+        cliente_email: pendingFormData.cliente_email || selectedLead?.email || null,
+        cliente_telefone: pendingFormData.cliente_telefone || selectedLead?.telefone || null,
+        cliente_cpf: pendingFormData.cliente_cpf || selectedLead?.cpf || null,
       });
 
       toast.success('Proposta criada como rascunho');
@@ -250,13 +270,16 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            {/* Lead Selection */}
+            {/* Lead Selection (opcional) */}
             <FormField
               control={form.control}
               name="lead_id"
               render={({ field }) => (
                 <FormItem className="flex flex-col">
-                  <FormLabel>Lead *</FormLabel>
+                  <FormLabel className="flex items-center gap-2">
+                    <User className="h-4 w-4" />
+                    Lead (opcional)
+                  </FormLabel>
                   <Popover open={leadSearchOpen} onOpenChange={setLeadSearchOpen}>
                     <PopoverTrigger asChild>
                       <FormControl>
@@ -277,7 +300,7 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
                               </span>
                             </div>
                           ) : (
-                            "Selecione um lead..."
+                            "Selecione um lead existente..."
                           )}
                           <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
@@ -289,6 +312,19 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
                         <CommandList>
                           <CommandEmpty>Nenhum lead encontrado.</CommandEmpty>
                           <CommandGroup>
+                            {/* Opção para limpar seleção */}
+                            {field.value && (
+                              <CommandItem
+                                value="__clear__"
+                                onSelect={() => {
+                                  form.setValue('lead_id', '');
+                                  setLeadSearchOpen(false);
+                                }}
+                                className="text-muted-foreground"
+                              >
+                                <span className="italic">Limpar seleção</span>
+                              </CommandItem>
+                            )}
                             {availableLeads.map((lead) => (
                               <CommandItem
                                 key={lead.id}
@@ -322,6 +358,88 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
                 </FormItem>
               )}
             />
+
+            {/* Campos do cliente (quando não há lead selecionado) */}
+            {!selectedLeadId && (
+              <div className="rounded-lg border p-4 bg-muted/30 space-y-4">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <UserPlus className="h-4 w-4 text-primary" />
+                  <span>Dados do Cliente</span>
+                  <span className="text-xs text-muted-foreground font-normal">(preencha se não houver lead)</span>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-3">
+                  <FormField
+                    control={form.control}
+                    name="cliente_nome"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs">Nome *</FormLabel>
+                        <FormControl>
+                          <Input 
+                            placeholder="Nome do cliente" 
+                            {...field} 
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="cliente_email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs">Email</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="email"
+                            placeholder="email@exemplo.com" 
+                            {...field} 
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="cliente_telefone"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs">Telefone</FormLabel>
+                        <FormControl>
+                          <Input 
+                            placeholder="(00) 00000-0000" 
+                            {...field} 
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="cliente_cpf"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs">CPF</FormLabel>
+                        <FormControl>
+                          <Input 
+                            placeholder="000.000.000-00" 
+                            {...field} 
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+            )}
 
             {/* Consultor Responsável - Apenas para não-vendedores */}
             {!usuarioEhVendedor && (
@@ -528,7 +646,7 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
               </Button>
               <Button 
                 type="submit" 
-                disabled={isSubmitting || (selectedLead && !selectedLead.email) || form.watch('valor_adesao') <= 0}
+                disabled={isSubmitting || form.watch('valor_adesao') <= 0}
               >
                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Criar Rascunho
