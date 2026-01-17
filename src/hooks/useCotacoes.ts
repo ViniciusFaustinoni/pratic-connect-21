@@ -66,7 +66,7 @@ export function useCotacoes(options?: UseCotacoesOptions) {
         .select(`
           *,
           leads:leads!fk_cotacoes_lead_id(*),
-          planos(*),
+          planos:planos!plano_id(*),
           contratos(id, numero, status)
         `)
         .order('created_at', { ascending: false });
@@ -120,7 +120,7 @@ export function useCotacao(id: string | undefined) {
         .select(`
           *,
           leads:leads!fk_cotacoes_lead_id(*),
-          planos(*)
+          planos:planos!plano_id(*)
         `)
         .eq('id', id)
         .single();

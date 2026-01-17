@@ -3629,23 +3629,41 @@ export type Database = {
           adicionais_selecionados: Json | null
           categoria: string | null
           cidade: string | null
+          cliente_bairro: string | null
+          cliente_cep: string | null
+          cliente_cidade: string | null
+          cliente_complemento: string | null
+          cliente_cpf: string | null
+          cliente_data_nascimento: string | null
+          cliente_logradouro: string | null
+          cliente_numero: string | null
+          cliente_uf: string | null
           codigo_fipe: string | null
           combustivel: string | null
+          contrato_gerado_id: string | null
           created_at: string
           dados_extras: Json | null
           desagio_aplicado: number | null
+          doc_cnh_frente: string | null
+          doc_cnh_verso: string | null
+          doc_comprovante: string | null
+          doc_crlv: string | null
+          doc_selfie: string | null
           email_enviado_em: string | null
           email_solicitante: string | null
           id: string
           lead_id: string | null
           nome_solicitante: string | null
           numero: string
+          plano_escolhido_id: string | null
           plano_id: string | null
           regiao: string | null
           status: Database["public"]["Enums"]["status_cotacao"]
+          status_contratacao: string | null
           taxa_administrativa: number
           telefone1_solicitante: string | null
           telefone2_solicitante: string | null
+          tipo_vistoria: string | null
           token_publico: string | null
           updated_at: string
           uso_aplicativo: boolean | null
@@ -3665,28 +3683,48 @@ export type Database = {
           veiculo_modelo: string | null
           veiculo_placa: string | null
           vendedor_id: string | null
+          vistoria_concluida_em: string | null
+          visualizado_em: string | null
         }
         Insert: {
           adicionais_selecionados?: Json | null
           categoria?: string | null
           cidade?: string | null
+          cliente_bairro?: string | null
+          cliente_cep?: string | null
+          cliente_cidade?: string | null
+          cliente_complemento?: string | null
+          cliente_cpf?: string | null
+          cliente_data_nascimento?: string | null
+          cliente_logradouro?: string | null
+          cliente_numero?: string | null
+          cliente_uf?: string | null
           codigo_fipe?: string | null
           combustivel?: string | null
+          contrato_gerado_id?: string | null
           created_at?: string
           dados_extras?: Json | null
           desagio_aplicado?: number | null
+          doc_cnh_frente?: string | null
+          doc_cnh_verso?: string | null
+          doc_comprovante?: string | null
+          doc_crlv?: string | null
+          doc_selfie?: string | null
           email_enviado_em?: string | null
           email_solicitante?: string | null
           id?: string
           lead_id?: string | null
           nome_solicitante?: string | null
           numero: string
+          plano_escolhido_id?: string | null
           plano_id?: string | null
           regiao?: string | null
           status?: Database["public"]["Enums"]["status_cotacao"]
+          status_contratacao?: string | null
           taxa_administrativa?: number
           telefone1_solicitante?: string | null
           telefone2_solicitante?: string | null
+          tipo_vistoria?: string | null
           token_publico?: string | null
           updated_at?: string
           uso_aplicativo?: boolean | null
@@ -3706,28 +3744,48 @@ export type Database = {
           veiculo_modelo?: string | null
           veiculo_placa?: string | null
           vendedor_id?: string | null
+          vistoria_concluida_em?: string | null
+          visualizado_em?: string | null
         }
         Update: {
           adicionais_selecionados?: Json | null
           categoria?: string | null
           cidade?: string | null
+          cliente_bairro?: string | null
+          cliente_cep?: string | null
+          cliente_cidade?: string | null
+          cliente_complemento?: string | null
+          cliente_cpf?: string | null
+          cliente_data_nascimento?: string | null
+          cliente_logradouro?: string | null
+          cliente_numero?: string | null
+          cliente_uf?: string | null
           codigo_fipe?: string | null
           combustivel?: string | null
+          contrato_gerado_id?: string | null
           created_at?: string
           dados_extras?: Json | null
           desagio_aplicado?: number | null
+          doc_cnh_frente?: string | null
+          doc_cnh_verso?: string | null
+          doc_comprovante?: string | null
+          doc_crlv?: string | null
+          doc_selfie?: string | null
           email_enviado_em?: string | null
           email_solicitante?: string | null
           id?: string
           lead_id?: string | null
           nome_solicitante?: string | null
           numero?: string
+          plano_escolhido_id?: string | null
           plano_id?: string | null
           regiao?: string | null
           status?: Database["public"]["Enums"]["status_cotacao"]
+          status_contratacao?: string | null
           taxa_administrativa?: number
           telefone1_solicitante?: string | null
           telefone2_solicitante?: string | null
+          tipo_vistoria?: string | null
           token_publico?: string | null
           updated_at?: string
           uso_aplicativo?: boolean | null
@@ -3747,8 +3805,17 @@ export type Database = {
           veiculo_modelo?: string | null
           veiculo_placa?: string | null
           vendedor_id?: string | null
+          vistoria_concluida_em?: string | null
+          visualizado_em?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "cotacoes_contrato_gerado_id_fkey"
+            columns: ["contrato_gerado_id"]
+            isOneToOne: false
+            referencedRelation: "contratos"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "cotacoes_lead_id_fkey"
             columns: ["lead_id"]
@@ -3762,6 +3829,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_acompanhamento"
             referencedColumns: ["lead_id"]
+          },
+          {
+            foreignKeyName: "cotacoes_plano_escolhido_id_fkey"
+            columns: ["plano_escolhido_id"]
+            isOneToOne: false
+            referencedRelation: "planos"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "cotacoes_plano_id_fkey"

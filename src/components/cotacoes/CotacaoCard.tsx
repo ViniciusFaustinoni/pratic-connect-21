@@ -351,6 +351,15 @@ export function CotacaoCard({
                 <FileDown className="h-4 w-4 mr-2" />
                 Baixar PDF
               </DropdownMenuItem>
+              {cotacao.token_publico && (
+                <DropdownMenuItem onClick={() => {
+                  const link = `${window.location.origin}/cotacao/${cotacao.token_publico}`;
+                  navigator.clipboard.writeText(link);
+                }}>
+                  <Link2 className="h-4 w-4 mr-2" />
+                  Copiar Link
+                </DropdownMenuItem>
+              )}
               {permissions?.canDuplicate !== false && (
                 <>
                   <DropdownMenuSeparator />

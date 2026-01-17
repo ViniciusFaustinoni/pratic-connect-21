@@ -233,6 +233,7 @@ import InstaladorChecklist from "./pages/instalador/InstaladorChecklist";
 // Public Pages
 import CotacaoPublicaPage from "./pages/public/CotacaoPublica";
 import CotacaoPublicaCompleta from "./pages/public/CotacaoPublicaCompleta";
+import CotacaoContratacao from "./pages/public/CotacaoContratacao";
 
 const queryClient = new QueryClient();
 
@@ -262,7 +263,8 @@ const App = () => (
             <Route path="/auth/reset-password" element={<ResetPassword />} />
             
             {/* Public Quote Page */}
-            <Route path="/cotacao/:token" element={<CotacaoPublicaPage />} />
+            <Route path="/cotacao/:token" element={<CotacaoContratacao />} />
+            <Route path="/cotacao-visualizar/:token" element={<CotacaoPublicaPage />} />
             <Route path="/q/:token" element={<CotacaoPublicaCompleta />} />
             
             {/* Public Associate Vistoria Page */}
