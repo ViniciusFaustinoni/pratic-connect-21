@@ -641,11 +641,13 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
       const anoTextoLocal = getAnoNome();
       const anoNumericoLocal = anoTextoLocal ? parseInt(anoTextoLocal.split(' ')[0]) : null;
       
+      const valorAdicionalAtual = pendingFormData.valor_adicional || 0;
+      
       await createCotacao.mutateAsync({
         lead_id: pendingFormData.lead_id || null,
         plano_id: pendingFormData.plano_id,
         valor_fipe: pendingFormData.valor_fipe,
-        valor_adicional: pendingFormData.valor_adicional || 0,
+        valor_adicional: valorAdicionalAtual,
         valor_cota: pendingFormData.valor_cota,
         taxa_administrativa: pendingFormData.taxa_administrativa,
         valor_rastreamento: pendingFormData.valor_rastreamento,
@@ -670,6 +672,16 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
         categoria: categoria && categoria !== 'nenhuma' ? categoria : null,
         // Região selecionada
         regiao: regiaoSelecionada || null,
+        // Planos para comparação (múltiplos planos selecionados)
+        dados_extras: {
+          planos_comparacao: planosSelecionados.map(p => ({
+            id: p.id,
+            nome: p.nome,
+            codigo: p.codigo,
+            valorMensal: p.valorMensal + valorAdicionalAtual,
+            coberturas: p.coberturas || [],
+          }))
+        },
       });
       
       toast.success('Cotação criada com sucesso!');

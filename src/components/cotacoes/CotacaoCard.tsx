@@ -209,18 +209,43 @@ export function CotacaoCard({
           </div>
         </div>
         
-        {/* Valores */}
-        <div className="flex flex-wrap gap-4 sm:gap-8 text-sm mb-4">
-          <div>
-            <span className="text-muted-foreground">FIPE: </span>
-            <span className="font-medium">{formatCurrency(cotacao.valor_fipe)}</span>
+        {/* Valores e Planos */}
+        <div className="mb-4">
+          <div className="flex flex-wrap gap-4 sm:gap-8 text-sm mb-2">
+            <div>
+              <span className="text-muted-foreground">FIPE: </span>
+              <span className="font-medium">{formatCurrency(cotacao.valor_fipe)}</span>
+            </div>
           </div>
-          <div>
-            <span className="text-muted-foreground">Mensal: </span>
-            <span className="font-semibold text-primary text-base">
-              {formatCurrency(cotacao.valor_total_mensal)}
-            </span>
-          </div>
+          
+          {(() => {
+            const planosComparacao = (cotacao.dados_extras as { planos_comparacao?: { id: string; nome: string; valorMensal: number }[] } | null)?.planos_comparacao;
+            
+            if (planosComparacao && planosComparacao.length > 1) {
+              return (
+                <div className={`grid gap-2 ${planosComparacao.length === 2 ? 'grid-cols-2' : 'grid-cols-2 lg:grid-cols-3'}`}>
+                  {planosComparacao.map((plano) => (
+                    <div key={plano.id} className="p-2 rounded-lg border bg-muted/30">
+                      <p className="text-xs font-medium truncate">{plano.nome}</p>
+                      <p className="text-primary font-bold">
+                        {formatCurrency(plano.valorMensal)}
+                        <span className="text-[10px] font-normal text-muted-foreground">/mês</span>
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              );
+            }
+            
+            return (
+              <div>
+                <span className="text-muted-foreground text-sm">Mensal: </span>
+                <span className="font-semibold text-primary text-base">
+                  {formatCurrency(cotacao.valor_total_mensal)}
+                </span>
+              </div>
+            );
+          })()}
         </div>
         
         <Separator className="my-3" />
