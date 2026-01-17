@@ -125,9 +125,9 @@ export function EscolhaPlano({
         </p>
       </motion.div>
 
-      {/* Cards de Planos - Premium Dark Cards */}
+      {/* Cards de Planos - Grid com máximo 3 por linha */}
       <motion.div 
-        className="flex flex-wrap justify-center gap-6"
+        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto justify-items-center"
         variants={containerVariants}
         initial="hidden"
         animate="visible"
@@ -145,7 +145,7 @@ export function EscolhaPlano({
                 transition: { duration: 0.2 },
               }}
               whileTap={{ scale: 0.98 }}
-              className="w-full sm:w-80"
+              className="w-full max-w-sm"
             >
               <Card
                 className={cn(
