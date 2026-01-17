@@ -3,11 +3,10 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { User } from 'lucide-react';
 
-interface UserAvatarProps {
+interface UserAvatarProps extends React.ComponentPropsWithoutRef<typeof Avatar> {
   src?: string | null;
   name?: string | null;
   size?: 'sm' | 'md' | 'lg' | 'xl';
-  className?: string;
 }
 
 const sizeClasses = {
@@ -24,7 +23,10 @@ const iconSizes = {
   xl: 'h-10 w-10',
 };
 
-export function UserAvatar({ src, name, size = 'md', className }: UserAvatarProps) {
+const UserAvatar = React.forwardRef<
+  React.ElementRef<typeof Avatar>,
+  UserAvatarProps
+>(({ src, name, size = 'md', className, ...props }, ref) => {
   const initials = name
     ? name
         .split(' ')
@@ -35,11 +37,15 @@ export function UserAvatar({ src, name, size = 'md', className }: UserAvatarProp
     : null;
 
   return (
-    <Avatar className={cn(sizeClasses[size], className)}>
+    <Avatar ref={ref} className={cn(sizeClasses[size], className)} {...props}>
       {src && <AvatarImage src={src} alt={name || 'Avatar'} className="object-cover" />}
       <AvatarFallback className="bg-primary text-primary-foreground font-medium">
         {initials || <User className={iconSizes[size]} />}
       </AvatarFallback>
     </Avatar>
   );
-}
+});
+
+UserAvatar.displayName = 'UserAvatar';
+
+export { UserAvatar };

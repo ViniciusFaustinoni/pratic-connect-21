@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { toast } from 'sonner';
 import type { Tables } from '@/integrations/supabase/types';
 import type { DadosPessoaisForm } from '@/components/cotacao-publica/FormularioDadosPessoais';
@@ -43,27 +43,36 @@ export function useCotacaoContratacao(token: string | undefined) {
   const queryClient = useQueryClient();
   const [etapaAtual, setEtapaAtual] = useState(0);
 
-  // Buscar cotação pelo token público
+  // Buscar cotação pelo token público usando cliente ANÔNIMO
+  // Isso garante que funcione mesmo se o usuário estiver logado no painel
   const { data: cotacao, isLoading, error } = useQuery({
     queryKey: ['cotacao-contratacao', token],
     queryFn: async (): Promise<CotacaoContratacao> => {
       if (!token) throw new Error('Token não informado');
 
-      const { data, error } = await supabase
+      const { data, error } = await publicSupabase
         .from('cotacoes')
         .select(`
           *,
-          planos!left(id, nome, codigo, coberturas, valor_adesao),
-          plano_escolhido:planos!left(id, nome, codigo, coberturas, valor_adesao)
+          planos:planos!plano_id(id, nome, codigo, coberturas, valor_adesao),
+          plano_escolhido:planos!plano_escolhido_id(id, nome, codigo, coberturas, valor_adesao)
         `)
         .eq('token_publico', token)
-        .single();
+        .maybeSingle();
 
-      if (error) throw error;
+      if (error) {
+        console.error('[CotacaoContratacao] Erro ao buscar cotação:', error);
+        throw error;
+      }
+      
+      if (!data) {
+        console.warn('[CotacaoContratacao] Nenhuma cotação encontrada para token:', token);
+        throw new Error('Cotação não encontrada');
+      }
 
       // Atualizar visualizado_em se for primeira visualização
-      if (data && !data.visualizado_em) {
-        await supabase
+      if (!data.visualizado_em) {
+        await publicSupabase
           .from('cotacoes')
           .update({ visualizado_em: new Date().toISOString() })
           .eq('id', data.id);
@@ -72,6 +81,8 @@ export function useCotacaoContratacao(token: string | undefined) {
       return data as unknown as CotacaoContratacao;
     },
     enabled: !!token,
+    retry: 2,
+    retryDelay: 500,
   });
 
   // Extrair planos disponíveis para escolha
@@ -135,7 +146,7 @@ export function useCotacaoContratacao(token: string | undefined) {
     mutationFn: async (planoId: string) => {
       if (!cotacao) throw new Error('Cotação não encontrada');
 
-      const { error } = await supabase
+      const { error } = await publicSupabase
         .from('cotacoes')
         .update({
           plano_escolhido_id: planoId,
@@ -159,7 +170,7 @@ export function useCotacaoContratacao(token: string | undefined) {
     mutationFn: async (dados: DadosPessoaisForm) => {
       if (!cotacao) throw new Error('Cotação não encontrada');
 
-      const { error } = await supabase
+      const { error } = await publicSupabase
         .from('cotacoes')
         .update({
           nome_solicitante: dados.nome,
@@ -201,7 +212,7 @@ export function useCotacaoContratacao(token: string | undefined) {
     }) => {
       if (!cotacao) throw new Error('Cotação não encontrada');
 
-      const { error } = await supabase
+      const { error } = await publicSupabase
         .from('cotacoes')
         .update({
           doc_cnh_frente: docs.cnh_frente,
@@ -230,7 +241,7 @@ export function useCotacaoContratacao(token: string | undefined) {
     mutationFn: async (tipoVistoria: 'autovistoria' | 'agendada') => {
       if (!cotacao) throw new Error('Cotação não encontrada');
 
-      const { error } = await supabase
+      const { error } = await publicSupabase
         .from('cotacoes')
         .update({
           tipo_vistoria: tipoVistoria,
@@ -256,15 +267,15 @@ export function useCotacaoContratacao(token: string | undefined) {
       if (!cotacao) throw new Error('Cotação não encontrada');
 
       // 1. Atualizar status do pagamento
-      const { error: updateError } = await supabase
+      const { error: updateError } = await publicSupabase
         .from('cotacoes')
         .update({ status_contratacao: 'pagamento_ok' })
         .eq('id', cotacao.id);
 
       if (updateError) throw updateError;
 
-      // 2. Gerar contrato via edge function
-      const { data, error: fnError } = await supabase.functions.invoke('contrato-gerar', {
+      // 2. Gerar contrato via edge function (usa publicSupabase para invocar)
+      const { data, error: fnError } = await publicSupabase.functions.invoke('contrato-gerar', {
         body: { cotacao_id: cotacao.id },
       });
 
@@ -272,7 +283,7 @@ export function useCotacaoContratacao(token: string | undefined) {
 
       // 3. Atualizar cotação com ID do contrato gerado
       if (data?.contrato?.id) {
-        await supabase
+        await publicSupabase
           .from('cotacoes')
           .update({
             contrato_gerado_id: data.contrato.id,
