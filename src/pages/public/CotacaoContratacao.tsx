@@ -1,7 +1,7 @@
 import { useParams } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertTriangle, Car, CheckCircle2 } from 'lucide-react';
+import { AlertTriangle, Car, CheckCircle2, Sparkles } from 'lucide-react';
 import { useCotacaoContratacao } from '@/hooks/useCotacaoContratacao';
 import { StepperCotacao, type Step } from '@/components/cotacao-publica/StepperCotacao';
 import { EscolhaPlano } from '@/components/cotacao-publica/EscolhaPlano';
@@ -72,12 +72,12 @@ export default function CotacaoContratacao() {
   // Loading
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5 p-4 md:p-8">
+      <div className="dark min-h-screen public-premium-bg p-4 md:p-8">
         <div className="max-w-5xl mx-auto space-y-6">
-          <Skeleton className="h-24 w-full rounded-xl" />
+          <Skeleton className="h-24 w-full rounded-xl bg-white/5" />
           <div className="grid md:grid-cols-[280px_1fr] gap-6">
-            <Skeleton className="h-80 rounded-xl" />
-            <Skeleton className="h-[500px] rounded-xl" />
+            <Skeleton className="h-80 rounded-xl bg-white/5" />
+            <Skeleton className="h-[500px] rounded-xl bg-white/5" />
           </div>
         </div>
       </div>
@@ -87,18 +87,25 @@ export default function CotacaoContratacao() {
   // Error / Not Found
   if (error || !cotacao) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5 flex items-center justify-center p-4">
+      <div className="dark min-h-screen public-premium-bg flex items-center justify-center p-4">
+        {/* Ambient glow effects */}
+        <div className="fixed inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full bg-primary/10 blur-[120px]" />
+          <div className="absolute bottom-1/4 right-1/4 w-80 h-80 rounded-full bg-accent/5 blur-[100px]" />
+        </div>
+        
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.4 }}
+          className="relative z-10"
         >
-          <Card className="max-w-md w-full border-destructive/20">
+          <Card className="max-w-md w-full border-destructive/30 bg-card/80 backdrop-blur-xl">
             <CardContent className="pt-8 pb-8 text-center">
               <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-destructive/10 flex items-center justify-center">
                 <AlertTriangle className="h-8 w-8 text-destructive" />
               </div>
-              <h1 className="text-xl font-bold mb-2">Cotação não encontrada</h1>
+              <h1 className="text-xl font-bold mb-2 text-foreground">Cotação não encontrada</h1>
               <p className="text-muted-foreground">
                 Esta cotação não existe, expirou ou o link está incorreto.
               </p>
@@ -112,27 +119,34 @@ export default function CotacaoContratacao() {
   // Contrato já gerado
   if (cotacao.status_contratacao === 'contrato_gerado' && cotacao.contrato_gerado_id) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background via-background to-green-500/5 flex items-center justify-center p-4">
+      <div className="dark min-h-screen public-premium-bg flex items-center justify-center p-4">
+        {/* Ambient glow effects */}
+        <div className="fixed inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute top-1/4 left-1/3 w-96 h-96 rounded-full bg-success/10 blur-[120px]" />
+          <div className="absolute bottom-1/3 right-1/4 w-72 h-72 rounded-full bg-primary/10 blur-[100px]" />
+        </div>
+        
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.5, type: 'spring' }}
+          className="relative z-10"
         >
-          <Card className="max-w-md w-full border-green-500/30">
+          <Card className="max-w-md w-full border-success/30 bg-card/80 backdrop-blur-xl">
             <CardContent className="pt-8 pb-8 text-center">
               <motion.div 
-                className="w-20 h-20 mx-auto mb-4 rounded-full bg-green-500/10 flex items-center justify-center"
+                className="w-20 h-20 mx-auto mb-4 rounded-full bg-success/10 flex items-center justify-center"
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
               >
-                <CheckCircle2 className="h-10 w-10 text-green-500" />
+                <CheckCircle2 className="h-10 w-10 text-success" />
               </motion.div>
-              <h1 className="text-2xl font-bold mb-2">Contrato Gerado!</h1>
+              <h1 className="text-2xl font-bold mb-2 text-foreground">Contrato Gerado!</h1>
               <p className="text-muted-foreground mb-6">
                 Seu contrato foi gerado com sucesso. Em breve você receberá um e-mail para assinatura.
               </p>
-              <Badge variant="outline" className="text-lg px-6 py-2 border-green-500/30">
+              <Badge variant="outline" className="text-lg px-6 py-2 border-success/30 text-success">
                 {cotacao.numero}
               </Badge>
             </CardContent>
@@ -159,21 +173,31 @@ export default function CotacaoContratacao() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+    <div className="dark min-h-screen public-premium-bg relative">
+      {/* Ambient glow effects - fixed background */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
+        <div className="absolute top-20 left-1/4 w-[500px] h-[500px] rounded-full bg-primary/8 blur-[150px]" />
+        <div className="absolute bottom-40 right-1/4 w-[400px] h-[400px] rounded-full bg-accent/5 blur-[120px]" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-primary/5 blur-[180px]" />
+      </div>
+
       {/* Header Premium com Logo */}
       <motion.header 
-        className="bg-gradient-to-r from-[hsl(218,80%,20%)] via-[hsl(218,67%,30%)] to-[hsl(218,80%,20%)] text-white sticky top-0 z-20 shadow-lg"
+        className="header-premium-glow text-white sticky top-0 z-20"
         initial={{ y: -100 }}
         animate={{ y: 0 }}
         transition={{ duration: 0.5, type: 'spring' }}
       >
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img 
-              src="/pratic-logo.png" 
-              alt="PRATIC" 
-              className="h-12 w-12 object-contain rounded-lg bg-white/10 p-1"
-            />
+            <div className="relative">
+              <div className="absolute inset-0 bg-white/20 blur-xl rounded-full" />
+              <img 
+                src="/pratic-logo.png" 
+                alt="PRATIC" 
+                className="h-12 w-12 object-contain rounded-lg bg-white/10 p-1 relative z-10"
+              />
+            </div>
             <div>
               <h1 className="font-bold text-lg tracking-tight">PRATIC</h1>
               <p className="text-xs text-white/60">Proteção Veicular</p>
@@ -190,7 +214,7 @@ export default function CotacaoContratacao() {
 
       {/* Vehicle Info Bar */}
       <motion.div 
-        className="bg-card border-b shadow-sm"
+        className="bg-card/50 backdrop-blur-md border-b border-border/50 relative z-10"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.2 }}
@@ -204,7 +228,7 @@ export default function CotacaoContratacao() {
               </span>
             </div>
             {cotacao.veiculo_ano && (
-              <Badge variant="secondary" className="text-xs">
+              <Badge variant="secondary" className="text-xs bg-white/5 border-white/10">
                 {cotacao.veiculo_ano}
               </Badge>
             )}
@@ -218,7 +242,7 @@ export default function CotacaoContratacao() {
       </motion.div>
 
       {/* Main Content */}
-      <main className="max-w-5xl mx-auto px-4 py-8">
+      <main className="max-w-5xl mx-auto px-4 py-8 relative z-10">
         <div className="grid md:grid-cols-[280px_1fr] gap-8">
           {/* Stepper Sidebar */}
           <motion.aside 
@@ -227,7 +251,7 @@ export default function CotacaoContratacao() {
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.3, duration: 0.5 }}
           >
-            <Card className="p-4 shadow-sm">
+            <Card className="p-4 stepper-card-premium">
               <StepperCotacao
                 steps={STEPS}
                 currentStep={etapaAtual}
@@ -284,18 +308,18 @@ export default function CotacaoContratacao() {
                   animate="animate"
                   exit="exit"
                 >
-                  <Card className="border-dashed">
+                  <Card className="placeholder-card-premium">
                     <CardContent className="py-16 text-center">
-                      <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
+                      <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center">
                         <span className="text-2xl">📄</span>
                       </div>
-                      <h2 className="text-xl font-semibold mb-3">Envio de Documentos</h2>
+                      <h2 className="text-xl font-semibold mb-3 text-foreground">Envio de Documentos</h2>
                       <p className="text-muted-foreground mb-6 max-w-sm mx-auto">
                         Esta etapa será implementada em breve. Por enquanto, clique em continuar.
                       </p>
                       <Button 
                         onClick={() => setEtapaAtual(3)}
-                        className="bg-accent hover:bg-accent-hover"
+                        className="bg-accent hover:bg-accent-hover text-accent-foreground"
                       >
                         Continuar
                       </Button>
@@ -313,18 +337,18 @@ export default function CotacaoContratacao() {
                   animate="animate"
                   exit="exit"
                 >
-                  <Card className="border-dashed">
+                  <Card className="placeholder-card-premium">
                     <CardContent className="py-16 text-center">
-                      <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
+                      <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center">
                         <span className="text-2xl">🔍</span>
                       </div>
-                      <h2 className="text-xl font-semibold mb-3">Vistoria</h2>
+                      <h2 className="text-xl font-semibold mb-3 text-foreground">Vistoria</h2>
                       <p className="text-muted-foreground mb-6 max-w-sm mx-auto">
                         Esta etapa será implementada em breve. Por enquanto, clique em continuar.
                       </p>
                       <Button 
                         onClick={() => setEtapaAtual(4)}
-                        className="bg-accent hover:bg-accent-hover"
+                        className="bg-accent hover:bg-accent-hover text-accent-foreground"
                       >
                         Continuar
                       </Button>
@@ -342,18 +366,18 @@ export default function CotacaoContratacao() {
                   animate="animate"
                   exit="exit"
                 >
-                  <Card className="border-dashed">
+                  <Card className="placeholder-card-premium">
                     <CardContent className="py-16 text-center">
-                      <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
+                      <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center">
                         <span className="text-2xl">💳</span>
                       </div>
-                      <h2 className="text-xl font-semibold mb-3">Pagamento</h2>
+                      <h2 className="text-xl font-semibold mb-3 text-foreground">Pagamento</h2>
                       <p className="text-muted-foreground mb-6 max-w-sm mx-auto">
                         Esta etapa será implementada em breve. Por enquanto, clique em continuar.
                       </p>
                       <Button 
                         onClick={() => setEtapaAtual(5)}
-                        className="bg-accent hover:bg-accent-hover"
+                        className="bg-accent hover:bg-accent-hover text-accent-foreground"
                       >
                         Continuar
                       </Button>
@@ -371,17 +395,17 @@ export default function CotacaoContratacao() {
                   animate="animate"
                   exit="exit"
                 >
-                  <Card className="border-green-500/30 bg-gradient-to-br from-green-500/5 to-transparent">
+                  <Card className="border-success/30 bg-card/80 backdrop-blur-xl">
                     <CardContent className="py-16 text-center">
                       <motion.div 
-                        className="w-20 h-20 mx-auto mb-6 rounded-full bg-green-500/10 flex items-center justify-center"
+                        className="w-20 h-20 mx-auto mb-6 rounded-full bg-success/10 flex items-center justify-center"
                         initial={{ scale: 0 }}
                         animate={{ scale: 1 }}
                         transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
                       >
-                        <CheckCircle2 className="h-10 w-10 text-green-500" />
+                        <CheckCircle2 className="h-10 w-10 text-success" />
                       </motion.div>
-                      <h2 className="text-2xl font-bold mb-3">Processo Concluído!</h2>
+                      <h2 className="text-2xl font-bold mb-3 text-foreground">Processo Concluído!</h2>
                       <p className="text-muted-foreground max-w-sm mx-auto">
                         Seu contrato será gerado e você receberá um e-mail para assinatura digital.
                       </p>
@@ -395,7 +419,7 @@ export default function CotacaoContratacao() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t mt-auto">
+      <footer className="border-t border-border/30 mt-auto relative z-10 bg-card/30 backdrop-blur-sm">
         <div className="max-w-5xl mx-auto px-4 py-6 text-center">
           <p className="text-xs text-muted-foreground">
             © {new Date().getFullYear()} PRATIC - Proteção Veicular. Todos os direitos reservados.
