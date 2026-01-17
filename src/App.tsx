@@ -1,3 +1,4 @@
+// App Root
 import { Toaster } from "@/components/ui/toaster";
 import AcompanharChamado from "./pages/app/AcompanharChamado";
 import { Toaster as Sonner } from "@/components/ui/sonner";
