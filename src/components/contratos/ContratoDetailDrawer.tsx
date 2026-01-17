@@ -35,6 +35,7 @@ import {
   getAutentiqueStatusLabel,
   getWhatsAppLink 
 } from '@/hooks/useAutentique';
+import { useAutentiqueSyncContrato } from '@/hooks/useAutentiqueSyncContrato';
 import { ContratoTimeline } from './ContratoTimeline';
 import { useGerarLinkAssociado, getAssociadoLinkUrl } from '@/hooks/useContratoLink';
 import { toast } from 'sonner';
@@ -67,6 +68,7 @@ export function ContratoDetailDrawer({ contratoId, open, onClose }: ContratoDeta
   const sendToAutentique = useSendToAutentique();
   const resendAutentique = useResendAutentique();
   const cancelAutentique = useCancelAutentique();
+  const syncContrato = useAutentiqueSyncContrato();
   
   const gerarLink = useGerarLinkAssociado();
   
@@ -162,6 +164,11 @@ export function ContratoDetailDrawer({ contratoId, open, onClose }: ContratoDeta
       contratoId: contrato.id,
     });
     onClose();
+  };
+
+  const handleSyncAssinatura = async () => {
+    if (!contrato?.id) return;
+    await syncContrato.mutateAsync({ contratoId: contrato.id });
   };
 
   const handleEnviarWhatsApp = () => {
@@ -463,6 +470,22 @@ export function ContratoDetailDrawer({ contratoId, open, onClose }: ContratoDeta
                                 WhatsApp
                               </Button>
                             </div>
+
+                            {/* Botão de Sincronização Manual */}
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="w-full border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-400 dark:hover:bg-blue-950"
+                              onClick={handleSyncAssinatura}
+                              disabled={syncContrato.isPending}
+                            >
+                              {syncContrato.isPending ? (
+                                <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <RefreshCw className="mr-2 h-3.5 w-3.5" />
+                              )}
+                              Sincronizar Assinatura
+                            </Button>
 
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
