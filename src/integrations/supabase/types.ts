@@ -1850,6 +1850,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "beneficios_regioes_beneficio_id_fkey"
+            columns: ["beneficio_id"]
+            isOneToOne: false
+            referencedRelation: "vw_custo_real_adicionais"
+            referencedColumns: ["beneficio_id"]
+          },
+          {
             foreignKeyName: "beneficios_regioes_regiao_id_fkey"
             columns: ["regiao_id"]
             isOneToOne: false
@@ -1868,6 +1875,7 @@ export type Database = {
           id: string
           is_active: boolean | null
           name: string
+          preco_sugerido: number | null
           slug: string
         }
         Insert: {
@@ -1879,6 +1887,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           name: string
+          preco_sugerido?: number | null
           slug: string
         }
         Update: {
@@ -1890,6 +1899,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           name?: string
+          preco_sugerido?: number | null
           slug?: string
         }
         Relationships: []
@@ -5938,6 +5948,112 @@ export type Database = {
           },
         ]
       }
+      gastos_beneficios: {
+        Row: {
+          associado_id: string
+          beneficio_id: string
+          beneficio_tipo: string
+          chamado_id: string | null
+          contrato_id: string | null
+          created_at: string | null
+          data_ocorrencia: string
+          descricao: string | null
+          id: string
+          sinistro_id: string | null
+          valor_gasto: number
+        }
+        Insert: {
+          associado_id: string
+          beneficio_id: string
+          beneficio_tipo: string
+          chamado_id?: string | null
+          contrato_id?: string | null
+          created_at?: string | null
+          data_ocorrencia: string
+          descricao?: string | null
+          id?: string
+          sinistro_id?: string | null
+          valor_gasto: number
+        }
+        Update: {
+          associado_id?: string
+          beneficio_id?: string
+          beneficio_tipo?: string
+          chamado_id?: string | null
+          contrato_id?: string | null
+          created_at?: string | null
+          data_ocorrencia?: string
+          descricao?: string | null
+          id?: string
+          sinistro_id?: string | null
+          valor_gasto?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gastos_beneficios_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gastos_beneficios_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "gastos_beneficios_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "gastos_beneficios_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "gastos_beneficios_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "gastos_beneficios_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "gastos_beneficios_chamado_id_fkey"
+            columns: ["chamado_id"]
+            isOneToOne: false
+            referencedRelation: "chamados_assistencia"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gastos_beneficios_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "contratos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gastos_beneficios_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "sinistros"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       indicacoes: {
         Row: {
           associado_id: string | null
@@ -8557,6 +8673,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "benefits"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_benefits_benefit_id_fkey"
+            columns: ["benefit_id"]
+            isOneToOne: false
+            referencedRelation: "vw_custo_real_benefits"
+            referencedColumns: ["beneficio_id"]
           },
           {
             foreignKeyName: "plan_benefits_plan_id_fkey"
@@ -12410,6 +12533,51 @@ export type Database = {
         }
         Relationships: []
       }
+      vw_custo_real_adicionais: {
+        Row: {
+          beneficio_id: string | null
+          categoria: string | null
+          codigo: string | null
+          custo_real: number | null
+          gasto_total_60d: number | null
+          indicador: string | null
+          nome: string | null
+          preco_sugerido: number | null
+          tipo_beneficio: string | null
+          total_cotas: number | null
+        }
+        Relationships: []
+      }
+      vw_custo_real_beneficios: {
+        Row: {
+          beneficio_id: string | null
+          categoria: string | null
+          codigo: string | null
+          custo_real: number | null
+          gasto_total_60d: number | null
+          indicador: string | null
+          nome: string | null
+          preco_sugerido: number | null
+          tipo_beneficio: string | null
+          total_cotas: number | null
+        }
+        Relationships: []
+      }
+      vw_custo_real_benefits: {
+        Row: {
+          beneficio_id: string | null
+          categoria: string | null
+          codigo: string | null
+          custo_real: number | null
+          gasto_total_60d: number | null
+          indicador: string | null
+          nome: string | null
+          preco_sugerido: number | null
+          tipo_beneficio: string | null
+          total_cotas: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       adicionar_fila_cobranca: {
@@ -12446,6 +12614,40 @@ export type Database = {
       can_manage_juridico: { Args: { _user_id: string }; Returns: boolean }
       can_manage_marketing: { Args: { _user_id: string }; Returns: boolean }
       can_manage_permissions: { Args: { _user_id: string }; Returns: boolean }
+      fn_calcular_custo_beneficio: {
+        Args: { p_beneficio_id: string; p_tipo?: string }
+        Returns: {
+          beneficio_id: string
+          custo_real: number
+          gasto_total_60d: number
+          indicador: string
+          margem: number
+          preco_sugerido: number
+          total_cotas: number
+        }[]
+      }
+      fn_calcular_preco_plano: {
+        Args: { p_plano_id: string }
+        Returns: {
+          indicador_geral: string
+          mensalidade: number
+          plano_id: string
+          qtd_beneficios: number
+          soma_beneficios: number
+          valor_adesao: number
+          valor_adicional: number
+        }[]
+      }
+      fn_resumo_saude_beneficios: {
+        Args: never
+        Returns: {
+          equilibrio: number
+          prejuizo: number
+          sem_dados: number
+          superavit: number
+          total_beneficios: number
+        }[]
+      }
       gerar_hash_lancamento: {
         Args: {
           p_conta_id: string
