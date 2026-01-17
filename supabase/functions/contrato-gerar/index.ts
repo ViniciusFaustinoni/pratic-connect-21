@@ -52,10 +52,17 @@ serve(async (req) => {
 
     console.log('Cotação encontrada:', cotacao.numero);
 
-    // 2. Verificar se cotação está aceita
-    if (cotacao.status !== 'aceita') {
-      throw new Error(`Cotação não está com status "aceita". Status atual: ${cotacao.status}`);
+    // 2. Verificar se cotação está pronta para gerar contrato
+    // Aceita tanto cotações com status='aceita' (fluxo vendedor)
+    // quanto cotações com status_contratacao='vistoria_ok' (fluxo link público)
+    const isFluxoVendedor = cotacao.status === 'aceita';
+    const isFluxoPublico = cotacao.status_contratacao === 'vistoria_ok';
+    
+    if (!isFluxoVendedor && !isFluxoPublico) {
+      throw new Error(`Cotação não está pronta para gerar contrato. Status: ${cotacao.status}, Status Contratação: ${cotacao.status_contratacao}`);
     }
+    
+    console.log(`Gerando contrato via fluxo: ${isFluxoVendedor ? 'vendedor' : 'público'}`)
 
     // 3. Verificar se já existe contrato para esta cotação
     const { data: contratoExistente } = await supabase
@@ -80,15 +87,24 @@ serve(async (req) => {
     let leadId = cotacao.lead_id;
     let lead = cotacao.lead;
     
+    // Para fluxo público, dados estão na cotação diretamente
+    // Usar dados da cotação como fallback se lead não existir ou estiver incompleto
+    const clienteNome = lead?.nome || cotacao.nome_solicitante;
+    const clienteEmail = lead?.email || cotacao.email_solicitante;
+    const clienteTelefone = lead?.telefone || cotacao.telefone1_solicitante;
+    const clienteCpf = lead?.cpf || cotacao.cliente_cpf;
+    
     if (!leadId && cotacao.veiculo_marca) {
       console.log('Criando lead retroativo para cotação sem lead');
       
       const { data: novoLead, error: leadError } = await supabase
         .from('leads')
         .insert({
-          nome: `Cliente Cotação ${cotacao.numero}`,
-          telefone: cotacao.lead?.telefone || '00000000000', // telefone é obrigatório
-          origem: 'cotador', // Lead criado a partir do cotador de preços
+          nome: clienteNome || `Cliente Cotação ${cotacao.numero}`,
+          telefone: clienteTelefone || '00000000000',
+          email: clienteEmail,
+          cpf: clienteCpf,
+          origem: isFluxoPublico ? 'link_publico' : 'cotador',
           etapa: 'contrato_enviado',
           vendedor_id: vendedor_id || cotacao.vendedor_id,
           veiculo_marca: cotacao.veiculo_marca,
@@ -115,20 +131,26 @@ serve(async (req) => {
       }
     }
 
-    // 5. Validar se lead tem dados mínimos para criar associado
-    if (!lead?.cpf || lead.cpf.replace(/\D/g, '').length !== 11) {
-      throw new Error('O lead precisa ter CPF cadastrado para gerar o contrato. Complete os dados do lead antes de continuar.');
+    // 5. Validar se temos dados mínimos para criar associado
+    // Usar dados do lead OU da cotação (fluxo público)
+    const cpfFinal = clienteCpf || lead?.cpf;
+    const nomeFinal = clienteNome || lead?.nome;
+    const emailFinal = clienteEmail || lead?.email;
+    const telefoneFinal = clienteTelefone || lead?.telefone;
+    
+    if (!cpfFinal || cpfFinal.replace(/\D/g, '').length !== 11) {
+      throw new Error('CPF é obrigatório para gerar o contrato. Complete os dados antes de continuar.');
     }
 
-    if (!lead?.nome || lead.nome.includes('Cliente Cotação')) {
-      throw new Error('O lead precisa ter nome cadastrado para gerar o contrato. Complete os dados do lead antes de continuar.');
+    if (!nomeFinal || nomeFinal.includes('Cliente Cotação')) {
+      throw new Error('Nome é obrigatório para gerar o contrato. Complete os dados antes de continuar.');
     }
 
     // 6. Criar ou encontrar associado
     let associadoId = null;
     
     // Verificar se já existe associado com mesmo CPF
-    const cpfLimpo = lead.cpf.replace(/\D/g, '');
+    const cpfLimpo = cpfFinal.replace(/\D/g, '');
     const { data: associadoExistente } = await supabase
       .from('associados')
       .select('id')
@@ -140,11 +162,11 @@ serve(async (req) => {
       console.log('Associado existente encontrado pelo CPF:', associadoId);
     } else {
       // Verificar por email se existir
-      if (lead.email) {
+      if (emailFinal) {
         const { data: byEmail } = await supabase
           .from('associados')
           .select('id')
-          .eq('email', lead.email)
+          .eq('email', emailFinal)
           .maybeSingle();
         
         if (byEmail) {
@@ -159,11 +181,11 @@ serve(async (req) => {
       const { data: novoAssociado, error: associadoError } = await supabase
         .from('associados')
         .insert({
-          nome: lead.nome,
-          email: lead.email || `${cpfLimpo}@temp.associado.local`,
-          telefone: lead.telefone,
+          nome: nomeFinal,
+          email: emailFinal || `${cpfLimpo}@temp.associado.local`,
+          telefone: telefoneFinal || '00000000000',
           cpf: cpfLimpo,
-          plano_id: cotacao.plano_id,
+          plano_id: cotacao.plano_escolhido_id || cotacao.plano_id,
           status: 'em_analise',
           data_adesao: new Date().toISOString().split('T')[0],
           dia_vencimento: 10,
@@ -198,7 +220,7 @@ serve(async (req) => {
         cotacao_id,
         lead_id: leadId, // Usa o lead original ou o criado retroativamente
         associado_id: associadoId, // Usa o associado criado/encontrado
-        plano_id: cotacao.plano_id,
+        plano_id: cotacao.plano_escolhido_id || cotacao.plano_id,
         valor_adesao: cotacao.valor_adesao || 0,
         valor_mensal: cotacao.valor_total_mensal || cotacao.valor_mensal,
         vendedor_id: vendedor_id || cotacao.vendedor_id,
@@ -211,11 +233,11 @@ serve(async (req) => {
         veiculo_placa: cotacao.veiculo_placa,
         veiculo_valor_fipe: cotacao.valor_fipe,
         
-        // Dados do cliente (do lead)
-        cliente_nome: lead?.nome,
-        cliente_email: lead?.email,
-        cliente_telefone: lead?.telefone,
-        cliente_cpf: lead?.cpf,
+        // Dados do cliente (usar dados finais que podem vir do lead ou da cotação)
+        cliente_nome: nomeFinal,
+        cliente_email: emailFinal,
+        cliente_telefone: telefoneFinal,
+        cliente_cpf: cpfFinal,
         
         data_inicio: new Date().toISOString().split('T')[0],
         validade_link: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 dias
