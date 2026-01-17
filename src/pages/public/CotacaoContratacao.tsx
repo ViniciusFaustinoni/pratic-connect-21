@@ -15,11 +15,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 const STEPS: Step[] = [
   { id: 'plano', label: 'Escolha do Plano', description: 'Selecione seu plano' },
-  { id: 'dados', label: 'Dados Pessoais', description: 'Preencha seus dados' },
-  { id: 'documentos', label: 'Documentos', description: 'Envie seus documentos' },
+  { id: 'documentos', label: 'Documentos e Dados', description: 'Envie seus documentos' },
   { id: 'vistoria', label: 'Vistoria', description: 'Realize a vistoria' },
   { id: 'pagamento', label: 'Pagamento', description: 'Pague a adesão' },
-  { id: 'conclusao', label: 'Conclusão', description: 'Contrato gerado' },
+  { id: 'conclusao', label: 'Contrato', description: 'Contrato gerado' },
 ];
 
 const pageVariants = {
@@ -280,10 +279,10 @@ export default function CotacaoContratacao() {
                 </motion.div>
               )}
 
-              {/* Etapa 1: Dados Pessoais */}
+              {/* Etapa 1: Documentos e Dados (Unificado) */}
               {etapaAtual === 1 && (
                 <motion.div
-                  key="dados"
+                  key="documentos"
                   variants={pageVariants}
                   initial="initial"
                   animate="animate"
@@ -298,37 +297,8 @@ export default function CotacaoContratacao() {
                 </motion.div>
               )}
 
-              {/* Etapa 2: Documentos - Placeholder */}
+              {/* Etapa 2: Vistoria - Placeholder */}
               {etapaAtual === 2 && (
-                <motion.div
-                  key="documentos"
-                  variants={pageVariants}
-                  initial="initial"
-                  animate="animate"
-                  exit="exit"
-                >
-                  <Card className="placeholder-card-premium">
-                    <CardContent className="py-16 text-center">
-                      <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center">
-                        <span className="text-2xl">📄</span>
-                      </div>
-                      <h2 className="text-xl font-semibold mb-3 text-foreground">Envio de Documentos</h2>
-                      <p className="text-muted-foreground mb-6 max-w-sm mx-auto">
-                        Esta etapa será implementada em breve. Por enquanto, clique em continuar.
-                      </p>
-                      <Button 
-                        onClick={() => setEtapaAtual(3)}
-                        className="bg-accent hover:bg-accent-hover text-accent-foreground"
-                      >
-                        Continuar
-                      </Button>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              )}
-
-              {/* Etapa 3: Vistoria - Placeholder */}
-              {etapaAtual === 3 && (
                 <motion.div
                   key="vistoria"
                   variants={pageVariants}
@@ -346,7 +316,7 @@ export default function CotacaoContratacao() {
                         Esta etapa será implementada em breve. Por enquanto, clique em continuar.
                       </p>
                       <Button 
-                        onClick={() => setEtapaAtual(4)}
+                        onClick={() => setEtapaAtual(3)}
                         className="bg-accent hover:bg-accent-hover text-accent-foreground"
                       >
                         Continuar
@@ -356,8 +326,8 @@ export default function CotacaoContratacao() {
                 </motion.div>
               )}
 
-              {/* Etapa 4: Pagamento - Placeholder */}
-              {etapaAtual === 4 && (
+              {/* Etapa 3: Pagamento - Placeholder */}
+              {etapaAtual === 3 && (
                 <motion.div
                   key="pagamento"
                   variants={pageVariants}
@@ -375,7 +345,7 @@ export default function CotacaoContratacao() {
                         Esta etapa será implementada em breve. Por enquanto, clique em continuar.
                       </p>
                       <Button 
-                        onClick={() => setEtapaAtual(5)}
+                        onClick={() => setEtapaAtual(4)}
                         className="bg-accent hover:bg-accent-hover text-accent-foreground"
                       >
                         Continuar
@@ -385,8 +355,8 @@ export default function CotacaoContratacao() {
                 </motion.div>
               )}
 
-              {/* Etapa 5: Conclusão */}
-              {etapaAtual === 5 && (
+              {/* Etapa 4: Conclusão */}
+              {etapaAtual === 4 && (
                 <motion.div
                   key="conclusao"
                   variants={pageVariants}
