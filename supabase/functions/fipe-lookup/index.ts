@@ -6,10 +6,10 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// APIs FIPE alternativas
+// APIs FIPE alternativas (mesma API em hosts diferentes para fallback)
 const FIPE_APIS = [
   'https://parallelum.com.br/fipe/api/v1',
-  'https://veiculos.fipe.org.br/api/veiculos'
+  'https://fipe.parallelum.com.br/api/v1',
 ];
 
 // Cache em memória para reduzir chamadas
@@ -55,42 +55,65 @@ function parseValorFipe(valor: string): number {
   );
 }
 
-// Função para fazer fetch com retry e fallback
-async function fetchWithRetry(path: string, maxRetries = 2): Promise<Response> {
+// Função para fazer fetch com retry, timeout e fallback entre hosts
+async function fetchWithRetry(path: string, maxRetries = 3): Promise<Response> {
   let lastError: Error | null = null;
-  
+
+  // tentativa = retry; dentro de cada tentativa, percorremos os hosts
   for (let attempt = 0; attempt < maxRetries; attempt++) {
-    const apiUrl = FIPE_APIS[0]; // Usar API principal
-    const url = `${apiUrl}${path}`;
-    
-    try {
-      const response = await fetch(url, {
-        headers: {
-          'Accept': 'application/json',
-          'User-Agent': 'Mozilla/5.0'
+    for (const apiUrl of FIPE_APIS) {
+      const url = `${apiUrl}${path}`;
+
+      // Timeout por requisição (evita travar a edge function)
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
+
+      try {
+        const response = await fetch(url, {
+          signal: controller.signal,
+          headers: {
+            Accept: 'application/json',
+            // Alguns provedores bloqueiam user-agents vazios
+            'User-Agent': 'LovableEdge/1.0',
+          },
+        });
+
+        // OK
+        if (response.ok) return response;
+
+        // Rate limit -> aguarda e tenta de novo (mantém host atual como fallback natural)
+        if (response.status === 429) {
+          const waitMs = 1000 * (attempt + 1);
+          console.log(
+            `Rate limited (${response.status}) em ${apiUrl}. Aguardando ${waitMs}ms (attempt ${attempt + 1}/${maxRetries})`
+          );
+          await new Promise((resolve) => setTimeout(resolve, waitMs));
+          continue;
         }
-      });
-      
-      if (response.ok) {
+
+        // Erros 5xx -> tentar próximo host
+        if (response.status >= 500) {
+          console.warn(`FIPE ${apiUrl} respondeu ${response.status} - tentando fallback...`);
+          continue;
+        }
+
+        // Erros 4xx (exceto 429) -> retornar para tratamento no caller
         return response;
-      }
-      
-      // Se rate limited, esperar e tentar novamente
-      if (response.status === 429) {
-        console.log(`Rate limited, aguardando antes de retry (attempt ${attempt + 1}/${maxRetries})`);
-        await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        lastError = error instanceof Error ? error : new Error(msg);
+        console.error(`Fetch error em ${apiUrl} (attempt ${attempt + 1}):`, msg);
+        // tenta o próximo host
         continue;
+      } finally {
+        clearTimeout(timeout);
       }
-      
-      // Para outros erros, retornar a resposta para tratamento
-      return response;
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error));
-      console.error(`Fetch error (attempt ${attempt + 1}):`, lastError.message);
-      await new Promise(resolve => setTimeout(resolve, 500));
     }
+
+    // backoff entre tentativas completas
+    await new Promise((resolve) => setTimeout(resolve, 400 * (attempt + 1)));
   }
-  
+
   throw lastError || new Error('Falha ao conectar com API FIPE');
 }
 
