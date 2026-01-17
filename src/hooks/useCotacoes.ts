@@ -23,7 +23,20 @@ function gerarNumeroCotacao(): string {
   return `COT-${ano}${mes}${dia}-${hora}${min}${seg}${ms}-${random}`;
 }
 
-export interface CotacaoWithRelations extends Cotacao {
+export interface PlanoComparacao {
+  id: string;
+  nome: string;
+  codigo?: string;
+  valorMensal: number;
+  coberturas?: string[];
+}
+
+export interface DadosExtrasCotacao {
+  planos_comparacao?: PlanoComparacao[];
+  [key: string]: unknown;
+}
+
+export interface CotacaoWithRelations extends Omit<Cotacao, 'dados_extras'> {
   leads?: Tables<'leads'> | null;
   planos?: Tables<'planos'> | null;
   vendedor?: {
@@ -36,6 +49,7 @@ export interface CotacaoWithRelations extends Cotacao {
     numero: string;
     status: string;
   } | null;
+  dados_extras?: DadosExtrasCotacao | null;
 }
 
 export interface UseCotacoesOptions {
