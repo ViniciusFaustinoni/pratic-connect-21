@@ -13,7 +13,7 @@ import { SidebarTrigger } from '@/components/ui/sidebar';
 import { useAuth } from '@/contexts/AuthContext';
 import { ROLE_LABELS } from '@/types/database';
 import { UserAvatar } from '@/components/UserAvatar';
-import { NotificationBell } from '@/components/layout/NotificationBell';
+
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { GlobalSearch } from '@/components/layout/GlobalSearch';
 import { GlobalBreadcrumb } from '@/components/layout/GlobalBreadcrumb';
@@ -51,9 +51,6 @@ export function AppHeader() {
         <div className="hidden sm:flex">
           <ThemeToggle />
         </div>
-        
-        {/* Notifications */}
-        <NotificationBell variant="internal" />
         
         {/* User Menu */}
         <DropdownMenu>

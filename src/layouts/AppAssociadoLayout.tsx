@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Outlet, useLocation, Link } from 'react-router-dom';
-import { Home, Receipt, MapPin, Phone, User, Bell } from 'lucide-react';
+import { Home, Receipt, MapPin, Phone, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { useUnreadCount } from '@/hooks/useMyNotificacoes';
+
 import { useNotificacoesRealtime } from '@/hooks/useNotificacoesRealtime';
 import { useNotificacoesPreferencias } from '@/hooks/useNotificacoesPreferencias';
 import { NotificacoesOnboarding } from '@/components/app/NotificacoesOnboarding';
@@ -18,7 +18,6 @@ const NAV_ITEMS = [
 
 export function AppAssociadoLayout({ children }: { children?: React.ReactNode }) {
   const location = useLocation();
-  const { data: unreadCount = 0 } = useUnreadCount();
   const { data: preferencias } = useNotificacoesPreferencias();
   const [showOnboarding, setShowOnboarding] = useState(false);
 
@@ -57,17 +56,6 @@ export function AppAssociadoLayout({ children }: { children?: React.ReactNode })
               <span className="font-bold text-lg text-foreground">PRATIC</span>
             </Link>
 
-            {/* NOTIFICAÇÕES */}
-            <Button variant="ghost" size="icon" className="relative" asChild>
-              <Link to="/app/notificacoes">
-                <Bell className="h-5 w-5" />
-                {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-destructive text-destructive-foreground text-xs flex items-center justify-center font-medium">
-                    {unreadCount > 9 ? '9+' : unreadCount}
-                  </span>
-                )}
-              </Link>
-            </Button>
           </div>
         </header>
 

@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,7 +18,7 @@ import {
   Phone,
   MessageSquare,
   ArrowRight,
-  RefreshCw,
+  
   AlertTriangle,
   DollarSign,
   Car,
@@ -147,11 +146,9 @@ function KPICard({ titulo, valor, variacao, emoji, loading }: KPICardProps) {
 // ============================================
 interface WelcomeBannerProps {
   nome: string;
-  onRefresh?: () => void;
-  lastUpdate?: Date;
 }
 
-function WelcomeBanner({ nome, onRefresh, lastUpdate }: WelcomeBannerProps) {
+function WelcomeBanner({ nome }: WelcomeBannerProps) {
   const getSaudacao = () => {
     const hora = new Date().getHours();
     if (hora < 12) return 'Bom dia';
@@ -176,25 +173,6 @@ function WelcomeBanner({ nome, onRefresh, lastUpdate }: WelcomeBannerProps) {
         <p className="text-white/80 mt-1">
           Aqui está o resumo das atividades de hoje.
         </p>
-        
-        {/* Link discreto de atualização */}
-        {onRefresh && (
-          <div className="flex items-center gap-2 mt-3 text-white/50 text-sm">
-            {lastUpdate && (
-              <span>
-                Última atualização: {lastUpdate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-              </span>
-            )}
-            <span>•</span>
-            <button 
-              onClick={onRefresh}
-              className="text-white/70 hover:text-white flex items-center gap-1 transition-colors"
-            >
-              <RefreshCw className="h-3 w-3" />
-              atualizar dados
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );
@@ -408,7 +386,6 @@ export default function Dashboard() {
   const queryClient = useQueryClient();
   const { profile } = useAuth();
   const { isAnalistaCadastroOnly } = usePermissions();
-  const [lastUpdate, setLastUpdate] = useState(new Date());
 
   // Se é analista de cadastro, mostrar dashboard específico
   if (isAnalistaCadastroOnly) {
@@ -426,12 +403,6 @@ export default function Dashboard() {
 
   const isLoading = leadsLoading || cotacoesLoading || contratosLoading;
   const leads = leadsData?.leads || [];
-
-  // Função de atualização
-  const handleRefresh = () => {
-    queryClient.invalidateQueries();
-    setLastUpdate(new Date());
-  };
 
   // Calcular dados do funil
   const funnelData: FunilItem[] = [
@@ -476,11 +447,7 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       {/* BANNER */}
-      <WelcomeBanner 
-        nome={profile?.nome?.split(' ')[0] || 'Usuário'} 
-        onRefresh={handleRefresh}
-        lastUpdate={lastUpdate}
-      />
+      <WelcomeBanner nome={profile?.nome?.split(' ')[0] || 'Usuário'} />
 
       {/* ALERTAS */}
       <AlertaBanner alertas={alertas} />

@@ -1,5 +1,4 @@
 import { useNavigate } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -9,16 +8,16 @@ import {
   Clock,
   CheckCircle,
   ArrowRight,
-  RefreshCw,
   Shield,
   Eye,
+  User,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDocumentosQueue, useDocumentosStats } from '@/hooks/useDocumentosQueue';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
-import { useState } from 'react';
+
 
 // ============================================
 // COMPONENTE: CARD DE KPI
@@ -70,11 +69,9 @@ function KPICard({ titulo, valor, icon, cor, loading }: KPICardProps) {
 // ============================================
 interface WelcomeBannerProps {
   nome: string;
-  onRefresh?: () => void;
-  lastUpdate?: Date;
 }
 
-function WelcomeBanner({ nome, onRefresh, lastUpdate }: WelcomeBannerProps) {
+function WelcomeBanner({ nome }: WelcomeBannerProps) {
   const getSaudacao = () => {
     const hora = new Date().getHours();
     if (hora < 12) return 'Bom dia';
@@ -104,24 +101,6 @@ function WelcomeBanner({ nome, onRefresh, lastUpdate }: WelcomeBannerProps) {
         <p className="text-white/80 mt-1">
           Gerencie documentos e associados da sua fila de trabalho.
         </p>
-        
-        {onRefresh && (
-          <div className="flex items-center gap-2 mt-3 text-white/50 text-sm">
-            {lastUpdate && (
-              <span>
-                Última atualização: {lastUpdate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-              </span>
-            )}
-            <span>•</span>
-            <button 
-              onClick={onRefresh}
-              className="text-white/70 hover:text-white flex items-center gap-1 transition-colors"
-            >
-              <RefreshCw className="h-3 w-3" />
-              atualizar dados
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );
@@ -246,16 +225,9 @@ function DocumentosPendentes() {
 // ============================================
 export function DashboardCadastro() {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const { profile } = useAuth();
-  const [lastUpdate, setLastUpdate] = useState(new Date());
 
   const { data: stats, isLoading: statsLoading } = useDocumentosStats();
-
-  const handleRefresh = () => {
-    queryClient.invalidateQueries({ queryKey: ['documentos'] });
-    setLastUpdate(new Date());
-  };
 
   // Calcular métricas
   const pendentes = stats?.pendentes || 0;
@@ -268,11 +240,7 @@ export function DashboardCadastro() {
   return (
     <div className="space-y-6">
       {/* BANNER */}
-      <WelcomeBanner 
-        nome={profile?.nome?.split(' ')[0] || 'Analista'} 
-        onRefresh={handleRefresh}
-        lastUpdate={lastUpdate}
-      />
+      <WelcomeBanner nome={profile?.nome?.split(' ')[0] || 'Analista'} />
 
       {/* KPIs - Grid de 4 */}
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
@@ -373,7 +341,7 @@ export function DashboardCadastro() {
             >
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-muted">
-                  <RefreshCw className="h-5 w-5 text-muted-foreground" />
+                  <User className="h-5 w-5 text-muted-foreground" />
                 </div>
                 <div className="text-left">
                   <p className="font-medium text-foreground">Meu Perfil</p>
