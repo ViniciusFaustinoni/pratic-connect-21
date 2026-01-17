@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/select';
 import { Loader2 } from 'lucide-react';
 import { useCreateBeneficio, useUpdateBeneficio, CATEGORIAS_BENEFICIO } from '@/hooks/useBeneficiosAdmin';
+import { CustoRealInfo } from '@/components/beneficios/CustoRealInfo';
 import type { Tables } from '@/integrations/supabase/types';
 
 type BeneficioAdicional = Tables<'beneficios_adicionais'>;
@@ -179,6 +180,15 @@ export function BeneficioAdicionalModal({ open, onOpenChange, beneficio }: Benef
               onChange={(e) => setFormData({ ...formData, preco: parseFloat(e.target.value) || 0 })}
               placeholder="0.00"
             />
+            
+            {/* Custo Real - só aparece quando editando */}
+            {isEditing && beneficio && (
+              <CustoRealInfo 
+                beneficioId={beneficio.id} 
+                tipo="adicional"
+                precoAtual={formData.preco}
+              />
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-4">

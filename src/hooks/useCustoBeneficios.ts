@@ -10,8 +10,11 @@ export interface CustoBeneficio {
   categoria: string;
   preco_sugerido: number;
   gasto_total_60d: number;
+  qtd_utilizacoes_60d: number;
+  total_associados: number;
   total_cotas: number;
   custo_real: number;
+  margem: number;
   indicador: IndicadorSaude;
   tipo_beneficio: 'benefit' | 'adicional';
 }
