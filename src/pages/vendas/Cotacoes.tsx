@@ -118,6 +118,7 @@ export default function Cotacoes() {
   const [cotacaoParaVincular, setCotacaoParaVincular] = useState<CotacaoWithRelations | null>(null);
   const [cotacaoParaExcluir, setCotacaoParaExcluir] = useState<string | null>(null);
   const [mesFilter, setMesFilter] = useState<string>('all');
+  const [cotacaoParaDuplicar, setCotacaoParaDuplicar] = useState<CotacaoWithRelations | null>(null);
 
   // Permissões
   const permissions = usePermissions();
@@ -225,7 +226,8 @@ export default function Cotacoes() {
   };
 
   const handleDuplicar = (cotacao: CotacaoWithRelations) => {
-    duplicarCotacao.mutate(cotacao.id);
+    setCotacaoParaDuplicar(cotacao);
+    setShowCotacaoForm(true);
   };
 
   const handleExcluir = (id: string) => {
@@ -626,9 +628,31 @@ export default function Cotacoes() {
         open={showCotacaoForm} 
         onOpenChange={(open) => {
           setShowCotacaoForm(open);
-          if (!open) setLeadIdFromUrl(null);
+          if (!open) {
+            setLeadIdFromUrl(null);
+            setCotacaoParaDuplicar(null);
+          }
         }} 
         leadId={leadIdFromUrl || undefined}
+        cotacaoBase={cotacaoParaDuplicar ? {
+          valor_fipe: cotacaoParaDuplicar.valor_fipe,
+          valor_adicional: cotacaoParaDuplicar.valor_adicional,
+          valor_adesao: cotacaoParaDuplicar.valor_adesao,
+          validade_dias: cotacaoParaDuplicar.validade_dias,
+          veiculo_marca: cotacaoParaDuplicar.veiculo_marca,
+          veiculo_modelo: cotacaoParaDuplicar.veiculo_modelo,
+          veiculo_ano: cotacaoParaDuplicar.veiculo_ano,
+          veiculo_placa: cotacaoParaDuplicar.veiculo_placa,
+          codigo_fipe: cotacaoParaDuplicar.codigo_fipe,
+          categoria: cotacaoParaDuplicar.categoria,
+          regiao: cotacaoParaDuplicar.regiao,
+          nome_solicitante: cotacaoParaDuplicar.nome_solicitante || cotacaoParaDuplicar.leads?.nome || null,
+          telefone1_solicitante: cotacaoParaDuplicar.telefone1_solicitante || cotacaoParaDuplicar.leads?.telefone || null,
+          email_solicitante: cotacaoParaDuplicar.email_solicitante || cotacaoParaDuplicar.leads?.email || null,
+          lead_id: cotacaoParaDuplicar.lead_id,
+          plano_id: cotacaoParaDuplicar.plano_id,
+          dados_extras: cotacaoParaDuplicar.dados_extras as any,
+        } : null}
       />
       <ContratoWizard 
         open={showContratoWizard} 
