@@ -1268,25 +1268,10 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId }: CotacaoFormDia
                               </Badge>
                             ) : null}
                           </div>
-                        {valorAdicional > 0 ? (
-                          <div className="mb-3">
-                            <p className="text-sm text-muted-foreground">
-                              Proteção: {formatCurrency(plano.valorMensal)}
-                            </p>
-                            <p className="text-xs text-blue-600">
-                              + Adicional: {formatCurrency(valorAdicional)}
-                            </p>
-                            <p className="text-xl font-bold text-primary">
-                              Total: {formatCurrency(plano.valorMensal + valorAdicional)}
-                              <span className="text-xs font-normal text-muted-foreground">/mês</span>
-                            </p>
-                          </div>
-                        ) : (
-                          <p className="text-xl font-bold text-primary mb-3">
-                            {formatCurrency(plano.valorMensal)}
-                            <span className="text-xs font-normal text-muted-foreground">/mês</span>
-                          </p>
-                        )}
+                        <p className="text-xl font-bold text-primary mb-3">
+                          {formatCurrency(plano.valorMensal + valorAdicional)}
+                          <span className="text-xs font-normal text-muted-foreground">/mês</span>
+                        </p>
                         <ul className="text-xs space-y-1 text-muted-foreground">
                           {plano.coberturas.slice(0, 4).map((cobertura, idx) => (
                             <li key={idx} className="flex items-center gap-1">
