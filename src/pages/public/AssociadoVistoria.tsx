@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
-import { Loader2, Car, Calendar, Camera, CheckCircle, AlertCircle, Clock, FileCheck, Search } from 'lucide-react';
+import { Loader2, Car, Calendar, Camera, CheckCircle, AlertCircle, Clock, FileCheck, Search, Lock } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { useContratoByToken, useGerarAutentiqueByToken } from '@/hooks/useContratoLink';
 import { EscolhaVistoria } from '@/components/associado/EscolhaVistoria';
@@ -92,6 +93,37 @@ export default function AssociadoVistoria() {
   const MARCAS_MOTOS = ['HONDA', 'YAMAHA', 'SUZUKI', 'KAWASAKI', 'BMW MOTORRAD', 'HARLEY-DAVIDSON', 'TRIUMPH', 'DUCATI', 'KTM', 'DAFRA', 'SHINERAY', 'KASINSKI'];
   const tipoVeiculo = MARCAS_MOTOS.some(marca => contrato.veiculo_marca?.toUpperCase()?.includes(marca)) ? 'moto' : 'carro';
 
+  // Calcular se está em modo somente leitura (bloqueia edição)
+  const isReadOnly = useMemo(() => {
+    if (!contrato) return false;
+    
+    // Status do associado em análise
+    if (contrato.associados?.status === 'em_analise') return true;
+    
+    // Contrato aguardando assinatura
+    if (contrato.status === 'pendente_assinatura') return true;
+    if (contrato.autentique_url) return true;
+    
+    // Adesão paga mas não assinado ainda (em fluxo de assinatura)
+    if (contrato.adesao_paga && contrato.status !== 'assinado') return true;
+    
+    return false;
+  }, [contrato]);
+
+  // Mensagem contextual baseada no estado
+  const getReadOnlyMessage = () => {
+    if (contrato?.associados?.status === 'em_analise') {
+      return 'Seus dados estão em análise pela nossa equipe. Aguarde o retorno.';
+    }
+    if (contrato?.autentique_url || contrato?.status === 'pendente_assinatura') {
+      return 'Aguardando assinatura do contrato. Verifique seu email.';
+    }
+    if (contrato?.adesao_paga) {
+      return 'Pagamento confirmado! Sua adesão está sendo processada.';
+    }
+    return 'Suas informações estão sendo processadas.';
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-primary/10 py-8 px-4">
       <div className="max-w-2xl mx-auto space-y-6">
@@ -105,6 +137,16 @@ export default function AssociadoVistoria() {
             Olá, <strong>{clienteNome}</strong>!
           </p>
         </div>
+
+        {/* Alerta de Modo Somente Leitura */}
+        {isReadOnly && (
+          <Alert className="bg-blue-50 border-blue-200 dark:bg-blue-950/30 dark:border-blue-900">
+            <Lock className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+            <AlertDescription className="text-blue-700 dark:text-blue-300">
+              <strong>Modo visualização:</strong> {getReadOnlyMessage()}
+            </AlertDescription>
+          </Alert>
+        )}
 
         {/* Info do Veículo */}
         <Card className="bg-muted/50">
@@ -194,6 +236,7 @@ export default function AssociadoVistoria() {
         {contrato.associado_id && (
           <DocumentosPendentes 
             associadoId={contrato.associado_id} 
+            readOnly={isReadOnly}
             onTodosEnviados={() => {
               // Recarregar dados do contrato
               console.log('[AssociadoVistoria] Todos documentos enviados, recarregando...');
@@ -205,6 +248,8 @@ export default function AssociadoVistoria() {
         {etapa === 'escolha' && (
           <EscolhaVistoria
             contratoId={contrato.id}
+            disabled={isReadOnly}
+            tipoSelecionado={contrato.tipo_vistoria as 'agendada' | 'autovistoria' | null}
             onEscolher={(tipo) => {
               if (tipo === 'agendada') {
                 setEtapa('agendar');
@@ -219,6 +264,7 @@ export default function AssociadoVistoria() {
           <AgendarVistoria
             contratoId={contrato.id}
             associadoId={contrato.associado_id || ''}
+            readOnly={isReadOnly}
             onAgendar={(data, horario, vistoriaId) => {
               setDadosAgendamento({ data, horario });
               setVistoriaId(vistoriaId);
@@ -233,6 +279,7 @@ export default function AssociadoVistoria() {
             contratoId={contrato.id}
             associadoId={contrato.associado_id || ''}
             tipoVeiculo={tipoVeiculo as 'carro' | 'moto'}
+            readOnly={isReadOnly}
             onComplete={(vistoriaId) => {
               setVistoriaId(vistoriaId);
               setEtapa('pagamento');

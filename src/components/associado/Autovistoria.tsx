@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { 
   Camera, Check, ArrowLeft, ArrowRight, Loader2, ChevronRight, Gauge, 
-  CheckCircle, XCircle, Lightbulb, RotateCcw 
+  CheckCircle, XCircle, Lightbulb, RotateCcw, Lock
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,11 +16,12 @@ interface AutovistoriaProps {
   associadoId: string;
   veiculoId?: string;
   tipoVeiculo: TipoVeiculo;
+  readOnly?: boolean;
   onComplete: (vistoriaId: string) => void;
   onVoltar: () => void;
 }
 
-export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, onComplete, onVoltar }: AutovistoriaProps) {
+export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, readOnly, onComplete, onVoltar }: AutovistoriaProps) {
   const fotos = getFotosAutovistoria(tipoVeiculo);
   const [fotosEnviadas, setFotosEnviadas] = useState<Record<string, string>>({});
   const [indiceAtual, setIndiceAtual] = useState(0);
@@ -369,10 +370,15 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
         <Button 
           onClick={handleTirarFoto} 
           className="w-full h-14 text-lg"
-          disabled={uploading}
+          disabled={uploading || readOnly}
           variant={fotoAtualEnviada ? "outline" : "default"}
         >
-          {uploading ? (
+          {readOnly ? (
+            <>
+              <Lock className="h-5 w-5 mr-2" />
+              Envio Bloqueado
+            </>
+          ) : uploading ? (
             <>
               <Loader2 className="h-5 w-5 mr-2 animate-spin" />
               Enviando...
@@ -390,15 +396,17 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
           )}
         </Button>
 
-        {/* Input Hidden */}
-        <input
-          ref={inputRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          onChange={handleFileChange}
-          className="hidden"
-        />
+        {/* Input Hidden - só mostra se não for readOnly */}
+        {!readOnly && (
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={handleFileChange}
+            className="hidden"
+          />
+        )}
 
         {/* Navegação entre fotos */}
         <div className="flex justify-between pt-2 border-t">
