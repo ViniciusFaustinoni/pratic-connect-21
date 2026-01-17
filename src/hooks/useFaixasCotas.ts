@@ -377,6 +377,107 @@ export function useTotalCotasAtivas() {
 }
 
 // ============================================
+// HOOKS - SIMULAÇÃO EM TEMPO REAL
+// ============================================
+
+export interface SimulacaoFaixaResult {
+  faixaId: string;
+  fipeDe: number;
+  fipeAte: number;
+  quantidadeCotas: number;
+  ajustePercentual: number;
+  valorBaseCota: number;
+  valorFinalCota: number;
+  diferencaCota: number;
+  totalCotasNaFaixa: number;
+  impactoTotal: number;
+}
+
+export interface SimulacaoResult {
+  custoSimulado: number;
+  totalCotas: number;
+  valorBasePorCota: number;
+  custoDescontos: number;
+  novoValorBase: number;
+  percentualAumento: number;
+  faixas: SimulacaoFaixaResult[];
+}
+
+/**
+ * Hook para simulação em tempo real do impacto dos ajustes
+ * Calcula localmente sem chamar RPC a cada mudança
+ */
+export function useSimulacaoFaixas(
+  faixas: FaixaCota[] | undefined,
+  custoSimulado: number,
+  totalCotasAtivas: number,
+  ajustesTemporarios?: Record<string, number> // faixaId -> novo ajuste
+): SimulacaoResult | null {
+  if (!faixas || faixas.length === 0 || custoSimulado <= 0 || totalCotasAtivas <= 0) {
+    return null;
+  }
+
+  // Valor base por cota SEM ajustes
+  const valorBasePorCota = custoSimulado / totalCotasAtivas;
+
+  // Calcular custo dos descontos (faixas com ajuste negativo)
+  let custoDescontos = 0;
+  const faixasComDados: SimulacaoFaixaResult[] = [];
+
+  // Primeiro passo: calcular impacto de cada faixa
+  faixas.forEach(faixa => {
+    const ajuste = ajustesTemporarios?.[faixa.id] ?? faixa.ajuste_percentual;
+    
+    // Estimativa: assume distribuição proporcional de cotas por faixa
+    // Em produção, seria ideal ter o número real de contratos por faixa
+    const estimativaCotasNaFaixa = faixa.quantidade_cotas * 10; // Placeholder
+    
+    const valorFinalCota = valorBasePorCota * (1 + ajuste / 100);
+    const diferencaCota = valorFinalCota - valorBasePorCota;
+    const impactoTotal = diferencaCota * estimativaCotasNaFaixa;
+    
+    if (ajuste < 0) {
+      custoDescontos += Math.abs(impactoTotal);
+    }
+
+    faixasComDados.push({
+      faixaId: faixa.id,
+      fipeDe: faixa.fipe_de,
+      fipeAte: faixa.fipe_ate,
+      quantidadeCotas: faixa.quantidade_cotas,
+      ajustePercentual: ajuste,
+      valorBaseCota: valorBasePorCota,
+      valorFinalCota,
+      diferencaCota,
+      totalCotasNaFaixa: estimativaCotasNaFaixa,
+      impactoTotal,
+    });
+  });
+
+  // O custo dos descontos é redistribuído entre todas as cotas
+  const novoValorBase = valorBasePorCota + (custoDescontos / totalCotasAtivas);
+  const percentualAumento = ((novoValorBase - valorBasePorCota) / valorBasePorCota) * 100;
+
+  // Recalcular valores finais com novo valor base
+  const faixasFinais = faixasComDados.map(f => ({
+    ...f,
+    valorBaseCota: novoValorBase,
+    valorFinalCota: novoValorBase * (1 + f.ajustePercentual / 100),
+    diferencaCota: (novoValorBase * (1 + f.ajustePercentual / 100)) - novoValorBase,
+  }));
+
+  return {
+    custoSimulado,
+    totalCotas: totalCotasAtivas,
+    valorBasePorCota,
+    custoDescontos,
+    novoValorBase,
+    percentualAumento,
+    faixas: faixasFinais,
+  };
+}
+
+// ============================================
 // UTILITÁRIOS
 // ============================================
 
@@ -405,4 +506,14 @@ export function formatPercentual(valor: number): string {
 export function calcularCotasManual(valorFipe: number): number {
   if (!valorFipe || valorFipe <= 0) return 0;
   return Math.ceil(valorFipe / 5000);
+}
+
+/**
+ * Formata valor em moeda
+ */
+export function formatCurrency(valor: number): string {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(valor);
 }

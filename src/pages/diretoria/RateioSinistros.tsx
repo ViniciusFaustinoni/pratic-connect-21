@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Calculator, Check, Play, History, AlertTriangle, Users, DollarSign, TrendingUp } from 'lucide-react';
+import { Calculator, Check, Play, History, AlertTriangle, Users, DollarSign, TrendingUp, Layers } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +12,8 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useAuth } from '@/contexts/AuthContext';
 import { CalcularRateioModal } from '@/components/diretoria';
+import { RateioDetalhesFaixasCard } from '@/components/diretoria/RateioDetalhesFaixasCard';
+import { type RateioPorCota } from '@/hooks/useFaixasCotas';
 
 const statusConfig: Record<string, { label: string; class: string }> = {
   calculado: { label: 'Calculado', class: 'bg-yellow-100 text-yellow-800' },
@@ -63,7 +65,8 @@ export default function RateioSinistros() {
           detalhes:rateios_detalhes(
             *,
             plano:planos(nome)
-          )
+          ),
+          detalhes_faixas:rateios_detalhes_faixas(*)
         `)
         .eq('ano', hoje.getFullYear())
         .eq('mes', hoje.getMonth() + 1)
@@ -73,7 +76,7 @@ export default function RateioSinistros() {
     }
   });
 
-  // Mutation - Calcular Rateio (CORRIGIDO: divisão por COTAS conforme PDF)
+  // Mutation - Calcular Rateio (CORRIGIDO: usando fn_calcular_rateio_por_cotas)
   const calcularRateio = useMutation({
     mutationFn: async ({ mes, ano }: { mes: number; ano: number }) => {
       const inicioMes = `${ano}-${String(mes).padStart(2, '0')}-01`;
@@ -105,7 +108,13 @@ export default function RateioSinistros() {
       const percentualFundo = 10;
       const valorFundo = valorTotalSinistros * (percentualFundo / 100);
       
-      // CORREÇÃO: Dividir por COTAS em vez de associados
+      // Chamar fn_calcular_rateio_por_cotas para obter valores ajustados por faixa
+      const { data: rateioDetalhado, error: erroRateio } = await supabase.rpc('fn_calcular_rateio_por_cotas', {
+        p_custo_total: valorTotalSinistros + valorFundo,
+        p_percentual_fundo: percentualFundo,
+      });
+
+      // Valor base por cota (sem ajustes)
       const valorRateioPorCota = totalCotas > 0 
         ? (valorTotalSinistros + valorFundo) / totalCotas 
         : 0;
@@ -127,8 +136,8 @@ export default function RateioSinistros() {
           percentual_fundo_reserva: percentualFundo,
           valor_fundo_reserva: valorFundo,
           status: 'calculado',
-          formula_utilizada: '(Sinistros + Fundo) / Total Cotas',
-          // Novos campos para sistema de cotas
+          formula_utilizada: '(Sinistros + Fundo) / Total Cotas + Ajustes por Faixa',
+          // Campos para sistema de cotas
           total_cotas: totalCotas,
           valor_rateio_por_cota: valorRateioPorCota
         }, { onConflict: 'mes,ano' })
@@ -136,6 +145,34 @@ export default function RateioSinistros() {
         .single();
 
       if (error) throw error;
+
+      // Salvar detalhes por faixa se disponível
+      if (rateioDetalhado && rateioDetalhado.length > 0 && data?.id) {
+        // Primeiro, remover detalhes antigos
+        await supabase
+          .from('rateios_detalhes_faixas')
+          .delete()
+          .eq('rateio_id', data.id);
+
+        // Inserir novos detalhes
+        const detalhesParaInserir = rateioDetalhado.map((detalhe: RateioPorCota) => ({
+          rateio_id: data.id,
+          faixa_id: detalhe.faixa_id,
+          fipe_de: detalhe.fipe_de,
+          fipe_ate: detalhe.fipe_ate,
+          quantidade_cotas: detalhe.quantidade_cotas,
+          contratos_na_faixa: detalhe.contratos_na_faixa || 0,
+          total_cotas_faixa: detalhe.total_cotas_faixa || 0,
+          ajuste_percentual: detalhe.ajuste_percentual,
+          valor_base_cota: detalhe.valor_base_cota,
+          valor_final_cota: detalhe.valor_final_cota,
+        }));
+
+        await supabase
+          .from('rateios_detalhes_faixas')
+          .insert(detalhesParaInserir);
+      }
+
       return data;
     },
     onSuccess: () => {
@@ -366,7 +403,10 @@ export default function RateioSinistros() {
         </Card>
       )}
 
-      {/* Histórico de Rateios */}
+      {/* Detalhes por Faixa FIPE */}
+      {rateioAtual?.detalhes_faixas && rateioAtual.detalhes_faixas.length > 0 && (
+        <RateioDetalhesFaixasCard detalhesFaixas={rateioAtual.detalhes_faixas as RateioPorCota[]} />
+      )}
       {showHistorico && (
         <Card>
           <CardHeader>

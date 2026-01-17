@@ -10648,6 +10648,66 @@ export type Database = {
           },
         ]
       }
+      rateios_detalhes_faixas: {
+        Row: {
+          ajuste_percentual: number | null
+          contratos_na_faixa: number | null
+          created_at: string | null
+          faixa_id: string
+          fipe_ate: number
+          fipe_de: number
+          id: string
+          quantidade_cotas: number
+          rateio_id: string
+          total_cotas_faixa: number | null
+          valor_base_cota: number
+          valor_final_cota: number
+        }
+        Insert: {
+          ajuste_percentual?: number | null
+          contratos_na_faixa?: number | null
+          created_at?: string | null
+          faixa_id: string
+          fipe_ate: number
+          fipe_de: number
+          id?: string
+          quantidade_cotas: number
+          rateio_id: string
+          total_cotas_faixa?: number | null
+          valor_base_cota: number
+          valor_final_cota: number
+        }
+        Update: {
+          ajuste_percentual?: number | null
+          contratos_na_faixa?: number | null
+          created_at?: string | null
+          faixa_id?: string
+          fipe_ate?: number
+          fipe_de?: number
+          id?: string
+          quantidade_cotas?: number
+          rateio_id?: string
+          total_cotas_faixa?: number | null
+          valor_base_cota?: number
+          valor_final_cota?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rateios_detalhes_faixas_faixa_id_fkey"
+            columns: ["faixa_id"]
+            isOneToOne: false
+            referencedRelation: "faixas_cotas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rateios_detalhes_faixas_rateio_id_fkey"
+            columns: ["rateio_id"]
+            isOneToOne: false
+            referencedRelation: "rateios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       regioes: {
         Row: {
           ativa: boolean | null
