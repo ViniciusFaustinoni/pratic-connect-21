@@ -183,9 +183,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase }: C
   const [loadingAnos, setLoadingAnos] = useState(false);
   const [buscandoFipe, setBuscandoFipe] = useState(false);
 
-  // Estado para planos selecionados (múltipla seleção)
+  // Estado para planos selecionados (múltipla seleção - sem limite)
   const [planosSelecionados, setPlanosSelecionados] = useState<PlanoCotacao[]>([]);
-  const MAX_PLANOS_COMPARACAO = 3;
 
   const form = useForm<CotacaoFormData>({
     resolver: zodResolver(cotacaoSchema),
@@ -589,12 +588,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase }: C
         }
         return novos;
       }
-      // Verificar limite
-      if (prev.length >= MAX_PLANOS_COMPARACAO) {
-        toast.warning(`Máximo de ${MAX_PLANOS_COMPARACAO} planos para comparação`);
-        return prev;
-      }
-      // Adiciona o plano
+      // Adiciona o plano (sem limite de quantidade)
       const novos = [...prev, plano];
       // Se for o primeiro, define no form
       if (novos.length === 1) {
@@ -1336,7 +1330,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase }: C
                 </h3>
                 {planosSelecionados.length > 0 && (
                   <Badge variant="outline" className="text-primary">
-                    {planosSelecionados.length}/{MAX_PLANOS_COMPARACAO} selecionados
+                    {planosSelecionados.length} selecionado{planosSelecionados.length > 1 ? 's' : ''}
                   </Badge>
                 )}
               </div>
@@ -1460,7 +1454,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase }: C
                       "grid gap-3 mb-4",
                       planosSelecionados.length === 1 && "grid-cols-1",
                       planosSelecionados.length === 2 && "grid-cols-1 md:grid-cols-2",
-                      planosSelecionados.length >= 3 && "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
+                      planosSelecionados.length === 3 && "grid-cols-1 md:grid-cols-2 lg:grid-cols-3",
+                      planosSelecionados.length >= 4 && "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
                     )}>
                       {planosSelecionados.map((plano, idx) => (
                         <Card key={plano.id} className="border-primary/30 bg-background">

@@ -46,7 +46,6 @@ interface EtapaResultadoProps {
   planos: PlanoCotacao[];
   planosSelecionados: PlanoCotacao[];
   onTogglePlano: (plano: PlanoCotacao) => void;
-  maxPlanos: number;
   valorAdesao?: number | null;
   onValorAdesaoChange?: (valor: number) => void;
   onNovaCotacao: () => void;
@@ -88,7 +87,6 @@ export function EtapaResultado({
   planos,
   planosSelecionados,
   onTogglePlano,
-  maxPlanos,
   valorAdesao,
   onValorAdesaoChange,
   onNovaCotacao,
@@ -205,7 +203,7 @@ export function EtapaResultado({
             variant={temPlanosSelecionados ? "default" : "outline"} 
             className="text-xs"
           >
-            {planosSelecionados.length}/{maxPlanos} selecionados
+            {planosSelecionados.length} selecionado{planosSelecionados.length !== 1 ? 's' : ''}
           </Badge>
         </div>
 
@@ -302,7 +300,7 @@ export function EtapaResultado({
           
           {!temPlanosSelecionados && (
             <p className="text-sm text-muted-foreground text-center mt-3">
-              Selecione até {maxPlanos} planos para comparar
+              Selecione os planos que deseja incluir na cotação
             </p>
           )}
         </CardContent>
