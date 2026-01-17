@@ -294,7 +294,7 @@ export function EtapaPagamentoCotacao({
             <p className="text-muted-foreground text-sm">
               {etapaInterna === 'gerando_contrato'
                 ? 'Estamos preparando seu contrato com base nos dados informados.'
-                : 'Gerando as opções de pagamento via PIX e Boleto.'}
+                : 'Gerando o pagamento via PIX...'}
             </p>
           </motion.div>
         </CardContent>
@@ -396,26 +396,6 @@ export function EtapaPagamentoCotacao({
                   {copiado ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                 </Button>
               </div>
-            </motion.div>
-          )}
-
-          {/* Boleto */}
-          {cobranca?.boletoUrl && (
-            <motion.div 
-              className="border-t border-border/30 pt-4 space-y-2"
-              initial={{ y: 10, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 0.3 }}
-            >
-              <p className="text-sm text-muted-foreground text-center">
-                Ou pague via boleto bancário:
-              </p>
-              <Button variant="outline" className="w-full" asChild>
-                <a href={cobranca.boletoUrl} target="_blank" rel="noopener noreferrer">
-                  <FileText className="mr-2 h-4 w-4" />
-                  Baixar Boleto
-                </a>
-              </Button>
             </motion.div>
           )}
 
