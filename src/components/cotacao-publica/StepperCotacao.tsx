@@ -1,5 +1,6 @@
 import { Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { motion } from 'framer-motion';
 
 export interface Step {
   id: string;
@@ -28,59 +29,120 @@ export function StepperCotacao({ steps, currentStep, onStepClick }: StepperCotac
               className="flex flex-col items-center flex-1"
               onClick={() => isCompleted && onStepClick?.(index)}
             >
-              <div
+              <motion.div
+                initial={false}
+                animate={{
+                  scale: isCurrent ? 1.1 : 1,
+                  backgroundColor: isCompleted || isCurrent 
+                    ? 'hsl(var(--primary))' 
+                    : 'hsl(var(--muted))',
+                }}
+                transition={{ duration: 0.3 }}
                 className={cn(
-                  'w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium transition-colors',
-                  isCompleted && 'bg-primary text-primary-foreground cursor-pointer',
-                  isCurrent && 'bg-primary text-primary-foreground ring-2 ring-primary/30',
-                  !isCompleted && !isCurrent && 'bg-muted text-muted-foreground'
+                  'w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium',
+                  (isCompleted || isCurrent) && 'text-primary-foreground',
+                  !isCompleted && !isCurrent && 'text-muted-foreground',
+                  isCompleted && 'cursor-pointer'
                 )}
               >
-                {isCompleted ? <Check className="h-4 w-4" /> : index + 1}
-              </div>
+                {isCompleted ? (
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: 'spring', stiffness: 200 }}
+                  >
+                    <Check className="h-4 w-4" />
+                  </motion.div>
+                ) : (
+                  index + 1
+                )}
+              </motion.div>
               {index < steps.length - 1 && (
-                <div
-                  className={cn(
-                    'h-0.5 flex-1 mx-1 mt-4',
-                    isCompleted ? 'bg-primary' : 'bg-muted'
-                  )}
-                />
+                <div className="relative w-full h-0.5 mt-4 mx-1 bg-muted overflow-hidden">
+                  <motion.div
+                    initial={false}
+                    animate={{ 
+                      width: isCompleted ? '100%' : '0%' 
+                    }}
+                    transition={{ duration: 0.5, ease: 'easeInOut' }}
+                    className="absolute inset-y-0 left-0 bg-primary"
+                  />
+                </div>
               )}
             </div>
           );
         })}
       </div>
 
-      {/* Desktop: Lista vertical */}
-      <div className="hidden md:block space-y-2">
+      {/* Desktop: Lista vertical com animações */}
+      <div className="hidden md:block space-y-1">
         {steps.map((step, index) => {
           const isCompleted = index < currentStep;
           const isCurrent = index === currentStep;
 
           return (
-            <div
+            <motion.div
               key={step.id}
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: index * 0.1 }}
               className={cn(
-                'flex items-center gap-3 p-3 rounded-lg transition-colors',
-                isCurrent && 'bg-primary/10',
-                isCompleted && 'cursor-pointer hover:bg-muted',
+                'relative flex items-center gap-3 p-3 rounded-lg transition-all duration-200',
+                isCurrent && 'bg-primary/10 shadow-sm',
+                isCompleted && 'cursor-pointer hover:bg-muted/80',
                 !isCompleted && !isCurrent && 'opacity-50'
               )}
               onClick={() => isCompleted && onStepClick?.(index)}
             >
-              <div
+              {/* Linha conectora vertical */}
+              {index < steps.length - 1 && (
+                <div className="absolute left-[27px] top-12 w-0.5 h-6 bg-muted overflow-hidden">
+                  <motion.div
+                    initial={false}
+                    animate={{ 
+                      height: isCompleted ? '100%' : '0%' 
+                    }}
+                    transition={{ duration: 0.3, delay: 0.1 }}
+                    className="w-full bg-primary"
+                  />
+                </div>
+              )}
+
+              {/* Indicador de step */}
+              <motion.div
+                initial={false}
+                animate={{
+                  backgroundColor: isCompleted || isCurrent 
+                    ? 'hsl(var(--primary))' 
+                    : 'hsl(var(--muted))',
+                  boxShadow: isCurrent 
+                    ? '0 0 0 4px hsl(var(--primary) / 0.2)' 
+                    : '0 0 0 0px transparent',
+                }}
+                transition={{ duration: 0.3 }}
                 className={cn(
-                  'w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0',
-                  isCompleted && 'bg-primary text-primary-foreground',
-                  isCurrent && 'bg-primary text-primary-foreground',
-                  !isCompleted && !isCurrent && 'bg-muted text-muted-foreground'
+                  'w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0 z-10',
+                  (isCompleted || isCurrent) && 'text-primary-foreground',
+                  !isCompleted && !isCurrent && 'text-muted-foreground'
                 )}
               >
-                {isCompleted ? <Check className="h-4 w-4" /> : index + 1}
-              </div>
-              <div className="min-w-0">
+                {isCompleted ? (
+                  <motion.div
+                    initial={{ scale: 0, rotate: -180 }}
+                    animate={{ scale: 1, rotate: 0 }}
+                    transition={{ type: 'spring', stiffness: 200 }}
+                  >
+                    <Check className="h-4 w-4" />
+                  </motion.div>
+                ) : (
+                  index + 1
+                )}
+              </motion.div>
+
+              {/* Texto */}
+              <div className="min-w-0 flex-1">
                 <p className={cn(
-                  'font-medium text-sm truncate',
+                  'font-medium text-sm truncate transition-colors',
                   isCurrent && 'text-primary'
                 )}>
                   {step.label}
@@ -91,20 +153,48 @@ export function StepperCotacao({ steps, currentStep, onStepClick }: StepperCotac
                   </p>
                 )}
               </div>
-            </div>
+
+              {/* Indicador visual de atual */}
+              {isCurrent && (
+                <motion.div
+                  layoutId="currentStepIndicator"
+                  className="w-1.5 h-6 bg-primary rounded-full"
+                  transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                />
+              )}
+            </motion.div>
           );
         })}
       </div>
 
       {/* Indicador de progresso mobile */}
-      <div className="md:hidden mt-3 px-2">
-        <p className="text-sm font-medium text-center">
-          {steps[currentStep]?.label}
-        </p>
-        <p className="text-xs text-muted-foreground text-center">
-          Etapa {currentStep + 1} de {steps.length}
-        </p>
-      </div>
+      <motion.div 
+        className="md:hidden mt-4 px-4 py-3 bg-muted/50 rounded-lg"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+      >
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-sm font-semibold">
+            {steps[currentStep]?.label}
+          </p>
+          <span className="text-xs text-muted-foreground">
+            {currentStep + 1}/{steps.length}
+          </span>
+        </div>
+        
+        {/* Barra de progresso */}
+        <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
+          <motion.div
+            initial={false}
+            animate={{ 
+              width: `${((currentStep + 1) / steps.length) * 100}%` 
+            }}
+            transition={{ duration: 0.5, ease: 'easeOut' }}
+            className="h-full bg-primary rounded-full"
+          />
+        </div>
+      </motion.div>
     </div>
   );
 }

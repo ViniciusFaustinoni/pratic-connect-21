@@ -1,8 +1,9 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Check, Shield, Star, Zap } from 'lucide-react';
+import { Check, Shield, Star, Zap, Crown } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { motion } from 'framer-motion';
 
 export interface PlanoOpcao {
   id: string;
@@ -33,11 +34,11 @@ const formatarMoeda = (valor: number) => {
 const getNivelIcon = (nivel?: string) => {
   switch (nivel) {
     case 'exclusive':
-      return <Star className="h-4 w-4 text-yellow-500" />;
+      return <Crown className="h-5 w-5 text-yellow-400" />;
     case 'premium':
-      return <Zap className="h-4 w-4 text-purple-500" />;
+      return <Zap className="h-5 w-5 text-purple-400" />;
     default:
-      return <Shield className="h-4 w-4 text-primary" />;
+      return <Shield className="h-5 w-5 text-primary" />;
   }
 };
 
@@ -52,6 +53,34 @@ const getNivelLabel = (nivel?: string) => {
   }
 };
 
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.15,
+    },
+  },
+};
+
+const cardVariants = {
+  hidden: { 
+    opacity: 0, 
+    y: 30,
+    scale: 0.95,
+  },
+  visible: { 
+    opacity: 1, 
+    y: 0,
+    scale: 1,
+    transition: {
+      type: 'spring' as const,
+      stiffness: 100,
+      damping: 15,
+    },
+  },
+};
+
 export function EscolhaPlano({
   planos,
   planoSelecionadoId,
@@ -60,99 +89,195 @@ export function EscolhaPlano({
   isLoading,
 }: EscolhaPlanoProps) {
   return (
-    <div className="space-y-6">
-      <div className="text-center">
-        <h2 className="text-xl font-semibold">Escolha seu plano</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          Selecione a opção que melhor atende suas necessidades
+    <div className="space-y-8">
+      {/* Header com título animado */}
+      <motion.div 
+        className="text-center"
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+      >
+        <h2 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+          Escolha o plano ideal
+        </h2>
+        <p className="text-muted-foreground mt-2 max-w-md mx-auto">
+          Selecione a opção que melhor atende suas necessidades de proteção
         </p>
-      </div>
+      </motion.div>
 
-      <div className="grid gap-4">
-        {planos.map((plano) => {
+      {/* Grid de Planos */}
+      <motion.div 
+        className="grid gap-4 md:gap-6 md:grid-cols-2 lg:grid-cols-3"
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+      >
+        {planos.map((plano, index) => {
           const isSelected = plano.id === planoSelecionadoId;
+          const isRecommended = plano.destaque;
 
           return (
-            <Card
+            <motion.div
               key={plano.id}
-              className={cn(
-                'cursor-pointer transition-all hover:shadow-md',
-                isSelected && 'ring-2 ring-primary border-primary',
-                plano.destaque && 'border-primary/50'
-              )}
-              onClick={() => onSelectPlano(plano.id)}
+              variants={cardVariants}
+              whileHover={{ 
+                scale: 1.02,
+                transition: { duration: 0.2 },
+              }}
+              whileTap={{ scale: 0.98 }}
             >
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      {getNivelIcon(plano.nivel)}
-                      <span className="font-semibold">{plano.nome}</span>
-                      {plano.destaque && (
-                        <Badge variant="secondary" className="text-xs">
-                          Recomendado
-                        </Badge>
-                      )}
+              <Card
+                className={cn(
+                  'relative cursor-pointer overflow-hidden transition-all duration-300',
+                  'border-2 hover:shadow-xl',
+                  isSelected && 'border-primary ring-2 ring-primary/20 shadow-lg',
+                  isRecommended && !isSelected && 'border-accent/50',
+                  !isSelected && !isRecommended && 'border-border hover:border-primary/30',
+                  isRecommended && 'plan-recommended'
+                )}
+                onClick={() => onSelectPlano(plano.id)}
+              >
+                {/* Badge Recomendado */}
+                {isRecommended && (
+                  <div className="absolute top-0 right-0 z-10">
+                    <div className="bg-accent text-accent-foreground text-xs font-semibold px-3 py-1 rounded-bl-lg">
+                      ⭐ Recomendado
                     </div>
-                    
-                    <div className="flex items-baseline gap-1 mb-3">
-                      <span className="text-2xl font-bold text-primary">
+                  </div>
+                )}
+
+                {/* Glow effect para selecionado */}
+                {isSelected && (
+                  <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-primary/10 pointer-events-none" />
+                )}
+
+                <CardContent className="p-5 md:p-6">
+                  {/* Header do Card */}
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className={cn(
+                      'w-12 h-12 rounded-xl flex items-center justify-center',
+                      'bg-gradient-to-br from-muted to-muted/50',
+                      isSelected && 'from-primary/20 to-primary/10'
+                    )}>
+                      {getNivelIcon(plano.nivel)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-bold text-lg truncate">{plano.nome}</h3>
+                      <Badge 
+                        variant="outline" 
+                        className={cn(
+                          'text-xs',
+                          plano.nivel === 'exclusive' && 'border-yellow-400/50 text-yellow-600 dark:text-yellow-400',
+                          plano.nivel === 'premium' && 'border-purple-400/50 text-purple-600 dark:text-purple-400'
+                        )}
+                      >
+                        {getNivelLabel(plano.nivel)}
+                      </Badge>
+                    </div>
+                  </div>
+
+                  {/* Preço */}
+                  <div className="mb-4">
+                    <div className="flex items-baseline gap-1">
+                      <span className={cn(
+                        'text-3xl font-bold',
+                        isSelected ? 'text-primary' : 'text-foreground'
+                      )}>
                         {formatarMoeda(plano.valorMensal)}
                       </span>
-                      <span className="text-sm text-muted-foreground">/mês</span>
+                      <span className="text-muted-foreground text-sm">/mês</span>
                     </div>
-
                     {plano.valorAdesao && plano.valorAdesao > 0 && (
-                      <p className="text-xs text-muted-foreground mb-2">
-                        Taxa de adesão: {formatarMoeda(plano.valorAdesao)}
+                      <p className="text-xs text-muted-foreground mt-1">
+                        + {formatarMoeda(plano.valorAdesao)} de adesão
                       </p>
                     )}
+                  </div>
 
-                    {plano.coberturas && plano.coberturas.length > 0 && (
-                      <div className="space-y-1">
-                        {plano.coberturas.slice(0, 4).map((cobertura, idx) => (
-                          <div
-                            key={idx}
-                            className="flex items-center gap-2 text-sm text-muted-foreground"
-                          >
-                            <Check className="h-3 w-3 text-green-500 flex-shrink-0" />
-                            <span className="truncate">{cobertura}</span>
+                  {/* Divisor */}
+                  <div className="h-px bg-border mb-4" />
+
+                  {/* Coberturas */}
+                  {plano.coberturas && plano.coberturas.length > 0 && (
+                    <div className="space-y-2.5">
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        Coberturas incluídas
+                      </p>
+                      {plano.coberturas.slice(0, 5).map((cobertura, idx) => (
+                        <motion.div
+                          key={idx}
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: 0.3 + idx * 0.05 }}
+                          className="flex items-center gap-2.5"
+                        >
+                          <div className="w-5 h-5 rounded-full bg-green-500/10 flex items-center justify-center flex-shrink-0">
+                            <Check className="h-3 w-3 text-green-500" />
                           </div>
-                        ))}
-                        {plano.coberturas.length > 4 && (
-                          <p className="text-xs text-muted-foreground pl-5">
-                            + {plano.coberturas.length - 4} coberturas
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                          <span className="text-sm text-muted-foreground">{cobertura}</span>
+                        </motion.div>
+                      ))}
+                      {plano.coberturas.length > 5 && (
+                        <p className="text-xs text-primary font-medium pl-7">
+                          + {plano.coberturas.length - 5} coberturas adicionais
+                        </p>
+                      )}
+                    </div>
+                  )}
 
-                  <div
-                    className={cn(
-                      'w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0',
-                      isSelected
-                        ? 'border-primary bg-primary'
-                        : 'border-muted-foreground/30'
-                    )}
-                  >
-                    {isSelected && <Check className="h-4 w-4 text-primary-foreground" />}
+                  {/* Indicador de Seleção */}
+                  <div className="mt-5 pt-4 border-t border-border">
+                    <div className="flex items-center justify-center gap-2">
+                      <div
+                        className={cn(
+                          'w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all',
+                          isSelected
+                            ? 'border-primary bg-primary'
+                            : 'border-muted-foreground/30'
+                        )}
+                      >
+                        {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
+                      </div>
+                      <span className={cn(
+                        'text-sm font-medium',
+                        isSelected ? 'text-primary' : 'text-muted-foreground'
+                      )}>
+                        {isSelected ? 'Selecionado' : 'Selecionar plano'}
+                      </span>
+                    </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </motion.div>
           );
         })}
-      </div>
+      </motion.div>
 
-      <Button
-        className="w-full"
-        size="lg"
-        onClick={onConfirmar}
-        disabled={!planoSelecionadoId || isLoading}
+      {/* Botão Continuar */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.5 }}
       >
-        {isLoading ? 'Carregando...' : 'Continuar'}
-      </Button>
+        <Button
+          className={cn(
+            'w-full h-12 text-base font-semibold transition-all',
+            planoSelecionadoId && 'bg-accent hover:bg-accent-hover'
+          )}
+          size="lg"
+          onClick={onConfirmar}
+          disabled={!planoSelecionadoId || isLoading}
+        >
+          {isLoading ? (
+            <span className="flex items-center gap-2">
+              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              Carregando...
+            </span>
+          ) : (
+            'Continuar com este plano'
+          )}
+        </Button>
+      </motion.div>
     </div>
   );
 }
