@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Info } from 'lucide-react';
 import { useCreateBeneficio, useUpdateBeneficio, CATEGORIAS_BENEFICIO } from '@/hooks/useBeneficiosAdmin';
 import { CustoRealInfo } from '@/components/beneficios/CustoRealInfo';
 import type { Tables } from '@/integrations/supabase/types';
@@ -181,13 +181,20 @@ export function BeneficioAdicionalModal({ open, onOpenChange, beneficio }: Benef
               placeholder="0.00"
             />
             
-            {/* Custo Real - só aparece quando editando */}
-            {isEditing && beneficio && (
+            {/* Custo Real - mostra info ao criar, dados ao editar */}
+            {isEditing && beneficio ? (
               <CustoRealInfo 
                 beneficioId={beneficio.id} 
                 tipo="adicional"
                 precoAtual={formData.preco}
               />
+            ) : (
+              <div className="mt-2 p-3 rounded-md border border-muted bg-muted/20">
+                <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <Info className="h-3.5 w-3.5 shrink-0" />
+                  O custo real será calculado após salvar e registrar gastos em sinistros
+                </p>
+              </div>
             )}
           </div>
 

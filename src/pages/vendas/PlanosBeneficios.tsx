@@ -25,8 +25,9 @@ import { toast } from 'sonner';
 import { useProductLines, usePlans, useMainCoverages } from '@/hooks/usePlans';
 import { useDeletePlan } from '@/hooks/usePlansAdmin';
 import { useBeneficiosAtivos, useDeleteBeneficio } from '@/hooks/useBeneficiosAdmin';
-import { useResumoSaudeBeneficios } from '@/hooks/useCustoBeneficios';
+import { useResumoSaudeBeneficios, useCustoBeneficios, type CustoBeneficio } from '@/hooks/useCustoBeneficios';
 import { ResumoSaudeCard } from '@/components/beneficios/ResumoSaudeCard';
+import { BadgeIndicador } from '@/components/beneficios/IndicadorSaude';
 
 // Componentes
 import { TabelaPrecosCarros, TabelaPrecosMotos, TabelaPrecosEletricos } from '@/components/planos/TabelaPrecos';
@@ -99,6 +100,13 @@ export default function PlanosBeneficios() {
   const { data: mainCoverages, isLoading: loadingCoverages } = useMainCoverages();
   const { data: beneficiosAdicionais, isLoading: loadingBeneficios } = useBeneficiosAtivos();
   const { data: resumoSaude, isLoading: loadingResumo } = useResumoSaudeBeneficios();
+  const { data: custosReais } = useCustoBeneficios();
+
+  // Criar mapa para acesso rápido por ID do benefício
+  const custosPorBeneficio = custosReais?.reduce((acc, custo) => {
+    acc[custo.beneficio_id] = custo;
+    return acc;
+  }, {} as Record<string, CustoBeneficio>) || {};
   const deletePlan = useDeletePlan();
   const deleteBeneficio = useDeleteBeneficio();
 
@@ -383,10 +391,17 @@ export default function PlanosBeneficios() {
                       className="group relative flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
                     >
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <Badge variant="outline" className="text-xs">
                             {beneficio.categoria}
                           </Badge>
+                          {/* Badge de indicador de saúde (visível para Diretor) */}
+                          {podeEditar && custosPorBeneficio[beneficio.id] && (
+                            <BadgeIndicador 
+                              indicador={custosPorBeneficio[beneficio.id].indicador} 
+                              size="sm" 
+                            />
+                          )}
                           <span className="font-medium">{beneficio.nome}</span>
                         </div>
                         <p className="text-sm text-muted-foreground mt-1 truncate">{beneficio.descricao}</p>
