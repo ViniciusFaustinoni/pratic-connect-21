@@ -149,6 +149,11 @@ export function useCreateCotacao() {
   
   return useMutation({
     mutationFn: async (cotacao: Omit<CotacaoInsert, 'numero'>) => {
+      // Validação: vendedor_id é obrigatório para garantir visibilidade via RLS
+      if (!cotacao.vendedor_id) {
+        throw new Error('vendedor_id é obrigatório para criar cotações');
+      }
+      
       const { data, error } = await supabase
         .from('cotacoes')
         .insert({
