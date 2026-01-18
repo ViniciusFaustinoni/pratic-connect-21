@@ -72,12 +72,12 @@ export function AtribuirInstaladorDialog({ instalacaoId, open, onOpenChange }: A
 
           <div className="space-y-2">
             <Label>Rastreador (opcional)</Label>
-            <Select value={rastreadorId} onValueChange={setRastreadorId} disabled={loadingRastreadores}>
+            <Select value={rastreadorId || 'none'} onValueChange={(v) => setRastreadorId(v === 'none' ? '' : v)} disabled={loadingRastreadores}>
               <SelectTrigger>
                 <SelectValue placeholder={loadingRastreadores ? 'Carregando...' : 'Selecione um rastreador'} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Nenhum</SelectItem>
+                <SelectItem value="none">Nenhum</SelectItem>
                 {rastreadores?.map((rast) => (
                   <SelectItem key={rast.id} value={rast.id}>
                     {rast.codigo} {rast.imei && `(${rast.imei})`}
