@@ -1,7 +1,7 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { CalendarIcon } from 'lucide-react';
 import {
@@ -36,6 +36,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useCreateRota, useUpdateRota, useInstaladores, type Rota } from '@/hooks/useRotas';
 import { toast } from 'sonner';
+import { useEffect } from 'react';
 
 const rotaSchema = z.object({
   data_rota: z.date({ required_error: 'Data é obrigatória' }),
@@ -62,13 +63,26 @@ export function RotaFormDialog({ open, onOpenChange, rota }: RotaFormDialogProps
   const form = useForm<RotaFormData>({
     resolver: zodResolver(rotaSchema),
     defaultValues: {
-      data_rota: rota?.data_rota ? new Date(rota.data_rota) : new Date(),
-      instalador_id: rota?.instalador_id || '',
-      coordenador_id: rota?.coordenador_id || null,
-      cidade: rota?.cidade || '',
-      regiao: rota?.regiao || '',
+      data_rota: new Date(),
+      instalador_id: '',
+      coordenador_id: null,
+      cidade: '',
+      regiao: '',
     },
   });
+
+  // Reset form when dialog opens or rota changes
+  useEffect(() => {
+    if (open) {
+      form.reset({
+        data_rota: rota?.data_rota ? parseISO(rota.data_rota) : new Date(),
+        instalador_id: rota?.instalador_id || '',
+        coordenador_id: rota?.coordenador_id || null,
+        cidade: rota?.cidade || '',
+        regiao: rota?.regiao || '',
+      });
+    }
+  }, [open, rota, form]);
 
   const onSubmit = async (data: RotaFormData) => {
     try {
