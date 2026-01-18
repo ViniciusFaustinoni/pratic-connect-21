@@ -1,7 +1,7 @@
 import { useParams } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertTriangle, Car, CheckCircle2, CalendarCheck, Calendar, Clock, MapPin, PartyPopper } from 'lucide-react';
+import { AlertTriangle, Car, CheckCircle2, CalendarCheck, Calendar, Clock, MapPin, PartyPopper, Shield } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useCotacaoContratacao } from '@/hooks/useCotacaoContratacao';
@@ -11,6 +11,7 @@ import { EtapaDadosPessoaisDocumentos } from '@/components/cotacao-publica/Etapa
 import { EtapaAssinaturaContrato } from '@/components/cotacao-publica/EtapaAssinaturaContrato';
 import { EtapaVistoria } from '@/components/cotacao-publica/EtapaVistoria';
 import { EtapaPagamentoCotacao } from '@/components/cotacao-publica/EtapaPagamentoCotacao';
+import { AgendamentoVistoriaCompleta } from '@/components/cotacao-publica/AgendamentoVistoriaCompleta';
 import type { DadosPessoaisForm } from '@/components/cotacao-publica/FormularioDadosPessoais';
 import { useState, useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
@@ -381,34 +382,112 @@ export default function CotacaoContratacao() {
                   exit="exit"
                 >
                   {cotacao?.tipo_vistoria === 'autovistoria' ? (
-                    // AUTOVISTORIA - Cobertura ativada para roubo e furto
-                    <Card className="border-success/30 bg-card/80 backdrop-blur-xl">
-                      <CardContent className="py-16 text-center">
-                        <motion.div 
-                          className="w-20 h-20 mx-auto mb-6 rounded-full bg-success/10 flex items-center justify-center"
-                          initial={{ scale: 0 }}
-                          animate={{ scale: 1 }}
-                          transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
-                        >
-                          <PartyPopper className="h-10 w-10 text-success" />
-                        </motion.div>
-                        <Badge className="bg-success/20 text-success border-success/30 mb-4">
-                          Cobertura Ativada
-                        </Badge>
-                        <h2 className="text-2xl font-bold mb-3 text-success">
-                          Cobertura para Roubo e Furto Ativada!
-                        </h2>
-                        <p className="text-muted-foreground max-w-sm mx-auto mb-4">
-                          Parabéns! Seu veículo já está protegido contra roubo e furto.
-                          Seja bem-vindo à família PRATIC!
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          Você receberá um e-mail com todos os detalhes da sua cobertura.
-                        </p>
-                      </CardContent>
-                    </Card>
+                    // AUTOVISTORIA - Verificar se já agendou vistoria completa
+                    cotacao?.vistoria_completa_data_agendada ? (
+                      // Vistoria completa já agendada - mostrar conclusão final
+                      <Card className="border-success/30 bg-card/80 backdrop-blur-xl">
+                        <CardContent className="py-12 text-center space-y-6">
+                          <motion.div 
+                            className="w-20 h-20 mx-auto rounded-full bg-success/10 flex items-center justify-center"
+                            initial={{ scale: 0 }}
+                            animate={{ scale: 1 }}
+                            transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
+                          >
+                            <PartyPopper className="h-10 w-10 text-success" />
+                          </motion.div>
+                          
+                          <div>
+                            <Badge className="bg-success/20 text-success border-success/30 mb-4">
+                              Bem-vindo à PRATIC!
+                            </Badge>
+                            <h2 className="text-2xl font-bold mb-3 text-foreground">
+                              Parabéns! Você está na família PRATIC!
+                            </h2>
+                          </div>
+
+                          {/* Cobertura ativa */}
+                          <div className="bg-success/10 border border-success/30 rounded-lg p-4 max-w-md mx-auto">
+                            <div className="flex items-center gap-3 justify-center mb-2">
+                              <Shield className="h-6 w-6 text-success" />
+                              <span className="font-semibold text-success">Cobertura Ativa</span>
+                            </div>
+                            <p className="text-sm text-muted-foreground">
+                              Roubo e Furto <span className="text-success font-medium">(Proteção Imediata)</span>
+                            </p>
+                          </div>
+
+                          {/* Detalhes do agendamento da vistoria completa */}
+                          <div className="bg-muted/30 rounded-lg p-4 max-w-md mx-auto text-left space-y-3">
+                            <div className="flex items-center gap-2 mb-3">
+                              <CalendarCheck className="h-5 w-5 text-primary" />
+                              <span className="font-medium text-foreground">Vistoria Completa Agendada</span>
+                            </div>
+                            
+                            <div className="flex items-center gap-3">
+                              <Calendar className="h-5 w-5 text-primary flex-shrink-0" />
+                              <div>
+                                <p className="text-sm text-muted-foreground">Data</p>
+                                <p className="font-medium">
+                                  {format(new Date(cotacao.vistoria_completa_data_agendada + 'T12:00:00'), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                                </p>
+                              </div>
+                            </div>
+                            
+                            {cotacao?.vistoria_completa_horario_agendado && (
+                              <div className="flex items-center gap-3">
+                                <Clock className="h-5 w-5 text-primary flex-shrink-0" />
+                                <div>
+                                  <p className="text-sm text-muted-foreground">Horário</p>
+                                  <p className="font-medium">{cotacao.vistoria_completa_horario_agendado}</p>
+                                </div>
+                              </div>
+                            )}
+                            
+                            {cotacao?.vistoria_completa_endereco_logradouro && (
+                              <div className="flex items-start gap-3">
+                                <MapPin className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                                <div>
+                                  <p className="text-sm text-muted-foreground">Local</p>
+                                  <p className="font-medium">
+                                    {cotacao.vistoria_completa_endereco_logradouro}
+                                    {cotacao.vistoria_completa_endereco_numero && `, ${cotacao.vistoria_completa_endereco_numero}`}
+                                  </p>
+                                  <p className="text-sm text-muted-foreground">
+                                    {cotacao.vistoria_completa_endereco_bairro}
+                                    {cotacao.vistoria_completa_endereco_cidade && ` - ${cotacao.vistoria_completa_endereco_cidade}`}
+                                    {cotacao.vistoria_completa_endereco_estado && `/${cotacao.vistoria_completa_endereco_estado}`}
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Aviso importante */}
+                          <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 max-w-md mx-auto">
+                            <AlertTriangle className="h-5 w-5 text-amber-500 mt-0.5 flex-shrink-0" />
+                            <p className="text-sm text-left text-amber-200">
+                              <strong>Importante:</strong> A cobertura <strong>TOTAL</strong> será ativada 
+                              após a realização da vistoria presencial.
+                            </p>
+                          </div>
+
+                          <p className="text-sm text-muted-foreground">
+                            Você receberá um e-mail com todos os detalhes. Aguarde o contato do vistoriador no dia agendado.
+                          </p>
+                        </CardContent>
+                      </Card>
+                    ) : (
+                      // Autovistoria concluída, mas ainda precisa agendar vistoria completa
+                      <AgendamentoVistoriaCompleta
+                        cotacaoId={cotacao.id}
+                        onConfirmar={() => {
+                          // Força refresh dos dados
+                          window.location.reload();
+                        }}
+                      />
+                    )
                   ) : (
-                    // VISTORIA AGENDADA - Ainda não está coberto
+                    // VISTORIA AGENDADA DIRETO - Ainda não está coberto
                     <Card className="border-primary/30 bg-card/80 backdrop-blur-xl">
                       <CardContent className="py-12 text-center space-y-6">
                         <motion.div 
