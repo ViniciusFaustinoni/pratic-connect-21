@@ -32,6 +32,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Package, Loader2 } from "lucide-react";
+import { usePlataformasOptions } from "@/hooks/usePlataformasCRUD";
 
 const formSchema = z.object({
   quantidade: z.coerce
@@ -51,22 +52,17 @@ interface EntradaEstoqueDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-const PLATAFORMAS = [
-  { value: "rede_veiculos", label: "Rede Veículos" },
-  { value: "sascar", label: "Sascar" },
-  { value: "autotrac", label: "Autotrac" },
-  { value: "onixsat", label: "Onixsat" },
-  { value: "outro", label: "Outro" },
-];
-
 export function EntradaEstoqueDialog({ open, onOpenChange }: EntradaEstoqueDialogProps) {
   const queryClient = useQueryClient();
+  const { data: plataformas, isLoading: loadingPlataformas } = usePlataformasOptions();
+
+  const defaultPlataforma = plataformas?.[0]?.codigo || '';
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       quantidade: 1,
-      plataforma: "rede_veiculos",
+      plataforma: defaultPlataforma,
       nota_fiscal: "",
       fornecedor: "",
       observacoes: "",
@@ -202,9 +198,11 @@ export function EntradaEstoqueDialog({ open, onOpenChange }: EntradaEstoqueDialo
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {PLATAFORMAS.map((p) => (
-                        <SelectItem key={p.value} value={p.value}>
-                          {p.label}
+                      {loadingPlataformas ? (
+                        <SelectItem value="" disabled>Carregando...</SelectItem>
+                      ) : plataformas?.map((p) => (
+                        <SelectItem key={p.codigo} value={p.codigo}>
+                          {p.nome}
                         </SelectItem>
                       ))}
                     </SelectContent>
