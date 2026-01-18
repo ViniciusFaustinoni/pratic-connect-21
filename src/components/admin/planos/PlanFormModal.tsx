@@ -629,7 +629,11 @@ export function PlanFormModal({
           {/* Preview Side */}
           <div className="w-80 border-l bg-muted/30 p-4 overflow-auto">
             <p className="text-sm font-medium mb-3">Preview</p>
-            <PlanPreview plan={previewData} />
+            <PlanPreview 
+              plan={previewData} 
+              pendingExclusions={pendingExclusions}
+              benefits={benefits}
+            />
           </div>
         </div>
       </DialogContent>

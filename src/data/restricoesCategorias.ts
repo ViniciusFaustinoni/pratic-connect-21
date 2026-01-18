@@ -269,3 +269,57 @@ export function gerarMensagemAlertaCategoria(
   const beneficiosTexto = beneficiosExcluidos.join(', ') + ' e ' + ultimoBeneficio;
   return `${prefixo}: sem cobertura de ${beneficiosTexto}`;
 }
+
+/**
+ * Gera um resumo de exclusões agrupado por benefício.
+ * Mostra quais categorias de veículo não terão acesso a cada benefício.
+ * Ideal para o Preview de edição de planos.
+ */
+export function gerarResumoExclusoesParaPreview(
+  exclusions: Map<string, string[]>
+): string[] {
+  const alertas: string[] = [];
+  
+  exclusions.forEach((categorias, benefitId) => {
+    if (categorias.length === 0) return;
+    
+    const labels = categorias.map(cat => CATEGORIA_LABELS[cat] || cat);
+    
+    // O benefício será identificado pelo nome quando renderizado
+    if (labels.length === 1) {
+      alertas.push(`${labels[0]}`);
+    } else if (labels.length === 2) {
+      alertas.push(`${labels[0]} e ${labels[1]}`);
+    } else {
+      const ultimo = labels.pop();
+      alertas.push(`${labels.join(', ')} e ${ultimo}`);
+    }
+  });
+  
+  return alertas;
+}
+
+/**
+ * Gera alertas formatados para o Preview, agrupados por benefício.
+ * Retorna um array de objetos com o nome do benefício e as categorias excluídas.
+ */
+export function gerarAlertasExclusaoPreview(
+  exclusions: Map<string, string[]>,
+  benefitsMap: Map<string, string> // benefitId -> benefitName
+): Array<{ benefitName: string; categorias: string[] }> {
+  const alertas: Array<{ benefitName: string; categorias: string[] }> = [];
+  
+  exclusions.forEach((categorias, benefitId) => {
+    if (categorias.length === 0) return;
+    
+    const benefitName = benefitsMap.get(benefitId) || benefitId;
+    const categoriasLabels = categorias.map(cat => CATEGORIA_LABELS[cat] || cat);
+    
+    alertas.push({
+      benefitName,
+      categorias: categoriasLabels,
+    });
+  });
+  
+  return alertas;
+}
