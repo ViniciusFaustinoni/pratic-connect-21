@@ -125,3 +125,9 @@ verify_jwt = false
 
 [functions.autentique-sync-contrato]
 verify_jwt = false
+
+[functions.processar-vistoria]
+verify_jwt = false
+
+[functions.notificar-cliente]
+verify_jwt = false

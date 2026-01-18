@@ -55,6 +55,15 @@ interface DecisaoParams {
   permitirNovaTentativa?: boolean;
 }
 
+interface ProcessarVistoriaResponse {
+  success: boolean;
+  decisao?: string;
+  instalacao_id?: string;
+  nova_vistoria_id?: string;
+  mensagem?: string;
+  error?: string;
+}
+
 export function useAnaliseVistoria(vistoriaId: string) {
   const queryClient = useQueryClient();
 
@@ -107,118 +116,40 @@ export function useAnaliseVistoria(vistoriaId: string) {
     enabled: !!vistoriaId,
   });
 
-  // Registrar decisão
+  // Registrar decisão via Edge Function
   const registrarDecisao = useMutation({
-    mutationFn: async (params: DecisaoParams) => {
+    mutationFn: async (params: DecisaoParams): Promise<ProcessarVistoriaResponse> => {
       const { vistoriaId, decisao, observacoes, ressalvas, motivoReprovacao, permitirNovaTentativa } = params;
 
-      // Buscar dados atuais da vistoria para o histórico
-      const { data: vistoriaAtual } = await supabase
-        .from('vistorias')
-        .select('associado_id, veiculo_id')
-        .eq('id', vistoriaId)
-        .single();
-
-      const userId = (await supabase.auth.getUser()).data.user?.id;
-
-      // 1. Atualizar status da vistoria
-      const updateData: Record<string, unknown> = {
-        status: decisao,
-        observacoes_analise: observacoes || null,
-        analisado_por: userId,
-        analisado_em: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-
-      if (decisao === 'aprovada_com_ressalvas') {
-        updateData.ressalvas = ressalvas;
-        updateData.status = 'aprovada';
+      // Buscar ID do usuário atual
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error('Usuário não autenticado');
       }
 
-      if (decisao === 'reprovada') {
-        updateData.motivo_reprovacao = motivoReprovacao;
-      }
-
-      const { error: updateError } = await supabase
-        .from('vistorias')
-        .update(updateData)
-        .eq('id', vistoriaId);
-
-      if (updateError) throw updateError;
-
-      // 2. Se APROVADA: criar instalação e atualizar associado
-      if (decisao === 'aprovada' || decisao === 'aprovada_com_ressalvas') {
-        // Criar instalação pendente
-        if (vistoriaAtual?.associado_id && vistoriaAtual?.veiculo_id) {
-          const { error: instalacaoError } = await supabase
-            .from('instalacoes')
-            .insert([{
-              associado_id: vistoriaAtual.associado_id,
-              veiculo_id: vistoriaAtual.veiculo_id,
-              status: 'agendada',
-              data_agendada: new Date().toISOString(),
-            }]);
-
-          if (instalacaoError) {
-            console.error('Erro ao criar instalação:', instalacaoError);
-          }
-
-          // Atualizar status do associado
-          await supabase
-            .from('associados')
-            .update({ status: 'aguardando_instalacao' })
-            .eq('id', vistoriaAtual.associado_id);
-
-          // Atualizar status do veículo
-          await supabase
-            .from('veiculos')
-            .update({ status: 'instalacao_pendente' })
-            .eq('id', vistoriaAtual.veiculo_id);
-        }
-      }
-
-      // 3. Se REPROVADA e permitir nova tentativa: criar nova vistoria pendente
-      if (decisao === 'reprovada' && permitirNovaTentativa) {
-        await supabase.from('vistorias').insert({
-          associado_id: vistoriaAtual?.associado_id,
-          veiculo_id: vistoriaAtual?.veiculo_id,
-          tipo: 'entrada',
-          status: 'pendente',
-        });
-      }
-
-      // 4. Registrar no histórico do associado (se tabela existir)
-      try {
-        await supabase.from('associados_historico').insert({
-          associado_id: vistoriaAtual?.associado_id!,
-          tipo: 'vistoria_analisada',
-          descricao: `Vistoria ${decisao === 'reprovada' ? 'reprovada' : 'aprovada'}${ressalvas ? ' com ressalvas' : ''}`,
-          dados_novos: {
-            vistoria_id: vistoriaId,
-            decisao,
-            motivo: decisao === 'reprovada' ? motivoReprovacao : null,
-            ressalvas: decisao === 'aprovada_com_ressalvas' ? ressalvas : null,
-          },
-          usuario_id: userId,
-        });
-      } catch {
-        // Ignorar se tabela não existir ou erro
-      }
-
-      // 5. Disparar notificação (via edge function)
-      await supabase.functions.invoke('notificar-cliente', {
+      // Chamar edge function que centraliza toda a lógica
+      const { data, error } = await supabase.functions.invoke<ProcessarVistoriaResponse>('processar-vistoria', {
         body: {
-          tipo: decisao === 'reprovada' ? 'vistoria_reprovada' : 'vistoria_aprovada',
-          associado_id: vistoriaAtual?.associado_id,
-          dados: {
-            vistoria_id: vistoriaId,
-            motivo: motivoReprovacao,
-            permitir_nova_tentativa: permitirNovaTentativa,
-          },
+          vistoria_id: vistoriaId,
+          decisao,
+          analista_id: user.id,
+          observacoes,
+          ressalvas,
+          motivo_reprovacao: motivoReprovacao,
+          permitir_nova_tentativa: permitirNovaTentativa,
         },
-      }).catch(() => {}); // Ignorar se function não existir
+      });
 
-      return { success: true, decisao };
+      if (error) {
+        console.error('Erro ao invocar processar-vistoria:', error);
+        throw new Error(error.message || 'Erro ao processar vistoria');
+      }
+
+      if (!data?.success) {
+        throw new Error(data?.error || 'Erro desconhecido ao processar vistoria');
+      }
+
+      return data;
     },
     onSuccess: (data) => {
       if (data.decisao === 'reprovada') {
@@ -226,9 +157,12 @@ export function useAnaliseVistoria(vistoriaId: string) {
       } else {
         toast.success('Vistoria aprovada! Instalação criada na fila.');
       }
+      
+      // Invalidar queries relacionadas
       queryClient.invalidateQueries({ queryKey: ['vistoria-analise', vistoriaId] });
       queryClient.invalidateQueries({ queryKey: ['fila-vistorias'] });
       queryClient.invalidateQueries({ queryKey: ['vistorias'] });
+      queryClient.invalidateQueries({ queryKey: ['instalacoes'] });
     },
     onError: (error: Error) => {
       toast.error('Erro ao registrar decisão: ' + error.message);
