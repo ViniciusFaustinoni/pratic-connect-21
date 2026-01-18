@@ -235,6 +235,10 @@ import InstaladorLogin from "./pages/instalador/InstaladorLogin";
 import InstaladorHome from "./pages/instalador/InstaladorHome";
 import InstaladorChecklist from "./pages/instalador/InstaladorChecklist";
 
+// Vistoriador App Pages
+import VistoriadorHome from "./pages/vistoriador/Home";
+import { VistoriadorLayout } from "./layouts/VistoriadorLayout";
+
 // Public Pages
 import CotacaoPublicaPage from "./pages/public/CotacaoPublica";
 import CotacaoPublicaCompleta from "./pages/public/CotacaoPublicaCompleta";
@@ -512,6 +516,14 @@ const App = () => (
             <Route element={<InstaladorLayout />}>
               <Route path="/instalador" element={<InstaladorHome />} />
               <Route path="/instalador/instalacao/:id" element={<InstaladorChecklist />} />
+            </Route>
+            
+            {/* Vistoriador App Routes */}
+            <Route element={<VistoriadorLayout />}>
+              <Route path="/vistoriador/home" element={<VistoriadorHome />} />
+              <Route path="/vistoriador/tarefas" element={<div>Tarefas</div>} />
+              <Route path="/vistoriador/mapa" element={<div>Mapa</div>} />
+              <Route path="/vistoriador/perfil" element={<div>Perfil</div>} />
             </Route>
             
             {/* Acesso Negado */}
