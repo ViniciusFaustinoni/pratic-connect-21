@@ -4,7 +4,7 @@ import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Loader2, Car, Search, CheckCircle2, Shield, Check, AlertCircle, Copy, MessageCircle, Zap, User, Link, UserCheck, Phone, Mail, AlertTriangle, Info, MapPin, HelpCircle } from 'lucide-react';
+import { Loader2, Car, Search, CheckCircle2, Shield, Check, AlertCircle, Copy, MessageCircle, Zap, User, Link, UserCheck, Phone, Mail, AlertTriangle, Info, MapPin, HelpCircle, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Button } from '@/components/ui/button';
@@ -58,6 +58,7 @@ import { toast } from 'sonner';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { VehicleCategorySelect, CATEGORIAS_VEICULO } from '@/components/cotador/VehicleCategorySelect';
+import { isCoberturaRemovida } from '@/data/restricoesCategorias';
 
 // Regiões disponíveis no sistema
 const REGIOES = [
@@ -1391,12 +1392,25 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase }: C
                           <span className="text-xs font-normal text-muted-foreground">/mês</span>
                         </p>
                         <ul className="text-xs space-y-1 text-muted-foreground">
-                          {plano.coberturas.slice(0, 4).map((cobertura, idx) => (
-                            <li key={idx} className="flex items-center gap-1">
-                              <Check className="h-3 w-3 text-green-500 shrink-0" />
-                              <span className="truncate">{cobertura}</span>
-                            </li>
-                          ))}
+                          {plano.coberturas.slice(0, 4).map((cobertura, idx) => {
+                            const isRemovida = isCoberturaRemovida(cobertura, categoria);
+                            return (
+                              <li key={idx} className="flex items-center gap-1">
+                                {isRemovida ? (
+                                  <>
+                                    <X className="h-3 w-3 text-destructive shrink-0" />
+                                    <span className="truncate line-through text-muted-foreground/60">{cobertura}</span>
+                                    <span className="text-[10px] text-destructive">(não cobre)</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Check className="h-3 w-3 text-green-500 shrink-0" />
+                                    <span className="truncate">{cobertura}</span>
+                                  </>
+                                )}
+                              </li>
+                            );
+                          })}
                           <AnimatePresence initial={false}>
                             {expandedPlanos[plano.id] && (
                               <motion.div
@@ -1406,12 +1420,25 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase }: C
                                 transition={{ duration: 0.2, ease: "easeInOut" }}
                                 className="overflow-hidden"
                               >
-                                {plano.coberturas.slice(4).map((cobertura, idx) => (
-                                  <li key={idx + 4} className="flex items-center gap-1 mt-1">
-                                    <Check className="h-3 w-3 text-green-500 shrink-0" />
-                                    <span className="truncate">{cobertura}</span>
-                                  </li>
-                                ))}
+                                {plano.coberturas.slice(4).map((cobertura, idx) => {
+                                  const isRemovida = isCoberturaRemovida(cobertura, categoria);
+                                  return (
+                                    <li key={idx + 4} className="flex items-center gap-1 mt-1">
+                                      {isRemovida ? (
+                                        <>
+                                          <X className="h-3 w-3 text-destructive shrink-0" />
+                                          <span className="truncate line-through text-muted-foreground/60">{cobertura}</span>
+                                          <span className="text-[10px] text-destructive">(não cobre)</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Check className="h-3 w-3 text-green-500 shrink-0" />
+                                          <span className="truncate">{cobertura}</span>
+                                        </>
+                                      )}
+                                    </li>
+                                  );
+                                })}
                               </motion.div>
                             )}
                           </AnimatePresence>
