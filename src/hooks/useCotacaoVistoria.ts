@@ -6,9 +6,9 @@ export interface CotacaoVistoriaFoto {
   id: string;
   cotacao_id: string;
   tipo: string;
-  url: string;
-  latitude?: number;
-  longitude?: number;
+  arquivo_url: string;
+  latitude: number | null;
+  longitude: number | null;
   created_at: string;
 }
 
@@ -23,7 +23,7 @@ export function useFotosCotacaoVistoria(cotacaoId: string | null) {
         .eq('cotacao_id', cotacaoId)
         .order('created_at', { ascending: true });
       if (error) throw error;
-      return data as CotacaoVistoriaFoto[];
+      return (data || []) as CotacaoVistoriaFoto[];
     },
     enabled: !!cotacaoId
   });
@@ -37,10 +37,10 @@ interface UploadFotoParams {
   longitude?: number;
 }
 
-interface UploadFotoResult {
+export interface UploadFotoResult {
   fotoId: string;
   url: string;
-  quilometragem?: number;
+  kmExtraido?: number;
 }
 
 export function useUploadFotoCotacaoVistoria() {
@@ -63,21 +63,26 @@ export function useUploadFotoCotacaoVistoria() {
       
       const { error: dbError } = await supabase
         .from('cotacoes_vistoria_fotos')
-        .upsert({ cotacao_id: cotacaoId, tipo: fotoId, url, latitude, longitude }, { onConflict: 'cotacao_id,tipo' });
+        .upsert({
+          cotacao_id: cotacaoId,
+          tipo: fotoId,
+          arquivo_url: url,
+          latitude: latitude ?? null,
+          longitude: longitude ?? null
+        }, { onConflict: 'cotacao_id,tipo' });
       if (dbError) throw dbError;
       
-      let quilometragem: number | undefined;
+      let kmExtraido: number | undefined;
       if (fotoId === 'odometro') {
         try {
           const { data: ocrData } = await supabase.functions.invoke('odometro-ocr', { body: { imageUrl: url } });
-          if (ocrData?.quilometragem) quilometragem = ocrData.quilometragem;
+          if (ocrData?.quilometragem) kmExtraido = ocrData.quilometragem;
         } catch (e) { console.warn('OCR falhou:', e); }
       }
-      return { fotoId, url, quilometragem };
+      return { fotoId, url, kmExtraido };
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['cotacao-vistoria-fotos', variables.cotacaoId] });
-      toast.success('Foto enviada com sucesso!');
     },
     onError: () => toast.error('Erro ao enviar foto')
   });
