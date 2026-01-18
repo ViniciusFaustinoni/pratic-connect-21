@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { Plan, Benefit, MainCoverage, ProductLine } from '@/types/plans';
+import { clearExclusionsCache } from '@/data/restricoesCategorias';
 
 // ==================== PLAN TYPES ====================
 
@@ -296,6 +297,8 @@ export function useCreateBenefit() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['benefits'] });
+      queryClient.invalidateQueries({ queryKey: ['benefit_category_exclusions'] });
+      clearExclusionsCache();
       toast.success('Benefício criado!');
     },
     onError: (error: Error) => {
@@ -320,6 +323,8 @@ export function useUpdateBenefit() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['benefits'] });
+      queryClient.invalidateQueries({ queryKey: ['benefit_category_exclusions'] });
+      clearExclusionsCache();
       toast.success('Benefício atualizado!');
     },
     onError: (error: Error) => {
@@ -333,11 +338,16 @@ export function useDeleteBenefit() {
 
   return useMutation({
     mutationFn: async (id: string) => {
+      // Deletar exclusões primeiro
+      await supabase.from('benefit_category_exclusions').delete().eq('benefit_id', id);
+      
       const { error } = await supabase.from('benefits').delete().eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['benefits'] });
+      queryClient.invalidateQueries({ queryKey: ['benefit_category_exclusions'] });
+      clearExclusionsCache();
       toast.success('Benefício excluído!');
     },
     onError: (error: Error) => {

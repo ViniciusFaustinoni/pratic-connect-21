@@ -2002,6 +2002,42 @@ export type Database = {
           },
         ]
       }
+      benefit_category_exclusions: {
+        Row: {
+          benefit_id: string
+          categoria_veiculo: string
+          created_at: string | null
+          id: string
+        }
+        Insert: {
+          benefit_id: string
+          categoria_veiculo: string
+          created_at?: string | null
+          id?: string
+        }
+        Update: {
+          benefit_id?: string
+          categoria_veiculo?: string
+          created_at?: string | null
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "benefit_category_exclusions_benefit_id_fkey"
+            columns: ["benefit_id"]
+            isOneToOne: false
+            referencedRelation: "benefits"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "benefit_category_exclusions_benefit_id_fkey"
+            columns: ["benefit_id"]
+            isOneToOne: false
+            referencedRelation: "vw_custo_real_benefits"
+            referencedColumns: ["beneficio_id"]
+          },
+        ]
+      }
       benefits: {
         Row: {
           category: string | null
