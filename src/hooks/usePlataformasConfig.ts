@@ -190,3 +190,54 @@ export function useRastreadorLogs(plataforma?: string, limit = 50) {
     },
   });
 }
+
+// Hook para testar conexão com plataforma
+export function useTestarConexaoPlataforma() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (plataformaCodigo: string) => {
+      const response = await supabase.functions.invoke('rastreador-testar-conexao', {
+        body: { plataforma_codigo: plataformaCodigo },
+      });
+
+      if (response.error) throw response.error;
+      return response.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['plataformas-config'] });
+      if (data?.sucesso) {
+        toast.success('Conexão testada com sucesso!');
+      } else {
+        toast.error(data?.mensagem || 'Falha no teste de conexão');
+      }
+    },
+    onError: (error: Error) => {
+      toast.error(`Erro ao testar conexão: ${error.message}`);
+    },
+  });
+}
+
+// Hook para sincronizar rastreadores de uma plataforma
+export function useSyncRastreadores() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (plataformaCodigo: string) => {
+      const response = await supabase.functions.invoke('rastreador-sync', {
+        body: { plataforma_codigo: plataformaCodigo },
+      });
+
+      if (response.error) throw response.error;
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['rastreadores'] });
+      queryClient.invalidateQueries({ queryKey: ['plataformas-estatisticas'] });
+      toast.success('Sincronização iniciada!');
+    },
+    onError: (error: Error) => {
+      toast.error(`Erro ao sincronizar: ${error.message}`);
+    },
+  });
+}
