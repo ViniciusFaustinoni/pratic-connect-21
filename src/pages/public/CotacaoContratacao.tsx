@@ -278,6 +278,7 @@ export default function CotacaoContratacao() {
                     onSelectPlano={setPlanoSelecionadoId}
                     onConfirmar={handleSelecionarPlano}
                     isLoading={isPending}
+                    categoriaVeiculo={(cotacao as { categoria_veiculo?: string }).categoria_veiculo}
                   />
                 </motion.div>
               )}

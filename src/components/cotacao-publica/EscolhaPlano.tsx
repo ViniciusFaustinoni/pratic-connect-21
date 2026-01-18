@@ -2,9 +2,11 @@ import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Check, Shield, Zap, Crown, Sparkles, ChevronDown, ChevronUp } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Check, X, Shield, Zap, Crown, Sparkles, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
+import { isCoberturaRemovida, getRestricaoCategoria } from '@/data/restricoesCategorias';
 
 export interface PlanoOpcao {
   id: string;
@@ -15,6 +17,7 @@ export interface PlanoOpcao {
   coberturas?: string[];
   destaque?: boolean;
   nivel?: 'basic' | 'premium' | 'exclusive';
+  categoriaVeiculo?: string;
 }
 
 interface EscolhaPlanoProps {
@@ -23,6 +26,7 @@ interface EscolhaPlanoProps {
   onSelectPlano: (planoId: string) => void;
   onConfirmar: () => void;
   isLoading?: boolean;
+  categoriaVeiculo?: string;
 }
 
 const formatarMoeda = (valor: number) => {
@@ -90,6 +94,7 @@ export function EscolhaPlano({
   onSelectPlano,
   onConfirmar,
   isLoading,
+  categoriaVeiculo,
 }: EscolhaPlanoProps) {
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
 
@@ -104,6 +109,10 @@ export function EscolhaPlano({
       return newSet;
     });
   };
+
+  // Verificar se há restrições de categoria
+  const restricao = categoriaVeiculo ? getRestricaoCategoria(categoriaVeiculo) : null;
+
   return (
     <div className="space-y-8">
       {/* Header com título animado - Premium Dark Style */}
@@ -124,6 +133,22 @@ export function EscolhaPlano({
           Selecione a opção que melhor atende suas necessidades de proteção
         </p>
       </motion.div>
+
+      {/* Alerta de restrições de categoria */}
+      {restricao && restricao.mensagemAlerta && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+        >
+          <Alert className="border-amber-500/50 bg-amber-500/10 max-w-6xl mx-auto">
+            <AlertTriangle className="h-4 w-4 text-amber-500" />
+            <AlertDescription className="text-amber-700 dark:text-amber-400">
+              {restricao.mensagemAlerta}
+            </AlertDescription>
+          </Alert>
+        </motion.div>
+      )}
 
       {/* Cards de Planos - Grid com máximo 3 por linha */}
       <motion.div 
@@ -248,21 +273,37 @@ export function EscolhaPlano({
                           Coberturas incluídas
                         </p>
                         <AnimatePresence mode="sync">
-                          {visibleCoberturas.map((cobertura, idx) => (
-                            <motion.div
-                              key={cobertura}
-                              initial={{ opacity: 0, height: 0 }}
-                              animate={{ opacity: 1, height: 'auto' }}
-                              exit={{ opacity: 0, height: 0 }}
-                              transition={{ duration: 0.2, delay: idx < MAX_VISIBLE_COBERTURAS ? 0 : 0.05 * (idx - MAX_VISIBLE_COBERTURAS) }}
-                              className="flex items-center gap-2.5"
-                            >
-                              <div className="w-5 h-5 rounded-full bg-success/10 border border-success/20 flex items-center justify-center flex-shrink-0">
-                                <Check className="h-3 w-3 text-success" />
-                              </div>
-                              <span className="text-sm text-muted-foreground">{cobertura}</span>
-                            </motion.div>
-                          ))}
+                          {visibleCoberturas.map((cobertura, idx) => {
+                            const isRemovida = isCoberturaRemovida(cobertura, categoriaVeiculo || plano.categoriaVeiculo);
+                            
+                            return (
+                              <motion.div
+                                key={cobertura}
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: 'auto' }}
+                                exit={{ opacity: 0, height: 0 }}
+                                transition={{ duration: 0.2, delay: idx < MAX_VISIBLE_COBERTURAS ? 0 : 0.05 * (idx - MAX_VISIBLE_COBERTURAS) }}
+                                className="flex items-center gap-2.5"
+                              >
+                                {isRemovida ? (
+                                  <>
+                                    <div className="w-5 h-5 rounded-full bg-destructive/10 border border-destructive/20 flex items-center justify-center flex-shrink-0">
+                                      <X className="h-3 w-3 text-destructive" />
+                                    </div>
+                                    <span className="text-sm text-muted-foreground line-through">{cobertura}</span>
+                                    <span className="text-xs text-destructive ml-auto">(não disponível)</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <div className="w-5 h-5 rounded-full bg-success/10 border border-success/20 flex items-center justify-center flex-shrink-0">
+                                      <Check className="h-3 w-3 text-success" />
+                                    </div>
+                                    <span className="text-sm text-muted-foreground">{cobertura}</span>
+                                  </>
+                                )}
+                              </motion.div>
+                            );
+                          })}
                         </AnimatePresence>
 
                         {hasMore && (

@@ -1,7 +1,8 @@
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Check, Shield } from 'lucide-react';
+import { Check, X, Shield } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { isCoberturaRemovida } from '@/data/restricoesCategorias';
 
 interface PlanoCardProps {
   plano: {
@@ -12,12 +13,14 @@ interface PlanoCardProps {
     valorAdesao: number;
     valorMensal: number;
     destaque?: boolean;
+    categoriaVeiculo?: string;
   };
   selecionado?: boolean;
   onSelecionar?: () => void;
+  categoriaVeiculo?: string;
 }
 
-export function PlanoCard({ plano, selecionado, onSelecionar }: PlanoCardProps) {
+export function PlanoCard({ plano, selecionado, onSelecionar, categoriaVeiculo }: PlanoCardProps) {
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -59,12 +62,26 @@ export function PlanoCard({ plano, selecionado, onSelecionar }: PlanoCardProps) 
 
       {/* Coberturas */}
       <div className="space-y-1.5 mb-4 pl-3">
-        {plano.coberturas.map((cobertura, index) => (
-          <div key={index} className="flex items-center gap-2 text-sm">
-            <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
-            <span>{cobertura}</span>
-          </div>
-        ))}
+        {plano.coberturas.map((cobertura, index) => {
+          const isRemovida = isCoberturaRemovida(cobertura, categoriaVeiculo || plano.categoriaVeiculo);
+          
+          return (
+            <div key={index} className="flex items-center gap-2 text-sm">
+              {isRemovida ? (
+                <>
+                  <X className="h-4 w-4 text-destructive flex-shrink-0" />
+                  <span className="text-muted-foreground line-through">{cobertura}</span>
+                  <span className="text-xs text-destructive ml-auto">(não disponível)</span>
+                </>
+              ) : (
+                <>
+                  <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
+                  <span>{cobertura}</span>
+                </>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {/* Valores */}
