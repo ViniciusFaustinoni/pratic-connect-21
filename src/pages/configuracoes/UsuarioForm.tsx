@@ -111,6 +111,9 @@ export default function UsuarioForm() {
     perfis: preselectedPerfil ? [preselectedPerfil] : [] as string[],
   });
 
+  // Estado para erros de validação de campos específicos
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
   // Buscar usuário existente
   const { data: usuario, isLoading } = useQuery({
     queryKey: ['usuario-edit', id],
@@ -210,6 +213,9 @@ export default function UsuarioForm() {
         }
       } else {
         // Criar novo usuário via Edge Function
+        // Limpar erros de campo anteriores
+        setFieldErrors({});
+        
         const { data, error } = await supabase.functions.invoke('create-user', {
           body: {
             nome: formData.nome,
@@ -227,12 +233,24 @@ export default function UsuarioForm() {
       }
     },
     onSuccess: () => {
+      setFieldErrors({});
       toast.success(isEditing ? 'Usuário atualizado!' : 'Usuário criado!');
       queryClient.invalidateQueries({ queryKey: ['usuarios'] });
       navigate('/configuracoes/usuarios');
     },
     onError: (error: any) => {
-      toast.error(error.message || 'Erro ao salvar usuário');
+      const errorMessage = error.message || 'Erro ao salvar usuário';
+      
+      // Detectar erros de duplicidade e mostrar no campo específico
+      if (errorMessage.includes('CPF já está cadastrado')) {
+        setFieldErrors(prev => ({ ...prev, cpf: 'Este CPF já está cadastrado no sistema' }));
+        toast.error('CPF já cadastrado. Por favor, verifique os dados.');
+      } else if (errorMessage.includes('email já está em uso') || errorMessage.includes('already been registered')) {
+        setFieldErrors(prev => ({ ...prev, email: 'Este email já está cadastrado no sistema' }));
+        toast.error('Email já cadastrado. Por favor, verifique os dados.');
+      } else {
+        toast.error(errorMessage);
+      }
     }
   });
 
@@ -300,10 +318,19 @@ export default function UsuarioForm() {
                     <Input 
                       id="cpf" 
                       value={formData.cpf} 
-                      onChange={(e) => setFormData({ ...formData, cpf: e.target.value })} 
+                      onChange={(e) => {
+                        setFormData({ ...formData, cpf: e.target.value });
+                        // Limpar erro do campo ao digitar
+                        if (fieldErrors.cpf) {
+                          setFieldErrors(prev => ({ ...prev, cpf: '' }));
+                        }
+                      }}
                       placeholder="000.000.000-00" 
-                      className="bg-background" 
+                      className={`bg-background ${fieldErrors.cpf ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
                     />
+                    {fieldErrors.cpf && (
+                      <p className="text-xs text-red-500 font-medium">{fieldErrors.cpf}</p>
+                    )}
                   </div>
                 </div>
 
@@ -314,12 +341,21 @@ export default function UsuarioForm() {
                       id="email" 
                       type="email" 
                       value={formData.email} 
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })} 
-                      className="bg-background" 
+                      onChange={(e) => {
+                        setFormData({ ...formData, email: e.target.value });
+                        // Limpar erro do campo ao digitar
+                        if (fieldErrors.email) {
+                          setFieldErrors(prev => ({ ...prev, email: '' }));
+                        }
+                      }}
+                      className={`bg-background ${fieldErrors.email ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
                       disabled={isEditing} 
                       required 
                     />
-                    {isEditing && <p className="text-xs text-muted-foreground">Email não pode ser alterado</p>}
+                    {fieldErrors.email && (
+                      <p className="text-xs text-red-500 font-medium">{fieldErrors.email}</p>
+                    )}
+                    {isEditing && !fieldErrors.email && <p className="text-xs text-muted-foreground">Email não pode ser alterado</p>}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="telefone">Telefone</Label>
