@@ -370,33 +370,10 @@ export function useInstalacoesPorInstalador(instaladorId: string | undefined, da
 }
 
 // ============================================
-// HOOK: INSTALADORES (profiles com role)
+// HOOK: INSTALADORES - Re-exportado de useRotas
 // ============================================
-export function useInstaladores() {
-  return useQuery({
-    queryKey: ['instaladores'],
-    queryFn: async () => {
-      const { data: roles, error: rolesError } = await supabase
-        .from('user_roles')
-        .select('user_id')
-        .eq('role', 'instalador_vistoriador');
-
-      if (rolesError) throw rolesError;
-      if (!roles?.length) return [];
-
-      const userIds = roles.map(r => r.user_id);
-
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, nome, telefone, email')
-        .in('user_id', userIds)
-        .eq('ativo', true);
-
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
-}
+// NOTA: useInstaladores foi unificado em useRotas.ts para evitar
+// conflito de cache do React Query. Use: import { useInstaladores } from '@/hooks/useRotas'
 
 // ============================================
 // HOOK: RASTREADORES EM ESTOQUE

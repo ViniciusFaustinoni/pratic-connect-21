@@ -39,7 +39,8 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useAssociados, type AssociadoWithRelations } from '@/hooks/useAssociados';
 import { useVeiculos } from '@/hooks/useVeiculos';
-import { useCreateInstalacao, useUpdateInstalacao, useInstalacao, useInstaladores, useRastreadoresEstoque } from '@/hooks/useInstalacoes';
+import { useCreateInstalacao, useUpdateInstalacao, useInstalacao, useRastreadoresEstoque } from '@/hooks/useInstalacoes';
+import { useInstaladores } from '@/hooks/useRotas';
 import { buscarCep } from '@/lib/cep';
 import { PERIODO_LABELS } from '@/types/database';
 
