@@ -7054,6 +7054,7 @@ export type Database = {
           cidade: string | null
           complemento: string | null
           concluida_em: string | null
+          cotacao_id: string | null
           created_at: string
           data_agendada: string
           hora_agendada: string | null
@@ -7082,6 +7083,7 @@ export type Database = {
           cidade?: string | null
           complemento?: string | null
           concluida_em?: string | null
+          cotacao_id?: string | null
           created_at?: string
           data_agendada: string
           hora_agendada?: string | null
@@ -7110,6 +7112,7 @@ export type Database = {
           cidade?: string | null
           complemento?: string | null
           concluida_em?: string | null
+          cotacao_id?: string | null
           created_at?: string
           data_agendada?: string
           hora_agendada?: string | null
@@ -7171,6 +7174,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "instalacoes_cotacao_id_fkey"
+            columns: ["cotacao_id"]
+            isOneToOne: false
+            referencedRelation: "cotacoes"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "instalacoes_instalador_id_fkey"
