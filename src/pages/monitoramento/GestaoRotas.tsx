@@ -27,7 +27,7 @@ import {
   type RotaWithRelations,
   type StatusRota 
 } from '@/hooks/useRotas';
-import { RotaFormDialog } from '@/components/rotas/RotaFormDialog';
+import { RotaModal } from '@/components/monitoramento/RotaModal';
 import { RotaDetailDrawer } from '@/components/rotas/RotaDetailDrawer';
 import { toast } from 'sonner';
 
@@ -70,6 +70,7 @@ const STATUS_TAREFA_CONFIG = {
 export default function GestaoRotas() {
   const [dataSelecionada, setDataSelecionada] = useState<Date>(new Date());
   const [formRotaOpen, setFormRotaOpen] = useState(false);
+  const [rotaParaEditar, setRotaParaEditar] = useState<RotaWithRelations | null>(null);
   const [rotaDetalheId, setRotaDetalheId] = useState<string | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
 
@@ -377,7 +378,8 @@ export default function GestaoRotas() {
                       size="sm" 
                       className="gap-1"
                       onClick={() => {
-                        toast.info('Edição em desenvolvimento');
+                        setRotaParaEditar(rota);
+                        setFormRotaOpen(true);
                       }}
                     >
                       <Edit className="h-4 w-4" />
@@ -514,9 +516,14 @@ export default function GestaoRotas() {
       )}
 
       {/* Dialogs */}
-      <RotaFormDialog
+      <RotaModal
         open={formRotaOpen}
-        onOpenChange={setFormRotaOpen}
+        onOpenChange={(open) => {
+          setFormRotaOpen(open);
+          if (!open) setRotaParaEditar(null);
+        }}
+        rota={rotaParaEditar}
+        data={dataSelecionada}
       />
 
       <RotaDetailDrawer
