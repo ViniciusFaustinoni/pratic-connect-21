@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Loader2, Plus, CalendarIcon } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
@@ -37,7 +37,7 @@ export function AddInstalacaoDialog({
   rotaData 
 }: AddInstalacaoDialogProps) {
   const [dataFiltro, setDataFiltro] = useState<Date | undefined>(
-    rotaData ? new Date(rotaData) : undefined
+    rotaData ? parseISO(rotaData) : undefined
   );
   const { data: instalacoes, isLoading } = useInstalacoesDisponiveis(dataFiltro);
   
