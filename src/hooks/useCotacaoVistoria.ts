@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -6,33 +6,26 @@ export interface CotacaoVistoriaFoto {
   id: string;
   cotacao_id: string;
   tipo: string;
-  arquivo_url: string;
-  latitude: number | null;
-  longitude: number | null;
+  url: string;
+  latitude?: number;
+  longitude?: number;
   created_at: string;
 }
 
-// Hook para buscar fotos existentes da vistoria
-export function useFotosCotacaoVistoria(cotacaoId: string | undefined) {
+export function useFotosCotacaoVistoria(cotacaoId: string | null) {
   return useQuery({
     queryKey: ['cotacao-vistoria-fotos', cotacaoId],
-    queryFn: async (): Promise<CotacaoVistoriaFoto[]> => {
+    queryFn: async () => {
       if (!cotacaoId) return [];
-      
       const { data, error } = await supabase
         .from('cotacoes_vistoria_fotos')
         .select('*')
         .eq('cotacao_id', cotacaoId)
         .order('created_at', { ascending: true });
-      
-      if (error) {
-        console.error('Erro ao buscar fotos da vistoria:', error);
-        return [];
-      }
-      
-      return data || [];
+      if (error) throw error;
+      return data as CotacaoVistoriaFoto[];
     },
-    enabled: !!cotacaoId,
+    enabled: !!cotacaoId
   });
 }
 
@@ -47,114 +40,91 @@ interface UploadFotoParams {
 interface UploadFotoResult {
   fotoId: string;
   url: string;
-  kmExtraido: number | null;
+  quilometragem?: number;
 }
 
-// Hook para upload de foto da autovistoria
 export function useUploadFotoCotacaoVistoria() {
   const queryClient = useQueryClient();
   
   return useMutation({
     mutationFn: async ({ cotacaoId, fotoId, file, latitude, longitude }: UploadFotoParams): Promise<UploadFotoResult> => {
-      const fileName = `cotacoes/${cotacaoId}/vistoria/${fotoId}_${Date.now()}.${file.name.split('.').pop()}`;
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${cotacaoId}/${fotoId}-${Date.now()}.${fileExt}`;
       
-      // Upload do arquivo para storage
       const { error: uploadError } = await supabase.storage
-        .from('cotacoes-docs')
+        .from('cotacoes-vistoria')
         .upload(fileName, file, { upsert: true });
+      if (uploadError) throw uploadError;
       
-      if (uploadError) {
-        console.error('Erro no upload:', uploadError);
-        throw new Error('Falha ao enviar foto');
-      }
-      
-      // Obter URL pública
       const { data: urlData } = supabase.storage
-        .from('cotacoes-docs')
+        .from('cotacoes-vistoria')
         .getPublicUrl(fileName);
+      const url = urlData.publicUrl;
       
-      const publicUrl = urlData.publicUrl;
-      
-      // Persistir/atualizar em cotacoes_vistoria_fotos (upsert por cotacao_id + tipo)
       const { error: dbError } = await supabase
         .from('cotacoes_vistoria_fotos')
-        .upsert(
-          { 
-            cotacao_id: cotacaoId, 
-            tipo: fotoId, 
-            arquivo_url: publicUrl,
-            latitude: latitude || null,
-            longitude: longitude || null,
-          },
-          { onConflict: 'cotacao_id,tipo' }
-        );
+        .upsert({ cotacao_id: cotacaoId, tipo: fotoId, url, latitude, longitude }, { onConflict: 'cotacao_id,tipo' });
+      if (dbError) throw dbError;
       
-      if (dbError) {
-        console.error('Erro ao salvar foto no banco:', dbError);
-        throw new Error('Falha ao registrar foto');
-      }
-      
-      // Se for foto do odômetro, extrair quilometragem via IA
-      let kmExtraido: number | null = null;
+      let quilometragem: number | undefined;
       if (fotoId === 'odometro') {
         try {
-          const { data: ocrResult, error: ocrError } = await supabase.functions.invoke('odometro-ocr', {
-            body: { url: publicUrl }
-          });
-          
-          if (!ocrError && ocrResult?.km && ocrResult.confianca >= 0.7) {
-            kmExtraido = ocrResult.km;
-            console.log('KM extraído do odômetro:', kmExtraido);
-          }
-        } catch (error) {
-          console.error('Erro ao extrair km do odômetro:', error);
-        }
+          const { data: ocrData } = await supabase.functions.invoke('odometro-ocr', { body: { imageUrl: url } });
+          if (ocrData?.quilometragem) quilometragem = ocrData.quilometragem;
+        } catch (e) { console.warn('OCR falhou:', e); }
       }
-      
-      return { fotoId, url: publicUrl, kmExtraido };
+      return { fotoId, url, quilometragem };
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['cotacao-vistoria-fotos', variables.cotacaoId] });
+      toast.success('Foto enviada com sucesso!');
     },
-    onError: (error) => {
-      console.error('Erro no upload da foto:', error);
-      toast.error('Falha ao enviar foto. Tente novamente.');
-    },
+    onError: () => toast.error('Erro ao enviar foto')
   });
 }
 
-interface FinalizarVistoriaParams {
+export interface FinalizarVistoriaParams {
   cotacaoId: string;
   tipoVistoria: 'autovistoria' | 'agendada';
+  dataAgendada?: string;
+  horarioAgendado?: string;
+  endereco?: { cep: string; logradouro: string; numero: string; bairro: string; cidade: string; estado: string; };
+  responsavel?: { euMesmo: boolean; nome?: string; telefone?: string; };
 }
 
-// Hook para finalizar vistoria
 export function useFinalizarVistoriaCotacao() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async ({ cotacaoId, tipoVistoria }: FinalizarVistoriaParams) => {
-      const { error } = await supabase
-        .from('cotacoes')
-        .update({
-          tipo_vistoria: tipoVistoria,
-          vistoria_concluida_em: new Date().toISOString(),
-          status_contratacao: 'vistoria_ok',
-        })
-        .eq('id', cotacaoId);
+    mutationFn: async ({ cotacaoId, tipoVistoria, dataAgendada, horarioAgendado, endereco, responsavel }: FinalizarVistoriaParams) => {
+      const updateData: Record<string, unknown> = {
+        tipo_vistoria: tipoVistoria,
+        vistoria_concluida_em: new Date().toISOString(),
+        status_contratacao: 'vistoria_ok'
+      };
       
+      if (tipoVistoria === 'agendada' && endereco && responsavel) {
+        updateData.vistoria_data_agendada = dataAgendada;
+        updateData.vistoria_horario_agendado = horarioAgendado;
+        updateData.vistoria_endereco_cep = endereco.cep;
+        updateData.vistoria_endereco_logradouro = endereco.logradouro;
+        updateData.vistoria_endereco_numero = endereco.numero;
+        updateData.vistoria_endereco_bairro = endereco.bairro;
+        updateData.vistoria_endereco_cidade = endereco.cidade;
+        updateData.vistoria_endereco_estado = endereco.estado;
+        updateData.vistoria_responsavel_eu_mesmo = responsavel.euMesmo;
+        updateData.vistoria_responsavel_nome = responsavel.nome || null;
+        updateData.vistoria_responsavel_telefone = responsavel.telefone || null;
+      }
+      
+      const { error } = await supabase.from('cotacoes').update(updateData).eq('id', cotacaoId);
       if (error) throw error;
-      
-      return { success: true };
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['cotacao-contratacao'] });
-      queryClient.invalidateQueries({ queryKey: ['cotacao-vistoria-fotos', variables.cotacaoId] });
-      toast.success('Vistoria concluída com sucesso!');
+      queryClient.invalidateQueries({ queryKey: ['cotacao', variables.cotacaoId] });
+      queryClient.invalidateQueries({ queryKey: ['cotacao-publica'] });
+      toast.success(variables.tipoVistoria === 'agendada' ? 'Vistoria agendada!' : 'Vistoria enviada!');
     },
-    onError: (error) => {
-      console.error('Erro ao finalizar vistoria:', error);
-      toast.error('Erro ao finalizar vistoria');
-    },
+    onError: () => toast.error('Erro ao finalizar vistoria')
   });
 }
