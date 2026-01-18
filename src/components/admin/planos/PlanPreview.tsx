@@ -1,9 +1,18 @@
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Check, Star } from 'lucide-react';
+import { Check, Star, AlertTriangle } from 'lucide-react';
+import { useMemo } from 'react';
+import { gerarAlertasExclusaoPreview } from '@/data/restricoesCategorias';
+
+interface Benefit {
+  id: string;
+  name: string;
+}
 
 interface PlanPreviewProps {
   plan: any;
+  pendingExclusions?: Map<string, string[]>;
+  benefits?: Benefit[];
 }
 
 const BADGE_COLORS: Record<string, string> = {
@@ -30,7 +39,7 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
-export function PlanPreview({ plan }: PlanPreviewProps) {
+export function PlanPreview({ plan, pendingExclusions, benefits }: PlanPreviewProps) {
   const lineColor = plan.product_lines?.color || 'blue';
   const gradientClass = LINE_COLORS[lineColor] || LINE_COLORS.blue;
 
@@ -42,6 +51,19 @@ export function PlanPreview({ plan }: PlanPreviewProps) {
       return (a.display_order || 0) - (b.display_order || 0);
     })
     .slice(0, 5);
+
+  // Gerar alertas dinâmicos de exclusão baseados nas exclusões pendentes
+  const exclusionAlerts = useMemo(() => {
+    if (!pendingExclusions || pendingExclusions.size === 0 || !benefits) {
+      return [];
+    }
+    
+    // Criar mapa de benefitId -> name
+    const benefitsMap = new Map<string, string>();
+    benefits.forEach(b => benefitsMap.set(b.id, b.name));
+    
+    return gerarAlertasExclusaoPreview(pendingExclusions, benefitsMap);
+  }, [pendingExclusions, benefits]);
 
   return (
     <Card className="overflow-hidden">
@@ -125,8 +147,22 @@ export function PlanPreview({ plan }: PlanPreviewProps) {
           </ul>
         )}
 
-        {/* Restriction Alert */}
-        {plan.restriction_alert && (
+        {/* Dynamic Exclusion Alerts */}
+        {exclusionAlerts.length > 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded p-2 text-amber-800 text-[10px] space-y-1">
+            {exclusionAlerts.map((alert, idx) => (
+              <div key={idx} className="flex items-start gap-1">
+                <AlertTriangle className="h-3 w-3 flex-shrink-0 mt-0.5" />
+                <span>
+                  <strong>{alert.benefitName}:</strong> sem cobertura para {alert.categorias.join(', ')}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Static Restriction Alert (fallback) */}
+        {!exclusionAlerts.length && plan.restriction_alert && (
           <div className="bg-yellow-50 border border-yellow-200 rounded p-2 text-yellow-800 text-[10px]">
             ⚠️ {plan.restriction_alert}
           </div>
