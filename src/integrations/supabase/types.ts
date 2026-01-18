@@ -11133,8 +11133,11 @@ export type Database = {
           auth_type: string
           config: Json | null
           created_at: string | null
+          descricao: string | null
+          icone: string | null
           id: string
           nome_exibicao: string
+          ordem: number | null
           plataforma: string
           suporta_acionamento_roubo: boolean | null
           suporta_bloqueio: boolean | null
@@ -11152,8 +11155,11 @@ export type Database = {
           auth_type: string
           config?: Json | null
           created_at?: string | null
+          descricao?: string | null
+          icone?: string | null
           id?: string
           nome_exibicao: string
+          ordem?: number | null
           plataforma: string
           suporta_acionamento_roubo?: boolean | null
           suporta_bloqueio?: boolean | null
@@ -11171,8 +11177,11 @@ export type Database = {
           auth_type?: string
           config?: Json | null
           created_at?: string | null
+          descricao?: string | null
+          icone?: string | null
           id?: string
           nome_exibicao?: string
+          ordem?: number | null
           plataforma?: string
           suporta_acionamento_roubo?: boolean | null
           suporta_bloqueio?: boolean | null
