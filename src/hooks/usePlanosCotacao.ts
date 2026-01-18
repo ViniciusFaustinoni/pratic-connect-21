@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { calcularPrecoRegiao, type Regiao } from '@/data/planosPrecos';
 import { 
-  getCoberturasRemovidas, 
+  getCoberturasRemovidasDinamico, 
   gerarMensagemAlertaCategoria,
   type BenefitExclusionData
 } from '@/data/restricoesCategorias';
@@ -291,8 +291,8 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       }
 
       // Obter restrições baseadas na categoria do veículo (fonte única de verdade)
-      // Agora usa as exclusões do banco de dados para gerar a mensagem
-      const coberturasRemovidas = getCoberturasRemovidas(categoria);
+      // Usa exclusões do banco de dados (dinâmico) com fallback para estático
+      const coberturasRemovidas = getCoberturasRemovidasDinamico(categoria, benefitExclusions || []);
       const alertaDesagio = gerarMensagemAlertaCategoria(categoria, benefitExclusions || []) || undefined;
 
       // Calcular valores detalhados (estimativa baseada no valorMensal)

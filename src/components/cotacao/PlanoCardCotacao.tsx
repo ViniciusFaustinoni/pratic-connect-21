@@ -5,7 +5,6 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Check, X, Star, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { PlanoCotacao } from '@/hooks/usePlanosCotacao';
-import { isCoberturaRemovida } from '@/data/restricoesCategorias';
 
 interface PlanoCardCotacaoProps {
   plano: PlanoCotacao;
@@ -32,9 +31,6 @@ export function PlanoCardCotacao({
   const diferenca = planoBasico && plano.id !== planoBasico.id
     ? plano.valorMensal - planoBasico.valorMensal
     : null;
-
-  // Verifica se há coberturas removidas para exibir alerta
-  const temCoberturasRemovidas = plano.coberturasRemovidas && plano.coberturasRemovidas.length > 0;
 
   return (
     <Card 
@@ -99,8 +95,10 @@ export function PlanoCardCotacao({
         {/* Coberturas - com indicação visual de restrições */}
         <div className="space-y-1.5">
           {plano.coberturas.slice(0, 6).map((cobertura, index) => {
-            // Verifica se esta cobertura está removida pela categoria do veículo
-            const isRemovida = isCoberturaRemovida(cobertura, plano.categoriaVeiculo);
+            // Verifica se esta cobertura está na lista de removidas (agora dinâmica do banco)
+            const isRemovida = plano.coberturasRemovidas.some(
+              rem => cobertura.toLowerCase().includes(rem.toLowerCase())
+            );
 
             return (
               <div key={index} className="flex items-center gap-2 text-sm">
@@ -130,8 +128,8 @@ export function PlanoCardCotacao({
           )}
         </div>
 
-        {/* Alerta de categoria especial */}
-        {plano.alertaDesagio && temCoberturasRemovidas && (
+        {/* Alerta de categoria especial - exibe quando há mensagem de alerta */}
+        {plano.alertaDesagio && (
           <Alert className="border-amber-500/50 bg-amber-500/10 py-2">
             <AlertTriangle className="h-4 w-4 text-amber-500" />
             <AlertDescription className="text-amber-700 dark:text-amber-400 text-xs">

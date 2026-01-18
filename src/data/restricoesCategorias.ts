@@ -178,6 +178,31 @@ export function getCoberturasRemovidas(categoria: string | undefined | null): st
 }
 
 /**
+ * Obtém as coberturas removidas dinamicamente (banco + estático como fallback).
+ * Esta é a função recomendada para uso nas cotações.
+ */
+export function getCoberturasRemovidasDinamico(
+  categoria: string | undefined | null,
+  exclusions: BenefitExclusionData[]
+): string[] {
+  if (!categoria || categoria === 'nenhuma') return [];
+  
+  // Primeiro buscar exclusões dinâmicas do banco
+  const exclusoesDinamicas = exclusions
+    .filter(exc => exc.categoria_veiculo === categoria)
+    .map(exc => exc.benefit_name || '')
+    .filter(Boolean);
+  
+  if (exclusoesDinamicas.length > 0) {
+    return exclusoesDinamicas;
+  }
+  
+  // Fallback para mapa estático
+  const restricoes = RESTRICOES_CATEGORIA[categoria];
+  return restricoes?.coberturasRemovidas || [];
+}
+
+/**
  * Obtém a restrição completa para uma categoria.
  */
 export function getRestricaoCategoria(categoria: string | undefined | null): RestricaoCategoria | null {
