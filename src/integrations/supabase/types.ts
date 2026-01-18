@@ -11945,6 +11945,11 @@ export type Database = {
       }
       vistorias: {
         Row: {
+          assinatura_autentique_id: string | null
+          assinatura_concluida_em: string | null
+          assinatura_documento_url: string | null
+          assinatura_enviada_em: string | null
+          assinatura_status: string | null
           associado_id: string
           avarias: string | null
           contrato_id: string | null
@@ -11967,6 +11972,11 @@ export type Database = {
           vistoriador_id: string | null
         }
         Insert: {
+          assinatura_autentique_id?: string | null
+          assinatura_concluida_em?: string | null
+          assinatura_documento_url?: string | null
+          assinatura_enviada_em?: string | null
+          assinatura_status?: string | null
           associado_id: string
           avarias?: string | null
           contrato_id?: string | null
@@ -11989,6 +11999,11 @@ export type Database = {
           vistoriador_id?: string | null
         }
         Update: {
+          assinatura_autentique_id?: string | null
+          assinatura_concluida_em?: string | null
+          assinatura_documento_url?: string | null
+          assinatura_enviada_em?: string | null
+          assinatura_status?: string | null
           associado_id?: string
           avarias?: string | null
           contrato_id?: string | null
