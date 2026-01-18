@@ -1,7 +1,8 @@
-import { Check, Shield, Star } from 'lucide-react';
+import { Check, X, Shield, Star } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { isCoberturaRemovida } from '@/data/restricoesCategorias';
 
 interface PlanoData {
   id: string;
@@ -13,6 +14,7 @@ interface PlanoData {
   valor_adesao?: number;
   destaque?: boolean | null;
   linha?: string | null;
+  categoriaVeiculo?: string;
 }
 
 interface PlanoCardSelecaoProps {
@@ -22,6 +24,7 @@ interface PlanoCardSelecaoProps {
   valorMensal?: number;
   mostrarCoberturas?: boolean;
   compact?: boolean;
+  categoriaVeiculo?: string;
 }
 
 const LINHA_CORES: Record<string, string> = {
@@ -39,7 +42,8 @@ export function PlanoCardSelecao({
   onSelecionar, 
   valorMensal,
   mostrarCoberturas = true,
-  compact = false
+  compact = false,
+  categoriaVeiculo
 }: PlanoCardSelecaoProps) {
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -95,12 +99,26 @@ export function PlanoCardSelecao({
         {/* Coberturas */}
         {mostrarCoberturas && coberturasToShow.length > 0 && (
           <div className={cn('space-y-1 mb-3', compact ? 'space-y-0.5' : '')}>
-            {coberturasToShow.map((cobertura, index) => (
-              <div key={index} className={cn('flex items-center gap-2', compact ? 'text-xs' : 'text-sm')}>
-                <Check className={cn('flex-shrink-0 text-green-500', compact ? 'h-3 w-3' : 'h-4 w-4')} />
-                <span className="text-muted-foreground truncate">{cobertura}</span>
-              </div>
-            ))}
+            {coberturasToShow.map((cobertura, index) => {
+              const isRemovida = isCoberturaRemovida(cobertura, categoriaVeiculo || plano.categoriaVeiculo);
+              
+              return (
+                <div key={index} className={cn('flex items-center gap-2', compact ? 'text-xs' : 'text-sm')}>
+                  {isRemovida ? (
+                    <>
+                      <X className={cn('flex-shrink-0 text-destructive', compact ? 'h-3 w-3' : 'h-4 w-4')} />
+                      <span className="text-muted-foreground truncate line-through">{cobertura}</span>
+                      {!compact && <span className="text-xs text-destructive ml-auto">(não disponível)</span>}
+                    </>
+                  ) : (
+                    <>
+                      <Check className={cn('flex-shrink-0 text-green-500', compact ? 'h-3 w-3' : 'h-4 w-4')} />
+                      <span className="text-muted-foreground truncate">{cobertura}</span>
+                    </>
+                  )}
+                </div>
+              );
+            })}
             {compact && plano.coberturas && plano.coberturas.length > 4 && (
               <span className="text-xs text-muted-foreground pl-5">
                 +{plano.coberturas.length - 4} coberturas

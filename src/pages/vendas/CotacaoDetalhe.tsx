@@ -28,7 +28,9 @@ import {
   Calendar,
   Shield,
   Check,
+  X,
   AlertCircle,
+  AlertTriangle,
   ChevronDown,
   ExternalLink,
   Clock,
@@ -38,10 +40,12 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { BotaoGerarPdf } from '@/components/cotacoes/BotaoGerarPdf';
 import { EnviarEmailModal } from '@/components/cotacoes/EnviarEmailModal';
 import { VincularLeadModal } from '@/components/cotacoes/VincularLeadModal';
 import { ContratoWizard } from '@/components/contratos/ContratoWizard';
+import { isCoberturaRemovida, getRestricaoCategoria } from '@/data/restricoesCategorias';
 import {
   STATUS_COTACAO_LABELS,
   STATUS_COTACAO_COLORS,
@@ -565,12 +569,26 @@ Ficou com alguma dúvida? Estou à disposição!
                           <div>
                             <p className="mb-2 text-xs font-medium text-muted-foreground">Coberturas:</p>
                             <ul className="space-y-1">
-                              {plano.coberturas.map((cobertura, i) => (
-                                <li key={i} className="flex items-start gap-2 text-xs">
-                                  <Check className="h-3 w-3 text-green-600 mt-0.5 flex-shrink-0" />
-                                  <span>{cobertura}</span>
-                                </li>
-                              ))}
+                              {plano.coberturas.map((cobertura, i) => {
+                                const categoriaVeiculo = (cotacao as { categoria_veiculo?: string }).categoria_veiculo;
+                                const isRemovida = isCoberturaRemovida(cobertura, categoriaVeiculo);
+                                
+                                return (
+                                  <li key={i} className="flex items-start gap-2 text-xs">
+                                    {isRemovida ? (
+                                      <>
+                                        <X className="h-3 w-3 text-destructive mt-0.5 flex-shrink-0" />
+                                        <span className="text-muted-foreground line-through">{cobertura}</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Check className="h-3 w-3 text-green-600 mt-0.5 flex-shrink-0" />
+                                        <span>{cobertura}</span>
+                                      </>
+                                    )}
+                                  </li>
+                                );
+                              })}
                             </ul>
                           </div>
                         )}
@@ -594,16 +612,49 @@ Ficou com alguma dúvida? Estou à disposição!
                   </p>
                 </div>
 
+                {/* Alerta de restrições */}
+                {(() => {
+                  const categoriaVeiculo = (cotacao as { categoria_veiculo?: string }).categoria_veiculo;
+                  const restricao = getRestricaoCategoria(categoriaVeiculo);
+                  
+                  if (restricao && restricao.mensagemAlerta) {
+                    return (
+                      <Alert className="border-amber-500/50 bg-amber-500/10">
+                        <AlertTriangle className="h-4 w-4 text-amber-500" />
+                        <AlertDescription className="text-amber-700 dark:text-amber-400">
+                          {restricao.mensagemAlerta}
+                        </AlertDescription>
+                      </Alert>
+                    );
+                  }
+                  return null;
+                })()}
+
                 {/* Coberturas */}
                 <div>
                   <p className="mb-2 text-sm font-medium">Coberturas incluídas:</p>
                   <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                    {coberturas.map((cobertura, index) => (
-                      <div key={index} className="flex items-center gap-2 text-sm">
-                        <Check className="h-4 w-4 text-green-600" />
-                        {cobertura}
-                      </div>
-                    ))}
+                    {coberturas.map((cobertura, index) => {
+                      const categoriaVeiculo = (cotacao as { categoria_veiculo?: string }).categoria_veiculo;
+                      const isRemovida = isCoberturaRemovida(cobertura, categoriaVeiculo);
+                      
+                      return (
+                        <div key={index} className="flex items-center gap-2 text-sm">
+                          {isRemovida ? (
+                            <>
+                              <X className="h-4 w-4 text-destructive" />
+                              <span className="text-muted-foreground line-through">{cobertura}</span>
+                              <span className="text-xs text-destructive">(não disponível)</span>
+                            </>
+                          ) : (
+                            <>
+                              <Check className="h-4 w-4 text-green-600" />
+                              {cobertura}
+                            </>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
