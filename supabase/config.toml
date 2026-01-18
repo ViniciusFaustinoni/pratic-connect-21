@@ -30,6 +30,9 @@ verify_jwt = false
 [functions.autentique-documento]
 verify_jwt = false
 
+[functions.autentique-vistoria-create]
+verify_jwt = false
+
 [functions.document-ocr]
 verify_jwt = false
 
