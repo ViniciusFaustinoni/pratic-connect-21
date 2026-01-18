@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -18,6 +19,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useCreateBenefit, useUpdateBenefit } from '@/hooks/usePlansAdmin';
+import { 
+  useBenefitExclusionsByBenefitId, 
+  useUpdateBenefitExclusions 
+} from '@/hooks/useBenefitExclusions';
+import { CATEGORIAS_VEICULO } from '@/components/cotador/VehicleCategorySelect';
+import { AlertTriangle } from 'lucide-react';
 import type { Benefit } from '@/types/plans';
 
 interface BeneficioFormModalProps {
@@ -35,6 +42,11 @@ const CATEGORIES = [
   { value: 'outros', label: 'Outros' },
 ];
 
+// Categorias que podem ter exclusões (excluímos 'nenhuma')
+const CATEGORIAS_PARA_EXCLUSAO = CATEGORIAS_VEICULO.filter(
+  (cat) => cat.value !== 'nenhuma'
+);
+
 function generateSlug(name: string): string {
   return name
     .toLowerCase()
@@ -51,6 +63,12 @@ export function BeneficioFormModal({
 }: BeneficioFormModalProps) {
   const createBenefit = useCreateBenefit();
   const updateBenefit = useUpdateBenefit();
+  const updateExclusions = useUpdateBenefitExclusions();
+  
+  // Buscar exclusões existentes se estiver editando
+  const { data: existingExclusions } = useBenefitExclusionsByBenefitId(
+    benefit?.id || null
+  );
 
   const isEditing = !!benefit;
 
@@ -63,6 +81,18 @@ export function BeneficioFormModal({
     display_order: '0',
     is_active: true,
   });
+  
+  // Estado para categorias excluídas
+  const [excludedCategories, setExcludedCategories] = useState<string[]>([]);
+
+  // Carregar exclusões existentes quando o benefício mudar
+  useEffect(() => {
+    if (existingExclusions) {
+      setExcludedCategories(existingExclusions.map((e) => e.categoria_veiculo));
+    } else {
+      setExcludedCategories([]);
+    }
+  }, [existingExclusions]);
 
   useEffect(() => {
     if (benefit) {
@@ -85,6 +115,7 @@ export function BeneficioFormModal({
         display_order: '0',
         is_active: true,
       });
+      setExcludedCategories([]);
     }
   }, [benefit]);
 
@@ -94,6 +125,15 @@ export function BeneficioFormModal({
       name,
       slug: isEditing ? prev.slug : generateSlug(name),
     }));
+  };
+
+  const toggleCategoryExclusion = (categoria: string, checked: boolean) => {
+    setExcludedCategories((prev) => {
+      if (checked) {
+        return [...prev, categoria];
+      }
+      return prev.filter((c) => c !== categoria);
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -110,11 +150,22 @@ export function BeneficioFormModal({
     };
 
     try {
+      let benefitId: string;
+      
       if (isEditing && benefit) {
         await updateBenefit.mutateAsync({ id: benefit.id, ...payload });
+        benefitId = benefit.id;
       } else {
-        await createBenefit.mutateAsync(payload);
+        const createdBenefit = await createBenefit.mutateAsync(payload);
+        benefitId = createdBenefit.id;
       }
+      
+      // Salvar exclusões de categoria
+      await updateExclusions.mutateAsync({
+        benefitId,
+        categorias: excludedCategories,
+      });
+      
       onOpenChange(false);
     } catch (error) {
       // Error handled by mutation
@@ -123,7 +174,7 @@ export function BeneficioFormModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {isEditing ? 'Editar Benefício' : 'Novo Benefício'}
@@ -222,6 +273,42 @@ export function BeneficioFormModal({
               />
               <Label htmlFor="is_active">Ativo</Label>
             </div>
+          </div>
+
+          {/* Seção de Exclusão por Categoria */}
+          <div className="space-y-3 pt-4 border-t">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-amber-500" />
+              <Label className="font-medium">Excluir para Categorias Especiais</Label>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Selecione as categorias de veículo que <strong>NÃO</strong> terão direito a este benefício.
+              Veículos destas categorias não verão este benefício em cotações, propostas ou contratos.
+            </p>
+            <div className="grid grid-cols-1 gap-2 max-h-[180px] overflow-y-auto p-2 border rounded-md bg-muted/20">
+              {CATEGORIAS_PARA_EXCLUSAO.map((cat) => (
+                <div key={cat.value} className="flex items-center gap-2">
+                  <Checkbox
+                    id={`exclude-${cat.value}`}
+                    checked={excludedCategories.includes(cat.value)}
+                    onCheckedChange={(checked) =>
+                      toggleCategoryExclusion(cat.value, !!checked)
+                    }
+                  />
+                  <Label 
+                    htmlFor={`exclude-${cat.value}`}
+                    className="text-sm font-normal cursor-pointer"
+                  >
+                    {cat.label}
+                  </Label>
+                </div>
+              ))}
+            </div>
+            {excludedCategories.length > 0 && (
+              <p className="text-xs text-amber-600">
+                ⚠️ Este benefício será excluído para {excludedCategories.length} categoria(s)
+              </p>
+            )}
           </div>
 
           <div className="flex justify-end gap-2 pt-4">
