@@ -33,7 +33,8 @@ import {
   useVeiculosSemRastreador,
   type StatusRastreador,
 } from '@/hooks/useRastreadores';
-import { STATUS_RASTREADOR_LABELS, PLATAFORMA_RASTREADOR_LABELS } from '@/types/database';
+import { usePlataformasOptions } from '@/hooks/usePlataformasCRUD';
+import { STATUS_RASTREADOR_LABELS } from '@/types/database';
 
 const rastreadorSchema = z.object({
   codigo: z.string().min(1, 'Código é obrigatório').max(50),
@@ -74,10 +75,12 @@ export function RastreadorFormDialog({
     rastreadorId || undefined
   );
   const { data: veiculos } = useVeiculosSemRastreador();
+  const { data: plataformas, isLoading: loadingPlataformas } = usePlataformasOptions();
   const createRastreador = useCreateRastreador();
   const updateRastreador = useUpdateRastreador();
 
   const isEditing = !!rastreadorId;
+  const defaultPlataforma = plataformas?.[0]?.codigo || 'rede_veiculos';
   const isLoading = createRastreador.isPending || updateRastreador.isPending;
 
   const form = useForm<RastreadorFormData>({
@@ -87,7 +90,7 @@ export function RastreadorFormDialog({
       numero_serie: '',
       imei: '',
       chip_iccid: '',
-      plataforma: 'rede_veiculos',
+      plataforma: defaultPlataforma,
       id_plataforma: '',
       status: 'estoque',
       veiculo_id: null,
@@ -116,7 +119,7 @@ export function RastreadorFormDialog({
           numero_serie: '',
           imei: '',
           chip_iccid: '',
-          plataforma: 'rede_veiculos',
+          plataforma: defaultPlataforma,
           id_plataforma: '',
           status: 'estoque',
           veiculo_id: null,
@@ -270,13 +273,13 @@ export function RastreadorFormDialog({
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {Object.entries(PLATAFORMA_RASTREADOR_LABELS).map(
-                            ([value, label]) => (
-                              <SelectItem key={value} value={value}>
-                                {label}
-                              </SelectItem>
-                            )
-                          )}
+                          {loadingPlataformas ? (
+                            <SelectItem value="" disabled>Carregando...</SelectItem>
+                          ) : plataformas?.map((p) => (
+                            <SelectItem key={p.codigo} value={p.codigo}>
+                              {p.nome}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                       <FormMessage />

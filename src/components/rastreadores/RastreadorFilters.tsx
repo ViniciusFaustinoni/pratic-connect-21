@@ -8,8 +8,9 @@ import {
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Search, X } from 'lucide-react';
-import { usePlataformas, type RastreadorFilters as Filters, type StatusRastreador } from '@/hooks/useRastreadores';
-import { STATUS_RASTREADOR_LABELS, PLATAFORMA_RASTREADOR_LABELS } from '@/types/database';
+import { type RastreadorFilters as Filters, type StatusRastreador } from '@/hooks/useRastreadores';
+import { usePlataformasOptions } from '@/hooks/usePlataformasCRUD';
+import { STATUS_RASTREADOR_LABELS } from '@/types/database';
 
 interface RastreadorFiltersProps {
   filters: Filters;
@@ -17,7 +18,7 @@ interface RastreadorFiltersProps {
 }
 
 export function RastreadorFilters({ filters, onFiltersChange }: RastreadorFiltersProps) {
-  const { data: plataformas } = usePlataformas();
+  const { data: plataformas, isLoading: loadingPlataformas } = usePlataformasOptions();
 
   const handleStatusChange = (value: string) => {
     if (value === 'todos') {
@@ -85,6 +86,7 @@ export function RastreadorFilters({ filters, onFiltersChange }: RastreadorFilter
         <Select
           value={filters.plataforma || 'todas'}
           onValueChange={handlePlataformaChange}
+          disabled={loadingPlataformas}
         >
           <SelectTrigger className="w-[150px]">
             <SelectValue placeholder="Plataforma" />
@@ -92,8 +94,8 @@ export function RastreadorFilters({ filters, onFiltersChange }: RastreadorFilter
           <SelectContent>
             <SelectItem value="todas">Todas Plataformas</SelectItem>
             {plataformas?.map((plat) => (
-              <SelectItem key={plat} value={plat}>
-                {PLATAFORMA_RASTREADOR_LABELS[plat] || plat}
+              <SelectItem key={plat.codigo} value={plat.codigo}>
+                {plat.nome}
               </SelectItem>
             ))}
           </SelectContent>

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Table,
   TableBody,
@@ -16,22 +17,24 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Radio, Plus, Wifi, WifiOff, AlertTriangle, Loader2, MoreHorizontal, Eye, Pencil, Package } from 'lucide-react';
+import { Radio, Plus, Wifi, WifiOff, AlertTriangle, Loader2, MoreHorizontal, Eye, Pencil, Package, Server } from 'lucide-react';
 import {
   useRastreadores,
   useRastreadoresMetricas,
   isRastreadorOnline,
   type RastreadorFilters as Filters,
 } from '@/hooks/useRastreadores';
+import { usePlataformasLabels } from '@/hooks/usePlataformasCRUD';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   RastreadorFormDialog,
   RastreadorDetailDrawer,
   RastreadorFilters,
 } from '@/components/rastreadores';
+import { PlataformasConfigPanel } from '@/components/rastreadores/PlataformasConfigPanel';
 import {
   STATUS_RASTREADOR_LABELS,
   STATUS_RASTREADOR_COLORS,
-  PLATAFORMA_RASTREADOR_LABELS,
 } from '@/types/database';
 
 export default function Rastreadores() {
@@ -39,9 +42,14 @@ export default function Rastreadores() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [filters, setFilters] = useState<Filters>({});
+  const [activeTab, setActiveTab] = useState('rastreadores');
 
   const { data: rastreadores, isLoading } = useRastreadores(filters);
   const { data: metricas } = useRastreadoresMetricas();
+  const { data: plataformasLabels } = usePlataformasLabels();
+  const { isDiretor, isDesenvolvedor } = usePermissions();
+
+  const canManagePlataformas = isDiretor || isDesenvolvedor;
 
   const handleOpenDetails = (id: string) => {
     setSelectedId(id);
@@ -64,6 +72,10 @@ export default function Rastreadores() {
     setShowForm(open);
   };
 
+  const getPlataformaLabel = (codigo: string) => {
+    return plataformasLabels?.[codigo] || codigo;
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -73,12 +85,106 @@ export default function Rastreadores() {
             Monitore a comunicação e status dos rastreadores
           </p>
         </div>
-        <Button onClick={handleNewRastreador}>
-          <Plus className="mr-2 h-4 w-4" />
-          Novo Rastreador
-        </Button>
+        {activeTab === 'rastreadores' && (
+          <Button onClick={handleNewRastreador}>
+            <Plus className="mr-2 h-4 w-4" />
+            Novo Rastreador
+          </Button>
+        )}
       </div>
 
+      {canManagePlataformas ? (
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList>
+            <TabsTrigger value="rastreadores" className="gap-2">
+              <Radio className="h-4 w-4" />
+              Rastreadores
+            </TabsTrigger>
+            <TabsTrigger value="plataformas" className="gap-2">
+              <Server className="h-4 w-4" />
+              Plataformas
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="rastreadores" className="space-y-6 mt-6">
+            <RastreadoresContent
+              rastreadores={rastreadores}
+              metricas={metricas}
+              isLoading={isLoading}
+              filters={filters}
+              onFiltersChange={setFilters}
+              onOpenDetails={handleOpenDetails}
+              onEdit={handleEdit}
+              onNewRastreador={handleNewRastreador}
+              getPlataformaLabel={getPlataformaLabel}
+            />
+          </TabsContent>
+
+          <TabsContent value="plataformas" className="mt-6">
+            <PlataformasConfigPanel />
+          </TabsContent>
+        </Tabs>
+      ) : (
+        <RastreadoresContent
+          rastreadores={rastreadores}
+          metricas={metricas}
+          isLoading={isLoading}
+          filters={filters}
+          onFiltersChange={setFilters}
+          onOpenDetails={handleOpenDetails}
+          onEdit={handleEdit}
+          onNewRastreador={handleNewRastreador}
+          getPlataformaLabel={getPlataformaLabel}
+        />
+      )}
+
+      <RastreadorFormDialog
+        open={showForm}
+        onOpenChange={handleFormClose}
+        rastreadorId={editingId}
+      />
+
+      <RastreadorDetailDrawer
+        rastreadorId={selectedId}
+        open={!!selectedId}
+        onOpenChange={(open) => !open && setSelectedId(null)}
+        onEdit={() => {
+          if (selectedId) {
+            handleEdit(selectedId);
+            setSelectedId(null);
+          }
+        }}
+      />
+    </div>
+  );
+}
+
+// Componente separado para o conteúdo de rastreadores
+interface RastreadoresContentProps {
+  rastreadores: ReturnType<typeof useRastreadores>['data'];
+  metricas: ReturnType<typeof useRastreadoresMetricas>['data'];
+  isLoading: boolean;
+  filters: Filters;
+  onFiltersChange: (filters: Filters) => void;
+  onOpenDetails: (id: string) => void;
+  onEdit: (id: string) => void;
+  onNewRastreador: () => void;
+  getPlataformaLabel: (codigo: string) => string;
+}
+
+function RastreadoresContent({
+  rastreadores,
+  metricas,
+  isLoading,
+  filters,
+  onFiltersChange,
+  onOpenDetails,
+  onEdit,
+  onNewRastreador,
+  getPlataformaLabel,
+}: RastreadoresContentProps) {
+  return (
+    <>
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -122,7 +228,7 @@ export default function Rastreadores() {
         </Card>
       </div>
 
-      <RastreadorFilters filters={filters} onFiltersChange={setFilters} />
+      <RastreadorFilters filters={filters} onFiltersChange={onFiltersChange} />
 
       <Card>
         <CardHeader>
@@ -144,7 +250,7 @@ export default function Rastreadores() {
                 <p className="mt-2 text-sm text-muted-foreground">
                   Cadastre rastreadores para monitorar
                 </p>
-                <Button className="mt-4" onClick={handleNewRastreador}>
+                <Button className="mt-4" onClick={onNewRastreador}>
                   <Plus className="mr-2 h-4 w-4" />
                   Novo Rastreador
                 </Button>
@@ -173,7 +279,7 @@ export default function Rastreadores() {
                       <TableCell className="font-medium">{rastreador.codigo}</TableCell>
                       <TableCell>{rastreador.numero_serie || '-'}</TableCell>
                       <TableCell>
-                        {PLATAFORMA_RASTREADOR_LABELS[rastreador.plataforma] || rastreador.plataforma}
+                        {getPlataformaLabel(rastreador.plataforma)}
                       </TableCell>
                       <TableCell>
                         <Badge className={STATUS_RASTREADOR_COLORS[rastreador.status]}>
@@ -226,16 +332,16 @@ export default function Rastreadores() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleOpenDetails(rastreador.id)}>
+                            <DropdownMenuItem onClick={() => onOpenDetails(rastreador.id)}>
                               <Eye className="mr-2 h-4 w-4" />
                               Ver Detalhes
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleEdit(rastreador.id)}>
+                            <DropdownMenuItem onClick={() => onEdit(rastreador.id)}>
                               <Pencil className="mr-2 h-4 w-4" />
                               Editar
                             </DropdownMenuItem>
                             {rastreador.status === 'estoque' && (
-                              <DropdownMenuItem onClick={() => handleOpenDetails(rastreador.id)}>
+                              <DropdownMenuItem onClick={() => onOpenDetails(rastreador.id)}>
                                 <Package className="mr-2 h-4 w-4" />
                                 Ver Estoque
                               </DropdownMenuItem>
@@ -251,24 +357,6 @@ export default function Rastreadores() {
           )}
         </CardContent>
       </Card>
-
-      <RastreadorFormDialog
-        open={showForm}
-        onOpenChange={handleFormClose}
-        rastreadorId={editingId}
-      />
-
-      <RastreadorDetailDrawer
-        rastreadorId={selectedId}
-        open={!!selectedId}
-        onOpenChange={(open) => !open && setSelectedId(null)}
-        onEdit={() => {
-          if (selectedId) {
-            handleEdit(selectedId);
-            setSelectedId(null);
-          }
-        }}
-      />
-    </div>
+    </>
   );
 }

@@ -610,13 +610,12 @@ export const STATUS_RASTREADOR_COLORS: Record<StatusRastreador, string> = {
   baixado: 'bg-red-100 text-red-800',
 };
 
+/**
+ * @deprecated Use usePlataformasLabels() hook instead - busca dinamicamente do banco de dados
+ */
 export const PLATAFORMA_RASTREADOR_LABELS: Record<string, string> = {
   rede_veiculos: 'Rede Veículos',
-  soft_truck: 'Soft Truck',
-  autotrac: 'Autotrac',
-  sascar: 'Sascar',
-  omnilink: 'Omnilink',
-  outra: 'Outra',
+  softruck: 'Softruck',
 };
 
 export const STATUS_ROTA_LABELS: Record<StatusRota, string> = {
