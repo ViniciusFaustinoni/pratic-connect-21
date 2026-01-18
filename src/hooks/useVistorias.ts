@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { format } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -489,7 +490,35 @@ export function useContratosPendentesVinculo() {
           veiculo_modelo: lead?.veiculo_modelo || null,
           associado_id: contrato.associado_id,
         };
-      });
+    });
+  },
+});
+}
+
+// Hook para buscar vistorias disponíveis para atribuição em rotas
+export function useVistoriasDisponiveis(data?: Date) {
+  return useQuery({
+    queryKey: ['vistorias-disponiveis', data ? format(data, 'yyyy-MM-dd') : 'todas'],
+    queryFn: async () => {
+      let query = supabase
+        .from('vistorias')
+        .select(`
+          *,
+          associado:associados!vistorias_associado_id_fkey(id, nome, telefone),
+          veiculo:veiculos(id, marca, modelo, placa)
+        `)
+        .is('vistoriador_id', null)
+        .eq('status', 'agendada')
+        .order('data_agendada');
+
+      if (data) {
+        query = query.eq('data_agendada', format(data, 'yyyy-MM-dd'));
+      }
+
+      const { data: vistorias, error } = await query;
+      if (error) throw error;
+      return vistorias || [];
     },
+    enabled: !!data,
   });
 }
