@@ -431,3 +431,47 @@ export function useRotasDoDia(data?: string) {
     dataFim: new Date(dataFiltro),
   });
 }
+
+// Profissionais sem rota para uma data específica
+export function useProfissionaisSemRota(data: Date) {
+  return useQuery({
+    queryKey: ['profissionais-sem-rota', format(data, 'yyyy-MM-dd')],
+    queryFn: async () => {
+      const dataStr = format(data, 'yyyy-MM-dd');
+      
+      // Buscar profissionais com função de instalador/vistoriador
+      const { data: roles, error: rolesError } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .eq('role', 'instalador_vistoriador');
+      
+      if (rolesError) throw rolesError;
+      
+      const userIds = roles?.map(r => r.user_id) || [];
+      if (!userIds.length) return [];
+      
+      // Buscar profiles ativos
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('*')
+        .in('user_id', userIds)
+        .eq('ativo', true)
+        .order('nome');
+      
+      if (profilesError) throw profilesError;
+      
+      // Buscar rotas do dia para filtrar quem já tem
+      const { data: rotasDia, error: rotasError } = await supabase
+        .from('rotas')
+        .select('instalador_id')
+        .eq('data_rota', dataStr);
+      
+      if (rotasError) throw rotasError;
+      
+      const idsComRota = new Set(rotasDia?.map(r => r.instalador_id) || []);
+      
+      // Retornar apenas quem NÃO tem rota
+      return (profiles || []).filter(p => !idsComRota.has(p.id));
+    },
+  });
+}
