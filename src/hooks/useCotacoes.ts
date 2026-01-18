@@ -48,7 +48,9 @@ export interface CotacaoWithRelations extends Omit<Cotacao, 'dados_extras'> {
     id: string;
     numero: string;
     status: string;
+    associados?: { id: string; status: string } | null;
   } | null;
+  instalacoes?: { id: string; status: string; data_agendada: string | null }[];
   dados_extras?: DadosExtrasCotacao | null;
 }
 
@@ -67,7 +69,11 @@ export function useCotacoes(options?: UseCotacoesOptions) {
           *,
           leads:leads!fk_cotacoes_lead_id(*),
           planos:planos!plano_id(*),
-          contratos:contratos!contratos_cotacao_id_fkey(id, numero, status)
+          contratos:contratos!contratos_cotacao_id_fkey(
+            id, numero, status,
+            associados:associados!associado_id(id, status)
+          ),
+          instalacoes:instalacoes!cotacao_id(id, status, data_agendada)
         `)
         .order('created_at', { ascending: false });
       
@@ -91,6 +97,9 @@ export function useCotacoes(options?: UseCotacoesOptions) {
         contrato: Array.isArray(c.contratos) && c.contratos.length > 0 
           ? c.contratos[0] 
           : null,
+        instalacoes: Array.isArray((c as unknown as { instalacoes?: unknown[] }).instalacoes) 
+          ? (c as unknown as { instalacoes: { id: string; status: string; data_agendada: string | null }[] }).instalacoes 
+          : [],
       });
       
       if (vendedorIds.length > 0) {

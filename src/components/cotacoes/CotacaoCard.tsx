@@ -69,6 +69,117 @@ const statusConfig: Record<StatusCotacaoExtended, {
   },
 };
 
+// Etapas da venda
+type EtapaVenda = 
+  | 'cotacao_realizada'
+  | 'escolhendo_plano'
+  | 'enviando_documentos'
+  | 'escolha_vistoria'
+  | 'realizando_pagamento'
+  | 'assinando_contrato'
+  | 'vistoria_agendada'
+  | 'instalacao_agendada'
+  | 'realizando_vistoria'
+  | 'vistoria_realizada'
+  | 'associado_ativo';
+
+const etapaVendaConfig: Record<EtapaVenda, { label: string; color: string; bgColor: string }> = {
+  cotacao_realizada: {
+    label: 'Cotação Realizada',
+    color: 'text-slate-600 dark:text-slate-400',
+    bgColor: 'bg-slate-500/20',
+  },
+  escolhendo_plano: {
+    label: 'Escolhendo Plano',
+    color: 'text-sky-600 dark:text-sky-400',
+    bgColor: 'bg-sky-500/20',
+  },
+  enviando_documentos: {
+    label: 'Enviando Documentos',
+    color: 'text-blue-600 dark:text-blue-400',
+    bgColor: 'bg-blue-500/20',
+  },
+  escolha_vistoria: {
+    label: 'Escolha de Vistoria',
+    color: 'text-indigo-600 dark:text-indigo-400',
+    bgColor: 'bg-indigo-500/20',
+  },
+  realizando_pagamento: {
+    label: 'Realizando Pagamento',
+    color: 'text-amber-600 dark:text-amber-400',
+    bgColor: 'bg-amber-500/20',
+  },
+  assinando_contrato: {
+    label: 'Assinando Contrato',
+    color: 'text-orange-600 dark:text-orange-400',
+    bgColor: 'bg-orange-500/20',
+  },
+  vistoria_agendada: {
+    label: 'Vistoria Agendada',
+    color: 'text-violet-600 dark:text-violet-400',
+    bgColor: 'bg-violet-500/20',
+  },
+  instalacao_agendada: {
+    label: 'Instalação Agendada',
+    color: 'text-purple-600 dark:text-purple-400',
+    bgColor: 'bg-purple-500/20',
+  },
+  realizando_vistoria: {
+    label: 'Realizando Vistoria',
+    color: 'text-cyan-600 dark:text-cyan-400',
+    bgColor: 'bg-cyan-500/20',
+  },
+  vistoria_realizada: {
+    label: 'Vistoria Realizada',
+    color: 'text-teal-600 dark:text-teal-400',
+    bgColor: 'bg-teal-500/20',
+  },
+  associado_ativo: {
+    label: 'Associado Ativo',
+    color: 'text-emerald-600 dark:text-emerald-400',
+    bgColor: 'bg-emerald-500/20',
+  },
+};
+
+// Função para determinar a etapa da venda
+const getEtapaVenda = (cotacao: CotacaoWithRelations): EtapaVenda | null => {
+  // Se é rascunho, não mostra etapa
+  if (cotacao.status === 'rascunho') return null;
+  
+  // Verificar se associado está ativo
+  const associadoStatus = cotacao.contrato?.associados?.status;
+  if (associadoStatus === 'ativo') return 'associado_ativo';
+  
+  // Verificar status da instalação/vistoria
+  const instalacao = cotacao.instalacoes?.[0];
+  if (instalacao) {
+    if (instalacao.status === 'concluida') return 'vistoria_realizada';
+    if (instalacao.status === 'em_andamento' || instalacao.status === 'em_rota') return 'realizando_vistoria';
+    if (instalacao.status === 'agendada' || instalacao.status === 'reagendada') {
+      // Diferenciar entre vistoria agendada e instalação agendada
+      const tipoVistoria = cotacao.tipo_vistoria;
+      if (tipoVistoria === 'autovistoria') return 'instalacao_agendada';
+      return 'vistoria_agendada';
+    }
+  }
+  
+  // Verificar status_contratacao
+  const statusContratacao = cotacao.status_contratacao;
+  
+  if (statusContratacao === 'contrato_assinado' || statusContratacao === 'contrato_gerado') {
+    // Se contrato assinado mas sem instalação agendada
+    return 'vistoria_agendada';
+  }
+  if (statusContratacao === 'pagamento_ok') return 'assinando_contrato';
+  if (statusContratacao === 'vistoria_ok') return 'realizando_pagamento';
+  if (statusContratacao === 'documentos_ok') return 'escolha_vistoria';
+  if (statusContratacao === 'dados_preenchidos') return 'enviando_documentos';
+  if (statusContratacao === 'plano_escolhido') return 'escolhendo_plano';
+  
+  // Default para cotações enviadas/aceitas sem status_contratacao específico
+  return 'cotacao_realizada';
+};
+
 export interface CotacaoCardPermissions {
   canEdit: boolean;
   canDelete: boolean;
@@ -120,6 +231,10 @@ export function CotacaoCard({
   const hasLead = !!cotacao.lead_id;
   const vendedorNome = cotacao.vendedor?.nome;
   
+  // Determinar etapa da venda
+  const etapaVenda = getEtapaVenda(cotacao);
+  const etapaInfo = etapaVenda ? etapaVendaConfig[etapaVenda] : null;
+  
   // Cores de fundo baseadas no tipo
   const getBgClass = () => {
     if (tipo === 'andamento') return 'border-l-yellow-500 bg-yellow-500/5';
@@ -136,13 +251,18 @@ export function CotacaoCard({
       )}
       onClick={() => navigate(`/vendas/cotacoes/${cotacao.id}`)}
     >
-      {/* Header do Card: Status + Vendedor + Tempo */}
-      <div className="flex items-center justify-between px-4 py-2 bg-muted/30">
-        <div className="flex items-center gap-3">
+      {/* Header do Card: Status + Etapa da Venda + Vendedor + Tempo */}
+      <div className="flex items-center justify-between px-4 py-2 bg-muted/30 gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
           {cotacao.status !== 'rascunho' && (
             <Badge className={cn(status.bgColor, status.color, "font-medium border-0")}>
               <status.icon className="h-3 w-3 mr-1" />
               {status.label.toUpperCase()}
+            </Badge>
+          )}
+          {etapaInfo && (
+            <Badge className={cn(etapaInfo.bgColor, etapaInfo.color, "font-medium border-0 text-[10px]")}>
+              {etapaInfo.label.toUpperCase()}
             </Badge>
           )}
           {vendedorNome && (
