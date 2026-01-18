@@ -14,7 +14,9 @@ import {
   Calendar,
   FileText,
   ChevronRight,
-  Settings
+  Settings,
+  Shield,
+  AlertTriangle,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -36,7 +38,14 @@ import {
   useVendedorContratos,
   useVendedorStats 
 } from '@/hooks/useVendedorHistorico';
+import { 
+  useVendedorMonitoramento, 
+  useVendedorHistoricoAuditoria 
+} from '@/hooks/useAuditoriaVendedores';
 import { ETAPA_LABELS, ETAPA_COLORS, STATUS_COTACAO_LABELS, STATUS_COTACAO_COLORS } from '@/types/vendas';
+import { VendedorRiskBadge, RiskScoreIndicator } from '@/components/auditoria/VendedorRiskBadge';
+import { VendedorMonitoramentoModal } from '@/components/auditoria/VendedorMonitoramentoModal';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function VendedorHistorico() {
   const { id } = useParams<{ id: string }>();
@@ -44,6 +53,8 @@ export default function VendedorHistorico() {
   const [search, setSearch] = useState('');
   const [etapaFilter, setEtapaFilter] = useState('todos');
   const [activeTab, setActiveTab] = useState('leads');
+  const [showMonitoramentoModal, setShowMonitoramentoModal] = useState(false);
+  const { roles } = useAuth();
 
   const { data: vendedor, isLoading: loadingVendedor } = useVendedor(id);
   const { data: stats, isLoading: loadingStats } = useVendedorStats(id || '');
@@ -54,9 +65,16 @@ export default function VendedorHistorico() {
   });
   const { data: cotacoes = [], isLoading: loadingCotacoes } = useVendedorCotacoes(id || '');
   const { data: contratos = [], isLoading: loadingContratos } = useVendedorContratos(id || '');
+  const { data: monitoramento } = useVendedorMonitoramento(id);
+  const { data: historicoAuditoria = [] } = useVendedorHistoricoAuditoria(id);
 
   const isLoading = loadingVendedor || loadingStats;
   const taxaConversao = stats?.total ? ((stats.ganhos / stats.total) * 100).toFixed(1) : '0';
+  
+  // Check if user can access audit
+  const canAccessAudit = roles?.some(role => 
+    ['diretor', 'gerente_comercial'].includes(role)
+  );
 
   if (isLoading) {
     return (
@@ -99,18 +117,38 @@ export default function VendedorHistorico() {
                 <ArrowLeft className="h-5 w-5" />
               </Button>
               <div>
-                <h1 className="text-2xl font-bold text-foreground">{vendedor.nome}</h1>
+                <div className="flex items-center gap-3">
+                  <h1 className="text-2xl font-bold text-foreground">{vendedor.nome}</h1>
+                  {canAccessAudit && monitoramento && (
+                    <VendedorRiskBadge 
+                      status={monitoramento.status_monitoramento} 
+                      scoreRisco={monitoramento.score_risco_acumulado}
+                    />
+                  )}
+                </div>
                 <p className="text-muted-foreground">Histórico de atividades do vendedor</p>
               </div>
             </div>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => navigate(`/configuracoes/usuarios/${vendedor.id}`)}
-            >
-              <Settings className="w-4 h-4 mr-2" />
-              Editar Usuário
-            </Button>
+            <div className="flex gap-2">
+              {canAccessAudit && (
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setShowMonitoramentoModal(true)}
+                >
+                  <Shield className="w-4 h-4 mr-2" />
+                  Monitoramento
+                </Button>
+              )}
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => navigate(`/configuracoes/usuarios/${vendedor.id}`)}
+              >
+                <Settings className="w-4 h-4 mr-2" />
+                Editar Usuário
+              </Button>
+            </div>
           </div>
 
           {/* Stats Cards */}
@@ -191,6 +229,12 @@ export default function VendedorHistorico() {
                 <FileText className="h-4 w-4" />
                 Contratos ({contratos.length})
               </TabsTrigger>
+              {canAccessAudit && (
+                <TabsTrigger value="auditoria" className="gap-2">
+                  <Shield className="h-4 w-4" />
+                  Auditoria ({historicoAuditoria.length})
+                </TabsTrigger>
+              )}
             </TabsList>
 
             {activeTab === 'leads' && (
@@ -396,8 +440,62 @@ export default function VendedorHistorico() {
               ))
             )}
           </TabsContent>
+
+          {/* Auditoria Tab */}
+          {canAccessAudit && (
+            <TabsContent value="auditoria" className="space-y-4">
+              {historicoAuditoria.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <Shield className="h-12 w-12 text-green-500/50 mb-4" />
+                  <h3 className="text-lg font-medium">Nenhum alerta registrado</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Este vendedor não possui alertas de auditoria
+                  </p>
+                </div>
+              ) : (
+                historicoAuditoria.map((alerta: any) => (
+                  <Card key={alerta.id} className="border-border/50">
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <AlertTriangle className="h-4 w-4 text-amber-500" />
+                            <span className="font-medium">{alerta.tipo_alerta}</span>
+                            <Badge 
+                              variant="secondary"
+                              className={
+                                alerta.status === 'pendente' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400' :
+                                alerta.status === 'confirmado' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' :
+                                alerta.status === 'analisado' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
+                                'bg-muted'
+                              }
+                            >
+                              {alerta.status}
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-muted-foreground">{alerta.descricao}</p>
+                          <p className="text-xs text-muted-foreground mt-2">
+                            {format(new Date(alerta.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                          </p>
+                        </div>
+                        <RiskScoreIndicator score={alerta.score_risco || 0} />
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))
+              )}
+            </TabsContent>
+          )}
         </Tabs>
       </div>
+
+      {/* Modal de Monitoramento */}
+      <VendedorMonitoramentoModal
+        vendedor={vendedor ? { id: vendedor.user_id, nome: vendedor.nome, avatar_url: vendedor.avatar_url } : null}
+        monitoramento={monitoramento}
+        open={showMonitoramentoModal}
+        onOpenChange={setShowMonitoramentoModal}
+      />
     </div>
   );
 }
