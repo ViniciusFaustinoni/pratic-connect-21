@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Loader2, Plus, CalendarIcon } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import {
   Dialog,
   DialogContent,
@@ -20,6 +21,7 @@ import { cn } from '@/lib/utils';
 import { useInstalacoesDisponiveis, useAddInstalacaoToRota } from '@/hooks/useRotas';
 import { InstalacaoMiniCard } from './InstalacaoMiniCard';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 
 interface AddInstalacaoDialogProps {
   open: boolean;
@@ -38,6 +40,25 @@ export function AddInstalacaoDialog({
     rotaData ? new Date(rotaData) : undefined
   );
   const { data: instalacoes, isLoading } = useInstalacoesDisponiveis(dataFiltro);
+  
+  // Query para verificar total de instalações agendadas (com ou sem rota)
+  const { data: totalInstalacoes = 0 } = useQuery({
+    queryKey: ['total-instalacoes-agendadas', dataFiltro ? format(dataFiltro, 'yyyy-MM-dd') : 'todas'],
+    queryFn: async () => {
+      let query = supabase
+        .from('instalacoes')
+        .select('*', { count: 'exact', head: true })
+        .in('status', ['agendada', 'reagendada']);
+      
+      if (dataFiltro) {
+        query = query.eq('data_agendada', format(dataFiltro, 'yyyy-MM-dd'));
+      }
+      
+      const { count } = await query;
+      return count || 0;
+    },
+    enabled: open
+  });
   const addToRota = useAddInstalacaoToRota();
 
   const handleAdd = async (instalacaoId: string) => {
@@ -126,12 +147,25 @@ export function AddInstalacaoDialog({
               </div>
             ) : (
               <div className="flex h-32 flex-col items-center justify-center text-center">
-                <p className="text-muted-foreground">
-                  Nenhuma instalação disponível
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Todas as instalações já estão atribuídas a rotas
-                </p>
+                {totalInstalacoes === 0 ? (
+                  <>
+                    <p className="text-muted-foreground">
+                      Nenhuma instalação agendada{dataFiltro ? ' para esta data' : ''}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Agende instalações para poder adicioná-las às rotas
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-muted-foreground">
+                      Nenhuma instalação disponível
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Todas as instalações já estão atribuídas a rotas
+                    </p>
+                  </>
+                )}
               </div>
             )}
           </ScrollArea>
