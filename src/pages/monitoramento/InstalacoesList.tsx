@@ -9,9 +9,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Search, Plus, Clock, Calendar, Truck, CheckCircle, MoreHorizontal, Eye, UserPlus, X, RefreshCw, ChevronLeft, ChevronRight, MapPin, AlertCircle } from 'lucide-react';
+import { Search, Plus, Clock, Calendar, Truck, CheckCircle, MoreHorizontal, Eye, UserPlus, X, ChevronLeft, ChevronRight, MapPin, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { STATUS_INSTALACAO_LABELS, STATUS_INSTALACAO_COLORS, PERIODO_LABELS, StatusInstalacao, PeriodoInstalacao } from '@/types/database';
+import { AtribuirInstaladorDialog } from '@/components/instalacoes/AtribuirInstaladorDialog';
 
 const formatDate = (d: string) => new Date(d + 'T12:00:00').toLocaleDateString('pt-BR');
 
@@ -21,6 +22,8 @@ export default function InstalacoesList() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusInstalacao | ''>('');
   const [periodoFilter, setPeriodoFilter] = useState<'hoje' | 'amanha' | 'semana' | ''>('');
+  const [atribuirDialogOpen, setAtribuirDialogOpen] = useState(false);
+  const [selectedInstalacaoId, setSelectedInstalacaoId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
 
   const [searchDebounced, setSearchDebounced] = useState('');
@@ -67,7 +70,7 @@ export default function InstalacoesList() {
     ...getDatasFromPeriodo(),
   };
 
-  const { data, isLoading, error, refetch, isFetching } = useInstalacoes({
+  const { data, isLoading, error } = useInstalacoes({
     filters,
     pagination: { page, pageSize: 15 },
   });
@@ -113,16 +116,10 @@ export default function InstalacoesList() {
           <h1 className="text-2xl font-bold tracking-tight">Instalações</h1>
           <p className="text-muted-foreground">Gerencie as instalações de rastreadores</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
-            <RefreshCw className={cn("h-4 w-4 mr-2", isFetching && "animate-spin")} />
-            Atualizar
-          </Button>
-          <Button size="sm" onClick={() => navigate('/monitoramento/instalacoes/agendar')}>
-            <Plus className="h-4 w-4 mr-2" />
-            Agendar
-          </Button>
-        </div>
+        <Button size="sm" onClick={() => navigate('/monitoramento/instalacoes/agendar')}>
+          <Plus className="h-4 w-4 mr-2" />
+          Agendar
+        </Button>
       </div>
 
       {/* CARDS DE RESUMO */}
@@ -304,7 +301,7 @@ export default function InstalacoesList() {
                           <Eye className="h-4 w-4 mr-2" /> Ver detalhes
                         </DropdownMenuItem>
                         {!inst.instalador_id && (
-                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); navigate(`/monitoramento/instalacoes/${inst.id}/atribuir`); }}>
+                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setSelectedInstalacaoId(inst.id); setAtribuirDialogOpen(true); }}>
                             <UserPlus className="h-4 w-4 mr-2" /> Atribuir instalador
                           </DropdownMenuItem>
                         )}
@@ -347,6 +344,12 @@ export default function InstalacoesList() {
           </div>
         </div>
       )}
+
+      <AtribuirInstaladorDialog
+        instalacaoId={selectedInstalacaoId}
+        open={atribuirDialogOpen}
+        onOpenChange={setAtribuirDialogOpen}
+      />
     </div>
   );
 }

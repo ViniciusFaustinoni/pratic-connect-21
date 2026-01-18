@@ -12,10 +12,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, User, Car, MapPin, Wrench, Phone, MessageSquare, Navigation, Calendar, Clock, Wifi, Play, CheckCircle, XCircle, RefreshCw, AlertCircle, ExternalLink, Loader2 } from 'lucide-react';
+import { ArrowLeft, User, Car, MapPin, Wrench, Phone, MessageSquare, Navigation, Calendar, Clock, Wifi, Play, CheckCircle, XCircle, RefreshCw, AlertCircle, ExternalLink, Loader2, UserPlus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { STATUS_INSTALACAO_LABELS, STATUS_INSTALACAO_COLORS, PERIODO_LABELS } from '@/types/database';
 import type { PeriodoInstalacao } from '@/types/database';
+import { AtribuirInstaladorDialog } from '@/components/instalacoes/AtribuirInstaladorDialog';
 
 const formatDate = (d: string) => new Date(d + 'T12:00:00').toLocaleDateString('pt-BR');
 const formatPhone = (p: string | null | undefined) => {
@@ -31,6 +32,7 @@ export default function InstalacaoDetalhePage() {
   const [cancelarOpen, setCancelarOpen] = useState(false);
   const [reagendarOpen, setReagendarOpen] = useState(false);
   const [concluirOpen, setConcluirOpen] = useState(false);
+  const [atribuirDialogOpen, setAtribuirDialogOpen] = useState(false);
 
   // Form reagendar
   const [novaData, setNovaData] = useState('');
@@ -311,8 +313,8 @@ export default function InstalacaoDetalhePage() {
             ) : (
               <div className="text-center py-4 space-y-3">
                 <p className="text-muted-foreground">Não atribuído</p>
-                <Button variant="outline" onClick={() => navigate(`/monitoramento/instalacoes/${id}/atribuir`)}>
-                  Atribuir Instalador
+                <Button variant="outline" onClick={() => setAtribuirDialogOpen(true)}>
+                  <UserPlus className="mr-2 h-4 w-4" /> Atribuir Instalador
                 </Button>
               </div>
             )}
@@ -454,6 +456,12 @@ export default function InstalacaoDetalhePage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AtribuirInstaladorDialog
+        instalacaoId={id || null}
+        open={atribuirDialogOpen}
+        onOpenChange={setAtribuirDialogOpen}
+      />
     </div>
   );
 }
