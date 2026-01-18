@@ -7,7 +7,9 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Settings, ArrowLeft, ArrowRight, Car, Smartphone, AlertTriangle, Tag } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { VehicleCategorySelect } from '@/components/cotador/VehicleCategorySelect';
-
+import { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { fetchBenefitExclusions, gerarMensagemAlertaCategoria } from '@/data/restricoesCategorias';
 interface EtapaCriteriosCotacaoProps {
   // Região
   regiao: string;
@@ -64,6 +66,19 @@ export function EtapaCriteriosCotacao({
 }: EtapaCriteriosCotacaoProps) {
   // Pode calcular se todos os campos obrigatórios estão preenchidos
   const canCalculate = regiao !== '' && modalidade && combustivel !== '' && categoria !== '';
+
+  // Buscar exclusões do banco de dados
+  const { data: benefitExclusions = [] } = useQuery({
+    queryKey: ['benefit-exclusions-criteria'],
+    queryFn: fetchBenefitExclusions,
+    staleTime: 5 * 60 * 1000, // 5 minutos
+  });
+
+  // Gerar mensagem de exclusão dinamicamente baseada na categoria
+  const mensagemExclusao = useMemo(() => {
+    if (!categoria || categoria === 'nenhuma') return null;
+    return gerarMensagemAlertaCategoria(categoria, benefitExclusions);
+  }, [categoria, benefitExclusions]);
 
   // Handler para mudança de categoria
   const handleCategoriaChange = (value: string) => {
@@ -221,39 +236,12 @@ export function EtapaCriteriosCotacao({
             onChange={handleCategoriaChange}
           />
 
-          {/* Alertas baseados na categoria */}
-          {categoria === 'leilao' && (
+          {/* Alerta dinâmico baseado nas exclusões do banco */}
+          {mensagemExclusao && (
             <Alert className="border-amber-500/50 bg-amber-50 dark:bg-amber-950/20">
               <AlertTriangle className="h-4 w-4 text-amber-600" />
               <AlertDescription className="text-amber-700 dark:text-amber-400">
-                <strong>Atenção:</strong> Veículos de leilão não possuem cobertura de incêndio em nenhum plano.
-              </AlertDescription>
-            </Alert>
-          )}
-          
-          {categoria === 'chassi_remarcado' && (
-            <Alert className="border-amber-500/50 bg-amber-50 dark:bg-amber-950/20">
-              <AlertTriangle className="h-4 w-4 text-amber-600" />
-              <AlertDescription className="text-amber-700 dark:text-amber-400">
-                <strong>Atenção:</strong> Chassi remarcado está sujeito à análise de aceitação pela associação.
-              </AlertDescription>
-            </Alert>
-          )}
-          
-          {categoria === 'ressarcimento_integral' && (
-            <Alert className="border-amber-500/50 bg-amber-50 dark:bg-amber-950/20">
-              <AlertTriangle className="h-4 w-4 text-amber-600" />
-              <AlertDescription className="text-amber-700 dark:text-amber-400">
-                <strong>Atenção:</strong> Veículos com ressarcimento integral anterior possuem cobertura de 80% da tabela FIPE.
-              </AlertDescription>
-            </Alert>
-          )}
-          
-          {(categoria === 'taxi' || categoria === 'ex_taxi') && (
-            <Alert className="border-blue-500/50 bg-blue-50 dark:bg-blue-950/20">
-              <AlertTriangle className="h-4 w-4 text-blue-600" />
-              <AlertDescription className="text-blue-700 dark:text-blue-400">
-                <strong>Informação:</strong> Veículos de táxi possuem condições especiais de proteção.
+                <strong>Atenção:</strong> {mensagemExclusao}
               </AlertDescription>
             </Alert>
           )}
