@@ -2,7 +2,11 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { calcularPrecoRegiao, type Regiao } from '@/data/planosPrecos';
-import { getCoberturasRemovidas, getRestricaoCategoria } from '@/data/restricoesCategorias';
+import { 
+  getCoberturasRemovidas, 
+  gerarMensagemAlertaCategoria,
+  type BenefitExclusionData
+} from '@/data/restricoesCategorias';
 
 // ============================================
 // INTERFACES
@@ -120,6 +124,30 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       
       if (error) throw error;
       return data;
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
+  // Buscar exclusões de benefícios por categoria
+  const { data: benefitExclusions } = useQuery({
+    queryKey: ['benefit_exclusions_cotacao'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('benefit_category_exclusions')
+        .select(`
+          id,
+          benefit_id,
+          categoria_veiculo,
+          benefits:benefit_id (name)
+        `);
+      
+      if (error) throw error;
+      return (data || []).map((item: any) => ({
+        id: item.id,
+        benefit_id: item.benefit_id,
+        categoria_veiculo: item.categoria_veiculo,
+        benefit_name: item.benefits?.name || '',
+      })) as BenefitExclusionData[];
     },
     staleTime: 1000 * 60 * 5,
   });
@@ -263,9 +291,9 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       }
 
       // Obter restrições baseadas na categoria do veículo (fonte única de verdade)
-      const restricaoCategoria = getRestricaoCategoria(categoria);
+      // Agora usa as exclusões do banco de dados para gerar a mensagem
       const coberturasRemovidas = getCoberturasRemovidas(categoria);
-      const alertaDesagio = restricaoCategoria?.mensagemAlerta || undefined;
+      const alertaDesagio = gerarMensagemAlertaCategoria(categoria, benefitExclusions || []) || undefined;
 
       // Calcular valores detalhados (estimativa baseada no valorMensal)
       const valorCota = Math.round(valorMensal * 0.6 * 100) / 100;
@@ -313,7 +341,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       
       return a.valorMensal - b.valorMensal;
     });
-  }, [params, planosBanco, tabelasPreco]);
+  }, [params, planosBanco, tabelasPreco, benefitExclusions]);
 
   return {
     planos,

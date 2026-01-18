@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Loader2 } from 'lucide-react';
 import {
   Dialog,
@@ -23,6 +23,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useProductLines } from '@/hooks/usePlans';
 import { useBenefits } from '@/hooks/usePlans';
 import { useCreatePlan, useUpdatePlan, PlanBenefitInput } from '@/hooks/usePlansAdmin';
+import { useUpdateBenefitExclusions } from '@/hooks/useBenefitExclusions';
 import { BenefitsSelector } from './BenefitsSelector';
 import { PlanPreview } from './PlanPreview';
 import type { PlanWithDetails } from '@/types/plans';
@@ -62,6 +63,7 @@ export function PlanFormModal({
   const { data: benefits } = useBenefits();
   const createPlan = useCreatePlan();
   const updatePlan = useUpdatePlan();
+  const updateExclusions = useUpdateBenefitExclusions();
 
   const isEditing = !!plan;
 
@@ -89,6 +91,12 @@ export function PlanFormModal({
   });
 
   const [selectedBenefits, setSelectedBenefits] = useState<PlanBenefitInput[]>([]);
+  const [pendingExclusions, setPendingExclusions] = useState<Map<string, string[]>>(new Map());
+
+  // Callback for exclusion changes from BenefitsSelector
+  const handleExclusionsChange = useCallback((exclusions: Map<string, string[]>) => {
+    setPendingExclusions(exclusions);
+  }, []);
 
   // Reset form when plan changes
   useEffect(() => {
@@ -205,6 +213,14 @@ export function PlanFormModal({
       } else {
         await createPlan.mutateAsync(payload);
       }
+
+      // Save benefit exclusions
+      if (pendingExclusions.size > 0) {
+        for (const [benefitId, categorias] of pendingExclusions) {
+          await updateExclusions.mutateAsync({ benefitId, categorias });
+        }
+      }
+
       onOpenChange(false);
     } catch (error) {
       // Error is handled by mutation
@@ -530,6 +546,7 @@ export function PlanFormModal({
                       benefits={benefits || []}
                       selectedBenefits={selectedBenefits}
                       onChange={setSelectedBenefits}
+                      onExclusionsChange={handleExclusionsChange}
                     />
                   </TabsContent>
 

@@ -199,3 +199,48 @@ export function getBenefitsExcludedForCategory(
     .map((exc) => exc.benefit_name || '')
     .filter(Boolean);
 }
+
+/**
+ * Labels amigáveis para as categorias de veículo
+ */
+const CATEGORIA_LABELS: Record<string, string> = {
+  leilao: 'Veículo de leilão',
+  chassi_remarcado: 'Chassi remarcado',
+  ressarcimento_integral: 'Ressarcimento integral',
+  taxi: 'Táxi',
+  ex_taxi: 'Ex-Táxi',
+  placa_vermelha: 'Placa vermelha',
+  aplicativo: 'Uso para aplicativo',
+};
+
+/**
+ * Gera mensagem de alerta dinâmica baseada nas exclusões configuradas no banco.
+ * Usa fallback para mensagem estática se não houver exclusões.
+ */
+export function gerarMensagemAlertaCategoria(
+  categoria: string | undefined | null,
+  exclusions: BenefitExclusionData[]
+): string | null {
+  if (!categoria || categoria === 'nenhuma') return null;
+  
+  // Buscar benefícios excluídos para esta categoria
+  const beneficiosExcluidos = getBenefitsExcludedForCategory(categoria, exclusions);
+  
+  if (beneficiosExcluidos.length === 0) {
+    // Fallback para mensagem estática se não houver exclusões configuradas
+    const restricaoEstatica = RESTRICOES_CATEGORIA[categoria];
+    return restricaoEstatica?.mensagemAlerta || null;
+  }
+  
+  // Gerar mensagem dinâmica
+  const prefixo = CATEGORIA_LABELS[categoria] || 'Esta categoria';
+  
+  if (beneficiosExcluidos.length === 1) {
+    return `${prefixo}: sem cobertura de ${beneficiosExcluidos[0]}`;
+  }
+  
+  // Múltiplos benefícios excluídos
+  const ultimoBeneficio = beneficiosExcluidos.pop();
+  const beneficiosTexto = beneficiosExcluidos.join(', ') + ' e ' + ultimoBeneficio;
+  return `${prefixo}: sem cobertura de ${beneficiosTexto}`;
+}
