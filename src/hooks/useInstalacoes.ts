@@ -389,7 +389,7 @@ export function useInstaladores() {
       const { data, error } = await supabase
         .from('profiles')
         .select('id, nome, telefone, email')
-        .in('id', userIds)
+        .in('user_id', userIds)
         .eq('ativo', true);
 
       if (error) throw error;
