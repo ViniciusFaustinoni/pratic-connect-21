@@ -191,6 +191,7 @@ import UsuarioEditarPage from "./pages/diretoria/UsuarioEditar";
 import LogsAuditoria from "./pages/diretoria/LogsAuditoria";
 import RelatoriosGerenciais from "./pages/diretoria/RelatoriosGerenciais";
 import FaixasCotas from "./pages/diretoria/FaixasCotas";
+import AuditoriaVendedores from "./pages/auditoria/AuditoriaVendedores";
 
 // Central de Relatórios
 import RelatoriosCentral from "./pages/relatorios/RelatoriosCentral";
@@ -308,6 +309,9 @@ const App = () => (
               <Route path="/vendas/vendedores" element={<Vendedores />} />
               <Route path="/vendas/vendedores/:id" element={<VendedorHistorico />} />
               <Route path="/vendas/configuracoes" element={<VendasConfig />} />
+              
+              {/* Auditoria */}
+              <Route path="/auditoria/vendedores" element={<AuditoriaVendedores />} />
               
               {/* Cadastro */}
               <Route path="/cadastro/associados" element={<Associados />} />

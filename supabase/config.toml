@@ -131,3 +131,6 @@ verify_jwt = false
 
 [functions.notificar-cliente]
 verify_jwt = false
+
+[functions.analisar-exclusividade]
+verify_jwt = false

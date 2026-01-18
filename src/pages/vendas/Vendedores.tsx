@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Users, TrendingUp, Target, ChevronRight, History, Plus } from 'lucide-react';
+import { Search, Users, TrendingUp, Target, ChevronRight, History, Plus, Shield } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -14,16 +14,26 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useVendedores, useVendedoresContagem } from '@/hooks/useVendedores';
+import { useVendedoresRisco } from '@/hooks/useAuditoriaVendedores';
 import { Skeleton } from '@/components/ui/skeleton';
+import { VendedorRiskBadge } from '@/components/auditoria/VendedorRiskBadge';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function Vendedores() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
+  const { roles } = useAuth();
 
   const { data: vendedores = [], isLoading: loadingVendedores } = useVendedores();
   const { data: contagemLeads = {}, isLoading: loadingContagem } = useVendedoresContagem();
+  const { data: vendedoresRisco = [] } = useVendedoresRisco();
 
   const isLoading = loadingVendedores || loadingContagem;
+  
+  // Check if user can access audit
+  const canAccessAudit = roles?.some(role => 
+    ['diretor', 'gerente_comercial'].includes(role)
+  );
 
   // Filtrar vendedores
   const filteredVendedores = useMemo(() => {
@@ -62,10 +72,18 @@ export default function Vendedores() {
                 Acompanhe o desempenho e histórico de cada vendedor
               </p>
             </div>
-            <Button onClick={() => navigate('/configuracoes/usuarios/novo?perfil=vendedor_clt')}>
-              <Plus className="w-4 h-4 mr-2" />
-              Novo Vendedor
-            </Button>
+            <div className="flex gap-2">
+              {canAccessAudit && (
+                <Button variant="outline" onClick={() => navigate('/auditoria/vendedores')}>
+                  <Shield className="w-4 h-4 mr-2" />
+                  Auditoria
+                </Button>
+              )}
+              <Button onClick={() => navigate('/configuracoes/usuarios/novo?perfil=vendedor_clt')}>
+                <Plus className="w-4 h-4 mr-2" />
+                Novo Vendedor
+              </Button>
+            </div>
           </div>
 
           {/* Stats Cards */}
@@ -166,6 +184,7 @@ export default function Vendedores() {
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead>Vendedor</TableHead>
+                  {canAccessAudit && <TableHead className="text-center">Status</TableHead>}
                   <TableHead className="text-center">Leads</TableHead>
                   <TableHead className="text-center">Em Andamento</TableHead>
                   <TableHead className="text-center">Ganhos</TableHead>
@@ -189,6 +208,11 @@ export default function Vendedores() {
                   const taxaConv = contagem.total > 0 
                     ? ((contagem.ganhos / contagem.total) * 100).toFixed(0) 
                     : '0';
+                  
+                  // Find monitoring status
+                  const monitoramento = vendedoresRisco.find(
+                    (v: any) => v.vendedor_id === vendedor.user_id
+                  );
 
                   return (
                     <TableRow key={vendedor.id} className="group">
@@ -200,6 +224,15 @@ export default function Vendedores() {
                           )}
                         </div>
                       </TableCell>
+                      {canAccessAudit && (
+                        <TableCell className="text-center">
+                          <VendedorRiskBadge 
+                            status={monitoramento?.status_monitoramento || 'normal'} 
+                            scoreRisco={monitoramento?.score_risco_acumulado}
+                            compact
+                          />
+                        </TableCell>
+                      )}
                       <TableCell className="text-center">
                         <Badge variant="outline" className="font-mono">
                           {contagem.total}
