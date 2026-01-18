@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useInstaladores, useRastreadoresEstoque, useInstalacaoActions } from '@/hooks/useInstalacoes';
-import { Loader2, UserPlus } from 'lucide-react';
+import { useRastreadoresEstoque, useInstalacaoActions } from '@/hooks/useInstalacoes';
+import { useInstaladores } from '@/hooks/useRotas';
+import { Loader2, UserPlus, AlertCircle } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface AtribuirInstaladorDialogProps {
   instalacaoId: string | null;
@@ -16,9 +18,23 @@ export function AtribuirInstaladorDialog({ instalacaoId, open, onOpenChange }: A
   const [instaladorId, setInstaladorId] = useState('');
   const [rastreadorId, setRastreadorId] = useState('');
 
-  const { data: instaladores, isLoading: loadingInstaladores } = useInstaladores();
+  const { data: instaladores, isLoading: loadingInstaladores, error: instaladoresError } = useInstaladores();
   const { data: rastreadores, isLoading: loadingRastreadores } = useRastreadoresEstoque();
   const { atribuirInstalador, isAtribuindo } = useInstalacaoActions();
+
+  // Log para debug e notificação de erro
+  useEffect(() => {
+    if (instaladoresError) {
+      console.error('[AtribuirInstaladorDialog] Erro ao carregar instaladores:', instaladoresError);
+      toast.error('Erro ao carregar instaladores: ' + (instaladoresError as Error).message);
+    }
+  }, [instaladoresError]);
+
+  useEffect(() => {
+    if (!loadingInstaladores) {
+      console.log('[AtribuirInstaladorDialog] Instaladores carregados:', instaladores?.length ?? 0);
+    }
+  }, [loadingInstaladores, instaladores]);
 
   const handleSubmit = () => {
     if (!instalacaoId || !instaladorId) return;
@@ -56,18 +72,31 @@ export function AtribuirInstaladorDialog({ instalacaoId, open, onOpenChange }: A
         <div className="space-y-4 py-4">
           <div className="space-y-2">
             <Label>Instalador *</Label>
-            <Select value={instaladorId} onValueChange={setInstaladorId} disabled={loadingInstaladores}>
-              <SelectTrigger>
-                <SelectValue placeholder={loadingInstaladores ? 'Carregando...' : 'Selecione um instalador'} />
-              </SelectTrigger>
-              <SelectContent>
-                {instaladores?.map((inst) => (
-                  <SelectItem key={inst.id} value={inst.id}>
-                    {inst.nome}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {instaladoresError ? (
+              <div className="flex items-center gap-2 p-3 rounded-md bg-destructive/10 text-destructive text-sm">
+                <AlertCircle className="h-4 w-4" />
+                <span>Erro ao carregar instaladores. Verifique suas permissões.</span>
+              </div>
+            ) : (
+              <Select value={instaladorId} onValueChange={setInstaladorId} disabled={loadingInstaladores}>
+                <SelectTrigger>
+                  <SelectValue placeholder={loadingInstaladores ? 'Carregando...' : 'Selecione um instalador'} />
+                </SelectTrigger>
+                <SelectContent>
+                  {!loadingInstaladores && (!instaladores || instaladores.length === 0) ? (
+                    <div className="p-2 text-center text-muted-foreground text-sm">
+                      Nenhum instalador/vistoriador disponível
+                    </div>
+                  ) : (
+                    instaladores?.map((inst) => (
+                      <SelectItem key={inst.id} value={inst.id}>
+                        {inst.nome}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
           <div className="space-y-2">
