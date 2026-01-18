@@ -21,6 +21,8 @@ import {
   XCircle,
   Loader2,
   FileText,
+  MapPin,
+  Clock,
 } from 'lucide-react';
 import { useVistoria, useFinalizarVistoriaComDecisao, VistoriaStatus } from '@/hooks/useVistorias';
 import { VistoriaFotosView } from './VistoriaFotosView';
@@ -40,6 +42,15 @@ const STATUS_CONFIG: Record<VistoriaStatus, { label: string; variant: 'default' 
   reprovada: { label: 'Reprovada', variant: 'destructive' },
 };
 
+// Helper para formatar telefone
+const formatarTelefone = (telefone: string | null) => {
+  if (!telefone) return '';
+  const nums = telefone.replace(/\D/g, '');
+  if (nums.length <= 2) return nums;
+  if (nums.length <= 7) return `(${nums.slice(0, 2)}) ${nums.slice(2)}`;
+  return `(${nums.slice(0, 2)}) ${nums.slice(2, 7)}-${nums.slice(7, 11)}`;
+};
+
 export function VistoriaDetailDrawer({
   vistoriaId,
   open,
@@ -48,11 +59,13 @@ export function VistoriaDetailDrawer({
   const { data: vistoria, isLoading } = useVistoria(vistoriaId);
   const finalizarVistoria = useFinalizarVistoriaComDecisao();
 
-  const openWhatsApp = () => {
-    if (!vistoria?.veiculo?.associado?.telefone) return;
-    const phone = vistoria.veiculo.associado.telefone.replace(/\D/g, '');
-    const message = `Olá ${vistoria.veiculo.associado.nome}! Entramos em contato sobre a vistoria do seu veículo ${vistoria.veiculo?.placa || ''}.`;
-    window.open(`https://wa.me/55${phone}?text=${encodeURIComponent(message)}`, '_blank');
+  const openWhatsApp = (phone?: string | null, nome?: string) => {
+    if (!phone) return;
+    const phoneClean = phone.replace(/\D/g, '');
+    const message = nome 
+      ? `Olá ${nome}! Entramos em contato sobre a vistoria agendada.`
+      : `Olá! Entramos em contato sobre a vistoria do veículo.`;
+    window.open(`https://wa.me/55${phoneClean}?text=${encodeURIComponent(message)}`, '_blank');
   };
 
   const handleAprovar = () => {
@@ -124,7 +137,7 @@ export function VistoriaDetailDrawer({
                           variant="ghost"
                           size="sm"
                           className="h-7 px-2 text-emerald-600"
-                          onClick={openWhatsApp}
+                          onClick={() => openWhatsApp(vistoria.veiculo?.associado?.telefone, vistoria.veiculo?.associado?.nome)}
                         >
                           WhatsApp
                         </Button>
@@ -151,6 +164,7 @@ export function VistoriaDetailDrawer({
                   </div>
                 </section>
               )}
+
 
               {/* Informações */}
               <section className="space-y-2">

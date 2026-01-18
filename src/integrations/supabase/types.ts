@@ -3966,6 +3966,17 @@ export type Database = {
           veiculo_placa: string | null
           vendedor_id: string | null
           vistoria_concluida_em: string | null
+          vistoria_data_agendada: string | null
+          vistoria_endereco_bairro: string | null
+          vistoria_endereco_cep: string | null
+          vistoria_endereco_cidade: string | null
+          vistoria_endereco_estado: string | null
+          vistoria_endereco_logradouro: string | null
+          vistoria_endereco_numero: string | null
+          vistoria_horario_agendado: string | null
+          vistoria_responsavel_eu_mesmo: boolean | null
+          vistoria_responsavel_nome: string | null
+          vistoria_responsavel_telefone: string | null
           visualizado_em: string | null
         }
         Insert: {
@@ -4027,6 +4038,17 @@ export type Database = {
           veiculo_placa?: string | null
           vendedor_id?: string | null
           vistoria_concluida_em?: string | null
+          vistoria_data_agendada?: string | null
+          vistoria_endereco_bairro?: string | null
+          vistoria_endereco_cep?: string | null
+          vistoria_endereco_cidade?: string | null
+          vistoria_endereco_estado?: string | null
+          vistoria_endereco_logradouro?: string | null
+          vistoria_endereco_numero?: string | null
+          vistoria_horario_agendado?: string | null
+          vistoria_responsavel_eu_mesmo?: boolean | null
+          vistoria_responsavel_nome?: string | null
+          vistoria_responsavel_telefone?: string | null
           visualizado_em?: string | null
         }
         Update: {
@@ -4088,6 +4110,17 @@ export type Database = {
           veiculo_placa?: string | null
           vendedor_id?: string | null
           vistoria_concluida_em?: string | null
+          vistoria_data_agendada?: string | null
+          vistoria_endereco_bairro?: string | null
+          vistoria_endereco_cep?: string | null
+          vistoria_endereco_cidade?: string | null
+          vistoria_endereco_estado?: string | null
+          vistoria_endereco_logradouro?: string | null
+          vistoria_endereco_numero?: string | null
+          vistoria_horario_agendado?: string | null
+          vistoria_responsavel_eu_mesmo?: boolean | null
+          vistoria_responsavel_nome?: string | null
+          vistoria_responsavel_telefone?: string | null
           visualizado_em?: string | null
         }
         Relationships: [
