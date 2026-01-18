@@ -155,7 +155,8 @@ export function useAnaliseVistoria(vistoriaId: string) {
             .insert([{
               associado_id: vistoriaAtual.associado_id,
               veiculo_id: vistoriaAtual.veiculo_id,
-              status: 'pendente',
+              status: 'agendada',
+              data_agendada: new Date().toISOString(),
             }]);
 
           if (instalacaoError) {

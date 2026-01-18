@@ -46,6 +46,7 @@ import Veiculos from "./pages/cadastro/Veiculos";
 import Documentos from "./pages/cadastro/Documentos";
 import FilaDocumentos from "./pages/cadastro/FilaDocumentos";
 import AnaliseDocumento from "./pages/cadastro/AnaliseDocumento";
+import AnaliseVistoria from "./pages/cadastro/AnaliseVistoria";
 import PropostasPendentes from "./pages/cadastro/PropostasPendentes";
 import PropostaAnalise from "./pages/cadastro/PropostaAnalise";
 import SinistrosList from "./pages/eventos/SinistrosList";
@@ -315,6 +316,7 @@ const App = () => (
               <Route path="/cadastro/documentos" element={<Documentos />} />
               <Route path="/cadastro/fila-documentos" element={<FilaDocumentos />} />
               <Route path="/cadastro/documentos/:id" element={<AnaliseDocumento />} />
+              <Route path="/cadastro/vistorias/:id/analise" element={<AnaliseVistoria />} />
               <Route path="/cadastro/propostas" element={<PropostasPendentes />} />
               <Route path="/cadastro/propostas/:id" element={<PropostaAnalise />} />
               
