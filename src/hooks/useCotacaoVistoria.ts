@@ -133,3 +133,45 @@ export function useFinalizarVistoriaCotacao() {
     onError: () => toast.error('Erro ao finalizar vistoria')
   });
 }
+
+// Hook para agendar vistoria completa (após autovistoria)
+export interface AgendarVistoriaCompletaParams {
+  cotacaoId: string;
+  dataAgendada: string;
+  horarioAgendado: string;
+  endereco: { cep: string; logradouro: string; numero: string; bairro: string; cidade: string; estado: string; };
+  responsavel: { euMesmo: boolean; nome?: string; telefone?: string; };
+}
+
+export function useAgendarVistoriaCompleta() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async ({ cotacaoId, dataAgendada, horarioAgendado, endereco, responsavel }: AgendarVistoriaCompletaParams) => {
+      const { error } = await supabase
+        .from('cotacoes')
+        .update({
+          vistoria_completa_data_agendada: dataAgendada,
+          vistoria_completa_horario_agendado: horarioAgendado,
+          vistoria_completa_endereco_cep: endereco.cep,
+          vistoria_completa_endereco_logradouro: endereco.logradouro,
+          vistoria_completa_endereco_numero: endereco.numero,
+          vistoria_completa_endereco_bairro: endereco.bairro,
+          vistoria_completa_endereco_cidade: endereco.cidade,
+          vistoria_completa_endereco_estado: endereco.estado,
+          vistoria_completa_responsavel_eu_mesmo: responsavel.euMesmo,
+          vistoria_completa_responsavel_nome: responsavel.nome || null,
+          vistoria_completa_responsavel_telefone: responsavel.telefone || null,
+        })
+        .eq('id', cotacaoId);
+      
+      if (error) throw error;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['cotacao', variables.cotacaoId] });
+      queryClient.invalidateQueries({ queryKey: ['cotacao-publica'] });
+      toast.success('Vistoria completa agendada com sucesso!');
+    },
+    onError: () => toast.error('Erro ao agendar vistoria completa')
+  });
+}

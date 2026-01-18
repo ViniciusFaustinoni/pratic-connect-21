@@ -3965,6 +3965,17 @@ export type Database = {
           veiculo_modelo: string | null
           veiculo_placa: string | null
           vendedor_id: string | null
+          vistoria_completa_data_agendada: string | null
+          vistoria_completa_endereco_bairro: string | null
+          vistoria_completa_endereco_cep: string | null
+          vistoria_completa_endereco_cidade: string | null
+          vistoria_completa_endereco_estado: string | null
+          vistoria_completa_endereco_logradouro: string | null
+          vistoria_completa_endereco_numero: string | null
+          vistoria_completa_horario_agendado: string | null
+          vistoria_completa_responsavel_eu_mesmo: boolean | null
+          vistoria_completa_responsavel_nome: string | null
+          vistoria_completa_responsavel_telefone: string | null
           vistoria_concluida_em: string | null
           vistoria_data_agendada: string | null
           vistoria_endereco_bairro: string | null
@@ -4037,6 +4048,17 @@ export type Database = {
           veiculo_modelo?: string | null
           veiculo_placa?: string | null
           vendedor_id?: string | null
+          vistoria_completa_data_agendada?: string | null
+          vistoria_completa_endereco_bairro?: string | null
+          vistoria_completa_endereco_cep?: string | null
+          vistoria_completa_endereco_cidade?: string | null
+          vistoria_completa_endereco_estado?: string | null
+          vistoria_completa_endereco_logradouro?: string | null
+          vistoria_completa_endereco_numero?: string | null
+          vistoria_completa_horario_agendado?: string | null
+          vistoria_completa_responsavel_eu_mesmo?: boolean | null
+          vistoria_completa_responsavel_nome?: string | null
+          vistoria_completa_responsavel_telefone?: string | null
           vistoria_concluida_em?: string | null
           vistoria_data_agendada?: string | null
           vistoria_endereco_bairro?: string | null
@@ -4109,6 +4131,17 @@ export type Database = {
           veiculo_modelo?: string | null
           veiculo_placa?: string | null
           vendedor_id?: string | null
+          vistoria_completa_data_agendada?: string | null
+          vistoria_completa_endereco_bairro?: string | null
+          vistoria_completa_endereco_cep?: string | null
+          vistoria_completa_endereco_cidade?: string | null
+          vistoria_completa_endereco_estado?: string | null
+          vistoria_completa_endereco_logradouro?: string | null
+          vistoria_completa_endereco_numero?: string | null
+          vistoria_completa_horario_agendado?: string | null
+          vistoria_completa_responsavel_eu_mesmo?: boolean | null
+          vistoria_completa_responsavel_nome?: string | null
+          vistoria_completa_responsavel_telefone?: string | null
           vistoria_concluida_em?: string | null
           vistoria_data_agendada?: string | null
           vistoria_endereco_bairro?: string | null
