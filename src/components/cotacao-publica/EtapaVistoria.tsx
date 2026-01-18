@@ -12,11 +12,13 @@ interface EtapaVistoriaProps {
   tipoVeiculo: TipoVeiculo;
   onComplete: () => void;
   onAgendar?: (data: string, horario: string) => void;
+  readOnly?: boolean;
+  tipoVistoriaRealizada?: 'autovistoria' | 'agendada';
 }
 
 type ModoVistoria = 'escolha' | 'autovistoria' | 'agendada';
 
-export function EtapaVistoria({ cotacaoId, tipoVeiculo, onComplete, onAgendar }: EtapaVistoriaProps) {
+export function EtapaVistoria({ cotacaoId, tipoVeiculo, onComplete, onAgendar, readOnly = false, tipoVistoriaRealizada }: EtapaVistoriaProps) {
   const [modo, setModo] = useState<ModoVistoria>('escolha');
 
   const handleVoltarEscolha = () => {
@@ -27,6 +29,46 @@ export function EtapaVistoria({ cotacaoId, tipoVeiculo, onComplete, onAgendar }:
     onAgendar?.(data, horario);
     onComplete();
   };
+
+  // Modo read-only: mostrar resumo da vistoria realizada
+  if (readOnly) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="space-y-4"
+      >
+        <Card className="border-success/30 bg-card/80 backdrop-blur-xl">
+          <CardContent className="py-8 text-center">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-success/10 flex items-center justify-center">
+              <CheckCircle2 className="h-8 w-8 text-success" />
+            </div>
+            <h3 className="text-xl font-bold mb-2 text-foreground">Vistoria Concluída</h3>
+            <p className="text-muted-foreground mb-4">
+              {tipoVistoriaRealizada === 'autovistoria' 
+                ? 'Autovistoria realizada com sucesso'
+                : tipoVistoriaRealizada === 'agendada'
+                ? 'Vistoria presencial agendada'
+                : 'Vistoria do veículo concluída'}
+            </p>
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-success/10 text-success text-sm">
+              {tipoVistoriaRealizada === 'autovistoria' ? (
+                <>
+                  <Camera className="h-4 w-4" />
+                  Fotos enviadas
+                </>
+              ) : (
+                <>
+                  <Calendar className="h-4 w-4" />
+                  Agendamento confirmado
+                </>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+    );
+  }
 
   return (
     <AnimatePresence mode="wait">

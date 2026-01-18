@@ -49,6 +49,7 @@ interface EtapaDadosPessoaisDocumentosProps {
   onSubmit: (dados: DadosPessoaisForm) => void;
   isLoading?: boolean;
   defaultValues?: Partial<DadosPessoaisForm>;
+  readOnly?: boolean;
 }
 
 export function EtapaDadosPessoaisDocumentos({
@@ -56,6 +57,7 @@ export function EtapaDadosPessoaisDocumentos({
   onSubmit,
   isLoading = false,
   defaultValues,
+  readOnly = false,
 }: EtapaDadosPessoaisDocumentosProps) {
   const [documentos, setDocumentos] = useState<DocumentoUnificado[]>([]);
   const [dadosExtraidos, setDadosExtraidos] = useState<DadosExtraidos>({});
@@ -163,6 +165,85 @@ export function EtapaDadosPessoaisDocumentos({
     };
     onSubmit(dados);
   };
+
+  // Modo read-only: mostrar resumo dos dados salvos
+  if (readOnly) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="space-y-6"
+      >
+        <div className="text-center">
+          <Badge className="bg-success/10 text-success border-success/30 mb-4">
+            <Check className="h-3 w-3 mr-1" />
+            Dados Confirmados
+          </Badge>
+          <h2 className="text-2xl font-bold text-foreground mb-2">Documentos e Dados</h2>
+          <p className="text-muted-foreground">
+            Seus dados foram verificados e salvos com sucesso
+          </p>
+        </div>
+
+        {/* Dados do Cliente */}
+        <Card className="bg-success/5 border-success/20">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-4">
+              <User className="h-5 w-5 text-success" />
+              <h4 className="font-medium">Dados Pessoais</h4>
+            </div>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              {defaultValues?.nome && (
+                <div>
+                  <span className="text-muted-foreground">Nome:</span>
+                  <p className="font-medium text-foreground">{defaultValues.nome}</p>
+                </div>
+              )}
+              {defaultValues?.cpf && (
+                <div>
+                  <span className="text-muted-foreground">CPF:</span>
+                  <p className="font-medium text-foreground">{defaultValues.cpf}</p>
+                </div>
+              )}
+              {defaultValues?.email && (
+                <div>
+                  <span className="text-muted-foreground">E-mail:</span>
+                  <p className="font-medium text-foreground">{defaultValues.email}</p>
+                </div>
+              )}
+              {defaultValues?.telefone && (
+                <div>
+                  <span className="text-muted-foreground">Telefone:</span>
+                  <p className="font-medium text-foreground">{defaultValues.telefone}</p>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Endereço */}
+        {defaultValues?.logradouro && (
+          <Card className="bg-success/5 border-success/20">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <MapPin className="h-5 w-5 text-success" />
+                <h4 className="font-medium">Endereço</h4>
+              </div>
+              <p className="text-sm text-foreground">
+                {defaultValues.logradouro}
+                {defaultValues.numero && `, ${defaultValues.numero}`}
+                {defaultValues.complemento && ` - ${defaultValues.complemento}`}
+                <br />
+                {defaultValues.bairro && `${defaultValues.bairro} - `}
+                {defaultValues.cidade}/{defaultValues.uf}
+                {defaultValues.cep && ` • CEP: ${defaultValues.cep}`}
+              </p>
+            </CardContent>
+          </Card>
+        )}
+      </motion.div>
+    );
+  }
 
   return (
     <div className="space-y-6">

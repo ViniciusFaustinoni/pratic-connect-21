@@ -47,6 +47,11 @@ export default function CotacaoContratacao() {
 
   const [planoSelecionadoId, setPlanoSelecionadoId] = useState<string | null>(null);
 
+  // Determinar etapa baseada no status para saber o que está concluído
+  const etapaDoStatus = cotacao?.status_contratacao 
+    ? determinarEtapa(cotacao.status_contratacao) 
+    : 0;
+
   // Sincronizar etapa com status da cotação
   useEffect(() => {
     if (cotacao?.status_contratacao) {
@@ -272,13 +277,14 @@ export default function CotacaoContratacao() {
                   animate="animate"
                   exit="exit"
                 >
-                  <EscolhaPlano
+                <EscolhaPlano
                     planos={planosDisponiveis}
                     planoSelecionadoId={planoSelecionadoId}
                     onSelectPlano={setPlanoSelecionadoId}
                     onConfirmar={handleSelecionarPlano}
                     isLoading={isPending}
                     categoriaVeiculo={(cotacao as { categoria_veiculo?: string }).categoria_veiculo}
+                    readOnly={0 < etapaDoStatus}
                   />
                 </motion.div>
               )}
@@ -292,11 +298,12 @@ export default function CotacaoContratacao() {
                   animate="animate"
                   exit="exit"
                 >
-                  <EtapaDadosPessoaisDocumentos
+                <EtapaDadosPessoaisDocumentos
                     cotacaoId={cotacao.id}
                     onSubmit={handleSalvarDados}
                     defaultValues={dadosPessoaisDefault}
                     isLoading={isPending}
+                    readOnly={1 < etapaDoStatus}
                   />
                 </motion.div>
               )}
@@ -310,12 +317,13 @@ export default function CotacaoContratacao() {
                   animate="animate"
                   exit="exit"
                 >
-                  <EtapaAssinaturaContrato
+                <EtapaAssinaturaContrato
                     cotacaoId={cotacao.id}
                     tokenPublico={token || cotacao.token_publico || ''}
                     clienteNome={cotacao.nome_solicitante || ''}
                     clienteEmail={cotacao.email_solicitante || ''}
                     onContratoAssinado={() => setEtapaAtual(3)}
+                    readOnly={2 < etapaDoStatus}
                   />
                 </motion.div>
               )}
@@ -329,11 +337,13 @@ export default function CotacaoContratacao() {
                   animate="animate"
                   exit="exit"
                 >
-                  <EtapaVistoria
+                <EtapaVistoria
                     cotacaoId={cotacao.id}
                     tipoVeiculo={cotacao.categoria === 'moto' ? 'moto' : 'carro'}
                     onComplete={() => setEtapaAtual(4)}
                     onAgendar={() => setEtapaAtual(4)}
+                    readOnly={3 < etapaDoStatus}
+                    tipoVistoriaRealizada={cotacao.tipo_vistoria as 'autovistoria' | 'agendada' | undefined}
                   />
                 </motion.div>
               )}
@@ -347,13 +357,14 @@ export default function CotacaoContratacao() {
                   animate="animate"
                   exit="exit"
                 >
-                  <EtapaPagamentoCotacao
+                <EtapaPagamentoCotacao
                     cotacaoId={cotacao.id}
                     valorAdesao={cotacao.valor_adesao || 0}
                     clienteNome={cotacao.nome_solicitante || ''}
                     clienteEmail={cotacao.email_solicitante || ''}
                     clienteCpf={cotacao.cliente_cpf || ''}
                     onPagamentoConfirmado={() => setEtapaAtual(5)}
+                    readOnly={4 < etapaDoStatus}
                   />
                 </motion.div>
               )}

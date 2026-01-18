@@ -27,6 +27,7 @@ interface EscolhaPlanoProps {
   onConfirmar: () => void;
   isLoading?: boolean;
   categoriaVeiculo?: string;
+  readOnly?: boolean;
 }
 
 const formatarMoeda = (valor: number) => {
@@ -95,6 +96,7 @@ export function EscolhaPlano({
   onConfirmar,
   isLoading,
   categoriaVeiculo,
+  readOnly = false,
 }: EscolhaPlanoProps) {
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
 
@@ -110,8 +112,62 @@ export function EscolhaPlano({
     });
   };
 
+  // Encontrar plano selecionado para modo read-only
+  const planoSelecionado = planos.find(p => p.id === planoSelecionadoId);
+
   // Verificar se há restrições de categoria
   const restricao = categoriaVeiculo ? getRestricaoCategoria(categoriaVeiculo) : null;
+
+  // Modo read-only: mostrar apenas resumo do plano escolhido
+  if (readOnly && planoSelecionado) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="space-y-6"
+      >
+        <div className="text-center">
+          <Badge className="bg-success/10 text-success border-success/30 mb-4">
+            <Check className="h-3 w-3 mr-1" />
+            Plano Escolhido
+          </Badge>
+          <h2 className="text-2xl font-bold text-foreground mb-2">
+            {planoSelecionado.nome}
+          </h2>
+          <p className="text-muted-foreground">
+            Você selecionou este plano para proteção do seu veículo
+          </p>
+        </div>
+
+        <Card className="max-w-md mx-auto border-success/30 bg-card/80 backdrop-blur-xl">
+          <CardContent className="p-6 text-center">
+            <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-success/10 flex items-center justify-center">
+              {getNivelIcon(planoSelecionado.nivel)}
+            </div>
+            <Badge 
+              variant="outline" 
+              className={cn(
+                'text-xs mb-3',
+                planoSelecionado.nivel === 'exclusive' && 'border-yellow-400/30 text-yellow-400 bg-yellow-400/10',
+                planoSelecionado.nivel === 'premium' && 'border-purple-400/30 text-purple-400 bg-purple-400/10'
+              )}
+            >
+              {getNivelLabel(planoSelecionado.nivel)}
+            </Badge>
+            <div className="text-3xl font-bold text-foreground mb-1">
+              {formatarMoeda(planoSelecionado.valorMensal)}
+              <span className="text-sm font-normal text-muted-foreground">/mês</span>
+            </div>
+            {planoSelecionado.valorAdesao && planoSelecionado.valorAdesao > 0 && (
+              <p className="text-sm text-muted-foreground">
+                + {formatarMoeda(planoSelecionado.valorAdesao)} de adesão
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </motion.div>
+    );
+  }
 
   return (
     <div className="space-y-8">

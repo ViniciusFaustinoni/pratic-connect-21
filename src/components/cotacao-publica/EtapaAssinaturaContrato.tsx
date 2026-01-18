@@ -15,6 +15,7 @@ interface EtapaAssinaturaContratoProps {
   clienteNome: string;
   clienteEmail: string;
   onContratoAssinado: () => void;
+  readOnly?: boolean;
 }
 
 type EtapaInterna = 'verificando' | 'gerando_contrato' | 'enviando_autentique' | 'aguardando_assinatura' | 'assinado' | 'erro';
@@ -33,6 +34,7 @@ export function EtapaAssinaturaContrato({
   clienteNome,
   clienteEmail,
   onContratoAssinado,
+  readOnly = false,
 }: EtapaAssinaturaContratoProps) {
   const [etapaInterna, setEtapaInterna] = useState<EtapaInterna>('verificando');
   const [contrato, setContrato] = useState<ContratoInfo | null>(null);
@@ -374,8 +376,8 @@ export function EtapaAssinaturaContrato({
     );
   }
 
-  // Estado de já assinado
-  if (etapaInterna === 'assinado') {
+  // Estado de já assinado (ou readOnly)
+  if (etapaInterna === 'assinado' || readOnly) {
     return (
       <Card className="border-success/30 bg-card/80 backdrop-blur-xl">
         <CardContent className="py-16 text-center">

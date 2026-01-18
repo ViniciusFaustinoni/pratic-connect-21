@@ -14,6 +14,7 @@ interface EtapaPagamentoCotacaoProps {
   clienteEmail: string;
   clienteCpf: string;
   onPagamentoConfirmado: () => void;
+  readOnly?: boolean;
 }
 
 interface CobrancaData {
@@ -34,6 +35,7 @@ export function EtapaPagamentoCotacao({
   clienteEmail,
   clienteCpf,
   onPagamentoConfirmado,
+  readOnly = false,
 }: EtapaPagamentoCotacaoProps) {
   const [etapaInterna, setEtapaInterna] = useState<EtapaInterna>('gerando_contrato');
   const [contratoId, setContratoId] = useState<string | null>(null);
@@ -274,6 +276,30 @@ export function EtapaPagamentoCotacao({
       currency: 'BRL',
     }).format(value);
   };
+
+  // Modo read-only: mostrar pagamento confirmado
+  if (readOnly) {
+    return (
+      <Card className="border-success/30 bg-card/80 backdrop-blur-xl">
+        <CardContent className="py-16 text-center">
+          <motion.div
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ duration: 0.3 }}
+          >
+            <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-success/10 flex items-center justify-center">
+              <Check className="h-10 w-10 text-success" />
+            </div>
+            <h3 className="text-xl font-bold mb-2">Pagamento Confirmado!</h3>
+            <p className="text-muted-foreground mb-4">
+              Taxa de adesão paga com sucesso.
+            </p>
+            <p className="text-lg font-bold text-success">{formatCurrency(valorAdesao)}</p>
+          </motion.div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   // Estado de carregamento
   if (etapaInterna === 'gerando_contrato' || etapaInterna === 'criando_cobranca') {
