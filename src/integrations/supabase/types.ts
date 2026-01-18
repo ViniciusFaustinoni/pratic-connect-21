@@ -11945,6 +11945,8 @@ export type Database = {
       }
       vistorias: {
         Row: {
+          analisado_em: string | null
+          analisado_por: string | null
           assinatura_autentique_id: string | null
           assinatura_concluida_em: string | null
           assinatura_documento_url: string | null
@@ -11963,7 +11965,11 @@ export type Database = {
           instalacao_id: string | null
           km_atual: number | null
           modalidade: string | null
+          motivo_reprovacao: string | null
           observacoes: string | null
+          observacoes_analise: string | null
+          protocolo: string | null
+          ressalvas: string | null
           sinistro_id: string | null
           status: Database["public"]["Enums"]["status_vistoria"]
           tipo: Database["public"]["Enums"]["tipo_vistoria"]
@@ -11972,6 +11978,8 @@ export type Database = {
           vistoriador_id: string | null
         }
         Insert: {
+          analisado_em?: string | null
+          analisado_por?: string | null
           assinatura_autentique_id?: string | null
           assinatura_concluida_em?: string | null
           assinatura_documento_url?: string | null
@@ -11990,7 +11998,11 @@ export type Database = {
           instalacao_id?: string | null
           km_atual?: number | null
           modalidade?: string | null
+          motivo_reprovacao?: string | null
           observacoes?: string | null
+          observacoes_analise?: string | null
+          protocolo?: string | null
+          ressalvas?: string | null
           sinistro_id?: string | null
           status?: Database["public"]["Enums"]["status_vistoria"]
           tipo?: Database["public"]["Enums"]["tipo_vistoria"]
@@ -11999,6 +12011,8 @@ export type Database = {
           vistoriador_id?: string | null
         }
         Update: {
+          analisado_em?: string | null
+          analisado_por?: string | null
           assinatura_autentique_id?: string | null
           assinatura_concluida_em?: string | null
           assinatura_documento_url?: string | null
@@ -12017,7 +12031,11 @@ export type Database = {
           instalacao_id?: string | null
           km_atual?: number | null
           modalidade?: string | null
+          motivo_reprovacao?: string | null
           observacoes?: string | null
+          observacoes_analise?: string | null
+          protocolo?: string | null
+          ressalvas?: string | null
           sinistro_id?: string | null
           status?: Database["public"]["Enums"]["status_vistoria"]
           tipo?: Database["public"]["Enums"]["tipo_vistoria"]
@@ -12026,6 +12044,13 @@ export type Database = {
           vistoriador_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "vistorias_analisado_por_fkey"
+            columns: ["analisado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "vistorias_associado_id_fkey"
             columns: ["associado_id"]
