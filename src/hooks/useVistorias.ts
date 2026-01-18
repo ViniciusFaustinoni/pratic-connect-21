@@ -522,3 +522,83 @@ export function useVistoriasDisponiveis(data?: Date) {
     enabled: !!data,
   });
 }
+
+// Hook para buscar vistoria completa com dados do veículo expandidos
+export function useVistoriaCompleta(id: string | null) {
+  return useQuery({
+    queryKey: ['vistoria-completa', id],
+    queryFn: async () => {
+      if (!id) return null;
+
+      const { data, error } = await supabase
+        .from('vistorias')
+        .select(`
+          *,
+          veiculo:veiculos(
+            id, placa, chassi, marca, modelo, 
+            ano_fabricacao, ano_modelo, cor,
+            associado:associados(id, nome, cpf, telefone)
+          ),
+          associado:associados!vistorias_associado_id_fkey(id, nome, cpf, telefone),
+          vistoriador:profiles!vistorias_vistoriador_id_fkey(id, nome),
+          fotos:vistoria_fotos(*)
+        `)
+        .eq('id', id)
+        .single();
+
+      if (error) throw error;
+      return data as Vistoria & {
+        veiculo: {
+          id: string;
+          placa: string;
+          chassi: string | null;
+          marca: string | null;
+          modelo: string | null;
+          ano_fabricacao: number | null;
+          ano_modelo: number | null;
+          cor: string | null;
+          associado: { id: string; nome: string; cpf: string; telefone: string } | null;
+        } | null;
+      };
+    },
+    enabled: !!id,
+  });
+}
+
+// Hook para executar e finalizar vistoria
+export function useExecutarVistoria() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: {
+      id: string;
+      km_atual: number;
+      avarias: string;
+      observacoes: string;
+      status: 'em_analise' | 'aprovada' | 'reprovada';
+    }) => {
+      const { error } = await supabase
+        .from('vistorias')
+        .update({
+          km_atual: data.km_atual,
+          avarias: data.avarias,
+          observacoes: data.observacoes,
+          status: data.status,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', data.id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vistorias'] });
+      queryClient.invalidateQueries({ queryKey: ['vistoria'] });
+      queryClient.invalidateQueries({ queryKey: ['vistoria-completa'] });
+      toast.success('Vistoria finalizada com sucesso!');
+    },
+    onError: (error) => {
+      console.error('Erro ao executar vistoria:', error);
+      toast.error('Erro ao executar vistoria');
+    },
+  });
+}
