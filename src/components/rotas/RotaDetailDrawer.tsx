@@ -1,12 +1,23 @@
+import { useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { MapPin, Phone, User, Calendar, Route, Play, CheckCircle, Plus, X, Loader2 } from 'lucide-react';
+import { MapPin, Phone, User, Calendar, Route, Play, CheckCircle, Plus, X, Loader2, Trash2 } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -14,14 +25,14 @@ import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { 
   useRota, 
-  useUpdateRotaStatus, 
+  useUpdateRotaStatus,
+  useDeleteRota,
   STATUS_ROTA_LABELS, 
   STATUS_ROTA_COLORS,
   type StatusRota 
 } from '@/hooks/useRotas';
 import { InstalacaoMiniCard } from './InstalacaoMiniCard';
 import { toast } from 'sonner';
-
 interface RotaDetailDrawerProps {
   rotaId: string | null;
   open: boolean;
@@ -39,6 +50,8 @@ export function RotaDetailDrawer({
 }: RotaDetailDrawerProps) {
   const { data: rota, isLoading } = useRota(rotaId || undefined);
   const updateStatus = useUpdateRotaStatus();
+  const deleteRota = useDeleteRota();
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   const handleUpdateStatus = async (novoStatus: StatusRota) => {
     if (!rotaId) return;
@@ -47,6 +60,18 @@ export function RotaDetailDrawer({
       toast.success(`Rota ${STATUS_ROTA_LABELS[novoStatus].toLowerCase()}`);
     } catch {
       toast.error('Erro ao atualizar status');
+    }
+  };
+
+  const handleDeleteRota = async () => {
+    if (!rotaId) return;
+    try {
+      await deleteRota.mutateAsync(rotaId);
+      toast.success('Rota excluída com sucesso');
+      setShowDeleteDialog(false);
+      onOpenChange(false);
+    } catch {
+      toast.error('Erro ao excluir rota');
     }
   };
 
@@ -175,6 +200,16 @@ export function RotaDetailDrawer({
                       Cancelar
                     </Button>
                   )}
+                  {(rota.status === 'pendente' || rota.status === 'cancelada') && (
+                    <Button 
+                      variant="ghost" 
+                      onClick={() => setShowDeleteDialog(true)}
+                      className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Excluir
+                    </Button>
+                  )}
                 </div>
 
                 <Separator />
@@ -223,6 +258,38 @@ export function RotaDetailDrawer({
           </div>
         )}
       </SheetContent>
+
+      {/* Modal de confirmação de exclusão */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir Rota</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div>
+                Tem certeza que deseja excluir a rota <strong>{rota?.codigo}</strong>?
+                <br /><br />
+                <strong>As seguintes ações serão realizadas:</strong>
+                <ul className="list-disc list-inside mt-2 space-y-1">
+                  <li>{rota?.instalacoes?.length || 0} instalação(ões) serão desvinculadas</li>
+                  <li>A rota será removida permanentemente do sistema</li>
+                </ul>
+                <br />
+                Esta ação não pode ser desfeita.
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleDeleteRota}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteRota.isPending}
+            >
+              {deleteRota.isPending ? 'Excluindo...' : 'Excluir Rota'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Sheet>
   );
 }
