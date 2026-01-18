@@ -1,4 +1,4 @@
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { MapPin, Phone, User, Calendar, Route, Play, CheckCircle, Plus, X, Loader2 } from 'lucide-react';
 import {
@@ -79,7 +79,7 @@ export function RotaDetailDrawer({
               <div className="flex items-center gap-4 text-sm text-muted-foreground">
                 <div className="flex items-center gap-1">
                   <Calendar className="h-4 w-4" />
-                  {format(new Date(rota.data_rota), "EEEE, dd 'de' MMMM", { locale: ptBR })}
+                  {format(parseISO(rota.data_rota), "EEEE, dd 'de' MMMM", { locale: ptBR })}
                 </div>
                 {rota.cidade && (
                   <div className="flex items-center gap-1">
