@@ -90,7 +90,7 @@ export function useAtivacoes(filtro: FiltroAtivacao = 'todos') {
           .from('vistorias')
           .select('id, status, modalidade, created_at, associado_id')
           .in('associado_id', associadoIds)
-          .eq('tipo', 'entrada');
+          .in('tipo', ['entrada', 'instalacao'] as any);
         vistoriasData = (data || []) as unknown as typeof vistoriasData;
       }
       

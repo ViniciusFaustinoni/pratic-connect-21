@@ -243,7 +243,7 @@ serve(async (req) => {
           .insert({
             associado_id: vistoria.associado_id,
             veiculo_id: vistoria.veiculo_id,
-            tipo: vistoria.tipo || 'entrada',
+            tipo: vistoria.tipo || 'instalacao',
             status: 'pendente',
           })
           .select('id')

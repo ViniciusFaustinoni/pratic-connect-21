@@ -376,13 +376,12 @@ export function MapaVistoriasContent() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="todos">Todos os tipos</SelectItem>
-              <SelectItem value="entrada">📥 Entrada</SelectItem>
+              <SelectItem value="instalacao">🔌 Instalação</SelectItem>
               <SelectItem value="saida">📤 Saída</SelectItem>
               <SelectItem value="sinistro">⚠️ Sinistro</SelectItem>
               <SelectItem value="periodica">🔄 Periódica</SelectItem>
               <SelectItem value="cancelamento">❌ Cancelamento</SelectItem>
               <SelectItem value="manutencao">🔧 Manutenção</SelectItem>
-              <SelectItem value="instalacao">🔌 Instalação</SelectItem>
             </SelectContent>
           </Select>
 

@@ -13,7 +13,7 @@ interface TipoServicoFilterProps {
   disabled?: boolean;
 }
 
-const TIPOS_VISTORIA: TipoVistoria[] = ['entrada', 'saida', 'sinistro', 'periodica', 'cancelamento', 'manutencao'];
+const TIPOS_VISTORIA: TipoVistoria[] = ['saida', 'sinistro', 'periodica', 'cancelamento', 'manutencao'];
 
 export function TipoServicoFilter({ filtros, onChange, disabled }: TipoServicoFilterProps) {
   const handleChange = (key: keyof FiltroTipoServico, value: boolean) => {
@@ -23,7 +23,6 @@ export function TipoServicoFilter({ filtros, onChange, disabled }: TipoServicoFi
   const handleSelectAll = () => {
     const allTrue: FiltroTipoServico = {
       instalacao: true,
-      entrada: true,
       saida: true,
       sinistro: true,
       periodica: true,
@@ -36,7 +35,6 @@ export function TipoServicoFilter({ filtros, onChange, disabled }: TipoServicoFi
   const handleDeselectAll = () => {
     const allFalse: FiltroTipoServico = {
       instalacao: false,
-      entrada: false,
       saida: false,
       sinistro: false,
       periodica: false,
@@ -110,10 +108,10 @@ export function TipoServicoFilter({ filtros, onChange, disabled }: TipoServicoFi
               htmlFor={`tipo-${tipo}`} 
               className="flex items-center gap-2 text-sm cursor-pointer"
             >
-              {tipo === 'entrada' || tipo === 'saida' || tipo === 'cancelamento' ? (
-                <ClipboardCheck className="h-4 w-4 text-amber-600" />
-              ) : (
-                <FileSearch className="h-4 w-4 text-amber-600" />
+            {tipo === 'saida' || tipo === 'cancelamento' ? (
+              <ClipboardCheck className="h-4 w-4 text-amber-600" />
+            ) : (
+              <FileSearch className="h-4 w-4 text-amber-600" />
               )}
               {TIPO_VISTORIA_LABELS[tipo]}
             </Label>

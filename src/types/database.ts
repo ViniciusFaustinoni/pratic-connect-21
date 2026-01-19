@@ -114,7 +114,7 @@ export type StatusChamado = 'aberto' | 'em_atendimento' | 'em_deslocamento' | 'c
 
 export type StatusSinistro = 'em_analise' | 'aprovado' | 'reprovado' | 'indenizado' | 'cancelado';
 
-export type TipoVistoria = 'entrada' | 'saida' | 'sinistro';
+export type TipoVistoria = 'saida' | 'sinistro';
 
 export type TipoSinistro = 'roubo' | 'furto' | 'colisao' | 'incendio' | 'alagamento' | 'outro';
 
@@ -687,7 +687,6 @@ export const STATUS_CONTRATO_LABELS: Record<StatusContrato, string> = {
 };
 
 export const TIPO_VISTORIA_LABELS: Record<TipoVistoria, string> = {
-  entrada: 'Entrada',
   saida: 'Saída',
   sinistro: 'Sinistro',
 };

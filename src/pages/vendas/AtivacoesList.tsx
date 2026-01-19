@@ -49,7 +49,7 @@ export default function AtivacoesList() {
       toast.info('Redirecione o cliente para assinar a proposta');
       // navigate(`/vendas/contratos/${contratoId}`);
     } else {
-      toast.info('Agende uma vistoria de entrada para este cliente');
+      toast.info('Agende uma instalação para este cliente');
       // navigate(`/monitoramento/instalacoes`);
     }
   };

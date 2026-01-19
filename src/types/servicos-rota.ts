@@ -2,7 +2,7 @@
 
 export type TipoServico = 'instalacao' | 'vistoria' | 'vistoria_cotacao';
 
-export type TipoVistoria = 'entrada' | 'saida' | 'sinistro' | 'periodica' | 'cancelamento' | 'manutencao';
+export type TipoVistoria = 'saida' | 'sinistro' | 'periodica' | 'cancelamento' | 'manutencao';
 
 export interface ServicoRota {
   id: string;
@@ -41,7 +41,6 @@ export interface DistribuicaoServico {
 
 // Labels para tipos de vistoria
 export const TIPO_VISTORIA_LABELS: Record<TipoVistoria, string> = {
-  entrada: 'Entrada',
   saida: 'Saída',
   sinistro: 'Sinistro',
   periodica: 'Periódica',
@@ -72,7 +71,6 @@ export const TIPO_SERVICO_ICONS: Record<TipoServico, string> = {
 
 // Cores para tipos de vistoria
 export const TIPO_VISTORIA_COLORS: Record<TipoVistoria, string> = {
-  entrada: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
   saida: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
   sinistro: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
   periodica: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-300',
@@ -83,7 +81,6 @@ export const TIPO_VISTORIA_COLORS: Record<TipoVistoria, string> = {
 // Filtro de tipos para o formulário de rota
 export interface FiltroTipoServico {
   instalacao: boolean;
-  entrada: boolean;
   saida: boolean;
   sinistro: boolean;
   periodica: boolean;
@@ -93,7 +90,6 @@ export interface FiltroTipoServico {
 
 export const FILTRO_TIPO_SERVICO_DEFAULT: FiltroTipoServico = {
   instalacao: true,
-  entrada: true,
   saida: true,
   sinistro: true,
   periodica: true,

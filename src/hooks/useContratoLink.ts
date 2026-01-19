@@ -209,7 +209,7 @@ export function useCriarVistoriaAgendada() {
           horario_agendado: horarioAgendado,
           modalidade: 'presencial',
           status: 'pendente',
-          tipo: 'entrada',
+          tipo: 'instalacao' as any, // Instalação (anteriormente "entrada")
         })
         .select()
         .single();
@@ -316,7 +316,7 @@ export function useCriarAutovistoria() {
           contrato_id: contratoId,
           modalidade: 'autovistoria',
           status: 'pendente',
-          tipo: 'entrada',
+          tipo: 'instalacao' as any, // Instalação (anteriormente "entrada")
         })
         .select()
         .single();
