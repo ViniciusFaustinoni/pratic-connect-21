@@ -196,19 +196,6 @@ export function RotaFormDialog({ open, onOpenChange, rota }: RotaFormDialogProps
             toast.error(`Erro ao vincular ${cotacoesIds.length} cotações à rota`);
           } else {
             cotacoesVinculadas = cotacoesIds.length;
-            
-            // IMPORTANTE: Atualizar também a tabela vistorias (sistema unificado)
-            const { error: vistCotError } = await supabase
-              .from('vistorias')
-              .update({ 
-                rota_id: novaRota.id,
-                vistoriador_id: selectedInstaladores[0],
-              })
-              .in('cotacao_id', cotacoesIds);
-            
-            if (vistCotError) {
-              console.error('Erro ao vincular vistorias de cotações:', vistCotError);
-            }
           }
         }
 
@@ -236,19 +223,6 @@ export function RotaFormDialog({ open, onOpenChange, rota }: RotaFormDialogProps
             console.error('Erro ao vincular contratos:', updateContError);
           } else {
             contratosVinculados = contratosIds.length;
-            
-            // IMPORTANTE: Atualizar também a tabela vistorias (sistema unificado)
-            const { error: vistContError } = await supabase
-              .from('vistorias')
-              .update({ 
-                rota_id: novaRota.id,
-                vistoriador_id: selectedInstaladores[0],
-              })
-              .in('contrato_id', contratosIds);
-            
-            if (vistContError) {
-              console.error('Erro ao vincular vistorias de contratos:', vistContError);
-            }
           }
         }
       }

@@ -3558,7 +3558,6 @@ export type Database = {
           veiculo_ano: number | null
           veiculo_chassi: string | null
           veiculo_cor: string | null
-          veiculo_id: string | null
           veiculo_marca: string | null
           veiculo_modelo: string | null
           veiculo_placa: string | null
@@ -3631,7 +3630,6 @@ export type Database = {
           veiculo_ano?: number | null
           veiculo_chassi?: string | null
           veiculo_cor?: string | null
-          veiculo_id?: string | null
           veiculo_marca?: string | null
           veiculo_modelo?: string | null
           veiculo_placa?: string | null
@@ -3704,7 +3702,6 @@ export type Database = {
           veiculo_ano?: number | null
           veiculo_chassi?: string | null
           veiculo_cor?: string | null
-          veiculo_id?: string | null
           veiculo_marca?: string | null
           veiculo_modelo?: string | null
           veiculo_placa?: string | null
@@ -3798,34 +3795,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "planos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "contratos_veiculo_id_fkey"
-            columns: ["veiculo_id"]
-            isOneToOne: false
-            referencedRelation: "veiculos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "contratos_veiculo_id_fkey"
-            columns: ["veiculo_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["veiculo_id"]
-          },
-          {
-            foreignKeyName: "contratos_veiculo_id_fkey"
-            columns: ["veiculo_id"]
-            isOneToOne: false
-            referencedRelation: "view_alertas_ativos"
-            referencedColumns: ["veiculo_id"]
-          },
-          {
-            foreignKeyName: "contratos_veiculo_id_fkey"
-            columns: ["veiculo_id"]
-            isOneToOne: false
-            referencedRelation: "view_rastreadores_posicao"
-            referencedColumns: ["veiculo_id"]
           },
           {
             foreignKeyName: "contratos_vendedor_id_fkey"
