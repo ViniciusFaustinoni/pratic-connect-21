@@ -248,7 +248,16 @@ import CotacaoPublicaPage from "./pages/public/CotacaoPublica";
 import CotacaoPublicaCompleta from "./pages/public/CotacaoPublicaCompleta";
 import CotacaoContratacao from "./pages/public/CotacaoContratacao";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5, // 5 minutos - evita re-fetches desnecessários
+      gcTime: 1000 * 60 * 30, // 30 minutos - mantém em cache
+      refetchOnWindowFocus: false, // Evita re-fetch ao voltar para aba
+      retry: 1, // Reduz tentativas de retry
+    },
+  },
+});
 
 // Componente para redirect de contrato com state
 const ContratoRedirect = () => {

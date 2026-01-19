@@ -114,8 +114,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   useEffect(() => {
     let mounted = true;
+    let hasLoadedData = false; // Flag para evitar duplicação
 
     const loadUserData = async (currentSession: Session | null) => {
+      // Evitar chamadas duplicadas
+      if (hasLoadedData) return;
+      
       if (!currentSession?.user) {
         if (mounted) {
           setUser(null);
@@ -127,6 +131,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }
         return;
       }
+
+      hasLoadedData = true; // Marcar que já carregou
 
       try {
         if (mounted) {
@@ -169,6 +175,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
             await loadUserData(currentSession);
           }, 0);
         } else {
+          hasLoadedData = false; // Reset flag ao deslogar
           setProfile(null);
           setPerfis([]);
           setLoading(false);
@@ -179,14 +186,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     // THEN check for existing session
     supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
-      setSession(currentSession);
-      setUser(currentSession?.user ?? null);
+      // Só carregar se ainda não foi feito via onAuthStateChange
+      if (!hasLoadedData) {
+        setSession(currentSession);
+        setUser(currentSession?.user ?? null);
 
-      if (currentSession?.user) {
-        loadUserData(currentSession);
-      } else {
-        setLoading(false);
-        setInitialized(true);
+        if (currentSession?.user) {
+          loadUserData(currentSession);
+        } else {
+          setLoading(false);
+          setInitialized(true);
+        }
       }
     });
 

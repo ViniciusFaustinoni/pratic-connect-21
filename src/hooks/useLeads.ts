@@ -294,3 +294,32 @@ export function useUpdateLead() {
     },
   });
 }
+
+// ============================================
+// HOOK — CONTAGEM POR ETAPA (DASHBOARD OTIMIZADO)
+// ============================================
+
+export interface LeadsFunnelData {
+  [etapa: string]: number;
+}
+
+export function useLeadsFunnel() {
+  return useQuery({
+    queryKey: ['leads-funnel'],
+    queryFn: async (): Promise<LeadsFunnelData> => {
+      const { data, error } = await supabase
+        .from('leads')
+        .select('etapa');
+      
+      if (error) throw error;
+      
+      // Agrupa por etapa e retorna contagem
+      return (data || []).reduce((acc, lead) => {
+        const etapa = lead.etapa || 'novo';
+        acc[etapa] = (acc[etapa] || 0) + 1;
+        return acc;
+      }, {} as LeadsFunnelData);
+    },
+    staleTime: 1000 * 60 * 5, // 5 minutos
+  });
+}

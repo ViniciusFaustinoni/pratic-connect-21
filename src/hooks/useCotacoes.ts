@@ -66,16 +66,11 @@ export function useCotacoes(options?: UseCotacoesOptions) {
       let query = supabase
         .from('cotacoes')
         .select(`
-          *,
-          leads:leads!fk_cotacoes_lead_id(*),
-          planos:planos!plano_id(*),
-          contratos:contratos!contratos_cotacao_id_fkey(
-            id, numero, status,
-            associados:associados!associado_id(id, status)
-          ),
-          instalacoes:instalacoes!cotacao_id(id, status, data_agendada)
+          id, numero, status, valor_total_mensal, created_at, updated_at,
+          lead_id, plano_id, vendedor_id, token_publico
         `)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(100);
       
       // Filtrar por vendedor se viewScope = 'own'
       if (options?.viewScope === 'own' && options?.vendedorId) {
@@ -86,35 +81,9 @@ export function useCotacoes(options?: UseCotacoesOptions) {
       
       if (error) throw error;
       
-      // Buscar vendedores separadamente se necessário
-      const cotacoes = data || [];
-      const vendedorIds = [...new Set(cotacoes.map(c => c.vendedor_id).filter(Boolean))];
-      
-      // Mapear contratos e vendedores
-      const mapCotacao = (c: typeof cotacoes[0], vendedorMap?: Map<string, { id: string; nome: string; email: string }>) => ({
-        ...c,
-        vendedor: c.vendedor_id && vendedorMap ? vendedorMap.get(c.vendedor_id) || null : null,
-        contrato: Array.isArray(c.contratos) && c.contratos.length > 0 
-          ? c.contratos[0] 
-          : null,
-        instalacoes: Array.isArray((c as unknown as { instalacoes?: unknown[] }).instalacoes) 
-          ? (c as unknown as { instalacoes: { id: string; status: string; data_agendada: string | null }[] }).instalacoes 
-          : [],
-      });
-      
-      if (vendedorIds.length > 0) {
-        const { data: vendedores } = await supabase
-          .from('profiles')
-          .select('user_id, nome, email')
-          .in('user_id', vendedorIds);
-        
-        const vendedorMap = new Map(vendedores?.map(v => [v.user_id, { id: v.user_id, nome: v.nome, email: v.email }]) || []);
-        
-        return cotacoes.map(c => mapCotacao(c, vendedorMap)) as CotacaoWithRelations[];
-      }
-      
-      return cotacoes.map(c => mapCotacao(c)) as CotacaoWithRelations[];
+      return (data || []) as CotacaoWithRelations[];
     },
+    staleTime: 1000 * 60 * 5, // 5 minutos
   });
 }
 
