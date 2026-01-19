@@ -3988,6 +3988,7 @@ export type Database = {
           vistoria_responsavel_eu_mesmo: boolean | null
           vistoria_responsavel_nome: string | null
           vistoria_responsavel_telefone: string | null
+          vistoria_rota_id: string | null
           visualizado_em: string | null
         }
         Insert: {
@@ -4071,6 +4072,7 @@ export type Database = {
           vistoria_responsavel_eu_mesmo?: boolean | null
           vistoria_responsavel_nome?: string | null
           vistoria_responsavel_telefone?: string | null
+          vistoria_rota_id?: string | null
           visualizado_em?: string | null
         }
         Update: {
@@ -4154,6 +4156,7 @@ export type Database = {
           vistoria_responsavel_eu_mesmo?: boolean | null
           vistoria_responsavel_nome?: string | null
           vistoria_responsavel_telefone?: string | null
+          vistoria_rota_id?: string | null
           visualizado_em?: string | null
         }
         Relationships: [
@@ -4190,6 +4193,13 @@ export type Database = {
             columns: ["plano_id"]
             isOneToOne: false
             referencedRelation: "planos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cotacoes_vistoria_rota_id_fkey"
+            columns: ["vistoria_rota_id"]
+            isOneToOne: false
+            referencedRelation: "rotas"
             referencedColumns: ["id"]
           },
           {
@@ -12815,9 +12825,12 @@ export type Database = {
           contrato_id: string | null
           created_at: string
           data_agendada: string | null
+          endereco_bairro: string | null
+          endereco_cep: string | null
           endereco_cidade: string | null
           endereco_estado: string | null
           endereco_logradouro: string | null
+          endereco_numero: string | null
           horario_agendado: string | null
           id: string
           instalacao_id: string | null
@@ -12828,6 +12841,7 @@ export type Database = {
           observacoes_analise: string | null
           protocolo: string | null
           ressalvas: string | null
+          rota_id: string | null
           sinistro_id: string | null
           status: Database["public"]["Enums"]["status_vistoria"]
           tipo: Database["public"]["Enums"]["tipo_vistoria"]
@@ -12848,9 +12862,12 @@ export type Database = {
           contrato_id?: string | null
           created_at?: string
           data_agendada?: string | null
+          endereco_bairro?: string | null
+          endereco_cep?: string | null
           endereco_cidade?: string | null
           endereco_estado?: string | null
           endereco_logradouro?: string | null
+          endereco_numero?: string | null
           horario_agendado?: string | null
           id?: string
           instalacao_id?: string | null
@@ -12861,6 +12878,7 @@ export type Database = {
           observacoes_analise?: string | null
           protocolo?: string | null
           ressalvas?: string | null
+          rota_id?: string | null
           sinistro_id?: string | null
           status?: Database["public"]["Enums"]["status_vistoria"]
           tipo?: Database["public"]["Enums"]["tipo_vistoria"]
@@ -12881,9 +12899,12 @@ export type Database = {
           contrato_id?: string | null
           created_at?: string
           data_agendada?: string | null
+          endereco_bairro?: string | null
+          endereco_cep?: string | null
           endereco_cidade?: string | null
           endereco_estado?: string | null
           endereco_logradouro?: string | null
+          endereco_numero?: string | null
           horario_agendado?: string | null
           id?: string
           instalacao_id?: string | null
@@ -12894,6 +12915,7 @@ export type Database = {
           observacoes_analise?: string | null
           protocolo?: string | null
           ressalvas?: string | null
+          rota_id?: string | null
           sinistro_id?: string | null
           status?: Database["public"]["Enums"]["status_vistoria"]
           tipo?: Database["public"]["Enums"]["tipo_vistoria"]
@@ -12978,6 +13000,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_acompanhamento"
             referencedColumns: ["instalacao_id"]
+          },
+          {
+            foreignKeyName: "vistorias_rota_id_fkey"
+            columns: ["rota_id"]
+            isOneToOne: false
+            referencedRelation: "rotas"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "vistorias_sinistro_id_fkey"
@@ -13272,6 +13301,29 @@ export type Database = {
       }
     }
     Views: {
+      servicos_pendentes_rota: {
+        Row: {
+          associado_id: string | null
+          associado_nome: string | null
+          associado_telefone: string | null
+          data_agendada: string | null
+          endereco_bairro: string | null
+          endereco_cep: string | null
+          endereco_cidade: string | null
+          endereco_logradouro: string | null
+          endereco_numero: string | null
+          id: string | null
+          marca: string | null
+          modelo: string | null
+          periodo: Database["public"]["Enums"]["periodo_instalacao"] | null
+          placa: string | null
+          rota_id: string | null
+          tipo_servico: string | null
+          tipo_vistoria: Database["public"]["Enums"]["tipo_vistoria"] | null
+          veiculo_id: string | null
+        }
+        Relationships: []
+      }
       view_acompanhamento: {
         Row: {
           associado_id: string | null
