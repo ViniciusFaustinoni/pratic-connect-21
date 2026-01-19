@@ -15,15 +15,18 @@ import { AtivacaoCardNew } from "@/components/ativacao/AtivacaoCardNew";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useContratosRealtime } from "@/hooks/useContratosRealtime";
 
 export default function AtivacoesList() {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [filtro, setFiltro] = useState<FiltroAtivacao>("todos");
   
+  // Ativar atualizações em tempo real
+  useContratosRealtime();
+  
   const { isDiretor, isAdminMaster, isVendedor } = usePermissions();
   const canDeleteAtivacoes = isDiretor || isAdminMaster;
-  
   const { data: ativacoes, isLoading, error, refetch } = useAtivacoes(filtro);
   const { mutate: ativarContrato, isPending: isAtivando } = useAtivarContrato();
   const { mutate: excluirAtivacao, isPending: isExcluindo } = useExcluirAtivacao();
@@ -103,17 +106,6 @@ export default function AtivacoesList() {
             </div>
           </div>
 
-          {!isVendedor && (
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => refetch()}
-              disabled={isLoading}
-            >
-              <RefreshCw className={cn("h-4 w-4 mr-2", isLoading && "animate-spin")} />
-              Atualizar
-            </Button>
-          )}
         </div>
 
         {/* Metrics Cards */}

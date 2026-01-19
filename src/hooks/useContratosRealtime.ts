@@ -29,6 +29,7 @@ export function useContratosRealtime() {
           queryClient.invalidateQueries({ queryKey: ['contratos'] });
           queryClient.invalidateQueries({ queryKey: ['contrato'] });
           queryClient.invalidateQueries({ queryKey: ['contrato-publico'] });
+          queryClient.invalidateQueries({ queryKey: ['ativacoes'] });
           
           // Se for uma atualização e o status mudou para 'assinado'
           if (payload.eventType === 'UPDATE') {
@@ -65,9 +66,27 @@ export function useContratosRealtime() {
         console.log('[useContratosRealtime] Status da subscription:', status);
       });
 
+    // Listener para vistorias (afeta requisitos de ativação)
+    const vistoriasChannel = supabase
+      .channel('vistorias-ativacoes-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'vistorias',
+        },
+        (payload) => {
+          console.log('[useContratosRealtime] Vistoria alterada:', payload.eventType);
+          queryClient.invalidateQueries({ queryKey: ['ativacoes'] });
+        }
+      )
+      .subscribe();
+
     return () => {
-      console.log('[useContratosRealtime] Removendo listener realtime');
+      console.log('[useContratosRealtime] Removendo listeners realtime');
       supabase.removeChannel(channel);
+      supabase.removeChannel(vistoriasChannel);
     };
   }, [queryClient]);
 }
