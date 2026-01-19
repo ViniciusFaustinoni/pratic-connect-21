@@ -105,7 +105,7 @@ export function useFinalizarVistoriaCotacao() {
     mutationFn: async ({ cotacaoId, tipoVistoria, dataAgendada, horarioAgendado, endereco, responsavel }: FinalizarVistoriaParams) => {
       const updateData: Record<string, unknown> = {
         tipo_vistoria: tipoVistoria,
-        vistoria_concluida_em: new Date().toISOString(),
+        // vistoria_concluida_em será setado apenas quando o vistoriador concluir a instalação
         status_contratacao: 'vistoria_ok'
       };
       

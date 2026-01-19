@@ -286,7 +286,7 @@ export function useCotacaoContratacao(token: string | undefined) {
         .update({
           tipo_vistoria: tipoVistoria,
           status_contratacao: 'vistoria_ok',
-          vistoria_concluida_em: new Date().toISOString(),
+          // vistoria_concluida_em será setado apenas quando o vistoriador concluir a instalação
         })
         .eq('id', cotacao.id);
 
