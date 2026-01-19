@@ -335,8 +335,10 @@ export function useCotacaoContratacao(token: string | undefined) {
 
       return data;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['cotacao-contratacao', token] });
+    onSuccess: async () => {
+      // Aguardar invalidação e refetch para garantir dados atualizados antes de mudar de etapa
+      await queryClient.invalidateQueries({ queryKey: ['cotacao-contratacao', token] });
+      await queryClient.refetchQueries({ queryKey: ['cotacao-contratacao', token] });
       setEtapaAtual(5); // Ir para conclusão (etapa 5 no novo fluxo)
       toast.success('Pagamento confirmado! Sua cobertura está ativa.');
     },

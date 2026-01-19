@@ -381,8 +381,9 @@ export default function CotacaoContratacao() {
                   animate="animate"
                   exit="exit"
                 >
-                  {cotacao?.tipo_vistoria === 'autovistoria' ? (
-                    // AUTOVISTORIA - Verificar se já agendou vistoria completa
+                  {(cotacao?.tipo_vistoria === 'autovistoria' || 
+                    (!cotacao?.vistoria_data_agendada && cotacao?.status_contratacao === 'pagamento_ok')) ? (
+                    // AUTOVISTORIA ou caso sem agendamento - Verificar se já agendou vistoria completa/instalação
                     cotacao?.vistoria_completa_data_agendada ? (
                       // Vistoria completa já agendada - mostrar conclusão final
                       <Card className="border-success/30 bg-card/80 backdrop-blur-xl">
@@ -420,7 +421,7 @@ export default function CotacaoContratacao() {
                           <div className="bg-muted/30 rounded-lg p-4 max-w-md mx-auto text-left space-y-3">
                             <div className="flex items-center gap-2 mb-3">
                               <CalendarCheck className="h-5 w-5 text-primary" />
-                              <span className="font-medium text-foreground">Vistoria Completa Agendada</span>
+                              <span className="font-medium text-foreground">Instalação Agendada</span>
                             </div>
                             
                             <div className="flex items-center gap-3">
@@ -467,17 +468,17 @@ export default function CotacaoContratacao() {
                             <AlertTriangle className="h-5 w-5 text-amber-500 mt-0.5 flex-shrink-0" />
                             <p className="text-sm text-left text-amber-200">
                               <strong>Importante:</strong> A cobertura <strong>TOTAL</strong> será ativada 
-                              após a realização da vistoria presencial.
+                              após a realização da vistoria presencial e instalação do rastreador.
                             </p>
                           </div>
 
                           <p className="text-sm text-muted-foreground">
-                            Você receberá um e-mail com todos os detalhes. Aguarde o contato do vistoriador no dia agendado.
+                            Você receberá um e-mail com todos os detalhes. Aguarde o contato do técnico no dia agendado.
                           </p>
                         </CardContent>
                       </Card>
                     ) : (
-                      // Autovistoria concluída, mas ainda precisa agendar vistoria completa
+                      // Autovistoria concluída, mas ainda precisa agendar instalação/vistoria completa
                       <AgendamentoVistoriaCompleta
                         cotacaoId={cotacao.id}
                         onConfirmar={() => {
@@ -486,7 +487,7 @@ export default function CotacaoContratacao() {
                         }}
                       />
                     )
-                  ) : (
+                  ) : cotacao?.vistoria_data_agendada ? (
                     // VISTORIA AGENDADA DIRETO - Ainda não está coberto
                     <Card className="border-primary/30 bg-card/80 backdrop-blur-xl">
                       <CardContent className="py-12 text-center space-y-6">
@@ -565,6 +566,14 @@ export default function CotacaoContratacao() {
                         </p>
                       </CardContent>
                     </Card>
+                  ) : (
+                    // Fallback - precisa agendar instalação
+                    <AgendamentoVistoriaCompleta
+                      cotacaoId={cotacao.id}
+                      onConfirmar={() => {
+                        window.location.reload();
+                      }}
+                    />
                   )}
                 </motion.div>
               )}
