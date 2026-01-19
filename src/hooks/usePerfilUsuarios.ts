@@ -40,10 +40,12 @@ export function usePerfilUsuarios() {
 
         const userIds = roleData.map(r => r.user_id);
         
+        // CORREÇÃO: userIds são auth.users.id (de user_roles.user_id)
+        // Portanto devemos buscar profiles por user_id, não por id
         const { data: profiles, error: profileError } = await supabase
           .from('profiles')
-          .select('id, nome, email')
-          .in('id', userIds);
+          .select('id, nome, email, user_id')
+          .in('user_id', userIds);
 
         if (profileError) throw profileError;
 

@@ -80,24 +80,37 @@ export function usePropostasMetricas(periodo: PeriodoFiltro = 'mes') {
 
       const vendedorIds = [...new Set(vendedoresRoles.map(r => r.user_id))];
 
-      // Buscar profiles dos vendedores
+      // Buscar profiles dos vendedores (vendedorIds são auth.users.id de user_roles)
       const { data: profiles } = await supabase
         .from('profiles')
-        .select('user_id, nome, avatar_url')
+        .select('id, user_id, nome, avatar_url')
         .in('user_id', vendedorIds)
         .eq('ativo', true);
 
-      // Buscar leads de cada vendedor
+      // Criar mapa de profiles.id -> user_id para compatibilidade
+      const profileIdToUserId = new Map<string, string>();
+      const userIdToProfileId = new Map<string, string>();
+      profiles?.forEach(p => {
+        if (p.user_id) {
+          profileIdToUserId.set(p.id, p.user_id);
+          userIdToProfileId.set(p.user_id, p.id);
+        }
+      });
+
+      // Buscar profiles IDs para filtrar contratos (contratos.vendedor_id armazena profiles.id)
+      const profileIds = profiles?.map(p => p.id) || [];
+
+      // Buscar leads de cada vendedor (leads.vendedor_id = auth.users.id)
       const { data: leads } = await supabase
         .from('leads')
         .select('id, vendedor_id, etapa, created_at')
         .in('vendedor_id', vendedorIds);
 
-      // Buscar contratos período atual
+      // Buscar contratos período atual (contratos.vendedor_id = profiles.id)
       const { data: contratosAtuais } = await supabase
         .from('contratos')
         .select('id, vendedor_id, status, valor_mensal, created_at, data_assinatura')
-        .in('vendedor_id', vendedorIds)
+        .in('vendedor_id', profileIds)
         .gte('created_at', periodoInicioStr)
         .lte('created_at', periodoFimStr);
 
@@ -105,7 +118,7 @@ export function usePropostasMetricas(periodo: PeriodoFiltro = 'mes') {
       const { data: contratosAnteriores } = await supabase
         .from('contratos')
         .select('id, vendedor_id, status, valor_mensal')
-        .in('vendedor_id', vendedorIds)
+        .in('vendedor_id', profileIds)
         .in('status', ['assinado', 'ativo'])
         .gte('created_at', periodoAnteriorInicioStr)
         .lte('created_at', periodoAnteriorFimStr);
@@ -114,15 +127,17 @@ export function usePropostasMetricas(periodo: PeriodoFiltro = 'mes') {
       const { data: todosContratos } = await supabase
         .from('contratos')
         .select('id, vendedor_id, status, valor_mensal, created_at')
-        .in('vendedor_id', vendedorIds);
+        .in('vendedor_id', profileIds);
 
       // Processar métricas por consultor
       const consultoresMap = new Map<string, ConsultorMetricas>();
 
       profiles?.forEach(profile => {
+        // Para leads: usar user_id diretamente
         const vendedorLeads = leads?.filter(l => l.vendedor_id === profile.user_id) || [];
-        const vendedorContratosAtuais = contratosAtuais?.filter(c => c.vendedor_id === profile.user_id) || [];
-        const vendedorContratosAnteriores = contratosAnteriores?.filter(c => c.vendedor_id === profile.user_id) || [];
+        // Para contratos: usar profiles.id (já que contratos.vendedor_id = profiles.id)
+        const vendedorContratosAtuais = contratosAtuais?.filter(c => c.vendedor_id === profile.id) || [];
+        const vendedorContratosAnteriores = contratosAnteriores?.filter(c => c.vendedor_id === profile.id) || [];
         
         const propostasFechadas = vendedorContratosAtuais.filter(c => 
           c.status === 'assinado' || c.status === 'ativo'
@@ -157,8 +172,9 @@ export function usePropostasMetricas(periodo: PeriodoFiltro = 'mes') {
         const totalLeads = vendedorLeads.length;
         const taxaConversao = totalLeads > 0 ? (leadsGanhos / totalLeads) * 100 : 0;
 
-        consultoresMap.set(profile.user_id, {
-          id: profile.user_id,
+        // Usar user_id como chave do consultor (para consistência com auth.uid())
+        consultoresMap.set(profile.user_id!, {
+          id: profile.user_id!,
           nome: profile.nome || 'Sem nome',
           avatar_url: profile.avatar_url,
           leadsAtivos,

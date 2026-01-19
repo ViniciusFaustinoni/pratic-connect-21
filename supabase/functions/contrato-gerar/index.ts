@@ -64,33 +64,33 @@ serve(async (req) => {
     
     console.log(`Gerando contrato via fluxo: ${isFluxoVendedor ? 'vendedor' : isFluxoPublico ? 'público' : 'rascunho'}`);
 
-    // 3. CORREÇÃO: Converter vendedor_id (auth.users.id) para profiles.id
-    // O campo vendedor_id nas cotações armazena auth.users.id, mas contratos espera profiles.id
+    // 3. PADRÃO DO BANCO: vendedor_id armazena profiles.id (não auth.users.id)
+    // Isso é consistente com 80+ FKs no banco que apontam para profiles(id)
     let vendedorIdFinal: string | null = null;
     const vendedorIdOriginal = vendedor_id || cotacao.vendedor_id;
 
     if (vendedorIdOriginal) {
-      // Tentar buscar profile pelo user_id (auth.users.id)
-      const { data: profileByUserId } = await supabase
+      // Primeiro: verificar se já é um profiles.id válido
+      const { data: profileById } = await supabase
         .from('profiles')
         .select('id')
-        .eq('user_id', vendedorIdOriginal)
+        .eq('id', vendedorIdOriginal)
         .maybeSingle();
       
-      if (profileByUserId) {
-        vendedorIdFinal = profileByUserId.id;
-        console.log(`Convertido vendedor user_id ${vendedorIdOriginal} -> profile.id ${vendedorIdFinal}`);
+      if (profileById) {
+        vendedorIdFinal = profileById.id;
+        console.log(`vendedor_id já é profiles.id válido: ${vendedorIdFinal}`);
       } else {
-        // Talvez já seja um profiles.id válido, verificar
-        const { data: profileById } = await supabase
+        // Talvez seja um auth.users.id, converter para profiles.id
+        const { data: profileByUserId } = await supabase
           .from('profiles')
           .select('id')
-          .eq('id', vendedorIdOriginal)
+          .eq('user_id', vendedorIdOriginal)
           .maybeSingle();
         
-        if (profileById) {
-          vendedorIdFinal = profileById.id;
-          console.log(`vendedor_id já é um profile.id válido: ${vendedorIdFinal}`);
+        if (profileByUserId) {
+          vendedorIdFinal = profileByUserId.id;
+          console.log(`Convertido user_id ${vendedorIdOriginal} -> profiles.id ${vendedorIdFinal}`);
         } else {
           console.warn(`Profile não encontrado para vendedor_id ${vendedorIdOriginal}`);
         }
@@ -109,7 +109,7 @@ serve(async (req) => {
       
       if (diretorFallback) {
         vendedorIdFinal = diretorFallback.id;
-        console.log('Usando diretor como fallback:', vendedorIdFinal);
+        console.log('Usando diretor como fallback (profiles.id):', vendedorIdFinal);
       } else {
         // Último recurso: qualquer funcionário ativo
         const { data: funcionarioFallback } = await supabase
@@ -120,7 +120,7 @@ serve(async (req) => {
           .maybeSingle();
         
         vendedorIdFinal = funcionarioFallback?.id || null;
-        console.log('Usando funcionário fallback:', vendedorIdFinal);
+        console.log('Usando funcionário fallback (profiles.id):', vendedorIdFinal);
       }
     }
 
