@@ -18,12 +18,13 @@ function ServicoIcon({ tipoServico }: { tipoServico: string }) {
   switch (tipoServico) {
     case 'instalacao':
       return <Wrench className="h-4 w-4 text-blue-600" />;
-    case 'vistoria':
-      return <ClipboardCheck className="h-4 w-4 text-amber-600" />;
-    case 'vistoria_cotacao':
+    case 'cotacao':
       return <FileSearch className="h-4 w-4 text-purple-600" />;
+    case 'contrato':
+      return <ClipboardCheck className="h-4 w-4 text-emerald-600" />;
     default:
-      return null;
+      // vistoria, manutencao, etc.
+      return <ClipboardCheck className="h-4 w-4 text-amber-600" />;
   }
 }
 
@@ -36,9 +37,11 @@ function ServicoItem({ servico }: { servico: ServicoRota }) {
 
   const bgColor = servico.tipo_servico === 'instalacao'
     ? 'bg-blue-50/50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800'
-    : servico.tipo_servico === 'vistoria_cotacao'
+    : servico.tipo_servico === 'cotacao'
       ? 'bg-purple-50/50 dark:bg-purple-950/20 border-purple-200 dark:border-purple-800'
-      : 'bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800';
+      : servico.tipo_servico === 'contrato'
+        ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800'
+        : 'bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800';
 
   return (
     <div className={cn('flex items-center gap-2 p-2 rounded-md border text-sm', bgColor)}>
