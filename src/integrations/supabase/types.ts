@@ -1049,6 +1049,8 @@ export type Database = {
           data_nascimento: string | null
           dia_vencimento: number | null
           email: string
+          endereco_latitude: number | null
+          endereco_longitude: number | null
           estado_civil: string | null
           id: string
           instalacao_agendada: boolean | null
@@ -1087,6 +1089,8 @@ export type Database = {
           data_nascimento?: string | null
           dia_vencimento?: number | null
           email: string
+          endereco_latitude?: number | null
+          endereco_longitude?: number | null
           estado_civil?: string | null
           id?: string
           instalacao_agendada?: boolean | null
@@ -1125,6 +1129,8 @@ export type Database = {
           data_nascimento?: string | null
           dia_vencimento?: number | null
           email?: string
+          endereco_latitude?: number | null
+          endereco_longitude?: number | null
           estado_civil?: string | null
           id?: string
           instalacao_agendada?: boolean | null
@@ -7073,6 +7079,8 @@ export type Database = {
           cotacao_id: string | null
           created_at: string
           data_agendada: string
+          endereco_latitude: number | null
+          endereco_longitude: number | null
           hora_agendada: string | null
           id: string
           iniciada_em: string | null
@@ -7103,6 +7111,8 @@ export type Database = {
           cotacao_id?: string | null
           created_at?: string
           data_agendada: string
+          endereco_latitude?: number | null
+          endereco_longitude?: number | null
           hora_agendada?: string | null
           id?: string
           iniciada_em?: string | null
@@ -7133,6 +7143,8 @@ export type Database = {
           cotacao_id?: string | null
           created_at?: string
           data_agendada?: string
+          endereco_latitude?: number | null
+          endereco_longitude?: number | null
           hora_agendada?: string | null
           id?: string
           iniciada_em?: string | null

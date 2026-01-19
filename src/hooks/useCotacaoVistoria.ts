@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { geocodificarEndereco } from '@/services/geocodingService';
 
 export interface CotacaoVistoriaFoto {
   id: string;
@@ -120,6 +121,28 @@ export function useFinalizarVistoriaCotacao() {
         updateData.vistoria_responsavel_eu_mesmo = responsavel.euMesmo;
         updateData.vistoria_responsavel_nome = responsavel.nome || null;
         updateData.vistoria_responsavel_telefone = responsavel.telefone || null;
+        
+        // Geocodificar endereço em background (não bloqueia a operação)
+        geocodificarEndereco({
+          logradouro: endereco.logradouro,
+          numero: endereco.numero,
+          bairro: endereco.bairro,
+          cidade: endereco.cidade,
+          uf: endereco.estado,
+          cep: endereco.cep,
+        }).then(coords => {
+          if (coords.success) {
+            // Atualizar cotação com coordenadas em background
+            supabase
+              .from('cotacoes')
+              .update({
+                vistoria_endereco_latitude: coords.latitude,
+                vistoria_endereco_longitude: coords.longitude,
+              })
+              .eq('id', cotacaoId)
+              .then(() => console.log('[Geocode] Coordenadas salvas para cotação:', cotacaoId));
+          }
+        }).catch(err => console.error('[Geocode] Erro background:', err));
       }
       
       const { error } = await supabase.from('cotacoes').update(updateData).eq('id', cotacaoId);
@@ -148,21 +171,39 @@ export function useAgendarVistoriaCompleta() {
   
   return useMutation({
     mutationFn: async ({ cotacaoId, dataAgendada, horarioAgendado, endereco, responsavel }: AgendarVistoriaCompletaParams) => {
+      // Geocodificar endereço em background antes de salvar
+      const coords = await geocodificarEndereco({
+        logradouro: endereco.logradouro,
+        numero: endereco.numero,
+        bairro: endereco.bairro,
+        cidade: endereco.cidade,
+        uf: endereco.estado,
+        cep: endereco.cep,
+      });
+      
+      const updateData: Record<string, unknown> = {
+        vistoria_completa_data_agendada: dataAgendada,
+        vistoria_completa_horario_agendado: horarioAgendado,
+        vistoria_completa_endereco_cep: endereco.cep,
+        vistoria_completa_endereco_logradouro: endereco.logradouro,
+        vistoria_completa_endereco_numero: endereco.numero,
+        vistoria_completa_endereco_bairro: endereco.bairro,
+        vistoria_completa_endereco_cidade: endereco.cidade,
+        vistoria_completa_endereco_estado: endereco.estado,
+        vistoria_completa_responsavel_eu_mesmo: responsavel.euMesmo,
+        vistoria_completa_responsavel_nome: responsavel.nome || null,
+        vistoria_completa_responsavel_telefone: responsavel.telefone || null,
+      };
+      
+      // Adicionar coordenadas se geocodificação foi bem sucedida
+      if (coords.success) {
+        updateData.vistoria_endereco_latitude = coords.latitude;
+        updateData.vistoria_endereco_longitude = coords.longitude;
+      }
+      
       const { error } = await supabase
         .from('cotacoes')
-        .update({
-          vistoria_completa_data_agendada: dataAgendada,
-          vistoria_completa_horario_agendado: horarioAgendado,
-          vistoria_completa_endereco_cep: endereco.cep,
-          vistoria_completa_endereco_logradouro: endereco.logradouro,
-          vistoria_completa_endereco_numero: endereco.numero,
-          vistoria_completa_endereco_bairro: endereco.bairro,
-          vistoria_completa_endereco_cidade: endereco.cidade,
-          vistoria_completa_endereco_estado: endereco.estado,
-          vistoria_completa_responsavel_eu_mesmo: responsavel.euMesmo,
-          vistoria_completa_responsavel_nome: responsavel.nome || null,
-          vistoria_completa_responsavel_telefone: responsavel.telefone || null,
-        })
+        .update(updateData)
         .eq('id', cotacaoId);
       
       if (error) throw error;

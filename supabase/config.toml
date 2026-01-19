@@ -134,3 +134,6 @@ verify_jwt = false
 
 [functions.analisar-exclusividade]
 verify_jwt = false
+
+[functions.geocode-endereco]
+verify_jwt = false
