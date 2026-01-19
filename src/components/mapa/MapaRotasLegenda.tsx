@@ -1,6 +1,8 @@
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Users, MapPin } from "lucide-react";
+import { Users } from "lucide-react";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import { RotaAgrupada } from "@/hooks/useVistoriasMapa";
 import { getRotaColor, SEM_ROTA_COLOR } from "@/lib/rota-colors";
 
@@ -9,6 +11,7 @@ interface MapaRotasLegendaProps {
   rotasIds: string[];
   rotaSelecionada: string | null;
   onRotaClick: (rotaId: string | null) => void;
+  dataSelecionada?: Date;
 }
 
 export function MapaRotasLegenda({
@@ -16,6 +19,7 @@ export function MapaRotasLegenda({
   rotasIds,
   rotaSelecionada,
   onRotaClick,
+  dataSelecionada,
 }: MapaRotasLegendaProps) {
   if (rotas.length === 0) return null;
 
@@ -24,7 +28,7 @@ export function MapaRotasLegenda({
       <div className="p-3 border-b">
         <h4 className="font-semibold text-sm flex items-center gap-2">
           <Users className="h-4 w-4 text-primary" />
-          Rotas do Dia
+          Rotas {dataSelecionada && format(dataSelecionada, "dd/MM", { locale: ptBR })}
         </h4>
       </div>
       
@@ -38,7 +42,7 @@ export function MapaRotasLegenda({
             }`}
           >
             <span className="flex gap-0.5">
-              {rotasIds.slice(0, 4).map((id, i) => (
+              {rotasIds.slice(0, 4).map((id) => (
                 <span
                   key={id}
                   className="w-2 h-2 rounded-full"
