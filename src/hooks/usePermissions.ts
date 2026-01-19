@@ -111,8 +111,16 @@ export function usePermissions() {
     !isDesenvolvedor && 
     !isAdminMaster;
 
+  // Verifica se é APENAS coordenador de monitoramento (sem perfis de gerência ou admin)
+  const isCoordenadorMonitoramento = hasRole('coordenador_monitoramento');
+  const isCoordenadorMonitoramentoOnly = isCoordenadorMonitoramento && 
+    !isDiretor && 
+    !isGerencia() && 
+    !isDesenvolvedor && 
+    !isAdminMaster;
+
   // Perfis que devem ver "Perfil" ao invés de "Configurações"
-  const isPerfilLimitado = isAnalistaCadastroOnly || isVendedorCltOnly;
+  const isPerfilLimitado = isAnalistaCadastroOnly || isVendedorCltOnly || isCoordenadorMonitoramentoOnly;
 
   // Verificações de grupo para cotações
   const isVendedorCotacao = hasRole('vendedor_clt') || hasRole('vendedor_externo');
@@ -178,7 +186,8 @@ export function usePermissions() {
     isAnalistaCadastroOnly,
     isVendedorCltOnly,
     isPerfilLimitado,
-    isCoordenadorMonitoramento: hasRole('coordenador_monitoramento'),
+    isCoordenadorMonitoramento,
+    isCoordenadorMonitoramentoOnly,
     isAnalistaPlataforma: hasRole('analista_plataforma'),
     isInstaladorVistoriador: hasRole('instalador_vistoriador'),
     isAnalistaMarketing: hasRole('analista_marketing'),
