@@ -27,21 +27,17 @@ export function useContratos() {
       const { data, error } = await supabase
         .from('contratos')
         .select(`
-          *,
-          planos (*),
-          cotacoes:cotacoes!contratos_cotacao_id_fkey (*),
-          associado:associados!fk_contratos_associado (*),
-          leads (*)
+          id, numero, status, valor_mensal, created_at, updated_at,
+          associado_id, plano_id, lead_id, cotacao_id, vendedor_id,
+          data_inicio, dia_vencimento
         `)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(200);
       
       if (error) throw error;
-      // Map aliased field to expected interface name
-      return ((data || []) as unknown as any[]).map(item => ({
-        ...item,
-        associados: item.associado,
-      })) as ContratoWithRelations[];
+      return (data || []) as ContratoWithRelations[];
     },
+    staleTime: 1000 * 60 * 5, // 5 minutos
   });
 }
 

@@ -30,8 +30,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
-import { useLeads } from '@/hooks/useLeads';
-import { useCotacoes } from '@/hooks/useCotacoes';
+import { useLeadsFunnel, useLeads } from '@/hooks/useLeads';
 import { useContratos } from '@/hooks/useContratos';
 import { usePendingDocumentos, useDocumentosContagem } from '@/hooks/useDocumentos';
 import { useInstalacoesDoDia, useInstalacoesMetricas } from '@/hooks/useInstalacoes';
@@ -398,29 +397,34 @@ export default function Dashboard() {
     return <DashboardCoordenador />;
   }
 
-  // Queries de dados
-  const { data: leadsData, isLoading: leadsLoading } = useLeads({ page: 1, perPage: 100 });
-  const { data: cotacoes, isLoading: cotacoesLoading } = useCotacoes();
+  // Queries otimizadas para dashboard - principais KPIs
+  const { data: leadsFunnel, isLoading: leadsLoading } = useLeadsFunnel();
   const { data: contratos, isLoading: contratosLoading } = useContratos();
-  const { data: pendingDocs, isLoading: docsLoading } = usePendingDocumentos();
   const { data: docsContagem } = useDocumentosContagem();
-  const { data: instalacoesDia, isLoading: instalacoesLoading } = useInstalacoesDoDia();
-  const { data: instMetricas } = useInstalacoesMetricas();
-
-  const isLoading = leadsLoading || cotacoesLoading || contratosLoading;
+  const { data: instMetricas, isLoading: instalacoesLoading } = useInstalacoesMetricas();
+  
+  // Queries secundárias - carregam dados para widgets específicos
+  const { data: leadsData } = useLeads({ page: 1, perPage: 5 }); // Apenas 5 leads para preview
+  const { data: pendingDocs, isLoading: docsLoading } = usePendingDocumentos();
+  const { data: instalacoesDia } = useInstalacoesDoDia();
+  
   const leads = leadsData?.leads || [];
 
-  // Calcular dados do funil
+  const isLoading = leadsLoading || contratosLoading;
+
+  // Calcular dados do funil a partir do hook otimizado
   const funnelData: FunilItem[] = [
-    { etapa: 'novo', count: leads.filter(l => l.etapa === 'novo').length },
-    { etapa: 'contato_inicial', count: leads.filter(l => l.etapa === 'contato_inicial').length },
-    { etapa: 'apresentacao', count: leads.filter(l => l.etapa === 'apresentacao').length },
-    { etapa: 'cotacao_enviada', count: leads.filter(l => l.etapa === 'cotacao_enviada').length },
-    { etapa: 'negociacao', count: leads.filter(l => l.etapa === 'negociacao').length },
-    { etapa: 'contrato_enviado', count: leads.filter(l => l.etapa === 'contrato_enviado').length },
-    { etapa: 'ganho', count: leads.filter(l => l.etapa === 'ganho').length },
-    { etapa: 'perdido', count: leads.filter(l => l.etapa === 'perdido').length },
+    { etapa: 'novo', count: leadsFunnel?.novo || 0 },
+    { etapa: 'contato_inicial', count: leadsFunnel?.contato_inicial || 0 },
+    { etapa: 'apresentacao', count: leadsFunnel?.apresentacao || 0 },
+    { etapa: 'cotacao_enviada', count: leadsFunnel?.cotacao_enviada || 0 },
+    { etapa: 'negociacao', count: leadsFunnel?.negociacao || 0 },
+    { etapa: 'contrato_enviado', count: leadsFunnel?.contrato_enviado || 0 },
+    { etapa: 'ganho', count: leadsFunnel?.ganho || 0 },
+    { etapa: 'perdido', count: leadsFunnel?.perdido || 0 },
   ];
+  
+  const totalLeads = Object.values(leadsFunnel || {}).reduce((acc, count) => acc + count, 0);
 
   // Calcular alertas
   const alertas: Alerta[] = [];
@@ -468,7 +472,7 @@ export default function Dashboard() {
         />
         <KPICard
           titulo="Leads do Mês"
-          valor={leads.length}
+          valor={totalLeads}
           emoji="📊"
           variacao={12}
           loading={leadsLoading}
