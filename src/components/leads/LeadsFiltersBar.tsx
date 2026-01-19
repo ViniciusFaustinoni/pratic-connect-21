@@ -49,58 +49,6 @@ export function LeadsFiltersBar({
 
       {/* Quick Filters & Actions */}
       <div className="flex items-center gap-3 flex-wrap">
-        {/* Quick Filter Toggles */}
-        <div className="flex items-center border border-border/50 rounded-lg bg-card/50 p-1 gap-0.5">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onQuickFilterChange('all')}
-            className={cn(
-              'h-8 px-3.5 text-sm rounded-md transition-all duration-200',
-              quickFilter === 'all' 
-                ? 'bg-background shadow-sm text-foreground font-medium' 
-                : 'text-muted-foreground hover:text-foreground'
-            )}
-          >
-            Todos
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onQuickFilterChange('today')}
-            className={cn(
-              'h-8 px-3.5 text-sm gap-1.5 rounded-md transition-all duration-200',
-              quickFilter === 'today' 
-                ? 'bg-background shadow-sm text-foreground font-medium' 
-                : 'text-muted-foreground hover:text-foreground'
-            )}
-          >
-            <Calendar className="h-3.5 w-3.5" />
-            Hoje
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onQuickFilterChange('overdue')}
-            className={cn(
-              'h-8 px-3.5 text-sm gap-1.5 rounded-md transition-all duration-200',
-              quickFilter === 'overdue' 
-                ? 'bg-background shadow-sm text-foreground font-medium' 
-                : 'text-muted-foreground hover:text-foreground'
-            )}
-          >
-            <AlertCircle className="h-3.5 w-3.5" />
-            Atrasados
-            {overdueCount > 0 && (
-              <Badge
-                variant="destructive"
-                className="h-5 min-w-[20px] px-1.5 text-xs font-semibold ml-0.5"
-              >
-                {overdueCount}
-              </Badge>
-            )}
-          </Button>
-        </div>
 
         {/* Separator */}
         <div className="hidden sm:block h-6 w-px bg-border/50" />

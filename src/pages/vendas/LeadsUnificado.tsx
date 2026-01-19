@@ -250,19 +250,6 @@ export default function LeadsUnificado() {
               />
             </div>
             
-            {/* Funnel Toggle - Only show in kanban mode */}
-            {viewMode === 'kanban' && (
-              <div className="flex items-center gap-2 shrink-0">
-                <Switch
-                  id="funnel-mode"
-                  checked={funnelMode === 'complete'}
-                  onCheckedChange={(checked) => setFunnelMode(checked ? 'complete' : 'simple')}
-                />
-                <Label htmlFor="funnel-mode" className="text-xs text-muted-foreground cursor-pointer">
-                  Funil Completo
-                </Label>
-              </div>
-            )}
           </div>
         </div>
       </div>
