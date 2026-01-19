@@ -3578,6 +3578,7 @@ export type Database = {
           vistoria_concluida_em: string | null
           vistoria_endereco_latitude: number | null
           vistoria_endereco_longitude: number | null
+          vistoria_id: string | null
           vistoria_rota_id: string | null
         }
         Insert: {
@@ -3649,6 +3650,7 @@ export type Database = {
           vistoria_concluida_em?: string | null
           vistoria_endereco_latitude?: number | null
           vistoria_endereco_longitude?: number | null
+          vistoria_id?: string | null
           vistoria_rota_id?: string | null
         }
         Update: {
@@ -3720,6 +3722,7 @@ export type Database = {
           vistoria_concluida_em?: string | null
           vistoria_endereco_latitude?: number | null
           vistoria_endereco_longitude?: number | null
+          vistoria_id?: string | null
           vistoria_rota_id?: string | null
         }
         Relationships: [
@@ -3806,6 +3809,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
             referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "contratos_vistoria_id_fkey"
+            columns: ["vistoria_id"]
+            isOneToOne: false
+            referencedRelation: "view_vistorias_mapa"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contratos_vistoria_id_fkey"
+            columns: ["vistoria_id"]
+            isOneToOne: false
+            referencedRelation: "vistorias"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "contratos_vistoria_rota_id_fkey"
@@ -4045,6 +4062,7 @@ export type Database = {
           vistoria_endereco_longitude: number | null
           vistoria_endereco_numero: string | null
           vistoria_horario_agendado: string | null
+          vistoria_id: string | null
           vistoria_responsavel_eu_mesmo: boolean | null
           vistoria_responsavel_nome: string | null
           vistoria_responsavel_telefone: string | null
@@ -4131,6 +4149,7 @@ export type Database = {
           vistoria_endereco_longitude?: number | null
           vistoria_endereco_numero?: string | null
           vistoria_horario_agendado?: string | null
+          vistoria_id?: string | null
           vistoria_responsavel_eu_mesmo?: boolean | null
           vistoria_responsavel_nome?: string | null
           vistoria_responsavel_telefone?: string | null
@@ -4217,6 +4236,7 @@ export type Database = {
           vistoria_endereco_longitude?: number | null
           vistoria_endereco_numero?: string | null
           vistoria_horario_agendado?: string | null
+          vistoria_id?: string | null
           vistoria_responsavel_eu_mesmo?: boolean | null
           vistoria_responsavel_nome?: string | null
           vistoria_responsavel_telefone?: string | null
@@ -4257,6 +4277,20 @@ export type Database = {
             columns: ["plano_id"]
             isOneToOne: false
             referencedRelation: "planos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cotacoes_vistoria_id_fkey"
+            columns: ["vistoria_id"]
+            isOneToOne: false
+            referencedRelation: "view_vistorias_mapa"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cotacoes_vistoria_id_fkey"
+            columns: ["vistoria_id"]
+            isOneToOne: false
+            referencedRelation: "vistorias"
             referencedColumns: ["id"]
           },
           {
@@ -12904,6 +12938,13 @@ export type Database = {
             foreignKeyName: "vistoria_fotos_vistoria_id_fkey"
             columns: ["vistoria_id"]
             isOneToOne: false
+            referencedRelation: "view_vistorias_mapa"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vistoria_fotos_vistoria_id_fkey"
+            columns: ["vistoria_id"]
+            isOneToOne: false
             referencedRelation: "vistorias"
             referencedColumns: ["id"]
           },
@@ -12918,9 +12959,10 @@ export type Database = {
           assinatura_documento_url: string | null
           assinatura_enviada_em: string | null
           assinatura_status: string | null
-          associado_id: string
+          associado_id: string | null
           avarias: string | null
           contrato_id: string | null
+          cotacao_id: string | null
           created_at: string
           data_agendada: string | null
           endereco_bairro: string | null
@@ -12935,10 +12977,12 @@ export type Database = {
           id: string
           instalacao_id: string | null
           km_atual: number | null
+          lead_id: string | null
           modalidade: string | null
           motivo_reprovacao: string | null
           observacoes: string | null
           observacoes_analise: string | null
+          origem: string | null
           protocolo: string | null
           ressalvas: string | null
           rota_id: string | null
@@ -12957,9 +13001,10 @@ export type Database = {
           assinatura_documento_url?: string | null
           assinatura_enviada_em?: string | null
           assinatura_status?: string | null
-          associado_id: string
+          associado_id?: string | null
           avarias?: string | null
           contrato_id?: string | null
+          cotacao_id?: string | null
           created_at?: string
           data_agendada?: string | null
           endereco_bairro?: string | null
@@ -12974,10 +13019,12 @@ export type Database = {
           id?: string
           instalacao_id?: string | null
           km_atual?: number | null
+          lead_id?: string | null
           modalidade?: string | null
           motivo_reprovacao?: string | null
           observacoes?: string | null
           observacoes_analise?: string | null
+          origem?: string | null
           protocolo?: string | null
           ressalvas?: string | null
           rota_id?: string | null
@@ -12996,9 +13043,10 @@ export type Database = {
           assinatura_documento_url?: string | null
           assinatura_enviada_em?: string | null
           assinatura_status?: string | null
-          associado_id?: string
+          associado_id?: string | null
           avarias?: string | null
           contrato_id?: string | null
+          cotacao_id?: string | null
           created_at?: string
           data_agendada?: string | null
           endereco_bairro?: string | null
@@ -13013,10 +13061,12 @@ export type Database = {
           id?: string
           instalacao_id?: string | null
           km_atual?: number | null
+          lead_id?: string | null
           modalidade?: string | null
           motivo_reprovacao?: string | null
           observacoes?: string | null
           observacoes_analise?: string | null
+          origem?: string | null
           protocolo?: string | null
           ressalvas?: string | null
           rota_id?: string | null
@@ -13092,6 +13142,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "vistorias_cotacao_id_fkey"
+            columns: ["cotacao_id"]
+            isOneToOne: false
+            referencedRelation: "cotacoes"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "vistorias_instalacao_id_fkey"
             columns: ["instalacao_id"]
             isOneToOne: false
@@ -13104,6 +13161,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_acompanhamento"
             referencedColumns: ["instalacao_id"]
+          },
+          {
+            foreignKeyName: "vistorias_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vistorias_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["lead_id"]
           },
           {
             foreignKeyName: "vistorias_rota_id_fkey"
@@ -13423,7 +13494,7 @@ export type Database = {
           placa: string | null
           rota_id: string | null
           tipo_servico: string | null
-          tipo_vistoria: Database["public"]["Enums"]["tipo_vistoria"] | null
+          tipo_vistoria: string | null
           veiculo_id: string | null
         }
         Relationships: []
@@ -13942,7 +14013,29 @@ export type Database = {
           vistoriador_id: string | null
           vistoriador_nome: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "vistorias_rota_id_fkey"
+            columns: ["rota_id"]
+            isOneToOne: false
+            referencedRelation: "rotas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vistorias_vistoriador_id_fkey"
+            columns: ["vistoriador_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vistorias_vistoriador_id_fkey"
+            columns: ["vistoriador_id"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+        ]
       }
       vw_cpfs_duplicados: {
         Row: {
