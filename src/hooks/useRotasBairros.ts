@@ -47,6 +47,13 @@ export function useRotasBairros(data?: Date) {
         .in("vistoria_rota_id", rotaIds)
         .not("vistoria_completa_endereco_bairro", "is", null);
       
+      // Buscar bairros diretamente de vistorias (unificado)
+      const { data: vistorias } = await supabase
+        .from("vistorias")
+        .select("rota_id, endereco_bairro")
+        .in("rota_id", rotaIds)
+        .not("endereco_bairro", "is", null);
+      
       // Agrupar bairros por rota
       return rotas.map(rota => {
         const bairrosSet = new Set<string>();
@@ -64,6 +71,12 @@ export function useRotasBairros(data?: Date) {
         contratos?.filter(c => c.vistoria_rota_id === rota.id)
           .forEach(c => {
             if (c.vistoria_completa_endereco_bairro) bairrosSet.add(c.vistoria_completa_endereco_bairro);
+          });
+        
+        // Incluir bairros de vistorias unificadas
+        vistorias?.filter(v => v.rota_id === rota.id)
+          .forEach(v => {
+            if (v.endereco_bairro) bairrosSet.add(v.endereco_bairro);
           });
         
         return {
