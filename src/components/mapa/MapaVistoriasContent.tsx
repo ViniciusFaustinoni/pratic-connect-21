@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap, GeoJSON } from "react-leaflet";
 import L from "leaflet";
 import { format, isSameDay, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -41,6 +41,8 @@ import { TIPO_VISTORIA_LABELS } from "@/types/servicos-rota";
 import { getRotaColor, SEM_ROTA_COLOR, createColoredMarkerSvg, svgToDataUrl } from "@/lib/rota-colors";
 import { MapaRotasLegenda } from "./MapaRotasLegenda";
 import { cn } from "@/lib/utils";
+import { useBairrosGeoJSON } from "@/hooks/useBairrosGeoJSON";
+import { normalizarNomeBairro } from "@/lib/bairros";
 
 // Cache de ícones por cor
 const iconCache = new Map<string, L.Icon>();
@@ -74,6 +76,7 @@ function FlyToPosition({ position, zoom = 15 }: { position: [number, number] | n
 
 export function MapaVistoriasContent() {
   const { data: vistorias, isLoading } = useVistoriasMapa();
+  const { data: bairrosGeoJSON } = useBairrosGeoJSON();
   const [filtroTipo, setFiltroTipo] = useState("todos");
   const [filtroRota, setFiltroRota] = useState<string | null>(null);
   const [filtroBusca, setFiltroBusca] = useState("");
@@ -143,6 +146,52 @@ export function MapaVistoriasContent() {
   const rotasAgrupadas = useMemo(() => {
     return agruparPorRota(vistoriasComCoordenadas);
   }, [vistoriasComCoordenadas]);
+
+  // Mapear bairros com cores de rotas para polígonos
+  const bairrosComRota = useMemo(() => {
+    const mapa = new Map<string, string>(); // bairro normalizado -> cor
+    
+    vistoriasFiltradas.forEach((v) => {
+      if (v.endereco_bairro && v.rota_id) {
+        const bairroNormalizado = normalizarNomeBairro(v.endereco_bairro);
+        if (!mapa.has(bairroNormalizado)) {
+          const cor = v.rota_cor || getRotaColor(v.rota_id, rotasIds);
+          mapa.set(bairroNormalizado, cor);
+        }
+      }
+    });
+    
+    return mapa;
+  }, [vistoriasFiltradas, rotasIds]);
+
+  // Função de estilo para os polígonos dos bairros
+  const styleBairro = (feature: GeoJSON.Feature | undefined) => {
+    if (!feature?.properties?.name) {
+      return { fillOpacity: 0, weight: 0 };
+    }
+    
+    const nomeBairro = normalizarNomeBairro(feature.properties.name);
+    const corRota = bairrosComRota.get(nomeBairro);
+    
+    if (corRota) {
+      return {
+        fillColor: corRota,
+        fillOpacity: 0.25,
+        color: corRota,
+        weight: 2,
+        opacity: 0.7,
+      };
+    }
+    
+    // Bairro sem rota: transparente/invisível
+    return {
+      fillColor: "transparent",
+      fillOpacity: 0,
+      color: "#aaa",
+      weight: 0.5,
+      opacity: 0.2,
+    };
+  };
 
   // Selecionar vistoria
   const selecionarVistoria = (vistoria: VistoriaMapa) => {
@@ -434,6 +483,15 @@ export function MapaVistoriasContent() {
             />
 
             <FlyToPosition position={posicaoSelecionada} />
+
+            {/* Camada de polígonos dos bairros */}
+            {bairrosGeoJSON && (
+              <GeoJSON
+                key={`bairros-${Array.from(bairrosComRota.keys()).join('-')}`}
+                data={bairrosGeoJSON as GeoJSON.FeatureCollection}
+                style={styleBairro}
+              />
+            )}
 
             {/* Polylines conectando pontos de cada rota */}
             {rotasAgrupadas.map((rota) => {
