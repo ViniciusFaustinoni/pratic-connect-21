@@ -3982,7 +3982,9 @@ export type Database = {
           vistoria_endereco_cep: string | null
           vistoria_endereco_cidade: string | null
           vistoria_endereco_estado: string | null
+          vistoria_endereco_latitude: number | null
           vistoria_endereco_logradouro: string | null
+          vistoria_endereco_longitude: number | null
           vistoria_endereco_numero: string | null
           vistoria_horario_agendado: string | null
           vistoria_responsavel_eu_mesmo: boolean | null
@@ -4066,7 +4068,9 @@ export type Database = {
           vistoria_endereco_cep?: string | null
           vistoria_endereco_cidade?: string | null
           vistoria_endereco_estado?: string | null
+          vistoria_endereco_latitude?: number | null
           vistoria_endereco_logradouro?: string | null
+          vistoria_endereco_longitude?: number | null
           vistoria_endereco_numero?: string | null
           vistoria_horario_agendado?: string | null
           vistoria_responsavel_eu_mesmo?: boolean | null
@@ -4150,7 +4154,9 @@ export type Database = {
           vistoria_endereco_cep?: string | null
           vistoria_endereco_cidade?: string | null
           vistoria_endereco_estado?: string | null
+          vistoria_endereco_latitude?: number | null
           vistoria_endereco_logradouro?: string | null
+          vistoria_endereco_longitude?: number | null
           vistoria_endereco_numero?: string | null
           vistoria_horario_agendado?: string | null
           vistoria_responsavel_eu_mesmo?: boolean | null
@@ -12829,7 +12835,9 @@ export type Database = {
           endereco_cep: string | null
           endereco_cidade: string | null
           endereco_estado: string | null
+          endereco_latitude: number | null
           endereco_logradouro: string | null
+          endereco_longitude: number | null
           endereco_numero: string | null
           horario_agendado: string | null
           id: string
@@ -12866,7 +12874,9 @@ export type Database = {
           endereco_cep?: string | null
           endereco_cidade?: string | null
           endereco_estado?: string | null
+          endereco_latitude?: number | null
           endereco_logradouro?: string | null
+          endereco_longitude?: number | null
           endereco_numero?: string | null
           horario_agendado?: string | null
           id?: string
@@ -12903,7 +12913,9 @@ export type Database = {
           endereco_cep?: string | null
           endereco_cidade?: string | null
           endereco_estado?: string | null
+          endereco_latitude?: number | null
           endereco_logradouro?: string | null
+          endereco_longitude?: number | null
           endereco_numero?: string | null
           horario_agendado?: string | null
           id?: string
@@ -13806,6 +13818,32 @@ export type Database = {
           ultima_comunicacao: string | null
           veiculo_id: string | null
           velocidade: number | null
+        }
+        Relationships: []
+      }
+      view_vistorias_mapa: {
+        Row: {
+          associado_id: string | null
+          associado_nome: string | null
+          associado_telefone: string | null
+          data_agendada: string | null
+          endereco_bairro: string | null
+          endereco_cep: string | null
+          endereco_cidade: string | null
+          endereco_logradouro: string | null
+          endereco_numero: string | null
+          id: string | null
+          latitude: number | null
+          longitude: number | null
+          marca: string | null
+          modelo: string | null
+          placa: string | null
+          status: string | null
+          tipo_servico: string | null
+          tipo_vistoria: string | null
+          veiculo_id: string | null
+          vistoriador_id: string | null
+          vistoriador_nome: string | null
         }
         Relationships: []
       }

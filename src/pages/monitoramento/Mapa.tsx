@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -28,8 +29,10 @@ import {
   Power,
   Clock,
   Locate,
+  ClipboardCheck,
 } from "lucide-react";
 import { toast } from "sonner";
+import { MapaVistoriasContent } from "@/components/mapa/MapaVistoriasContent";
 
 // =====================================================
 // FIX PARA ÍCONES DO LEAFLET
@@ -114,6 +117,7 @@ interface Veiculo {
 
 export default function Mapa() {
   // Estados
+  const [abaAtiva, setAbaAtiva] = useState<string>("veiculos");
   const [filtroStatus, setFiltroStatus] = useState("todos");
   const [filtroBusca, setFiltroBusca] = useState("");
   const [posicaoSelecionada, setPosicaoSelecionada] = useState<[number, number] | null>(null);
@@ -132,6 +136,7 @@ export default function Mapa() {
       return (data || []) as Veiculo[];
     },
     refetchInterval: 30000, // Atualizar a cada 30 segundos
+    enabled: abaAtiva === "veiculos",
   });
 
   // Filtrar veículos
@@ -231,285 +236,290 @@ export default function Mapa() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] gap-4 p-4">
-      {/* ================================================= */}
-      {/* SIDEBAR - Lista de Veículos */}
-      {/* ================================================= */}
-      <Card className="w-80 flex-shrink-0 flex flex-col">
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Car className="h-5 w-5 text-primary" />
-              <CardTitle className="text-base">Veículos</CardTitle>
-            </div>
-            <Badge variant="secondary">{veiculosFiltrados.length}</Badge>
-          </div>
+    <div className="flex flex-col h-[calc(100vh-4rem)] p-4">
+      {/* Tabs de navegação */}
+      <Tabs value={abaAtiva} onValueChange={setAbaAtiva} className="flex flex-col h-full">
+        <TabsList className="w-fit mb-4">
+          <TabsTrigger value="veiculos" className="gap-2">
+            <Car className="h-4 w-4" />
+            Veículos em Tempo Real
+          </TabsTrigger>
+          <TabsTrigger value="vistorias" className="gap-2">
+            <ClipboardCheck className="h-4 w-4" />
+            Vistorias Pendentes
+          </TabsTrigger>
+        </TabsList>
 
-          {/* Contadores de Status */}
-          <div className="flex gap-2 mt-3">
-            <Badge className="bg-green-500/10 text-green-600 border-green-500/20 hover:bg-green-500/20">
-              {contadores.online} online
-            </Badge>
-            <Badge className="bg-yellow-500/10 text-yellow-600 border-yellow-500/20 hover:bg-yellow-500/20">
-              {contadores.atencao} atenção
-            </Badge>
-            <Badge className="bg-red-500/10 text-red-600 border-red-500/20 hover:bg-red-500/20">
-              {contadores.offline} offline
-            </Badge>
-          </div>
-
-          {/* Filtro de Status */}
-          <Select value={filtroStatus} onValueChange={setFiltroStatus}>
-            <SelectTrigger className="h-9 mt-3">
-              <SelectValue placeholder="Filtrar por status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Todos os status</SelectItem>
-              <SelectItem value="online">🟢 Online</SelectItem>
-              <SelectItem value="atencao">🟡 Atenção</SelectItem>
-              <SelectItem value="offline">🔴 Offline</SelectItem>
-              <SelectItem value="sem_dados">⚪ Sem dados</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {/* Campo de Busca */}
-          <div className="relative mt-2">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar placa ou associado..."
-              value={filtroBusca}
-              onChange={(e) => setFiltroBusca(e.target.value)}
-              className="pl-9 h-9"
-            />
-          </div>
-        </CardHeader>
-
-        <CardContent className="flex-1 overflow-hidden p-0">
-          <ScrollArea className="h-full px-4 pb-4">
-            {isLoading ? (
-              // Loading
-              <div className="space-y-3">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <div key={i} className="p-3 border rounded-lg">
-                    <Skeleton className="h-5 w-24 mb-2" />
-                    <div className="space-y-1">
-                      <Skeleton className="h-4 w-32" />
-                      <Skeleton className="h-4 w-28" />
-                    </div>
+        {/* Aba de Veículos */}
+        <TabsContent value="veiculos" className="flex-1 mt-0">
+          <div className="flex h-full gap-4">
+            {/* SIDEBAR - Lista de Veículos */}
+            <Card className="w-80 flex-shrink-0 flex flex-col">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Car className="h-5 w-5 text-primary" />
+                    <CardTitle className="text-base">Veículos</CardTitle>
                   </div>
-                ))}
-              </div>
-            ) : veiculosFiltrados.length === 0 ? (
-              // Vazio
-              <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-                <Car className="h-12 w-12 mb-2 opacity-50" />
-                <p className="text-sm">Nenhum veículo encontrado</p>
-              </div>
-            ) : (
-              // Lista de Veículos
-              <div className="space-y-2">
-                {veiculosFiltrados.map((v) => (
-                  <div
-                    key={v.rastreador_id}
-                    className={`p-3 border rounded-lg cursor-pointer transition-colors hover:bg-muted/50 ${
-                      veiculoSelecionado === v.rastreador_id ? "border-primary bg-primary/5" : ""
-                    }`}
-                    onClick={() => selecionarVeiculo(v)}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1 min-w-0">
-                        {/* Placa */}
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-semibold text-sm truncate">
-                            {v.placa || "Sem placa"}
-                          </span>
-                          <Badge className={`text-xs ${getStatusBadgeClass(v.status_comunicacao)}`}>
-                            {getStatusLabel(v.status_comunicacao)}
-                          </Badge>
-                        </div>
+                  <Badge variant="secondary">{veiculosFiltrados.length}</Badge>
+                </div>
 
-                        {/* Veículo */}
-                        <p className="text-xs text-muted-foreground truncate">
-                          {v.marca} {v.modelo}
-                        </p>
+                {/* Contadores de Status */}
+                <div className="flex gap-2 mt-3">
+                  <Badge className="bg-green-500/10 text-green-600 border-green-500/20 hover:bg-green-500/20">
+                    {contadores.online} online
+                  </Badge>
+                  <Badge className="bg-yellow-500/10 text-yellow-600 border-yellow-500/20 hover:bg-yellow-500/20">
+                    {contadores.atencao} atenção
+                  </Badge>
+                  <Badge className="bg-red-500/10 text-red-600 border-red-500/20 hover:bg-red-500/20">
+                    {contadores.offline} offline
+                  </Badge>
+                </div>
 
-                        {/* Associado */}
-                        <p className="text-xs text-muted-foreground truncate">
-                          {v.associado_nome || "Sem associado"}
-                        </p>
+                {/* Filtro de Status */}
+                <Select value={filtroStatus} onValueChange={setFiltroStatus}>
+                  <SelectTrigger className="h-9 mt-3">
+                    <SelectValue placeholder="Filtrar por status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos os status</SelectItem>
+                    <SelectItem value="online">🟢 Online</SelectItem>
+                    <SelectItem value="atencao">🟡 Atenção</SelectItem>
+                    <SelectItem value="offline">🔴 Offline</SelectItem>
+                    <SelectItem value="sem_dados">⚪ Sem dados</SelectItem>
+                  </SelectContent>
+                </Select>
 
-                        {/* Info de velocidade/ignição */}
-                        {v.latitude && (
-                          <div className="flex items-center gap-3 mt-2 text-xs">
-                            <span className="flex items-center gap-1">
-                              <Gauge className="h-3 w-3" />
-                              {v.velocidade || 0} km/h
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <Power className="h-3 w-3" />
-                              {v.ignicao ? "Ligado" : "Desligado"}
-                            </span>
+                {/* Campo de Busca */}
+                <div className="relative mt-2">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar placa ou associado..."
+                    value={filtroBusca}
+                    onChange={(e) => setFiltroBusca(e.target.value)}
+                    className="pl-9 h-9"
+                  />
+                </div>
+              </CardHeader>
+
+              <CardContent className="flex-1 overflow-hidden p-0">
+                <ScrollArea className="h-full px-4 pb-4">
+                  {isLoading ? (
+                    <div className="space-y-3">
+                      {[1, 2, 3, 4, 5].map((i) => (
+                        <div key={i} className="p-3 border rounded-lg">
+                          <Skeleton className="h-5 w-24 mb-2" />
+                          <div className="space-y-1">
+                            <Skeleton className="h-4 w-32" />
+                            <Skeleton className="h-4 w-28" />
                           </div>
-                        )}
-
-                        {/* Última comunicação */}
-                        {v.ultima_comunicacao && (
-                          <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
-                            {formatDistanceToNow(new Date(v.ultima_comunicacao), {
-                              addSuffix: true,
-                              locale: ptBR,
-                            })}
-                          </p>
-                        )}
-                      </div>
-
-                      {/* Botão de localizar */}
-                      {v.latitude && v.longitude && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 flex-shrink-0"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            selecionarVeiculo(v);
-                          }}
-                        >
-                          <Locate className="h-4 w-4" />
-                        </Button>
-                      )}
+                        </div>
+                      ))}
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </ScrollArea>
-        </CardContent>
-      </Card>
+                  ) : veiculosFiltrados.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+                      <Car className="h-12 w-12 mb-2 opacity-50" />
+                      <p className="text-sm">Nenhum veículo encontrado</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {veiculosFiltrados.map((v) => (
+                        <div
+                          key={v.rastreador_id}
+                          className={`p-3 border rounded-lg cursor-pointer transition-colors hover:bg-muted/50 ${
+                            veiculoSelecionado === v.rastreador_id ? "border-primary bg-primary/5" : ""
+                          }`}
+                          onClick={() => selecionarVeiculo(v)}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="font-semibold text-sm truncate">
+                                  {v.placa || "Sem placa"}
+                                </span>
+                                <Badge className={`text-xs ${getStatusBadgeClass(v.status_comunicacao)}`}>
+                                  {getStatusLabel(v.status_comunicacao)}
+                                </Badge>
+                              </div>
 
-      {/* ================================================= */}
-      {/* MAPA */}
-      {/* ================================================= */}
-      <Card className="flex-1 flex flex-col overflow-hidden">
-        <CardHeader className="pb-3 flex-row items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Navigation className="h-5 w-5 text-primary" />
-            <CardTitle className="text-base">Mapa em Tempo Real</CardTitle>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => refetch()}
-            disabled={isRefetching}
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${isRefetching ? "animate-spin" : ""}`} />
-            Atualizar
-          </Button>
-        </CardHeader>
+                              <p className="text-xs text-muted-foreground truncate">
+                                {v.marca} {v.modelo}
+                              </p>
 
-        <CardContent className="flex-1 p-0 relative">
-          <MapContainer
-            center={centroInicial}
-            zoom={4}
-            className="h-full w-full"
-            style={{ height: "100%", width: "100%" }}
-          >
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
+                              <p className="text-xs text-muted-foreground truncate">
+                                {v.associado_nome || "Sem associado"}
+                              </p>
 
-            <FlyToPosition position={posicaoSelecionada} />
+                              {v.latitude && (
+                                <div className="flex items-center gap-3 mt-2 text-xs">
+                                  <span className="flex items-center gap-1">
+                                    <Gauge className="h-3 w-3" />
+                                    {v.velocidade || 0} km/h
+                                  </span>
+                                  <span className="flex items-center gap-1">
+                                    <Power className="h-3 w-3" />
+                                    {v.ignicao ? "Ligado" : "Desligado"}
+                                  </span>
+                                </div>
+                              )}
 
-            {veiculosFiltrados.map((v) => {
-              if (!v.latitude || !v.longitude) return null;
+                              {v.ultima_comunicacao && (
+                                <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                                  <Clock className="h-3 w-3" />
+                                  {formatDistanceToNow(new Date(v.ultima_comunicacao), {
+                                    addSuffix: true,
+                                    locale: ptBR,
+                                  })}
+                                </p>
+                              )}
+                            </div>
 
-              const icon = markerIcons[v.status_comunicacao as keyof typeof markerIcons] || markerIcons.sem_dados;
+                            {v.latitude && v.longitude && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 flex-shrink-0"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  selecionarVeiculo(v);
+                                }}
+                              >
+                                <Locate className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </ScrollArea>
+              </CardContent>
+            </Card>
 
-              return (
-                <Marker
-                  key={v.rastreador_id}
-                  position={[v.latitude, v.longitude]}
-                  icon={icon}
+            {/* MAPA DE VEÍCULOS */}
+            <Card className="flex-1 flex flex-col overflow-hidden">
+              <CardHeader className="pb-3 flex-row items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Navigation className="h-5 w-5 text-primary" />
+                  <CardTitle className="text-base">Mapa em Tempo Real</CardTitle>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => refetch()}
+                  disabled={isRefetching}
                 >
-                  <Popup>
-                    <div className="min-w-[200px]">
-                      {/* Header do Popup */}
-                      <div className="flex items-center justify-between mb-2">
-                        <h3 className="font-bold text-sm">{v.placa || "Sem placa"}</h3>
-                        <span className="text-xs">
-                          {v.status_comunicacao === "online"
-                            ? "🟢 Online"
-                            : v.status_comunicacao === "atencao"
-                            ? "🟡 Atenção"
-                            : "🔴 Offline"}
-                        </span>
-                      </div>
+                  <RefreshCw className={`h-4 w-4 mr-2 ${isRefetching ? "animate-spin" : ""}`} />
+                  Atualizar
+                </Button>
+              </CardHeader>
 
-                      {/* Info do Veículo */}
-                      <div className="text-xs space-y-1 mb-2">
-                        <p>
-                          <strong>Veículo:</strong> {v.marca} {v.modelo}
-                        </p>
-                        <p>
-                          <strong>Associado:</strong> {v.associado_nome || "-"}
-                        </p>
-                      </div>
+              <CardContent className="flex-1 p-0 relative">
+                <MapContainer
+                  center={centroInicial}
+                  zoom={4}
+                  className="h-full w-full"
+                  style={{ height: "100%", width: "100%" }}
+                >
+                  <TileLayer
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  />
 
-                      {/* Status */}
-                      <div className="flex items-center gap-3 text-xs mb-2">
-                        <span className="flex items-center gap-1">
-                          <Gauge className="h-3 w-3" />
-                          {v.velocidade || 0} km/h
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Power className="h-3 w-3" />
-                          {v.ignicao ? "Ligado" : "Desligado"}
-                        </span>
-                      </div>
+                  <FlyToPosition position={posicaoSelecionada} />
 
-                      {/* Última comunicação */}
-                      {v.ultima_comunicacao && (
-                        <p className="text-xs text-gray-500 mb-3">
-                          Última comunicação:{" "}
-                          {format(new Date(v.ultima_comunicacao), "dd/MM/yyyy HH:mm", {
-                            locale: ptBR,
-                          })}
-                        </p>
-                      )}
+                  {veiculosFiltrados.map((v) => {
+                    if (!v.latitude || !v.longitude) return null;
 
-                      {/* Botões de Ação */}
-                      <div className="flex gap-2">
-                        {v.associado_telefone && (
-                          <button
-                            onClick={() => abrirWhatsApp(v.associado_telefone)}
-                            className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white rounded text-xs hover:bg-green-700"
-                          >
-                            <Phone className="h-3 w-3" />
-                            WhatsApp
-                          </button>
-                        )}
-                        <button
-                          onClick={() => abrirGoogleMaps(v.latitude!, v.longitude!)}
-                          className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
-                        >
-                          <Navigation className="h-3 w-3" />
-                          Google Maps
-                        </button>
-                      </div>
-                    </div>
-                  </Popup>
-                </Marker>
-              );
-            })}
-          </MapContainer>
+                    const icon = markerIcons[v.status_comunicacao as keyof typeof markerIcons] || markerIcons.sem_dados;
 
-          {/* Indicador de atualização automática */}
-          <div className="absolute bottom-4 left-4 bg-background/90 backdrop-blur-sm px-3 py-1.5 rounded-full text-xs text-muted-foreground border shadow-sm">
-            Atualização automática a cada 30s
+                    return (
+                      <Marker
+                        key={v.rastreador_id}
+                        position={[v.latitude, v.longitude]}
+                        icon={icon}
+                      >
+                        <Popup>
+                          <div className="min-w-[200px]">
+                            <div className="flex items-center justify-between mb-2">
+                              <h3 className="font-bold text-sm">{v.placa || "Sem placa"}</h3>
+                              <span className="text-xs">
+                                {v.status_comunicacao === "online"
+                                  ? "🟢 Online"
+                                  : v.status_comunicacao === "atencao"
+                                  ? "🟡 Atenção"
+                                  : "🔴 Offline"}
+                              </span>
+                            </div>
+
+                            <div className="text-xs space-y-1 mb-2">
+                              <p>
+                                <strong>Veículo:</strong> {v.marca} {v.modelo}
+                              </p>
+                              <p>
+                                <strong>Associado:</strong> {v.associado_nome || "-"}
+                              </p>
+                            </div>
+
+                            <div className="flex items-center gap-3 text-xs mb-2">
+                              <span className="flex items-center gap-1">
+                                <Gauge className="h-3 w-3" />
+                                {v.velocidade || 0} km/h
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <Power className="h-3 w-3" />
+                                {v.ignicao ? "Ligado" : "Desligado"}
+                              </span>
+                            </div>
+
+                            {v.ultima_comunicacao && (
+                              <p className="text-xs text-gray-500 mb-3">
+                                Última comunicação:{" "}
+                                {format(new Date(v.ultima_comunicacao), "dd/MM/yyyy HH:mm", {
+                                  locale: ptBR,
+                                })}
+                              </p>
+                            )}
+
+                            <div className="flex gap-2">
+                              {v.associado_telefone && (
+                                <button
+                                  onClick={() => abrirWhatsApp(v.associado_telefone)}
+                                  className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white rounded text-xs hover:bg-green-700"
+                                >
+                                  <Phone className="h-3 w-3" />
+                                  WhatsApp
+                                </button>
+                              )}
+                              <button
+                                onClick={() => abrirGoogleMaps(v.latitude!, v.longitude!)}
+                                className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
+                              >
+                                <Navigation className="h-3 w-3" />
+                                Google Maps
+                              </button>
+                            </div>
+                          </div>
+                        </Popup>
+                      </Marker>
+                    );
+                  })}
+                </MapContainer>
+
+                <div className="absolute bottom-4 left-4 bg-background/90 backdrop-blur-sm px-3 py-1.5 rounded-full text-xs text-muted-foreground border shadow-sm">
+                  Atualização automática a cada 30s
+                </div>
+              </CardContent>
+            </Card>
           </div>
-        </CardContent>
-      </Card>
+        </TabsContent>
+
+        {/* Aba de Vistorias */}
+        <TabsContent value="vistorias" className="flex-1 mt-0">
+          <MapaVistoriasContent />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
