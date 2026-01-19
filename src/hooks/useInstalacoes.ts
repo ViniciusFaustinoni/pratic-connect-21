@@ -43,6 +43,13 @@ export interface InstalacaoWithRelations extends Instalacao {
     imei?: string | null;
     modelo?: string | null;
   } | null;
+  instalador?: {
+    id: string;
+    nome: string;
+    telefone?: string | null;
+    email?: string | null;
+  } | null;
+  // Alias for backward compatibility
   profiles?: {
     id: string;
     nome: string;
@@ -111,7 +118,7 @@ export function useInstalacoes(filtersOrParams?: InstalacaoFilters | UseInstalac
           associados (id, nome, telefone, email),
           veiculos (id, marca, modelo, placa, ano_modelo, cor),
           rastreadores (id, codigo, numero_serie, imei),
-          profiles:instalador_id (id, nome, telefone)
+          instalador:profiles!instalacoes_instalador_id_fkey (id, nome, telefone)
         `, { count: 'exact' })
         .order('data_agendada', { ascending: true });
 
@@ -208,7 +215,7 @@ export function useInstalacao(id: string | undefined) {
           associados (id, nome, telefone, email, cpf, cep, logradouro, numero, complemento, bairro, cidade, uf),
           veiculos (id, marca, modelo, placa, ano_modelo, cor, chassi, renavam),
           rastreadores (id, codigo, numero_serie, imei),
-          profiles:instalador_id (id, nome, telefone, email)
+          instalador:profiles!instalacoes_instalador_id_fkey (id, nome, telefone, email)
         `)
         .eq('id', id)
         .maybeSingle();
@@ -324,9 +331,9 @@ export function useInstalacoesDoDia(data?: string) {
         .from('instalacoes')
         .select(`
           *,
-          associados (id, nome, telefone),
+          associados (id, nome, telefone, email),
           veiculos (id, placa, marca, modelo),
-          profiles:instalador_id (id, nome, telefone)
+          instalador:profiles!instalacoes_instalador_id_fkey (id, nome, telefone)
         `)
         .eq('data_agendada', dataFiltro)
         .order('periodo', { ascending: true });

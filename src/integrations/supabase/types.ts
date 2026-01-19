@@ -7061,6 +7061,7 @@ export type Database = {
           id: string
           iniciada_em: string | null
           instalador_id: string | null
+          instalador_responsavel_id: string | null
           lead_id: string | null
           logradouro: string | null
           numero: string | null
@@ -7090,6 +7091,7 @@ export type Database = {
           id?: string
           iniciada_em?: string | null
           instalador_id?: string | null
+          instalador_responsavel_id?: string | null
           lead_id?: string | null
           logradouro?: string | null
           numero?: string | null
@@ -7119,6 +7121,7 @@ export type Database = {
           id?: string
           iniciada_em?: string | null
           instalador_id?: string | null
+          instalador_responsavel_id?: string | null
           lead_id?: string | null
           logradouro?: string | null
           numero?: string | null
@@ -7192,6 +7195,20 @@ export type Database = {
           {
             foreignKeyName: "instalacoes_instalador_id_fkey"
             columns: ["instalador_id"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "instalacoes_instalador_responsavel_id_fkey"
+            columns: ["instalador_responsavel_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "instalacoes_instalador_responsavel_id_fkey"
+            columns: ["instalador_responsavel_id"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
             referencedColumns: ["vendedor_id"]
@@ -11725,6 +11742,49 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      rota_instaladores: {
+        Row: {
+          created_at: string | null
+          id: string
+          instalador_id: string
+          rota_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          instalador_id: string
+          rota_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          instalador_id?: string
+          rota_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rota_instaladores_instalador_id_fkey"
+            columns: ["instalador_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rota_instaladores_instalador_id_fkey"
+            columns: ["instalador_id"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "rota_instaladores_rota_id_fkey"
+            columns: ["rota_id"]
+            isOneToOne: false
+            referencedRelation: "rotas"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       rotas: {
         Row: {
