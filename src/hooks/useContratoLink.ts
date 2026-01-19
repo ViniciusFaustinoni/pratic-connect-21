@@ -540,7 +540,7 @@ export function useAgendarInstalacaoContrato() {
       let longitude: number | null = null;
       
       try {
-        const { data, error } = await supabase.functions.invoke('geocode', {
+        const { data, error } = await supabase.functions.invoke('geocode-endereco', {
           body: {
             logradouro: endereco.logradouro,
             numero: endereco.numero,
