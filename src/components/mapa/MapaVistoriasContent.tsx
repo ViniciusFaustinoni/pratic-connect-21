@@ -203,13 +203,31 @@ export function MapaVistoriasContent() {
   }, [rotasBairros, filtroData]);
 
   // Função de estilo para os polígonos dos bairros
-  const styleBairro = (feature: GeoJSON.Feature | undefined) => {
+  const styleBairro = useMemo(() => (feature: GeoJSON.Feature | undefined) => {
     if (!feature?.properties?.name) {
       return { fillOpacity: 0, weight: 0 };
     }
     
-    const nomeBairro = normalizarNomeBairro(feature.properties.name);
+    const nomeOriginal = feature.properties.name;
+    const nomeBairro = normalizarNomeBairro(nomeOriginal);
     const corRota = bairrosComRota.get(nomeBairro);
+    
+    // Debug: tentar variantes de normalização
+    if (!corRota) {
+      // Tentar encontrar match parcial
+      for (const [bairroRota, cor] of bairrosComRota.entries()) {
+        if (bairroRota.includes(nomeBairro) || nomeBairro.includes(bairroRota)) {
+          console.log(`🔍 Match parcial: "${nomeOriginal}" -> "${bairroRota}"`);
+          return {
+            fillColor: cor,
+            fillOpacity: 0.25,
+            color: cor,
+            weight: 2,
+            opacity: 0.7,
+          };
+        }
+      }
+    }
     
     if (corRota) {
       return {
@@ -229,7 +247,7 @@ export function MapaVistoriasContent() {
       weight: 0.5,
       opacity: 0.2,
     };
-  };
+  }, [bairrosComRota]);
 
   // Selecionar vistoria
   const selecionarVistoria = (vistoria: VistoriaMapa) => {
@@ -525,9 +543,18 @@ export function MapaVistoriasContent() {
             {/* Camada de polígonos dos bairros */}
             {bairrosGeoJSON && (
               <GeoJSON
-                key={`bairros-${filtroData?.toISOString() || 'sem-data'}-${rotasBairros?.map(r => r.rota_id).join('-') || 'no-routes'}`}
+                key={`bairros-${filtroData?.getTime() || 0}-${bairrosComRota.size}-${Array.from(bairrosComRota.keys()).join(',')}`}
                 data={bairrosGeoJSON as GeoJSON.FeatureCollection}
                 style={styleBairro}
+                onEachFeature={(feature, layer) => {
+                  const nome = feature.properties?.name || 'Desconhecido';
+                  const normalizado = normalizarNomeBairro(nome);
+                  const temRota = bairrosComRota.has(normalizado);
+                  layer.bindTooltip(`${nome}${temRota ? ' ✓' : ''}`, { 
+                    permanent: false,
+                    className: temRota ? 'leaflet-tooltip-rota' : ''
+                  });
+                }}
               />
             )}
 
