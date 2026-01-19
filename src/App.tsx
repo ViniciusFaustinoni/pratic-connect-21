@@ -247,6 +247,7 @@ import { VistoriadorLayout } from "./layouts/VistoriadorLayout";
 import CotacaoPublicaPage from "./pages/public/CotacaoPublica";
 import CotacaoPublicaCompleta from "./pages/public/CotacaoPublicaCompleta";
 import CotacaoContratacao from "./pages/public/CotacaoContratacao";
+import AcompanhamentoProposta from "./pages/public/AcompanhamentoProposta";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -288,6 +289,9 @@ const App = () => (
             <Route path="/cotacao/:token" element={<CotacaoContratacao />} />
             <Route path="/cotacao-visualizar/:token" element={<CotacaoPublicaPage />} />
             <Route path="/q/:token" element={<CotacaoPublicaCompleta />} />
+            
+            {/* Public Proposal Tracking Page */}
+            <Route path="/acompanhar/:token" element={<AcompanhamentoProposta />} />
             
             {/* Public Associate Vistoria Page */}
             <Route path="/associado/:token" element={<AssociadoVistoria />} />

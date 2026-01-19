@@ -111,35 +111,15 @@ serve(async (req) => {
 
     // 4. Processar baseado na decisão
     if (decisao === 'aprovada' || decisao === 'aprovada_com_ressalvas') {
-      // === VISTORIA APROVADA ===
-      console.log('[processar-vistoria] Processando aprovação...');
+      // === VISTORIA APROVADA (Técnico aprova vistoria presencial/instalação) ===
+      console.log('[processar-vistoria] Processando aprovação do técnico...');
 
-      // 4.1 Criar registro de instalação
-      if (vistoria.associado_id && vistoria.veiculo_id) {
-        const { data: instalacao, error: instalacaoError } = await supabase
-          .from('instalacoes')
-          .insert({
-            associado_id: vistoria.associado_id,
-            veiculo_id: vistoria.veiculo_id,
-            status: 'agendada', // Enum válido
-            data_agendada: new Date().toISOString(),
-          })
-          .select('id')
-          .single();
-
-        if (instalacaoError) {
-          console.error('[processar-vistoria] Erro ao criar instalação:', instalacaoError);
-        } else {
-          instalacao_id = instalacao.id;
-          console.log(`[processar-vistoria] Instalação criada: ${instalacao_id}`);
-        }
-      }
-
-      // 4.2 Atualizar status do associado
+      // 4.1 Atualizar status do associado para ATIVO (ativação final)
       const { error: assocError } = await supabase
         .from('associados')
         .update({ 
-          status: 'aguardando_instalacao',
+          status: 'ativo',
+          data_ativacao: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
         .eq('id', vistoria.associado_id);
@@ -147,15 +127,16 @@ serve(async (req) => {
       if (assocError) {
         console.error('[processar-vistoria] Erro ao atualizar associado:', assocError);
       } else {
-        console.log('[processar-vistoria] Status do associado atualizado para aguardando_instalacao');
+        console.log('[processar-vistoria] Status do associado atualizado para ATIVO');
       }
 
-      // 4.3 Atualizar status do veículo e ativar cobertura roubo/furto (autovistoria)
+      // 4.2 Atualizar status do veículo para ATIVO e ativar cobertura TOTAL
       const { error: veicError } = await supabase
         .from('veiculos')
         .update({ 
-          status: 'instalacao_pendente',
-          cobertura_roubo_furto: true, // Analista aprova cobertura parcial na autovistoria
+          status: 'ativo',
+          cobertura_roubo_furto: true,
+          cobertura_total: true, // Técnico aprova = cobertura total ativada
           updated_at: new Date().toISOString(),
         })
         .eq('id', vistoria.veiculo_id);
@@ -163,7 +144,55 @@ serve(async (req) => {
       if (veicError) {
         console.error('[processar-vistoria] Erro ao atualizar veículo:', veicError);
       } else {
-        console.log('[processar-vistoria] Status do veículo atualizado para instalacao_pendente com cobertura_roubo_furto ativada');
+        console.log('[processar-vistoria] Status do veículo atualizado para ATIVO com cobertura_total ativada');
+      }
+
+      // 4.3 Atualizar instalação existente para concluída (se existir)
+      if (vistoria.associado_id && vistoria.veiculo_id) {
+        const { data: instalacaoExistente } = await supabase
+          .from('instalacoes')
+          .select('id')
+          .eq('associado_id', vistoria.associado_id)
+          .eq('veiculo_id', vistoria.veiculo_id)
+          .in('status', ['pendente', 'agendada', 'reagendada', 'em_andamento'])
+          .limit(1)
+          .maybeSingle();
+
+        if (instalacaoExistente) {
+          const { error: updateInstalacaoError } = await supabase
+            .from('instalacoes')
+            .update({
+              status: 'concluida',
+              data_conclusao: new Date().toISOString(),
+              instalador_id: analista_id,
+            })
+            .eq('id', instalacaoExistente.id);
+
+          if (!updateInstalacaoError) {
+            instalacao_id = instalacaoExistente.id;
+            console.log(`[processar-vistoria] Instalação atualizada para concluída: ${instalacao_id}`);
+          }
+        } else {
+          // Criar nova instalação já concluída
+          const { data: instalacao, error: instalacaoError } = await supabase
+            .from('instalacoes')
+            .insert({
+              associado_id: vistoria.associado_id,
+              veiculo_id: vistoria.veiculo_id,
+              status: 'concluida',
+              data_conclusao: new Date().toISOString(),
+              instalador_id: analista_id,
+            })
+            .select('id')
+            .single();
+
+          if (instalacaoError) {
+            console.error('[processar-vistoria] Erro ao criar instalação:', instalacaoError);
+          } else {
+            instalacao_id = instalacao.id;
+            console.log(`[processar-vistoria] Instalação criada como concluída: ${instalacao_id}`);
+          }
+        }
       }
 
       // 4.4 Registrar no histórico
@@ -172,13 +201,14 @@ serve(async (req) => {
           associado_id: vistoria.associado_id,
           tipo: 'vistoria_aprovada',
           descricao: decisao === 'aprovada' 
-            ? 'Vistoria aprovada - Instalação na fila'
-            : `Vistoria aprovada com ressalvas: ${ressalvas}`,
+            ? 'Vistoria presencial aprovada pelo técnico. Associado e veículo ativados com cobertura TOTAL.'
+            : `Vistoria aprovada com ressalvas: ${ressalvas}. Associado e veículo ativados com cobertura TOTAL.`,
           dados_novos: { 
             vistoria_id, 
             instalacao_id,
             decisao,
             ressalvas: ressalvas || null,
+            cobertura_total: true,
           },
           usuario_id: analista_id,
         });
@@ -187,15 +217,15 @@ serve(async (req) => {
         console.error('[processar-vistoria] Erro ao registrar histórico:', histError);
       }
 
-      // 4.5 Criar notificação interna para coordenadores (usando notificacoes_sistema)
+      // 4.5 Criar notificação interna para gestão
       try {
         await supabase.from('notificacoes_sistema').insert({
-          titulo: '🚗 Nova instalação na fila',
-          mensagem: `${vistoria.associado?.nome} - ${vistoria.veiculo?.modelo} (${vistoria.veiculo?.placa})`,
-          tipo: 'info',
+          titulo: '✅ Associado ativado com cobertura total',
+          mensagem: `${vistoria.associado?.nome} - ${vistoria.veiculo?.modelo} (${vistoria.veiculo?.placa}) - Instalação concluída`,
+          tipo: 'success',
           destino: 'perfil',
-          destino_role: 'coordenador',
-          link: instalacao_id ? `/monitoramento/instalacoes/${instalacao_id}` : '/monitoramento/instalacoes',
+          destino_role: 'diretor',
+          link: `/cadastro/associados/${vistoria.associado_id}`,
         });
         console.log('[processar-vistoria] Notificação de sistema criada');
       } catch (notifError) {
@@ -293,7 +323,7 @@ serve(async (req) => {
         nova_vistoria_id,
         mensagem: decisao === 'reprovada' 
           ? 'Vistoria reprovada. Cliente notificado.'
-          : 'Vistoria aprovada. Instalação criada na fila.',
+          : 'Vistoria presencial aprovada. Associado e veículo ativados com cobertura TOTAL.',
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

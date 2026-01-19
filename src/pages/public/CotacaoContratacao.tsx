@@ -385,36 +385,53 @@ export default function CotacaoContratacao() {
                     (!cotacao?.vistoria_data_agendada && cotacao?.status_contratacao === 'pagamento_ok')) ? (
                     // AUTOVISTORIA ou caso sem agendamento - Verificar se já agendou vistoria completa/instalação
                     cotacao?.vistoria_completa_data_agendada ? (
-                      // Vistoria completa já agendada - mostrar conclusão final
-                      <Card className="border-success/30 bg-card/80 backdrop-blur-xl">
+                      // Vistoria completa já agendada - mostrar tela de análise
+                      <Card className="border-primary/30 bg-card/80 backdrop-blur-xl">
                         <CardContent className="py-12 text-center space-y-6">
                           <motion.div 
-                            className="w-20 h-20 mx-auto rounded-full bg-success/10 flex items-center justify-center"
+                            className="w-20 h-20 mx-auto rounded-full bg-primary/10 flex items-center justify-center"
                             initial={{ scale: 0 }}
                             animate={{ scale: 1 }}
                             transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
                           >
-                            <PartyPopper className="h-10 w-10 text-success" />
+                            <Clock className="h-10 w-10 text-primary" />
                           </motion.div>
                           
                           <div>
-                            <Badge className="bg-success/20 text-success border-success/30 mb-4">
-                              Bem-vindo à PRATIC!
+                            <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 mb-4">
+                              Em Análise Cadastral
                             </Badge>
                             <h2 className="text-2xl font-bold mb-3 text-foreground">
-                              Parabéns! Você está na família PRATIC!
+                              Sua proposta está sendo analisada
                             </h2>
+                            <p className="text-muted-foreground max-w-md mx-auto">
+                              Seus documentos, contrato assinado e imagens da vistoria estão sendo analisados pelo nosso setor de cadastro. Você será notificado sobre a aprovação em breve.
+                            </p>
                           </div>
 
-                          {/* Cobertura ativa */}
-                          <div className="bg-success/10 border border-success/30 rounded-lg p-4 max-w-md mx-auto">
-                            <div className="flex items-center gap-3 justify-center mb-2">
-                              <Shield className="h-6 w-6 text-success" />
-                              <span className="font-semibold text-success">Cobertura Ativa</span>
+                          {/* Checklist visual do que foi concluído */}
+                          <div className="bg-muted/30 rounded-lg p-4 max-w-md mx-auto text-left space-y-3">
+                            <p className="text-sm font-medium text-foreground mb-3">O que já foi recebido:</p>
+                            
+                            <div className="flex items-center gap-3">
+                              <CheckCircle2 className="h-5 w-5 text-success flex-shrink-0" />
+                              <span className="text-sm text-muted-foreground">Contrato assinado digitalmente</span>
                             </div>
-                            <p className="text-sm text-muted-foreground">
-                              Roubo e Furto <span className="text-success font-medium">(Proteção Imediata)</span>
-                            </p>
+                            
+                            <div className="flex items-center gap-3">
+                              <CheckCircle2 className="h-5 w-5 text-success flex-shrink-0" />
+                              <span className="text-sm text-muted-foreground">Autovistoria realizada (fotos do veículo)</span>
+                            </div>
+                            
+                            <div className="flex items-center gap-3">
+                              <CheckCircle2 className="h-5 w-5 text-success flex-shrink-0" />
+                              <span className="text-sm text-muted-foreground">Pagamento de adesão confirmado</span>
+                            </div>
+                            
+                            <div className="flex items-center gap-3">
+                              <CheckCircle2 className="h-5 w-5 text-success flex-shrink-0" />
+                              <span className="text-sm text-muted-foreground">Instalação do rastreador agendada</span>
+                            </div>
                           </div>
 
                           {/* Detalhes do agendamento da vistoria completa */}
@@ -467,13 +484,13 @@ export default function CotacaoContratacao() {
                           <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 max-w-md mx-auto">
                             <AlertTriangle className="h-5 w-5 text-amber-500 mt-0.5 flex-shrink-0" />
                             <p className="text-sm text-left text-amber-200">
-                              <strong>Importante:</strong> A cobertura <strong>TOTAL</strong> será ativada 
-                              após a realização da vistoria presencial e instalação do rastreador.
+                              <strong>Próximo passo:</strong> Após a aprovação do setor de cadastro, a <strong>cobertura de Roubo e Furto</strong> será ativada. 
+                              A cobertura <strong>TOTAL</strong> será ativada após a instalação do rastreador.
                             </p>
                           </div>
 
                           <p className="text-sm text-muted-foreground">
-                            Você receberá um e-mail com todos os detalhes. Aguarde o contato do técnico no dia agendado.
+                            Você receberá um e-mail com a atualização do status da sua proposta.
                           </p>
                         </CardContent>
                       </Card>

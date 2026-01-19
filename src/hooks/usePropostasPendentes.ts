@@ -417,7 +417,7 @@ export function useAprovarProposta() {
       const associadoId = contrato.associado_id;
       const diaVencimento = contrato.dia_vencimento || (contrato.associado as any)?.dia_vencimento || 15;
 
-      // 2. Atualizar CONTRATO para ativo
+      // 2. Atualizar CONTRATO para ativo (contrato ativo, mas associado ainda aguarda instalação)
       const { error: contratoError } = await supabase
         .from('contratos')
         .update({
@@ -430,13 +430,13 @@ export function useAprovarProposta() {
 
       if (contratoError) throw contratoError;
 
-      // 3. Atualizar ASSOCIADO para ativo
+      // 3. Atualizar ASSOCIADO para aguardando_instalacao (NÃO ativo ainda)
+      // A ativação completa ocorre após técnico aprovar vistoria presencial
       const { error: associadoError } = await supabase
         .from('associados')
         .update({
-          status: 'ativo',
+          status: 'aguardando_instalacao',
           data_adesao: agora.split('T')[0],
-          data_ativacao: agora,
           aprovado_por: profile.id,
           aprovado_em: agora,
         })
@@ -444,32 +444,37 @@ export function useAprovarProposta() {
 
       if (associadoError) throw associadoError;
 
-      // 4. Registrar histórico
-      await supabase
-        .from('associados_historico')
-        .insert({
-          associado_id: associadoId,
-          contrato_id: contratoId,
-          tipo: 'status_alterado',
-          descricao: 'Proposta aprovada. Associado ativado.',
-          usuario_id: profile.id,
-        });
-
-      // 5. Buscar veículo do associado para criar instalação
+      // 4. Buscar veículo do associado para ativar cobertura roubo/furto
       const { data: veiculos } = await supabase
         .from('veiculos')
         .select('id, placa, modelo')
         .eq('associado_id', associadoId)
         .limit(1);
 
-      // 6. Criar INSTALAÇÃO pendente (se tiver veículo)
+      // 5. Atualizar VEÍCULO para cobertura roubo/furto (parcial)
       if (veiculos && veiculos.length > 0) {
+        const veiculoId = veiculos[0].id;
+        
+        const { error: veiculoError } = await supabase
+          .from('veiculos')
+          .update({
+            status: 'instalacao_pendente',
+            cobertura_roubo_furto: true,
+            cobertura_total: false,
+          })
+          .eq('id', veiculoId);
+
+        if (veiculoError) {
+          console.error('Erro ao atualizar veículo:', veiculoError);
+        }
+
+        // 6. Criar INSTALAÇÃO agendada (se tiver veículo)
         const associadoData = contrato.associado as any;
         await supabase
           .from('instalacoes')
           .insert({
             associado_id: associadoId,
-            veiculo_id: veiculos[0].id,
+            veiculo_id: veiculoId,
             status: 'pendente',
             logradouro: associadoData?.logradouro || null,
             numero: associadoData?.numero || null,
@@ -479,6 +484,17 @@ export function useAprovarProposta() {
             cep: associadoData?.cep || null,
           } as any);
       }
+
+      // 7. Registrar histórico
+      await supabase
+        .from('associados_historico')
+        .insert({
+          associado_id: associadoId,
+          contrato_id: contratoId,
+          tipo: 'status_alterado',
+          descricao: 'Proposta aprovada pelo analista de cadastro. Cobertura Roubo/Furto ativada. Aguardando instalação para cobertura total.',
+          usuario_id: profile.id,
+        });
 
       // 7. Buscar plano para criar cobranças
       const { data: plano } = await supabase
@@ -532,11 +548,11 @@ export function useAprovarProposta() {
       return { 
         contratoId, 
         associadoId,
-        mensagem: 'Associado ativado! Instalação criada e cobrança gerada.'
+        mensagem: 'Proposta aprovada! Cobertura Roubo/Furto ativada. Aguardando instalação para cobertura total.'
       };
     },
     onSuccess: () => {
-      toast.success('Proposta aprovada! Associado ativado com sucesso.');
+      toast.success('Proposta aprovada! Cobertura Roubo/Furto ativada. Aguardando instalação para cobertura total.');
       queryClient.invalidateQueries({ queryKey: ['propostas-pendentes'] });
       queryClient.invalidateQueries({ queryKey: ['propostas-stats'] });
       queryClient.invalidateQueries({ queryKey: ['proposta'] });
