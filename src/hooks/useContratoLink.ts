@@ -509,6 +509,103 @@ export function useFinalizarAutovistoria() {
   });
 }
 
+// Interface para agendar instalação no fluxo de contrato
+export interface AgendarInstalacaoContratoParams {
+  contratoId: string;
+  dataAgendada: string;
+  horarioAgendado: string;
+  endereco: {
+    cep: string;
+    logradouro: string;
+    numero: string;
+    bairro: string;
+    cidade: string;
+    estado: string;
+  };
+  responsavel: {
+    euMesmo: boolean;
+    nome?: string;
+    telefone?: string;
+  };
+}
+
+// Hook para agendar instalação após autovistoria no fluxo de contrato
+export function useAgendarInstalacaoContrato() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async ({ contratoId, dataAgendada, horarioAgendado, endereco, responsavel }: AgendarInstalacaoContratoParams) => {
+      // Geocodificar endereço em background
+      let latitude: number | null = null;
+      let longitude: number | null = null;
+      
+      try {
+        const { data, error } = await supabase.functions.invoke('geocode', {
+          body: {
+            logradouro: endereco.logradouro,
+            numero: endereco.numero,
+            bairro: endereco.bairro,
+            cidade: endereco.cidade,
+            uf: endereco.estado,
+            cep: endereco.cep,
+          }
+        });
+        
+        if (!error && data?.latitude && data?.longitude) {
+          latitude = data.latitude;
+          longitude = data.longitude;
+        }
+      } catch (err) {
+        console.warn('Erro ao geocodificar endereço:', err);
+      }
+      
+      // Atualizar contrato com dados de agendamento
+      const { error } = await supabase
+        .from('contratos')
+        .update({
+          vistoria_completa_data_agendada: dataAgendada,
+          vistoria_completa_horario_agendado: horarioAgendado,
+          vistoria_completa_endereco_cep: endereco.cep,
+          vistoria_completa_endereco_logradouro: endereco.logradouro,
+          vistoria_completa_endereco_numero: endereco.numero,
+          vistoria_completa_endereco_bairro: endereco.bairro,
+          vistoria_completa_endereco_cidade: endereco.cidade,
+          vistoria_completa_endereco_estado: endereco.estado,
+          vistoria_completa_responsavel_eu_mesmo: responsavel.euMesmo,
+          vistoria_completa_responsavel_nome: responsavel.nome || null,
+          vistoria_completa_responsavel_telefone: responsavel.telefone || null,
+          vistoria_endereco_latitude: latitude,
+          vistoria_endereco_longitude: longitude,
+        })
+        .eq('id', contratoId);
+      
+      if (error) throw error;
+      
+      // Registrar no histórico
+      await supabase.from('contratos_historico').insert({
+        contrato_id: contratoId,
+        evento: 'instalacao_agendada',
+        descricao: `Instalação agendada para ${dataAgendada} às ${horarioAgendado}`,
+        dados: {
+          data: dataAgendada,
+          horario: horarioAgendado,
+          endereco: `${endereco.logradouro}, ${endereco.numero} - ${endereco.bairro}`,
+        },
+      });
+      
+      return { success: true };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contrato-publico'] });
+      queryClient.invalidateQueries({ queryKey: ['vistorias-mapa'] });
+      toast.success('Instalação agendada com sucesso!');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Erro ao agendar instalação');
+    },
+  });
+}
+
 // Gerar URL do link do associado
 export function getAssociadoLinkUrl(token: string): string {
   const baseUrl = window.location.origin;

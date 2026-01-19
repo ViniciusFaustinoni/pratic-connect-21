@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
-import { Loader2, Shield, Car, CheckCircle, AlertCircle, Clock, Search, Lock, Sparkles, FileCheck } from 'lucide-react';
+import { Loader2, Shield, Car, CheckCircle, AlertCircle, Clock, Search, Lock, Sparkles, FileCheck, MapPin } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -12,6 +12,7 @@ import { PagamentoAdesao } from '@/components/associado/PagamentoAdesao';
 import { ConfirmacaoVistoria } from '@/components/associado/ConfirmacaoVistoria';
 import { DocumentosPendentes } from '@/components/associado/DocumentosPendentes';
 import { SyncStatusIndicator } from '@/components/associado/SyncStatusIndicator';
+import { AgendamentoInstalacaoContrato } from '@/components/associado/AgendamentoInstalacaoContrato';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
@@ -27,13 +28,14 @@ const STATUS_ASSOCIADO_CONFIG: Record<string, { label: string; variant: 'default
   'ativo': { label: 'Ativo', variant: 'outline', icon: <CheckCircle className="h-3 w-3" /> },
 };
 
-type Etapa = 'documentos' | 'escolha' | 'agendar' | 'autovistoria' | 'pagamento' | 'confirmacao';
+type Etapa = 'documentos' | 'escolha' | 'agendar' | 'autovistoria' | 'pagamento' | 'agendamento_instalacao' | 'confirmacao';
 
 // Stepper premium do fluxo de proposta
 const etapasFluxo = [
   { id: 'documentos', label: 'Documentos', icon: FileCheck },
   { id: 'vistoria', label: 'Vistoria', icon: Car },
   { id: 'pagamento', label: 'Pagamento', icon: Sparkles },
+  { id: 'instalacao', label: 'Instalação', icon: MapPin },
   { id: 'conclusao', label: 'Conclusão', icon: CheckCircle },
 ];
 
@@ -55,7 +57,8 @@ export default function AssociadoVistoria() {
       case 'autovistoria':
         return 1;
       case 'pagamento': return 2;
-      case 'confirmacao': return 3;
+      case 'agendamento_instalacao': return 3;
+      case 'confirmacao': return 4;
       default: return 0;
     }
   }, [etapa]);
@@ -78,9 +81,19 @@ export default function AssociadoVistoria() {
   // Determinar etapa baseado no estado do contrato
   useEffect(() => {
     if (contrato) {
-      if (contrato.adesao_paga) {
+      // Se já tem instalação agendada (vistoria_completa_data_agendada), vai para confirmação
+      if (contrato.vistoria_completa_data_agendada) {
         setEtapa('confirmacao');
-      } else if (contrato.tipo_vistoria === 'agendada' && dadosAgendamento) {
+      } 
+      // Se pagou adesão mas é autovistoria e ainda não agendou instalação
+      else if (contrato.adesao_paga && contrato.tipo_vistoria === 'autovistoria' && !contrato.vistoria_completa_data_agendada) {
+        setEtapa('agendamento_instalacao');
+      }
+      // Se pagou adesão e é vistoria agendada direta, já vai pra confirmação
+      else if (contrato.adesao_paga && contrato.tipo_vistoria === 'agendada') {
+        setEtapa('confirmacao');
+      }
+      else if (contrato.tipo_vistoria === 'agendada' && dadosAgendamento) {
         setEtapa('pagamento');
       } else if (contrato.tipo_vistoria === 'autovistoria') {
         setEtapa('autovistoria');
@@ -356,6 +369,34 @@ export default function AssociadoVistoria() {
               clienteEmail={contrato.associados?.email || contrato.leads?.email || contrato.cliente_email || ''}
               clienteCpf={contrato.associados?.cpf || contrato.leads?.cpf || contrato.cliente_cpf || ''}
               onPagamentoConfirmado={() => {
+                // Se é autovistoria, vai para agendamento da instalação
+                if (contrato.tipo_vistoria === 'autovistoria') {
+                  setEtapa('agendamento_instalacao');
+                } else {
+                  // Se é vistoria agendada direta, já vai para confirmação
+                  if (token && !contrato?.autentique_url) {
+                    console.log('[AssociadoVistoria] Iniciando geração do link Autentique...');
+                    gerarAutentique.mutate(token, {
+                      onSuccess: (result) => {
+                        console.log('[AssociadoVistoria] Link gerado:', result.signatureLink);
+                        setLinkGeradoAntecipado(result.signatureLink);
+                      },
+                      onError: (err) => {
+                        console.error('[AssociadoVistoria] Erro:', err);
+                      },
+                    });
+                  }
+                  setEtapa('confirmacao');
+                }
+              }}
+            />
+          )}
+
+          {etapa === 'agendamento_instalacao' && (
+            <AgendamentoInstalacaoContrato
+              contratoId={contrato.id}
+              onConfirmar={() => {
+                // Após agendar, gerar link Autentique e ir para confirmação
                 if (token && !contrato?.autentique_url) {
                   console.log('[AssociadoVistoria] Iniciando geração do link Autentique...');
                   gerarAutentique.mutate(token, {

@@ -66,7 +66,7 @@ export function MapaVistoriasContent() {
 
       if (filtroBusca) {
         const termo = filtroBusca.toLowerCase();
-        const placa = v.placa?.toLowerCase() || "";
+        const placa = v.veiculo_placa?.toLowerCase() || "";
         const associado = v.associado_nome?.toLowerCase() || "";
         const bairro = v.endereco_bairro?.toLowerCase() || "";
 
@@ -195,7 +195,7 @@ export function MapaVistoriasContent() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                           <span className="font-semibold text-sm truncate">
-                            {v.placa || "Sem placa"}
+                            {v.veiculo_placa || "Sem placa"}
                           </span>
                           <Badge variant="outline" className="text-xs bg-red-50 text-red-700 border-red-200">
                             {TIPO_VISTORIA_LABELS[v.tipo_vistoria as keyof typeof TIPO_VISTORIA_LABELS] || v.tipo_vistoria}
@@ -283,7 +283,7 @@ export function MapaVistoriasContent() {
                 <Popup>
                   <div className="min-w-[200px]">
                     <div className="flex items-center justify-between mb-2">
-                      <h3 className="font-bold text-sm">{v.placa || "Sem placa"}</h3>
+                      <h3 className="font-bold text-sm">{v.veiculo_placa || "Sem placa"}</h3>
                       <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded">
                         {TIPO_VISTORIA_LABELS[v.tipo_vistoria as keyof typeof TIPO_VISTORIA_LABELS] || v.tipo_vistoria}
                       </span>
@@ -291,7 +291,7 @@ export function MapaVistoriasContent() {
 
                     <div className="text-xs space-y-1 mb-2">
                       <p><strong>Associado:</strong> {v.associado_nome || "-"}</p>
-                      <p><strong>Veículo:</strong> {v.marca} {v.modelo}</p>
+                      <p><strong>Veículo:</strong> {v.veiculo_marca} {v.veiculo_modelo}</p>
                       {v.data_agendada && (
                         <p><strong>Agendada:</strong> {format(new Date(v.data_agendada), "dd/MM/yyyy", { locale: ptBR })}</p>
                       )}
