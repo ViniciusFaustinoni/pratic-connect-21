@@ -469,7 +469,7 @@ export function MapaVistoriasContent() {
                               "text-xs mt-1 flex items-center gap-1",
                               isAtrasada ? "text-orange-600" : "text-muted-foreground"
                             )}>
-                              <Calendar className="h-3 w-3" />
+                              <CalendarIcon className="h-3 w-3" />
                               {format(new Date(v.data_agendada), "dd/MM/yyyy", { locale: ptBR })}
                               {isAtrasada && " (pendente)"}
                             </p>
