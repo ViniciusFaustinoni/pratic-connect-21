@@ -14,15 +14,15 @@ export interface VistoriaMapa {
   endereco_cep: string | null;
   latitude: number | null;
   longitude: number | null;
-  associado_id: string | null;
   associado_nome: string | null;
   associado_telefone: string | null;
-  veiculo_id: string | null;
-  placa: string | null;
-  marca: string | null;
-  modelo: string | null;
+  associado_whatsapp: string | null;
+  veiculo_marca: string | null;
+  veiculo_modelo: string | null;
+  veiculo_placa: string | null;
+  veiculo_cor: string | null;
   vistoriador_id: string | null;
-  vistoriador_nome: string | null;
+  horario_agendado: string | null;
 }
 
 export function useVistoriasMapa() {
