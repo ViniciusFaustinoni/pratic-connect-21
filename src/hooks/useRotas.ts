@@ -8,12 +8,20 @@ export type RotaInsert = TablesInsert<'rotas'>;
 export type RotaUpdate = TablesUpdate<'rotas'>;
 export type StatusRota = Database['public']['Enums']['status_rota'];
 
+export interface RotaInstalador {
+  id: string;
+  instalador_id: string;
+  instalador?: Tables<'profiles'> | null;
+}
+
 export interface RotaWithRelations extends Rota {
   instalador?: Tables<'profiles'> | null;
   coordenador?: Tables<'profiles'> | null;
+  rota_instaladores?: RotaInstalador[];
   instalacoes?: (Tables<'instalacoes'> & {
     associados?: Tables<'associados'> | null;
     veiculos?: Tables<'veiculos'> | null;
+    instalador_responsavel?: Tables<'profiles'> | null;
   })[];
 }
 
@@ -80,7 +88,7 @@ export function useRotas(filters?: RotaFilters) {
   });
 }
 
-// Rota única com instalações
+// Rota única com instalações e múltiplos instaladores
 export function useRota(id: string | undefined) {
   return useQuery({
     queryKey: ['rota', id],
@@ -100,19 +108,37 @@ export function useRota(id: string | undefined) {
       if (rotaError) throw rotaError;
       if (!rota) return null;
 
+      // Buscar instaladores da rota (tabela N:N)
+      const { data: rotaInstaladores, error: riError } = await supabase
+        .from('rota_instaladores')
+        .select(`
+          id,
+          instalador_id,
+          instalador:profiles(*)
+        `)
+        .eq('rota_id', id);
+
+      if (riError) console.error('Error fetching rota_instaladores:', riError);
+
+      // Buscar instalações com instalador responsável
       const { data: instalacoes, error: instError } = await supabase
         .from('instalacoes')
         .select(`
           *,
           associados(*),
-          veiculos(*)
+          veiculos(*),
+          instalador_responsavel:profiles!instalacoes_instalador_responsavel_id_fkey(id, nome, telefone)
         `)
         .eq('rota_id', id)
         .order('periodo');
 
       if (instError) throw instError;
 
-      return { ...rota, instalacoes } as RotaWithRelations;
+      return { 
+        ...rota, 
+        instalacoes,
+        rota_instaladores: rotaInstaladores || []
+      } as RotaWithRelations;
     },
     enabled: !!id,
   });

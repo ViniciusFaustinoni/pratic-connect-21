@@ -5,3 +5,6 @@ export { RotaCard } from './RotaCard';
 export { InstalacaoMiniCard } from './InstalacaoMiniCard';
 export { RotaFilters } from './RotaFilters';
 export { AddInstalacaoDialog } from './AddInstalacaoDialog';
+export { InstaladorMultiSelect } from './InstaladorMultiSelect';
+export { BairroSelector } from './BairroSelector';
+export { DistribuicaoPreview, distribuirInstalacoes } from './DistribuicaoPreview';
