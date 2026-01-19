@@ -306,10 +306,10 @@ export function MapaVistoriasContent() {
               </div>
             ) : (
               <div className="space-y-2">
-                {vistoriasFiltradas.map((v) => {
-                  const color = v.rota_id 
+              {vistoriasFiltradas.map((v) => {
+                  const color = v.rota_cor || (v.rota_id 
                     ? getRotaColor(v.rota_id, rotasIds)
-                    : SEM_ROTA_COLOR;
+                    : SEM_ROTA_COLOR);
                   
                   return (
                     <div
@@ -439,9 +439,9 @@ export function MapaVistoriasContent() {
 
             {/* Marcadores */}
             {vistoriasComCoordenadas.map((v) => {
-              const color = v.rota_id 
+              const color = v.rota_cor || (v.rota_id 
                 ? getRotaColor(v.rota_id, rotasIds)
-                : SEM_ROTA_COLOR;
+                : SEM_ROTA_COLOR);
               
               return (
                 <Marker

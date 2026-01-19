@@ -27,6 +27,7 @@ export interface VistoriaMapa {
   rota_id: string | null;
   rota_codigo: string | null;
   rota_regiao: string | null;
+  rota_cor: string | null;
   vistoriador_nome: string | null;
 }
 

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { CalendarIcon } from 'lucide-react';
+import { CalendarIcon, Check } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -26,6 +26,18 @@ import { InstaladorMultiSelect } from './InstaladorMultiSelect';
 import { BairroSelector } from './BairroSelector';
 import { DistribuicaoPreview, distribuirInstalacoes, type DistribuicaoItem } from './DistribuicaoPreview';
 
+// Cores predefinidas para rotas
+const ROTA_COLORS = [
+  '#3B82F6', // Azul
+  '#10B981', // Verde
+  '#8B5CF6', // Roxo
+  '#F59E0B', // Laranja
+  '#EF4444', // Vermelho
+  '#EC4899', // Rosa
+  '#06B6D4', // Ciano
+  '#84CC16', // Lima
+];
+
 interface RotaFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -41,6 +53,7 @@ export function RotaFormDialog({ open, onOpenChange, rota }: RotaFormDialogProps
   const [dataRota, setDataRota] = useState<Date>(new Date());
   const [selectedInstaladores, setSelectedInstaladores] = useState<string[]>([]);
   const [selectedBairros, setSelectedBairros] = useState<string[]>([]);
+  const [corSelecionada, setCorSelecionada] = useState(ROTA_COLORS[0]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [distribuicao, setDistribuicao] = useState<DistribuicaoItem[]>([]);
 
@@ -59,6 +72,7 @@ export function RotaFormDialog({ open, onOpenChange, rota }: RotaFormDialogProps
         setDataRota(new Date());
         setSelectedInstaladores([]);
         setSelectedBairros([]);
+        setCorSelecionada(ROTA_COLORS[Math.floor(Math.random() * ROTA_COLORS.length)]);
       }
       setDistribuicao([]);
     }
@@ -111,6 +125,7 @@ export function RotaFormDialog({ open, onOpenChange, rota }: RotaFormDialogProps
           codigo,
           cidade: selectedBairros.length ? instalacoesSelecionadas?.[0]?.cidade : null,
           regiao: selectedBairros.join(', ').substring(0, 100),
+          cor: corSelecionada,
         })
         .select()
         .single();
@@ -215,6 +230,31 @@ export function RotaFormDialog({ open, onOpenChange, rota }: RotaFormDialogProps
               onSelectionChange={setSelectedInstaladores}
               placeholder="Selecione os instaladores"
             />
+          </div>
+
+          {/* Cor da Rota */}
+          <div className="space-y-2">
+            <Label>Cor da Rota</Label>
+            <div className="flex gap-2 flex-wrap">
+              {ROTA_COLORS.map((cor) => (
+                <button
+                  key={cor}
+                  type="button"
+                  onClick={() => setCorSelecionada(cor)}
+                  className={cn(
+                    "w-8 h-8 rounded-full border-2 transition-all flex items-center justify-center",
+                    corSelecionada === cor 
+                      ? "border-foreground scale-110 shadow-md" 
+                      : "border-transparent hover:scale-105"
+                  )}
+                  style={{ backgroundColor: cor }}
+                >
+                  {corSelecionada === cor && (
+                    <Check className="h-4 w-4 text-white drop-shadow-md" />
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Bairros */}
