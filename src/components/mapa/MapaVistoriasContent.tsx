@@ -42,7 +42,7 @@ import { TIPO_VISTORIA_LABELS } from "@/types/servicos-rota";
 import { getRotaColor, SEM_ROTA_COLOR, createColoredMarkerSvg, svgToDataUrl } from "@/lib/rota-colors";
 import { MapaRotasLegenda } from "./MapaRotasLegenda";
 import { cn } from "@/lib/utils";
-import { useBairrosGeoJSON } from "@/hooks/useBairrosGeoJSON";
+import { useBairrosGeoJSONDinamico, identificarCidadePredominante } from "@/hooks/useBairrosGeoJSONDinamico";
 import { normalizarNomeBairro } from "@/lib/bairros";
 
 // Cor fixa vermelha para pinos de vistorias
@@ -84,7 +84,6 @@ function FlyToPosition({ position, zoom = 15 }: { position: [number, number] | n
 
 export function MapaVistoriasContent() {
   const { data: vistorias, isLoading } = useVistoriasMapa();
-  const { data: bairrosGeoJSON } = useBairrosGeoJSON();
   const [filtroTipo, setFiltroTipo] = useState("todos");
   const [filtroRota, setFiltroRota] = useState<string | null>(null);
   const [filtroBusca, setFiltroBusca] = useState("");
@@ -94,6 +93,14 @@ export function MapaVistoriasContent() {
   
   // Hook para buscar bairros das rotas - após filtroData ser declarado
   const { data: rotasBairros } = useRotasBairros(filtroData);
+
+  // Identificar cidade predominante das vistorias para buscar GeoJSON dinâmico
+  const cidadePredominante = useMemo(() => {
+    return identificarCidadePredominante(vistorias || []);
+  }, [vistorias]);
+
+  // Buscar GeoJSON de bairros dinamicamente para a cidade identificada
+  const { data: bairrosGeoJSON, isLoading: isLoadingGeoJSON } = useBairrosGeoJSONDinamico(cidadePredominante);
 
   // Obter lista de IDs de rotas únicas
   const rotasIds = useMemo(() => {
@@ -544,9 +551,9 @@ export function MapaVistoriasContent() {
             <FlyToPosition position={posicaoSelecionada} />
 
             {/* Camada de polígonos dos bairros */}
-            {bairrosGeoJSON && (
+            {bairrosGeoJSON && bairrosGeoJSON.features.length > 0 && (
               <GeoJSON
-                key={`bairros-${filtroData?.getTime() || 0}-${bairrosComRota.size}-${Array.from(bairrosComRota.keys()).join(',')}`}
+                key={`bairros-${cidadePredominante || 'all'}-${filtroData?.getTime() || 0}-${bairrosComRota.size}-${Array.from(bairrosComRota.keys()).join(',')}`}
                 data={bairrosGeoJSON as GeoJSON.FeatureCollection}
                 style={styleBairro}
                 onEachFeature={(feature, layer) => {
@@ -662,8 +669,19 @@ export function MapaVistoriasContent() {
           />
 
           <div className="absolute bottom-4 left-4 bg-background/90 backdrop-blur-sm px-3 py-1.5 rounded-full text-xs text-muted-foreground border shadow-sm flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-            {vistoriasComCoordenadas.length} vistorias • Tempo real
+            {isLoadingGeoJSON ? (
+              <>
+                <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+                Carregando bairros...
+              </>
+            ) : (
+              <>
+                <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                {vistoriasComCoordenadas.length} vistorias
+                {cidadePredominante && ` • ${cidadePredominante}`}
+                {bairrosGeoJSON?.features?.length && ` • ${bairrosGeoJSON.features.length} bairros`}
+              </>
+            )}
           </div>
         </CardContent>
       </Card>
