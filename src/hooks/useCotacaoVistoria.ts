@@ -171,7 +171,7 @@ export function useAgendarVistoriaCompleta() {
   
   return useMutation({
     mutationFn: async ({ cotacaoId, dataAgendada, horarioAgendado, endereco, responsavel }: AgendarVistoriaCompletaParams) => {
-      // Geocodificar endereço em background antes de salvar
+      // Geocodificar endereço antes de salvar
       const coords = await geocodificarEndereco({
         logradouro: endereco.logradouro,
         numero: endereco.numero,
@@ -201,16 +201,85 @@ export function useAgendarVistoriaCompleta() {
         updateData.vistoria_endereco_longitude = coords.longitude;
       }
       
-      const { error } = await supabase
+      // 1. Atualizar cotação
+      const { error: cotacaoError } = await supabase
         .from('cotacoes')
         .update(updateData)
         .eq('id', cotacaoId);
       
-      if (error) throw error;
+      if (cotacaoError) throw cotacaoError;
+      
+      // 2. Buscar dados da cotação para obter informações do cliente
+      const { data: cotacao } = await supabase
+        .from('cotacoes')
+        .select('id, nome_solicitante, telefone1_solicitante, veiculo_placa, veiculo_marca, veiculo_modelo')
+        .eq('id', cotacaoId)
+        .single();
+      
+      // 3. Buscar contrato vinculado para obter associado_id e veiculo_id
+      const { data: contrato } = await supabase
+        .from('contratos')
+        .select('id, associado_id, veiculo_id')
+        .eq('cotacao_id', cotacaoId)
+        .single();
+      
+      // 4. CRIAR REGISTRO NA TABELA VISTORIAS
+      // Montar observações com dados do responsável
+      const obsResponsavel = responsavel.euMesmo 
+        ? `Responsável: ${cotacao?.nome_solicitante} - ${cotacao?.telefone1_solicitante}` 
+        : `Responsável: ${responsavel.nome} - ${responsavel.telefone}`;
+      
+      const vistoriaData = {
+        cotacao_id: cotacaoId,
+        contrato_id: contrato?.id || null,
+        associado_id: contrato?.associado_id || null,
+        veiculo_id: contrato?.veiculo_id || null,
+        tipo: 'entrada' as const,
+        modalidade: 'presencial',
+        status: 'agendada' as const,
+        origem: 'cotacao',
+        data_agendada: dataAgendada,
+        horario_agendado: horarioAgendado,
+        endereco_cep: endereco.cep,
+        endereco_logradouro: endereco.logradouro,
+        endereco_numero: endereco.numero,
+        endereco_bairro: endereco.bairro,
+        endereco_cidade: endereco.cidade,
+        endereco_estado: endereco.estado,
+        endereco_latitude: coords.success ? coords.latitude : null,
+        endereco_longitude: coords.success ? coords.longitude : null,
+        observacoes: obsResponsavel,
+      };
+      
+      const { data: novaVistoria, error: vistoriaError } = await supabase
+        .from('vistorias')
+        .insert(vistoriaData)
+        .select('id')
+        .single();
+      
+      if (vistoriaError) {
+        console.error('[AgendarVistoriaCompleta] Erro ao criar vistoria:', vistoriaError);
+        throw vistoriaError;
+      }
+      
+      console.log('[AgendarVistoriaCompleta] Vistoria criada com sucesso:', novaVistoria.id);
+      
+      // 5. Atualizar contrato com vistoria_id
+      if (contrato?.id && novaVistoria?.id) {
+        await supabase
+          .from('contratos')
+          .update({ vistoria_id: novaVistoria.id })
+          .eq('id', contrato.id);
+      }
+      
+      return novaVistoria;
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['cotacao', variables.cotacaoId] });
       queryClient.invalidateQueries({ queryKey: ['cotacao-publica'] });
+      queryClient.invalidateQueries({ queryKey: ['vistorias'] });
+      queryClient.invalidateQueries({ queryKey: ['vistorias-mapa'] });
+      queryClient.invalidateQueries({ queryKey: ['monitoramento-estatisticas'] });
       toast.success('Vistoria completa agendada com sucesso!');
     },
     onError: () => toast.error('Erro ao agendar vistoria completa')
