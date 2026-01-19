@@ -3578,6 +3578,7 @@ export type Database = {
           vistoria_concluida_em: string | null
           vistoria_endereco_latitude: number | null
           vistoria_endereco_longitude: number | null
+          vistoria_rota_id: string | null
         }
         Insert: {
           adesao_cobranca_id?: string | null
@@ -3648,6 +3649,7 @@ export type Database = {
           vistoria_concluida_em?: string | null
           vistoria_endereco_latitude?: number | null
           vistoria_endereco_longitude?: number | null
+          vistoria_rota_id?: string | null
         }
         Update: {
           adesao_cobranca_id?: string | null
@@ -3718,6 +3720,7 @@ export type Database = {
           vistoria_concluida_em?: string | null
           vistoria_endereco_latitude?: number | null
           vistoria_endereco_longitude?: number | null
+          vistoria_rota_id?: string | null
         }
         Relationships: [
           {
@@ -3803,6 +3806,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
             referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "contratos_vistoria_rota_id_fkey"
+            columns: ["vistoria_rota_id"]
+            isOneToOne: false
+            referencedRelation: "rotas"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "fk_contratos_associado"
@@ -11871,6 +11881,7 @@ export type Database = {
           cidade: string | null
           codigo: string
           coordenador_id: string | null
+          cor: string | null
           created_at: string
           data_rota: string
           id: string
@@ -11885,6 +11896,7 @@ export type Database = {
           cidade?: string | null
           codigo: string
           coordenador_id?: string | null
+          cor?: string | null
           created_at?: string
           data_rota: string
           id?: string
@@ -11899,6 +11911,7 @@ export type Database = {
           cidade?: string | null
           codigo?: string
           coordenador_id?: string | null
+          cor?: string | null
           created_at?: string
           data_rota?: string
           id?: string
@@ -13901,6 +13914,7 @@ export type Database = {
           latitude: number | null
           longitude: number | null
           rota_codigo: string | null
+          rota_cor: string | null
           rota_id: string | null
           rota_regiao: string | null
           status: string | null
