@@ -48,12 +48,16 @@ import { normalizarNomeBairro } from "@/lib/bairros";
 // Cor fixa vermelha para pinos de vistorias
 const VISTORIA_PIN_COLOR = "#EF4444";
 
-// Cache de ícones por cor
+// Cache de ícones por cor - limpar para garantir atualização
 const iconCache = new Map<string, L.Icon>();
 
+// Limpar cache ao iniciar para forçar ícones vermelhos
+iconCache.clear();
+
 function getColoredIcon(color: string): L.Icon {
-  if (iconCache.has(color)) {
-    return iconCache.get(color)!;
+  const cacheKey = `icon-${color}`;
+  if (iconCache.has(cacheKey)) {
+    return iconCache.get(cacheKey)!;
   }
   
   const icon = new L.Icon({
@@ -63,7 +67,7 @@ function getColoredIcon(color: string): L.Icon {
     popupAnchor: [0, -40],
   });
   
-  iconCache.set(color, icon);
+  iconCache.set(cacheKey, icon);
   return icon;
 }
 
@@ -493,7 +497,7 @@ export function MapaVistoriasContent() {
             {/* Camada de polígonos dos bairros */}
             {bairrosGeoJSON && (
               <GeoJSON
-                key={`bairros-${Array.from(bairrosComRota.keys()).join('-')}`}
+                key={`bairros-${filtroData?.toISOString() || 'sem-data'}-${rotasBairros?.map(r => r.rota_id).join('-') || 'no-routes'}`}
                 data={bairrosGeoJSON as GeoJSON.FeatureCollection}
                 style={styleBairro}
               />
@@ -527,7 +531,7 @@ export function MapaVistoriasContent() {
             {vistoriasComCoordenadas.map((v) => {
               return (
                 <Marker
-                  key={v.id}
+                  key={`marker-${v.id}-red`}
                   position={[v.latitude!, v.longitude!]}
                   icon={getColoredIcon(VISTORIA_PIN_COLOR)}
                 >
