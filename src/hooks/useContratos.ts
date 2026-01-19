@@ -9,14 +9,14 @@ type ContratoInsert = TablesInsert<'contratos'>;
 type ContratoUpdate = TablesUpdate<'contratos'>;
 
 export interface ContratoWithRelations extends Contrato {
-  planos?: Tables<'planos'> | null;
-  cotacoes?: Tables<'cotacoes'> | null;
-  associados?: Tables<'associados'> | null;
-  leads?: Tables<'leads'> | null;
+  planos?: Partial<Tables<'planos'>> | null;
+  cotacoes?: Partial<Tables<'cotacoes'>> | null;
+  associados?: Partial<Tables<'associados'>> | null;
+  leads?: Partial<Tables<'leads'>> | null;
   vendedor?: {
     id: string;
     nome: string;
-    email: string;
+    email?: string;
   } | null;
 }
 
@@ -27,9 +27,11 @@ export function useContratos() {
       const { data, error } = await supabase
         .from('contratos')
         .select(`
-          id, numero, status, valor_mensal, created_at, updated_at,
-          associado_id, plano_id, lead_id, cotacao_id, vendedor_id,
-          data_inicio, dia_vencimento
+          *,
+          leads (id, nome, telefone, email, veiculo_marca, veiculo_modelo, veiculo_ano, veiculo_placa),
+          associados:associados!fk_contratos_associado (id, nome, telefone, cpf, email),
+          planos (id, nome, codigo),
+          cotacoes:cotacoes!contratos_cotacao_id_fkey (id, veiculo_marca, veiculo_modelo, veiculo_ano, valor_adesao, valor_mensal)
         `)
         .order('created_at', { ascending: false })
         .limit(200);

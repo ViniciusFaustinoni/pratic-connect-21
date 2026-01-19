@@ -42,14 +42,13 @@ export function useAtivacoes(filtro: FiltroAtivacao = 'todos') {
   return useQuery({
     queryKey: ['ativacoes', filtro],
     queryFn: async (): Promise<AtivacaoContrato[]> => {
-      // Buscar contratos com dados do cliente
+      // Buscar contratos com joins diretos para leads e vendedor
       const { data: contratos, error } = await supabase
         .from('contratos')
         .select(`
-          id, numero, data_assinatura, data_ativacao, status, created_at, 
-          lead_id, vendedor_id, associado_id,
-          cliente_nome, cliente_telefone,
-          veiculo_marca, veiculo_modelo, veiculo_placa
+          *,
+          leads (id, nome, telefone, veiculo_marca, veiculo_modelo, veiculo_placa),
+          vendedor:profiles!contratos_vendedor_id_fkey (id, nome)
         `)
         .order('created_at', { ascending: false });
 
@@ -66,24 +65,8 @@ export function useAtivacoes(filtro: FiltroAtivacao = 'todos') {
         );
       }
 
-      // Buscar leads e vendedores
-      const leadIds = filteredContratos.map(c => c.lead_id).filter(Boolean) as string[];
-      const vendedorIds = filteredContratos.map(c => c.vendedor_id).filter(Boolean) as string[];
-      const associadoIds = filteredContratos.map(c => c.associado_id).filter(Boolean) as string[];
-
-      const [leadsRes, vendedoresRes] = await Promise.all([
-        leadIds.length > 0 
-          ? supabase.from('leads').select('id, nome, telefone, veiculo_marca, veiculo_modelo, veiculo_placa').in('id', leadIds)
-          : { data: [] },
-        vendedorIds.length > 0
-          ? supabase.from('profiles').select('id, nome').in('id', vendedorIds)
-          : { data: [] },
-      ]);
-
-      const leadsMap = new Map((leadsRes.data || []).map(l => [l.id, l]));
-      const vendedoresMap = new Map((vendedoresRes.data || []).map(v => [v.id, v]));
-
       // Buscar vistorias de entrada para cada associado
+      const associadoIds = filteredContratos.map(c => c.associado_id).filter(Boolean) as string[];
       let vistoriasData: Array<{ id: string; status: string | null; modalidade: string | null; created_at: string; associado_id: string }> = [];
       if (associadoIds.length > 0) {
         const { data } = await supabase
@@ -96,10 +79,10 @@ export function useAtivacoes(filtro: FiltroAtivacao = 'todos') {
       
       const vistoriasMap = new Map(vistoriasData.map(v => [v.associado_id, v]));
 
-      // Montar resultado
-      const result: AtivacaoContrato[] = filteredContratos.map(contrato => {
-        const lead = contrato.lead_id ? leadsMap.get(contrato.lead_id) : null;
-        const vendedor = contrato.vendedor_id ? vendedoresMap.get(contrato.vendedor_id) : null;
+      // Montar resultado - usar dados do join direto
+      const result: AtivacaoContrato[] = filteredContratos.map((contrato: any) => {
+        const lead = contrato.leads;
+        const vendedor = contrato.vendedor;
         const vistoria = contrato.associado_id ? vistoriasMap.get(contrato.associado_id) : null;
 
         return {

@@ -450,28 +450,25 @@ export function useContratosPendentesVinculo() {
     queryKey: ['contratos-pendentes-vinculo'],
     queryFn: async (): Promise<ContratoPendenteVinculo[]> => {
       // Buscar contratos que não estão ativos e não têm vistoria aprovada
+      // Buscar contratos com join direto para leads
       const { data: contratos, error } = await supabase
         .from('contratos')
-        .select('id, numero, lead_id, associado_id')
+        .select(`
+          id, numero, lead_id, associado_id,
+          leads (id, nome, veiculo_placa, veiculo_marca, veiculo_modelo)
+        `)
         .in('status', ['assinado', 'pendente', 'pendente_assinatura', 'enviado'])
         .order('created_at', { ascending: false });
 
       if (error) throw error;
 
-      const leadIds = (contratos || []).map(c => c.lead_id).filter(Boolean) as string[];
       const associadoIds = (contratos || []).map(c => c.associado_id).filter(Boolean) as string[];
 
-      // Buscar leads e verificar vistorias existentes
-      const [leadsRes, vistoriasRes] = await Promise.all([
-        leadIds.length > 0
-          ? supabase.from('leads').select('id, nome, veiculo_placa, veiculo_marca, veiculo_modelo').in('id', leadIds)
-          : { data: [] },
-        associadoIds.length > 0
-          ? supabase.from('vistorias').select('associado_id, status').in('associado_id', associadoIds).eq('tipo', 'entrada').eq('status', 'aprovada')
-          : { data: [] },
-      ]);
+      // Verificar vistorias existentes
+      const vistoriasRes = associadoIds.length > 0
+        ? await supabase.from('vistorias').select('associado_id, status').in('associado_id', associadoIds).eq('tipo', 'entrada').eq('status', 'aprovada')
+        : { data: [] };
 
-      const leadsMap = new Map((leadsRes.data || []).map(l => [l.id, l]));
       const vistoriasAprovadas = new Set((vistoriasRes.data || []).map(v => v.associado_id));
 
       // Filtrar contratos que já têm vistoria aprovada
@@ -479,8 +476,8 @@ export function useContratosPendentesVinculo() {
         !c.associado_id || !vistoriasAprovadas.has(c.associado_id)
       );
 
-      return contratosSemVistoria.map(contrato => {
-        const lead = contrato.lead_id ? leadsMap.get(contrato.lead_id) : null;
+      return contratosSemVistoria.map((contrato: any) => {
+        const lead = contrato.leads;
         return {
           id: contrato.id,
           numero: contrato.numero,
