@@ -16,12 +16,14 @@ export type Instalacao = Tables<'instalacoes'>;
 
 export interface InstalacaoComRelacoes extends Instalacao {
   associados: {
+    id: string;
     nome: string;
     telefone: string;
     email: string;
     whatsapp: string | null;
   } | null;
   veiculos: {
+    id: string;
     marca: string;
     modelo: string;
     placa: string;
@@ -81,8 +83,8 @@ export function useInstaladorInstalacoes(data?: Date) {
         .from('instalacoes')
         .select(`
           *,
-          associados (nome, telefone, email, whatsapp),
-          veiculos (marca, modelo, placa, ano_modelo, cor),
+          associados (id, nome, telefone, email, whatsapp),
+          veiculos (id, marca, modelo, placa, ano_modelo, cor),
           rastreadores (codigo, numero_serie)
         `)
         .eq('instalador_id', profile?.id)
@@ -159,6 +161,143 @@ export function useConcluirInstalacao() {
       queryClient.invalidateQueries({ queryKey: ['instalador-instalacoes'] });
       queryClient.invalidateQueries({ queryKey: ['instalacao-detalhes'] });
       queryClient.invalidateQueries({ queryKey: ['instalacoes'] });
+    },
+  });
+}
+
+// Hook para aprovar veículo e ativar cobertura total
+export function useAprovarVeiculo() {
+  const queryClient = useQueryClient();
+  const { profile } = useAuth();
+
+  return useMutation({
+    mutationFn: async ({ 
+      instalacaoId, 
+      veiculoId,
+      associadoId 
+    }: { 
+      instalacaoId: string;
+      veiculoId: string;
+      associadoId: string;
+    }) => {
+      // 1. Atualizar veículo com cobertura total
+      const { error: veiculoError } = await supabase
+        .from('veiculos')
+        .update({ 
+          status: 'ativo',
+          cobertura_total: true,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', veiculoId);
+
+      if (veiculoError) throw veiculoError;
+
+      // 2. Atualizar associado para ativo
+      const { error: associadoError } = await supabase
+        .from('associados')
+        .update({ 
+          status: 'ativo',
+          data_ativacao: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', associadoId);
+
+      if (associadoError) throw associadoError;
+
+      // 3. Concluir instalação
+      const { error: instalacaoError } = await supabase
+        .from('instalacoes')
+        .update({ 
+          status: 'concluida',
+          concluida_em: new Date().toISOString(),
+        })
+        .eq('id', instalacaoId);
+
+      if (instalacaoError) throw instalacaoError;
+
+      // 4. Registrar no histórico
+      await supabase.from('associados_historico').insert({
+        associado_id: associadoId,
+        tipo: 'veiculo_aprovado',
+        descricao: 'Veículo aprovado pelo técnico instalador - Cobertura total ativada',
+        dados_novos: { 
+          instalacao_id: instalacaoId, 
+          veiculo_id: veiculoId,
+          cobertura_total: true,
+        },
+        usuario_id: profile?.id,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['instalador-instalacoes'] });
+      queryClient.invalidateQueries({ queryKey: ['instalacao-detalhes'] });
+      queryClient.invalidateQueries({ queryKey: ['instalacoes'] });
+      queryClient.invalidateQueries({ queryKey: ['veiculos'] });
+      queryClient.invalidateQueries({ queryKey: ['associados'] });
+    },
+  });
+}
+
+// Hook para recusar veículo
+export function useRecusarVeiculo() {
+  const queryClient = useQueryClient();
+  const { profile } = useAuth();
+
+  return useMutation({
+    mutationFn: async ({ 
+      instalacaoId, 
+      veiculoId,
+      associadoId,
+      motivo 
+    }: { 
+      instalacaoId: string;
+      veiculoId: string;
+      associadoId: string;
+      motivo: string;
+    }) => {
+      // 1. Atualizar veículo como suspenso (recusado na instalação)
+      const { error: veiculoError } = await supabase
+        .from('veiculos')
+        .update({ 
+          status: 'suspenso',
+          motivo_recusa_veiculo: motivo,
+          recusado_por: profile?.id,
+          recusado_em: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', veiculoId);
+
+      if (veiculoError) throw veiculoError;
+
+      // 2. Cancelar instalação
+      const { error: instalacaoError } = await supabase
+        .from('instalacoes')
+        .update({ 
+          status: 'cancelada',
+          observacoes: `Veículo recusado: ${motivo}`,
+        })
+        .eq('id', instalacaoId);
+
+      if (instalacaoError) throw instalacaoError;
+
+      // 3. Registrar no histórico
+      await supabase.from('associados_historico').insert({
+        associado_id: associadoId,
+        tipo: 'veiculo_recusado',
+        descricao: `Veículo recusado pelo técnico instalador: ${motivo}`,
+        dados_novos: { 
+          instalacao_id: instalacaoId, 
+          veiculo_id: veiculoId,
+          motivo,
+        },
+        usuario_id: profile?.id,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['instalador-instalacoes'] });
+      queryClient.invalidateQueries({ queryKey: ['instalacao-detalhes'] });
+      queryClient.invalidateQueries({ queryKey: ['instalacoes'] });
+      queryClient.invalidateQueries({ queryKey: ['veiculos'] });
     },
   });
 }

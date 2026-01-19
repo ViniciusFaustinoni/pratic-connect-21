@@ -13,19 +13,28 @@ import {
   Loader2,
   AlertCircle,
   Phone,
-  Gauge
+  Gauge,
+  XCircle,
+  ShieldCheck
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useInstalacaoDetalhes, useConcluirInstalacao, useSalvarChecklistInstalacao } from '@/hooks/useInstaladorInstalacoes';
+import { 
+  useInstalacaoDetalhes, 
+  useConcluirInstalacao, 
+  useSalvarChecklistInstalacao,
+  useAprovarVeiculo,
+  useRecusarVeiculo
+} from '@/hooks/useInstaladorInstalacoes';
 import { useInstalacaoFotos, useUploadInstalacaoFoto, FOTOS_INSTALACAO } from '@/hooks/useInstalacaoFotos';
 import { useSaveAssinatura } from '@/hooks/useAssinatura';
 import { ChecklistItem, type ChecklistStatus } from '@/components/instalador/ChecklistItem';
 import { FotoCapture } from '@/components/instalador/FotoCapture';
 import { SignaturePad } from '@/components/instalador/SignaturePad';
+import { ModalRecusaVeiculo } from '@/components/instalador/ModalRecusaVeiculo';
 import { toast } from 'sonner';
 
 const CHECKLIST_ITEMS = [
@@ -43,7 +52,7 @@ const ETAPAS = [
   { id: 2, label: 'Checklist', icon: ClipboardCheck },
   { id: 3, label: 'Fotos', icon: Camera },
   { id: 4, label: 'Assinatura', icon: PenTool },
-  { id: 5, label: 'Confirmar', icon: CheckCircle2 },
+  { id: 5, label: 'Decisão', icon: ShieldCheck },
 ];
 
 type ChecklistState = Record<string, { status: ChecklistStatus; observacao?: string }>;
@@ -59,6 +68,7 @@ export default function InstaladorChecklist() {
   const [quilometragem, setQuilometragem] = useState<string>('');
   const [uploadingFoto, setUploadingFoto] = useState<string | null>(null);
   const [assinaturaUrl, setAssinaturaUrl] = useState<string | null>(null);
+  const [showModalRecusa, setShowModalRecusa] = useState(false);
 
   const { data: instalacao, isLoading, error } = useInstalacaoDetalhes(id);
   const { data: fotos = [] } = useInstalacaoFotos(id);
@@ -66,6 +76,8 @@ export default function InstaladorChecklist() {
   const saveAssinaturaMutation = useSaveAssinatura();
   const concluirMutation = useConcluirInstalacao();
   const salvarChecklistMutation = useSalvarChecklistInstalacao();
+  const aprovarVeiculoMutation = useAprovarVeiculo();
+  const recusarVeiculoMutation = useRecusarVeiculo();
 
   const progresso = (etapaAtual / ETAPAS.length) * 100;
 
@@ -133,14 +145,35 @@ export default function InstaladorChecklist() {
     }
   };
 
-  const handleConcluir = async () => {
-    if (!id) return;
+  const handleAprovarVeiculo = async () => {
+    if (!id || !instalacao?.veiculos?.id || !instalacao?.associados?.id) return;
     try {
-      await concluirMutation.mutateAsync(id);
-      toast.success('Instalação concluída com sucesso!');
+      await aprovarVeiculoMutation.mutateAsync({
+        instalacaoId: id,
+        veiculoId: instalacao.veiculos.id,
+        associadoId: instalacao.associados.id,
+      });
+      toast.success('Veículo aprovado! Cobertura total ativada.');
       navigate('/instalador');
     } catch (err) {
-      toast.error('Erro ao concluir instalação');
+      toast.error('Erro ao aprovar veículo');
+    }
+  };
+
+  const handleRecusarVeiculo = async (motivoCodigo: string, motivoCompleto: string) => {
+    if (!id || !instalacao?.veiculos?.id || !instalacao?.associados?.id) return;
+    try {
+      await recusarVeiculoMutation.mutateAsync({
+        instalacaoId: id,
+        veiculoId: instalacao.veiculos.id,
+        associadoId: instalacao.associados.id,
+        motivo: motivoCompleto,
+      });
+      toast.success('Veículo recusado. Associado será notificado.');
+      setShowModalRecusa(false);
+      navigate('/instalador');
+    } catch (err) {
+      toast.error('Erro ao recusar veículo');
     }
   };
 
@@ -455,23 +488,48 @@ export default function InstaladorChecklist() {
               </div>
             </div>
 
-            <Button
-              onClick={handleConcluir}
-              disabled={concluirMutation.isPending}
-              className="w-full bg-green-600 py-6 text-lg font-semibold hover:bg-green-700"
-            >
-              {concluirMutation.isPending ? (
-                <>
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  Finalizando...
-                </>
-              ) : (
-                <>
-                  <CheckCircle2 className="mr-2 h-5 w-5" />
-                  Concluir Instalação
-                </>
-              )}
-            </Button>
+            {/* Botões de Decisão */}
+            <div className="space-y-3 mt-6">
+              <Button
+                onClick={handleAprovarVeiculo}
+                disabled={aprovarVeiculoMutation.isPending || recusarVeiculoMutation.isPending}
+                className="w-full bg-emerald-600 py-6 text-lg font-semibold hover:bg-emerald-700"
+              >
+                {aprovarVeiculoMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                    Aprovando...
+                  </>
+                ) : (
+                  <>
+                    <ShieldCheck className="mr-2 h-5 w-5" />
+                    Aprovar Veículo - Ativar Cobertura Total
+                  </>
+                )}
+              </Button>
+
+              <Button
+                variant="destructive"
+                onClick={() => setShowModalRecusa(true)}
+                disabled={aprovarVeiculoMutation.isPending || recusarVeiculoMutation.isPending}
+                className="w-full py-6 text-lg font-semibold"
+              >
+                <XCircle className="mr-2 h-5 w-5" />
+                Recusar Veículo
+              </Button>
+            </div>
+
+            {/* Modal de Recusa */}
+            <ModalRecusaVeiculo
+              open={showModalRecusa}
+              onClose={() => setShowModalRecusa(false)}
+              onConfirm={handleRecusarVeiculo}
+              isPending={recusarVeiculoMutation.isPending}
+              veiculoInfo={{
+                placa: instalacao.veiculos?.placa,
+                modelo: instalacao.veiculos?.modelo,
+              }}
+            />
           </div>
         )}
       </div>

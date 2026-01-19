@@ -12686,6 +12686,8 @@ export type Database = {
           associado_id: string
           ativo: boolean
           chassi: string | null
+          cobertura_roubo_furto: boolean | null
+          cobertura_total: boolean | null
           codigo_fipe: string | null
           combustivel: string | null
           cor: string | null
@@ -12693,8 +12695,11 @@ export type Database = {
           id: string
           marca: string
           modelo: string
+          motivo_recusa_veiculo: string | null
           placa: string
           plataforma_app: string | null
+          recusado_em: string | null
+          recusado_por: string | null
           renavam: string | null
           status: Database["public"]["Enums"]["status_veiculo"] | null
           updated_at: string
@@ -12707,6 +12712,8 @@ export type Database = {
           associado_id: string
           ativo?: boolean
           chassi?: string | null
+          cobertura_roubo_furto?: boolean | null
+          cobertura_total?: boolean | null
           codigo_fipe?: string | null
           combustivel?: string | null
           cor?: string | null
@@ -12714,8 +12721,11 @@ export type Database = {
           id?: string
           marca: string
           modelo: string
+          motivo_recusa_veiculo?: string | null
           placa: string
           plataforma_app?: string | null
+          recusado_em?: string | null
+          recusado_por?: string | null
           renavam?: string | null
           status?: Database["public"]["Enums"]["status_veiculo"] | null
           updated_at?: string
@@ -12728,6 +12738,8 @@ export type Database = {
           associado_id?: string
           ativo?: boolean
           chassi?: string | null
+          cobertura_roubo_furto?: boolean | null
+          cobertura_total?: boolean | null
           codigo_fipe?: string | null
           combustivel?: string | null
           cor?: string | null
@@ -12735,8 +12747,11 @@ export type Database = {
           id?: string
           marca?: string
           modelo?: string
+          motivo_recusa_veiculo?: string | null
           placa?: string
           plataforma_app?: string | null
+          recusado_em?: string | null
+          recusado_por?: string | null
           renavam?: string | null
           status?: Database["public"]["Enums"]["status_veiculo"] | null
           updated_at?: string

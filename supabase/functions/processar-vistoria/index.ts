@@ -150,11 +150,12 @@ serve(async (req) => {
         console.log('[processar-vistoria] Status do associado atualizado para aguardando_instalacao');
       }
 
-      // 4.3 Atualizar status do veículo
+      // 4.3 Atualizar status do veículo e ativar cobertura roubo/furto (autovistoria)
       const { error: veicError } = await supabase
         .from('veiculos')
         .update({ 
           status: 'instalacao_pendente',
+          cobertura_roubo_furto: true, // Analista aprova cobertura parcial na autovistoria
           updated_at: new Date().toISOString(),
         })
         .eq('id', vistoria.veiculo_id);
@@ -162,7 +163,7 @@ serve(async (req) => {
       if (veicError) {
         console.error('[processar-vistoria] Erro ao atualizar veículo:', veicError);
       } else {
-        console.log('[processar-vistoria] Status do veículo atualizado para instalacao_pendente');
+        console.log('[processar-vistoria] Status do veículo atualizado para instalacao_pendente com cobertura_roubo_furto ativada');
       }
 
       // 4.4 Registrar no histórico
@@ -205,11 +206,11 @@ serve(async (req) => {
       // === VISTORIA REPROVADA ===
       console.log('[processar-vistoria] Processando reprovação...');
 
-      // 4.1 Atualizar status do veículo
+      // 4.1 Atualizar status do veículo para em_analise (aguardando nova tentativa ou suspenso)
       const { error: veicError } = await supabase
         .from('veiculos')
         .update({ 
-          status: 'vistoria_reprovada',
+          status: permitir_nova_tentativa ? 'em_analise' : 'suspenso',
           updated_at: new Date().toISOString(),
         })
         .eq('id', vistoria.veiculo_id);
