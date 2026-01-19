@@ -80,10 +80,16 @@ const successGreen = { r: 34, g: 197, b: 94 };    // green-500
 const warningYellow = { r: 234, g: 179, b: 8 };   // yellow-500
 
 // ============= CONSTANTES DE ESPAÇAMENTO =============
-const SECTION_GAP = 10;      // Espaço entre seções principais
-const INNER_GAP = 6;         // Espaço interno entre elementos
+const SECTION_GAP = 12;      // Espaço entre seções principais
+const INNER_GAP = 8;         // Espaço interno entre elementos
 const HEADER_HEIGHT = 12;    // Altura do header de seção
-const LINE_HEIGHT = 7;       // Altura de linha de texto
+const LINE_HEIGHT = 8;       // Altura de linha de texto
+
+// ============= FUNÇÃO DE TRUNCAMENTO =============
+const truncateText = (text: string | null | undefined, maxLength: number): string => {
+  if (!text) return '—';
+  return text.length > maxLength ? text.substring(0, maxLength - 2) + '...' : text;
+};
 
 // ============= Funções auxiliares =============
 
@@ -355,33 +361,36 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
   const clienteTelefone = cotacao.telefone1_solicitante || cotacao.leads?.telefone || '';
   const clienteEmail = cotacao.email_solicitante || cotacao.leads?.email || '';
 
-  // Colunas para melhor alinhamento
-  const labelWidth = 25;
+  // Colunas para melhor alinhamento - largura aumentada
+  const labelWidth = 22;
   const col1X = margin;
   const col1ValueX = margin + labelWidth;
-  const col2X = pageWidth / 2;
-  const col2ValueX = pageWidth / 2 + labelWidth;
+  const col2X = margin + (contentWidth / 2) + 5;
+  const col2ValueX = col2X + labelWidth;
 
+  // Linha 1: Nome completo (usa linha inteira)
   doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
   doc.text('Nome:', col1X, y);
   doc.setTextColor(textLight.r, textLight.g, textLight.b);
   doc.setFont('helvetica', 'bold');
-  doc.text(clienteNome, col1ValueX, y);
+  doc.text(truncateText(clienteNome, 55), col1ValueX, y);
 
   y += LINE_HEIGHT;
+
+  // Linha 2: Telefone e Email
   doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
   doc.setFont('helvetica', 'normal');
   doc.text('Telefone:', col1X, y);
   doc.setTextColor(textLight.r, textLight.g, textLight.b);
-  doc.text(formatPhone(clienteTelefone), col1ValueX + 3, y);
+  doc.text(formatPhone(clienteTelefone), col1ValueX, y);
 
   if (clienteEmail) {
     doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
     doc.text('E-mail:', col2X, y);
     doc.setTextColor(textLight.r, textLight.g, textLight.b);
-    doc.text(clienteEmail, col2ValueX, y);
+    doc.text(truncateText(clienteEmail, 30), col2ValueX, y);
   }
 
   y += SECTION_GAP + 4;
@@ -396,39 +405,31 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
   doc.setFont('helvetica', 'normal');
   doc.text('Marca:', col1X, y);
   doc.setTextColor(textLight.r, textLight.g, textLight.b);
-  doc.text(cotacao.veiculo_marca || '—', col1ValueX, y);
+  doc.text(truncateText(cotacao.veiculo_marca, 22), col1ValueX, y);
 
   doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
   doc.text('Modelo:', col2X, y);
   doc.setTextColor(textLight.r, textLight.g, textLight.b);
-  doc.text(cotacao.veiculo_modelo || '—', col2ValueX, y);
+  doc.text(truncateText(cotacao.veiculo_modelo, 25), col2ValueX, y);
 
   y += LINE_HEIGHT;
 
-  // Linha 2: Ano e Placa
+  // Linha 2: Ano, Placa e Valor FIPE (código FIPE removido)
   doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
   doc.text('Ano:', col1X, y);
   doc.setTextColor(textLight.r, textLight.g, textLight.b);
   doc.text(cotacao.veiculo_ano?.toString() || '—', col1ValueX, y);
 
   doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
-  doc.text('Placa:', col2X, y);
+  doc.text('Placa:', col1X + 40, y);
   doc.setTextColor(textLight.r, textLight.g, textLight.b);
-  doc.text(formatPlaca(cotacao.veiculo_placa), col2ValueX, y);
-
-  y += LINE_HEIGHT;
-
-  // Linha 3: Código FIPE e Valor FIPE
-  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
-  doc.text('Código FIPE:', col1X, y);
-  doc.setTextColor(textLight.r, textLight.g, textLight.b);
-  doc.text(cotacao.codigo_fipe || '—', col1ValueX + 12, y);
+  doc.text(formatPlaca(cotacao.veiculo_placa), col1X + 55, y);
 
   doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
   doc.text('Valor FIPE:', col2X, y);
   doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
   doc.setFont('helvetica', 'bold');
-  doc.text(formatCurrency(cotacao.valor_fipe), col2ValueX + 5, y);
+  doc.text(formatCurrency(cotacao.valor_fipe), col2ValueX, y);
 
   y += SECTION_GAP + 6;
 
@@ -442,11 +443,11 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
     hasGlow: true 
   });
 
-  // Nome do plano (sem estrela Unicode)
+  // Nome do plano (truncado para evitar overflow)
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(16);
   doc.setFont('helvetica', 'bold');
-  doc.text(planoNome.toUpperCase(), margin + 15, y + 16);
+  doc.text(truncateText(planoNome.toUpperCase(), 32), margin + 15, y + 16);
 
   // Badge "Selecionado" - centralizado abaixo do nome
   const badgeWidth = 50;
@@ -480,39 +481,41 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
     ? cotacao.planos.coberturas
     : COBERTURAS_PADRAO;
 
-  // Exibir em 2 colunas
+  // Exibir em 2 colunas - posições fixas para evitar sobreposição
   const coberturasCol1 = coberturas.slice(0, Math.ceil(coberturas.length / 2));
   const coberturasCol2 = coberturas.slice(Math.ceil(coberturas.length / 2));
 
   const startY = y;
-  const coberturaLineHeight = 6;
+  const coberturaLineHeight = 7;
+  const cobCol1X = margin;
+  const cobCol2X = margin + (contentWidth / 2) + 8;
   
   coberturasCol1.forEach((cobertura, index) => {
     const itemY = startY + (index * coberturaLineHeight);
     // Fundo alternado sutil
     if (index % 2 === 0) {
       doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
-      doc.rect(margin, itemY - 2, contentWidth / 2 - 4, coberturaLineHeight, 'F');
+      doc.rect(cobCol1X, itemY - 2, (contentWidth / 2) - 8, coberturaLineHeight, 'F');
     }
     // Indicador de check (círculo verde)
-    drawCheckIndicator(doc, margin + 5, itemY);
+    drawCheckIndicator(doc, cobCol1X + 5, itemY);
     doc.setTextColor(textLight.r, textLight.g, textLight.b);
-    doc.setFontSize(9);
+    doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
-    doc.text(cobertura, margin + 12, itemY);
+    doc.text(truncateText(cobertura, 30), cobCol1X + 12, itemY);
   });
 
   coberturasCol2.forEach((cobertura, index) => {
     const itemY = startY + (index * coberturaLineHeight);
     if (index % 2 === 0) {
       doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
-      doc.rect(col2X - 4, itemY - 2, contentWidth / 2 + 4, coberturaLineHeight, 'F');
+      doc.rect(cobCol2X - 4, itemY - 2, (contentWidth / 2), coberturaLineHeight, 'F');
     }
-    drawCheckIndicator(doc, col2X + 2, itemY);
+    drawCheckIndicator(doc, cobCol2X + 2, itemY);
     doc.setTextColor(textLight.r, textLight.g, textLight.b);
-    doc.setFontSize(9);
+    doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
-    doc.text(cobertura, col2X + 9, itemY);
+    doc.text(truncateText(cobertura, 30), cobCol2X + 9, itemY);
   });
 
   y = startY + Math.max(coberturasCol1.length, coberturasCol2.length) * coberturaLineHeight + SECTION_GAP;
