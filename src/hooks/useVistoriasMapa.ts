@@ -35,6 +35,7 @@ export interface RotaAgrupada {
   rota_id: string | null;
   rota_codigo: string | null;
   rota_regiao: string | null;
+  rota_cor: string | null;
   vistoriador_nome: string | null;
   vistorias: VistoriaMapa[];
 }
@@ -69,6 +70,7 @@ export function agruparPorRota(vistorias: VistoriaMapa[]): RotaAgrupada[] {
         rota_id: v.rota_id,
         rota_codigo: v.rota_codigo,
         rota_regiao: v.rota_regiao,
+        rota_cor: v.rota_cor,
         vistoriador_nome: v.vistoriador_nome,
         vistorias: [],
       });

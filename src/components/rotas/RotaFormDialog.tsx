@@ -164,42 +164,63 @@ export function RotaFormDialog({ open, onOpenChange, rota }: RotaFormDialogProps
       }
 
       // Vincular cotações do(s) bairro(s) selecionado(s) à rota
+      let cotacoesVinculadas = 0;
+      let contratosVinculados = 0;
+      
       if (selectedBairros.length > 0) {
-        // Buscar cotações pendentes nos bairros selecionados (incluindo atrasadas)
-        const { data: cotacoesParaVincular } = await supabase
+        // Buscar cotações pendentes nos bairros selecionados (vistoria não concluída)
+        const { data: cotacoesParaVincular, error: cotacoesError } = await supabase
           .from('cotacoes')
           .select('id')
           .in('vistoria_endereco_bairro', selectedBairros)
           .is('vistoria_rota_id', null)
-          .not('vistoria_status', 'in', '("concluida","cancelada")');
+          .is('vistoria_concluida_em', null)
+          .lte('vistoria_data_agendada', dataFormatada);
         
-        if (cotacoesParaVincular?.length) {
+        if (cotacoesError) {
+          console.error('Erro ao buscar cotações:', cotacoesError);
+        } else if (cotacoesParaVincular?.length) {
           const cotacoesIds = cotacoesParaVincular.map(c => c.id);
-          await supabase
+          const { error: updateCotError } = await supabase
             .from('cotacoes')
             .update({ 
               vistoria_rota_id: novaRota.id,
               vistoria_responsavel_id: selectedInstaladores[0],
             })
             .in('id', cotacoesIds);
+          
+          if (updateCotError) {
+            console.error('Erro ao vincular cotações:', updateCotError);
+          } else {
+            cotacoesVinculadas = cotacoesIds.length;
+          }
         }
 
-        // Vincular contratos pendentes nos bairros selecionados
-        const { data: contratosParaVincular } = await supabase
+        // Vincular contratos pendentes nos bairros selecionados (vistoria completa não concluída)
+        const { data: contratosParaVincular, error: contratosError } = await supabase
           .from('contratos')
           .select('id')
           .in('vistoria_completa_endereco_bairro', selectedBairros)
           .is('vistoria_rota_id', null)
-          .not('vistoria_completa_status', 'in', '("concluida","cancelada")');
+          .is('vistoria_concluida_em', null)
+          .lte('vistoria_completa_data_agendada', dataFormatada);
         
-        if (contratosParaVincular?.length) {
+        if (contratosError) {
+          console.error('Erro ao buscar contratos:', contratosError);
+        } else if (contratosParaVincular?.length) {
           const contratosIds = contratosParaVincular.map(c => c.id);
-          await supabase
+          const { error: updateContError } = await supabase
             .from('contratos')
             .update({ 
               vistoria_rota_id: novaRota.id,
             })
             .in('id', contratosIds);
+          
+          if (updateContError) {
+            console.error('Erro ao vincular contratos:', updateContError);
+          } else {
+            contratosVinculados = contratosIds.length;
+          }
         }
       }
 
@@ -211,8 +232,14 @@ export function RotaFormDialog({ open, onOpenChange, rota }: RotaFormDialogProps
       queryClient.invalidateQueries({ queryKey: ['bairros-disponiveis'] });
       queryClient.invalidateQueries({ queryKey: ['vistorias-mapa'] });
 
-      const totalVinculados = distribuicao.reduce((acc, d) => acc + d.instalacoes.length, 0);
-      toast.success(`Rota criada com sucesso!${totalVinculados > 0 ? ` ${totalVinculados} instalações vinculadas.` : ''}`);
+      const totalInstalacoes = distribuicao.reduce((acc, d) => acc + d.instalacoes.length, 0);
+      const vinculosMensagem = [
+        totalInstalacoes > 0 ? `${totalInstalacoes} instalações` : null,
+        cotacoesVinculadas > 0 ? `${cotacoesVinculadas} cotações` : null,
+        contratosVinculados > 0 ? `${contratosVinculados} contratos` : null,
+      ].filter(Boolean).join(', ');
+      
+      toast.success(`Rota criada com sucesso!${vinculosMensagem ? ` Vinculados: ${vinculosMensagem}.` : ''}`);
       onOpenChange(false);
     } catch (error) {
       console.error('Error creating rota:', error);
