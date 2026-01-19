@@ -133,6 +133,7 @@ export function useServicosPorBairros(
 
 /**
  * Hook para vincular serviços a uma rota
+ * Suporta todos os tipos de vistoria incluindo autovistoria
  */
 export function useVincularServicosRota() {
   const queryClient = useQueryClient();
@@ -145,9 +146,13 @@ export function useVincularServicosRota() {
       rotaId: string; 
       servicos: { id: string; tipo_servico: string; instalador_id?: string }[] 
     }) => {
+      // Separar por tipo
       const instalacoes = servicos.filter(s => s.tipo_servico === 'instalacao');
       const vistorias = servicos.filter(s => s.tipo_servico === 'vistoria');
-      const vistoriasCotacao = servicos.filter(s => s.tipo_servico === 'vistoria_cotacao');
+      // Inclui todos os tipos de vistoria de cotação (vistoria_cotacao, vistoria_cotacao_autovistoria, etc.)
+      const vistoriasCotacao = servicos.filter(s => s.tipo_servico.startsWith('vistoria_cotacao'));
+      // Vistorias de contrato (vistoria_contrato, vistoria_contrato_autovistoria, etc.)
+      const vistoriasContrato = servicos.filter(s => s.tipo_servico.startsWith('vistoria_contrato'));
 
       // Atualizar instalações
       if (instalacoes.length > 0) {
@@ -163,7 +168,7 @@ export function useVincularServicosRota() {
         }
       }
 
-      // Atualizar vistorias
+      // Atualizar vistorias (tabela vistorias)
       if (vistorias.length > 0) {
         for (const vist of vistorias) {
           const { error } = await supabase
@@ -177,7 +182,7 @@ export function useVincularServicosRota() {
         }
       }
 
-      // Atualizar cotações (vistorias agendadas)
+      // Atualizar cotações (vistorias agendadas de cotação)
       if (vistoriasCotacao.length > 0) {
         for (const cot of vistoriasCotacao) {
           const { error } = await supabase
@@ -187,11 +192,24 @@ export function useVincularServicosRota() {
           if (error) throw error;
         }
       }
+
+      // Atualizar contratos (vistorias agendadas de contrato)
+      if (vistoriasContrato.length > 0) {
+        for (const cont of vistoriasContrato) {
+          const { error } = await supabase
+            .from('contratos')
+            .update({ vistoria_rota_id: rotaId })
+            .eq('id', cont.id);
+          if (error) throw error;
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['servicos-por-bairros'] });
       queryClient.invalidateQueries({ queryKey: ['bairros-servicos'] });
       queryClient.invalidateQueries({ queryKey: ['rotas'] });
+      queryClient.invalidateQueries({ queryKey: ['vistorias-mapa'] });
+      queryClient.invalidateQueries({ queryKey: ['rotas-bairros'] });
     },
     onError: (error) => {
       console.error('Erro ao vincular serviços:', error);
@@ -226,9 +244,17 @@ export function useDesvincularServicoRota() {
           .update({ rota_id: null, vistoriador_id: null })
           .eq('id', id);
         if (error) throw error;
-      } else if (tipo_servico === 'vistoria_cotacao') {
+      } else if (tipo_servico.startsWith('vistoria_cotacao')) {
+        // Suporta vistoria_cotacao e vistoria_cotacao_autovistoria
         const { error } = await supabase
           .from('cotacoes')
+          .update({ vistoria_rota_id: null })
+          .eq('id', id);
+        if (error) throw error;
+      } else if (tipo_servico.startsWith('vistoria_contrato')) {
+        // Suporta vistoria_contrato e vistoria_contrato_autovistoria
+        const { error } = await supabase
+          .from('contratos')
           .update({ vistoria_rota_id: null })
           .eq('id', id);
         if (error) throw error;
@@ -238,6 +264,8 @@ export function useDesvincularServicoRota() {
       queryClient.invalidateQueries({ queryKey: ['servicos-por-bairros'] });
       queryClient.invalidateQueries({ queryKey: ['bairros-servicos'] });
       queryClient.invalidateQueries({ queryKey: ['rotas'] });
+      queryClient.invalidateQueries({ queryKey: ['vistorias-mapa'] });
+      queryClient.invalidateQueries({ queryKey: ['rotas-bairros'] });
       toast.success('Serviço removido da rota');
     },
     onError: (error) => {
