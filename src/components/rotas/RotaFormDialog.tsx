@@ -181,16 +181,19 @@ export function RotaFormDialog({ open, onOpenChange, rota }: RotaFormDialogProps
           console.error('Erro ao buscar cotações:', cotacoesError);
         } else if (cotacoesParaVincular?.length) {
           const cotacoesIds = cotacoesParaVincular.map(c => c.id);
+          // Buscar nome do instalador responsável
+          const instaladorResponsavel = instaladores?.find(i => i.id === selectedInstaladores[0]);
           const { error: updateCotError } = await supabase
             .from('cotacoes')
             .update({ 
               vistoria_rota_id: novaRota.id,
-              vistoria_responsavel_id: selectedInstaladores[0],
+              vistoria_responsavel_nome: instaladorResponsavel?.nome || null,
             })
             .in('id', cotacoesIds);
           
           if (updateCotError) {
             console.error('Erro ao vincular cotações:', updateCotError);
+            toast.error(`Erro ao vincular ${cotacoesIds.length} cotações à rota`);
           } else {
             cotacoesVinculadas = cotacoesIds.length;
           }
