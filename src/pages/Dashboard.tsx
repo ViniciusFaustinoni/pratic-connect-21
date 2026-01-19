@@ -37,6 +37,7 @@ import { usePendingDocumentos, useDocumentosContagem } from '@/hooks/useDocument
 import { useInstalacoesDoDia, useInstalacoesMetricas } from '@/hooks/useInstalacoes';
 import { FollowupWidget } from '@/components/vendas/FollowupWidget';
 import { DashboardCadastro } from '@/components/cadastro/DashboardCadastro';
+import DashboardCoordenador from '@/pages/monitoramento/DashboardCoordenador';
 
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -385,11 +386,16 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { profile } = useAuth();
-  const { isAnalistaCadastroOnly } = usePermissions();
+  const { isAnalistaCadastroOnly, isCoordenadorMonitoramentoOnly } = usePermissions();
 
   // Se é analista de cadastro, mostrar dashboard específico
   if (isAnalistaCadastroOnly) {
     return <DashboardCadastro />;
+  }
+
+  // Se é coordenador de monitoramento, mostrar dashboard específico
+  if (isCoordenadorMonitoramentoOnly) {
+    return <DashboardCoordenador />;
   }
 
   // Queries de dados
