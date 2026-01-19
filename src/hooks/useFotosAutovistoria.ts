@@ -20,7 +20,7 @@ const TIPOS_EXTERIOR = ['frente', 'traseira', 'lateral_esquerda', 'lateral_direi
 const TIPOS_INTERIOR = ['painel', 'hodometro', 'interior'];
 
 /**
- * Hook para buscar fotos de autovistoria da tabela cotacoes_vistoria_fotos
+ * Hook para buscar fotos de autovistoria da tabela cotacoes_vistoria_fotos (legado)
  */
 export function useFotosAutovistoriaCotacao(cotacaoId: string | undefined) {
   return useQuery({
@@ -38,6 +38,97 @@ export function useFotosAutovistoriaCotacao(cotacaoId: string | undefined) {
       return (data || []) as FotoAutovistoria[];
     },
     enabled: !!cotacaoId,
+  });
+}
+
+/**
+ * Hook UNIFICADO para buscar fotos de vistoria - funciona para cotações E propostas
+ * Prioriza fotos da tabela vistoria_fotos (nova arquitetura)
+ * Fallback para cotacoes_vistoria_fotos (legado - apenas quando existe cotacao_id)
+ */
+export function useFotosVistoriaUnificada(params: { 
+  contratoId?: string; 
+  cotacaoId?: string;
+}) {
+  const { contratoId, cotacaoId } = params;
+  
+  return useQuery({
+    queryKey: ['vistoria-fotos-unificada', contratoId, cotacaoId],
+    queryFn: async (): Promise<{
+      fotos: FotoAutovistoria[];
+      vistoriaId: string | null;
+      origem: 'vistoria_fotos' | 'cotacoes_vistoria_fotos' | null;
+    }> => {
+      // 1. Tentar buscar vistoria vinculada ao contrato (nova arquitetura)
+      if (contratoId) {
+        const { data: vistoria } = await supabase
+          .from('vistorias')
+          .select('id, status, modalidade')
+          .eq('contrato_id', contratoId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (vistoria?.id) {
+          const { data: fotos, error } = await supabase
+            .from('vistoria_fotos')
+            .select('id, tipo, arquivo_url, created_at')
+            .eq('vistoria_id', vistoria.id)
+            .order('created_at', { ascending: true });
+
+          if (!error && fotos && fotos.length > 0) {
+            return {
+              fotos: fotos as FotoAutovistoria[],
+              vistoriaId: vistoria.id,
+              origem: 'vistoria_fotos',
+            };
+          }
+        }
+      }
+
+      // 2. Fallback: buscar em cotacoes_vistoria_fotos (legado)
+      if (cotacaoId) {
+        const { data: fotosLegado, error } = await supabase
+          .from('cotacoes_vistoria_fotos')
+          .select('id, tipo, arquivo_url, created_at')
+          .eq('cotacao_id', cotacaoId)
+          .order('created_at', { ascending: true });
+
+        if (!error && fotosLegado && fotosLegado.length > 0) {
+          return {
+            fotos: fotosLegado as FotoAutovistoria[],
+            vistoriaId: null,
+            origem: 'cotacoes_vistoria_fotos',
+          };
+        }
+      }
+
+      // 3. Sem fotos encontradas
+      return { fotos: [], vistoriaId: null, origem: null };
+    },
+    enabled: !!(contratoId || cotacaoId),
+  });
+}
+
+/**
+ * Hook para buscar fotos diretamente por vistoria_id
+ */
+export function useFotosByVistoriaId(vistoriaId: string | undefined) {
+  return useQuery({
+    queryKey: ['vistoria-fotos', vistoriaId],
+    queryFn: async (): Promise<FotoAutovistoria[]> => {
+      if (!vistoriaId) return [];
+
+      const { data, error } = await supabase
+        .from('vistoria_fotos')
+        .select('id, tipo, arquivo_url, created_at')
+        .eq('vistoria_id', vistoriaId)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+      return (data || []) as FotoAutovistoria[];
+    },
+    enabled: !!vistoriaId,
   });
 }
 

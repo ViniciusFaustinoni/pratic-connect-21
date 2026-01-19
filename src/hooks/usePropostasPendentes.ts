@@ -193,21 +193,51 @@ export function usePropostasPendentes() {
             temDocumentoPendente = (count || 0) > 0;
           }
 
-      // Buscar fotos de autovistoria da cotação (cotacoes_vistoria_fotos)
+      // ==== BUSCA UNIFICADA DE FOTOS DE VISTORIA ====
+      // Funciona para PROPOSTAS (sem cotação) e COTAÇÕES (com cotação)
       let vistoria: VistoriaInfo | null = null;
-      if (contrato.cotacao_id) {
+      
+      // 1. Tentar buscar vistoria vinculada ao contrato (nova arquitetura)
+      const { data: vistoriaData } = await supabase
+        .from('vistorias')
+        .select('id, status, modalidade')
+        .eq('contrato_id', contrato.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (vistoriaData?.id) {
+        // Buscar fotos da tabela vistoria_fotos
         const { data: fotosVistoria } = await supabase
+          .from('vistoria_fotos')
+          .select('id, tipo, arquivo_url, created_at')
+          .eq('vistoria_id', vistoriaData.id)
+          .order('created_at', { ascending: true });
+
+        if (fotosVistoria && fotosVistoria.length > 0) {
+          vistoria = {
+            id: vistoriaData.id,
+            status: vistoriaData.status || 'pendente',
+            tipo: vistoriaData.modalidade === 'autovistoria' ? 'autovistoria' : 'agendada',
+            fotos: fotosVistoria as VistoriaFotoInfo[],
+          };
+        }
+      }
+
+      // 2. Fallback: buscar em cotacoes_vistoria_fotos (legado, apenas se tiver cotacao_id)
+      if (!vistoria && contrato.cotacao_id) {
+        const { data: fotosLegado } = await supabase
           .from('cotacoes_vistoria_fotos')
           .select('id, tipo, arquivo_url, created_at')
           .eq('cotacao_id', contrato.cotacao_id)
           .order('created_at', { ascending: true });
 
-        if (fotosVistoria && fotosVistoria.length > 0) {
+        if (fotosLegado && fotosLegado.length > 0) {
           vistoria = {
             id: contrato.cotacao_id,
             status: 'pendente',
             tipo: 'autovistoria',
-            fotos: fotosVistoria as VistoriaFotoInfo[],
+            fotos: fotosLegado as VistoriaFotoInfo[],
           };
         }
       }
@@ -356,21 +386,51 @@ export function useProposta(contratoId: string | undefined) {
         temDocumentoPendente = (count || 0) > 0;
       }
 
-      // Buscar fotos de autovistoria da cotação (cotacoes_vistoria_fotos)
+      // ==== BUSCA UNIFICADA DE FOTOS DE VISTORIA ====
+      // Funciona para PROPOSTAS (sem cotação) e COTAÇÕES (com cotação)
       let vistoria: VistoriaInfo | null = null;
-      if (contrato.cotacao_id) {
+      
+      // 1. Tentar buscar vistoria vinculada ao contrato (nova arquitetura)
+      const { data: vistoriaData } = await supabase
+        .from('vistorias')
+        .select('id, status, modalidade')
+        .eq('contrato_id', contrato.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (vistoriaData?.id) {
+        // Buscar fotos da tabela vistoria_fotos
         const { data: fotosVistoria } = await supabase
+          .from('vistoria_fotos')
+          .select('id, tipo, arquivo_url, created_at')
+          .eq('vistoria_id', vistoriaData.id)
+          .order('created_at', { ascending: true });
+
+        if (fotosVistoria && fotosVistoria.length > 0) {
+          vistoria = {
+            id: vistoriaData.id,
+            status: vistoriaData.status || 'pendente',
+            tipo: vistoriaData.modalidade === 'autovistoria' ? 'autovistoria' : 'agendada',
+            fotos: fotosVistoria as VistoriaFotoInfo[],
+          };
+        }
+      }
+
+      // 2. Fallback: buscar em cotacoes_vistoria_fotos (legado, apenas se tiver cotacao_id)
+      if (!vistoria && contrato.cotacao_id) {
+        const { data: fotosLegado } = await supabase
           .from('cotacoes_vistoria_fotos')
           .select('id, tipo, arquivo_url, created_at')
           .eq('cotacao_id', contrato.cotacao_id)
           .order('created_at', { ascending: true });
 
-        if (fotosVistoria && fotosVistoria.length > 0) {
+        if (fotosLegado && fotosLegado.length > 0) {
           vistoria = {
             id: contrato.cotacao_id,
             status: 'pendente',
             tipo: 'autovistoria',
-            fotos: fotosVistoria as VistoriaFotoInfo[],
+            fotos: fotosLegado as VistoriaFotoInfo[],
           };
         }
       }
