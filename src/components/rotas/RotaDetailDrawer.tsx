@@ -39,6 +39,7 @@ import {
   type StatusRota,
   type RotaInstalador,
 } from '@/hooks/useRotas';
+import { useRotaRealtime } from '@/hooks/useRotasRealtime';
 import { InstalacaoMiniCard } from './InstalacaoMiniCard';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -65,6 +66,9 @@ export function RotaDetailDrawer({
   const deleteRota = useDeleteRota();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [updatingInstalacao, setUpdatingInstalacao] = useState<string | null>(null);
+
+  // Ativar atualizações em tempo real para esta rota específica
+  useRotaRealtime(open ? rotaId : null);
 
   const handleUpdateStatus = async (novoStatus: StatusRota) => {
     if (!rotaId) return;

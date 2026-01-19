@@ -21,8 +21,11 @@ import {
   type RotaFilters as RotaFiltersType,
   type Rota 
 } from '@/hooks/useRotas';
+import { useRotasRealtime } from '@/hooks/useRotasRealtime';
 
 export default function Rotas() {
+  // Ativar atualizações em tempo real
+  useRotasRealtime();
   const [formOpen, setFormOpen] = useState(false);
   const [drawerRotaId, setDrawerRotaId] = useState<string | null>(null);
   const [editRota, setEditRota] = useState<Rota | null>(null);
