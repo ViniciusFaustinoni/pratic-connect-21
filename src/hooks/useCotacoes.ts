@@ -68,7 +68,15 @@ export function useCotacoes(options?: UseCotacoesOptions) {
         .select(`
           *,
           leads:leads!fk_cotacoes_lead_id(id, nome, telefone, email),
-          planos:planos!plano_id(id, nome, codigo, coberturas)
+          planos:planos!plano_id(id, nome, codigo, coberturas),
+          contrato:contratos!contratos_cotacao_id_fkey(
+            id, 
+            numero, 
+            status,
+            associados:associados!fk_contratos_associado(id, status)
+          ),
+          instalacoes:instalacoes!instalacoes_cotacao_id_fkey(id, status, data_agendada),
+          vendedor:profiles!cotacoes_vendedor_id_fkey(user_id, nome, email)
         `)
         .order('created_at', { ascending: false })
         .limit(100);
@@ -82,9 +90,23 @@ export function useCotacoes(options?: UseCotacoesOptions) {
       
       if (error) throw error;
       
-      return (data || []) as CotacaoWithRelations[];
+      // Mapear vendedor para formato esperado
+      const mapped = (data || []).map((cotacao: any) => ({
+        ...cotacao,
+        vendedor: cotacao.vendedor ? {
+          id: cotacao.vendedor.user_id,
+          nome: cotacao.vendedor.nome,
+          email: cotacao.vendedor.email,
+        } : null,
+        // Garantir que contrato seja objeto ou null (não array)
+        contrato: Array.isArray(cotacao.contrato) 
+          ? cotacao.contrato[0] || null 
+          : cotacao.contrato || null,
+      }));
+      
+      return mapped as CotacaoWithRelations[];
     },
-    staleTime: 1000 * 60 * 5, // 5 minutos
+    staleTime: 1000 * 60 * 1, // Reduzido para 1 minuto para melhor responsividade
   });
 }
 
