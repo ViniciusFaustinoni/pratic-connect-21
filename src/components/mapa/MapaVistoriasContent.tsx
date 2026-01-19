@@ -37,12 +37,16 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useVistoriasMapa, VistoriaMapa, agruparPorRota } from "@/hooks/useVistoriasMapa";
+import { useRotasBairros } from "@/hooks/useRotasBairros";
 import { TIPO_VISTORIA_LABELS } from "@/types/servicos-rota";
 import { getRotaColor, SEM_ROTA_COLOR, createColoredMarkerSvg, svgToDataUrl } from "@/lib/rota-colors";
 import { MapaRotasLegenda } from "./MapaRotasLegenda";
 import { cn } from "@/lib/utils";
 import { useBairrosGeoJSON } from "@/hooks/useBairrosGeoJSON";
 import { normalizarNomeBairro } from "@/lib/bairros";
+
+// Cor fixa vermelha para pinos de vistorias
+const VISTORIA_PIN_COLOR = "#EF4444";
 
 // Cache de ícones por cor
 const iconCache = new Map<string, L.Icon>();
@@ -83,6 +87,9 @@ export function MapaVistoriasContent() {
   const [filtroData, setFiltroData] = useState<Date | undefined>(new Date());
   const [posicaoSelecionada, setPosicaoSelecionada] = useState<[number, number] | null>(null);
   const [vistoriaSelecionada, setVistoriaSelecionada] = useState<string | null>(null);
+  
+  // Hook para buscar bairros das rotas - após filtroData ser declarado
+  const { data: rotasBairros } = useRotasBairros(filtroData);
 
   // Obter lista de IDs de rotas únicas
   const rotasIds = useMemo(() => {
@@ -147,22 +154,21 @@ export function MapaVistoriasContent() {
     return agruparPorRota(vistoriasComCoordenadas);
   }, [vistoriasComCoordenadas]);
 
-  // Mapear bairros com cores de rotas para polígonos
+  // Mapear bairros com cores de rotas para polígonos - FONTE: ROTAS (não vistorias)
   const bairrosComRota = useMemo(() => {
     const mapa = new Map<string, string>(); // bairro normalizado -> cor
     
-    vistoriasFiltradas.forEach((v) => {
-      if (v.endereco_bairro && v.rota_id) {
-        const bairroNormalizado = normalizarNomeBairro(v.endereco_bairro);
+    rotasBairros?.forEach((rota) => {
+      rota.bairros.forEach((bairro) => {
+        const bairroNormalizado = normalizarNomeBairro(bairro);
         if (!mapa.has(bairroNormalizado)) {
-          const cor = v.rota_cor || getRotaColor(v.rota_id, rotasIds);
-          mapa.set(bairroNormalizado, cor);
+          mapa.set(bairroNormalizado, rota.cor);
         }
-      }
+      });
     });
     
     return mapa;
-  }, [vistoriasFiltradas, rotasIds]);
+  }, [rotasBairros]);
 
   // Função de estilo para os polígonos dos bairros
   const styleBairro = (feature: GeoJSON.Feature | undefined) => {
@@ -517,17 +523,13 @@ export function MapaVistoriasContent() {
               );
             })}
 
-            {/* Marcadores */}
+            {/* Marcadores - Pinos vermelhos fixos para vistorias */}
             {vistoriasComCoordenadas.map((v) => {
-              const color = v.rota_cor || (v.rota_id 
-                ? getRotaColor(v.rota_id, rotasIds)
-                : SEM_ROTA_COLOR);
-              
               return (
                 <Marker
                   key={v.id}
                   position={[v.latitude!, v.longitude!]}
-                  icon={getColoredIcon(color)}
+                  icon={getColoredIcon(VISTORIA_PIN_COLOR)}
                 >
                   <Popup>
                     <div className="min-w-[200px]">
@@ -552,7 +554,7 @@ export function MapaVistoriasContent() {
                             <strong>Rota:</strong>{" "}
                             <span 
                               className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-white text-xs"
-                              style={{ backgroundColor: color }}
+                              style={{ backgroundColor: v.rota_cor || "#3B82F6" }}
                             >
                               {v.rota_codigo || 'Atribuída'}
                             </span>
