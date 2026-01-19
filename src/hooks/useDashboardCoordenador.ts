@@ -24,28 +24,42 @@ export function useEquipeHoje() {
     queryFn: async () => {
       const hoje = format(new Date(), 'yyyy-MM-dd');
 
-      // Buscar rotas de hoje com instaladores
+      // 1. Buscar rotas de hoje (query simples)
       const { data: rotasHoje, error: rotasError } = await supabase
         .from('rotas')
         .select(`
           id,
           status,
-          rota_instaladores(
-            instalador_id,
-            instalador:profiles(id, nome)
-          ),
           instalacoes(id, status),
           vistorias:cotacoes!cotacoes_vistoria_rota_id_fkey(id, status_vistoria)
         `)
         .eq('data_rota', hoje);
 
       if (rotasError) throw rotasError;
+      if (!rotasHoje?.length) return [];
 
-      // Mapear profissionais únicos com suas estatísticas
+      const rotaIds = rotasHoje.map(r => r.id);
+
+      // 2. Buscar instaladores das rotas em query separada (mais confiável)
+      const { data: rotaInstaladores, error: riError } = await supabase
+        .from('rota_instaladores')
+        .select(`
+          rota_id,
+          instalador_id,
+          instalador:profiles(id, nome)
+        `)
+        .in('rota_id', rotaIds);
+
+      if (riError) throw riError;
+
+      // 3. Mapear profissionais únicos com suas estatísticas
       const profissionaisMap = new Map<string, EquipeMembro>();
 
-      rotasHoje?.forEach(rota => {
-        rota.rota_instaladores?.forEach((ri: any) => {
+      rotasHoje.forEach(rota => {
+        // Filtrar instaladores desta rota
+        const instaladoresDaRota = rotaInstaladores?.filter(ri => ri.rota_id === rota.id) || [];
+        
+        instaladoresDaRota.forEach((ri: any) => {
           if (!ri.instalador) return;
 
           const instaladorId = ri.instalador.id;
@@ -79,7 +93,7 @@ export function useEquipeHoje() {
               status,
               tarefasConcluidas,
               tarefasTotal,
-              regiao: null, // Poderia buscar do primeiro serviço
+              regiao: null,
             });
           }
         });
@@ -87,7 +101,7 @@ export function useEquipeHoje() {
 
       return Array.from(profissionaisMap.values());
     },
-    refetchInterval: 30000, // Atualizar a cada 30 segundos
+    refetchInterval: 30000,
   });
 }
 
