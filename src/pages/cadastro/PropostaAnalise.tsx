@@ -298,19 +298,17 @@ export default function PropostaAnalise() {
                 label="Email"
                 value={proposta.cliente_email || associado?.email}
               />
-              {associado && (
-                <div className="sm:col-span-2">
-                  <InfoItem
-                    icon={MapPin}
-                    label="Endereço"
-                    value={
-                      associado.logradouro
-                        ? `${associado.logradouro}, ${associado.numero || 'S/N'} - ${associado.bairro || ''}, ${associado.cidade || ''} - ${associado.uf || ''}`
-                        : null
-                    }
-                  />
-                </div>
-              )}
+              <div className="sm:col-span-2">
+                <InfoItem
+                  icon={MapPin}
+                  label="Endereço"
+                  value={
+                    associado?.logradouro
+                      ? `${associado.logradouro}, ${associado.numero || 'S/N'} - ${associado.bairro || ''}, ${associado.cidade || ''} - ${associado.uf || ''}`
+                      : proposta.endereco_completo || null
+                  }
+                />
+              </div>
             </CardContent>
           </Card>
 
@@ -364,7 +362,7 @@ export default function PropostaAnalise() {
               <InfoItem
                 icon={FileCheck}
                 label="Plano Escolhido"
-                value={proposta.plano?.nome}
+                value={proposta.plano?.nome || proposta.plano_nome}
                 highlight
               />
               <InfoItem
@@ -373,11 +371,7 @@ export default function PropostaAnalise() {
                 value={formatCurrency(proposta.valor_mensal || proposta.plano?.valor_mensal)}
                 highlight
               />
-              <InfoItem
-                icon={Calendar}
-                label="Dia de Vencimento"
-                value={proposta.dia_vencimento?.toString()}
-              />
+              {/* Dia de Vencimento removido - não exibido ao Analista de Cadastro */}
               <InfoItem
                 icon={Calendar}
                 label="Data de Assinatura"
