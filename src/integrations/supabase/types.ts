@@ -3564,6 +3564,20 @@ export type Database = {
           veiculo_renavam: string | null
           veiculo_valor_fipe: number | null
           vendedor_id: string | null
+          vistoria_completa_data_agendada: string | null
+          vistoria_completa_endereco_bairro: string | null
+          vistoria_completa_endereco_cep: string | null
+          vistoria_completa_endereco_cidade: string | null
+          vistoria_completa_endereco_estado: string | null
+          vistoria_completa_endereco_logradouro: string | null
+          vistoria_completa_endereco_numero: string | null
+          vistoria_completa_horario_agendado: string | null
+          vistoria_completa_responsavel_eu_mesmo: boolean | null
+          vistoria_completa_responsavel_nome: string | null
+          vistoria_completa_responsavel_telefone: string | null
+          vistoria_concluida_em: string | null
+          vistoria_endereco_latitude: number | null
+          vistoria_endereco_longitude: number | null
         }
         Insert: {
           adesao_cobranca_id?: string | null
@@ -3620,6 +3634,20 @@ export type Database = {
           veiculo_renavam?: string | null
           veiculo_valor_fipe?: number | null
           vendedor_id?: string | null
+          vistoria_completa_data_agendada?: string | null
+          vistoria_completa_endereco_bairro?: string | null
+          vistoria_completa_endereco_cep?: string | null
+          vistoria_completa_endereco_cidade?: string | null
+          vistoria_completa_endereco_estado?: string | null
+          vistoria_completa_endereco_logradouro?: string | null
+          vistoria_completa_endereco_numero?: string | null
+          vistoria_completa_horario_agendado?: string | null
+          vistoria_completa_responsavel_eu_mesmo?: boolean | null
+          vistoria_completa_responsavel_nome?: string | null
+          vistoria_completa_responsavel_telefone?: string | null
+          vistoria_concluida_em?: string | null
+          vistoria_endereco_latitude?: number | null
+          vistoria_endereco_longitude?: number | null
         }
         Update: {
           adesao_cobranca_id?: string | null
@@ -3676,6 +3704,20 @@ export type Database = {
           veiculo_renavam?: string | null
           veiculo_valor_fipe?: number | null
           vendedor_id?: string | null
+          vistoria_completa_data_agendada?: string | null
+          vistoria_completa_endereco_bairro?: string | null
+          vistoria_completa_endereco_cep?: string | null
+          vistoria_completa_endereco_cidade?: string | null
+          vistoria_completa_endereco_estado?: string | null
+          vistoria_completa_endereco_logradouro?: string | null
+          vistoria_completa_endereco_numero?: string | null
+          vistoria_completa_horario_agendado?: string | null
+          vistoria_completa_responsavel_eu_mesmo?: boolean | null
+          vistoria_completa_responsavel_nome?: string | null
+          vistoria_completa_responsavel_telefone?: string | null
+          vistoria_concluida_em?: string | null
+          vistoria_endereco_latitude?: number | null
+          vistoria_endereco_longitude?: number | null
         }
         Relationships: [
           {
@@ -13835,27 +13877,27 @@ export type Database = {
       }
       view_vistorias_mapa: {
         Row: {
-          associado_id: string | null
           associado_nome: string | null
           associado_telefone: string | null
+          associado_whatsapp: string | null
           data_agendada: string | null
           endereco_bairro: string | null
           endereco_cep: string | null
           endereco_cidade: string | null
           endereco_logradouro: string | null
           endereco_numero: string | null
+          horario_agendado: string | null
           id: string | null
           latitude: number | null
           longitude: number | null
-          marca: string | null
-          modelo: string | null
-          placa: string | null
           status: string | null
           tipo_servico: string | null
           tipo_vistoria: string | null
-          veiculo_id: string | null
+          veiculo_cor: string | null
+          veiculo_marca: string | null
+          veiculo_modelo: string | null
+          veiculo_placa: string | null
           vistoriador_id: string | null
-          vistoriador_nome: string | null
         }
         Relationships: []
       }
