@@ -323,14 +323,46 @@ export function useDuplicarCotacao() {
   });
 }
 
-// Hook para excluir cotação (exclui contratos associados primeiro)
+// Hook para excluir cotação (exclui todos os registros dependentes)
 export function useExcluirCotacao() {
   const queryClient = useQueryClient();
   
   return useMutation({
     mutationFn: async (cotacaoId: string) => {
-      // 1. Primeiro excluir contratos vinculados a esta cotação
-      // (a FK agora é SET NULL, mas vamos excluir explicitamente para limpeza)
+      // 1. Excluir instalações vinculadas (CASCADE configurado, mas garantimos aqui)
+      const { error: instError } = await supabase
+        .from('instalacoes')
+        .delete()
+        .eq('cotacao_id', cotacaoId);
+      
+      if (instError) {
+        console.error('Erro ao excluir instalações da cotação:', instError);
+        throw instError;
+      }
+
+      // 2. Excluir vistorias vinculadas (CASCADE configurado, mas garantimos aqui)
+      const { error: vistError } = await supabase
+        .from('vistorias')
+        .delete()
+        .eq('cotacao_id', cotacaoId);
+      
+      if (vistError) {
+        console.error('Erro ao excluir vistorias da cotação:', vistError);
+        throw vistError;
+      }
+
+      // 3. Limpar referência no lead (SET NULL)
+      const { error: leadError } = await supabase
+        .from('leads')
+        .update({ cotacao_id: null })
+        .eq('cotacao_id', cotacaoId);
+      
+      if (leadError) {
+        console.error('Erro ao limpar cotacao_id do lead:', leadError);
+        throw leadError;
+      }
+
+      // 4. Excluir contratos vinculados
       const { error: contratoError } = await supabase
         .from('contratos')
         .delete()
@@ -341,7 +373,7 @@ export function useExcluirCotacao() {
         throw contratoError;
       }
       
-      // 2. Depois excluir a cotação
+      // 5. Finalmente excluir a cotação
       const { error } = await supabase
         .from('cotacoes')
         .delete()
@@ -352,6 +384,10 @@ export function useExcluirCotacao() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
       queryClient.invalidateQueries({ queryKey: ['contratos'] });
+      queryClient.invalidateQueries({ queryKey: ['vistorias'] });
+      queryClient.invalidateQueries({ queryKey: ['vistorias-mapa'] });
+      queryClient.invalidateQueries({ queryKey: ['instalacoes'] });
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
       toast.success('Cotação excluída com sucesso!');
     },
     onError: (error: Error) => {
