@@ -280,8 +280,8 @@ export default function InstalacoesList() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    {inst.profiles ? (
-                      <span className="text-sm">{inst.profiles.nome}</span>
+                    {(inst.instalador?.nome || inst.instalador_responsavel?.nome || inst.profiles?.nome) ? (
+                      <span className="text-sm">{inst.instalador?.nome || inst.instalador_responsavel?.nome || inst.profiles?.nome}</span>
                     ) : (
                       <span className="text-sm text-muted-foreground italic">Não atribuído</span>
                     )}
@@ -300,7 +300,7 @@ export default function InstalacoesList() {
                         <DropdownMenuItem onClick={(e) => { e.stopPropagation(); navigate(`/monitoramento/instalacoes/${inst.id}`); }}>
                           <Eye className="h-4 w-4 mr-2" /> Ver detalhes
                         </DropdownMenuItem>
-                        {!inst.instalador_id && (
+                        {!inst.instalador_id && !inst.instalador_responsavel_id && (
                           <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setSelectedInstalacaoId(inst.id); setAtribuirDialogOpen(true); }}>
                             <UserPlus className="h-4 w-4 mr-2" /> Atribuir instalador
                           </DropdownMenuItem>

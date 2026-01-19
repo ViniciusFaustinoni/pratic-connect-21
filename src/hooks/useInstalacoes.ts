@@ -125,7 +125,8 @@ export function useInstalacoes(filtersOrParams?: InstalacaoFilters | UseInstalac
           associados (id, nome, telefone, email),
           veiculos (id, marca, modelo, placa, ano_modelo, cor),
           rastreadores (id, codigo, numero_serie, imei),
-          instalador:profiles!instalacoes_instalador_id_fkey (id, nome, telefone)
+          instalador:profiles!instalacoes_instalador_id_fkey (id, nome, telefone),
+          instalador_responsavel:profiles!instalacoes_instalador_responsavel_id_fkey (id, nome, telefone)
         `, { count: 'exact' })
         .order('data_agendada', { ascending: true });
 
@@ -162,9 +163,9 @@ export function useInstalacoes(filtersOrParams?: InstalacaoFilters | UseInstalac
         query = query.lte('data_agendada', filters.data_fim);
       }
 
-      // Filtro sem instalador
+      // Filtro sem instalador (considera ambos os campos)
       if (filters?.sem_instalador) {
-        query = query.is('instalador_id', null);
+        query = query.is('instalador_id', null).is('instalador_responsavel_id', null);
       }
 
       // Paginação
@@ -176,7 +177,17 @@ export function useInstalacoes(filtersOrParams?: InstalacaoFilters | UseInstalac
 
       if (error) throw error;
 
-      let result = data as InstalacaoWithRelations[];
+      // Mapear instalador_responsavel para profiles como fallback
+      let result = (data || []).map((inst: any) => {
+        const mapped = inst as InstalacaoWithRelations;
+        // Se não tem instalador mas tem instalador_responsavel, usar como profiles
+        if (!mapped.instalador && mapped.instalador_responsavel) {
+          mapped.profiles = mapped.instalador_responsavel;
+        } else if (mapped.instalador) {
+          mapped.profiles = mapped.instalador;
+        }
+        return mapped;
+      });
 
       // Filtro por busca no client side
       if (filters?.search) {
@@ -451,7 +462,7 @@ export function useInstalacaoActions() {
     onError: () => toast.error('Erro ao agendar instalação'),
   });
 
-  // Atribuir instalador
+  // Atribuir instalador (atualiza ambos os campos para consistência)
   const atribuirInstalador = useMutation({
     mutationFn: async ({ 
       instalacao_id, 
@@ -464,6 +475,7 @@ export function useInstalacaoActions() {
     }) => {
       const updateData: InstalacaoUpdate = {
         instalador_id,
+        instalador_responsavel_id: instalador_id, // Manter ambos sincronizados
         status: 'agendada',
       };
 
@@ -481,6 +493,7 @@ export function useInstalacaoActions() {
     onSuccess: () => {
       invalidateAll();
       queryClient.invalidateQueries({ queryKey: ['rastreadores'] });
+      queryClient.invalidateQueries({ queryKey: ['vistorias-mapa'] });
       toast.success('Instalador atribuído!');
     },
     onError: () => toast.error('Erro ao atribuir instalador'),
