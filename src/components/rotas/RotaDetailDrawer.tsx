@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { MapPin, Phone, User, Calendar, Route, Play, CheckCircle, Plus, X, Loader2, Trash2 } from 'lucide-react';
+import { MapPin, Phone, User, Calendar, Route, Play, CheckCircle, Plus, X, Loader2, Trash2, Users, ArrowRight } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -18,6 +18,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -29,10 +36,14 @@ import {
   useDeleteRota,
   STATUS_ROTA_LABELS, 
   STATUS_ROTA_COLORS,
-  type StatusRota 
+  type StatusRota,
+  type RotaInstalador,
 } from '@/hooks/useRotas';
 import { InstalacaoMiniCard } from './InstalacaoMiniCard';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
+import { useQueryClient } from '@tanstack/react-query';
+
 interface RotaDetailDrawerProps {
   rotaId: string | null;
   open: boolean;
@@ -48,10 +59,12 @@ export function RotaDetailDrawer({
   onAddInstalacoes,
   onEdit,
 }: RotaDetailDrawerProps) {
+  const queryClient = useQueryClient();
   const { data: rota, isLoading } = useRota(rotaId || undefined);
   const updateStatus = useUpdateRotaStatus();
   const deleteRota = useDeleteRota();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [updatingInstalacao, setUpdatingInstalacao] = useState<string | null>(null);
 
   const handleUpdateStatus = async (novoStatus: StatusRota) => {
     if (!rotaId) return;
@@ -75,11 +88,44 @@ export function RotaDetailDrawer({
     }
   };
 
+  const handleChangeInstaladorResponsavel = async (instalacaoId: string, novoInstaladorId: string) => {
+    setUpdatingInstalacao(instalacaoId);
+    try {
+      const { error } = await supabase
+        .from('instalacoes')
+        .update({ instalador_responsavel_id: novoInstaladorId })
+        .eq('id', instalacaoId);
+
+      if (error) throw error;
+
+      queryClient.invalidateQueries({ queryKey: ['rota', rotaId] });
+      toast.success('Instalador responsável atualizado!');
+    } catch {
+      toast.error('Erro ao atualizar instalador');
+    } finally {
+      setUpdatingInstalacao(null);
+    }
+  };
+
   const progresso = rota 
     ? rota.total_servicos > 0 
       ? Math.round((rota.total_concluidos / rota.total_servicos) * 100)
       : 0
     : 0;
+
+  // Get all instaladores from the rota (N:N relationship)
+  const instaladoresDaRota = rota?.rota_instaladores || [];
+  const hasMultipleInstaladores = instaladoresDaRota.length > 1;
+
+  // Group instalacoes by instalador_responsavel
+  const instalacoesPorInstalador = rota?.instalacoes?.reduce((acc, inst) => {
+    const responsavelId = inst.instalador_responsavel_id || 'sem_responsavel';
+    if (!acc[responsavelId]) {
+      acc[responsavelId] = [];
+    }
+    acc[responsavelId].push(inst);
+    return acc;
+  }, {} as Record<string, typeof rota.instalacoes>);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -117,8 +163,47 @@ export function RotaDetailDrawer({
 
             <ScrollArea className="h-[calc(100vh-200px)] pr-4">
               <div className="mt-6 space-y-6">
-                {/* Instalador */}
-                {rota.instalador && (
+                {/* Instaladores */}
+                {instaladoresDaRota.length > 0 ? (
+                  <div className="rounded-lg border p-4">
+                    <h4 className="mb-3 text-sm font-medium text-muted-foreground flex items-center gap-2">
+                      <Users className="h-4 w-4" />
+                      {hasMultipleInstaladores ? 'Instaladores' : 'Instalador'}
+                      {hasMultipleInstaladores && (
+                        <Badge variant="secondary" className="ml-auto">
+                          {instaladoresDaRota.length}
+                        </Badge>
+                      )}
+                    </h4>
+                    <div className="space-y-3">
+                      {instaladoresDaRota.map((ri) => (
+                        <div key={ri.id} className="flex items-center gap-3">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+                            <User className="h-5 w-5 text-primary" />
+                          </div>
+                          <div className="flex-1">
+                            <p className="font-medium">{ri.instalador?.nome || 'Instalador'}</p>
+                            {ri.instalador?.telefone && (
+                              <p className="text-sm text-muted-foreground">{ri.instalador.telefone}</p>
+                            )}
+                          </div>
+                          {ri.instalador?.telefone && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                const phone = ri.instalador?.telefone?.replace(/\D/g, '');
+                                window.open(`https://wa.me/55${phone}`, '_blank');
+                              }}
+                            >
+                              <Phone className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : rota.instalador && (
                   <div className="rounded-lg border p-4">
                     <h4 className="mb-3 text-sm font-medium text-muted-foreground">Instalador</h4>
                     <div className="flex items-center gap-3">
@@ -214,23 +299,127 @@ export function RotaDetailDrawer({
 
                 <Separator />
 
-                {/* Instalações */}
+                {/* Instalações - agrupadas por instalador se houver múltiplos */}
                 <div>
                   <h4 className="mb-4 text-sm font-medium text-muted-foreground">
                     Instalações ({rota.instalacoes?.length || 0})
                   </h4>
                   
                   {rota.instalacoes?.length ? (
-                    <div className="space-y-3">
-                      {rota.instalacoes.map((instalacao) => (
-                        <InstalacaoMiniCard 
-                          key={instalacao.id} 
-                          instalacao={instalacao}
-                          rotaId={rota.id}
-                          showRemove={rota.status === 'pendente'}
-                        />
-                      ))}
-                    </div>
+                    hasMultipleInstaladores ? (
+                      // Mostrar agrupado por instalador
+                      <div className="space-y-6">
+                        {instaladoresDaRota.map((ri) => {
+                          const instalacoesDoInstalador = instalacoesPorInstalador?.[ri.instalador_id] || [];
+                          return (
+                            <div key={ri.id} className="space-y-3">
+                              <div className="flex items-center gap-2 text-sm">
+                                <User className="h-4 w-4 text-primary" />
+                                <span className="font-medium">{ri.instalador?.nome}</span>
+                                <Badge variant="outline" className="ml-auto">
+                                  {instalacoesDoInstalador.length}
+                                </Badge>
+                              </div>
+                              {instalacoesDoInstalador.length > 0 ? (
+                                <div className="space-y-2 ml-6">
+                                  {instalacoesDoInstalador.map((instalacao) => (
+                                    <div key={instalacao.id} className="relative">
+                                      <InstalacaoMiniCard 
+                                        instalacao={instalacao}
+                                        rotaId={rota.id}
+                                        showRemove={rota.status === 'pendente'}
+                                      />
+                                      {rota.status === 'pendente' && (
+                                        <div className="mt-1 flex items-center gap-2 text-xs">
+                                          <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                                          <Select
+                                            value={instalacao.instalador_responsavel_id || ''}
+                                            onValueChange={(value) => handleChangeInstaladorResponsavel(instalacao.id, value)}
+                                            disabled={updatingInstalacao === instalacao.id}
+                                          >
+                                            <SelectTrigger className="h-7 text-xs w-[180px]">
+                                              <SelectValue placeholder="Mover para..." />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              {instaladoresDaRota.map((inst) => (
+                                                <SelectItem key={inst.instalador_id} value={inst.instalador_id}>
+                                                  {inst.instalador?.nome}
+                                                </SelectItem>
+                                              ))}
+                                            </SelectContent>
+                                          </Select>
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="text-xs text-muted-foreground ml-6">
+                                  Nenhuma instalação atribuída
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })}
+                        
+                        {/* Instalações sem responsável */}
+                        {instalacoesPorInstalador?.['sem_responsavel']?.length > 0 && (
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <User className="h-4 w-4" />
+                              <span>Sem instalador atribuído</span>
+                              <Badge variant="outline" className="ml-auto">
+                                {instalacoesPorInstalador['sem_responsavel'].length}
+                              </Badge>
+                            </div>
+                            <div className="space-y-2 ml-6">
+                              {instalacoesPorInstalador['sem_responsavel'].map((instalacao) => (
+                                <div key={instalacao.id} className="relative">
+                                  <InstalacaoMiniCard 
+                                    instalacao={instalacao}
+                                    rotaId={rota.id}
+                                    showRemove={rota.status === 'pendente'}
+                                  />
+                                  {rota.status === 'pendente' && (
+                                    <div className="mt-1 flex items-center gap-2 text-xs">
+                                      <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                                      <Select
+                                        value=""
+                                        onValueChange={(value) => handleChangeInstaladorResponsavel(instalacao.id, value)}
+                                        disabled={updatingInstalacao === instalacao.id}
+                                      >
+                                        <SelectTrigger className="h-7 text-xs w-[180px]">
+                                          <SelectValue placeholder="Atribuir a..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {instaladoresDaRota.map((inst) => (
+                                            <SelectItem key={inst.instalador_id} value={inst.instalador_id}>
+                                              {inst.instalador?.nome}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      // Mostrar lista simples
+                      <div className="space-y-3">
+                        {rota.instalacoes.map((instalacao) => (
+                          <InstalacaoMiniCard 
+                            key={instalacao.id} 
+                            instalacao={instalacao}
+                            rotaId={rota.id}
+                            showRemove={rota.status === 'pendente'}
+                          />
+                        ))}
+                      </div>
+                    )
                   ) : (
                     <div className="rounded-lg border border-dashed p-6 text-center">
                       <Route className="mx-auto h-8 w-8 text-muted-foreground/50" />
