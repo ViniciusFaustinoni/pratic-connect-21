@@ -162,14 +162,56 @@ export function RotaFormDialog({ open, onOpenChange, rota }: RotaFormDialogProps
         }
       }
 
+      // Vincular cotações do(s) bairro(s) selecionado(s) à rota
+      if (selectedBairros.length > 0) {
+        // Buscar cotações pendentes nos bairros selecionados (incluindo atrasadas)
+        const { data: cotacoesParaVincular } = await supabase
+          .from('cotacoes')
+          .select('id')
+          .in('vistoria_endereco_bairro', selectedBairros)
+          .is('vistoria_rota_id', null)
+          .not('vistoria_status', 'in', '("concluida","cancelada")');
+        
+        if (cotacoesParaVincular?.length) {
+          const cotacoesIds = cotacoesParaVincular.map(c => c.id);
+          await supabase
+            .from('cotacoes')
+            .update({ 
+              vistoria_rota_id: novaRota.id,
+              vistoria_responsavel_id: selectedInstaladores[0],
+            })
+            .in('id', cotacoesIds);
+        }
+
+        // Vincular contratos pendentes nos bairros selecionados
+        const { data: contratosParaVincular } = await supabase
+          .from('contratos')
+          .select('id')
+          .in('vistoria_completa_endereco_bairro', selectedBairros)
+          .is('vistoria_rota_id', null)
+          .not('vistoria_completa_status', 'in', '("concluida","cancelada")');
+        
+        if (contratosParaVincular?.length) {
+          const contratosIds = contratosParaVincular.map(c => c.id);
+          await supabase
+            .from('contratos')
+            .update({ 
+              vistoria_rota_id: novaRota.id,
+            })
+            .in('id', contratosIds);
+        }
+      }
+
       // Invalidate queries
       queryClient.invalidateQueries({ queryKey: ['rotas'] });
       queryClient.invalidateQueries({ queryKey: ['rotas-metricas'] });
       queryClient.invalidateQueries({ queryKey: ['rotas-semana'] });
       queryClient.invalidateQueries({ queryKey: ['instalacoes-disponiveis'] });
       queryClient.invalidateQueries({ queryKey: ['bairros-disponiveis'] });
+      queryClient.invalidateQueries({ queryKey: ['vistorias-mapa'] });
 
-      toast.success(`Rota criada com ${distribuicao.reduce((acc, d) => acc + d.instalacoes.length, 0)} instalações!`);
+      const totalVinculados = distribuicao.reduce((acc, d) => acc + d.instalacoes.length, 0);
+      toast.success(`Rota criada com sucesso!${totalVinculados > 0 ? ` ${totalVinculados} instalações vinculadas.` : ''}`);
       onOpenChange(false);
     } catch (error) {
       console.error('Error creating rota:', error);

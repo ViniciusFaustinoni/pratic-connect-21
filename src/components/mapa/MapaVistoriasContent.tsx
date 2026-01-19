@@ -93,11 +93,19 @@ export function MapaVistoriasContent() {
     if (!vistorias) return [];
 
     return vistorias.filter((v) => {
-      // Filtro por data (dia específico)
+      // Filtro por data - inclui vistorias do dia selecionado E vistorias atrasadas (não concluídas)
       if (filtroData) {
         if (!v.data_agendada) return false;
         const dataVistoria = new Date(v.data_agendada);
-        if (!isSameDay(dataVistoria, filtroData)) return false;
+        const isDataSelecionada = isSameDay(dataVistoria, filtroData);
+        
+        // Considerar atrasada se: data anterior ao dia selecionado E status diferente de concluída/cancelada
+        const isAtrasada = dataVistoria < filtroData && 
+          v.status !== 'concluida' && 
+          v.status !== 'cancelada';
+        
+        // Mostrar se é do dia selecionado OU se está atrasada
+        if (!isDataSelecionada && !isAtrasada) return false;
       }
 
       if (filtroTipo !== "todos" && v.tipo_vistoria !== filtroTipo) return false;
@@ -311,24 +319,34 @@ export function MapaVistoriasContent() {
                     ? getRotaColor(v.rota_id, rotasIds)
                     : SEM_ROTA_COLOR);
                   
+                  // Verificar se está atrasada
+                  const isAtrasada = filtroData && v.data_agendada && 
+                    new Date(v.data_agendada) < filtroData && 
+                    v.status !== 'concluida' && v.status !== 'cancelada';
+                  
                   return (
                     <div
                       key={v.id}
                       className={`p-3 border rounded-lg cursor-pointer transition-colors hover:bg-muted/50 ${
                         vistoriaSelecionada === v.id ? "border-primary bg-primary/5" : ""
-                      } ${!v.latitude ? "opacity-60" : ""}`}
+                      } ${!v.latitude ? "opacity-60" : ""} ${isAtrasada ? "bg-orange-50 dark:bg-orange-950/20" : ""}`}
                       onClick={() => selecionarVistoria(v)}
                       style={{ borderLeftWidth: 4, borderLeftColor: color }}
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
                             <span className="font-semibold text-sm truncate">
                               {v.veiculo_placa || "Sem placa"}
                             </span>
                             <Badge variant="outline" className="text-xs bg-red-50 text-red-700 border-red-200">
                               {TIPO_VISTORIA_LABELS[v.tipo_vistoria as keyof typeof TIPO_VISTORIA_LABELS] || v.tipo_vistoria}
                             </Badge>
+                            {isAtrasada && (
+                              <Badge variant="outline" className="text-xs bg-orange-100 text-orange-700 border-orange-300">
+                                Atrasada
+                              </Badge>
+                            )}
                           </div>
 
                           <p className="text-xs text-muted-foreground truncate">
@@ -343,9 +361,13 @@ export function MapaVistoriasContent() {
                           )}
 
                           {v.data_agendada && (
-                            <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                            <p className={cn(
+                              "text-xs mt-1 flex items-center gap-1",
+                              isAtrasada ? "text-orange-600" : "text-muted-foreground"
+                            )}>
                               <Calendar className="h-3 w-3" />
                               {format(new Date(v.data_agendada), "dd/MM/yyyy", { locale: ptBR })}
+                              {isAtrasada && " (pendente)"}
                             </p>
                           )}
 
