@@ -272,6 +272,40 @@ export function useAgendarVistoriaCompleta() {
           .eq('id', contrato.id);
       }
       
+      // 6. CRIAR REGISTRO NA TABELA INSTALACOES
+      const instalacaoData = {
+        contrato_id: contrato?.id || null,
+        associado_id: contrato?.associado_id || null,
+        veiculo_id: contrato?.veiculo_id || null,
+        vistoria_id: novaVistoria.id,
+        status: 'agendada' as const,
+        data_agendada: dataAgendada,
+        horario_agendado: horarioAgendado,
+        endereco_cep: endereco.cep,
+        endereco_logradouro: endereco.logradouro,
+        endereco_numero: endereco.numero,
+        endereco_bairro: endereco.bairro,
+        endereco_cidade: endereco.cidade,
+        endereco_estado: endereco.estado,
+        endereco_latitude: coords.success ? coords.latitude : null,
+        endereco_longitude: coords.success ? coords.longitude : null,
+        observacoes: obsResponsavel,
+      };
+      
+      const { data: novaInstalacao, error: instalacaoError } = await supabase
+        .from('instalacoes')
+        .insert(instalacaoData)
+        .select('id')
+        .single();
+      
+      if (instalacaoError) {
+        console.error('[AgendarVistoriaCompleta] Erro ao criar instalação:', instalacaoError);
+        // Não vamos dar throw aqui para não interromper o fluxo
+        // A instalação pode ser criada manualmente depois
+      } else {
+        console.log('[AgendarVistoriaCompleta] Instalação criada com sucesso:', novaInstalacao.id);
+      }
+      
       return novaVistoria;
     },
     onSuccess: (_, variables) => {

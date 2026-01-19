@@ -71,7 +71,8 @@ export function useVistorias(filters: VistoriaFilters = {}) {
           *,
           veiculo:veiculos(id, placa, marca, modelo, associado:associados(id, nome, telefone)),
           associado:associados!vistorias_associado_id_fkey(id, nome, telefone, veiculos(id, placa, marca, modelo)),
-          vistoriador:profiles!vistorias_vistoriador_id_fkey(id, nome)
+          vistoriador:profiles!vistorias_vistoriador_id_fkey(id, nome),
+          cotacao:cotacoes(id, nome_solicitante, telefone1_solicitante, veiculo_placa, veiculo_marca, veiculo_modelo)
         `)
         .eq('tipo', 'entrada')
         .order('created_at', { ascending: false });
@@ -92,7 +93,9 @@ export function useVistorias(filters: VistoriaFilters = {}) {
           v.veiculo?.placa?.toLowerCase().includes(searchLower) ||
           v.veiculo?.associado?.nome?.toLowerCase().includes(searchLower) ||
           v.associado?.nome?.toLowerCase().includes(searchLower) ||
-          v.associado?.veiculos?.[0]?.placa?.toLowerCase().includes(searchLower)
+          v.associado?.veiculos?.[0]?.placa?.toLowerCase().includes(searchLower) ||
+          v.cotacao?.veiculo_placa?.toLowerCase().includes(searchLower) ||
+          v.cotacao?.nome_solicitante?.toLowerCase().includes(searchLower)
         );
       }
 
