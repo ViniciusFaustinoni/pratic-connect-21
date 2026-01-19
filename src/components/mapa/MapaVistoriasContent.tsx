@@ -17,7 +17,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  RefreshCw,
   Search,
   ClipboardCheck,
   Phone,
@@ -52,7 +51,7 @@ function FlyToPosition({ position, zoom = 15 }: { position: [number, number] | n
 }
 
 export function MapaVistoriasContent() {
-  const { data: vistorias, isLoading, refetch, isRefetching } = useVistoriasMapa();
+  const { data: vistorias, isLoading } = useVistoriasMapa();
   const [filtroTipo, setFiltroTipo] = useState("todos");
   const [filtroBusca, setFiltroBusca] = useState("");
   const [posicaoSelecionada, setPosicaoSelecionada] = useState<[number, number] | null>(null);
@@ -250,20 +249,15 @@ export function MapaVistoriasContent() {
 
       {/* Mapa */}
       <Card className="flex-1 flex flex-col overflow-hidden">
-        <CardHeader className="pb-3 flex-row items-center justify-between">
+        <CardHeader className="pb-2 flex-row items-center justify-between">
           <div className="flex items-center gap-2">
             <MapPin className="h-5 w-5 text-red-600" />
-            <CardTitle className="text-base">Mapa de Vistorias Pendentes</CardTitle>
+            <CardTitle className="text-base">Mapa de Vistorias</CardTitle>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => refetch()}
-            disabled={isRefetching}
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${isRefetching ? "animate-spin" : ""}`} />
-            Atualizar
-          </Button>
+          <Badge variant="outline" className="gap-1.5 text-xs">
+            <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+            Ao vivo
+          </Badge>
         </CardHeader>
 
         <CardContent className="flex-1 p-0 relative">
@@ -274,8 +268,8 @@ export function MapaVistoriasContent() {
             style={{ height: "100%", width: "100%" }}
           >
             <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              attribution='&copy; <a href="https://carto.com/">CARTO</a>'
+              url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
             />
 
             <FlyToPosition position={posicaoSelecionada} />
@@ -328,8 +322,9 @@ export function MapaVistoriasContent() {
             ))}
           </MapContainer>
 
-          <div className="absolute bottom-4 left-4 bg-background/90 backdrop-blur-sm px-3 py-1.5 rounded-full text-xs text-muted-foreground border shadow-sm">
-            {vistoriasComCoordenadas.length} vistorias no mapa • Atualização a cada 1 min
+          <div className="absolute bottom-4 left-4 bg-background/90 backdrop-blur-sm px-3 py-1.5 rounded-full text-xs text-muted-foreground border shadow-sm flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+            {vistoriasComCoordenadas.length} vistorias • Tempo real
           </div>
         </CardContent>
       </Card>
