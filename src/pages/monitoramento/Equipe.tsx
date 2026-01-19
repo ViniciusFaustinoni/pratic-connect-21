@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -16,6 +16,8 @@ import {
   Edit,
   UserX,
   Umbrella,
+  Loader2,
+  Users,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -46,31 +48,9 @@ import {
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
 import { ProfissionalModal, Profissional as ProfissionalModalData, ProfissionalFormData } from '@/components/monitoramento/ProfissionalModal';
+import { useProfissionaisEquipe, useSaveProfissional, useToggleProfissionalStatus, ProfissionalEquipe, StatusProfissional, FuncaoProfissional } from '@/hooks/useEquipe';
 import { toast } from 'sonner';
-
-type StatusProfissional = 'disponivel' | 'indisponivel' | 'ferias' | 'afastado';
-type FuncaoProfissional = 'vistoriador' | 'instalador';
-
-interface Profissional {
-  id: string;
-  nome: string;
-  email: string;
-  telefone: string;
-  cpf?: string;
-  whatsapp?: string;
-  cep?: string;
-  logradouro?: string;
-  numero?: string;
-  bairro?: string;
-  cidade?: string;
-  uf?: string;
-  status: StatusProfissional;
-  regioes: string[];
-  funcoes: FuncaoProfissional[];
-  capacidadeDiaria: number;
-  tarefasHoje: number;
-  ultimaAtividade: string;
-}
+import { REGIOES_ATENDIMENTO } from '@/types/monitoramento';
 
 const STATUS_CONFIG: Record<StatusProfissional, { label: string; className: string }> = {
   disponivel: {
@@ -91,68 +71,6 @@ const STATUS_CONFIG: Record<StatusProfissional, { label: string; className: stri
   },
 };
 
-const REGIOES_DISPONIVEIS = [
-  'Centro',
-  'Pinheiros',
-  'Consolação',
-  'Zona Sul',
-  'Santo Amaro',
-  'Zona Norte',
-  'Campinas',
-  'Valinhos',
-];
-
-const mockProfissionais: Profissional[] = [
-  {
-    id: '1',
-    nome: 'Pedro Silva',
-    email: 'pedro@pratic.com',
-    telefone: '(11) 99999-1111',
-    status: 'disponivel',
-    regioes: ['Centro', 'Pinheiros', 'Consolação'],
-    funcoes: ['vistoriador', 'instalador'],
-    capacidadeDiaria: 5,
-    tarefasHoje: 3,
-    ultimaAtividade: '2026-01-17T14:30:00',
-  },
-  {
-    id: '2',
-    nome: 'João Santos',
-    email: 'joao@pratic.com',
-    telefone: '(11) 98888-2222',
-    status: 'disponivel',
-    regioes: ['Zona Sul', 'Santo Amaro'],
-    funcoes: ['instalador'],
-    capacidadeDiaria: 4,
-    tarefasHoje: 4,
-    ultimaAtividade: '2026-01-17T15:00:00',
-  },
-  {
-    id: '3',
-    nome: 'Maria Oliveira',
-    email: 'maria@pratic.com',
-    telefone: '(11) 97777-3333',
-    status: 'ferias',
-    regioes: ['Campinas', 'Valinhos'],
-    funcoes: ['vistoriador'],
-    capacidadeDiaria: 6,
-    tarefasHoje: 0,
-    ultimaAtividade: '2026-01-10T18:00:00',
-  },
-  {
-    id: '4',
-    nome: 'Carlos Mendes',
-    email: 'carlos@pratic.com',
-    telefone: '(11) 96666-4444',
-    status: 'indisponivel',
-    regioes: ['Zona Norte'],
-    funcoes: ['vistoriador', 'instalador'],
-    capacidadeDiaria: 5,
-    tarefasHoje: 0,
-    ultimaAtividade: '2026-01-16T12:00:00',
-  },
-];
-
 export default function Equipe() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('todos');
@@ -161,38 +79,82 @@ export default function Equipe() {
   
   // Estado do modal
   const [modalOpen, setModalOpen] = useState(false);
-  const [profissionalSelecionado, setProfissionalSelecionado] = useState<Profissional | null>(null);
+  const [profissionalSelecionado, setProfissionalSelecionado] = useState<ProfissionalEquipe | null>(null);
+
+  // Hooks de dados
+  const { data: profissionais, isLoading, error } = useProfissionaisEquipe();
+  const { mutate: saveProfissional, isPending: isSaving } = useSaveProfissional();
+  const { mutate: toggleStatus } = useToggleProfissionalStatus();
 
   const handleNovoProfissional = () => {
     setProfissionalSelecionado(null);
     setModalOpen(true);
   };
 
-  const handleEditar = (prof: Profissional) => {
+  const handleEditar = (prof: ProfissionalEquipe) => {
     setProfissionalSelecionado(prof);
     setModalOpen(true);
   };
 
-  const handleSave = (data: ProfissionalFormData) => {
-    if (profissionalSelecionado) {
-      toast.success(`Profissional ${data.nome} atualizado com sucesso!`);
-    } else {
-      toast.success(`Profissional ${data.nome} cadastrado com sucesso!`);
-    }
-    // TODO: Integrar com Supabase
-    console.log('Dados salvos:', data);
+  const handleDesativar = (prof: ProfissionalEquipe) => {
+    toggleStatus(
+      { id: prof.id, ativo: !prof.ativo },
+      {
+        onSuccess: () => {
+          toast.success(prof.ativo ? 'Profissional desativado' : 'Profissional ativado');
+        },
+        onError: (err) => {
+          toast.error('Erro ao alterar status: ' + (err as Error).message);
+        },
+      }
+    );
   };
 
-  const profissionaisFiltrados = mockProfissionais.filter((prof) => {
-    const matchSearch = prof.nome.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchStatus = statusFilter === 'todos' || prof.status === statusFilter;
-    const matchRegiao = regiaoFilter === 'todas' || prof.regioes.includes(regiaoFilter);
-    const matchFuncao =
-      funcaoFilter === 'todos' ||
-      (funcaoFilter === 'ambos' && prof.funcoes.length === 2) ||
-      prof.funcoes.includes(funcaoFilter as FuncaoProfissional);
-    return matchSearch && matchStatus && matchRegiao && matchFuncao;
-  });
+  const handleSave = (data: ProfissionalFormData) => {
+    saveProfissional(
+      {
+        id: profissionalSelecionado?.id,
+        nome: data.nome,
+        email: data.email,
+        telefone: data.telefone,
+        whatsapp: data.whatsapp,
+        cpf: data.cpf,
+        cep: data.cep,
+        logradouro: data.logradouro,
+        numero: data.numero,
+        bairro: data.bairro,
+        cidade: data.cidade,
+        uf: data.uf,
+        regioes_atendimento: data.regioes,
+        capacidade_diaria: data.capacidadeDiaria,
+        ativo: data.status === 'disponivel',
+      },
+      {
+        onSuccess: () => {
+          toast.success(profissionalSelecionado ? 'Profissional atualizado!' : 'Profissional cadastrado!');
+          setModalOpen(false);
+        },
+        onError: (err) => {
+          toast.error('Erro: ' + (err as Error).message);
+        },
+      }
+    );
+  };
+
+  const profissionaisFiltrados = useMemo(() => {
+    if (!profissionais) return [];
+    
+    return profissionais.filter((prof) => {
+      const matchSearch = prof.nome.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchStatus = statusFilter === 'todos' || prof.status === statusFilter;
+      const matchRegiao = regiaoFilter === 'todas' || prof.regioes_atendimento.includes(regiaoFilter);
+      const matchFuncao =
+        funcaoFilter === 'todos' ||
+        (funcaoFilter === 'ambos' && prof.funcoes.length === 2) ||
+        prof.funcoes.includes(funcaoFilter as FuncaoProfissional);
+      return matchSearch && matchStatus && matchRegiao && matchFuncao;
+    });
+  }, [profissionais, searchTerm, statusFilter, regiaoFilter, funcaoFilter]);
 
   const getInitials = (nome: string) =>
     nome
@@ -255,7 +217,7 @@ export default function Equipe() {
           nome: profissionalSelecionado.nome,
           cpf: profissionalSelecionado.cpf || '',
           email: profissionalSelecionado.email,
-          telefone: profissionalSelecionado.telefone,
+          telefone: profissionalSelecionado.telefone || '',
           whatsapp: profissionalSelecionado.whatsapp,
           cep: profissionalSelecionado.cep,
           logradouro: profissionalSelecionado.logradouro,
@@ -263,9 +225,9 @@ export default function Equipe() {
           bairro: profissionalSelecionado.bairro,
           cidade: profissionalSelecionado.cidade,
           uf: profissionalSelecionado.uf,
-          regioes: profissionalSelecionado.regioes,
+          regioes: profissionalSelecionado.regioes_atendimento,
           funcoes: profissionalSelecionado.funcoes,
-          capacidadeDiaria: profissionalSelecionado.capacidadeDiaria,
+          capacidadeDiaria: profissionalSelecionado.capacidade_diaria,
           status: profissionalSelecionado.status === 'ferias' || profissionalSelecionado.status === 'afastado' 
             ? 'indisponivel' 
             : profissionalSelecionado.status,
@@ -302,9 +264,9 @@ export default function Equipe() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="todas">Todas</SelectItem>
-            {REGIOES_DISPONIVEIS.map((regiao) => (
-              <SelectItem key={regiao} value={regiao}>
-                {regiao}
+            {REGIOES_ATENDIMENTO.map((regiao) => (
+              <SelectItem key={regiao.value} value={regiao.value}>
+                {regiao.label}
               </SelectItem>
             ))}
           </SelectContent>
@@ -323,136 +285,161 @@ export default function Equipe() {
       </div>
 
       {/* Grid de Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {profissionaisFiltrados.length === 0 ? (
-          <div className="col-span-full text-center py-12">
-            <p className="text-muted-foreground">Nenhum profissional encontrado</p>
-          </div>
-        ) : (
-          profissionaisFiltrados.map((profissional) => (
-            <Card key={profissional.id} className="overflow-hidden">
-              <CardContent className="p-4">
-                {/* Header do Card */}
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-3">
-                    <Avatar className="h-12 w-12">
-                      <AvatarFallback className="bg-primary/10 text-primary font-medium">
-                        {getInitials(profissional.nome)}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <p className="font-semibold text-foreground">{profissional.nome}</p>
-                      <Badge
-                        variant="outline"
-                        className={STATUS_CONFIG[profissional.status].className}
-                      >
-                        {STATUS_CONFIG[profissional.status].label}
-                      </Badge>
+      {isLoading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      ) : error ? (
+        <div className="text-center py-12">
+          <p className="text-destructive">Erro ao carregar equipe: {(error as Error).message}</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {profissionaisFiltrados.length === 0 ? (
+            <div className="col-span-full text-center py-12">
+              <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+              <p className="text-muted-foreground mb-2">Nenhum profissional encontrado</p>
+              <p className="text-sm text-muted-foreground">
+                Cadastre profissionais com a role "instalador_vistoriador" no sistema.
+              </p>
+            </div>
+          ) : (
+            profissionaisFiltrados.map((profissional) => (
+              <Card key={profissional.id} className="overflow-hidden">
+                <CardContent className="p-4">
+                  {/* Header do Card */}
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <Avatar className="h-12 w-12">
+                        <AvatarFallback className="bg-primary/10 text-primary font-medium">
+                          {getInitials(profissional.nome)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <p className="font-semibold text-foreground">{profissional.nome}</p>
+                        <Badge
+                          variant="outline"
+                          className={STATUS_CONFIG[profissional.status].className}
+                        >
+                          {STATUS_CONFIG[profissional.status].label}
+                        </Badge>
+                      </div>
+                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => handleEditar(profissional)}>
+                          <Edit className="mr-2 h-4 w-4" />
+                          Editar
+                        </DropdownMenuItem>
+                        <DropdownMenuItem>
+                          <Calendar className="mr-2 h-4 w-4" />
+                          Ver agenda
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem>
+                          <Umbrella className="mr-2 h-4 w-4" />
+                          Marcar férias
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          className={profissional.ativo ? "text-destructive" : "text-green-600"}
+                          onClick={() => handleDesativar(profissional)}
+                        >
+                          <UserX className="mr-2 h-4 w-4" />
+                          {profissional.ativo ? 'Desativar' : 'Ativar'}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+
+                  {/* Contato */}
+                  <div className="space-y-1 mb-3 text-sm">
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Mail className="h-4 w-4" />
+                      <span className="truncate">{profissional.email}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Phone className="h-4 w-4" />
+                      <span>{profissional.telefone || 'Não informado'}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <MapPin className="h-4 w-4" />
+                      <span className="truncate">
+                        {profissional.regioes_atendimento.length > 0 
+                          ? profissional.regioes_atendimento.join(', ')
+                          : 'Nenhuma região'
+                        }
+                      </span>
                     </div>
                   </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => handleEditar(profissional)}>
-                        <Edit className="mr-2 h-4 w-4" />
-                        Editar
-                      </DropdownMenuItem>
-                      <DropdownMenuItem>
-                        <Calendar className="mr-2 h-4 w-4" />
-                        Ver agenda
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem>
-                        <Umbrella className="mr-2 h-4 w-4" />
-                        Marcar férias
-                      </DropdownMenuItem>
-                      <DropdownMenuItem className="text-destructive">
-                        <UserX className="mr-2 h-4 w-4" />
-                        Desativar
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
 
-                {/* Contato */}
-                <div className="space-y-1 mb-3 text-sm">
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Mail className="h-4 w-4" />
-                    <span className="truncate">{profissional.email}</span>
+                  {/* Funções */}
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-sm text-muted-foreground">Funções:</span>
+                    <div className="flex gap-1">
+                      {profissional.funcoes.includes('vistoriador') && (
+                        <Badge variant="secondary" className="gap-1">
+                          <Eye className="h-3 w-3" />
+                          Vistoriador
+                        </Badge>
+                      )}
+                      {profissional.funcoes.includes('instalador') && (
+                        <Badge variant="secondary" className="gap-1">
+                          <Wrench className="h-3 w-3" />
+                          Instalador
+                        </Badge>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Phone className="h-4 w-4" />
-                    <span>{profissional.telefone}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <MapPin className="h-4 w-4" />
-                    <span className="truncate">{profissional.regioes.join(', ')}</span>
-                  </div>
-                </div>
 
-                {/* Funções */}
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="text-sm text-muted-foreground">Funções:</span>
-                  <div className="flex gap-1">
-                    {profissional.funcoes.includes('vistoriador') && (
-                      <Badge variant="secondary" className="gap-1">
-                        <Eye className="h-3 w-3" />
-                        Vistoriador
-                      </Badge>
-                    )}
-                    {profissional.funcoes.includes('instalador') && (
-                      <Badge variant="secondary" className="gap-1">
-                        <Wrench className="h-3 w-3" />
-                        Instalador
-                      </Badge>
-                    )}
+                  {/* Capacidade */}
+                  <div className="space-y-2 mb-3">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">
+                        Capacidade: {profissional.capacidade_diaria} tarefas/dia
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Hoje:</span>
+                      <span className="font-medium text-foreground">
+                        {profissional.tarefas_hoje}/{profissional.capacidade_diaria}
+                      </span>
+                    </div>
+                    <Progress
+                      value={(profissional.tarefas_hoje / profissional.capacidade_diaria) * 100}
+                      className="h-2"
+                    />
                   </div>
-                </div>
 
-                {/* Capacidade */}
-                <div className="space-y-2 mb-3">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">
-                      Capacidade: {profissional.capacidadeDiaria} tarefas/dia
-                    </span>
+                  {/* Última atividade */}
+                  <p className="text-xs text-muted-foreground mb-4">
+                    Última atividade: {profissional.ultima_atividade 
+                      ? formatUltimaAtividade(profissional.ultima_atividade)
+                      : 'Sem atividade registrada'
+                    }
+                  </p>
+
+                  {/* Ações */}
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" className="flex-1">
+                      <Calendar className="mr-2 h-4 w-4" />
+                      Ver Agenda
+                    </Button>
+                    <Button variant="outline" size="sm" className="flex-1">
+                      <BarChart className="mr-2 h-4 w-4" />
+                      Relatório
+                    </Button>
                   </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Hoje:</span>
-                    <span className="font-medium text-foreground">
-                      {profissional.tarefasHoje}/{profissional.capacidadeDiaria}
-                    </span>
-                  </div>
-                  <Progress
-                    value={(profissional.tarefasHoje / profissional.capacidadeDiaria) * 100}
-                    className="h-2"
-                  />
-                </div>
-
-                {/* Última atividade */}
-                <p className="text-xs text-muted-foreground mb-4">
-                  Última atividade: {formatUltimaAtividade(profissional.ultimaAtividade)}
-                </p>
-
-                {/* Ações */}
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" className="flex-1">
-                    <Calendar className="mr-2 h-4 w-4" />
-                    Ver Agenda
-                  </Button>
-                  <Button variant="outline" size="sm" className="flex-1">
-                    <BarChart className="mr-2 h-4 w-4" />
-                    Relatório
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))
-        )}
-      </div>
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </div>
+      )}
     </div>
   );
 }
