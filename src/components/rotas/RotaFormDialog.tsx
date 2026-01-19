@@ -1,6 +1,4 @@
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
+import { useState, useEffect, useMemo } from 'react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { CalendarIcon } from 'lucide-react';
@@ -10,15 +8,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import {
@@ -26,27 +15,16 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
-import { useCreateRota, useUpdateRota, useInstaladores, type Rota } from '@/hooks/useRotas';
+import { useInstaladores, type Rota } from '@/hooks/useRotas';
+import { useBairrosDisponiveis, useInstalacoesPorBairros } from '@/hooks/useBairrosDisponiveis';
 import { toast } from 'sonner';
-import { useEffect } from 'react';
-
-const rotaSchema = z.object({
-  data_rota: z.date({ required_error: 'Data é obrigatória' }),
-  instalador_id: z.string().min(1, 'Selecione um instalador'),
-  coordenador_id: z.string().optional().nullable(),
-  cidade: z.string().optional(),
-  regiao: z.string().optional(),
-});
-
-type RotaFormData = z.infer<typeof rotaSchema>;
+import { supabase } from '@/integrations/supabase/client';
+import { useQueryClient } from '@tanstack/react-query';
+import { InstaladorMultiSelect } from './InstaladorMultiSelect';
+import { BairroSelector } from './BairroSelector';
+import { DistribuicaoPreview, distribuirInstalacoes, type DistribuicaoItem } from './DistribuicaoPreview';
 
 interface RotaFormDialogProps {
   open: boolean;
@@ -55,172 +33,232 @@ interface RotaFormDialogProps {
 }
 
 export function RotaFormDialog({ open, onOpenChange, rota }: RotaFormDialogProps) {
+  const queryClient = useQueryClient();
   const { data: instaladores } = useInstaladores();
-  const createRota = useCreateRota();
-  const updateRota = useUpdateRota();
   const isEditing = !!rota;
 
-  const form = useForm<RotaFormData>({
-    resolver: zodResolver(rotaSchema),
-    defaultValues: {
-      data_rota: new Date(),
-      instalador_id: '',
-      coordenador_id: null,
-      cidade: '',
-      regiao: '',
-    },
-  });
+  // Form state
+  const [dataRota, setDataRota] = useState<Date>(new Date());
+  const [selectedInstaladores, setSelectedInstaladores] = useState<string[]>([]);
+  const [selectedBairros, setSelectedBairros] = useState<string[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [distribuicao, setDistribuicao] = useState<DistribuicaoItem[]>([]);
 
-  // Reset form when dialog opens or rota changes
+  // Data hooks
+  const { data: bairrosDisponiveis, isLoading: loadingBairros } = useBairrosDisponiveis(dataRota);
+  const { data: instalacoesSelecionadas } = useInstalacoesPorBairros(selectedBairros, dataRota);
+
+  // Reset form when dialog opens
   useEffect(() => {
     if (open) {
-      form.reset({
-        data_rota: rota?.data_rota ? parseISO(rota.data_rota) : new Date(),
-        instalador_id: rota?.instalador_id || '',
-        coordenador_id: rota?.coordenador_id || null,
-        cidade: rota?.cidade || '',
-        regiao: rota?.regiao || '',
-      });
-    }
-  }, [open, rota, form]);
-
-  const onSubmit = async (data: RotaFormData) => {
-    try {
-      const rotaData = {
-        data_rota: format(data.data_rota, 'yyyy-MM-dd'),
-        instalador_id: data.instalador_id,
-        coordenador_id: data.coordenador_id || null,
-        cidade: data.cidade || null,
-        regiao: data.regiao || null,
-      };
-
-      if (isEditing && rota) {
-        await updateRota.mutateAsync({ id: rota.id, ...rotaData });
-        toast.success('Rota atualizada com sucesso!');
+      if (rota) {
+        setDataRota(rota.data_rota ? parseISO(rota.data_rota) : new Date());
+        setSelectedInstaladores(rota.instalador_id ? [rota.instalador_id] : []);
+        setSelectedBairros([]);
       } else {
-        await createRota.mutateAsync(rotaData);
-        toast.success('Rota criada com sucesso!');
+        setDataRota(new Date());
+        setSelectedInstaladores([]);
+        setSelectedBairros([]);
       }
-      onOpenChange(false);
-      form.reset();
-    } catch (error) {
-      toast.error('Erro ao salvar rota');
+      setDistribuicao([]);
+    }
+  }, [open, rota]);
+
+  // Calculate distribution when instaladores or instalacoes change
+  useEffect(() => {
+    if (selectedInstaladores.length && instalacoesSelecionadas?.length && instaladores) {
+      const instaladoresInfo = instaladores
+        .filter((i) => selectedInstaladores.includes(i.id))
+        .map((i) => ({ id: i.id, nome: i.nome }));
+      
+      const dist = distribuirInstalacoes(instalacoesSelecionadas, instaladoresInfo);
+      setDistribuicao(dist);
+    } else {
+      setDistribuicao([]);
+    }
+  }, [selectedInstaladores, instalacoesSelecionadas, instaladores]);
+
+  const handleRedistribuir = () => {
+    if (selectedInstaladores.length && instalacoesSelecionadas?.length && instaladores) {
+      const instaladoresInfo = instaladores
+        .filter((i) => selectedInstaladores.includes(i.id))
+        .map((i) => ({ id: i.id, nome: i.nome }));
+      
+      // Shuffle instalacoes for different distribution
+      const shuffled = [...instalacoesSelecionadas].sort(() => Math.random() - 0.5);
+      const dist = distribuirInstalacoes(shuffled, instaladoresInfo);
+      setDistribuicao(dist);
     }
   };
 
+  const handleSubmit = async () => {
+    if (!selectedInstaladores.length) {
+      toast.error('Selecione pelo menos um instalador');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const dataFormatada = format(dataRota, 'yyyy-MM-dd');
+      const codigo = `ROT-${format(dataRota, 'yyyyMMdd')}-TMP`;
+
+      // Create rota with first instalador as primary (for backward compatibility)
+      const { data: novaRota, error: rotaError } = await supabase
+        .from('rotas')
+        .insert({
+          data_rota: dataFormatada,
+          instalador_id: selectedInstaladores[0],
+          codigo,
+          cidade: selectedBairros.length ? instalacoesSelecionadas?.[0]?.cidade : null,
+          regiao: selectedBairros.join(', ').substring(0, 100),
+        })
+        .select()
+        .single();
+
+      if (rotaError) throw rotaError;
+
+      // Add all instaladores to rota_instaladores
+      if (selectedInstaladores.length > 0) {
+        const rotaInstaladores = selectedInstaladores.map((instaladorId) => ({
+          rota_id: novaRota.id,
+          instalador_id: instaladorId,
+        }));
+
+        const { error: instError } = await supabase
+          .from('rota_instaladores')
+          .insert(rotaInstaladores);
+
+        if (instError) console.error('Error adding rota_instaladores:', instError);
+      }
+
+      // Assign instalacoes to rota with their responsible instalador
+      if (distribuicao.length) {
+        for (const item of distribuicao) {
+          const instalacaoIds = item.instalacoes.map((i) => i.id);
+          if (instalacaoIds.length) {
+            await supabase
+              .from('instalacoes')
+              .update({
+                rota_id: novaRota.id,
+                instalador_responsavel_id: item.instaladorId,
+              })
+              .in('id', instalacaoIds);
+          }
+        }
+      }
+
+      // Invalidate queries
+      queryClient.invalidateQueries({ queryKey: ['rotas'] });
+      queryClient.invalidateQueries({ queryKey: ['rotas-metricas'] });
+      queryClient.invalidateQueries({ queryKey: ['rotas-semana'] });
+      queryClient.invalidateQueries({ queryKey: ['instalacoes-disponiveis'] });
+      queryClient.invalidateQueries({ queryKey: ['bairros-disponiveis'] });
+
+      toast.success(`Rota criada com ${distribuicao.reduce((acc, d) => acc + d.instalacoes.length, 0)} instalações!`);
+      onOpenChange(false);
+    } catch (error) {
+      console.error('Error creating rota:', error);
+      toast.error('Erro ao criar rota');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const totalInstalacoes = instalacoesSelecionadas?.length || 0;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEditing ? 'Editar Rota' : 'Nova Rota'}</DialogTitle>
         </DialogHeader>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="data_rota"
-              render={({ field }) => (
-                <FormItem className="flex flex-col">
-                  <FormLabel>Data da Rota</FormLabel>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <FormControl>
-                        <Button
-                          variant="outline"
-                          className={cn(
-                            'w-full pl-3 text-left font-normal',
-                            !field.value && 'text-muted-foreground'
-                          )}
-                        >
-                          {field.value ? (
-                            format(field.value, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })
-                          ) : (
-                            <span>Selecione a data</span>
-                          )}
-                          <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                        </Button>
-                      </FormControl>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={field.value}
-                        onSelect={field.onChange}
-                        disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
-                        initialFocus
-                        className="pointer-events-auto"
-                      />
-                    </PopoverContent>
-                  </Popover>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+        <div className="space-y-4 py-4">
+          {/* Data da Rota */}
+          <div className="space-y-2">
+            <Label>Data da Rota</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    'w-full pl-3 text-left font-normal',
+                    !dataRota && 'text-muted-foreground'
+                  )}
+                >
+                  {dataRota ? (
+                    format(dataRota, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })
+                  ) : (
+                    <span>Selecione a data</span>
+                  )}
+                  <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={dataRota}
+                  onSelect={(date) => date && setDataRota(date)}
+                  disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                  initialFocus
+                  className="pointer-events-auto"
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
 
-            <FormField
-              control={form.control}
-              name="instalador_id"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Instalador</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione o instalador" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {instaladores?.map((inst) => (
-                        <SelectItem key={inst.id} value={inst.id}>
-                          {inst.nome}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
+          {/* Instaladores */}
+          <div className="space-y-2">
+            <Label>Instaladores</Label>
+            <InstaladorMultiSelect
+              selectedIds={selectedInstaladores}
+              onSelectionChange={setSelectedInstaladores}
+              placeholder="Selecione os instaladores"
             />
+          </div>
 
-            <FormField
-              control={form.control}
-              name="cidade"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Cidade</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Ex: Rio de Janeiro" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+          {/* Bairros */}
+          <div className="space-y-2">
+            <Label>Bairros com Instalações Pendentes</Label>
+            <BairroSelector
+              bairros={bairrosDisponiveis || []}
+              selectedBairros={selectedBairros}
+              onSelectionChange={setSelectedBairros}
+              isLoading={loadingBairros}
+              placeholder="Selecione os bairros"
             />
+            {totalInstalacoes > 0 && (
+              <p className="text-xs text-muted-foreground">
+                {totalInstalacoes} instalação(ões) serão vinculadas à rota
+              </p>
+            )}
+          </div>
 
-            <FormField
-              control={form.control}
-              name="regiao"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Região</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Ex: Zona Sul" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+          {/* Preview da Distribuição */}
+          {distribuicao.length > 0 && (
+            <DistribuicaoPreview
+              instaladores={(instaladores || [])
+                .filter((i) => selectedInstaladores.includes(i.id))
+                .map((i) => ({ id: i.id, nome: i.nome }))}
+              instalacoes={instalacoesSelecionadas || []}
+              distribuicao={distribuicao}
+              onRedistribuir={handleRedistribuir}
             />
+          )}
 
-            <div className="flex justify-end gap-2 pt-4">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={createRota.isPending || updateRota.isPending}>
-                {isEditing ? 'Salvar' : 'Criar Rota'}
-              </Button>
-            </div>
-          </form>
-        </Form>
+          {/* Actions */}
+          <div className="flex justify-end gap-2 pt-4">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSubmit}
+              disabled={isSubmitting || !selectedInstaladores.length}
+            >
+              {isSubmitting ? 'Criando...' : 'Criar Rota'}
+            </Button>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );
