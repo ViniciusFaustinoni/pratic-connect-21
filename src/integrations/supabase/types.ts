@@ -7118,6 +7118,7 @@ export type Database = {
           cidade: string | null
           complemento: string | null
           concluida_em: string | null
+          contrato_id: string | null
           cotacao_id: string | null
           created_at: string
           data_agendada: string
@@ -7150,6 +7151,7 @@ export type Database = {
           cidade?: string | null
           complemento?: string | null
           concluida_em?: string | null
+          contrato_id?: string | null
           cotacao_id?: string | null
           created_at?: string
           data_agendada: string
@@ -7182,6 +7184,7 @@ export type Database = {
           cidade?: string | null
           complemento?: string | null
           concluida_em?: string | null
+          contrato_id?: string | null
           cotacao_id?: string | null
           created_at?: string
           data_agendada?: string
@@ -7247,6 +7250,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "instalacoes_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "contratos"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "instalacoes_cotacao_id_fkey"
