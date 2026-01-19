@@ -538,9 +538,11 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
 
       // 2. Verificar se veículo já existe pela placa
       let veiculo = await buscarVeiculoPorPlaca(data.placa);
+      let veiculoId: string | null = null;
       
       if (veiculo) {
         console.log('[Contrato] Veículo existente encontrado:', veiculo.id);
+        veiculoId = veiculo.id;
         
         // Verificar se pertence ao mesmo associado
         if (veiculo.associado_id && veiculo.associado_id !== associado.id) {
@@ -566,7 +568,7 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
       } else {
         // Criar novo veículo
         console.log('[Contrato] Criando novo veículo');
-        await createVeiculo.mutateAsync({
+        const novoVeiculo = await createVeiculo.mutateAsync({
           associado_id: associado.id,
           placa: data.placa,
           marca: data.marca,
@@ -579,6 +581,7 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
           renavam: data.renavam || null,
           valor_fipe: data.valor_fipe || null,
         });
+        veiculoId = novoVeiculo?.id || null;
       }
 
       // 3. Criar lead retroativo se cotação não tem lead vinculado
@@ -646,12 +649,13 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
         cotacao_id: cotacao.id,
         plano_id: cotacao.plano_id,
         associado_id: associado.id,
+        veiculo_id: veiculoId || veiculo?.id || null, // NOVO: veiculo_id FK
         lead_id: leadId, // Vincular lead (original ou criado retroativamente)
         valor_adesao: cotacao.valor_adesao,
         valor_mensal: cotacao.valor_total_mensal,
         data_inicio: new Date().toISOString().split('T')[0],
         status: 'pendente',
-        // Dados do veículo
+        // Dados do veículo (denormalizados para backup)
         veiculo_placa: data.placa || null,
         veiculo_marca: data.marca || null,
         veiculo_modelo: data.modelo || null,
