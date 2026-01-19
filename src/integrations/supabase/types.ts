@@ -4311,6 +4311,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "cotacoes_vendedor_profiles_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
             foreignKeyName: "cotacoes_vistoria_id_fkey"
             columns: ["vistoria_id"]
             isOneToOne: false

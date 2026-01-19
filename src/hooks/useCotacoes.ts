@@ -76,7 +76,7 @@ export function useCotacoes(options?: UseCotacoesOptions) {
             associados:associados!fk_contratos_associado(id, status)
           ),
           instalacoes:instalacoes!instalacoes_cotacao_id_fkey(id, status, data_agendada),
-          vendedor:profiles!cotacoes_vendedor_id_fkey(user_id, nome, email)
+          vendedor:profiles!cotacoes_vendedor_profiles_fkey(user_id, nome, email)
         `)
         .order('created_at', { ascending: false })
         .limit(100);
