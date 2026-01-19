@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from "react-leaflet";
 import L from "leaflet";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -24,20 +24,32 @@ import {
   Locate,
   Calendar,
   MapPin,
+  Route,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useVistoriasMapa, VistoriaMapa } from "@/hooks/useVistoriasMapa";
+import { useVistoriasMapa, VistoriaMapa, agruparPorRota } from "@/hooks/useVistoriasMapa";
 import { TIPO_VISTORIA_LABELS } from "@/types/servicos-rota";
+import { getRotaColor, SEM_ROTA_COLOR, createColoredMarkerSvg, svgToDataUrl } from "@/lib/rota-colors";
+import { MapaRotasLegenda } from "./MapaRotasLegenda";
 
-// Ícone vermelho para vistorias pendentes
-const vistoriaIcon = new L.Icon({
-  iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png",
-  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41],
-});
+// Cache de ícones por cor
+const iconCache = new Map<string, L.Icon>();
+
+function getColoredIcon(color: string): L.Icon {
+  if (iconCache.has(color)) {
+    return iconCache.get(color)!;
+  }
+  
+  const icon = new L.Icon({
+    iconUrl: svgToDataUrl(createColoredMarkerSvg(color)),
+    iconSize: [32, 40],
+    iconAnchor: [16, 40],
+    popupAnchor: [0, -40],
+  });
+  
+  iconCache.set(color, icon);
+  return icon;
+}
 
 // Componente para centralizar mapa
 function FlyToPosition({ position, zoom = 15 }: { position: [number, number] | null; zoom?: number }) {
@@ -53,9 +65,17 @@ function FlyToPosition({ position, zoom = 15 }: { position: [number, number] | n
 export function MapaVistoriasContent() {
   const { data: vistorias, isLoading } = useVistoriasMapa();
   const [filtroTipo, setFiltroTipo] = useState("todos");
+  const [filtroRota, setFiltroRota] = useState<string | null>(null);
   const [filtroBusca, setFiltroBusca] = useState("");
   const [posicaoSelecionada, setPosicaoSelecionada] = useState<[number, number] | null>(null);
   const [vistoriaSelecionada, setVistoriaSelecionada] = useState<string | null>(null);
+
+  // Obter lista de IDs de rotas únicas
+  const rotasIds = useMemo(() => {
+    if (!vistorias) return [];
+    const ids = [...new Set(vistorias.map(v => v.rota_id).filter(Boolean))] as string[];
+    return ids;
+  }, [vistorias]);
 
   // Filtrar vistorias
   const vistoriasFiltradas = useMemo(() => {
@@ -63,6 +83,15 @@ export function MapaVistoriasContent() {
 
     return vistorias.filter((v) => {
       if (filtroTipo !== "todos" && v.tipo_vistoria !== filtroTipo) return false;
+
+      // Filtro por rota
+      if (filtroRota !== null) {
+        if (filtroRota === 'sem_rota') {
+          if (v.rota_id !== null) return false;
+        } else {
+          if (v.rota_id !== filtroRota) return false;
+        }
+      }
 
       if (filtroBusca) {
         const termo = filtroBusca.toLowerCase();
@@ -77,12 +106,17 @@ export function MapaVistoriasContent() {
 
       return true;
     });
-  }, [vistorias, filtroTipo, filtroBusca]);
+  }, [vistorias, filtroTipo, filtroRota, filtroBusca]);
 
   // Vistorias com coordenadas
   const vistoriasComCoordenadas = useMemo(() => {
     return vistoriasFiltradas.filter((v) => v.latitude && v.longitude);
   }, [vistoriasFiltradas]);
+
+  // Agrupar por rota para legenda e polylines
+  const rotasAgrupadas = useMemo(() => {
+    return agruparPorRota(vistoriasComCoordenadas);
+  }, [vistoriasComCoordenadas]);
 
   // Selecionar vistoria
   const selecionarVistoria = (vistoria: VistoriaMapa) => {
@@ -147,6 +181,7 @@ export function MapaVistoriasContent() {
               <SelectItem value="periodica">🔄 Periódica</SelectItem>
               <SelectItem value="cancelamento">❌ Cancelamento</SelectItem>
               <SelectItem value="manutencao">🔧 Manutenção</SelectItem>
+              <SelectItem value="instalacao">🔌 Instalação</SelectItem>
             </SelectContent>
           </Select>
 
@@ -183,64 +218,80 @@ export function MapaVistoriasContent() {
               </div>
             ) : (
               <div className="space-y-2">
-                {vistoriasFiltradas.map((v) => (
-                  <div
-                    key={v.id}
-                    className={`p-3 border rounded-lg cursor-pointer transition-colors hover:bg-muted/50 ${
-                      vistoriaSelecionada === v.id ? "border-primary bg-primary/5" : ""
-                    } ${!v.latitude ? "opacity-60" : ""}`}
-                    onClick={() => selecionarVistoria(v)}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-semibold text-sm truncate">
-                            {v.veiculo_placa || "Sem placa"}
-                          </span>
-                          <Badge variant="outline" className="text-xs bg-red-50 text-red-700 border-red-200">
-                            {TIPO_VISTORIA_LABELS[v.tipo_vistoria as keyof typeof TIPO_VISTORIA_LABELS] || v.tipo_vistoria}
-                          </Badge>
+                {vistoriasFiltradas.map((v) => {
+                  const color = v.rota_id 
+                    ? getRotaColor(v.rota_id, rotasIds)
+                    : SEM_ROTA_COLOR;
+                  
+                  return (
+                    <div
+                      key={v.id}
+                      className={`p-3 border rounded-lg cursor-pointer transition-colors hover:bg-muted/50 ${
+                        vistoriaSelecionada === v.id ? "border-primary bg-primary/5" : ""
+                      } ${!v.latitude ? "opacity-60" : ""}`}
+                      onClick={() => selecionarVistoria(v)}
+                      style={{ borderLeftWidth: 4, borderLeftColor: color }}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-semibold text-sm truncate">
+                              {v.veiculo_placa || "Sem placa"}
+                            </span>
+                            <Badge variant="outline" className="text-xs bg-red-50 text-red-700 border-red-200">
+                              {TIPO_VISTORIA_LABELS[v.tipo_vistoria as keyof typeof TIPO_VISTORIA_LABELS] || v.tipo_vistoria}
+                            </Badge>
+                          </div>
+
+                          <p className="text-xs text-muted-foreground truncate">
+                            {v.associado_nome || "Sem associado"}
+                          </p>
+
+                          {v.endereco_bairro && (
+                            <p className="text-xs text-muted-foreground truncate flex items-center gap-1 mt-1">
+                              <MapPin className="h-3 w-3" />
+                              {v.endereco_bairro}, {v.endereco_cidade}
+                            </p>
+                          )}
+
+                          {v.data_agendada && (
+                            <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                              <Calendar className="h-3 w-3" />
+                              {format(new Date(v.data_agendada), "dd/MM/yyyy", { locale: ptBR })}
+                            </p>
+                          )}
+
+                          {/* Info da rota */}
+                          {v.rota_id && (
+                            <p className="text-xs mt-1 flex items-center gap-1" style={{ color }}>
+                              <Route className="h-3 w-3" />
+                              {v.rota_codigo || 'Rota atribuída'}
+                              {v.vistoriador_nome && ` • ${v.vistoriador_nome}`}
+                            </p>
+                          )}
+
+                          {!v.latitude && (
+                            <p className="text-xs text-orange-600 mt-1">⚠️ Sem coordenadas GPS</p>
+                          )}
                         </div>
 
-                        <p className="text-xs text-muted-foreground truncate">
-                          {v.associado_nome || "Sem associado"}
-                        </p>
-
-                        {v.endereco_bairro && (
-                          <p className="text-xs text-muted-foreground truncate flex items-center gap-1 mt-1">
-                            <MapPin className="h-3 w-3" />
-                            {v.endereco_bairro}, {v.endereco_cidade}
-                          </p>
-                        )}
-
-                        {v.data_agendada && (
-                          <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                            <Calendar className="h-3 w-3" />
-                            {format(new Date(v.data_agendada), "dd/MM/yyyy", { locale: ptBR })}
-                          </p>
-                        )}
-
-                        {!v.latitude && (
-                          <p className="text-xs text-orange-600 mt-1">⚠️ Sem coordenadas GPS</p>
+                        {v.latitude && v.longitude && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 flex-shrink-0"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              selecionarVistoria(v);
+                            }}
+                          >
+                            <Locate className="h-4 w-4" />
+                          </Button>
                         )}
                       </div>
-
-                      {v.latitude && v.longitude && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 flex-shrink-0"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            selecionarVistoria(v);
-                          }}
-                        >
-                          <Locate className="h-4 w-4" />
-                        </Button>
-                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </ScrollArea>
@@ -274,53 +325,108 @@ export function MapaVistoriasContent() {
 
             <FlyToPosition position={posicaoSelecionada} />
 
-            {vistoriasComCoordenadas.map((v) => (
-              <Marker
-                key={v.id}
-                position={[v.latitude!, v.longitude!]}
-                icon={vistoriaIcon}
-              >
-                <Popup>
-                  <div className="min-w-[200px]">
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="font-bold text-sm">{v.veiculo_placa || "Sem placa"}</h3>
-                      <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded">
-                        {TIPO_VISTORIA_LABELS[v.tipo_vistoria as keyof typeof TIPO_VISTORIA_LABELS] || v.tipo_vistoria}
-                      </span>
-                    </div>
+            {/* Polylines conectando pontos de cada rota */}
+            {rotasAgrupadas.map((rota) => {
+              if (!rota.rota_id) return null; // Não desenhar linha para sem rota
+              
+              const vistoriasComGps = rota.vistorias.filter(v => v.latitude && v.longitude);
+              if (vistoriasComGps.length < 2) return null; // Precisa de pelo menos 2 pontos
+              
+              const positions = vistoriasComGps.map(v => [v.latitude!, v.longitude!] as [number, number]);
+              const color = getRotaColor(rota.rota_id, rotasIds);
+              
+              return (
+                <Polyline
+                  key={`line-${rota.rota_id}`}
+                  positions={positions}
+                  pathOptions={{
+                    color,
+                    weight: 3,
+                    opacity: 0.6,
+                    dashArray: '8, 8',
+                  }}
+                />
+              );
+            })}
 
-                    <div className="text-xs space-y-1 mb-2">
-                      <p><strong>Associado:</strong> {v.associado_nome || "-"}</p>
-                      <p><strong>Veículo:</strong> {v.veiculo_marca} {v.veiculo_modelo}</p>
-                      {v.data_agendada && (
-                        <p><strong>Agendada:</strong> {format(new Date(v.data_agendada), "dd/MM/yyyy", { locale: ptBR })}</p>
-                      )}
-                      <p><strong>Local:</strong> {v.endereco_bairro}, {v.endereco_cidade}</p>
-                    </div>
+            {/* Marcadores */}
+            {vistoriasComCoordenadas.map((v) => {
+              const color = v.rota_id 
+                ? getRotaColor(v.rota_id, rotasIds)
+                : SEM_ROTA_COLOR;
+              
+              return (
+                <Marker
+                  key={v.id}
+                  position={[v.latitude!, v.longitude!]}
+                  icon={getColoredIcon(color)}
+                >
+                  <Popup>
+                    <div className="min-w-[200px]">
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="font-bold text-sm">{v.veiculo_placa || "Sem placa"}</h3>
+                        <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded">
+                          {TIPO_VISTORIA_LABELS[v.tipo_vistoria as keyof typeof TIPO_VISTORIA_LABELS] || v.tipo_vistoria}
+                        </span>
+                      </div>
 
-                    <div className="flex gap-2">
-                      {v.associado_telefone && (
+                      <div className="text-xs space-y-1 mb-2">
+                        <p><strong>Associado:</strong> {v.associado_nome || "-"}</p>
+                        <p><strong>Veículo:</strong> {v.veiculo_marca} {v.veiculo_modelo}</p>
+                        {v.data_agendada && (
+                          <p><strong>Agendada:</strong> {format(new Date(v.data_agendada), "dd/MM/yyyy", { locale: ptBR })}</p>
+                        )}
+                        <p><strong>Local:</strong> {v.endereco_bairro}, {v.endereco_cidade}</p>
+                        
+                        {/* Info da rota no popup */}
+                        {v.rota_id && (
+                          <p className="mt-1 pt-1 border-t">
+                            <strong>Rota:</strong>{" "}
+                            <span 
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-white text-xs"
+                              style={{ backgroundColor: color }}
+                            >
+                              {v.rota_codigo || 'Atribuída'}
+                            </span>
+                          </p>
+                        )}
+                        {v.vistoriador_nome && (
+                          <p><strong>Vistoriador:</strong> {v.vistoriador_nome}</p>
+                        )}
+                      </div>
+
+                      <div className="flex gap-2">
+                        {v.associado_telefone && (
+                          <button
+                            onClick={() => abrirWhatsApp(v.associado_telefone)}
+                            className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white rounded text-xs hover:bg-green-700"
+                          >
+                            <Phone className="h-3 w-3" />
+                            WhatsApp
+                          </button>
+                        )}
                         <button
-                          onClick={() => abrirWhatsApp(v.associado_telefone)}
-                          className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white rounded text-xs hover:bg-green-700"
+                          onClick={() => abrirGoogleMaps(v.latitude!, v.longitude!)}
+                          className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
                         >
-                          <Phone className="h-3 w-3" />
-                          WhatsApp
+                          <Navigation className="h-3 w-3" />
+                          Google Maps
                         </button>
-                      )}
-                      <button
-                        onClick={() => abrirGoogleMaps(v.latitude!, v.longitude!)}
-                        className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
-                      >
-                        <Navigation className="h-3 w-3" />
-                        Google Maps
-                      </button>
+                      </div>
                     </div>
-                  </div>
-                </Popup>
-              </Marker>
-            ))}
+                  </Popup>
+                </Marker>
+              );
+            })}
           </MapContainer>
+
+          {/* Legenda de Rotas */}
+          <MapaRotasLegenda
+            rotas={rotasAgrupadas}
+            rotasIds={rotasIds}
+            rotaSelecionada={filtroRota}
+            onRotaClick={setFiltroRota}
+          />
 
           <div className="absolute bottom-4 left-4 bg-background/90 backdrop-blur-sm px-3 py-1.5 rounded-full text-xs text-muted-foreground border shadow-sm flex items-center gap-2">
             <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
