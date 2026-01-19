@@ -42,13 +42,12 @@ export function useAtivacoes(filtro: FiltroAtivacao = 'todos') {
   return useQuery({
     queryKey: ['ativacoes', filtro],
     queryFn: async (): Promise<AtivacaoContrato[]> => {
-      // Buscar contratos com joins diretos para leads e vendedor
+      // Buscar contratos - vendedor_id armazena profiles.id
       const { data: contratos, error } = await supabase
         .from('contratos')
         .select(`
           *,
-          leads (id, nome, telefone, veiculo_marca, veiculo_modelo, veiculo_placa),
-          vendedor:profiles!contratos_vendedor_id_fkey (id, nome)
+          leads (id, nome, telefone, veiculo_marca, veiculo_modelo, veiculo_placa)
         `)
         .order('created_at', { ascending: false });
 
@@ -65,6 +64,17 @@ export function useAtivacoes(filtro: FiltroAtivacao = 'todos') {
         );
       }
 
+      // Buscar vendedores por profiles.id (contratos.vendedor_id armazena profiles.id)
+      const vendedorIds = [...new Set(filteredContratos.map(c => c.vendedor_id).filter(Boolean))] as string[];
+      let vendedoresMap = new Map<string, { id: string; nome: string | null }>();
+      if (vendedorIds.length > 0) {
+        const { data: vendedores } = await supabase
+          .from('profiles')
+          .select('id, nome')
+          .in('id', vendedorIds);
+        vendedores?.forEach(v => vendedoresMap.set(v.id, { id: v.id, nome: v.nome }));
+      }
+
       // Buscar vistorias de entrada para cada associado
       const associadoIds = filteredContratos.map(c => c.associado_id).filter(Boolean) as string[];
       let vistoriasData: Array<{ id: string; status: string | null; modalidade: string | null; created_at: string; associado_id: string }> = [];
@@ -76,13 +86,13 @@ export function useAtivacoes(filtro: FiltroAtivacao = 'todos') {
           .in('tipo', ['entrada', 'instalacao'] as any);
         vistoriasData = (data || []) as unknown as typeof vistoriasData;
       }
-      
+
       const vistoriasMap = new Map(vistoriasData.map(v => [v.associado_id, v]));
 
-      // Montar resultado - usar dados do join direto
+      // Montar resultado - buscar vendedor do mapa por profiles.id
       const result: AtivacaoContrato[] = filteredContratos.map((contrato: any) => {
         const lead = contrato.leads;
-        const vendedor = contrato.vendedor;
+        const vendedor = contrato.vendedor_id ? vendedoresMap.get(contrato.vendedor_id) : null;
         const vistoria = contrato.associado_id ? vistoriasMap.get(contrato.associado_id) : null;
 
         return {
