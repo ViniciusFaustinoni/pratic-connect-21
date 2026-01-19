@@ -56,6 +56,13 @@ export interface InstalacaoWithRelations extends Instalacao {
     telefone?: string | null;
     email?: string | null;
   } | null;
+  // Instalador responsável (campo alternativo)
+  instalador_responsavel?: {
+    id: string;
+    nome: string;
+    telefone?: string | null;
+    email?: string | null;
+  } | null;
 }
 
 export interface InstalacaoFilters {
@@ -215,13 +222,23 @@ export function useInstalacao(id: string | undefined) {
           associados (id, nome, telefone, email, cpf, cep, logradouro, numero, complemento, bairro, cidade, uf),
           veiculos (id, marca, modelo, placa, ano_modelo, cor, chassi, renavam),
           rastreadores (id, codigo, numero_serie, imei),
-          instalador:profiles!instalacoes_instalador_id_fkey (id, nome, telefone, email)
+          instalador:profiles!instalacoes_instalador_id_fkey (id, nome, telefone, email),
+          instalador_responsavel:profiles!instalacoes_instalador_responsavel_id_fkey (id, nome, telefone, email)
         `)
         .eq('id', id)
         .maybeSingle();
 
       if (error) throw error;
-      return data as InstalacaoWithRelations | null;
+      
+      // Map instalador_responsavel to profiles for backward compatibility if instalador is null
+      const result = data as InstalacaoWithRelations | null;
+      if (result && !result.instalador && result.instalador_responsavel) {
+        result.profiles = result.instalador_responsavel;
+      } else if (result && result.instalador) {
+        result.profiles = result.instalador;
+      }
+      
+      return result;
     },
     enabled: !!id,
   });

@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
@@ -28,6 +29,7 @@ import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { useInstalacao, useUpdateInstalacaoStatus, type Instalacao } from '@/hooks/useInstalacoes';
 import { STATUS_INSTALACAO_LABELS, STATUS_INSTALACAO_COLORS, PERIODO_LABELS } from '@/types/database';
+import { cn } from '@/lib/utils';
 
 interface InstalacaoDetailDrawerProps {
   instalacaoId: string | null;
@@ -83,6 +85,21 @@ export function InstalacaoDetailDrawer({
     window.open(`https://wa.me/55${phone}?text=${encodeURIComponent(message)}`, '_blank');
   };
 
+  // Calcular se está atrasada
+  const isAtrasada = useMemo(() => {
+    if (!instalacao) return false;
+    if (['concluida', 'cancelada'].includes(instalacao.status)) return false;
+    
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    const dataAgendada = new Date(instalacao.data_agendada + 'T00:00:00');
+    
+    return dataAgendada < hoje;
+  }, [instalacao]);
+
+  // Pegar instalador (prioriza profiles que já tem fallback no hook)
+  const instaladorInfo = instalacao?.profiles || instalacao?.instalador_responsavel;
+
   if (!instalacaoId) return null;
 
   return (
@@ -92,8 +109,8 @@ export function InstalacaoDetailDrawer({
           <div className="flex items-center justify-between">
             <DrawerTitle>Detalhes da Instalação</DrawerTitle>
             {instalacao && (
-              <Badge className={STATUS_INSTALACAO_COLORS[instalacao.status]}>
-                {STATUS_INSTALACAO_LABELS[instalacao.status]}
+              <Badge className={cn(isAtrasada ? "bg-orange-500 text-white" : STATUS_INSTALACAO_COLORS[instalacao.status])}>
+                {isAtrasada ? "Atrasada" : STATUS_INSTALACAO_LABELS[instalacao.status]}
               </Badge>
             )}
           </div>
@@ -145,11 +162,11 @@ export function InstalacaoDetailDrawer({
                 </div>
               </div>
 
-              {instalacao.profiles && (
+              {instaladorInfo && (
                 <div className="flex items-center gap-2 mt-2">
                   <User className="h-4 w-4 text-muted-foreground" />
                   <span className="text-sm">
-                    Instalador: <strong>{instalacao.profiles.nome}</strong>
+                    Instalador: <strong>{instaladorInfo.nome}</strong>
                   </span>
                 </div>
               )}

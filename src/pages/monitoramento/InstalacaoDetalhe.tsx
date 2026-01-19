@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useInstalacao, useInstalacaoActions } from '@/hooks/useInstalacoes';
 import { Button } from '@/components/ui/button';
@@ -134,6 +134,21 @@ export default function InstalacaoDetalhePage() {
   const podeReagendar = ['agendada', 'reagendada'].includes(instalacao.status);
   const podeCancelar = !['concluida', 'cancelada'].includes(instalacao.status);
 
+  // Calcular se está atrasada
+  const isAtrasada = useMemo(() => {
+    if (!instalacao) return false;
+    if (['concluida', 'cancelada'].includes(instalacao.status)) return false;
+    
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    const dataAgendada = new Date(instalacao.data_agendada + 'T00:00:00');
+    
+    return dataAgendada < hoje;
+  }, [instalacao]);
+
+  // Pegar instalador (prioriza profiles que já tem fallback no hook)
+  const instaladorInfo = instalacao.profiles || instalacao.instalador_responsavel;
+
   return (
     <div className="p-6 space-y-6">
       {/* BREADCRUMB */}
@@ -158,8 +173,8 @@ export default function InstalacaoDetalhePage() {
         <div className="space-y-2">
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold tracking-tight">Instalação #{id?.slice(0, 8)}</h1>
-            <Badge className={cn("text-white", STATUS_INSTALACAO_COLORS[instalacao.status])}>
-              {STATUS_INSTALACAO_LABELS[instalacao.status]}
+            <Badge className={cn("text-white", isAtrasada ? "bg-orange-500" : STATUS_INSTALACAO_COLORS[instalacao.status])}>
+              {isAtrasada ? "Atrasada" : STATUS_INSTALACAO_LABELS[instalacao.status]}
             </Badge>
           </div>
           <div className="flex items-center gap-2 text-muted-foreground">
@@ -288,23 +303,23 @@ export default function InstalacaoDetalhePage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {instalacao.profiles ? (
+            {instaladorInfo ? (
               <>
                 <div>
                   <p className="text-sm text-muted-foreground">Nome</p>
-                  <p className="font-medium">{instalacao.profiles.nome}</p>
+                  <p className="font-medium">{instaladorInfo.nome}</p>
                 </div>
                 <Separator />
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-muted-foreground">Telefone</p>
-                    <p className="font-medium">{formatPhone(instalacao.profiles.telefone)}</p>
+                    <p className="font-medium">{formatPhone(instaladorInfo.telefone)}</p>
                   </div>
                   <div className="flex gap-2">
-                    <Button size="icon" variant="outline" onClick={() => handleLigar(instalacao.profiles?.telefone)}>
+                    <Button size="icon" variant="outline" onClick={() => handleLigar(instaladorInfo?.telefone)}>
                       <Phone className="h-4 w-4" />
                     </Button>
-                    <Button size="icon" variant="outline" onClick={() => handleWhatsApp(instalacao.profiles?.telefone)}>
+                    <Button size="icon" variant="outline" onClick={() => handleWhatsApp(instaladorInfo?.telefone)}>
                       <MessageSquare className="h-4 w-4" />
                     </Button>
                   </div>
