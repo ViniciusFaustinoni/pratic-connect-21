@@ -13900,6 +13900,9 @@ export type Database = {
           id: string | null
           latitude: number | null
           longitude: number | null
+          rota_codigo: string | null
+          rota_id: string | null
+          rota_regiao: string | null
           status: string | null
           tipo_servico: string | null
           tipo_vistoria: string | null
@@ -13908,6 +13911,7 @@ export type Database = {
           veiculo_modelo: string | null
           veiculo_placa: string | null
           vistoriador_id: string | null
+          vistoriador_nome: string | null
         }
         Relationships: []
       }
