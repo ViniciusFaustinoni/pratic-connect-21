@@ -158,6 +158,29 @@ export function MapaVistoriasContent() {
     return agruparPorRota(vistoriasComCoordenadas);
   }, [vistoriasComCoordenadas]);
 
+  // Criar legenda baseada nas ROTAS DO BANCO (não das vistorias filtradas)
+  const rotasParaLegenda = useMemo(() => {
+    if (!rotasBairros?.length) return rotasAgrupadas;
+    
+    // Usar rotas do banco como base para a legenda
+    const rotasDoDb = rotasBairros.map(rota => ({
+      rota_id: rota.rota_id,
+      rota_codigo: rota.codigo,
+      rota_cor: rota.cor,
+      rota_regiao: rota.bairros.slice(0, 3).join(', '),
+      vistoriador_nome: null as string | null,
+      vistorias: vistoriasComCoordenadas.filter(v => v.rota_id === rota.rota_id),
+    }));
+    
+    // Adicionar grupo "sem rota" se houver vistorias sem rota
+    const semRota = rotasAgrupadas.find(r => !r.rota_id);
+    if (semRota && semRota.vistorias.length > 0) {
+      rotasDoDb.push(semRota);
+    }
+    
+    return rotasDoDb;
+  }, [rotasBairros, vistoriasComCoordenadas, rotasAgrupadas]);
+
   // Mapear bairros com cores de rotas para polígonos - FONTE: ROTAS (não vistorias)
   const bairrosComRota = useMemo(() => {
     const mapa = new Map<string, string>(); // bairro normalizado -> cor
@@ -171,8 +194,13 @@ export function MapaVistoriasContent() {
       });
     });
     
+    // Debug log
+    console.log('🗓️ Data filtro:', filtroData);
+    console.log('📍 Rotas Bairros:', rotasBairros);
+    console.log('🗺️ Bairros com Rota:', Array.from(mapa.entries()));
+    
     return mapa;
-  }, [rotasBairros]);
+  }, [rotasBairros, filtroData]);
 
   // Função de estilo para os polígonos dos bairros
   const styleBairro = (feature: GeoJSON.Feature | undefined) => {
@@ -594,10 +622,10 @@ export function MapaVistoriasContent() {
             })}
           </MapContainer>
 
-          {/* Legenda de Rotas */}
+          {/* Legenda de Rotas - baseada nas rotas do banco */}
           <MapaRotasLegenda
-            rotas={rotasAgrupadas}
-            rotasIds={rotasIds}
+            rotas={rotasParaLegenda}
+            rotasIds={rotasBairros?.map(r => r.rota_id) || rotasIds}
             rotaSelecionada={filtroRota}
             onRotaClick={setFiltroRota}
             dataSelecionada={filtroData}
