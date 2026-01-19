@@ -155,14 +155,23 @@ export default function FilaVistorias() {
     if (!vistoriasRaw) return [];
 
     return vistoriasRaw.map((v: Vistoria) => {
-      const clienteNome = v.associado?.nome || v.veiculo?.associado?.nome || 'Cliente não identificado';
+      const raw = v as any;
+      const clienteNome = v.associado?.nome || v.veiculo?.associado?.nome || raw.cotacao?.nome_solicitante || 'Cliente não identificado';
       const clienteId = v.associado?.id || v.veiculo?.associado?.id || '';
+      
+      // Buscar dados do veículo: primeiro do veiculo vinculado, depois do associado, depois da cotação
       const veiculoInfo = v.veiculo 
         ? `${v.veiculo.marca || ''} ${v.veiculo.modelo || ''}`.trim() 
         : v.associado?.veiculos?.[0] 
           ? `${v.associado.veiculos[0].marca || ''} ${v.associado.veiculos[0].modelo || ''}`.trim()
-          : 'Veículo não informado';
-      const placa = v.veiculo?.placa || v.associado?.veiculos?.[0]?.placa || '---';
+          : raw.cotacao?.veiculo_marca && raw.cotacao?.veiculo_modelo
+            ? `${raw.cotacao.veiculo_marca} ${raw.cotacao.veiculo_modelo}`.trim()
+            : 'Veículo não informado';
+      
+      const placa = v.veiculo?.placa || v.associado?.veiculos?.[0]?.placa || raw.cotacao?.veiculo_placa || '---';
+      
+      // Usar endereco_bairro ou endereco_cidade como região
+      const regiao = raw.endereco_bairro || raw.endereco_cidade || 'Não informada';
 
       return {
         id: v.id,
@@ -171,12 +180,12 @@ export default function FilaVistorias() {
         clienteId,
         veiculo: veiculoInfo,
         placa,
-        tipo: mapTipo((v as any).modalidade),
-        regiao: (v as any).regiao || 'Não informada',
+        tipo: mapTipo(raw.modalidade),
+        regiao,
         dataAgendada: v.data_agendada,
         vistoriador: v.vistoriador?.nome || null,
         vistoriadorId: v.vistoriador_id,
-        status: mapStatus(v.status, (v as any).modalidade),
+        status: mapStatus(v.status, raw.modalidade),
         createdAt: v.created_at,
       };
     });
@@ -193,12 +202,11 @@ export default function FilaVistorias() {
     return Array.from(map.entries()).map(([id, nome]) => ({ id, nome }));
   }, [vistorias]);
 
-  // Contadores por tab
+  // Contadores por tab - Pendentes agora inclui 'pendente' + 'agendada'
   const contadores = useMemo(() => {
     const hoje = new Date().toDateString();
     return {
-      pendentes: vistorias.filter(v => v.status === 'pendente').length,
-      agendadas: vistorias.filter(v => v.status === 'agendada').length,
+      pendentes: vistorias.filter(v => v.status === 'pendente' || v.status === 'agendada').length,
       emCampo: vistorias.filter(v => v.status === 'em_rota' || v.status === 'em_andamento').length,
       aguardandoAnalise: vistorias.filter(v => v.status === 'aguardando_analise').length,
       autoVistoria: vistorias.filter(v => v.status === 'auto_vistoria_pendente').length,
@@ -209,17 +217,15 @@ export default function FilaVistorias() {
     };
   }, [vistorias]);
 
-  // Filtrar vistorias por tab
+  // Filtrar vistorias por tab - Pendentes agora inclui 'pendente' + 'agendada'
   const vistoriasFiltradas = useMemo(() => {
     let result = vistorias;
 
     // Filtrar por tab
     switch (activeTab) {
       case 'pendentes':
-        result = result.filter(v => v.status === 'pendente');
-        break;
-      case 'agendadas':
-        result = result.filter(v => v.status === 'agendada');
+        // Consolidar pendentes e agendadas em uma única tab
+        result = result.filter(v => v.status === 'pendente' || v.status === 'agendada');
         break;
       case 'em_campo':
         result = result.filter(v => v.status === 'em_rota' || v.status === 'em_andamento');
@@ -428,16 +434,12 @@ export default function FilaVistorias() {
         </p>
       </div>
 
-      {/* Tabs */}
+      {/* Tabs - Removida tab "Agendadas" separada, consolidada em "Pendentes" */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="flex-wrap h-auto gap-2">
           <TabsTrigger value="pendentes" className="gap-2">
             Pendentes
             <Badge variant="secondary" className="ml-1">{contadores.pendentes}</Badge>
-          </TabsTrigger>
-          <TabsTrigger value="agendadas" className="gap-2">
-            Agendadas
-            <Badge variant="secondary" className="ml-1">{contadores.agendadas}</Badge>
           </TabsTrigger>
           <TabsTrigger value="em_campo" className="gap-2">
             Em Campo
