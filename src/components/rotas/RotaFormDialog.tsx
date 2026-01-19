@@ -18,7 +18,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { useInstaladores, type Rota } from '@/hooks/useRotas';
-import { useBairrosDisponiveis, useInstalacoesPorBairros } from '@/hooks/useBairrosDisponiveis';
+import { useBairrosDisponiveis, useInstalacoesPorBairros, useVistoriasPorBairros } from '@/hooks/useBairrosDisponiveis';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
@@ -57,9 +57,10 @@ export function RotaFormDialog({ open, onOpenChange, rota }: RotaFormDialogProps
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [distribuicao, setDistribuicao] = useState<DistribuicaoItem[]>([]);
 
-  // Data hooks
+  // Data hooks - now includes both instalações AND vistorias
   const { data: bairrosDisponiveis, isLoading: loadingBairros } = useBairrosDisponiveis(dataRota);
   const { data: instalacoesSelecionadas } = useInstalacoesPorBairros(selectedBairros, dataRota);
+  const { data: vistoriasSelecionadas } = useVistoriasPorBairros(selectedBairros, dataRota);
 
   // Reset form when dialog opens
   useEffect(() => {
@@ -147,11 +148,12 @@ export function RotaFormDialog({ open, onOpenChange, rota }: RotaFormDialogProps
       }
 
       // Assign instalacoes to rota with their responsible instalador
+      let totalInstalacoes = 0;
       if (distribuicao.length) {
         for (const item of distribuicao) {
           const instalacaoIds = item.instalacoes.map((i) => i.id);
           if (instalacaoIds.length) {
-            await supabase
+            const { error: updateInstError } = await supabase
               .from('instalacoes')
               .update({
                 rota_id: novaRota.id,
@@ -159,17 +161,52 @@ export function RotaFormDialog({ open, onOpenChange, rota }: RotaFormDialogProps
                 instalador_responsavel_id: item.instaladorId,
               })
               .in('id', instalacaoIds);
+            
+            if (updateInstError) {
+              console.error('Erro ao atualizar instalações:', updateInstError);
+            } else {
+              totalInstalacoes += instalacaoIds.length;
+            }
           }
         }
       }
 
-      // Vincular cotações do(s) bairro(s) selecionado(s) à rota
+      // ========== NOVA LÓGICA: Vincular VISTORIAS diretamente ==========
+      // A tabela unificada 'vistorias' é a fonte de verdade para o mapa
+      let vistoriasVinculadas = 0;
+      
+      if (vistoriasSelecionadas?.length) {
+        const vistoriaIds = vistoriasSelecionadas.map(v => v.id);
+        
+        console.log(`[RotaFormDialog] Vinculando ${vistoriaIds.length} vistorias diretamente à rota ${novaRota.id}`);
+        
+        const { error: vistError, count } = await supabase
+          .from('vistorias')
+          .update({ 
+            rota_id: novaRota.id,
+            vistoriador_id: selectedInstaladores[0],
+          })
+          .in('id', vistoriaIds)
+          .select('id');
+        
+        if (vistError) {
+          console.error('Erro ao vincular vistorias:', vistError);
+          toast.error(`Erro ao vincular ${vistoriaIds.length} vistorias à rota. Verifique suas permissões.`);
+        } else {
+          vistoriasVinculadas = vistoriaIds.length;
+          console.log(`[RotaFormDialog] ${vistoriasVinculadas} vistorias vinculadas com sucesso`);
+        }
+      }
+      
+      // ========== ATUALIZAÇÃO LEGADA (best-effort, não bloqueia) ==========
+      // Atualizar cotacoes.vistoria_rota_id e contratos.vistoria_rota_id para compatibilidade
+      // Isso é secundário - se falhar por RLS, a vistoria já foi vinculada acima
       let cotacoesVinculadas = 0;
       let contratosVinculados = 0;
       
       if (selectedBairros.length > 0) {
-        // Buscar cotações pendentes nos bairros selecionados (vistoria não concluída)
-        const { data: cotacoesParaVincular, error: cotacoesError } = await supabase
+        // Buscar cotações pendentes nos bairros selecionados
+        const { data: cotacoesParaVincular } = await supabase
           .from('cotacoes')
           .select('id')
           .in('vistoria_endereco_bairro', selectedBairros)
@@ -177,12 +214,10 @@ export function RotaFormDialog({ open, onOpenChange, rota }: RotaFormDialogProps
           .is('vistoria_concluida_em', null)
           .lte('vistoria_data_agendada', dataFormatada);
         
-        if (cotacoesError) {
-          console.error('Erro ao buscar cotações:', cotacoesError);
-        } else if (cotacoesParaVincular?.length) {
+        if (cotacoesParaVincular?.length) {
           const cotacoesIds = cotacoesParaVincular.map(c => c.id);
-          // Buscar nome do instalador responsável
           const instaladorResponsavel = instaladores?.find(i => i.id === selectedInstaladores[0]);
+          
           const { error: updateCotError } = await supabase
             .from('cotacoes')
             .update({ 
@@ -192,28 +227,14 @@ export function RotaFormDialog({ open, onOpenChange, rota }: RotaFormDialogProps
             .in('id', cotacoesIds);
           
           if (updateCotError) {
-            console.error('Erro ao vincular cotações:', updateCotError);
-            toast.error(`Erro ao vincular ${cotacoesIds.length} cotações à rota`);
+            console.warn('Aviso: Não foi possível atualizar cotacoes.vistoria_rota_id (RLS?):', updateCotError.message);
           } else {
             cotacoesVinculadas = cotacoesIds.length;
-            
-            // IMPORTANTE: Atualizar também a tabela vistorias (sistema unificado)
-            const { error: vistCotError } = await supabase
-              .from('vistorias')
-              .update({ 
-                rota_id: novaRota.id,
-                vistoriador_id: selectedInstaladores[0],
-              })
-              .in('cotacao_id', cotacoesIds);
-            
-            if (vistCotError) {
-              console.error('Erro ao vincular vistorias de cotações:', vistCotError);
-            }
           }
         }
 
-        // Vincular contratos pendentes nos bairros selecionados (vistoria completa não concluída)
-        const { data: contratosParaVincular, error: contratosError } = await supabase
+        // Vincular contratos pendentes nos bairros selecionados
+        const { data: contratosParaVincular } = await supabase
           .from('contratos')
           .select('id')
           .in('vistoria_completa_endereco_bairro', selectedBairros)
@@ -221,34 +242,18 @@ export function RotaFormDialog({ open, onOpenChange, rota }: RotaFormDialogProps
           .is('vistoria_concluida_em', null)
           .lte('vistoria_completa_data_agendada', dataFormatada);
         
-        if (contratosError) {
-          console.error('Erro ao buscar contratos:', contratosError);
-        } else if (contratosParaVincular?.length) {
+        if (contratosParaVincular?.length) {
           const contratosIds = contratosParaVincular.map(c => c.id);
+          
           const { error: updateContError } = await supabase
             .from('contratos')
-            .update({ 
-              vistoria_rota_id: novaRota.id,
-            })
+            .update({ vistoria_rota_id: novaRota.id })
             .in('id', contratosIds);
           
           if (updateContError) {
-            console.error('Erro ao vincular contratos:', updateContError);
+            console.warn('Aviso: Não foi possível atualizar contratos.vistoria_rota_id (RLS?):', updateContError.message);
           } else {
             contratosVinculados = contratosIds.length;
-            
-            // IMPORTANTE: Atualizar também a tabela vistorias (sistema unificado)
-            const { error: vistContError } = await supabase
-              .from('vistorias')
-              .update({ 
-                rota_id: novaRota.id,
-                vistoriador_id: selectedInstaladores[0],
-              })
-              .in('contrato_id', contratosIds);
-            
-            if (vistContError) {
-              console.error('Erro ao vincular vistorias de contratos:', vistContError);
-            }
           }
         }
       }
@@ -260,15 +265,26 @@ export function RotaFormDialog({ open, onOpenChange, rota }: RotaFormDialogProps
       queryClient.invalidateQueries({ queryKey: ['instalacoes-disponiveis'] });
       queryClient.invalidateQueries({ queryKey: ['bairros-disponiveis'] });
       queryClient.invalidateQueries({ queryKey: ['vistorias-mapa'] });
+      queryClient.invalidateQueries({ queryKey: ['vistorias-por-bairros'] });
+      queryClient.invalidateQueries({ queryKey: ['instalacoes-por-bairros'] });
+      queryClient.invalidateQueries({ queryKey: ['rotas-bairros'] });
 
-      const totalInstalacoes = distribuicao.reduce((acc, d) => acc + d.instalacoes.length, 0);
+      // Mensagem de sucesso detalhada
       const vinculosMensagem = [
         totalInstalacoes > 0 ? `${totalInstalacoes} instalações` : null,
-        cotacoesVinculadas > 0 ? `${cotacoesVinculadas} cotações` : null,
-        contratosVinculados > 0 ? `${contratosVinculados} contratos` : null,
+        vistoriasVinculadas > 0 ? `${vistoriasVinculadas} vistorias` : null,
       ].filter(Boolean).join(', ');
       
       toast.success(`Rota criada com sucesso!${vinculosMensagem ? ` Vinculados: ${vinculosMensagem}.` : ''}`);
+      
+      // Log detalhado para debug
+      console.log(`[RotaFormDialog] Rota ${novaRota.id} criada:`, {
+        instalacoes: totalInstalacoes,
+        vistorias: vistoriasVinculadas,
+        cotacoes_legado: cotacoesVinculadas,
+        contratos_legado: contratosVinculados,
+      });
+      
       onOpenChange(false);
     } catch (error) {
       console.error('Error creating rota:', error);
@@ -279,6 +295,8 @@ export function RotaFormDialog({ open, onOpenChange, rota }: RotaFormDialogProps
   };
 
   const totalInstalacoes = instalacoesSelecionadas?.length || 0;
+  const totalVistorias = vistoriasSelecionadas?.length || 0;
+  const totalServicos = totalInstalacoes + totalVistorias;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -358,7 +376,7 @@ export function RotaFormDialog({ open, onOpenChange, rota }: RotaFormDialogProps
 
           {/* Bairros */}
           <div className="space-y-2">
-            <Label>Bairros com Instalações Pendentes</Label>
+            <Label>Bairros com Serviços Pendentes</Label>
             <BairroSelector
               bairros={bairrosDisponiveis || []}
               selectedBairros={selectedBairros}
@@ -366,9 +384,12 @@ export function RotaFormDialog({ open, onOpenChange, rota }: RotaFormDialogProps
               isLoading={loadingBairros}
               placeholder="Selecione os bairros"
             />
-            {totalInstalacoes > 0 && (
+            {totalServicos > 0 && (
               <p className="text-xs text-muted-foreground">
-                {totalInstalacoes} instalação(ões) serão vinculadas à rota
+                {totalInstalacoes > 0 && `${totalInstalacoes} instalação(ões)`}
+                {totalInstalacoes > 0 && totalVistorias > 0 && ' + '}
+                {totalVistorias > 0 && `${totalVistorias} vistoria(s)`}
+                {' serão vinculadas à rota'}
               </p>
             )}
           </div>

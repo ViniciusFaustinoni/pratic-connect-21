@@ -49,10 +49,15 @@ export function useRotasRealtime() {
     // Função para invalidar queries de serviços pendentes
     const invalidateServicosQueries = () => {
       queryClient.invalidateQueries({ queryKey: ['instalacoes-disponiveis'] });
+      queryClient.invalidateQueries({ queryKey: ['bairros-disponiveis'] });
       queryClient.invalidateQueries({ queryKey: ['bairros-servicos'] });
       queryClient.invalidateQueries({ queryKey: ['servicos-por-bairros'] });
+      queryClient.invalidateQueries({ queryKey: ['instalacoes-por-bairros'] });
+      queryClient.invalidateQueries({ queryKey: ['vistorias-por-bairros'] });
       queryClient.invalidateQueries({ queryKey: ['instalacoes'] });
       queryClient.invalidateQueries({ queryKey: ['vistorias'] });
+      queryClient.invalidateQueries({ queryKey: ['vistorias-mapa'] });
+      queryClient.invalidateQueries({ queryKey: ['rotas-bairros'] });
     };
 
     // Handler para mudanças na tabela rotas
