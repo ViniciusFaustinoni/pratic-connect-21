@@ -14481,6 +14481,7 @@ export type Database = {
         | "reprovada"
         | "em_analise"
         | "agendada"
+        | "cancelada"
       tipo_documento:
         | "cnh"
         | "crlv"
@@ -14797,6 +14798,7 @@ export const Constants = {
         "reprovada",
         "em_analise",
         "agendada",
+        "cancelada",
       ],
       tipo_documento: [
         "cnh",

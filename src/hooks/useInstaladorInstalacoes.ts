@@ -255,6 +255,13 @@ export function useRecusarVeiculo() {
       associadoId: string;
       motivo: string;
     }) => {
+      // Buscar dados da instalação para propagar cancelamento
+      const { data: instData } = await supabase
+        .from('instalacoes')
+        .select('cotacao_id, contrato_id')
+        .eq('id', instalacaoId)
+        .single();
+
       // 1. Atualizar veículo como suspenso (recusado na instalação)
       const { error: veiculoError } = await supabase
         .from('veiculos')
@@ -280,7 +287,21 @@ export function useRecusarVeiculo() {
 
       if (instalacaoError) throw instalacaoError;
 
-      // 3. Registrar no histórico
+      // 3. Propagar cancelamento para vistoria associada
+      if (instData?.cotacao_id) {
+        await supabase
+          .from('vistorias')
+          .update({ status: 'cancelada' })
+          .eq('cotacao_id', instData.cotacao_id);
+      }
+      if (instData?.contrato_id) {
+        await supabase
+          .from('vistorias')
+          .update({ status: 'cancelada' })
+          .eq('contrato_id', instData.contrato_id);
+      }
+
+      // 4. Registrar no histórico
       await supabase.from('associados_historico').insert({
         associado_id: associadoId,
         tipo: 'veiculo_recusado',
@@ -298,6 +319,7 @@ export function useRecusarVeiculo() {
       queryClient.invalidateQueries({ queryKey: ['instalacao-detalhes'] });
       queryClient.invalidateQueries({ queryKey: ['instalacoes'] });
       queryClient.invalidateQueries({ queryKey: ['veiculos'] });
+      queryClient.invalidateQueries({ queryKey: ['vistorias-mapa'] });
     },
   });
 }

@@ -616,12 +616,14 @@ export function useInstalacaoActions() {
   // Cancelar
   const cancelarInstalacao = useMutation({
     mutationFn: async ({ id, motivo }: { id: string; motivo?: string }) => {
+      // Buscar dados da instalação para propagar cancelamento
       const { data: inst } = await supabase
         .from('instalacoes')
-        .select('rastreador_id')
+        .select('rastreador_id, cotacao_id, contrato_id')
         .eq('id', id)
         .single();
 
+      // Devolver rastreador ao estoque
       if (inst?.rastreador_id) {
         await supabase
           .from('rastreadores')
@@ -629,6 +631,7 @@ export function useInstalacaoActions() {
           .eq('id', inst.rastreador_id);
       }
 
+      // Cancelar instalação
       const updateData: InstalacaoUpdate = { status: 'cancelada' };
       if (motivo) updateData.observacoes = motivo;
 
@@ -638,10 +641,25 @@ export function useInstalacaoActions() {
         .eq('id', id);
 
       if (error) throw error;
+
+      // Propagar cancelamento para vistoria associada
+      if (inst?.cotacao_id) {
+        await supabase
+          .from('vistorias')
+          .update({ status: 'cancelada' })
+          .eq('cotacao_id', inst.cotacao_id);
+      }
+      if (inst?.contrato_id) {
+        await supabase
+          .from('vistorias')
+          .update({ status: 'cancelada' })
+          .eq('contrato_id', inst.contrato_id);
+      }
     },
     onSuccess: () => {
       invalidateAll();
       queryClient.invalidateQueries({ queryKey: ['rastreadores'] });
+      queryClient.invalidateQueries({ queryKey: ['vistorias-mapa'] });
       toast.success('Instalação cancelada');
     },
     onError: () => toast.error('Erro ao cancelar'),
