@@ -51,6 +51,8 @@ export interface PropostaPendente {
   cotacao_id: string | null;
   associado: Associado | null;
   plano: { nome: string; valor_mensal: number } | null;
+  plano_nome: string | null; // Fallback do nome do plano
+  endereco_completo: string | null; // Endereço completo da cotação
   vendedor: { nome: string | null } | null;
   documentos: DocumentoAnexado[];
   tem_documento_pendente: boolean;
@@ -137,15 +139,47 @@ export function usePropostasPendentes() {
           vendedor = data;
           }
 
-          // Buscar documentos anexados via cotacao_id
+          // Buscar documentos anexados via cotacao_id OU pela URL do storage que contém o cotacao_id
           let documentos: DocumentoAnexado[] = [];
           if (contrato.cotacao_id) {
+            // Primeiro, tenta buscar por cotacao_id
             const { data: docs } = await supabase
               .from('contratos_documentos')
               .select('id, tipo, arquivo_nome, arquivo_url, status, created_at')
               .eq('cotacao_id', contrato.cotacao_id)
               .order('created_at', { ascending: false });
-            documentos = (docs || []) as DocumentoAnexado[];
+            
+            if (docs && docs.length > 0) {
+              documentos = docs as DocumentoAnexado[];
+            } else {
+              // Fallback: buscar por URL que contém o cotacao_id
+              const { data: docsByUrl } = await supabase
+                .from('contratos_documentos')
+                .select('id, tipo, arquivo_nome, arquivo_url, status, created_at')
+                .ilike('arquivo_url', `%${contrato.cotacao_id}%`)
+                .order('created_at', { ascending: false });
+              documentos = (docsByUrl || []) as DocumentoAnexado[];
+            }
+          }
+
+          // Buscar dados extras da cotação para endereço e plano
+          let enderecoCompleto: string | null = null;
+          let planoNome: string | null = null;
+          if (contrato.cotacao_id) {
+            const { data: cotacao } = await supabase
+              .from('cotacoes')
+              .select('cliente_logradouro, cliente_numero, cliente_bairro, cliente_cidade, cliente_uf, plano_escolhido_id, planos!cotacoes_plano_escolhido_id_fkey(nome)')
+              .eq('id', contrato.cotacao_id)
+              .single();
+            
+            if (cotacao) {
+              if (cotacao.cliente_logradouro) {
+                enderecoCompleto = `${cotacao.cliente_logradouro}, ${cotacao.cliente_numero || 'S/N'} - ${cotacao.cliente_bairro || ''}, ${cotacao.cliente_cidade || ''} - ${cotacao.cliente_uf || ''}`;
+              }
+              if (cotacao.planos) {
+                planoNome = (cotacao.planos as any).nome;
+              }
+            }
           }
 
           // Verificar se há documentos pendentes
@@ -182,6 +216,8 @@ export function usePropostasPendentes() {
             ...contrato,
             associado,
             plano,
+            plano_nome: planoNome,
+            endereco_completo: enderecoCompleto,
             vendedor,
             documentos,
             tem_documento_pendente: temDocumentoPendente,
@@ -266,15 +302,47 @@ export function useProposta(contratoId: string | undefined) {
         vendedor = data;
       }
 
-      // Buscar documentos anexados via cotacao_id
+      // Buscar documentos anexados via cotacao_id OU pela URL do storage que contém o cotacao_id
       let documentos: DocumentoAnexado[] = [];
       if (contrato.cotacao_id) {
+        // Primeiro, tenta buscar por cotacao_id
         const { data: docs } = await supabase
           .from('contratos_documentos')
           .select('id, tipo, arquivo_nome, arquivo_url, status, created_at')
           .eq('cotacao_id', contrato.cotacao_id)
           .order('created_at', { ascending: false });
-        documentos = (docs || []) as DocumentoAnexado[];
+        
+        if (docs && docs.length > 0) {
+          documentos = docs as DocumentoAnexado[];
+        } else {
+          // Fallback: buscar por URL que contém o cotacao_id
+          const { data: docsByUrl } = await supabase
+            .from('contratos_documentos')
+            .select('id, tipo, arquivo_nome, arquivo_url, status, created_at')
+            .ilike('arquivo_url', `%${contrato.cotacao_id}%`)
+            .order('created_at', { ascending: false });
+          documentos = (docsByUrl || []) as DocumentoAnexado[];
+        }
+      }
+
+      // Buscar dados extras da cotação para endereço e plano
+      let enderecoCompleto: string | null = null;
+      let planoNome: string | null = null;
+      if (contrato.cotacao_id) {
+        const { data: cotacao } = await supabase
+          .from('cotacoes')
+          .select('cliente_logradouro, cliente_numero, cliente_bairro, cliente_cidade, cliente_uf, plano_escolhido_id, planos!cotacoes_plano_escolhido_id_fkey(nome)')
+          .eq('id', contrato.cotacao_id)
+          .single();
+        
+        if (cotacao) {
+          if (cotacao.cliente_logradouro) {
+            enderecoCompleto = `${cotacao.cliente_logradouro}, ${cotacao.cliente_numero || 'S/N'} - ${cotacao.cliente_bairro || ''}, ${cotacao.cliente_cidade || ''} - ${cotacao.cliente_uf || ''}`;
+          }
+          if (cotacao.planos) {
+            planoNome = (cotacao.planos as any).nome;
+          }
+        }
       }
 
       // Verificar se há documentos pendentes
@@ -311,6 +379,8 @@ export function useProposta(contratoId: string | undefined) {
         ...contrato,
         associado,
         plano,
+        plano_nome: planoNome,
+        endereco_completo: enderecoCompleto,
         vendedor,
         documentos,
         tem_documento_pendente: temDocumentoPendente,

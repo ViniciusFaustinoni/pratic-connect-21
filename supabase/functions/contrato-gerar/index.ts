@@ -204,6 +204,15 @@ serve(async (req) => {
           status: 'em_analise',
           data_adesao: new Date().toISOString().split('T')[0],
           dia_vencimento: 10,
+          // Campos de endereço da cotação
+          logradouro: cotacao.cliente_logradouro || null,
+          numero: cotacao.cliente_numero || null,
+          complemento: cotacao.cliente_complemento || null,
+          bairro: cotacao.cliente_bairro || null,
+          cidade: cotacao.cliente_cidade || null,
+          uf: cotacao.cliente_uf || null,
+          cep: cotacao.cliente_cep || null,
+          data_nascimento: cotacao.cliente_data_nascimento || null,
         })
         .select('id')
         .single();
