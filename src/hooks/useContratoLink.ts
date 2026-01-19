@@ -535,7 +535,33 @@ export function useAgendarInstalacaoContrato() {
   
   return useMutation({
     mutationFn: async ({ contratoId, dataAgendada, horarioAgendado, endereco, responsavel }: AgendarInstalacaoContratoParams) => {
-      // Geocodificar endereço em background
+      // 1. Buscar contrato com associado_id e veiculo_id
+      const { data: contrato, error: contratoError } = await supabase
+        .from('contratos')
+        .select('associado_id, veiculo_id, veiculo_placa')
+        .eq('id', contratoId)
+        .single();
+      
+      if (contratoError || !contrato) {
+        throw new Error('Contrato não encontrado');
+      }
+      
+      if (!contrato.associado_id) {
+        throw new Error('Contrato sem associado vinculado. Entre em contato com a associação.');
+      }
+      
+      // 2. Se não tem veiculo_id, buscar pelo veiculo_placa
+      let veiculoId = contrato.veiculo_id;
+      if (!veiculoId && contrato.veiculo_placa) {
+        const { data: veiculo } = await supabase
+          .from('veiculos')
+          .select('id')
+          .eq('placa', contrato.veiculo_placa)
+          .maybeSingle();
+        veiculoId = veiculo?.id || null;
+      }
+      
+      // 3. Geocodificar endereço em background
       let latitude: number | null = null;
       let longitude: number | null = null;
       
@@ -559,10 +585,76 @@ export function useAgendarInstalacaoContrato() {
         console.warn('Erro ao geocodificar endereço:', err);
       }
       
-      // Atualizar contrato com dados de agendamento
+      // 4. Determinar período baseado no horário
+      const hora = parseInt(horarioAgendado.split(':')[0], 10);
+      let periodo: 'manha' | 'tarde' | 'noite' = 'manha';
+      if (hora >= 12 && hora < 18) {
+        periodo = 'tarde';
+      } else if (hora >= 18) {
+        periodo = 'noite';
+      }
+      
+      // 5. Criar vistoria no sistema unificado
+      const { data: vistoria, error: vistoriaError } = await supabase
+        .from('vistorias')
+        .insert({
+          associado_id: contrato.associado_id,
+          veiculo_id: veiculoId,
+          contrato_id: contratoId,
+          data_agendada: dataAgendada,
+          horario_agendado: horarioAgendado,
+          modalidade: 'presencial',
+          status: 'pendente',
+          tipo: 'instalacao' as any,
+          origem: 'contrato',
+          cep: endereco.cep,
+          logradouro: endereco.logradouro,
+          numero: endereco.numero,
+          bairro: endereco.bairro,
+          cidade: endereco.cidade,
+          uf: endereco.estado,
+          latitude: latitude,
+          longitude: longitude,
+        })
+        .select()
+        .single();
+      
+      if (vistoriaError) {
+        console.error('[useAgendarInstalacaoContrato] Erro ao criar vistoria:', vistoriaError);
+        // Continuar mesmo com erro para manter compatibilidade
+      }
+      
+      // 6. Criar instalação para integração com rotas/monitoramento
+      const { error: instalacaoError } = await supabase
+        .from('instalacoes')
+        .insert({
+          associado_id: contrato.associado_id,
+          veiculo_id: veiculoId || null,
+          data_agendada: dataAgendada,
+          hora_agendada: horarioAgendado,
+          periodo: periodo,
+          status: 'agendada',
+          observacoes: `Instalação pós-autovistoria - Contrato: ${contratoId}`,
+          cep: endereco.cep,
+          logradouro: endereco.logradouro,
+          numero: endereco.numero,
+          bairro: endereco.bairro,
+          cidade: endereco.cidade,
+          uf: endereco.estado,
+          latitude: latitude,
+          longitude: longitude,
+        });
+      
+      if (instalacaoError) {
+        console.error('[useAgendarInstalacaoContrato] Erro ao criar instalação:', instalacaoError);
+        // Não falhar a operação principal
+      }
+      
+      // 7. Atualizar contrato com dados de agendamento e vistoria_id
       const { error } = await supabase
         .from('contratos')
         .update({
+          vistoria_id: vistoria?.id || null,
           vistoria_completa_data_agendada: dataAgendada,
           vistoria_completa_horario_agendado: horarioAgendado,
           vistoria_completa_endereco_cep: endereco.cep,
@@ -581,7 +673,7 @@ export function useAgendarInstalacaoContrato() {
       
       if (error) throw error;
       
-      // Registrar no histórico
+      // 8. Registrar no histórico
       await supabase.from('contratos_historico').insert({
         contrato_id: contratoId,
         evento: 'instalacao_agendada',
@@ -590,14 +682,18 @@ export function useAgendarInstalacaoContrato() {
           data: dataAgendada,
           horario: horarioAgendado,
           endereco: `${endereco.logradouro}, ${endereco.numero} - ${endereco.bairro}`,
+          vistoria_id: vistoria?.id,
         },
       });
       
-      return { success: true };
+      return { success: true, vistoriaId: vistoria?.id };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['contrato-publico'] });
       queryClient.invalidateQueries({ queryKey: ['vistorias-mapa'] });
+      queryClient.invalidateQueries({ queryKey: ['vistorias'] });
+      queryClient.invalidateQueries({ queryKey: ['instalacoes'] });
+      queryClient.invalidateQueries({ queryKey: ['rotas'] });
       toast.success('Instalação agendada com sucesso!');
     },
     onError: (error: Error) => {
