@@ -215,6 +215,31 @@ serve(async (req) => {
       
       associadoId = novoAssociado.id;
       console.log('Novo associado criado:', associadoId);
+
+      // Criar VEÍCULO vinculado ao novo associado (status em_analise)
+      const { data: novoVeiculo, error: veiculoError } = await supabase
+        .from('veiculos')
+        .insert({
+          associado_id: associadoId,
+          placa: cotacao.veiculo_placa,
+          marca: cotacao.veiculo_marca,
+          modelo: cotacao.veiculo_modelo,
+          ano: cotacao.veiculo_ano,
+          cor: cotacao.veiculo_cor || null,
+          valor_fipe: cotacao.valor_fipe || null,
+          status: 'em_analise',
+          cobertura_roubo_furto: false,
+          cobertura_total: false,
+        })
+        .select('id')
+        .single();
+
+      if (veiculoError) {
+        console.error('Erro ao criar veículo:', veiculoError);
+        // Não falhar, veículo pode ser criado depois
+      } else {
+        console.log('Novo veículo criado:', novoVeiculo.id);
+      }
     }
 
     // 8. Criar o contrato
