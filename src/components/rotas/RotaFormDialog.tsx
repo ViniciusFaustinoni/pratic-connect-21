@@ -155,6 +155,7 @@ export function RotaFormDialog({ open, onOpenChange, rota }: RotaFormDialogProps
               .from('instalacoes')
               .update({
                 rota_id: novaRota.id,
+                instalador_id: item.instaladorId,
                 instalador_responsavel_id: item.instaladorId,
               })
               .in('id', instalacaoIds);
