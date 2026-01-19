@@ -443,7 +443,7 @@ export function MapaVistoriasContent() {
               if (vistoriasComGps.length < 2) return null; // Precisa de pelo menos 2 pontos
               
               const positions = vistoriasComGps.map(v => [v.latitude!, v.longitude!] as [number, number]);
-              const color = getRotaColor(rota.rota_id, rotasIds);
+              const color = rota.rota_cor || getRotaColor(rota.rota_id, rotasIds);
               
               return (
                 <Polyline
