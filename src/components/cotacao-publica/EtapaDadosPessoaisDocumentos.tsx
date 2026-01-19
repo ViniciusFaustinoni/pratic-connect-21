@@ -384,7 +384,11 @@ export function EtapaDadosPessoaisDocumentos({
                     {dadosExtraidos.data_nascimento && (
                       <div>
                         <span className="text-muted-foreground">Nascimento:</span>
-                        <p className="font-medium">{dadosExtraidos.data_nascimento}</p>
+                        <p className="font-medium">
+                          {dadosExtraidos.data_nascimento.includes('-') 
+                            ? dadosExtraidos.data_nascimento.split('-').reverse().join('/')
+                            : dadosExtraidos.data_nascimento}
+                        </p>
                       </div>
                     )}
                   </div>
