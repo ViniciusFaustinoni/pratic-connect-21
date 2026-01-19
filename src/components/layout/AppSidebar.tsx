@@ -171,6 +171,7 @@ const menuConfig: {
       permission: 'canManageInstalacoes',
       color: MENU_COLORS.monitoramento,
       items: [
+        { title: 'Equipe', url: '/monitoramento/equipe', icon: Users },
         { title: 'Instalações', url: '/monitoramento/instalacoes', icon: Wrench },
         { title: 'Vistorias', url: '/monitoramento/vistorias', icon: ClipboardCheck },
         { title: 'Rotas', url: '/monitoramento/rotas', icon: MapPin },
