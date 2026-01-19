@@ -50,6 +50,18 @@ export default function InstalacaoDetalhePage() {
     isIniciandoRota, isIniciando, isConcluindo, isReagendando, isCancelando
   } = useInstalacaoActions();
 
+  // Calcular se está atrasada - DEVE vir ANTES de qualquer return condicional
+  const isAtrasada = useMemo(() => {
+    if (!instalacao) return false;
+    if (['concluida', 'cancelada'].includes(instalacao.status)) return false;
+    
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    const dataAgendada = new Date(instalacao.data_agendada + 'T00:00:00');
+    
+    return dataAgendada < hoje;
+  }, [instalacao]);
+
   const handleWhatsApp = (phone: string | null | undefined) => {
     if (!phone) return;
     window.open(`https://wa.me/55${phone.replace(/\D/g, '')}`, '_blank');
@@ -133,18 +145,6 @@ export default function InstalacaoDetalhePage() {
   const podeConcluir = instalacao.status === 'em_andamento' && instalacao.rastreador_id;
   const podeReagendar = ['agendada', 'reagendada'].includes(instalacao.status);
   const podeCancelar = !['concluida', 'cancelada'].includes(instalacao.status);
-
-  // Calcular se está atrasada
-  const isAtrasada = useMemo(() => {
-    if (!instalacao) return false;
-    if (['concluida', 'cancelada'].includes(instalacao.status)) return false;
-    
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
-    const dataAgendada = new Date(instalacao.data_agendada + 'T00:00:00');
-    
-    return dataAgendada < hoje;
-  }, [instalacao]);
 
   // Pegar instalador (prioriza profiles que já tem fallback no hook)
   const instaladorInfo = instalacao.profiles || instalacao.instalador_responsavel;
