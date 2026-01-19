@@ -66,8 +66,9 @@ export function useCotacoes(options?: UseCotacoesOptions) {
       let query = supabase
         .from('cotacoes')
         .select(`
-          id, numero, status, valor_total_mensal, created_at, updated_at,
-          lead_id, plano_id, vendedor_id, token_publico
+          *,
+          leads:leads!fk_cotacoes_lead_id(id, nome, telefone, email),
+          planos:planos!plano_id(id, nome, codigo, coberturas)
         `)
         .order('created_at', { ascending: false })
         .limit(100);
