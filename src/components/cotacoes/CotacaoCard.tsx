@@ -141,16 +141,16 @@ const etapaVendaConfig: Record<EtapaVenda, { label: string; color: string; bgCol
   },
 };
 
-// Função para determinar a etapa da venda
+// Função para determinar a etapa da venda - prioriza sinais fortes
 const getEtapaVenda = (cotacao: CotacaoWithRelations): EtapaVenda | null => {
   // Se é rascunho, não mostra etapa
   if (cotacao.status === 'rascunho') return null;
   
-  // Verificar se associado está ativo
+  // PRIORIDADE 1: Verificar se associado está ativo
   const associadoStatus = cotacao.contrato?.associados?.status;
   if (associadoStatus === 'ativo') return 'associado_ativo';
   
-  // Verificar status da instalação/vistoria
+  // PRIORIDADE 2: Verificar status da instalação/vistoria (sinal mais forte)
   const instalacao = cotacao.instalacoes?.[0];
   if (instalacao) {
     if (instalacao.status === 'concluida') return 'vistoria_realizada';
@@ -163,11 +163,17 @@ const getEtapaVenda = (cotacao: CotacaoWithRelations): EtapaVenda | null => {
     }
   }
   
-  // Verificar status_contratacao
+  // PRIORIDADE 3: Verificar status do contrato (mais confiável que status_contratacao)
+  const contratoStatus = cotacao.contrato?.status;
+  if (contratoStatus === 'assinado' || contratoStatus === 'ativo') {
+    // Contrato assinado mas sem instalação agendada ainda
+    return 'vistoria_agendada';
+  }
+  
+  // PRIORIDADE 4: Verificar status_contratacao (campo da cotação)
   const statusContratacao = cotacao.status_contratacao;
   
   if (statusContratacao === 'contrato_assinado' || statusContratacao === 'contrato_gerado') {
-    // Se contrato assinado mas sem instalação agendada
     return 'vistoria_agendada';
   }
   if (statusContratacao === 'pagamento_ok') return 'assinando_contrato';

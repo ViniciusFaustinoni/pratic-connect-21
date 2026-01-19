@@ -49,6 +49,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
+import { useCotacoesRealtime } from '@/hooks/useCotacoesRealtime';
 
 type StatusCotacaoExtended = StatusCotacao | 'visualizada';
 
@@ -135,6 +136,9 @@ export default function Cotacoes() {
   const duplicarCotacao = useDuplicarCotacao();
   const excluirCotacao = useExcluirCotacao();
   const queryClient = useQueryClient();
+  
+  // Ativar realtime para atualizações automáticas
+  useCotacoesRealtime();
 
   // Detectar parâmetro ?lead=xxx para abrir modal com dados do lead
   useEffect(() => {

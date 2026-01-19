@@ -30,6 +30,8 @@ export function useContratosRealtime() {
           queryClient.invalidateQueries({ queryKey: ['contrato'] });
           queryClient.invalidateQueries({ queryKey: ['contrato-publico'] });
           queryClient.invalidateQueries({ queryKey: ['ativacoes'] });
+          // Também invalidar cotações pois a etapa de venda depende do contrato
+          queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
           
           // Se for uma atualização e o status mudou para 'assinado'
           if (payload.eventType === 'UPDATE') {
