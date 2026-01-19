@@ -8,3 +8,4 @@ export { AddInstalacaoDialog } from './AddInstalacaoDialog';
 export { InstaladorMultiSelect } from './InstaladorMultiSelect';
 export { BairroSelector } from './BairroSelector';
 export { DistribuicaoPreview, distribuirInstalacoes } from './DistribuicaoPreview';
+export { DistribuicaoServicosPreview } from './DistribuicaoServicosPreview';
