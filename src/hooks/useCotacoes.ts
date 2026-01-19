@@ -329,7 +329,40 @@ export function useExcluirCotacao() {
   
   return useMutation({
     mutationFn: async (cotacaoId: string) => {
-      // 1. Excluir instalações vinculadas (CASCADE configurado, mas garantimos aqui)
+      // 1. PRIMEIRO: Quebrar referência circular - nullificar vistoria_id na cotação
+      const { error: cotacaoVistError } = await supabase
+        .from('cotacoes')
+        .update({ vistoria_id: null })
+        .eq('id', cotacaoId);
+      
+      if (cotacaoVistError) {
+        console.error('Erro ao limpar vistoria_id da cotação:', cotacaoVistError);
+        throw cotacaoVistError;
+      }
+
+      // 2. Nullificar vistoria_id nos contratos vinculados (evitar FK block)
+      const { error: contratoVistError } = await supabase
+        .from('contratos')
+        .update({ vistoria_id: null })
+        .eq('cotacao_id', cotacaoId);
+      
+      if (contratoVistError) {
+        console.error('Erro ao limpar vistoria_id dos contratos:', contratoVistError);
+        throw contratoVistError;
+      }
+
+      // 3. Excluir contratos vinculados
+      const { error: contratoError } = await supabase
+        .from('contratos')
+        .delete()
+        .eq('cotacao_id', cotacaoId);
+      
+      if (contratoError) {
+        console.error('Erro ao excluir contratos da cotação:', contratoError);
+        throw contratoError;
+      }
+
+      // 4. Excluir instalações vinculadas
       const { error: instError } = await supabase
         .from('instalacoes')
         .delete()
@@ -340,7 +373,7 @@ export function useExcluirCotacao() {
         throw instError;
       }
 
-      // 2. Excluir vistorias vinculadas (CASCADE configurado, mas garantimos aqui)
+      // 5. Excluir vistorias vinculadas (agora sem referências bloqueando)
       const { error: vistError } = await supabase
         .from('vistorias')
         .delete()
@@ -351,7 +384,7 @@ export function useExcluirCotacao() {
         throw vistError;
       }
 
-      // 3. Limpar referência no lead (SET NULL)
+      // 6. Limpar referência no lead (SET NULL)
       const { error: leadError } = await supabase
         .from('leads')
         .update({ cotacao_id: null })
@@ -361,19 +394,8 @@ export function useExcluirCotacao() {
         console.error('Erro ao limpar cotacao_id do lead:', leadError);
         throw leadError;
       }
-
-      // 4. Excluir contratos vinculados
-      const { error: contratoError } = await supabase
-        .from('contratos')
-        .delete()
-        .eq('cotacao_id', cotacaoId);
       
-      if (contratoError) {
-        console.error('Erro ao excluir contratos da cotação:', contratoError);
-        throw contratoError;
-      }
-      
-      // 5. Finalmente excluir a cotação
+      // 7. Finalmente excluir a cotação
       const { error } = await supabase
         .from('cotacoes')
         .delete()
