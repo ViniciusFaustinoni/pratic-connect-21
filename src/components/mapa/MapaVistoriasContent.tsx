@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from "react-leaflet";
 import L from "leaflet";
-import { format } from "date-fns";
+import { format, isSameDay, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -17,20 +17,30 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import {
   Search,
   ClipboardCheck,
   Phone,
   Navigation,
   Locate,
-  Calendar,
+  Calendar as CalendarIcon,
   MapPin,
   Route,
+  ChevronLeft,
+  ChevronRight,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useVistoriasMapa, VistoriaMapa, agruparPorRota } from "@/hooks/useVistoriasMapa";
 import { TIPO_VISTORIA_LABELS } from "@/types/servicos-rota";
 import { getRotaColor, SEM_ROTA_COLOR, createColoredMarkerSvg, svgToDataUrl } from "@/lib/rota-colors";
 import { MapaRotasLegenda } from "./MapaRotasLegenda";
+import { cn } from "@/lib/utils";
 
 // Cache de ícones por cor
 const iconCache = new Map<string, L.Icon>();
@@ -67,6 +77,7 @@ export function MapaVistoriasContent() {
   const [filtroTipo, setFiltroTipo] = useState("todos");
   const [filtroRota, setFiltroRota] = useState<string | null>(null);
   const [filtroBusca, setFiltroBusca] = useState("");
+  const [filtroData, setFiltroData] = useState<Date | undefined>(new Date());
   const [posicaoSelecionada, setPosicaoSelecionada] = useState<[number, number] | null>(null);
   const [vistoriaSelecionada, setVistoriaSelecionada] = useState<string | null>(null);
 
@@ -82,6 +93,13 @@ export function MapaVistoriasContent() {
     if (!vistorias) return [];
 
     return vistorias.filter((v) => {
+      // Filtro por data (dia específico)
+      if (filtroData) {
+        if (!v.data_agendada) return false;
+        const dataVistoria = new Date(v.data_agendada);
+        if (!isSameDay(dataVistoria, filtroData)) return false;
+      }
+
       if (filtroTipo !== "todos" && v.tipo_vistoria !== filtroTipo) return false;
 
       // Filtro por rota
@@ -106,7 +124,7 @@ export function MapaVistoriasContent() {
 
       return true;
     });
-  }, [vistorias, filtroTipo, filtroRota, filtroBusca]);
+  }, [vistorias, filtroTipo, filtroRota, filtroData, filtroBusca]);
 
   // Vistorias com coordenadas
   const vistoriasComCoordenadas = useMemo(() => {
@@ -153,9 +171,79 @@ export function MapaVistoriasContent() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <ClipboardCheck className="h-5 w-5 text-primary" />
-              <CardTitle className="text-base">Vistorias Pendentes</CardTitle>
+              <CardTitle className="text-base">Vistorias</CardTitle>
             </div>
             <Badge variant="secondary">{vistoriasFiltradas.length}</Badge>
+          </div>
+
+          {/* Filtro de Data */}
+          <div className="mt-3 space-y-2">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-full justify-start text-left font-normal",
+                    !filtroData && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {filtroData ? format(filtroData, "dd/MM/yyyy", { locale: ptBR }) : "Selecionar dia"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={filtroData}
+                  onSelect={setFiltroData}
+                  className="p-3 pointer-events-auto"
+                  locale={ptBR}
+                />
+              </PopoverContent>
+            </Popover>
+
+            {/* Navegação rápida de data */}
+            <div className="flex gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1 h-8"
+                onClick={() => setFiltroData(addDays(filtroData || new Date(), -1))}
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Anterior
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1 h-8"
+                onClick={() => setFiltroData(new Date())}
+              >
+                Hoje
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1 h-8"
+                onClick={() => setFiltroData(addDays(filtroData || new Date(), 1))}
+              >
+                Próximo
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {/* Limpar filtro de data */}
+            {filtroData && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full h-7 text-muted-foreground"
+                onClick={() => setFiltroData(undefined)}
+              >
+                <X className="h-3 w-3 mr-1" />
+                Ver todas as datas
+              </Button>
+            )}
           </div>
 
           {/* Info de coordenadas */}
@@ -426,6 +514,7 @@ export function MapaVistoriasContent() {
             rotasIds={rotasIds}
             rotaSelecionada={filtroRota}
             onRotaClick={setFiltroRota}
+            dataSelecionada={filtroData}
           />
 
           <div className="absolute bottom-4 left-4 bg-background/90 backdrop-blur-sm px-3 py-1.5 rounded-full text-xs text-muted-foreground border shadow-sm flex items-center gap-2">
