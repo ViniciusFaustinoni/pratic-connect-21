@@ -459,42 +459,54 @@ export default function Cotacoes() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Buscar lead ou veículo..."
-            className="pl-9"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+        <div className="flex-1 space-y-1.5">
+          <label className="text-sm font-medium text-muted-foreground">Buscar</label>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Lead, veículo ou número..."
+              className="pl-9"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-full sm:w-40">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos</SelectItem>
-            {Object.entries(statusConfig).map(([key, value]) => (
-              <SelectItem key={key} value={key}>{value.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={mesFilter} onValueChange={setMesFilter}>
-          <SelectTrigger className="w-full sm:w-40">
-            <Calendar className="h-4 w-4 mr-2" />
-            <SelectValue placeholder="Período" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos</SelectItem>
-            {mesesDisponiveis.map((mes) => (
-              <SelectItem key={mes} value={mes}>{formatMesLabel(mes)}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-muted-foreground">Status</label>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-full sm:w-44">
+              <SelectValue placeholder="Todos os status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os status</SelectItem>
+              <SelectItem value="rascunho">Rascunho</SelectItem>
+              <SelectItem value="enviada">Enviada</SelectItem>
+              <SelectItem value="visualizada">Visualizada</SelectItem>
+              <SelectItem value="aceita">Aceita</SelectItem>
+              <SelectItem value="recusada">Recusada</SelectItem>
+              <SelectItem value="expirada">Expirada</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-muted-foreground">Período</label>
+          <Select value={mesFilter} onValueChange={setMesFilter}>
+            <SelectTrigger className="w-full sm:w-44">
+              <Calendar className="h-4 w-4 mr-2" />
+              <SelectValue placeholder="Todos os períodos" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os períodos</SelectItem>
+              {mesesDisponiveis.map((mes) => (
+                <SelectItem key={mes} value={mes}>{formatMesLabel(mes)}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         {hasActiveFilters && (
-          <Button variant="ghost" size="sm" onClick={clearFilters}>
-            Limpar
+          <Button variant="ghost" size="sm" onClick={clearFilters} className="h-10">
+            Limpar filtros
           </Button>
         )}
       </div>
