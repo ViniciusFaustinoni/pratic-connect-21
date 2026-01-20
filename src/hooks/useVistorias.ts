@@ -531,6 +531,13 @@ export function useVistoriaCompleta(instalacaoId: string | null) {
     queryFn: async () => {
       if (!instalacaoId) return null;
 
+      // Buscar dados da instalação primeiro para obter cotacao_id
+      const { data: instalacao } = await supabase
+        .from('instalacoes')
+        .select('associado_id, veiculo_id, instalador_id, contrato_id, cotacao_id')
+        .eq('id', instalacaoId)
+        .single();
+
       // Primeiro, buscar vistoria existente vinculada à instalação
       let { data, error } = await supabase
         .from('vistorias')
@@ -548,46 +555,68 @@ export function useVistoriaCompleta(instalacaoId: string | null) {
         .eq('instalacao_id', instalacaoId)
         .maybeSingle();
 
-      // Se não existir, criar nova vistoria vinculada à instalação
-      if (!data && !error) {
-        // Buscar dados da instalação
-        const { data: instalacao } = await supabase
-          .from('instalacoes')
-          .select('associado_id, veiculo_id, instalador_id, contrato_id, cotacao_id')
-          .eq('id', instalacaoId)
+      // Se não encontrou por instalacao_id, buscar por cotacao_id
+      if (!data && !error && instalacao?.cotacao_id) {
+        const { data: vistoriaExistente, error: errCotacao } = await supabase
+          .from('vistorias')
+          .select(`
+            *,
+            veiculo:veiculos(
+              id, placa, chassi, marca, modelo, 
+              ano_fabricacao, ano_modelo, cor,
+              associado:associados(id, nome, cpf, telefone)
+            ),
+            associado:associados!vistorias_associado_id_fkey(id, nome, cpf, telefone),
+            vistoriador:profiles!vistorias_vistoriador_id_fkey(id, nome),
+            fotos:vistoria_fotos(*)
+          `)
+          .eq('cotacao_id', instalacao.cotacao_id)
+          .maybeSingle();
+
+        if (vistoriaExistente && !errCotacao) {
+          // Vincular instalacao_id à vistoria existente
+          if (!vistoriaExistente.instalacao_id) {
+            await supabase
+              .from('vistorias')
+              .update({ instalacao_id: instalacaoId })
+              .eq('id', vistoriaExistente.id);
+            console.log('[useVistoriaCompleta] Vinculou instalacao_id à vistoria existente:', vistoriaExistente.id);
+          }
+          data = { ...vistoriaExistente, instalacao_id: instalacaoId };
+        }
+      }
+
+      // Se ainda não existir, criar nova vistoria vinculada à instalação
+      if (!data && !error && instalacao) {
+        const { data: novaVistoria, error: insertError } = await supabase
+          .from('vistorias')
+          .insert({
+            instalacao_id: instalacaoId,
+            associado_id: instalacao.associado_id,
+            veiculo_id: instalacao.veiculo_id,
+            vistoriador_id: instalacao.instalador_id,
+            contrato_id: instalacao.contrato_id,
+            cotacao_id: instalacao.cotacao_id,
+            tipo: 'entrada',
+            modalidade: 'presencial',
+            status: 'em_analise',
+            origem: 'instalacao',
+          })
+          .select(`
+            *,
+            veiculo:veiculos(
+              id, placa, chassi, marca, modelo, 
+              ano_fabricacao, ano_modelo, cor,
+              associado:associados(id, nome, cpf, telefone)
+            ),
+            associado:associados!vistorias_associado_id_fkey(id, nome, cpf, telefone),
+            vistoriador:profiles!vistorias_vistoriador_id_fkey(id, nome),
+            fotos:vistoria_fotos(*)
+          `)
           .single();
 
-        if (instalacao) {
-          const { data: novaVistoria, error: insertError } = await supabase
-            .from('vistorias')
-            .insert({
-              instalacao_id: instalacaoId,
-              associado_id: instalacao.associado_id,
-              veiculo_id: instalacao.veiculo_id,
-              vistoriador_id: instalacao.instalador_id,
-              contrato_id: instalacao.contrato_id,
-              cotacao_id: instalacao.cotacao_id,
-              tipo: 'entrada',
-              modalidade: 'presencial',
-              status: 'em_analise',
-              origem: 'instalacao',
-            })
-            .select(`
-              *,
-              veiculo:veiculos(
-                id, placa, chassi, marca, modelo, 
-                ano_fabricacao, ano_modelo, cor,
-                associado:associados(id, nome, cpf, telefone)
-              ),
-              associado:associados!vistorias_associado_id_fkey(id, nome, cpf, telefone),
-              vistoriador:profiles!vistorias_vistoriador_id_fkey(id, nome),
-              fotos:vistoria_fotos(*)
-            `)
-            .single();
-
-          if (insertError) throw insertError;
-          data = novaVistoria;
-        }
+        if (insertError) throw insertError;
+        data = novaVistoria;
       }
 
       if (error) throw error;

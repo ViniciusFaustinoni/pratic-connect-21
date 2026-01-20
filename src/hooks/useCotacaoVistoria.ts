@@ -304,6 +304,14 @@ export function useAgendarVistoriaCompleta() {
         // A instalação pode ser criada manualmente depois
       } else {
         console.log('[AgendarVistoriaCompleta] Instalação criada com sucesso:', novaInstalacao.id);
+        
+        // 7. VINCULAR INSTALAÇÃO À VISTORIA (para que useVistoriaCompleta encontre a vistoria correta)
+        await supabase
+          .from('vistorias')
+          .update({ instalacao_id: novaInstalacao.id })
+          .eq('id', novaVistoria.id);
+        
+        console.log('[AgendarVistoriaCompleta] Vistoria vinculada à instalação');
       }
       
       return novaVistoria;

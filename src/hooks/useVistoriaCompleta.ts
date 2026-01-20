@@ -138,6 +138,19 @@ export function useAprovarVeiculoVistoria() {
           }).catch(err => console.warn('Erro ao gerar laudo (não crítico):', err));
         }).catch(err => console.warn('Erro ao importar hook:', err));
       }
+
+      // 8. Notificar cliente sobre cobertura total ativada
+      if (data.associadoId) {
+        supabase.functions.invoke('notificar-cliente', {
+          body: {
+            tipo: 'cobertura_total_ativada',
+            associado_id: data.associadoId,
+            dados: { 
+              placa: veiculoData?.placa || 'N/A',
+            }
+          }
+        }).catch(err => console.warn('Erro ao notificar cliente (não crítico):', err));
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['vistorias'] });
