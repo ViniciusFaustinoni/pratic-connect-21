@@ -43,7 +43,7 @@ import { CotacaoFormDialog } from '@/components/cotacoes/CotacaoFormDialog';
 import { ContratoWizard } from '@/components/contratos/ContratoWizard';
 import { EnviarEmailModal } from '@/components/cotacoes/EnviarEmailModal';
 import { VincularLeadModal } from '@/components/cotacoes/VincularLeadModal';
-import { gerarPdfCotacao } from '@/lib/gerarPdfCotacao';
+import { gerarPdfCotacao, gerarPdfCotacaoComparativa, type PlanoParaPdf, type CotacaoComparativaParaPdf } from '@/lib/gerarPdfCotacao';
 import { CotacaoCard, type CotacaoCardPermissions } from '@/components/cotacoes/CotacaoCard';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -266,9 +266,54 @@ export default function Cotacoes() {
 
   const handleBaixarPdf = async (cotacao: CotacaoWithRelations) => {
     try {
-      await gerarPdfCotacao(cotacao);
+      const planosComparacao = cotacao.dados_extras?.planos_comparacao;
+      
+      // Se há planos em dados_extras (1 ou mais), usar PDF comparativo
+      if (planosComparacao && planosComparacao.length > 0) {
+        const valorAdesao = cotacao.valor_adesao || 0;
+        
+        const planosParaPdf: PlanoParaPdf[] = planosComparacao.map(plano => ({
+          nome: plano.nome,
+          valorMensal: plano.valorMensal,
+          valorAdesao: plano.valorAdesao ?? valorAdesao,
+          coberturas: plano.coberturas || [],
+          naoInclui: plano.naoInclui || [],
+          coberturaFipe: plano.coberturaFipe || 100,
+          cota: plano.cota || '',
+          cotaPercentual: plano.cotaPercentual,
+          cotaMinima: plano.cotaMinima,
+          cotaDesagio: plano.cotaDesagio,
+          cotaMinimaDesagio: plano.cotaMinimaDesagio,
+          adicionalMensal: plano.adicionalMensal,
+          anoMinimo: plano.anoMinimo,
+          alertaDesagio: plano.alertaDesagio,
+          coberturasRemovidas: plano.coberturasRemovidas,
+        }));
+
+        const cotacaoComparativa: CotacaoComparativaParaPdf = {
+          numero: cotacao.numero,
+          created_at: cotacao.created_at,
+          validade_dias: cotacao.validade_dias,
+          nome_solicitante: cotacao.leads?.nome || cotacao.nome_solicitante,
+          telefone1_solicitante: cotacao.leads?.telefone || cotacao.telefone1_solicitante,
+          email_solicitante: cotacao.leads?.email || cotacao.email_solicitante,
+          veiculo_marca: cotacao.veiculo_marca,
+          veiculo_modelo: cotacao.veiculo_modelo,
+          veiculo_ano: cotacao.veiculo_ano,
+          veiculo_placa: cotacao.veiculo_placa,
+          valor_fipe: cotacao.valor_fipe,
+          planosComparar: planosParaPdf,
+        };
+
+        await gerarPdfCotacaoComparativa(cotacaoComparativa);
+      } else {
+        // Fallback: sem dados_extras, usar PDF padrão
+        await gerarPdfCotacao(cotacao);
+      }
+      
       toast.success('PDF gerado com sucesso!');
     } catch (error) {
+      console.error('Erro ao gerar PDF:', error);
       toast.error('Erro ao gerar PDF');
     }
   };
