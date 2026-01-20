@@ -526,7 +526,7 @@ export function useAprovarProposta() {
           plano_id,
           valor_mensal,
           dia_vencimento,
-          associado:associados (
+          associado:associados!fk_contratos_associado (
             id,
             nome,
             dia_vencimento,
