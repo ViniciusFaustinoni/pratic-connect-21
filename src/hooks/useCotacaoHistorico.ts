@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import type { Json } from '@/integrations/supabase/types';
 
 /**
  * Tipos de ações que podem ser registradas no histórico de cotações
@@ -58,7 +59,7 @@ export async function registrarEventoCotacao({
 }: {
   cotacaoId: string;
   acao: AcaoHistorico;
-  detalhes?: Record<string, unknown>;
+  detalhes?: Record<string, string | number | boolean | null>;
   autorId?: string;
   autorNome?: string;
 }) {
@@ -67,7 +68,7 @@ export async function registrarEventoCotacao({
     .insert([{
       cotacao_id: cotacaoId,
       acao,
-      detalhes: detalhes || null,
+      detalhes: (detalhes as Json) || null,
       autor_id: autorId || null,
       autor_nome: autorNome || null,
     }]);
