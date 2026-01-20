@@ -26,7 +26,7 @@ interface CobrancaData {
   status: string;
 }
 
-type EtapaInterna = 'gerando_contrato' | 'criando_cobranca' | 'aguardando_pagamento' | 'erro';
+type EtapaInterna = 'gerando_contrato' | 'criando_cobranca' | 'aguardando_pagamento' | 'pago' | 'erro';
 
 export function EtapaPagamentoCotacao({
   cotacaoId,
@@ -161,16 +161,40 @@ export function EtapaPagamentoCotacao({
     }
   }, [valorAdesao, clienteNome, clienteEmail, clienteCpf]);
 
-  // 3. Inicializar fluxo
+  // 3. Inicializar fluxo - verificar se já está pago ANTES de buscar/criar cobrança
   useEffect(() => {
     const inicializar = async () => {
+      // Primeiro, verificar se a cotação já tem contrato
+      const { data: cotacao } = await publicSupabase
+        .from('cotacoes')
+        .select('contrato_gerado_id')
+        .eq('id', cotacaoId)
+        .single();
+
+      if (cotacao?.contrato_gerado_id) {
+        // Verificar se o contrato já está pago
+        const { data: contrato } = await publicSupabase
+          .from('contratos')
+          .select('adesao_paga')
+          .eq('id', cotacao.contrato_gerado_id)
+          .maybeSingle();
+
+        if (contrato?.adesao_paga) {
+          console.log('[EtapaPagamento] Contrato já está pago!');
+          setContratoId(cotacao.contrato_gerado_id);
+          setEtapaInterna('pago');
+          return; // Não precisa buscar/criar cobrança
+        }
+      }
+
+      // Se não está pago, continuar fluxo normal
       const idContrato = await gerarContrato();
       if (idContrato) {
         await criarCobranca(idContrato);
       }
     };
     inicializar();
-  }, [gerarContrato, criarCobranca]);
+  }, [cotacaoId, gerarContrato, criarCobranca]);
 
   // 4. Polling automático para verificar pagamento
   useEffect(() => {
@@ -202,6 +226,15 @@ export function EtapaPagamentoCotacao({
             })
             .eq('id', cotacaoId);
 
+          // Atualizar status da cobrança para RECEIVED
+          await publicSupabase
+            .from('asaas_cobrancas')
+            .update({ status: 'RECEIVED' })
+            .eq('contrato_id', contratoId)
+            .eq('tipo', 'adesao')
+            .in('status', ['PENDING', 'OVERDUE']);
+
+          setEtapaInterna('pago');
           onPagamentoConfirmado();
         }
       } catch (error) {
@@ -238,6 +271,15 @@ export function EtapaPagamentoCotacao({
           })
           .eq('id', cotacaoId);
 
+        // Atualizar status da cobrança para RECEIVED
+        await publicSupabase
+          .from('asaas_cobrancas')
+          .update({ status: 'RECEIVED' })
+          .eq('contrato_id', contratoId)
+          .eq('tipo', 'adesao')
+          .in('status', ['PENDING', 'OVERDUE']);
+
+        setEtapaInterna('pago');
         onPagamentoConfirmado();
       } else {
         toast.info('Pagamento ainda não identificado. Aguarde alguns minutos.');
@@ -279,6 +321,30 @@ export function EtapaPagamentoCotacao({
 
   // Modo read-only: mostrar pagamento confirmado
   if (readOnly) {
+    return (
+      <Card className="border-success/30 bg-card/80 backdrop-blur-xl">
+        <CardContent className="py-16 text-center">
+          <motion.div
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ duration: 0.3 }}
+          >
+            <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-success/10 flex items-center justify-center">
+              <Check className="h-10 w-10 text-success" />
+            </div>
+            <h3 className="text-xl font-bold mb-2">Pagamento Confirmado!</h3>
+            <p className="text-muted-foreground mb-4">
+              Taxa de adesão paga com sucesso.
+            </p>
+            <p className="text-lg font-bold text-success">{formatCurrency(valorAdesao)}</p>
+          </motion.div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Estado de pagamento já confirmado
+  if (etapaInterna === 'pago') {
     return (
       <Card className="border-success/30 bg-card/80 backdrop-blur-xl">
         <CardContent className="py-16 text-center">
