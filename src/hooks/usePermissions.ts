@@ -49,6 +49,7 @@ export type PermissionKey =
   | 'canApprovePermissionChanges'
   | 'canCreateRoles'
   | 'canManageConsultores'
+  | 'canManageEquipeEstoque'
   | 'canViewReports';
 
 export type CotacaoViewScope = 'own' | 'team' | 'all';
@@ -209,6 +210,7 @@ export function usePermissions() {
     canManageContratos: isGerencia() || isDesenvolvedor,
     canManageApiSettings: isDiretor || hasRole('analista_marketing') || isDesenvolvedor,
     canManageInstalacoes: hasRole('coordenador_monitoramento') || hasRole('instalador_vistoriador') || isGerencia() || isDesenvolvedor,
+    canManageEquipeEstoque: hasRole('coordenador_monitoramento') || isGerencia() || isDesenvolvedor || isAdminMaster,
     canManageRastreadores: hasRole('analista_plataforma') || hasRole('coordenador_monitoramento') || isGerencia() || isDesenvolvedor,
     canViewDashboard: profile?.tipo === 'funcionario',
     canAccessApp: profile?.tipo === 'associado',
