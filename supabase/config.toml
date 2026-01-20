@@ -140,3 +140,6 @@ verify_jwt = false
 
 [functions.delete-associado]
 verify_jwt = false
+
+[functions.delete-ativacao]
+verify_jwt = false

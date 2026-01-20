@@ -544,54 +544,50 @@ export function useAssociadoActions() {
 }
 
 // ============================================
-// HOOK: EXCLUIR ASSOCIADO (standalone)
+// HOOK: EXCLUIR ASSOCIADO (standalone) - Usa Edge Function
 // ============================================
 export function useDeleteAssociado() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (associadoId: string) => {
-      const attemptDelete = async () => {
-        const { error } = await supabase
-          .from('associados')
-          .delete()
-          .eq('id', associadoId);
-        return { error };
-      };
-
-      const { error: deleteError } = await attemptDelete();
-
-      // Se houver dependências (FK), tentamos resolver casos conhecidos (ex.: leads) e repetir.
-      if (deleteError) {
-        const msg = deleteError.message || '';
-        const isFkViolation = (deleteError as any).code === '23503' || /foreign key/i.test(msg);
-
-        // Caso comum: leads.associado_id aponta para este associado.
-        if (isFkViolation && msg.includes('leads_associado_id_fkey')) {
-          const { error: desvincularError } = await supabase
-            .from('leads')
-            .update({ associado_id: null })
-            .eq('associado_id', associadoId);
-
-          if (desvincularError) throw desvincularError;
-
-          const { error: retryError } = await attemptDelete();
-          if (retryError) throw retryError;
-
-          return associadoId;
-        }
-
-        throw deleteError;
+      // Usar Edge Function para exclusão robusta com service role
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.access_token) {
+        throw new Error('Você precisa estar autenticado');
       }
 
-      return associadoId;
+      const response = await fetch(
+        'https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/delete-associado',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ associadoId }),
+        }
+      );
+
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Erro ao excluir associado');
+      }
+      
+      return result;
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       // Invalidar todas as queries relacionadas a associados
       queryClient.invalidateQueries({ queryKey: ['associados'] });
       queryClient.invalidateQueries({ queryKey: ['associados-contagem'] });
       queryClient.invalidateQueries({ queryKey: ['associados-cidades'] });
       queryClient.invalidateQueries({ queryKey: ['associado'] });
+      toast.success(result.message || 'Associado excluído permanentemente');
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Erro ao excluir associado');
     },
   });
 }

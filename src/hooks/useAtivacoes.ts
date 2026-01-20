@@ -130,15 +130,11 @@ export function useAtivacoes(filtro: FiltroAtivacao = 'todos') {
       });
 
       // Helper para verificar se vistoria está OK baseado na modalidade
+      // CORREÇÃO: Tanto autovistoria quanto presencial consideram em_analise como "realizada"
       const isVistoriaOk = (vistoria: typeof result[0]['vistoria']) => {
         if (!vistoria) return false;
-        const isAutovistoria = vistoria.modalidade === 'autovistoria';
-        // Autovistoria: em_analise ou aprovada são válidos para ativação
-        // Presencial: apenas aprovada
-        if (isAutovistoria) {
-          return ['em_analise', 'aprovada'].includes(vistoria.status);
-        }
-        return vistoria.status === 'aprovada';
+        // Para qualquer modalidade: em_analise ou aprovada são considerados OK para ativação
+        return ['em_analise', 'aprovada'].includes(vistoria.status);
       };
 
       // Aplicar filtros de requisitos
@@ -242,174 +238,44 @@ export function useExcluirAtivacao() {
 
   return useMutation({
     mutationFn: async (contratoId: string) => {
-      // 1. Buscar dados do contrato para obter IDs relacionados
-      const { data: contrato, error: fetchError } = await supabase
-        .from('contratos')
-        .select('autentique_documento_id, cotacao_id, associado_id')
-        .eq('id', contratoId)
-        .single();
+      // Usar Edge Function para exclusão robusta com service role
+      const { data: { session } } = await supabase.auth.getSession();
       
-      if (fetchError) throw fetchError;
+      if (!session?.access_token) {
+        throw new Error('Você precisa estar autenticado');
+      }
 
-      // 2. Cancelar documento no Autentique (se existir)
-      if (contrato?.autentique_documento_id) {
-        try {
-          const { error: autentiqueError } = await supabase.functions.invoke('autentique-cancel', {
-            body: { 
-              documentId: contrato.autentique_documento_id,
-              contratoId: contratoId 
-            }
-          });
-          
-          if (autentiqueError) {
-            console.warn('Erro ao cancelar no Autentique:', autentiqueError);
-            // Continuar mesmo com erro (documento pode já ter sido cancelado)
-          }
-        } catch (e) {
-          console.warn('Falha ao comunicar com Autentique:', e);
+      const response = await fetch(
+        'https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/delete-ativacao',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ contratoId }),
         }
-      }
+      );
 
-      // 3. Excluir cobranças Asaas vinculadas
-      await supabase
-        .from('asaas_cobrancas')
-        .delete()
-        .eq('contrato_id', contratoId);
+      const result = await response.json();
       
-      // 4. Excluir cobranças antigas
-      await supabase
-        .from('cobrancas')
-        .delete()
-        .eq('contrato_id', contratoId);
-      
-      // 5. Excluir histórico do contrato
-      await supabase
-        .from('contratos_historico')
-        .delete()
-        .eq('contrato_id', contratoId);
-      
-      // 6. Excluir vistorias vinculadas ao contrato
-      await supabase
-        .from('vistorias')
-        .delete()
-        .eq('contrato_id', contratoId);
-
-      // 7. Excluir histórico do associado (se existir)
-      if (contrato?.associado_id) {
-        await supabase
-          .from('associados_historico')
-          .delete()
-          .eq('associado_id', contrato.associado_id);
-      }
-
-      // 8. Excluir documentos do contrato
-      await supabase
-        .from('contratos_documentos')
-        .delete()
-        .eq('contrato_id', contratoId);
-
-      // 9. Excluir gastos/benefícios do contrato
-      await supabase
-        .from('gastos_beneficios')
-        .delete()
-        .eq('contrato_id', contratoId);
-
-      // 10. Excluir documentos solicitados
-      await supabase
-        .from('documentos_solicitados')
-        .delete()
-        .eq('contrato_id', contratoId);
-
-      // 11. Limpar referência na cotação ANTES de excluir o contrato
-      if (contrato?.cotacao_id) {
-        await supabase
-          .from('cotacoes')
-          .update({ contrato_gerado_id: null })
-          .eq('id', contrato.cotacao_id);
-      }
-
-      // 12. Limpar referência no associado
-      if (contrato?.associado_id) {
-        await supabase
-          .from('associados')
-          .update({ contrato_id: null })
-          .eq('id', contrato.associado_id);
+      if (!response.ok) {
+        throw new Error(result.error || 'Erro ao excluir ativação');
       }
       
-      // 13. Excluir o contrato
-      const { error: contratoError } = await supabase
-        .from('contratos')
-        .delete()
-        .eq('id', contratoId);
-        
-      if (contratoError) throw contratoError;
-
-      // 14. Excluir cotação vinculada (se existir)
-      if (contrato?.cotacao_id) {
-        await supabase
-          .from('cotacoes')
-          .delete()
-          .eq('id', contrato.cotacao_id);
-      }
-
-      // 15. Excluir associado vinculado (se existir e não tiver outros contratos)
-      if (contrato?.associado_id) {
-        // Verificar se associado tem outros contratos
-        const { count } = await supabase
-          .from('contratos')
-          .select('*', { count: 'exact', head: true })
-          .eq('associado_id', contrato.associado_id);
-        
-        if (count === 0) {
-          // Excluir tabelas dependentes do associado
-          await supabase.from('cobranca_fila').delete().eq('associado_id', contrato.associado_id);
-          await supabase.from('cobranca_contatos').delete().eq('associado_id', contrato.associado_id);
-          await supabase.from('regua_execucoes').delete().eq('associado_id', contrato.associado_id);
-          await supabase.from('ordens_servico').delete().eq('associado_id', contrato.associado_id);
-          await supabase.from('negativacoes').delete().eq('associado_id', contrato.associado_id);
-          await supabase.from('processos').delete().eq('associado_id', contrato.associado_id);
-          await supabase.from('consultas_juridicas').delete().eq('associado_id', contrato.associado_id);
-          await supabase.from('ouvidoria_manifestacoes').delete().eq('associado_id', contrato.associado_id);
-          await supabase.from('documento_gerados').delete().eq('associado_id', contrato.associado_id);
-          await supabase.from('indicacoes').delete().eq('associado_id', contrato.associado_id);
-          await supabase.from('indicacoes').delete().eq('indicador_id', contrato.associado_id);
-          await supabase.from('asaas_pagamentos').delete().eq('associado_id', contrato.associado_id);
-          await supabase.from('asaas_cobrancas').delete().eq('associado_id', contrato.associado_id);
-          await supabase.from('asaas_clientes').delete().eq('associado_id', contrato.associado_id);
-          await supabase.from('documentos').delete().eq('associado_id', contrato.associado_id);
-          await supabase.from('auth_tokens_primeiro_acesso').delete().eq('associado_id', contrato.associado_id);
-          
-          // Excluir vistorias do associado
-          await supabase
-            .from('vistorias')
-            .delete()
-            .eq('associado_id', contrato.associado_id);
-
-          // Desvincular leads (manter histórico)
-          await supabase
-            .from('leads')
-            .update({ associado_id: null })
-            .eq('associado_id', contrato.associado_id);
-          
-          // Excluir associado
-          await supabase
-            .from('associados')
-            .delete()
-            .eq('id', contrato.associado_id);
-        }
-      }
+      return result;
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['ativacoes'] });
       queryClient.invalidateQueries({ queryKey: ['contratos'] });
       queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
       queryClient.invalidateQueries({ queryKey: ['vistorias'] });
       queryClient.invalidateQueries({ queryKey: ['associados'] });
-      toast.success('Ativação e registros relacionados excluídos com sucesso!');
+      toast.success(result.message || 'Ativação e registros relacionados excluídos com sucesso!');
     },
     onError: (error) => {
       console.error('Erro ao excluir ativação:', error);
-      toast.error('Erro ao excluir ativação. Verifique suas permissões.');
+      toast.error(error instanceof Error ? error.message : 'Erro ao excluir ativação. Verifique suas permissões.');
     },
   });
 }
