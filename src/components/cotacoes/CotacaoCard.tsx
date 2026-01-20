@@ -143,8 +143,12 @@ const etapaVendaConfig: Record<EtapaVenda, { label: string; color: string; bgCol
 
 // Função para determinar a etapa da venda - prioriza sinais fortes
 const getEtapaVenda = (cotacao: CotacaoWithRelations): EtapaVenda | null => {
-  // Se é rascunho, não mostra etapa
-  if (cotacao.status === 'rascunho') return null;
+  // Verificar se há status_contratacao ativo (indica contratação pública em andamento)
+  const statusContratacao = cotacao.status_contratacao;
+  const temContratacaoAtiva = statusContratacao && statusContratacao !== 'aguardando';
+  
+  // Se é rascunho SEM contratação ativa, não mostra etapa
+  if (cotacao.status === 'rascunho' && !temContratacaoAtiva) return null;
   
   // PRIORIDADE 1: Verificar se associado está ativo
   const associadoStatus = cotacao.contrato?.associados?.status;
@@ -163,24 +167,32 @@ const getEtapaVenda = (cotacao: CotacaoWithRelations): EtapaVenda | null => {
     }
   }
   
-  // PRIORIDADE 3: Verificar status do contrato (mais confiável que status_contratacao)
-  const contratoStatus = cotacao.contrato?.status;
-  if (contratoStatus === 'assinado' || contratoStatus === 'ativo') {
-    // Contrato assinado mas sem instalação agendada ainda
-    return 'vistoria_agendada';
-  }
-  
-  // PRIORIDADE 4: Verificar status_contratacao (campo da cotação)
-  const statusContratacao = cotacao.status_contratacao;
-  
-  if (statusContratacao === 'contrato_assinado' || statusContratacao === 'contrato_gerado') {
-    return 'vistoria_agendada';
-  }
+  // PRIORIDADE 3: Verificar status_contratacao ANTES do contrato.status
+  // Isso garante que o badge reflita a etapa real do cliente no fluxo público
   if (statusContratacao === 'pagamento_ok') return 'assinando_contrato';
   if (statusContratacao === 'vistoria_ok') return 'realizando_pagamento';
+  if (statusContratacao === 'contrato_assinado' || statusContratacao === 'contrato_gerado') {
+    // Cliente assinou contrato, verificar se precisa pagar adesão
+    const adesaoPaga = cotacao.contrato?.adesao_paga;
+    if (adesaoPaga === false) return 'realizando_pagamento';
+    return 'vistoria_agendada';
+  }
   if (statusContratacao === 'documentos_ok') return 'escolha_vistoria';
   if (statusContratacao === 'dados_preenchidos') return 'enviando_documentos';
   if (statusContratacao === 'plano_escolhido') return 'escolhendo_plano';
+  
+  // PRIORIDADE 4: Verificar status do contrato com pagamento pendente
+  const contratoStatus = cotacao.contrato?.status;
+  const adesaoPaga = cotacao.contrato?.adesao_paga;
+  
+  if (contratoStatus === 'assinado' && adesaoPaga === false) {
+    // Contrato assinado mas pagamento pendente
+    return 'realizando_pagamento';
+  }
+  
+  if (contratoStatus === 'assinado' || contratoStatus === 'ativo') {
+    return 'vistoria_agendada';
+  }
   
   // Default para cotações enviadas/aceitas sem status_contratacao específico
   return 'cotacao_realizada';
