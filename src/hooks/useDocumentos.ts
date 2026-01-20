@@ -240,18 +240,13 @@ export function useDocumentoActions() {
     mutationFn: async (id: string) => {
       const { data: { user } } = await supabase.auth.getUser();
       
-      // Get profile ID for the analyst
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('user_id', user?.id || '')
-        .maybeSingle();
+      if (!user?.id) throw new Error('Usuário não autenticado');
 
       const { error } = await supabase
         .from('documentos')
         .update({
           status: 'em_analise',
-          analista_id: profile?.id,
+          analista_id: user.id, // Usar user.id diretamente (FK para auth.users)
         })
         .eq('id', id);
 
@@ -271,18 +266,13 @@ export function useDocumentoActions() {
     mutationFn: async (id: string) => {
       const { data: { user } } = await supabase.auth.getUser();
       
-      // Get profile ID for the analyst
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('user_id', user?.id || '')
-        .maybeSingle();
+      if (!user?.id) throw new Error('Usuário não autenticado');
 
       const { error } = await supabase
         .from('documentos')
         .update({
           status: 'aprovado',
-          analista_id: profile?.id,
+          analista_id: user.id, // Usar user.id diretamente (FK para auth.users)
           data_analise: new Date().toISOString(),
           motivo_reprovacao: null,
         })
@@ -304,12 +294,7 @@ export function useDocumentoActions() {
     mutationFn: async ({ id, motivo, observacao }: { id: string; motivo: string; observacao?: string }) => {
       const { data: { user } } = await supabase.auth.getUser();
       
-      // Get profile ID for the analyst
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('user_id', user?.id || '')
-        .maybeSingle();
+      if (!user?.id) throw new Error('Usuário não autenticado');
 
       const motivoCompleto = observacao 
         ? `${motivo}: ${observacao}` 
@@ -319,7 +304,7 @@ export function useDocumentoActions() {
         .from('documentos')
         .update({
           status: 'reprovado',
-          analista_id: profile?.id,
+          analista_id: user.id, // Usar user.id diretamente (FK para auth.users)
           data_analise: new Date().toISOString(),
           motivo_reprovacao: motivoCompleto,
         })
@@ -458,19 +443,14 @@ export function useAnaliseDocumento() {
     }) => {
       const { data: { user } } = await supabase.auth.getUser();
 
-      // Get profile ID for the analyst
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('user_id', user?.id || '')
-        .maybeSingle();
+      if (!user?.id) throw new Error('Usuário não autenticado');
 
       const { data, error } = await supabase
         .from('documentos')
         .update({
           status,
           motivo_reprovacao: status === 'reprovado' ? motivo_reprovacao : null,
-          analista_id: profile?.id,
+          analista_id: user.id, // Usar user.id diretamente (FK para auth.users)
           data_analise: new Date().toISOString(),
         })
         .eq('id', id)
