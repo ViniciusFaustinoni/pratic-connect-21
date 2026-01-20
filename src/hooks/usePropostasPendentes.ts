@@ -31,6 +31,21 @@ export interface VistoriaInfo {
   fotos: VistoriaFotoInfo[];
 }
 
+export interface DocumentoSolicitadoEnviado {
+  id: string;
+  tipo_documento: string;
+  descricao: string | null;
+  enviado_em: string | null;
+  observacao_solicitacao: string | null;
+  observacao_cliente: string | null;
+  documento: {
+    id: string;
+    arquivo_url: string;
+    nome_arquivo: string | null;
+    status: string | null;
+  } | null;
+}
+
 export interface PropostaPendente {
   id: string;
   numero: string | null;
@@ -58,6 +73,7 @@ export interface PropostaPendente {
   tem_documento_pendente: boolean;
   associado_status: string | null;
   vistoria: VistoriaInfo | null;
+  documentos_solicitados_enviados: DocumentoSolicitadoEnviado[];
 }
 
 export interface PropostaStats {
@@ -242,6 +258,33 @@ export function usePropostasPendentes() {
         }
       }
 
+      // Buscar documentos solicitados que já foram enviados pelo cliente
+      let documentosSolicitadosEnviados: DocumentoSolicitadoEnviado[] = [];
+      if (contrato.associado_id) {
+        const { data: docsSolicitados } = await supabase
+          .from('documentos_solicitados')
+          .select(`
+            id,
+            tipo_documento,
+            descricao,
+            enviado_em,
+            observacao_solicitacao,
+            observacao_cliente,
+            documento:documentos(
+              id,
+              arquivo_url,
+              nome_arquivo,
+              status
+            )
+          `)
+          .eq('associado_id', contrato.associado_id)
+          .eq('status', 'enviado');
+
+        if (docsSolicitados) {
+          documentosSolicitadosEnviados = docsSolicitados as unknown as DocumentoSolicitadoEnviado[];
+        }
+      }
+
           return {
             ...contrato,
             associado,
@@ -253,6 +296,7 @@ export function usePropostasPendentes() {
             tem_documento_pendente: temDocumentoPendente,
             associado_status: associado?.status || null,
             vistoria,
+            documentos_solicitados_enviados: documentosSolicitadosEnviados,
           } as PropostaPendente;
         })
       );
@@ -435,6 +479,33 @@ export function useProposta(contratoId: string | undefined) {
         }
       }
 
+      // Buscar documentos solicitados que já foram enviados pelo cliente
+      let documentosSolicitadosEnviados: DocumentoSolicitadoEnviado[] = [];
+      if (contrato.associado_id) {
+        const { data: docsSolicitados } = await supabase
+          .from('documentos_solicitados')
+          .select(`
+            id,
+            tipo_documento,
+            descricao,
+            enviado_em,
+            observacao_solicitacao,
+            observacao_cliente,
+            documento:documentos(
+              id,
+              arquivo_url,
+              nome_arquivo,
+              status
+            )
+          `)
+          .eq('associado_id', contrato.associado_id)
+          .eq('status', 'enviado');
+
+        if (docsSolicitados) {
+          documentosSolicitadosEnviados = docsSolicitados as unknown as DocumentoSolicitadoEnviado[];
+        }
+      }
+
       return {
         ...contrato,
         associado,
@@ -446,6 +517,7 @@ export function useProposta(contratoId: string | undefined) {
         tem_documento_pendente: temDocumentoPendente,
         associado_status: associado?.status || null,
         vistoria,
+        documentos_solicitados_enviados: documentosSolicitadosEnviados,
       } as PropostaPendente;
     },
     enabled: !!contratoId,
