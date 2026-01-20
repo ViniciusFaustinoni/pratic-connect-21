@@ -283,7 +283,7 @@ export function RotaFormDialog({ open, onOpenChange, rota, dataInicial }: RotaFo
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
           <DialogTitle>{isEditing ? 'Editar Rota' : 'Nova Rota'}</DialogTitle>
         </DialogHeader>

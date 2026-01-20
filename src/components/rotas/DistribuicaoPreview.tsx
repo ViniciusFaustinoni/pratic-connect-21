@@ -88,23 +88,22 @@ export function DistribuicaoPreview({
                     </div>
                   </div>
                   
-                  <div className="ml-10 space-y-1">
+                  <div className="ml-10 space-y-1 overflow-hidden">
                     {item.instalacoes.map((inst) => (
                       <div
                         key={inst.id}
-                        className="flex items-center gap-2 py-1.5 px-2 rounded bg-muted/50 text-sm"
+                        className="flex items-center gap-2 py-1.5 px-2 rounded bg-muted/50 text-sm overflow-hidden"
                       >
                         <Car className="h-3 w-3 text-muted-foreground shrink-0" />
-                        <span className="font-mono text-xs">
+                        <span className="font-mono text-xs shrink-0">
                           {inst.veiculos?.placa || 'S/P'}
                         </span>
-                        <span className="text-muted-foreground">•</span>
-                        <span className="truncate flex-1 text-xs">
+                        <span className="text-muted-foreground shrink-0">•</span>
+                        <span className="truncate min-w-0 flex-1 text-xs">
                           {inst.associados?.nome || 'Cliente'}
                         </span>
                         {inst.bairro && (
-                          <Badge variant="outline" className="text-xs shrink-0">
-                            <MapPin className="h-2 w-2 mr-1" />
+                          <Badge variant="outline" className="text-xs shrink-0 max-w-[100px] truncate">
                             {inst.bairro}
                           </Badge>
                         )}
