@@ -303,16 +303,15 @@ export function RotaDetailDrawer({
                       Cancelar
                     </Button>
                   )}
-                  {(rota.status === 'pendente' || rota.status === 'cancelada') && (
-                    <Button 
-                      variant="ghost" 
-                      onClick={() => setShowDeleteDialog(true)}
-                      className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Excluir
-                    </Button>
-                  )}
+                  {/* Botão Excluir - disponível para qualquer status */}
+                  <Button 
+                    variant="ghost" 
+                    onClick={() => setShowDeleteDialog(true)}
+                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Excluir
+                  </Button>
                 </div>
 
                 <Separator />
