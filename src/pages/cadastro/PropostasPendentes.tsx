@@ -180,15 +180,6 @@ export default function PropostasPendentes() {
             Contratos assinados aguardando análise e aprovação
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => refetch()}
-          className="border-border hover:border-border-hover"
-        >
-          <RefreshCw className="mr-2 h-4 w-4" />
-          Atualizar
-        </Button>
       </div>
 
       {/* KPIs */}
@@ -314,7 +305,7 @@ export default function PropostasPendentes() {
                         {proposta.plano?.nome || proposta.plano_nome || '---'}
                       </TableCell>
                       <TableCell className="text-foreground font-medium">
-                        {formatCurrency(proposta.valor_mensal || proposta.plano?.valor_mensal)}
+                        {formatCurrency(proposta.valor_mensal)}
                       </TableCell>
                       <TableCell>
                         <div className="text-foreground">

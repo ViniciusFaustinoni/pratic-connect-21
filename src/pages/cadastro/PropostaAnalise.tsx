@@ -369,7 +369,7 @@ export default function PropostaAnalise() {
               <InfoItem
                 icon={DollarSign}
                 label="Valor Mensal"
-                value={formatCurrency(proposta.valor_mensal || proposta.plano?.valor_mensal)}
+                value={formatCurrency(proposta.valor_mensal)}
                 highlight
               />
               {/* Dia de Vencimento removido - não exibido ao Analista de Cadastro */}
