@@ -36,6 +36,7 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
   const [hidratado, setHidratado] = useState(false);
   
   const inputRef = useRef<HTMLInputElement>(null);
+  const finalizandoRef = useRef(false);
   
   const { data: fotosExistentes, isLoading: carregandoFotos } = useFotosCotacaoVistoria(cotacaoId);
   const uploadMutation = useUploadFotoCotacaoVistoria();
@@ -137,6 +138,10 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
   };
   
   const handleFinalizar = async () => {
+    // Prevenir duplo clique
+    if (finalizandoRef.current || finalizarMutation.isPending) return;
+    finalizandoRef.current = true;
+    
     try {
       await finalizarMutation.mutateAsync({
         cotacaoId,
@@ -145,6 +150,7 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
       onComplete();
     } catch (error) {
       console.error('Erro ao finalizar:', error);
+      finalizandoRef.current = false; // Reset apenas em erro para permitir retry
     }
   };
   
