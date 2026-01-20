@@ -1,10 +1,11 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { toast } from 'sonner';
 import type { Tables } from '@/integrations/supabase/types';
 import type { DadosPessoaisForm } from '@/components/cotacao-publica/FormularioDadosPessoais';
 import type { PlanoOpcao } from '@/components/cotacao-publica/EscolhaPlano';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 
 type Cotacao = Tables<'cotacoes'>;
 
@@ -144,8 +145,52 @@ export function useCotacaoContratacao(token: string | undefined) {
       return (data || []) as DocumentoPendentePublico[];
     },
     enabled: !!associadoId,
-    refetchInterval: 30000, // Revalidar a cada 30 segundos
+    refetchInterval: 30000, // Revalidar a cada 30 segundos como fallback
   });
+
+  // REALTIME: Subscrição para atualizações em tempo real de documentos solicitados
+  useEffect(() => {
+    if (!associadoId) return;
+
+    console.log('[CotacaoContratacao] Iniciando realtime para associado:', associadoId);
+
+    const channel: RealtimeChannel = publicSupabase
+      .channel(`docs-pendentes-${associadoId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // INSERT, UPDATE, DELETE
+          schema: 'public',
+          table: 'documentos_solicitados',
+          filter: `associado_id=eq.${associadoId}`,
+        },
+        (payload) => {
+          console.log('[CotacaoContratacao] Realtime: documentos_solicitados mudou:', payload);
+          refetchDocs();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'associados',
+          filter: `id=eq.${associadoId}`,
+        },
+        (payload) => {
+          console.log('[CotacaoContratacao] Realtime: associado atualizado:', payload);
+          refetch();
+        }
+      )
+      .subscribe((status) => {
+        console.log('[CotacaoContratacao] Realtime status:', status);
+      });
+
+    return () => {
+      console.log('[CotacaoContratacao] Removendo subscription realtime');
+      publicSupabase.removeChannel(channel);
+    };
+  }, [associadoId, refetchDocs, refetch]);
 
   // Extrair planos disponíveis para escolha
   const planosDisponiveis: PlanoOpcao[] = (() => {
