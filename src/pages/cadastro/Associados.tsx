@@ -36,7 +36,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { STATUS_ASSOCIADO_LABELS, type StatusAssociado } from '@/types/database';
-import { useAssociados, useAssociadosContagem, useAssociadosCidades, useUpdateAssociadoStatus } from '@/hooks/useAssociados';
+import { useAssociados, useAssociadosContagem, useAssociadosCidades, useUpdateAssociadoStatus, useDeleteAssociado } from '@/hooks/useAssociados';
 import { usePlanos } from '@/hooks/usePlanos';
 import { AssociadoFormDialog } from '@/components/associados/AssociadoFormDialog';
 import { AssociadoFilters } from '@/components/cadastro/AssociadoFilters';
@@ -92,6 +92,7 @@ export default function Associados() {
   const { data: planos } = usePlanos();
   const { data: cidades } = useAssociadosCidades();
   const updateStatus = useUpdateAssociadoStatus();
+  const deleteAssociado = useDeleteAssociado();
 
   // Check if any filter is active
   const hasFilters = search || statusFilter !== 'all' || planoFilter !== 'all' || cidadeFilter !== 'all' || Object.keys(sheetFilters).length > 0;
@@ -213,22 +214,9 @@ export default function Associados() {
   const handleAcaoConfirm = async (motivo: string) => {
     if (!acaoDialog) return;
     
-    // Handle exclusão separadamente
+    // Handle exclusão usando o hook com invalidação automática
     if (acaoDialog.acao === 'excluir') {
-      const { error } = await supabase
-        .from('associados')
-        .delete()
-        .eq('id', acaoDialog.associadoId);
-      
-      if (error) {
-        toast({
-          title: 'Erro ao excluir',
-          description: error.message,
-          variant: 'destructive',
-        });
-        throw error;
-      }
-      
+      await deleteAssociado.mutateAsync(acaoDialog.associadoId);
       toast({
         title: 'Associado excluído',
         description: 'O associado foi removido permanentemente do sistema.',

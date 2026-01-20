@@ -457,7 +457,23 @@ export function useAssociadoActions() {
       invalidateAll();
       toast.success('Associado reativado!');
     },
-    onError: () => toast.error('Erro ao reativar associado'),
+    onError: (error) => toast.error(`Erro ao reativar associado: ${error.message}`),
+  });
+
+  const excluirAssociado = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('associados')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      invalidateAll();
+      queryClient.invalidateQueries({ queryKey: ['associados-cidades'] });
+      toast.success('Associado excluído permanentemente');
+    },
+    onError: (error) => toast.error(`Erro ao excluir associado: ${error.message}`),
   });
 
   const cancelarAssociado = useMutation({
@@ -496,13 +512,41 @@ export function useAssociadoActions() {
     suspenderAssociado: suspenderAssociado.mutate,
     reativarAssociado: reativarAssociado.mutate,
     cancelarAssociado: cancelarAssociado.mutate,
+    excluirAssociado: excluirAssociado.mutateAsync,
     atualizarDados: atualizarDados.mutate,
     isAtualizandoStatus: atualizarStatus.isPending,
     isSuspendendo: suspenderAssociado.isPending,
     isReativando: reativarAssociado.isPending,
     isCancelando: cancelarAssociado.isPending,
+    isExcluindo: excluirAssociado.isPending,
     isAtualizandoDados: atualizarDados.isPending,
   };
+}
+
+// ============================================
+// HOOK: EXCLUIR ASSOCIADO (standalone)
+// ============================================
+export function useDeleteAssociado() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (associadoId: string) => {
+      const { error } = await supabase
+        .from('associados')
+        .delete()
+        .eq('id', associadoId);
+
+      if (error) throw error;
+      return associadoId;
+    },
+    onSuccess: () => {
+      // Invalidar todas as queries relacionadas a associados
+      queryClient.invalidateQueries({ queryKey: ['associados'] });
+      queryClient.invalidateQueries({ queryKey: ['associados-contagem'] });
+      queryClient.invalidateQueries({ queryKey: ['associados-cidades'] });
+      queryClient.invalidateQueries({ queryKey: ['associado'] });
+    },
+  });
 }
 
 // ============================================
