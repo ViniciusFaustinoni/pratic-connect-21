@@ -262,7 +262,7 @@ export default function Rotas() {
         open={!!drawerRotaId}
         onOpenChange={(open) => !open && setDrawerRotaId(null)}
         onEdit={handleEditRota}
-        onAddInstalacoes={handleAddInstalacoes}
+        onAddServicos={handleAddInstalacoes}
       />
 
       {drawerRotaId && (

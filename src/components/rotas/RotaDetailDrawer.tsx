@@ -30,7 +30,6 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   useRota, 
   useUpdateRotaStatus,
@@ -38,11 +37,9 @@ import {
   STATUS_ROTA_LABELS, 
   STATUS_ROTA_COLORS,
   type StatusRota,
-  type RotaInstalador,
 } from '@/hooks/useRotas';
 import { useRotaRealtime } from '@/hooks/useRotasRealtime';
 import { InstalacaoMiniCard } from './InstalacaoMiniCard';
-import { VistoriaMiniCard } from './VistoriaMiniCard';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
@@ -126,7 +123,6 @@ export function RotaDetailDrawer({
   // Contagem de serviços
   const totalInstalacoes = rota?.instalacoes?.length || 0;
   const totalVistorias = (rota as any)?.vistorias?.length || 0;
-  const totalServicos = totalInstalacoes + totalVistorias;
 
   // Group instalacoes by instalador_responsavel
   const instalacoesPorInstalador = rota?.instalacoes?.reduce((acc, inst) => {
@@ -137,16 +133,6 @@ export function RotaDetailDrawer({
     acc[responsavelId].push(inst);
     return acc;
   }, {} as Record<string, typeof rota.instalacoes>);
-
-  // Group vistorias by vistoriador
-  const vistoriasPorInstalador = ((rota as any)?.vistorias || []).reduce((acc: Record<string, any[]>, vist: any) => {
-    const responsavelId = vist.vistoriador_id || 'sem_responsavel';
-    if (!acc[responsavelId]) {
-      acc[responsavelId] = [];
-    }
-    acc[responsavelId].push(vist);
-    return acc;
-  }, {} as Record<string, any[]>);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -274,11 +260,6 @@ export function RotaDetailDrawer({
                     </div>
                   </div>
                 </div>
-                      <span className="font-medium">{progresso}%</span>
-                    </div>
-                    <Progress value={progresso} className="h-2" />
-                  </div>
-                </div>
 
                 {/* Ações rápidas */}
                 <div className="flex flex-wrap gap-2">
@@ -337,7 +318,8 @@ export function RotaDetailDrawer({
 
                 {/* Instalações - agrupadas por instalador se houver múltiplos */}
                 <div>
-                  <h4 className="mb-4 text-sm font-medium text-muted-foreground">
+                  <h4 className="mb-4 text-sm font-medium text-muted-foreground flex items-center gap-2">
+                    <Wrench className="h-4 w-4" />
                     Instalações ({rota.instalacoes?.length || 0})
                   </h4>
                   
@@ -460,13 +442,13 @@ export function RotaDetailDrawer({
                     <div className="rounded-lg border border-dashed p-6 text-center">
                       <Route className="mx-auto h-8 w-8 text-muted-foreground/50" />
                       <p className="mt-2 text-sm text-muted-foreground">
-                        Nenhuma instalação vinculada
+                        Nenhum serviço vinculado
                       </p>
                       <Button 
                         variant="outline" 
                         size="sm" 
                         className="mt-3"
-                        onClick={onAddInstalacoes}
+                        onClick={onAddServicos}
                       >
                         <Plus className="mr-2 h-4 w-4" />
                         Adicionar
