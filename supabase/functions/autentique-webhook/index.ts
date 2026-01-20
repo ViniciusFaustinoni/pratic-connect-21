@@ -6,6 +6,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const AUTENTIQUE_API_URL = "https://api.autentique.com.br/v2/graphql";
+
 // Interface atualizada para refletir o payload REAL do Autentique
 interface AutentiqueWebhookPayload {
   id: string;
@@ -61,6 +63,178 @@ interface AutentiqueWebhookPayload {
     };
     created_at: string;
   };
+}
+
+/**
+ * Função para baixar o PDF assinado do Autentique e anexar nos documentos do associado
+ */
+async function anexarContratoAssinado(
+  supabase: any,
+  contrato: any,
+  documentId: string,
+  signerName: string
+): Promise<{ success: boolean; url?: string; error?: string }> {
+  try {
+    const autentiqueApiKey = Deno.env.get("AUTENTIQUE_API_KEY");
+    if (!autentiqueApiKey) {
+      console.log("[autentique-webhook] AUTENTIQUE_API_KEY não configurada, pulando anexo do PDF");
+      return { success: false, error: "API key não configurada" };
+    }
+
+    console.log("[autentique-webhook] Buscando URL do PDF assinado no Autentique...");
+
+    // Consultar Autentique para obter URL do PDF assinado
+    const query = `
+      query GetDocument($id: UUID!) {
+        document(id: $id) {
+          id
+          name
+          files {
+            signed
+            original
+          }
+        }
+      }
+    `;
+
+    const response = await fetch(AUTENTIQUE_API_URL, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${autentiqueApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        query,
+        variables: { id: documentId },
+      }),
+    });
+
+    const data = await response.json();
+    console.log("[autentique-webhook] Resposta Autentique files:", JSON.stringify(data, null, 2));
+
+    if (data.errors) {
+      console.error("[autentique-webhook] Erro ao buscar documento:", data.errors);
+      return { success: false, error: JSON.stringify(data.errors) };
+    }
+
+    const signedFileUrl = data.data?.document?.files?.signed;
+    if (!signedFileUrl) {
+      console.log("[autentique-webhook] PDF assinado ainda não disponível");
+      return { success: false, error: "PDF assinado não disponível" };
+    }
+
+    console.log("[autentique-webhook] URL do PDF assinado:", signedFileUrl);
+
+    // Baixar o PDF
+    const pdfResponse = await fetch(signedFileUrl);
+    if (!pdfResponse.ok) {
+      console.error("[autentique-webhook] Erro ao baixar PDF:", pdfResponse.status);
+      return { success: false, error: `Erro ao baixar PDF: ${pdfResponse.status}` };
+    }
+
+    const pdfBlob = await pdfResponse.blob();
+    const pdfArrayBuffer = await pdfBlob.arrayBuffer();
+    const pdfBytes = new Uint8Array(pdfArrayBuffer);
+
+    console.log("[autentique-webhook] PDF baixado, tamanho:", pdfBytes.length, "bytes");
+
+    // Gerar nome do arquivo
+    const timestamp = Date.now();
+    const contratoNumero = contrato.numero || contrato.id;
+    const fileName = `${contrato.associado_id}/${contratoNumero}_assinado_${timestamp}.pdf`;
+
+    console.log("[autentique-webhook] Fazendo upload para Storage:", fileName);
+
+    // Upload para Supabase Storage
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from("contratos-assinados")
+      .upload(fileName, pdfBytes, {
+        contentType: "application/pdf",
+        upsert: false,
+      });
+
+    if (uploadError) {
+      console.error("[autentique-webhook] Erro no upload:", uploadError);
+      return { success: false, error: uploadError.message };
+    }
+
+    console.log("[autentique-webhook] ✓ Upload concluído:", uploadData.path);
+
+    // Obter URL pública
+    const { data: urlData } = supabase.storage
+      .from("contratos-assinados")
+      .getPublicUrl(fileName);
+
+    const publicUrl = urlData.publicUrl;
+    console.log("[autentique-webhook] URL pública:", publicUrl);
+
+    // Atualizar contrato com URL do PDF assinado
+    await supabase
+      .from("contratos")
+      .update({ pdf_assinado_url: publicUrl })
+      .eq("id", contrato.id);
+
+    // Verificar se já existe documento anexado para este contrato
+    const { data: existingDoc } = await supabase
+      .from("documentos")
+      .select("id")
+      .eq("associado_id", contrato.associado_id)
+      .eq("tipo", "contrato_assinado")
+      .eq("contrato_id", contrato.id)
+      .maybeSingle();
+
+    if (existingDoc) {
+      console.log("[autentique-webhook] Documento já existe, atualizando...");
+      await supabase
+        .from("documentos")
+        .update({
+          arquivo_url: publicUrl,
+          nome_arquivo: `Contrato ${contratoNumero} - Assinado.pdf`,
+          status: "aprovado",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", existingDoc.id);
+    } else {
+      // Criar registro na tabela documentos
+      console.log("[autentique-webhook] Criando registro de documento...");
+      const { error: docError } = await supabase.from("documentos").insert({
+        associado_id: contrato.associado_id,
+        contrato_id: contrato.id,
+        tipo: "contrato_assinado",
+        nome_arquivo: `Contrato ${contratoNumero} - Assinado.pdf`,
+        arquivo_url: publicUrl,
+        status: "aprovado", // Já está aprovado pela assinatura digital
+        observacao: `Contrato assinado eletronicamente por ${signerName} via Autentique`,
+      });
+
+      if (docError) {
+        console.error("[autentique-webhook] Erro ao criar documento:", docError);
+        // Não falha a operação principal, apenas loga
+      } else {
+        console.log("[autentique-webhook] ✓ Documento criado com sucesso!");
+      }
+    }
+
+    // Registrar no histórico do associado
+    if (contrato.associado_id) {
+      await supabase.from("associados_historico").insert({
+        associado_id: contrato.associado_id,
+        tipo: "documento_anexado",
+        descricao: `Contrato ${contratoNumero} assinado anexado automaticamente`,
+        contrato_id: contrato.id,
+        metadata: {
+          arquivo_url: publicUrl,
+          assinado_por: signerName,
+          via: "autentique",
+        },
+      });
+    }
+
+    return { success: true, url: publicUrl };
+  } catch (error: any) {
+    console.error("[autentique-webhook] Erro ao anexar contrato:", error.message);
+    return { success: false, error: error.message };
+  }
 }
 
 serve(async (req) => {
@@ -281,6 +455,19 @@ serve(async (req) => {
             link: `/vendas/contratos`,
           });
         }
+
+        // ========== NOVO: Anexar PDF assinado nos documentos do associado ==========
+        if (contrato.associado_id) {
+          console.log("[autentique-webhook] Iniciando anexação do contrato assinado...");
+          const anexoResult = await anexarContratoAssinado(supabase, contrato, documentId, signerName);
+          if (anexoResult.success) {
+            console.log("[autentique-webhook] ✓ Contrato anexado com sucesso:", anexoResult.url);
+          } else {
+            console.log("[autentique-webhook] ⚠ Falha ao anexar contrato:", anexoResult.error);
+          }
+        } else {
+          console.log("[autentique-webhook] ⚠ Contrato sem associado_id, pulando anexação");
+        }
         break;
       }
 
@@ -364,6 +551,17 @@ serve(async (req) => {
               tipo: "success",
               link: `/vendas/contratos`,
             });
+          }
+
+          // ========== NOVO: Anexar PDF assinado nos documentos do associado ==========
+          if (contrato.associado_id) {
+            console.log("[autentique-webhook] Iniciando anexação do contrato assinado (via update)...");
+            const anexoResult = await anexarContratoAssinado(supabase, contrato, documentId, signerName);
+            if (anexoResult.success) {
+              console.log("[autentique-webhook] ✓ Contrato anexado com sucesso:", anexoResult.url);
+            } else {
+              console.log("[autentique-webhook] ⚠ Falha ao anexar contrato:", anexoResult.error);
+            }
           }
         } else if (wasViewed) {
           // Apenas visualizado

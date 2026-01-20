@@ -8,6 +8,130 @@ const corsHeaders = {
 
 const AUTENTIQUE_API_URL = "https://api.autentique.com.br/v2/graphql";
 
+/**
+ * Função para baixar o PDF assinado do Autentique e anexar nos documentos do associado
+ */
+async function anexarContratoAssinado(
+  supabase: any,
+  contrato: any,
+  signedFileUrl: string,
+  signerName: string = "Cliente"
+): Promise<{ success: boolean; url?: string; error?: string }> {
+  try {
+    console.log("[autentique-sync-contrato] Baixando PDF assinado de:", signedFileUrl);
+
+    // Baixar o PDF
+    const pdfResponse = await fetch(signedFileUrl);
+    if (!pdfResponse.ok) {
+      console.error("[autentique-sync-contrato] Erro ao baixar PDF:", pdfResponse.status);
+      return { success: false, error: `Erro ao baixar PDF: ${pdfResponse.status}` };
+    }
+
+    const pdfBlob = await pdfResponse.blob();
+    const pdfArrayBuffer = await pdfBlob.arrayBuffer();
+    const pdfBytes = new Uint8Array(pdfArrayBuffer);
+
+    console.log("[autentique-sync-contrato] PDF baixado, tamanho:", pdfBytes.length, "bytes");
+
+    // Gerar nome do arquivo
+    const timestamp = Date.now();
+    const contratoNumero = contrato.numero || contrato.id;
+    const fileName = `${contrato.associado_id}/${contratoNumero}_assinado_${timestamp}.pdf`;
+
+    console.log("[autentique-sync-contrato] Fazendo upload para Storage:", fileName);
+
+    // Upload para Supabase Storage
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from("contratos-assinados")
+      .upload(fileName, pdfBytes, {
+        contentType: "application/pdf",
+        upsert: false,
+      });
+
+    if (uploadError) {
+      console.error("[autentique-sync-contrato] Erro no upload:", uploadError);
+      return { success: false, error: uploadError.message };
+    }
+
+    console.log("[autentique-sync-contrato] ✓ Upload concluído:", uploadData.path);
+
+    // Obter URL pública
+    const { data: urlData } = supabase.storage
+      .from("contratos-assinados")
+      .getPublicUrl(fileName);
+
+    const publicUrl = urlData.publicUrl;
+    console.log("[autentique-sync-contrato] URL pública:", publicUrl);
+
+    // Atualizar contrato com URL do PDF assinado
+    await supabase
+      .from("contratos")
+      .update({ pdf_assinado_url: publicUrl })
+      .eq("id", contrato.id);
+
+    // Verificar se já existe documento anexado para este contrato
+    const { data: existingDoc } = await supabase
+      .from("documentos")
+      .select("id")
+      .eq("associado_id", contrato.associado_id)
+      .eq("tipo", "contrato_assinado")
+      .eq("contrato_id", contrato.id)
+      .maybeSingle();
+
+    if (existingDoc) {
+      console.log("[autentique-sync-contrato] Documento já existe, atualizando...");
+      await supabase
+        .from("documentos")
+        .update({
+          arquivo_url: publicUrl,
+          nome_arquivo: `Contrato ${contratoNumero} - Assinado.pdf`,
+          status: "aprovado",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", existingDoc.id);
+    } else {
+      // Criar registro na tabela documentos
+      console.log("[autentique-sync-contrato] Criando registro de documento...");
+      const { error: docError } = await supabase.from("documentos").insert({
+        associado_id: contrato.associado_id,
+        contrato_id: contrato.id,
+        tipo: "contrato_assinado",
+        nome_arquivo: `Contrato ${contratoNumero} - Assinado.pdf`,
+        arquivo_url: publicUrl,
+        status: "aprovado", // Já está aprovado pela assinatura digital
+        observacao: `Contrato assinado eletronicamente por ${signerName} via Autentique (sync)`,
+      });
+
+      if (docError) {
+        console.error("[autentique-sync-contrato] Erro ao criar documento:", docError);
+        // Não falha a operação principal, apenas loga
+      } else {
+        console.log("[autentique-sync-contrato] ✓ Documento criado com sucesso!");
+      }
+    }
+
+    // Registrar no histórico do associado
+    if (contrato.associado_id) {
+      await supabase.from("associados_historico").insert({
+        associado_id: contrato.associado_id,
+        tipo: "documento_anexado",
+        descricao: `Contrato ${contratoNumero} assinado anexado automaticamente (sync)`,
+        contrato_id: contrato.id,
+        metadata: {
+          arquivo_url: publicUrl,
+          assinado_por: signerName,
+          via: "autentique-sync",
+        },
+      });
+    }
+
+    return { success: true, url: publicUrl };
+  } catch (error: any) {
+    console.error("[autentique-sync-contrato] Erro ao anexar contrato:", error.message);
+    return { success: false, error: error.message };
+  }
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
@@ -61,8 +185,53 @@ serve(async (req) => {
 
     console.log("[autentique-sync-contrato] Contrato encontrado:", contrato.numero, "Status atual:", contrato.status);
 
-    // Se já está assinado, não precisa sincronizar
+    // Se já está assinado, verificar se precisa anexar o documento
     if (contrato.status === "assinado" || contrato.status === "ativo") {
+      // Verificar se já tem documento anexado
+      if (contrato.associado_id && !contrato.pdf_assinado_url) {
+        console.log("[autentique-sync-contrato] Contrato assinado mas sem PDF anexado, tentando buscar...");
+        
+        // Consultar Autentique para obter URL do PDF
+        const documentId = contrato.autentique_documento_id;
+        if (documentId) {
+          const query = `
+            query GetDocument($id: UUID!) {
+              document(id: $id) {
+                files { signed }
+              }
+            }
+          `;
+
+          const response = await fetch(AUTENTIQUE_API_URL, {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${autentiqueApiKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ query, variables: { id: documentId } }),
+          });
+
+          const data = await response.json();
+          const signedFileUrl = data.data?.document?.files?.signed;
+
+          if (signedFileUrl) {
+            const anexoResult = await anexarContratoAssinado(supabase, contrato, signedFileUrl);
+            if (anexoResult.success) {
+              return new Response(
+                JSON.stringify({ 
+                  success: true, 
+                  atualizado: true, 
+                  mensagem: "PDF assinado anexado com sucesso!",
+                  status: contrato.status,
+                  signedFileUrl: anexoResult.url
+                }),
+                { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+              );
+            }
+          }
+        }
+      }
+
       console.log("[autentique-sync-contrato] Contrato já está assinado/ativo");
       return new Response(
         JSON.stringify({ 
@@ -71,10 +240,7 @@ serve(async (req) => {
           mensagem: "Contrato já está assinado",
           status: contrato.status 
         }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -87,10 +253,7 @@ serve(async (req) => {
           atualizado: false, 
           mensagem: "Contrato não foi enviado para assinatura ainda" 
         }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -159,6 +322,10 @@ serve(async (req) => {
     const anySignerRejected = signersWithSignAction.some((s: any) => s.rejected?.created_at);
     const anySignerViewed = signersWithSignAction.some((s: any) => s.viewed?.created_at);
     
+    // Encontrar quem assinou
+    const signerWhoSigned = signersWithSignAction.find((s: any) => s.signed?.created_at);
+    const signerName = signerWhoSigned?.name || "Cliente";
+
     let overallStatus = "pending";
     if (allSignersSigned) overallStatus = "signed";
     else if (anySignerRejected) overallStatus = "rejected";
@@ -193,10 +360,11 @@ serve(async (req) => {
       await supabase.from("contratos_historico").insert({
         contrato_id: contrato.id,
         evento: "documento_assinado_sync",
-        descricao: "Contrato assinado (sincronização manual)",
+        descricao: `Contrato assinado (sincronização manual) por ${signerName}`,
         dados: { 
           signed_at: new Date().toISOString(),
-          sync_method: "autentique-sync-contrato"
+          sync_method: "autentique-sync-contrato",
+          signer_name: signerName
         },
       });
 
@@ -210,7 +378,7 @@ serve(async (req) => {
         await supabase.from("leads_historico").insert({
           lead_id: contrato.lead_id,
           acao: "contrato_assinado",
-          descricao: `Contrato ${contrato.numero} assinado (sincronização)`,
+          descricao: `Contrato ${contrato.numero} assinado por ${signerName} (sincronização)`,
           etapa_anterior: "contrato_enviado",
           etapa_nova: "contrato_assinado",
         });
@@ -218,18 +386,30 @@ serve(async (req) => {
 
       console.log("[autentique-sync-contrato] ✓ Contrato atualizado com sucesso!");
 
+      // ========== NOVO: Anexar PDF assinado nos documentos do associado ==========
+      let anexoUrl: string | null = null;
+      const signedFileUrl = document.files?.signed;
+      
+      if (signedFileUrl && contrato.associado_id) {
+        console.log("[autentique-sync-contrato] Iniciando anexação do contrato assinado...");
+        const anexoResult = await anexarContratoAssinado(supabase, contrato, signedFileUrl, signerName);
+        if (anexoResult.success) {
+          console.log("[autentique-sync-contrato] ✓ Contrato anexado com sucesso:", anexoResult.url);
+          anexoUrl = anexoResult.url || null;
+        } else {
+          console.log("[autentique-sync-contrato] ⚠ Falha ao anexar contrato:", anexoResult.error);
+        }
+      }
+
       return new Response(
         JSON.stringify({ 
           success: true, 
           atualizado: true, 
           mensagem: "Assinatura confirmada e contrato atualizado!",
           status: "assinado",
-          signedFileUrl: document.files?.signed || null
+          signedFileUrl: anexoUrl || signedFileUrl || null
         }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     } else if (overallStatus === "rejected") {
       // Atualizar para rejeitado
@@ -248,10 +428,7 @@ serve(async (req) => {
           mensagem: "Documento foi rejeitado",
           status: "rejeitado"
         }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     } else if (overallStatus === "viewed" && contrato.status === "pendente_assinatura") {
       // Atualizar para visualizado
@@ -270,10 +447,7 @@ serve(async (req) => {
           mensagem: "Documento foi visualizado",
           status: "visualizado"
         }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -285,10 +459,7 @@ serve(async (req) => {
         mensagem: "Documento ainda não foi assinado",
         status: overallStatus
       }),
-      {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
   } catch (error: any) {
@@ -298,10 +469,7 @@ serve(async (req) => {
         success: false, 
         error: error.message 
       }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
