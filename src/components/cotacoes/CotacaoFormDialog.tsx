@@ -49,7 +49,7 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { CurrencyInput, TelefoneInput } from '@/components/inputs/MaskedInputs';
 import { cotacaoSchema, type CotacaoFormData } from '@/lib/validations';
-import { useCreateCotacao } from '@/hooks/useCotacoes';
+import { useCreateCotacao, useUpdateCotacao } from '@/hooks/useCotacoes';
 import { usePlanosCotacao, type PlanoCotacao } from '@/hooks/usePlanosCotacao';
 import { useLead } from '@/hooks/useLeads';
 import { useFipe, type PlateResult, type FipeMarca, type FipeModelo, type FipeAno } from '@/hooks/useFipe';
@@ -130,16 +130,22 @@ export interface CotacaoBaseParaFormulario {
   } | null;
 }
 
-interface CotacaoFormDialogProps {
+export interface CotacaoFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   leadId?: string;
   cotacaoBase?: CotacaoBaseParaFormulario | null;
+  /** Cotação existente para edição (somente rascunhos) */
+  cotacaoParaEditar?: CotacaoBaseParaFormulario & { id: string } | null;
+  /** Callback após salvar com sucesso */
+  onSuccess?: () => void;
 }
 
-export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase }: CotacaoFormDialogProps) {
+export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cotacaoParaEditar, onSuccess }: CotacaoFormDialogProps) {
   const navigate = useNavigate();
   const createCotacao = useCreateCotacao();
+  const updateCotacao = useUpdateCotacao();
+  const isEditando = !!cotacaoParaEditar;
   const { data: lead } = useLead(leadId);
   const { getMarcas, getModelos, getAnos, getPreco, getByPlaca, buscarPorNome, loading: fipeLoading } = useFipe();
   const { data: vendedores = [], isLoading: vendedoresLoading } = useVendedores();
@@ -747,7 +753,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase }: C
       
       const valorAdicionalAtual = pendingFormData.valor_adicional || 0;
       
-      await createCotacao.mutateAsync({
+      const cotacaoData = {
         lead_id: pendingFormData.lead_id || null,
         plano_id: pendingFormData.plano_id,
         valor_fipe: pendingFormData.valor_fipe,
@@ -759,7 +765,6 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase }: C
         valor_total_mensal: pendingFormData.valor_total_mensal,
         valor_assistencia: planosSelecionados[0]?.valorAssistencia || 0,
         validade_dias: pendingFormData.validade_dias,
-        status: 'rascunho',
         // Dados do veículo
         veiculo_marca: getMarcaNome() || null,
         veiculo_modelo: getModeloNome() || null,
@@ -767,11 +772,6 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase }: C
         veiculo_placa: placa || veiculoEncontrado?.extractedPlate || null,
         veiculo_cor: veiculoEncontrado?.vehicleData?.cor || null,
         codigo_fipe: veiculoEncontrado?.fipeData?.codigo || null,
-        // Consultor responsável - liderança escolhe, demais auto-atribuição
-        // IMPORTANTE: Nunca deixar vendedor_id como null para garantir visibilidade via RLS
-        vendedor_id: podeAtribuirVendedor 
-          ? (pendingFormData.vendedor_id || userId || user?.id) 
-          : (userId || user?.id),
         // Dados do solicitante (para exibição no card quando não há lead)
         nome_solicitante: nomeAssociado.trim() || null,
         telefone1_solicitante: telefoneAssociado.replace(/\D/g, '') || null,
@@ -790,9 +790,36 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase }: C
             coberturas: p.coberturas || [],
           }))
         },
-      });
-      
-      toast.success('Cotação criada com sucesso!');
+      };
+
+      if (isEditando && cotacaoParaEditar) {
+        // Modo edição: atualizar cotação existente
+        await updateCotacao.mutateAsync({
+          id: cotacaoParaEditar.id,
+          ...cotacaoData,
+        });
+        
+        toast.success('Cotação atualizada com sucesso!');
+        
+        // Callback de sucesso (para registrar histórico, etc)
+        onSuccess?.();
+      } else {
+        // Modo criação: criar nova cotação
+        await createCotacao.mutateAsync({
+          ...cotacaoData,
+          status: 'rascunho',
+          // Consultor responsável - liderança escolhe, demais auto-atribuição
+          // IMPORTANTE: Nunca deixar vendedor_id como null para garantir visibilidade via RLS
+          vendedor_id: podeAtribuirVendedor 
+            ? (pendingFormData.vendedor_id || userId || user?.id) 
+            : (userId || user?.id),
+        });
+        
+        toast.success('Cotação criada com sucesso!');
+        
+        // Redirecionar para a página de cotações
+        navigate('/vendas/cotacoes');
+      }
       
       // Resetar estados
       form.reset();
@@ -814,11 +841,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase }: C
       
       // Fechar modal
       onOpenChange(false);
-      
-      // Redirecionar para a página de cotações
-      navigate('/vendas/cotacoes');
     } catch (error) {
-      toast.error('Erro ao criar cotação');
+      toast.error(isEditando ? 'Erro ao atualizar cotação' : 'Erro ao criar cotação');
       console.error(error);
     }
   };
@@ -1666,14 +1690,14 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase }: C
             <div className="flex items-center justify-end pt-2 border-t">
               <Button 
                 type="submit" 
-                disabled={createCotacao.isPending || planosSelecionados.length === 0 || valorAdesao <= 0 || !dadosAssociadoValidos}
+                disabled={(createCotacao.isPending || updateCotacao.isPending) || planosSelecionados.length === 0 || valorAdesao <= 0 || !dadosAssociadoValidos}
               >
-                {createCotacao.isPending ? (
+                {(createCotacao.isPending || updateCotacao.isPending) ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-1" />
                 ) : (
                   <Check className="h-4 w-4 mr-1" />
                 )}
-                Criar Cotação
+                {isEditando ? 'Salvar Alterações' : 'Criar Cotação'}
               </Button>
             </div>
             

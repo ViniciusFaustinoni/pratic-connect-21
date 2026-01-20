@@ -446,14 +446,18 @@ Ficou com alguma dúvida? Estou à disposição!
             onBaixarPDF={handleBaixarPDF}
             onEnviarWhatsApp={handleWhatsApp}
             onEnviarEmail={() => setShowEmailModal(true)}
+            onDuplicar={handleDuplicar}
+            onEditar={handleEditar}
             onMudarStatus={handleMudarStatus}
             onExcluir={handleExcluir}
             onReenviar={() => reenviarCotacao(cotacao.id)}
             onAceitarEContrato={handleAceitarEContrato}
+            onCopiarLink={handleCopiarLink}
             isReenviando={isReenviando}
             isAtualizando={isAtualizando || atualizarStatusMutation.isPending}
             isExcluindo={excluirMutation.isPending}
             isGerando={isGerando}
+            isDuplicando={duplicarMutation.isPending}
           />
 
           {/* TIMELINE */}
@@ -501,6 +505,26 @@ Ficou com alguma dúvida? Estou à disposição!
           onContratoCreated={(contratoId) => {
             setShowContratoWizard(false);
             navigate(`/vendas/contratos/${contratoId}`);
+          }}
+        />
+      )}
+
+      {/* Modal de Edição */}
+      {cotacao.status === 'rascunho' && (
+        <CotacaoFormDialog
+          open={showEditarModal}
+          onOpenChange={setShowEditarModal}
+          cotacaoParaEditar={cotacao}
+          onSuccess={() => {
+            setShowEditarModal(false);
+            queryClient.invalidateQueries({ queryKey: ['cotacoes', id] });
+            registrarEventoCotacao({
+              cotacaoId: cotacao.id,
+              acao: 'editada',
+              autorId: profile?.id,
+              autorNome: profile?.nome,
+            });
+            toast.success('Cotação atualizada com sucesso!');
           }}
         />
       )}
