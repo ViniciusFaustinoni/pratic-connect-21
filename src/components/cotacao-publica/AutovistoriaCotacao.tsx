@@ -6,8 +6,6 @@ import { Badge } from '@/components/ui/badge';
 import { 
   Camera, 
   CheckCircle2, 
-  ChevronLeft, 
-  ChevronRight, 
   Loader2, 
   AlertCircle,
   Image as ImageIcon,
@@ -150,13 +148,6 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
     }
   };
   
-  const navegarFoto = (direcao: 'prev' | 'next') => {
-    if (direcao === 'prev' && fotoAtualIndex > 0) {
-      setFotoAtualIndex(fotoAtualIndex - 1);
-    } else if (direcao === 'next' && fotoAtualIndex < totalFotos - 1) {
-      setFotoAtualIndex(fotoAtualIndex + 1);
-    }
-  };
   
   const fotoJaEnviada = !!fotosEnviadas[fotoAtual.id];
   const isUploading = uploadMutation.isPending;
@@ -193,9 +184,8 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
             const atual = index === fotoAtualIndex;
             
             return (
-              <button
+              <div
                 key={foto.id}
-                onClick={() => setFotoAtualIndex(index)}
                 className={cn(
                   "shrink-0 w-10 h-10 rounded-lg border-2 transition-all flex items-center justify-center",
                   atual && "border-primary ring-2 ring-primary/20",
@@ -208,7 +198,7 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
                 ) : (
                   <span className="text-xs font-medium text-muted-foreground">{index + 1}</span>
                 )}
-              </button>
+              </div>
             );
           })}
         </div>
@@ -331,23 +321,14 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
           </motion.div>
         </AnimatePresence>
         
-        {/* Botões de navegação */}
-        <div className="flex items-center justify-between pt-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => navegarFoto('prev')}
-            disabled={fotoAtualIndex === 0}
-          >
-            <ChevronLeft className="h-4 w-4 mr-1" />
-            Anterior
-          </Button>
-          
+        {/* Botão de captura */}
+        <div className="flex justify-center pt-2">
           {!fotoJaEnviada ? (
             <Button
               onClick={handleCapturarFoto}
               disabled={isUploading}
-              className="bg-primary hover:bg-primary/90"
+              className="bg-primary hover:bg-primary/90 w-full max-w-xs"
+              size="lg"
             >
               {isUploading ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -361,21 +342,12 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
               variant="outline"
               onClick={handleCapturarFoto}
               disabled={isUploading}
+              className="w-full max-w-xs"
             >
               <ImageIcon className="h-4 w-4 mr-2" />
-              Refazer
+              Refazer Foto
             </Button>
           )}
-          
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => navegarFoto('next')}
-            disabled={fotoAtualIndex === totalFotos - 1}
-          >
-            Próxima
-            <ChevronRight className="h-4 w-4 ml-1" />
-          </Button>
         </div>
         
         {/* Botão finalizar */}
