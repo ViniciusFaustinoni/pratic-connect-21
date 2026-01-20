@@ -727,66 +727,7 @@ export function useAprovarProposta() {
           usuario_id: profile.id,
         });
 
-      // 7. Buscar plano para criar cobranças
-      const { data: plano } = await supabase
-        .from('planos')
-        .select('valor_adesao')
-        .eq('id', contrato.plano_id)
-        .single();
-
-      const hoje = new Date();
-      
-      // Cobrança de adesão (se houver valor)
-      if (plano?.valor_adesao && plano.valor_adesao > 0) {
-        const dataVencimentoAdesao = new Date(hoje.getTime() + 3 * 24 * 60 * 60 * 1000); // 3 dias
-        const { error: cobrancaAdesaoError } = await supabase
-          .from('cobrancas')
-          .insert({
-            associado_id: associadoId,
-            tipo: 'adesao',
-            descricao: 'Taxa de adesão',
-            valor: plano.valor_adesao,
-            valor_final: plano.valor_adesao,
-            data_vencimento: dataVencimentoAdesao.toISOString().split('T')[0],
-            data_emissao: hoje.toISOString().split('T')[0],
-            status: 'pendente',
-          } as any);
-        
-        if (cobrancaAdesaoError) {
-          console.error('Erro ao criar cobrança de adesão:', cobrancaAdesaoError);
-          throw new Error(`Falha ao criar cobrança de adesão: ${cobrancaAdesaoError.message}`);
-        }
-      }
-
-      // Primeira mensalidade (usar valor do contrato)
-      if (contrato.valor_mensal && contrato.valor_mensal > 0) {
-        let dataVencimento = new Date(hoje.getFullYear(), hoje.getMonth(), diaVencimento);
-        if (dataVencimento <= hoje) {
-          dataVencimento = new Date(hoje.getFullYear(), hoje.getMonth() + 1, diaVencimento);
-        }
-
-        const mesAno = dataVencimento.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
-
-        const { error: cobrancaMensalidadeError } = await supabase
-          .from('cobrancas')
-          .insert({
-            associado_id: associadoId,
-            tipo: 'mensalidade',
-            referencia_mes: dataVencimento.getMonth() + 1,
-            referencia_ano: dataVencimento.getFullYear(),
-            descricao: `Mensalidade ${mesAno}`,
-            valor: contrato.valor_mensal,
-            valor_final: contrato.valor_mensal,
-            data_vencimento: dataVencimento.toISOString().split('T')[0],
-            data_emissao: hoje.toISOString().split('T')[0],
-            status: 'pendente',
-          } as any);
-        
-        if (cobrancaMensalidadeError) {
-          console.error('Erro ao criar cobrança de mensalidade:', cobrancaMensalidadeError);
-          throw new Error(`Falha ao criar cobrança de mensalidade: ${cobrancaMensalidadeError.message}`);
-        }
-      }
+      // Nota: Cobranças serão geradas em outro momento do fluxo (após instalação ou pelo financeiro)
 
       return { 
         contratoId, 
