@@ -429,7 +429,7 @@ export default function InstaladorChecklist() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 p-4">
+      <div className="flex-1 p-4 pb-24">
         {/* Etapa 1: Dados */}
         {etapaAtual === 1 && (
           <div className="space-y-4">
@@ -883,9 +883,9 @@ export default function InstaladorChecklist() {
         )}
       </div>
 
-      {/* Footer com navegação */}
-      <div className="sticky bottom-0 border-t border-slate-700 bg-slate-800 p-4">
-        <div className="flex gap-3">
+      {/* Footer com navegação - FIXO na parte inferior */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-slate-700 bg-slate-800 p-4 safe-area-pb">
+        <div className="flex gap-3 max-w-lg mx-auto">
           <Button
             variant="outline"
             onClick={voltar}
