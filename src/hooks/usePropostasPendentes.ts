@@ -600,6 +600,7 @@ export function useAprovarProposta() {
           plano_id,
           valor_mensal,
           dia_vencimento,
+          cotacao_id,
           associado:associados!fk_contratos_associado (
             id,
             nome,
@@ -761,9 +762,44 @@ export function useAprovarProposta() {
           usuario_id: profile.id,
         });
 
+      // 8. CONCLUIR DOCUMENTAÇÃO: Aprovação da proposta implica aprovação de todos os documentos relacionados
+      // Atualizar documentos do associado (tabela 'documentos')
+      await supabase
+        .from('documentos')
+        .update({
+          status: 'aprovado',
+          analista_id: profile.id,
+          data_analise: agora,
+          motivo_reprovacao: null,
+        })
+        .eq('associado_id', associadoId)
+        .in('status', ['pendente', 'em_analise']);
+
+      // Atualizar documentos solicitados que foram enviados
+      await supabase
+        .from('documentos_solicitados')
+        .update({
+          status: 'aprovado',
+          updated_at: agora,
+        })
+        .eq('associado_id', associadoId)
+        .eq('status', 'enviado');
+
+      // Atualizar anexos da cotação (tabela 'contratos_documentos')
+      if (contrato.cotacao_id) {
+        await supabase
+          .from('contratos_documentos')
+          .update({
+            status: 'aprovado',
+            updated_at: agora,
+          })
+          .eq('cotacao_id', contrato.cotacao_id)
+          .eq('status', 'pendente');
+      }
+
       // Nota: Cobranças serão geradas em outro momento do fluxo (após instalação ou pelo financeiro)
 
-      return { 
+      return {
         contratoId, 
         associadoId,
         mensagem: 'Proposta aprovada! Cobertura Roubo/Furto ativada. Aguardando instalação para cobertura total.'
