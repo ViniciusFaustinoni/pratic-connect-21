@@ -283,6 +283,7 @@ serve(async (req) => {
             veiculo_ano: cotacao.veiculo_ano,
             veiculo_placa: cotacao.veiculo_placa,
             veiculo_valor_fipe: cotacao.valor_fipe,
+            veiculo_cor: cotacao.veiculo_cor,
             
             // Dados do cliente
             cliente_nome: nomeFinal,
