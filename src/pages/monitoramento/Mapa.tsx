@@ -116,7 +116,7 @@ interface Veiculo {
 
 export default function Mapa() {
   // Estados
-  const [abaAtiva, setAbaAtiva] = useState<string>("veiculos");
+  const [abaAtiva, setAbaAtiva] = useState<string>("vistorias");
   const [filtroStatus, setFiltroStatus] = useState("todos");
   const [filtroBusca, setFiltroBusca] = useState("");
   const [posicaoSelecionada, setPosicaoSelecionada] = useState<[number, number] | null>(null);
@@ -239,13 +239,13 @@ export default function Mapa() {
       {/* Tabs de navegação */}
       <Tabs value={abaAtiva} onValueChange={setAbaAtiva} className="flex flex-col h-full">
         <TabsList className="w-fit mb-4">
-          <TabsTrigger value="veiculos" className="gap-2">
-            <Car className="h-4 w-4" />
-            Veículos em Tempo Real
-          </TabsTrigger>
           <TabsTrigger value="vistorias" className="gap-2">
             <ClipboardCheck className="h-4 w-4" />
             Vistorias Pendentes
+          </TabsTrigger>
+          <TabsTrigger value="veiculos" className="gap-2">
+            <Car className="h-4 w-4" />
+            Veículos em Tempo Real
           </TabsTrigger>
         </TabsList>
 
