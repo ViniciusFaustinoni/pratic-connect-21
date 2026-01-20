@@ -202,8 +202,17 @@ Ficou com alguma dúvida? Estou à disposição!
             valorAdesao: p.valorAdesao ?? cotacao.valor_adesao ?? 0,
             coberturas: p.coberturas || [],
             naoInclui: p.naoInclui || [],
-            coberturaFipe: 100,
-            cota: '100%',
+            coberturaFipe: p.coberturaFipe || 100,
+            cota: p.cota || '6% (mín R$ 1.200,00)',
+            // Campos expandidos para novo layout
+            cotaPercentual: p.cotaPercentual,
+            cotaMinima: p.cotaMinima,
+            cotaDesagio: p.cotaDesagio,
+            cotaMinimaDesagio: p.cotaMinimaDesagio,
+            adicionalMensal: p.adicionalMensal,
+            anoMinimo: p.anoMinimo,
+            alertaDesagio: p.alertaDesagio,
+            coberturasRemovidas: p.coberturasRemovidas,
           }))
         : [{
             nome: cotacao.planos?.nome || 'Plano',
@@ -212,7 +221,7 @@ Ficou com alguma dúvida? Estou à disposição!
             coberturas: [],
             naoInclui: [],
             coberturaFipe: 100,
-            cota: '100%',
+            cota: '6% (mín R$ 1.200,00)',
           }];
 
       await gerarPdfCotacaoComparativa({

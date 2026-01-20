@@ -42,6 +42,15 @@ export interface PlanoParaPdf {
   naoInclui: string[];
   coberturaFipe: number;
   cota: string;
+  // Campos expandidos para novo layout
+  cotaPercentual?: number;
+  cotaMinima?: number;
+  cotaDesagio?: number;
+  cotaMinimaDesagio?: number;
+  adicionalMensal?: number;
+  anoMinimo?: number;
+  alertaDesagio?: string;
+  coberturasRemovidas?: string[];
 }
 
 // Interface para cotação comparativa

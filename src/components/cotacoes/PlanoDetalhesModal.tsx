@@ -18,10 +18,12 @@ interface PlanoDetalhes {
   valorAdesao?: number;
   coberturas?: string[];
   naoInclui?: string[];
-  cota?: number;
+  cota?: string | number;
   taxaAdministrativa?: number;
   valorRastreamento?: number;
   valorAssistencia?: number;
+  cotaPercentual?: number;
+  cotaMinima?: number;
 }
 
 interface PlanoDetalhesModalProps {
@@ -133,8 +135,10 @@ export function PlanoDetalhesModal({
               <CardContent className="pt-4 space-y-2">
                 {plano.cota !== undefined && (
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Cota Base</span>
-                    <span>{formatCurrency(plano.cota)}</span>
+                    <span className="text-muted-foreground">Cota Participação</span>
+                    <span className="font-medium">
+                      {typeof plano.cota === 'string' ? plano.cota : formatCurrency(plano.cota)}
+                    </span>
                   </div>
                 )}
                 {plano.taxaAdministrativa !== undefined && (
