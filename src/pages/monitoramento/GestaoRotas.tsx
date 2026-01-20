@@ -530,7 +530,7 @@ export default function GestaoRotas() {
         rotaId={rotaDetalheId || undefined}
         open={!!rotaDetalheId}
         onOpenChange={(open) => !open && setRotaDetalheId(null)}
-        onAddInstalacoes={() => {}}
+        onAddServicos={() => {}}
         onEdit={() => {}}
       />
     </div>
