@@ -32,7 +32,7 @@ export function useContratos() {
           leads (id, nome, telefone, email, veiculo_marca, veiculo_modelo, veiculo_ano, veiculo_placa),
           associados:associados!fk_contratos_associado (id, nome, telefone, cpf, email),
           planos (id, nome, codigo),
-          cotacoes:cotacoes!contratos_cotacao_id_fkey (id, veiculo_marca, veiculo_modelo, veiculo_ano, valor_adesao, valor_mensal)
+          cotacoes:cotacoes!contratos_cotacao_id_fkey (id, veiculo_marca, veiculo_modelo, veiculo_ano, valor_adesao, valor_total_mensal)
         `)
         .order('created_at', { ascending: false })
         .limit(200);
