@@ -12967,6 +12967,7 @@ export type Database = {
           created_at: string
           id: string
           tipo: string
+          visivel_cliente: boolean
           vistoria_id: string
         }
         Insert: {
@@ -12974,6 +12975,7 @@ export type Database = {
           created_at?: string
           id?: string
           tipo: string
+          visivel_cliente?: boolean
           vistoria_id: string
         }
         Update: {
@@ -12981,6 +12983,7 @@ export type Database = {
           created_at?: string
           id?: string
           tipo?: string
+          visivel_cliente?: boolean
           vistoria_id?: string
         }
         Relationships: [
@@ -13023,6 +13026,7 @@ export type Database = {
           endereco_logradouro: string | null
           endereco_longitude: number | null
           endereco_numero: string | null
+          fotos_recusa: string[] | null
           horario_agendado: string | null
           id: string
           instalacao_id: string | null
@@ -13041,6 +13045,7 @@ export type Database = {
           tipo: Database["public"]["Enums"]["tipo_vistoria"]
           updated_at: string
           veiculo_id: string | null
+          video_360_url: string | null
           vistoriador_id: string | null
         }
         Insert: {
@@ -13065,6 +13070,7 @@ export type Database = {
           endereco_logradouro?: string | null
           endereco_longitude?: number | null
           endereco_numero?: string | null
+          fotos_recusa?: string[] | null
           horario_agendado?: string | null
           id?: string
           instalacao_id?: string | null
@@ -13083,6 +13089,7 @@ export type Database = {
           tipo?: Database["public"]["Enums"]["tipo_vistoria"]
           updated_at?: string
           veiculo_id?: string | null
+          video_360_url?: string | null
           vistoriador_id?: string | null
         }
         Update: {
@@ -13107,6 +13114,7 @@ export type Database = {
           endereco_logradouro?: string | null
           endereco_longitude?: number | null
           endereco_numero?: string | null
+          fotos_recusa?: string[] | null
           horario_agendado?: string | null
           id?: string
           instalacao_id?: string | null
@@ -13125,6 +13133,7 @@ export type Database = {
           tipo?: Database["public"]["Enums"]["tipo_vistoria"]
           updated_at?: string
           veiculo_id?: string | null
+          video_360_url?: string | null
           vistoriador_id?: string | null
         }
         Relationships: [
