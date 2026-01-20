@@ -104,11 +104,21 @@ export function useFinalizarVistoriaCotacao() {
   
   return useMutation({
     mutationFn: async ({ cotacaoId, tipoVistoria, dataAgendada, horarioAgendado, endereco, responsavel }: FinalizarVistoriaParams) => {
+      // Buscar dados da cotação para preencher a vistoria
+      const { data: cotacao, error: cotacaoFetchError } = await supabase
+        .from('cotacoes')
+        .select('id, nome_solicitante, telefone1_solicitante, veiculo_placa, veiculo_marca, veiculo_modelo')
+        .eq('id', cotacaoId)
+        .single();
+      
+      if (cotacaoFetchError) throw cotacaoFetchError;
+      
       const updateData: Record<string, unknown> = {
         tipo_vistoria: tipoVistoria,
-        // vistoria_concluida_em será setado apenas quando o vistoriador concluir a instalação
         status_contratacao: 'vistoria_ok'
       };
+      
+      let coords: { success: boolean; latitude?: number; longitude?: number } = { success: false };
       
       if (tipoVistoria === 'agendada' && endereco && responsavel) {
         updateData.vistoria_data_agendada = dataAgendada;
@@ -123,35 +133,68 @@ export function useFinalizarVistoriaCotacao() {
         updateData.vistoria_responsavel_nome = responsavel.nome || null;
         updateData.vistoria_responsavel_telefone = responsavel.telefone || null;
         
-        // Geocodificar endereço em background (não bloqueia a operação)
-        geocodificarEndereco({
+        // Geocodificar endereço
+        coords = await geocodificarEndereco({
           logradouro: endereco.logradouro,
           numero: endereco.numero,
           bairro: endereco.bairro,
           cidade: endereco.cidade,
           uf: endereco.estado,
           cep: endereco.cep,
-        }).then(coords => {
-          if (coords.success) {
-            // Atualizar cotação com coordenadas em background
-            supabase
-              .from('cotacoes')
-              .update({
-                vistoria_endereco_latitude: coords.latitude,
-                vistoria_endereco_longitude: coords.longitude,
-              })
-              .eq('id', cotacaoId)
-              .then(() => console.log('[Geocode] Coordenadas salvas para cotação:', cotacaoId));
-          }
-        }).catch(err => console.error('[Geocode] Erro background:', err));
+        });
+        
+        if (coords.success) {
+          updateData.vistoria_endereco_latitude = coords.latitude;
+          updateData.vistoria_endereco_longitude = coords.longitude;
+        }
       }
       
+      // Atualizar cotação
       const { error } = await supabase.from('cotacoes').update(updateData).eq('id', cotacaoId);
       if (error) throw error;
+      
+      // CRIAR REGISTRO NA TABELA VISTORIAS para aparecer nas rotas
+      if (tipoVistoria === 'agendada' && endereco && responsavel) {
+        const obsResponsavel = responsavel.euMesmo 
+          ? `Responsável: ${cotacao.nome_solicitante} - ${cotacao.telefone1_solicitante}` 
+          : `Responsável: ${responsavel.nome} - ${responsavel.telefone}`;
+        
+        const vistoriaData = {
+          cotacao_id: cotacaoId,
+          tipo: 'entrada' as const,
+          modalidade: 'presencial' as const,
+          status: 'pendente' as const,
+          origem: 'cotacao' as const,
+          data_agendada: dataAgendada,
+          horario_agendado: horarioAgendado,
+          endereco_cep: endereco.cep,
+          endereco_logradouro: endereco.logradouro,
+          endereco_numero: endereco.numero,
+          endereco_bairro: endereco.bairro,
+          endereco_cidade: endereco.cidade,
+          endereco_estado: endereco.estado,
+          endereco_latitude: coords.success ? coords.latitude : null,
+          endereco_longitude: coords.success ? coords.longitude : null,
+          observacoes: obsResponsavel,
+        };
+        
+        const { error: vistoriaError } = await supabase
+          .from('vistorias')
+          .insert([vistoriaData]);
+        
+        if (vistoriaError) {
+          console.error('[FinalizarVistoria] Erro ao criar vistoria:', vistoriaError);
+        } else {
+          console.log('[FinalizarVistoria] Vistoria criada para cotação:', cotacaoId);
+        }
+      }
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['cotacao', variables.cotacaoId] });
       queryClient.invalidateQueries({ queryKey: ['cotacao-publica'] });
+      queryClient.invalidateQueries({ queryKey: ['vistorias'] });
+      queryClient.invalidateQueries({ queryKey: ['servicos-disponiveis'] });
+      queryClient.invalidateQueries({ queryKey: ['bairros-servicos'] });
       toast.success(variables.tipoVistoria === 'agendada' ? 'Vistoria agendada!' : 'Vistoria enviada!');
     },
     onError: () => toast.error('Erro ao finalizar vistoria')

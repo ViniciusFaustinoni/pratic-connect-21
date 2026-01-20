@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Loader2, Plus, CalendarIcon } from 'lucide-react';
+import { Loader2, Plus, CalendarIcon, Wrench, ClipboardCheck } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Dialog,
@@ -17,11 +17,14 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { useInstalacoesDisponiveis, useAddInstalacaoToRota } from '@/hooks/useRotas';
-import { InstalacaoMiniCard } from './InstalacaoMiniCard';
+import { useAddInstalacaoToRota } from '@/hooks/useRotas';
+import { useServicosDisponiveis, useVincularServicosRota } from '@/hooks/useServicosRota';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { TIPO_SERVICO_LABELS, TIPO_SERVICO_COLORS } from '@/types/servicos-rota';
+import type { ServicoRota, TipoServico } from '@/types/servicos-rota';
 
 interface AddInstalacaoDialogProps {
   open: boolean;
@@ -39,16 +42,15 @@ export function AddInstalacaoDialog({
   const [dataFiltro, setDataFiltro] = useState<Date | undefined>(
     rotaData ? parseISO(rotaData) : undefined
   );
-  const { data: instalacoes, isLoading } = useInstalacoesDisponiveis(dataFiltro);
+  const { data: servicos, isLoading } = useServicosDisponiveis(dataFiltro);
   
-  // Query para verificar total de instalações agendadas (com ou sem rota)
-  const { data: totalInstalacoes = 0 } = useQuery({
-    queryKey: ['total-instalacoes-agendadas', dataFiltro ? format(dataFiltro, 'yyyy-MM-dd') : 'todas'],
+  // Query para verificar total de serviços agendados (com ou sem rota)
+  const { data: totalServicos = 0 } = useQuery({
+    queryKey: ['total-servicos-agendados', dataFiltro ? format(dataFiltro, 'yyyy-MM-dd') : 'todas'],
     queryFn: async () => {
       let query = supabase
-        .from('instalacoes')
-        .select('*', { count: 'exact', head: true })
-        .in('status', ['agendada', 'reagendada']);
+        .from('servicos_pendentes_rota')
+        .select('*', { count: 'exact', head: true });
       
       if (dataFiltro) {
         query = query.eq('data_agendada', format(dataFiltro, 'yyyy-MM-dd'));
@@ -59,22 +61,36 @@ export function AddInstalacaoDialog({
     },
     enabled: open
   });
-  const addToRota = useAddInstalacaoToRota();
+  
+  const addInstalacao = useAddInstalacaoToRota();
+  const vincularServicos = useVincularServicosRota();
 
-  const handleAdd = async (instalacaoId: string) => {
+  const handleAdd = async (servico: ServicoRota) => {
     try {
-      await addToRota.mutateAsync({ instalacaoId, rotaId });
-      toast.success('Instalação adicionada à rota');
+      if (servico.tipo_servico === 'instalacao') {
+        await addInstalacao.mutateAsync({ instalacaoId: servico.id, rotaId });
+      } else {
+        await vincularServicos.mutateAsync({ 
+          rotaId, 
+          servicos: [{ id: servico.id, tipo_servico: servico.tipo_servico }] 
+        });
+      }
+      toast.success('Serviço adicionado à rota');
     } catch {
-      toast.error('Erro ao adicionar instalação');
+      toast.error('Erro ao adicionar serviço');
     }
+  };
+
+  const getTipoIcon = (tipo: TipoServico) => {
+    if (tipo === 'instalacao') return <Wrench className="h-3 w-3" />;
+    return <ClipboardCheck className="h-3 w-3" />;
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>Adicionar Instalações à Rota</DialogTitle>
+          <DialogTitle>Adicionar Serviços à Rota</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -120,49 +136,78 @@ export function AddInstalacaoDialog({
             )}
           </div>
 
-          {/* Lista de instalações */}
+          {/* Lista de serviços */}
           <ScrollArea className="h-[400px] pr-4">
             {isLoading ? (
               <div className="flex h-32 items-center justify-center">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
-            ) : instalacoes?.length ? (
+            ) : servicos?.length ? (
               <div className="space-y-2">
-                {instalacoes.map((instalacao) => (
-                  <div key={instalacao.id} className="relative">
-                    <InstalacaoMiniCard 
-                      instalacao={instalacao as any}
-                    />
-                    <Button
-                      size="sm"
-                      className="absolute right-2 top-2"
-                      onClick={() => handleAdd(instalacao.id)}
-                      disabled={addToRota.isPending}
-                    >
-                      <Plus className="mr-1 h-4 w-4" />
-                      Adicionar
-                    </Button>
+                {servicos.map((servico) => (
+                  <div 
+                    key={`${servico.tipo_servico}-${servico.id}`} 
+                    className="relative rounded-lg border bg-card p-3"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Badge 
+                            variant="secondary" 
+                            className={cn("text-xs", TIPO_SERVICO_COLORS[servico.tipo_servico as TipoServico])}
+                          >
+                            {getTipoIcon(servico.tipo_servico as TipoServico)}
+                            <span className="ml-1">
+                              {TIPO_SERVICO_LABELS[servico.tipo_servico as TipoServico] || servico.tipo_servico}
+                            </span>
+                          </Badge>
+                          {servico.data_agendada && (
+                            <span className="text-xs text-muted-foreground">
+                              {format(parseISO(servico.data_agendada), 'dd/MM')}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm font-medium truncate">
+                          {servico.associado_nome || 'Sem associado'}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {servico.placa && `${servico.placa} - `}
+                          {servico.marca} {servico.modelo}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {servico.endereco_bairro}, {servico.endereco_cidade}
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        onClick={() => handleAdd(servico)}
+                        disabled={addInstalacao.isPending || vincularServicos.isPending}
+                      >
+                        <Plus className="mr-1 h-4 w-4" />
+                        Adicionar
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>
             ) : (
               <div className="flex h-32 flex-col items-center justify-center text-center">
-                {totalInstalacoes === 0 ? (
+                {totalServicos === 0 ? (
                   <>
                     <p className="text-muted-foreground">
-                      Nenhuma instalação agendada{dataFiltro ? ' para esta data' : ''}
+                      Nenhum serviço agendado{dataFiltro ? ' para esta data' : ''}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      Agende instalações para poder adicioná-las às rotas
+                      Agende instalações ou vistorias para adicioná-las às rotas
                     </p>
                   </>
                 ) : (
                   <>
                     <p className="text-muted-foreground">
-                      Nenhuma instalação disponível
+                      Nenhum serviço disponível
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      Todas as instalações já estão atribuídas a rotas
+                      Todos os serviços já estão atribuídos a rotas
                     </p>
                   </>
                 )}

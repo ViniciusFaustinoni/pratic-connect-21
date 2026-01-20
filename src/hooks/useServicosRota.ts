@@ -83,6 +83,31 @@ export function useBairrosServicos(data?: Date, filtroTipos?: FiltroTipoServico)
 }
 
 /**
+ * Hook para buscar serviços disponíveis para atribuição a rotas
+ * Retorna instalações + vistorias pendentes sem rota atribuída
+ */
+export function useServicosDisponiveis(data?: Date) {
+  return useQuery({
+    queryKey: ['servicos-disponiveis', data ? format(data, 'yyyy-MM-dd') : 'todas'],
+    queryFn: async () => {
+      let query = supabase
+        .from('servicos_pendentes_rota')
+        .select('*')
+        .is('rota_id', null)
+        .order('data_agendada');
+
+      if (data) {
+        query = query.eq('data_agendada', format(data, 'yyyy-MM-dd'));
+      }
+
+      const { data: servicos, error } = await query;
+      if (error) throw error;
+      return (servicos || []) as ServicoRota[];
+    },
+  });
+}
+
+/**
  * Hook para buscar serviços de bairros específicos (sem rota)
  * Inclui instalações + vistorias + vistorias de cotações
  */
