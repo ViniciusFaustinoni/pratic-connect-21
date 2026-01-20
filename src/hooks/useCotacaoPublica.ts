@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { CotacaoPublicaData } from '@/types/cotacaoPublica';
@@ -7,7 +8,9 @@ import { CotacaoPublicaData } from '@/types/cotacaoPublica';
 // ============================================
 
 export function useCotacaoPublica(token?: string) {
-  return useQuery({
+  const queryClient = useQueryClient();
+
+  const query = useQuery({
     queryKey: ['cotacao-publica', token],
     queryFn: async () => {
       if (!token) throw new Error('Token não fornecido');
@@ -42,6 +45,39 @@ export function useCotacaoPublica(token?: string) {
     enabled: !!token,
     staleTime: 1000 * 60,
   });
+
+  // Listener Realtime para atualizações automáticas
+  useEffect(() => {
+    if (!token || !query.data?.id) return;
+
+    console.log('[useCotacaoPublica] Iniciando realtime para cotação:', query.data.id);
+
+    const channel = supabase
+      .channel(`cotacao-publica-${query.data.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'cotacoes_publicas',
+          filter: `id=eq.${query.data.id}`,
+        },
+        (payload) => {
+          console.log('[useCotacaoPublica] Cotação atualizada via realtime:', payload);
+          queryClient.invalidateQueries({ queryKey: ['cotacao-publica', token] });
+        }
+      )
+      .subscribe((status) => {
+        console.log('[useCotacaoPublica] Realtime status:', status);
+      });
+
+    return () => {
+      console.log('[useCotacaoPublica] Removendo listener realtime');
+      supabase.removeChannel(channel);
+    };
+  }, [token, query.data?.id, queryClient]);
+
+  return query;
 }
 
 // ============================================
