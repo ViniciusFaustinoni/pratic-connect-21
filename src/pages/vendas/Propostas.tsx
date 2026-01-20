@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Users, Calendar, LayoutGrid, List, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,9 @@ import { ConsultoresTable } from '@/components/propostas/ConsultoresTable';
 import { ConsultorDrawer } from '@/components/propostas/ConsultorDrawer';
 import { usePropostasMetricas, type PeriodoFiltro } from '@/hooks/usePropostasMetricas';
 import { cn } from '@/lib/utils';
+import { useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 const PAGE_SIZE = 12;
 
@@ -19,8 +22,44 @@ export default function Propostas() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchTerm, setSearchTerm] = useState('');
   const [page, setPage] = useState(1);
+  const queryClient = useQueryClient();
   
   const { data, isLoading } = usePropostasMetricas(periodo);
+
+  // Realtime: atualizar quando contrato for assinado
+  useEffect(() => {
+    const channel = supabase
+      .channel('propostas-realtime')
+      .on(
+        'postgres_changes',
+        { 
+          event: 'UPDATE', 
+          schema: 'public', 
+          table: 'contratos'
+        },
+        (payload) => {
+          const newStatus = payload.new?.status;
+          const oldStatus = payload.old?.status;
+          
+          // Se mudou para assinado, notificar e invalidar cache
+          if (newStatus === 'assinado' && oldStatus !== 'assinado') {
+            console.log('[Propostas] Contrato assinado:', payload.new?.numero);
+            toast.success('🎉 Nova proposta assinada!', {
+              description: `Contrato ${payload.new?.numero || ''} foi assinado pelo cliente`,
+              duration: 10000,
+            });
+            // Invalidar cache das métricas
+            queryClient.invalidateQueries({ queryKey: ['propostas-metricas'] });
+            queryClient.invalidateQueries({ queryKey: ['consultor-propostas'] });
+          }
+        }
+      )
+      .subscribe();
+    
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
 
   // Filtrar e ordenar consultores por valor fechado (maior para menor)
   const sortedConsultores = useMemo(() => {
