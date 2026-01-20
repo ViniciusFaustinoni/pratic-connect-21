@@ -35,23 +35,50 @@ export function useCotacoesRealtime() {
           
           // Se for update de uma cotação específica
           if (payload.eventType === 'UPDATE' && payload.new) {
-            const newData = payload.new as { id?: string; status?: string; status_contratacao?: string };
-            const oldData = payload.old as { status_contratacao?: string };
+            const newData = payload.new as { id?: string; status?: string; status_contratacao?: string; cliente_nome?: string };
+            const oldData = payload.old as { status_contratacao?: string; status?: string };
             
             if (newData.id) {
               queryClient.refetchQueries({ queryKey: ['cotacoes', newData.id] });
             }
             
+            // Labels específicos para cada etapa do status_contratacao
+            const STATUS_CONTRATACAO_LABELS: Record<string, { emoji: string; label: string; type: 'success' | 'info' }> = {
+              'plano_escolhido': { emoji: '📋', label: 'Cliente escolheu o plano', type: 'info' },
+              'dados_preenchidos': { emoji: '📝', label: 'Cliente preencheu os dados', type: 'info' },
+              'documentos_ok': { emoji: '📎', label: 'Documentos enviados', type: 'info' },
+              'autovistoria_ok': { emoji: '📷', label: 'Autovistoria enviada', type: 'info' },
+              'vistoria_agendada': { emoji: '🗓️', label: 'Vistoria agendada', type: 'info' },
+              'vistoria_ok': { emoji: '✅', label: 'Vistoria concluída', type: 'success' },
+              'instalacao_agendada': { emoji: '🔧', label: 'Instalação agendada', type: 'info' },
+              'instalacao_ok': { emoji: '✅', label: 'Instalação concluída', type: 'success' },
+              'pagamento_ok': { emoji: '💰', label: 'Pagamento confirmado', type: 'success' },
+              'contrato_assinado': { emoji: '✍️', label: 'Contrato assinado', type: 'success' },
+              'ativo': { emoji: '🎉', label: 'Associado ativado', type: 'success' },
+            };
+            
             // Toast para mudança de status_contratacao (cliente avançou no fluxo)
             if (newData.status_contratacao && 
                 newData.status_contratacao !== 'aguardando' && 
                 newData.status_contratacao !== oldData?.status_contratacao) {
-              toast.info('📋 Cliente avançou na contratação!', { duration: 4000 });
+              const statusInfo = STATUS_CONTRATACAO_LABELS[newData.status_contratacao];
+              const clienteNome = newData.cliente_nome ? ` - ${newData.cliente_nome}` : '';
+              
+              if (statusInfo) {
+                if (statusInfo.type === 'success') {
+                  toast.success(`${statusInfo.emoji} ${statusInfo.label}${clienteNome}`, { duration: 6000 });
+                } else {
+                  toast.info(`${statusInfo.emoji} ${statusInfo.label}${clienteNome}`, { duration: 5000 });
+                }
+              } else {
+                toast.info(`📋 Cliente avançou na contratação${clienteNome}`, { duration: 4000 });
+              }
             }
             
             // Toast para mudança de status importante
-            if (newData.status === 'aceita') {
-              toast.success('🎉 Cotação aceita pelo cliente!', { duration: 5000 });
+            if (newData.status === 'aceita' && oldData?.status !== 'aceita') {
+              const clienteNome = newData.cliente_nome ? ` - ${newData.cliente_nome}` : '';
+              toast.success(`🎉 Cotação aceita pelo cliente${clienteNome}!`, { duration: 5000 });
             }
           }
         }
