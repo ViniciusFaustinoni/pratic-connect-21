@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
+import { useFilasRealtime } from '@/hooks/useFilasRealtime';
 import { ptBR } from 'date-fns/locale';
 import { 
   Plus, 
@@ -37,6 +38,9 @@ import {
 import { STATUS_INSTALACAO_LABELS, STATUS_INSTALACAO_COLORS, PERIODO_LABELS } from '@/types/database';
 
 export default function Instalacoes() {
+  // Ativar realtime para atualizações automáticas
+  useFilasRealtime();
+
   const [filters, setFilters] = useState<Filters>({});
   const [showFormDialog, setShowFormDialog] = useState(false);
   const [selectedInstalacaoId, setSelectedInstalacaoId] = useState<string | null>(null);
