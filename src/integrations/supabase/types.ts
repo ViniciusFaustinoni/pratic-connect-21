@@ -14521,6 +14521,20 @@ export type Database = {
         | "foto_painel"
         | "foto_hodometro"
         | "outro"
+        | "selfie_veiculo"
+        | "frente"
+        | "traseira"
+        | "lateral_direita"
+        | "lateral_esquerda"
+        | "odometro"
+        | "chassi"
+        | "motor"
+        | "banco_dianteiro"
+        | "banco_traseiro"
+        | "pneu_dianteiro_direito"
+        | "pneu_dianteiro_esquerdo"
+        | "pneu_traseiro_direito"
+        | "pneu_traseiro_esquerdo"
       tipo_foto_os: "entrada" | "execucao" | "conclusao"
       tipo_item_os: "peca" | "mao_de_obra" | "servico_terceiro"
       tipo_pix: "cpf" | "cnpj" | "email" | "telefone" | "aleatoria"
@@ -14839,6 +14853,20 @@ export const Constants = {
         "foto_painel",
         "foto_hodometro",
         "outro",
+        "selfie_veiculo",
+        "frente",
+        "traseira",
+        "lateral_direita",
+        "lateral_esquerda",
+        "odometro",
+        "chassi",
+        "motor",
+        "banco_dianteiro",
+        "banco_traseiro",
+        "pneu_dianteiro_direito",
+        "pneu_dianteiro_esquerdo",
+        "pneu_traseiro_direito",
+        "pneu_traseiro_esquerdo",
       ],
       tipo_foto_os: ["entrada", "execucao", "conclusao"],
       tipo_item_os: ["peca", "mao_de_obra", "servico_terceiro"],

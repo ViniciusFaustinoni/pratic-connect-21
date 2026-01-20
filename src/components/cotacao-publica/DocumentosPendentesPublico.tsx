@@ -22,6 +22,21 @@ const TIPO_DOCUMENTO_LABELS: Record<string, string> = {
   'foto_painel': 'Foto do Painel',
   'foto_hodometro': 'Foto do Hodômetro',
   'outro': 'Documento Solicitado',
+  // Novos tipos de vistoria
+  'selfie_veiculo': 'Selfie com o Veículo',
+  'frente': 'Foto do Veículo - Frente',
+  'traseira': 'Foto do Veículo - Traseira',
+  'lateral_direita': 'Foto do Veículo - Lateral Direita',
+  'lateral_esquerda': 'Foto do Veículo - Lateral Esquerda',
+  'odometro': 'Foto do Odômetro',
+  'chassi': 'Foto do Chassi',
+  'motor': 'Foto do Motor',
+  'banco_dianteiro': 'Foto do Banco Dianteiro',
+  'banco_traseiro': 'Foto do Banco Traseiro',
+  'pneu_dianteiro_direito': 'Pneu Dianteiro Direito',
+  'pneu_dianteiro_esquerdo': 'Pneu Dianteiro Esquerdo',
+  'pneu_traseiro_direito': 'Pneu Traseiro Direito',
+  'pneu_traseiro_esquerdo': 'Pneu Traseiro Esquerdo',
 };
 
 interface DocumentosPendentesPublicoProps {
@@ -121,12 +136,13 @@ export function DocumentosPendentesPublico({
         .from('cotacoes-docs')
         .getPublicUrl(fileName);
 
-      // 3. Criar registro na tabela documentos
+      // 3. Criar registro na tabela documentos (tipo já é validado pelo enum do banco)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: novoDoc, error: docError } = await publicSupabase
         .from('documentos')
         .insert({
           associado_id: associadoId,
-          tipo: doc.tipo_documento as 'cnh' | 'crlv' | 'comprovante_residencia' | 'foto_frontal_veiculo' | 'foto_traseira_veiculo' | 'foto_lateral_esquerda' | 'foto_lateral_direita' | 'foto_painel' | 'foto_hodometro' | 'outro',
+          tipo: doc.tipo_documento as any, // Tipos expandidos via migration
           arquivo_url: publicUrl,
           nome_arquivo: file.name,
           tamanho_bytes: file.size,
