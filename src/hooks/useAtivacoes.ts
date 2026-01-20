@@ -352,7 +352,7 @@ export function useExcluirAtivacao() {
           .eq('id', contrato.cotacao_id);
       }
 
-      // 10. Excluir associado vinculado (se existir e não tiver outros contratos)
+      // 15. Excluir associado vinculado (se existir e não tiver outros contratos)
       if (contrato?.associado_id) {
         // Verificar se associado tem outros contratos
         const { count } = await supabase
@@ -361,10 +361,34 @@ export function useExcluirAtivacao() {
           .eq('associado_id', contrato.associado_id);
         
         if (count === 0) {
+          // Excluir tabelas dependentes do associado
+          await supabase.from('cobranca_fila').delete().eq('associado_id', contrato.associado_id);
+          await supabase.from('cobranca_contatos').delete().eq('associado_id', contrato.associado_id);
+          await supabase.from('regua_execucoes').delete().eq('associado_id', contrato.associado_id);
+          await supabase.from('ordens_servico').delete().eq('associado_id', contrato.associado_id);
+          await supabase.from('negativacoes').delete().eq('associado_id', contrato.associado_id);
+          await supabase.from('processos').delete().eq('associado_id', contrato.associado_id);
+          await supabase.from('consultas_juridicas').delete().eq('associado_id', contrato.associado_id);
+          await supabase.from('ouvidoria_manifestacoes').delete().eq('associado_id', contrato.associado_id);
+          await supabase.from('documento_gerados').delete().eq('associado_id', contrato.associado_id);
+          await supabase.from('indicacoes').delete().eq('associado_id', contrato.associado_id);
+          await supabase.from('indicacoes').delete().eq('indicador_id', contrato.associado_id);
+          await supabase.from('asaas_pagamentos').delete().eq('associado_id', contrato.associado_id);
+          await supabase.from('asaas_cobrancas').delete().eq('associado_id', contrato.associado_id);
+          await supabase.from('asaas_clientes').delete().eq('associado_id', contrato.associado_id);
+          await supabase.from('documentos').delete().eq('associado_id', contrato.associado_id);
+          await supabase.from('auth_tokens_primeiro_acesso').delete().eq('associado_id', contrato.associado_id);
+          
           // Excluir vistorias do associado
           await supabase
             .from('vistorias')
             .delete()
+            .eq('associado_id', contrato.associado_id);
+
+          // Desvincular leads (manter histórico)
+          await supabase
+            .from('leads')
+            .update({ associado_id: null })
             .eq('associado_id', contrato.associado_id);
           
           // Excluir associado
