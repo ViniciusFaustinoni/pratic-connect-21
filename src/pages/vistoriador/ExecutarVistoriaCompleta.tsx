@@ -3,11 +3,12 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Camera, Check, AlertTriangle, 
   Gauge, CheckCircle2, Loader2, Car, Video,
-  ChevronDown, ChevronUp, XCircle, MapPin
+  ChevronDown, ChevronUp, XCircle, MapPin, Lock, ShieldCheck, ShieldX
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -176,6 +177,67 @@ export default function ExecutarVistoriaCompleta() {
         <AlertTriangle className="h-12 w-12 text-red-500" />
         <p className="text-center text-slate-300">Vistoria não encontrada.</p>
         <Button onClick={() => navigate('/vistoriador/tarefas')}>Voltar</Button>
+      </div>
+    );
+  }
+
+  // Verificar se a vistoria já foi finalizada (bloqueio de edição)
+  const vistoriaFinalizada = ['aprovada', 'reprovada'].includes(vistoria?.status || '');
+  
+  if (vistoriaFinalizada) {
+    const foiAprovada = vistoria.status === 'aprovada';
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-slate-900 p-6">
+        <div className={`rounded-full p-6 ${foiAprovada ? 'bg-green-500/20' : 'bg-red-500/20'}`}>
+          {foiAprovada ? (
+            <ShieldCheck className="h-16 w-16 text-green-500" />
+          ) : (
+            <ShieldX className="h-16 w-16 text-red-500" />
+          )}
+        </div>
+        
+        <Badge className={foiAprovada ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}>
+          <Lock className="mr-1 h-3 w-3" />
+          Vistoria {foiAprovada ? 'Aprovada' : 'Reprovada'}
+        </Badge>
+        
+        <div className="text-center space-y-2">
+          <h2 className="text-xl font-bold text-white">
+            Vistoria Finalizada
+          </h2>
+          <p className="text-slate-400 max-w-sm">
+            Esta vistoria já foi {foiAprovada ? 'aprovada' : 'reprovada'} e não pode mais ser editada.
+          </p>
+        </div>
+
+        <Card className="border-slate-700 bg-slate-800 w-full max-w-sm">
+          <CardContent className="py-4 space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span className="text-slate-400">Veículo:</span>
+              <span className="text-white font-medium">{veiculo?.placa}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">Associado:</span>
+              <span className="text-white">{associado?.nome}</span>
+            </div>
+            {vistoria.updated_at && (
+              <div className="flex justify-between">
+                <span className="text-slate-400">Concluída em:</span>
+                <span className="text-white">
+                  {new Date(vistoria.updated_at).toLocaleDateString('pt-BR')}
+                </span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+        
+        <Button 
+          onClick={() => navigate('/vistoriador/tarefas')} 
+          className="mt-4"
+        >
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Voltar para Tarefas
+        </Button>
       </div>
     );
   }
