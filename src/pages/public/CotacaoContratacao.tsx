@@ -14,7 +14,7 @@ import { EtapaPagamentoCotacao } from '@/components/cotacao-publica/EtapaPagamen
 import { AgendamentoVistoriaCompleta } from '@/components/cotacao-publica/AgendamentoVistoriaCompleta';
 import { DocumentosPendentesPublico } from '@/components/cotacao-publica/DocumentosPendentesPublico';
 import type { DadosPessoaisForm } from '@/components/cotacao-publica/FormularioDadosPessoais';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { formatarMoeda } from '@/config/pricing';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -71,6 +71,35 @@ export default function CotacaoContratacao() {
     
     return etapaBase;
   }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, determinarEtapa]);
+
+  // Função para verificar se uma etapa específica já foi concluída
+  // Isso garante o modo somente leitura mesmo quando o cliente volta para etapas anteriores
+  const isEtapaConcluida = useCallback((etapaIndex: number): boolean => {
+    if (!cotacao?.status_contratacao) return false;
+    
+    const statusConcluidos = {
+      plano: ['plano_escolhido', 'dados_preenchidos', 'documentos_ok', 'contrato_assinado', 'vistoria_ok', 'pagamento_ok', 'contrato_gerado', 'ativo'],
+      documentos: ['dados_preenchidos', 'documentos_ok', 'contrato_assinado', 'vistoria_ok', 'pagamento_ok', 'contrato_gerado', 'ativo'],
+      contrato: ['contrato_assinado', 'vistoria_ok', 'pagamento_ok', 'contrato_gerado', 'ativo'],
+      vistoria: ['vistoria_ok', 'pagamento_ok', 'contrato_gerado', 'ativo'],
+      pagamento: ['pagamento_ok', 'contrato_gerado', 'ativo'],
+    };
+    
+    switch (etapaIndex) {
+      case 0: // Plano - concluído se plano_escolhido_id existe
+        return !!cotacao.plano_escolhido_id || statusConcluidos.plano.includes(cotacao.status_contratacao);
+      case 1: // Documentos - concluído se status >= dados_preenchidos
+        return statusConcluidos.documentos.includes(cotacao.status_contratacao);
+      case 2: // Contrato - concluído se status >= contrato_assinado
+        return statusConcluidos.contrato.includes(cotacao.status_contratacao);
+      case 3: // Vistoria - concluído se tipo_vistoria está preenchido OU status >= vistoria_ok
+        return !!cotacao.tipo_vistoria || statusConcluidos.vistoria.includes(cotacao.status_contratacao);
+      case 4: // Pagamento - concluído se status >= pagamento_ok
+        return statusConcluidos.pagamento.includes(cotacao.status_contratacao);
+      default:
+        return false;
+    }
+  }, [cotacao?.status_contratacao, cotacao?.plano_escolhido_id, cotacao?.tipo_vistoria]);
 
   // Sincronizar etapa com status da cotação
   useEffect(() => {
@@ -286,7 +315,7 @@ export default function CotacaoContratacao() {
               <StepperCotacao
                 steps={STEPS}
                 currentStep={etapaAtual}
-                onStepClick={(step) => step < etapaAtual && setEtapaAtual(step)}
+                onStepClick={(step) => isEtapaConcluida(step) && setEtapaAtual(step)}
               />
             </Card>
           </motion.div>
@@ -310,7 +339,7 @@ export default function CotacaoContratacao() {
                     onConfirmar={handleSelecionarPlano}
                     isLoading={isPending}
                     categoriaVeiculo={(cotacao as { categoria_veiculo?: string }).categoria_veiculo}
-                    readOnly={0 < etapaDoStatus}
+                    readOnly={isEtapaConcluida(0)}
                   />
                 </motion.div>
               )}
@@ -329,7 +358,7 @@ export default function CotacaoContratacao() {
                     onSubmit={handleSalvarDados}
                     defaultValues={dadosPessoaisDefault}
                     isLoading={isPending}
-                    readOnly={1 < etapaDoStatus}
+                    readOnly={isEtapaConcluida(1)}
                   />
                 </motion.div>
               )}
@@ -349,7 +378,7 @@ export default function CotacaoContratacao() {
                     clienteNome={cotacao.nome_solicitante || ''}
                     clienteEmail={cotacao.email_solicitante || ''}
                     onContratoAssinado={() => setEtapaAtual(3)}
-                    readOnly={2 < etapaDoStatus}
+                    readOnly={isEtapaConcluida(2)}
                   />
                 </motion.div>
               )}
@@ -368,7 +397,7 @@ export default function CotacaoContratacao() {
                     tipoVeiculo={cotacao.categoria === 'moto' ? 'moto' : 'carro'}
                     onComplete={() => setEtapaAtual(4)}
                     onAgendar={() => setEtapaAtual(4)}
-                    readOnly={3 < etapaDoStatus}
+                    readOnly={isEtapaConcluida(3)}
                     tipoVistoriaRealizada={cotacao.tipo_vistoria as 'autovistoria' | 'agendada' | undefined}
                   />
                 </motion.div>
@@ -390,7 +419,7 @@ export default function CotacaoContratacao() {
                     clienteEmail={cotacao.email_solicitante || ''}
                     clienteCpf={cotacao.cliente_cpf || ''}
                     onPagamentoConfirmado={() => setEtapaAtual(5)}
-                    readOnly={4 < etapaDoStatus}
+                    readOnly={isEtapaConcluida(4)}
                   />
                 </motion.div>
               )}
