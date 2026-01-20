@@ -1,55 +1,31 @@
 import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { useCotacao, useCotacaoActions, useAtualizarStatusCotacao } from '@/hooks/useCotacoes';
+import { useCotacao, useCotacaoActions, useAtualizarStatusCotacao, useExcluirCotacao } from '@/hooks/useCotacoes';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Separator } from '@/components/ui/separator';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
-  ArrowLeft,
-  Send,
-  MessageSquare,
-  FileText,
-  User,
-  Car,
-  Phone,
-  Mail,
-  Calendar,
-  Shield,
-  Check,
-  X,
-  AlertCircle,
-  AlertTriangle,
-  ChevronDown,
-  ExternalLink,
-  Clock,
-  FileSignature,
-  Loader2,
-  Link2,
-  RefreshCw,
-} from 'lucide-react';
+import { ArrowLeft, AlertCircle, Shield, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { BotaoGerarPdf } from '@/components/cotacoes/BotaoGerarPdf';
+
+// Componentes novos
+import { CotacaoHeader } from '@/components/cotacoes/CotacaoHeader';
+import { CotacaoAcoes } from '@/components/cotacoes/CotacaoAcoes';
+import { CotacaoTimeline } from '@/components/cotacoes/CotacaoTimeline';
+import { CotacaoClienteVeiculo } from '@/components/cotacoes/CotacaoClienteVeiculo';
+import { CotacaoVendedor } from '@/components/cotacoes/CotacaoVendedor';
+import { PlanoCardComparativo, type PlanoComparativo } from '@/components/cotacoes/PlanoCardComparativo';
+import { PlanoDetalhesModal } from '@/components/cotacoes/PlanoDetalhesModal';
+
+// Componentes existentes
 import { EnviarEmailModal } from '@/components/cotacoes/EnviarEmailModal';
 import { VincularLeadModal } from '@/components/cotacoes/VincularLeadModal';
 import { ContratoWizard } from '@/components/contratos/ContratoWizard';
-import { isCoberturaRemovida, getRestricaoCategoria } from '@/data/restricoesCategorias';
-import {
-  STATUS_COTACAO_LABELS,
-  STATUS_COTACAO_COLORS,
-} from '@/types/vendas';
+import { isCoberturaRemovida } from '@/data/restricoesCategorias';
+import { gerarPdfCotacaoComparativa } from '@/lib/gerarPdfCotacao';
 import type { StatusCotacao } from '@/types/vendas';
 
 // ============================================
@@ -63,91 +39,33 @@ const formatCurrency = (value: number | null | undefined) => {
   }).format(value);
 };
 
-const formatPhone = (phone: string | null | undefined) => {
-  if (!phone) return '—';
-  const digits = phone.replace(/\D/g, '');
-  if (digits.length === 11) {
-    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
-  }
-  return phone;
-};
-
-const formatDate = (date: string) => {
-  return new Date(date).toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
-};
-
-const formatDateTime = (date: string) => {
-  return new Date(date).toLocaleString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-};
-
-const calcularValidade = (createdAt: string) => {
-  const created = new Date(createdAt);
-  const validade = new Date(created.getTime() + 7 * 24 * 60 * 60 * 1000);
-  return validade;
-};
-
-const isExpirada = (createdAt: string) => {
-  const validade = calcularValidade(createdAt);
-  return new Date() > validade;
-};
-
-// Coberturas mock por plano
-const COBERTURAS_POR_PLANO: Record<string, string[]> = {
-  basico: [
-    'Proteção contra roubo/furto',
-    'Proteção contra colisão',
-    'Proteção contra incêndio',
-    'Assistência 24h',
-  ],
-  completo: [
-    'Proteção contra roubo/furto',
-    'Proteção contra colisão',
-    'Proteção contra incêndio',
-    'Assistência 24h',
-    'Proteção de vidros',
-    'App de rastreamento',
-    'Carro reserva (7 dias)',
-  ],
-  premium: [
-    'Proteção contra roubo/furto',
-    'Proteção contra colisão',
-    'Proteção contra incêndio',
-    'Assistência 24h Premium',
-    'Proteção de vidros',
-    'App de rastreamento',
-    'Carro reserva (15 dias)',
-    'Proteção para terceiros',
-    'Desconto em rede credenciada',
-  ],
-};
-
 // ============================================
 // COMPONENTE PRINCIPAL
 // ============================================
 export default function CotacaoDetalhe() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { profile } = useAuth();
+
+  // Estados dos modais
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [showVincularModal, setShowVincularModal] = useState(false);
   const [showContratoWizard, setShowContratoWizard] = useState(false);
-  const queryClient = useQueryClient();
+  const [planoDetalhesModal, setPlanoDetalhesModal] = useState<PlanoComparativo | null>(null);
+  const [planoSelecionado, setPlanoSelecionado] = useState<string | null>(null);
+  const [isGerando, setIsGerando] = useState(false);
 
+  // Hooks de dados
   const { data: cotacao, isLoading, error } = useCotacao(id);
   const { reenviarCotacao, atualizarStatus, isReenviando, isAtualizando } = useCotacaoActions();
   const atualizarStatusMutation = useAtualizarStatusCotacao();
-  const { profile } = useAuth();
+  const excluirMutation = useExcluirCotacao();
 
-  // Handler WhatsApp - agora também atualiza status e etapa do lead
+  // ============================================
+  // HANDLERS
+  // ============================================
+  
   const handleWhatsApp = async () => {
     if (!cotacao) return;
     
@@ -175,11 +93,10 @@ Ficou com alguma dúvida? Estou à disposição!
     
     window.open(url, '_blank');
     
-    // Atualizar status da cotação para 'enviada' e etapa do lead
+    // Atualizar status para 'enviada'
     if (cotacao.status === 'rascunho') {
       atualizarStatus({ id: cotacao.id, status: 'enviada' });
       
-      // Atualizar etapa do lead para 'cotacao_enviada'
       if (cotacao.lead_id) {
         await supabase
           .from('leads')
@@ -189,10 +106,88 @@ Ficou com alguma dúvida? Estou à disposição!
     }
   };
 
-  // Handler mudar status
   const handleMudarStatus = (status: StatusCotacao) => {
     if (!id) return;
     atualizarStatus({ id, status });
+  };
+
+  const handleExcluir = () => {
+    if (!id) return;
+    excluirMutation.mutate(id, {
+      onSuccess: () => {
+        toast.success('Cotação excluída');
+        navigate('/vendas/cotacoes');
+      },
+    });
+  };
+
+  const handleBaixarPDF = async () => {
+    if (!cotacao) return;
+    setIsGerando(true);
+    
+    try {
+      const planosComparacao = (cotacao.dados_extras as { planos_comparacao?: PlanoComparativo[] } | null)?.planos_comparacao || [];
+      
+      // Se não tem planos em dados_extras, usar o plano principal
+      const planosParaPdf = planosComparacao.length > 0 
+        ? planosComparacao.map(p => ({
+            nome: p.nome,
+            valorMensal: p.valorMensal,
+            valorAdesao: p.valorAdesao ?? cotacao.valor_adesao ?? 0,
+            coberturas: p.coberturas || [],
+            naoInclui: p.naoInclui || [],
+            coberturaFipe: 100,
+            cota: '100%',
+          }))
+        : [{
+            nome: cotacao.planos?.nome || 'Plano',
+            valorMensal: cotacao.valor_total_mensal || 0,
+            valorAdesao: cotacao.valor_adesao || 0,
+            coberturas: [],
+            naoInclui: [],
+            coberturaFipe: 100,
+            cota: '100%',
+          }];
+
+      await gerarPdfCotacaoComparativa({
+        numero: cotacao.numero || `COT-${cotacao.id.slice(0, 8)}`,
+        created_at: cotacao.created_at,
+        validade_dias: 7,
+        nome_solicitante: cotacao.leads?.nome || 'Cliente',
+        telefone1_solicitante: cotacao.leads?.telefone || '',
+        email_solicitante: cotacao.leads?.email || '',
+        veiculo_marca: cotacao.veiculo_marca || '',
+        veiculo_modelo: cotacao.veiculo_modelo || '',
+        veiculo_ano: cotacao.veiculo_ano || null,
+        veiculo_placa: cotacao.veiculo_placa || null,
+        valor_fipe: cotacao.valor_fipe || null,
+        planosComparar: planosParaPdf,
+      });
+      
+      toast.success('PDF gerado com sucesso!');
+    } catch (error) {
+      console.error('Erro ao gerar PDF:', error);
+      toast.error('Erro ao gerar PDF');
+    } finally {
+      setIsGerando(false);
+    }
+  };
+
+  const handleAceitarEContrato = () => {
+    if (!cotacao) return;
+    
+    if (cotacao.status !== 'aceita') {
+      atualizarStatusMutation.mutate(
+        { id: cotacao.id, status: 'aceita' },
+        { onSuccess: () => setShowContratoWizard(true) }
+      );
+    } else {
+      setShowContratoWizard(true);
+    }
+  };
+
+  const handleSelecionarPlano = (plano: PlanoComparativo) => {
+    setPlanoSelecionado(plano.id === planoSelecionado ? null : plano.id);
   };
 
   // ============================================
@@ -203,11 +198,16 @@ Ficou com alguma dúvida? Estou à disposição!
       <div className="space-y-6 p-6">
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-40 w-full" />
-        <div className="grid gap-4 md:grid-cols-2">
-          <Skeleton className="h-48" />
-          <Skeleton className="h-48" />
+        <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+          <div className="space-y-4">
+            <Skeleton className="h-48" />
+            <Skeleton className="h-64" />
+          </div>
+          <div className="space-y-4">
+            <Skeleton className="h-64" />
+            <Skeleton className="h-48" />
+          </div>
         </div>
-        <Skeleton className="h-64 w-full" />
       </div>
     );
   }
@@ -239,11 +239,31 @@ Ficou com alguma dúvida? Estou à disposição!
     );
   }
 
-  const validade = calcularValidade(cotacao.created_at);
-  const expirada = isExpirada(cotacao.created_at);
-  const planoNome = cotacao.planos?.nome?.toLowerCase() || 'basico';
-  const coberturas = COBERTURAS_POR_PLANO[planoNome] || COBERTURAS_POR_PLANO.basico;
-  const primeiroPagamento = (cotacao.valor_adesao || 0) + (cotacao.valor_total_mensal || 0);
+  // Extrair planos para comparação
+  const planosComparacao = (cotacao.dados_extras as { planos_comparacao?: PlanoComparativo[] } | null)?.planos_comparacao || [];
+  const categoriaVeiculo = (cotacao as { categoria_veiculo?: string }).categoria_veiculo;
+  
+  // Se não tem planos em dados_extras, criar array com plano principal
+  const planosExibir: PlanoComparativo[] = planosComparacao.length > 0 
+    ? planosComparacao 
+    : cotacao.planos 
+      ? [{
+          id: cotacao.planos.id,
+          nome: cotacao.planos.nome || 'Plano',
+          valorMensal: cotacao.valor_total_mensal || 0,
+          valorAdesao: cotacao.valor_adesao,
+          coberturas: [],
+        }]
+      : [];
+
+  // Verificar plano recomendado (destaque ou segundo plano se houver 3)
+  const getPlanoRecomendado = () => {
+    const comDestaque = planosExibir.find(p => p.destaque);
+    if (comDestaque) return comDestaque.id;
+    if (planosExibir.length === 3) return planosExibir[1].id; // Meio
+    return null;
+  };
+  const planoRecomendadoId = getPlanoRecomendado();
 
   // ============================================
   // RENDER
@@ -254,21 +274,15 @@ Ficou com alguma dúvida? Estou à disposição!
       <nav className="text-sm text-muted-foreground">
         <ol className="flex items-center gap-1">
           <li>
-            <Link to="/dashboard" className="hover:text-foreground">
-              Home
-            </Link>
+            <Link to="/dashboard" className="hover:text-foreground">Home</Link>
           </li>
           <li>/</li>
           <li>
-            <Link to="/vendas/dashboard" className="hover:text-foreground">
-              Vendas
-            </Link>
+            <Link to="/vendas/dashboard" className="hover:text-foreground">Vendas</Link>
           </li>
           <li>/</li>
           <li>
-            <Link to="/vendas/cotacoes" className="hover:text-foreground">
-              Cotações
-            </Link>
+            <Link to="/vendas/cotacoes" className="hover:text-foreground">Cotações</Link>
           </li>
           <li>/</li>
           <li className="text-foreground font-medium">
@@ -278,441 +292,115 @@ Ficou com alguma dúvida? Estou à disposição!
       </nav>
 
       {/* BOTÃO VOLTAR */}
-      <div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate('/vendas/cotacoes')}
-        >
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Voltar
-        </Button>
-      </div>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => navigate('/vendas/cotacoes')}
+      >
+        <ArrowLeft className="mr-2 h-4 w-4" />
+        Voltar
+      </Button>
 
-      {/* HEADER DA COTAÇÃO */}
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-            {/* Info principal */}
-            <div className="space-y-2">
-              {/* Linha 1: Nome do Lead (destaque) + Badge de Status */}
-              <div className="flex items-center gap-3">
-                <CardTitle className="text-2xl font-bold">
-                  {cotacao.leads?.nome || 'Cotação Avulsa'}
+      {/* HEADER COM RESUMO EXECUTIVO */}
+      <CotacaoHeader cotacao={cotacao} />
+
+      {/* LAYOUT 2 COLUNAS */}
+      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+        {/* COLUNA PRINCIPAL */}
+        <div className="space-y-6">
+          {/* PLANOS PARA COMPARAÇÃO */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <Shield className="h-5 w-5" />
+                  {planosExibir.length > 1 ? 'Planos para Comparação' : 'Plano Selecionado'}
                 </CardTitle>
-                <Badge className={STATUS_COTACAO_COLORS[cotacao.status as StatusCotacao]}>
-                  {STATUS_COTACAO_LABELS[cotacao.status as StatusCotacao]}
-                </Badge>
-              </div>
-              
-              {/* Linha 2: ID da cotação (texto secundário) */}
-              <p className="text-sm text-muted-foreground">
-                {cotacao.leads?.nome ? 'Cotação' : ''} #{cotacao.numero || cotacao.id.slice(0, 8).toUpperCase()}
-              </p>
-              
-              {/* Linha 3: Datas */}
-              <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-                <span className="flex items-center gap-1">
-                  <Calendar className="h-4 w-4" />
-                  Criada em {formatDateTime(cotacao.created_at)}
-                </span>
-                <span className={cn("flex items-center gap-1", expirada && "text-destructive")}>
-                  <Clock className="h-4 w-4" />
-                  {expirada ? 'Expirada em' : 'Válida até'} {formatDate(validade.toISOString())}
-                </span>
-              </div>
-            </div>
-
-            {/* Ações */}
-            <div className="flex flex-wrap gap-2">
-              <BotaoGerarPdf cotacao={cotacao} />
-              
-              {/* Botões de envio só aparecem se tem lead vinculado */}
-              {cotacao.lead_id ? (
-                <>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => reenviarCotacao(cotacao.id)}
-                    disabled={isReenviando}
-                  >
-                    <Send className="mr-2 h-4 w-4" />
-                    {isReenviando ? 'Reenviando...' : 'Reenviar'}
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={handleWhatsApp}>
-                    <MessageSquare className="mr-2 h-4 w-4" />
-                    WhatsApp
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => setShowEmailModal(true)}>
-                    <Mail className="mr-2 h-4 w-4" />
-                    Email
-                  </Button>
-                </>
-              ) : (
-                /* Aviso sutil quando não tem lead */
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-muted text-muted-foreground text-sm">
-                  <AlertCircle className="h-4 w-4" />
-                  Vincule a um lead para enviar
-                </div>
-              )}
-              
-              {/* Botão Aceitar e Continuar para Documentos - abre o wizard */}
-              {(cotacao.status === 'enviada' || cotacao.status === 'rascunho') && cotacao.lead_id && (
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    // Se não estiver aceita, primeiro aceita e depois abre wizard
-                    if (cotacao.status !== 'aceita') {
-                      atualizarStatusMutation.mutate(
-                        { id: cotacao.id, status: 'aceita' },
-                        { onSuccess: () => setShowContratoWizard(true) }
-                      );
-                    } else {
-                      setShowContratoWizard(true);
-                    }
-                  }}
-                  disabled={atualizarStatusMutation.isPending}
-                  className="bg-emerald-600 hover:bg-emerald-700"
-                >
-                  {atualizarStatusMutation.isPending ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <FileSignature className="mr-2 h-4 w-4" />
-                  )}
-                  {atualizarStatusMutation.isPending ? 'Processando...' : 'Aceitar e Gerar Contrato'}
-                </Button>
-              )}
-              
-              {/* Para cotação já aceita, abrir wizard diretamente */}
-              {cotacao.status === 'aceita' && cotacao.lead_id && (
-                <Button
-                  size="sm"
-                  onClick={() => setShowContratoWizard(true)}
-                >
-                  <FileSignature className="mr-2 h-4 w-4" />
-                  Continuar para Documentos
-                </Button>
-              )}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" disabled={isAtualizando}>
-                    Status
-                    <ChevronDown className="ml-2 h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => handleMudarStatus('enviada')}>
-                    Enviada
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleMudarStatus('aceita')}>
-                    Aceita
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleMudarStatus('recusada')}>
-                    Recusada
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleMudarStatus('expirada')}>
-                    Expirada
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </div>
-        </CardHeader>
-      </Card>
-
-      {/* GRID DE CARDS */}
-      <div className="grid gap-4 md:grid-cols-2">
-        {/* CARD: LEAD */}
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <User className="h-4 w-4" />
-                Lead
-              </CardTitle>
-              {/* Botão Trocar/Vincular */}
-              {cotacao.lead_id ? (
-                <Button 
-                  variant="ghost" 
-                  size="sm"
-                  onClick={() => setShowVincularModal(true)}
-                >
-                  <RefreshCw className="h-3 w-3 mr-1" />
-                  Trocar
-                </Button>
-              ) : (
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => setShowVincularModal(true)}
-                >
-                  <Link2 className="h-3 w-3 mr-1" />
-                  Vincular Lead
-                </Button>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {cotacao.lead_id ? (
-              /* Conteúdo quando tem lead - nome já aparece no título */
-              <>
-                <div className="flex items-center gap-2 text-sm">
-                  <Phone className="h-4 w-4 text-muted-foreground" />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Telefone</p>
-                    <p>{formatPhone(cotacao.leads?.telefone)}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <Mail className="h-4 w-4 text-muted-foreground" />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Email</p>
-                    <p>{cotacao.leads?.email || '—'}</p>
-                  </div>
-                </div>
-                {cotacao.leads?.id && (
-                  <Button variant="link" size="sm" className="p-0" asChild>
-                    <Link to={`/vendas/leads/${cotacao.leads.id}`}>
-                      Ver Lead
-                      <ExternalLink className="ml-1 h-3 w-3" />
-                    </Link>
+                {planosExibir.length < 3 && (
+                  <Button variant="outline" size="sm" disabled>
+                    <Plus className="h-4 w-4 mr-1" />
+                    Adicionar
                   </Button>
                 )}
-              </>
-            ) : (
-              /* Aviso quando não tem lead */
-              <div className="text-center py-4 text-muted-foreground">
-                <User className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p className="text-sm font-medium">Cotação avulsa</p>
-                <p className="text-xs">Vincule a um lead para enviar</p>
               </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* CARD: VEÍCULO */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Car className="h-4 w-4" />
-              Veículo
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <p className="text-lg font-medium">
-              {cotacao.veiculo_marca} {cotacao.veiculo_modelo}
-            </p>
-            <Separator />
-            <div className="grid grid-cols-3 gap-4 text-sm">
-              <div>
-                <p className="text-xs text-muted-foreground">Ano</p>
-                <p>{cotacao.veiculo_ano || '—'}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Placa</p>
-                <p>{cotacao.veiculo_placa || '—'}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Valor FIPE</p>
-                <p className="font-medium">{formatCurrency(cotacao.valor_fipe)}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* CARD: PLANO(S) */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Shield className="h-5 w-5" />
-            {(() => {
-              const planosComparacao = (cotacao.dados_extras as { planos_comparacao?: { id: string; nome: string; valorMensal: number; coberturas?: string[] }[] } | null)?.planos_comparacao;
-              return planosComparacao && planosComparacao.length > 1 ? 'Planos para Comparação' : 'Plano Selecionado';
-            })()}
-          </CardTitle>
-          <CardDescription>
-            Detalhes da proteção cotada
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {(() => {
-            const planosComparacao = (cotacao.dados_extras as { planos_comparacao?: { id: string; nome: string; valorMensal: number; coberturas?: string[] }[] } | null)?.planos_comparacao;
-            
-            // Múltiplos planos - exibir em grade comparativa
-            if (planosComparacao && planosComparacao.length > 1) {
-              return (
-                <div className={`grid gap-4 ${planosComparacao.length === 2 ? 'md:grid-cols-2' : 'md:grid-cols-2 lg:grid-cols-3'}`}>
-                  {planosComparacao.map((plano, idx) => (
-                    <Card key={plano.id} className="border-primary/30 bg-muted/30">
-                      <CardContent className="p-4 space-y-4">
-                        {/* Cabeçalho do plano */}
-                        <div className="flex items-center gap-2">
-                          <Badge variant="secondary" className="text-xs">
-                            Opção {idx + 1}
-                          </Badge>
-                        </div>
-                        <div>
-                          <h3 className="text-lg font-semibold">{plano.nome}</h3>
-                        </div>
-                        
-                        {/* Valor mensal destacado */}
-                        <div className="rounded-lg border bg-primary/10 p-3 text-center">
-                          <p className="text-xs text-muted-foreground">Mensalidade</p>
-                          <p className="text-2xl font-bold text-primary">
-                            {formatCurrency(plano.valorMensal)}
-                          </p>
-                        </div>
-                        
-                        {/* Coberturas */}
-                        {plano.coberturas && plano.coberturas.length > 0 && (
-                          <div>
-                            <p className="mb-2 text-xs font-medium text-muted-foreground">Coberturas:</p>
-                            <ul className="space-y-1">
-                              {plano.coberturas.map((cobertura, i) => {
-                                const categoriaVeiculo = (cotacao as { categoria_veiculo?: string }).categoria_veiculo;
-                                const isRemovida = isCoberturaRemovida(cobertura, categoriaVeiculo);
-                                
-                                return (
-                                  <li key={i} className="flex items-start gap-2 text-xs">
-                                    {isRemovida ? (
-                                      <>
-                                        <X className="h-3 w-3 text-destructive mt-0.5 flex-shrink-0" />
-                                        <span className="text-muted-foreground line-through">{cobertura}</span>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Check className="h-3 w-3 text-green-600 mt-0.5 flex-shrink-0" />
-                                        <span>{cobertura}</span>
-                                      </>
-                                    )}
-                                  </li>
-                                );
-                              })}
-                            </ul>
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
+            </CardHeader>
+            <CardContent>
+              {planosExibir.length > 0 ? (
+                <div className={cn(
+                  "grid gap-4",
+                  planosExibir.length === 1 && "md:grid-cols-1 max-w-md mx-auto",
+                  planosExibir.length === 2 && "md:grid-cols-2",
+                  planosExibir.length >= 3 && "md:grid-cols-2 lg:grid-cols-3"
+                )}>
+                  {planosExibir.map((plano, idx) => (
+                    <PlanoCardComparativo
+                      key={plano.id}
+                      plano={plano}
+                      valorAdesao={cotacao.valor_adesao || 0}
+                      isRecomendado={plano.id === planoRecomendadoId}
+                      isSelecionado={plano.id === planoSelecionado}
+                      indice={planosExibir.length > 1 ? idx : undefined}
+                      categoriaVeiculo={categoriaVeiculo}
+                      onSelecionar={handleSelecionarPlano}
+                      onVerDetalhes={setPlanoDetalhesModal}
+                      isCoberturaRemovida={isCoberturaRemovida}
+                    />
                   ))}
                 </div>
-              );
-            }
-            
-            // Plano único - exibição original
-            return (
-              <>
-                {/* Nome do plano */}
-                <div>
-                  <h3 className="text-xl font-semibold">
-                    {cotacao.planos?.nome || 'Plano'}
-                  </h3>
-                  <p className="text-muted-foreground">
-                    {cotacao.planos?.descricao || '100% FIPE + Coberturas completas'}
-                  </p>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Shield className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                  <p>Nenhum plano selecionado</p>
                 </div>
+              )}
+            </CardContent>
+          </Card>
 
-                {/* Alerta de restrições */}
-                {(() => {
-                  const categoriaVeiculo = (cotacao as { categoria_veiculo?: string }).categoria_veiculo;
-                  const restricao = getRestricaoCategoria(categoriaVeiculo);
-                  
-                  if (restricao && restricao.mensagemAlerta) {
-                    return (
-                      <Alert className="border-amber-500/50 bg-amber-500/10">
-                        <AlertTriangle className="h-4 w-4 text-amber-500" />
-                        <AlertDescription className="text-amber-700 dark:text-amber-400">
-                          {restricao.mensagemAlerta}
-                        </AlertDescription>
-                      </Alert>
-                    );
-                  }
-                  return null;
-                })()}
+          {/* DADOS DO CLIENTE E VEÍCULO */}
+          <CotacaoClienteVeiculo
+            cotacao={cotacao}
+            onVincularLead={() => setShowVincularModal(true)}
+            onTrocarLead={() => setShowVincularModal(true)}
+          />
+        </div>
 
-                {/* Coberturas */}
-                <div>
-                  <p className="mb-2 text-sm font-medium">Coberturas incluídas:</p>
-                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                    {coberturas.map((cobertura, index) => {
-                      const categoriaVeiculo = (cotacao as { categoria_veiculo?: string }).categoria_veiculo;
-                      const isRemovida = isCoberturaRemovida(cobertura, categoriaVeiculo);
-                      
-                      return (
-                        <div key={index} className="flex items-center gap-2 text-sm">
-                          {isRemovida ? (
-                            <>
-                              <X className="h-4 w-4 text-destructive" />
-                              <span className="text-muted-foreground line-through">{cobertura}</span>
-                              <span className="text-xs text-destructive">(não disponível)</span>
-                            </>
-                          ) : (
-                            <>
-                              <Check className="h-4 w-4 text-green-600" />
-                              {cobertura}
-                            </>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
+        {/* COLUNA LATERAL */}
+        <div className="space-y-4 lg:sticky lg:top-6 lg:h-fit">
+          {/* AÇÕES RÁPIDAS */}
+          <CotacaoAcoes
+            cotacao={cotacao}
+            onBaixarPDF={handleBaixarPDF}
+            onEnviarWhatsApp={handleWhatsApp}
+            onEnviarEmail={() => setShowEmailModal(true)}
+            onMudarStatus={handleMudarStatus}
+            onExcluir={handleExcluir}
+            onReenviar={() => reenviarCotacao(cotacao.id)}
+            onAceitarEContrato={handleAceitarEContrato}
+            isReenviando={isReenviando}
+            isAtualizando={isAtualizando || atualizarStatusMutation.isPending}
+            isExcluindo={excluirMutation.isPending}
+            isGerando={isGerando}
+          />
 
-                <Separator />
+          {/* TIMELINE */}
+          <CotacaoTimeline cotacao={cotacao} />
 
-                {/* Valores */}
-                <div className="grid gap-4 sm:grid-cols-3">
-                  <div className="rounded-lg border bg-muted/50 p-4 text-center">
-                    <p className="text-sm text-muted-foreground">Adesão</p>
-                    <p className="text-2xl font-bold text-primary">
-                      {formatCurrency(cotacao.valor_adesao)}
-                    </p>
-                  </div>
-                  <div className="rounded-lg border bg-muted/50 p-4 text-center">
-                    <p className="text-sm text-muted-foreground">Mensalidade</p>
-                    <p className="text-2xl font-bold text-primary">
-                      {formatCurrency(cotacao.valor_total_mensal)}
-                    </p>
-                  </div>
-                  <div className="rounded-lg border bg-primary/10 p-4 text-center">
-                    <p className="text-sm text-muted-foreground">1º Pagamento</p>
-                    <p className="text-2xl font-bold text-primary">
-                      {formatCurrency(primeiroPagamento)}
-                    </p>
-                  </div>
-                </div>
-              </>
-            );
-          })()}
-        </CardContent>
-      </Card>
+          {/* VENDEDOR */}
+          <CotacaoVendedor vendedor={cotacao.vendedor} />
+        </div>
+      </div>
 
-      {/* CARD: VENDEDOR */}
-      {cotacao.vendedor && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <User className="h-4 w-4" />
-              Vendedor Responsável
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-3">
-              <Avatar>
-                <AvatarFallback>
-                  {cotacao.vendedor.nome?.charAt(0).toUpperCase() || 'V'}
-                </AvatarFallback>
-              </Avatar>
-              <div>
-                <p className="font-medium">{cotacao.vendedor.nome}</p>
-                <p className="text-sm text-muted-foreground">{cotacao.vendedor.email}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* MODAIS */}
+      <PlanoDetalhesModal
+        open={!!planoDetalhesModal}
+        onOpenChange={(open) => !open && setPlanoDetalhesModal(null)}
+        plano={planoDetalhesModal}
+        valorAdesao={cotacao.valor_adesao || 0}
+        categoriaVeiculo={categoriaVeiculo}
+        onSelecionar={(plano) => handleSelecionarPlano(plano as PlanoComparativo)}
+        isCoberturaRemovida={isCoberturaRemovida}
+      />
 
-      {/* Modal de Email */}
       {cotacao && (
         <EnviarEmailModal
           open={showEmailModal}
@@ -721,7 +409,6 @@ Ficou com alguma dúvida? Estou à disposição!
         />
       )}
 
-      {/* Modal Vincular Lead */}
       <VincularLeadModal
         open={showVincularModal}
         onOpenChange={setShowVincularModal}
@@ -732,7 +419,6 @@ Ficou com alguma dúvida? Estou à disposição!
         }}
       />
 
-      {/* Wizard de Contrato - fluxo de documentos convergente */}
       {cotacao.lead_id && (
         <ContratoWizard
           open={showContratoWizard}
