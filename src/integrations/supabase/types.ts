@@ -3851,13 +3851,6 @@ export type Database = {
             foreignKeyName: "contratos_vistoria_id_fkey"
             columns: ["vistoria_id"]
             isOneToOne: false
-            referencedRelation: "view_vistorias_mapa"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "contratos_vistoria_id_fkey"
-            columns: ["vistoria_id"]
-            isOneToOne: false
             referencedRelation: "vistorias"
             referencedColumns: ["id"]
           },
@@ -4325,13 +4318,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["user_id"]
-          },
-          {
-            foreignKeyName: "cotacoes_vistoria_id_fkey"
-            columns: ["vistoria_id"]
-            isOneToOne: false
-            referencedRelation: "view_vistorias_mapa"
-            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "cotacoes_vistoria_id_fkey"
@@ -12991,13 +12977,6 @@ export type Database = {
             foreignKeyName: "vistoria_fotos_vistoria_id_fkey"
             columns: ["vistoria_id"]
             isOneToOne: false
-            referencedRelation: "view_vistorias_mapa"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "vistoria_fotos_vistoria_id_fkey"
-            columns: ["vistoria_id"]
-            isOneToOne: false
             referencedRelation: "vistorias"
             referencedColumns: ["id"]
           },
@@ -14072,29 +14051,7 @@ export type Database = {
           vistoriador_id: string | null
           vistoriador_nome: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "vistorias_rota_id_fkey"
-            columns: ["rota_id"]
-            isOneToOne: false
-            referencedRelation: "rotas"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "vistorias_vistoriador_id_fkey"
-            columns: ["vistoriador_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "vistorias_vistoriador_id_fkey"
-            columns: ["vistoriador_id"]
-            isOneToOne: false
-            referencedRelation: "vw_metricas_vendedores"
-            referencedColumns: ["vendedor_id"]
-          },
-        ]
+        Relationships: []
       }
       vw_cpfs_duplicados: {
         Row: {
