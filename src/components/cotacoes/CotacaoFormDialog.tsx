@@ -765,6 +765,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase }: C
         veiculo_modelo: getModeloNome() || null,
         veiculo_ano: anoNumericoLocal,
         veiculo_placa: placa || veiculoEncontrado?.extractedPlate || null,
+        veiculo_cor: veiculoEncontrado?.vehicleData?.cor || null,
         codigo_fipe: veiculoEncontrado?.fipeData?.codigo || null,
         // Consultor responsável - liderança escolhe, demais auto-atribuição
         // IMPORTANTE: Nunca deixar vendedor_id como null para garantir visibilidade via RLS
