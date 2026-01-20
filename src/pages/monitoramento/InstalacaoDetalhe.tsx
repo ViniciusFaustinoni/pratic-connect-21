@@ -1,18 +1,21 @@
 import { useState, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useInstalacao, useInstalacaoActions } from '@/hooks/useInstalacoes';
+import { useFotosVistoriaUnificada, agruparFotosPorCategoria, formatarTipoFoto } from '@/hooks/useFotosAutovistoria';
+import { useDocumentosContrato } from '@/hooks/useDocumentosCotacao';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, User, Car, MapPin, Wrench, Phone, MessageSquare, Navigation, Calendar, Clock, Wifi, Play, CheckCircle, XCircle, RefreshCw, AlertCircle, ExternalLink, Loader2, UserPlus } from 'lucide-react';
+import { ArrowLeft, User, Car, MapPin, Wrench, Phone, MessageSquare, Navigation, Calendar, Clock, Wifi, Play, CheckCircle, XCircle, RefreshCw, AlertCircle, ExternalLink, Loader2, UserPlus, Camera, FileText, ChevronDown, ChevronRight, ClipboardCheck, Eye } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { STATUS_INSTALACAO_LABELS, STATUS_INSTALACAO_COLORS, PERIODO_LABELS } from '@/types/database';
 import type { PeriodoInstalacao } from '@/types/database';
@@ -25,6 +28,17 @@ const formatPhone = (p: string | null | undefined) => {
   return d.length === 11 ? `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}` : p;
 };
 
+// Mapeamento de tipos de documentos
+const TIPO_DOCUMENTO_LABELS: Record<string, string> = {
+  cnh: 'CNH',
+  crlv: 'CRLV',
+  comprovante_residencia: 'Comprovante de Residência',
+  contrato: 'Contrato',
+  rg: 'RG',
+  cpf: 'CPF',
+  outros: 'Outros',
+};
+
 export default function InstalacaoDetalhePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -33,6 +47,9 @@ export default function InstalacaoDetalhePage() {
   const [reagendarOpen, setReagendarOpen] = useState(false);
   const [concluirOpen, setConcluirOpen] = useState(false);
   const [atribuirDialogOpen, setAtribuirDialogOpen] = useState(false);
+  const [fotosOpen, setFotosOpen] = useState(false);
+  const [docsOpen, setDocsOpen] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   // Form reagendar
   const [novaData, setNovaData] = useState('');
@@ -49,6 +66,21 @@ export default function InstalacaoDetalhePage() {
     iniciarRota, iniciarInstalacao, concluirInstalacao, reagendarInstalacao, cancelarInstalacao,
     isIniciandoRota, isIniciando, isConcluindo, isReagendando, isCancelando
   } = useInstalacaoActions();
+
+  // Buscar fotos da autovistoria
+  const { data: fotosData, isLoading: isLoadingFotos } = useFotosVistoriaUnificada({
+    contratoId: instalacao?.contrato_id || undefined,
+    cotacaoId: instalacao?.cotacao_id || undefined,
+  });
+
+  // Buscar documentos
+  const { data: documentos, isLoading: isLoadingDocs } = useDocumentosContrato(instalacao?.contrato_id || undefined);
+
+  // Agrupar fotos por categoria
+  const fotosAgrupadas = useMemo(() => {
+    if (!fotosData?.fotos) return null;
+    return agruparFotosPorCategoria(fotosData.fotos);
+  }, [fotosData?.fotos]);
 
   // Calcular se está atrasada - DEVE vir ANTES de qualquer return condicional
   const isAtrasada = useMemo(() => {
@@ -140,7 +172,13 @@ export default function InstalacaoDetalhePage() {
     );
   }
 
-  const podeIniciarRota = instalacao.status === 'agendada' && instalacao.instalador_id;
+  // Lógica dos botões baseada no status da rota
+  const rotaInfo = (instalacao as any).rota;
+  const rotaJaIniciada = rotaInfo?.status === 'em_andamento';
+  
+  // Se rota já iniciada, mostra "Iniciar Vistoria" ao invés de "Iniciar Rota"
+  const podeIniciarRota = instalacao.status === 'agendada' && instalacao.instalador_id && !rotaJaIniciada;
+  const podeIniciarVistoria = instalacao.status === 'agendada' && instalacao.instalador_id && rotaJaIniciada;
   const podeIniciar = instalacao.status === 'em_rota';
   const podeConcluir = instalacao.status === 'em_andamento' && instalacao.rastreador_id;
   const podeReagendar = ['agendada', 'reagendada'].includes(instalacao.status);
@@ -148,6 +186,10 @@ export default function InstalacaoDetalhePage() {
 
   // Pegar instalador (prioriza profiles que já tem fallback no hook)
   const instaladorInfo = instalacao.profiles || instalacao.instalador_responsavel;
+
+  // Contar fotos e documentos
+  const totalFotos = fotosData?.fotos?.length || 0;
+  const totalDocs = documentos?.length || 0;
 
   return (
     <div className="p-6 space-y-6">
@@ -190,6 +232,12 @@ export default function InstalacaoDetalhePage() {
               Iniciar Rota
             </Button>
           )}
+          {podeIniciarVistoria && (
+            <Button onClick={handleIniciarInstalacao} disabled={isIniciando}>
+              {isIniciando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ClipboardCheck className="mr-2 h-4 w-4" />}
+              Iniciar Vistoria
+            </Button>
+          )}
           {podeIniciar && (
             <Button onClick={handleIniciarInstalacao} disabled={isIniciando}>
               {isIniciando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
@@ -197,7 +245,7 @@ export default function InstalacaoDetalhePage() {
             </Button>
           )}
           {podeConcluir && (
-            <Button className="bg-green-600 hover:bg-green-700" onClick={() => setConcluirOpen(true)}>
+            <Button variant="default" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => setConcluirOpen(true)}>
               <CheckCircle className="mr-2 h-4 w-4" /> Concluir
             </Button>
           )}
@@ -268,7 +316,11 @@ export default function InstalacaoDetalhePage() {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Cor</p>
-                <p className="font-medium">{instalacao.veiculos?.cor || '—'}</p>
+                <p className="font-medium">
+                  {instalacao.veiculos?.cor || (
+                    <span className="text-muted-foreground italic">Não informada</span>
+                  )}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -353,7 +405,7 @@ export default function InstalacaoDetalhePage() {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Modelo</p>
-                <p className="font-medium">{instalacao.rastreadores.modelo || '—'}</p>
+                <p className="font-medium">{(instalacao.rastreadores as any).modelo || '—'}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">IMEI</p>
@@ -373,6 +425,181 @@ export default function InstalacaoDetalhePage() {
         </CardContent>
       </Card>
 
+      {/* FOTOS DA AUTOVISTORIA */}
+      {totalFotos > 0 && (
+        <Collapsible open={fotosOpen} onOpenChange={setFotosOpen}>
+          <Card>
+            <CollapsibleTrigger asChild>
+              <CardHeader className="pb-3 cursor-pointer hover:bg-muted/50 transition-colors">
+                <CardTitle className="flex items-center justify-between text-base">
+                  <div className="flex items-center gap-2">
+                    <Camera className="h-4 w-4" />
+                    Fotos da Autovistoria ({totalFotos})
+                  </div>
+                  {fotosOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                </CardTitle>
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent className="space-y-6">
+                {isLoadingFotos ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : fotosAgrupadas && (
+                  <>
+                    {/* Identificação */}
+                    {fotosAgrupadas.identificacao.length > 0 && (
+                      <div>
+                        <h4 className="font-medium mb-3 text-sm text-muted-foreground">Identificação</h4>
+                        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
+                          {fotosAgrupadas.identificacao.map((foto) => (
+                            <div key={foto.id} className="relative group cursor-pointer" onClick={() => setPreviewUrl(foto.arquivo_url)}>
+                              <img 
+                                src={foto.arquivo_url} 
+                                alt={formatarTipoFoto(foto.tipo)}
+                                className="w-full aspect-square object-cover rounded-lg border hover:border-primary transition-colors"
+                              />
+                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
+                                <Eye className="h-5 w-5 text-white" />
+                              </div>
+                              <p className="text-xs text-center mt-1 text-muted-foreground truncate">{formatarTipoFoto(foto.tipo)}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Exterior */}
+                    {fotosAgrupadas.exterior.length > 0 && (
+                      <div>
+                        <h4 className="font-medium mb-3 text-sm text-muted-foreground">Exterior</h4>
+                        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
+                          {fotosAgrupadas.exterior.map((foto) => (
+                            <div key={foto.id} className="relative group cursor-pointer" onClick={() => setPreviewUrl(foto.arquivo_url)}>
+                              <img 
+                                src={foto.arquivo_url} 
+                                alt={formatarTipoFoto(foto.tipo)}
+                                className="w-full aspect-square object-cover rounded-lg border hover:border-primary transition-colors"
+                              />
+                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
+                                <Eye className="h-5 w-5 text-white" />
+                              </div>
+                              <p className="text-xs text-center mt-1 text-muted-foreground truncate">{formatarTipoFoto(foto.tipo)}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Interior */}
+                    {fotosAgrupadas.interior.length > 0 && (
+                      <div>
+                        <h4 className="font-medium mb-3 text-sm text-muted-foreground">Interior</h4>
+                        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
+                          {fotosAgrupadas.interior.map((foto) => (
+                            <div key={foto.id} className="relative group cursor-pointer" onClick={() => setPreviewUrl(foto.arquivo_url)}>
+                              <img 
+                                src={foto.arquivo_url} 
+                                alt={formatarTipoFoto(foto.tipo)}
+                                className="w-full aspect-square object-cover rounded-lg border hover:border-primary transition-colors"
+                              />
+                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
+                                <Eye className="h-5 w-5 text-white" />
+                              </div>
+                              <p className="text-xs text-center mt-1 text-muted-foreground truncate">{formatarTipoFoto(foto.tipo)}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Outros */}
+                    {fotosAgrupadas.outros.length > 0 && (
+                      <div>
+                        <h4 className="font-medium mb-3 text-sm text-muted-foreground">Outros</h4>
+                        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
+                          {fotosAgrupadas.outros.map((foto) => (
+                            <div key={foto.id} className="relative group cursor-pointer" onClick={() => setPreviewUrl(foto.arquivo_url)}>
+                              <img 
+                                src={foto.arquivo_url} 
+                                alt={formatarTipoFoto(foto.tipo)}
+                                className="w-full aspect-square object-cover rounded-lg border hover:border-primary transition-colors"
+                              />
+                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
+                                <Eye className="h-5 w-5 text-white" />
+                              </div>
+                              <p className="text-xs text-center mt-1 text-muted-foreground truncate">{formatarTipoFoto(foto.tipo)}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
+      )}
+
+      {/* DOCUMENTAÇÃO */}
+      {totalDocs > 0 && (
+        <Collapsible open={docsOpen} onOpenChange={setDocsOpen}>
+          <Card>
+            <CollapsibleTrigger asChild>
+              <CardHeader className="pb-3 cursor-pointer hover:bg-muted/50 transition-colors">
+                <CardTitle className="flex items-center justify-between text-base">
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Documentação ({totalDocs})
+                  </div>
+                  {docsOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                </CardTitle>
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent>
+                {isLoadingDocs ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {documentos?.map((doc) => (
+                      <div key={doc.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <FileText className="h-5 w-5 text-muted-foreground" />
+                          <div>
+                            <p className="font-medium text-sm">{TIPO_DOCUMENTO_LABELS[doc.tipo] || doc.tipo}</p>
+                            {doc.arquivo_nome && (
+                              <p className="text-xs text-muted-foreground">{doc.arquivo_nome}</p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <Badge variant={doc.status === 'aprovado' ? 'default' : 'secondary'} className="text-xs">
+                            {doc.status === 'aprovado' ? 'Aprovado' : doc.status === 'pendente' ? 'Pendente' : doc.status}
+                          </Badge>
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => window.open(doc.arquivo_url, '_blank')}
+                          >
+                            <Eye className="h-4 w-4 mr-1" />
+                            Ver
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
+      )}
+
       {/* OBSERVAÇÕES */}
       {instalacao.observacoes && (
         <Card>
@@ -384,6 +611,17 @@ export default function InstalacaoDetalhePage() {
           </CardContent>
         </Card>
       )}
+
+      {/* DIALOG PREVIEW IMAGEM */}
+      <Dialog open={!!previewUrl} onOpenChange={() => setPreviewUrl(null)}>
+        <DialogContent className="max-w-4xl p-0">
+          <img 
+            src={previewUrl || ''} 
+            alt="Preview" 
+            className="w-full h-auto max-h-[80vh] object-contain rounded-lg"
+          />
+        </DialogContent>
+      </Dialog>
 
       {/* DIALOG CONCLUIR */}
       <Dialog open={concluirOpen} onOpenChange={setConcluirOpen}>
@@ -410,7 +648,7 @@ export default function InstalacaoDetalhePage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConcluirOpen(false)}>Cancelar</Button>
-            <Button className="bg-green-600 hover:bg-green-700" onClick={handleConcluir} disabled={!horaInicio || !horaFim || isConcluindo}>
+            <Button variant="default" className="bg-emerald-600 hover:bg-emerald-700" onClick={handleConcluir} disabled={!horaInicio || !horaFim || isConcluindo}>
               {isConcluindo ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}Concluir
             </Button>
           </DialogFooter>
