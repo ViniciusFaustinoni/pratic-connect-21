@@ -17,7 +17,7 @@ export function useVendedorLeads(options: VendedorLeadsOptions) {
         .from('leads')
         .select(`
           *,
-          cotacoes:cotacoes(id, numero, status, valor_mensal),
+          cotacoes:cotacoes(id, numero, status, valor_total_mensal),
           contratos:contratos(id, numero, status)
         `)
         .eq('vendedor_id', options.vendedorId)
