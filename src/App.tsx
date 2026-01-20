@@ -241,6 +241,7 @@ import InstaladorChecklist from "./pages/instalador/InstaladorChecklist";
 import VistoriadorHome from "./pages/vistoriador/Home";
 import VistoriadorTarefas from "./pages/vistoriador/Tarefas";
 import ExecutarVistoria from "./pages/vistoriador/ExecutarVistoria";
+import ExecutarVistoriaCompleta from "./pages/vistoriador/ExecutarVistoriaCompleta";
 import { VistoriadorLayout } from "./layouts/VistoriadorLayout";
 
 // Public Pages
@@ -544,6 +545,7 @@ const App = () => (
               <Route path="/vistoriador/home" element={<VistoriadorHome />} />
               <Route path="/vistoriador/tarefas" element={<VistoriadorTarefas />} />
               <Route path="/vistoriador/vistoria/:id" element={<ExecutarVistoria />} />
+              <Route path="/vistoriador/vistoria-completa/:id" element={<ExecutarVistoriaCompleta />} />
               <Route path="/vistoriador/mapa" element={<div>Mapa</div>} />
               <Route path="/vistoriador/perfil" element={<div>Perfil</div>} />
             </Route>

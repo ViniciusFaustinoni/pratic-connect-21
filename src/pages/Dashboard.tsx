@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -27,6 +28,7 @@ import {
   Wrench,
   Plus,
   Shield,
+  Loader2,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -385,7 +387,21 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { profile } = useAuth();
-  const { isAnalistaCadastroOnly, isCoordenadorMonitoramentoOnly } = usePermissions();
+  const { isAnalistaCadastroOnly, isCoordenadorMonitoramentoOnly, isInstaladorVistoriador, isGerencia, isDiretor, isDesenvolvedor, isAdminMaster } = usePermissions();
+
+  // Verificar se é APENAS instalador/vistoriador (sem perfis de gerência ou admin)
+  const isInstaladorVistoriadorOnly = isInstaladorVistoriador && 
+    !isDiretor && 
+    !isGerencia && 
+    !isDesenvolvedor && 
+    !isAdminMaster;
+
+  // Se é instalador/vistoriador apenas, redirecionar para dashboard próprio
+  useEffect(() => {
+    if (isInstaladorVistoriadorOnly) {
+      navigate('/instalador', { replace: true });
+    }
+  }, [isInstaladorVistoriadorOnly, navigate]);
 
   // Se é analista de cadastro, mostrar dashboard específico
   if (isAnalistaCadastroOnly) {
@@ -395,6 +411,15 @@ export default function Dashboard() {
   // Se é coordenador de monitoramento, mostrar dashboard específico
   if (isCoordenadorMonitoramentoOnly) {
     return <DashboardCoordenador />;
+  }
+
+  // Se está redirecionando, mostrar loading
+  if (isInstaladorVistoriadorOnly) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
   }
 
   // Queries otimizadas para dashboard - principais KPIs
