@@ -17,13 +17,18 @@ import {
   XCircle,
   ShieldCheck,
   ShieldX,
-  Lock
+  Lock,
+  Video,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { cn } from '@/lib/utils';
 import { 
   useInstalacaoDetalhes, 
   useConcluirInstalacao, 
@@ -31,10 +36,16 @@ import {
   useAprovarVeiculo,
   useRecusarVeiculo
 } from '@/hooks/useInstaladorInstalacoes';
-import { useInstalacaoFotos, useUploadInstalacaoFoto, FOTOS_INSTALACAO } from '@/hooks/useInstalacaoFotos';
+import { useVistoriaCompleta } from '@/hooks/useVistorias';
+import { useUploadFotoVistoriaCompleta, useUploadVideo360 } from '@/hooks/useVistoriaCompleta';
+import { 
+  agruparFotosPorCategoriaCompleta, 
+  FOTOS_VISTORIA_COMPLETA, 
+  TOTAL_FOTOS_OBRIGATORIAS 
+} from '@/data/vistoriaConfigCompleta';
 import { useSaveAssinatura } from '@/hooks/useAssinatura';
 import { ChecklistItem, type ChecklistStatus } from '@/components/instalador/ChecklistItem';
-import { FotoCapture } from '@/components/instalador/FotoCapture';
+import { VistoriaFotoCard } from '@/components/vistorias/VistoriaFotoCard';
 import { SignaturePad } from '@/components/instalador/SignaturePad';
 import { ModalRecusaVeiculo } from '@/components/instalador/ModalRecusaVeiculo';
 import { toast } from 'sonner';
@@ -69,12 +80,15 @@ export default function InstaladorChecklist() {
   );
   const [quilometragem, setQuilometragem] = useState<string>('');
   const [uploadingFoto, setUploadingFoto] = useState<string | null>(null);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
   const [assinaturaUrl, setAssinaturaUrl] = useState<string | null>(null);
   const [showModalRecusa, setShowModalRecusa] = useState(false);
+  const [openCategorias, setOpenCategorias] = useState<string[]>([]);
 
   const { data: instalacao, isLoading, error } = useInstalacaoDetalhes(id);
-  const { data: fotos = [] } = useInstalacaoFotos(id);
-  const uploadFotoMutation = useUploadInstalacaoFoto();
+  const { data: vistoriaCompleta, isLoading: isLoadingVistoria } = useVistoriaCompleta(id ?? null);
+  const uploadFotoMutation = useUploadFotoVistoriaCompleta();
+  const uploadVideoMutation = useUploadVideo360();
   const saveAssinaturaMutation = useSaveAssinatura();
   const concluirMutation = useConcluirInstalacao();
   const salvarChecklistMutation = useSalvarChecklistInstalacao();
@@ -82,6 +96,14 @@ export default function InstaladorChecklist() {
   const recusarVeiculoMutation = useRecusarVeiculo();
 
   const progresso = (etapaAtual / ETAPAS.length) * 100;
+
+  // Fotos da vistoria
+  const fotosEnviadas = vistoriaCompleta?.fotos || [];
+  const videoUrl = (vistoriaCompleta as any)?.video_360_url as string | undefined;
+  const vistoriaId = vistoriaCompleta?.id;
+
+  // Agrupar fotos por categoria
+  const categoriasComFotos = useMemo(() => agruparFotosPorCategoriaCompleta(), []);
 
   // Carregar checklist e quilometragem salvos
   useEffect(() => {
@@ -99,15 +121,58 @@ export default function InstaladorChecklist() {
     }
   }, [instalacao]);
 
+  // Abrir primeira categoria incompleta ao carregar
+  useEffect(() => {
+    if (openCategorias.length === 0 && categoriasComFotos.length > 0) {
+      const primeiraIncompleta = categoriasComFotos.find(cat => {
+        const enviadas = cat.fotos.filter(f => 
+          fotosEnviadas.some(foto => foto.tipo === f.id)
+        ).length;
+        return enviadas < cat.fotos.length;
+      });
+      if (primeiraIncompleta) {
+        setOpenCategorias([primeiraIncompleta.id]);
+      }
+    }
+  }, [categoriasComFotos, fotosEnviadas, openCategorias.length]);
+
   const checklistCompleto = useMemo(() => 
     CHECKLIST_ITEMS.every(item => checklist[item.id]?.status === 'ok'),
     [checklist]
   );
 
+  // Verificar se todas as fotos obrigatórias foram enviadas (31 fotos)
   const fotosObrigatoriasCompletas = useMemo(() => {
-    const obrigatorias = FOTOS_INSTALACAO.filter(f => f.obrigatoria);
-    return obrigatorias.every(f => fotos.some(foto => foto.tipo === f.tipo));
-  }, [fotos]);
+    const obrigatorias = FOTOS_VISTORIA_COMPLETA.filter(f => f.categoria !== 'instalacao');
+    return obrigatorias.every(f => fotosEnviadas.some(foto => foto.tipo === f.id));
+  }, [fotosEnviadas]);
+
+  // Verificar se o vídeo 360 foi enviado
+  const video360Enviado = !!videoUrl;
+
+  // Contagem de fotos enviadas
+  const totalFotosEnviadas = useMemo(() => {
+    const obrigatorias = FOTOS_VISTORIA_COMPLETA.filter(f => f.categoria !== 'instalacao');
+    return obrigatorias.filter(f => fotosEnviadas.some(foto => foto.tipo === f.id)).length;
+  }, [fotosEnviadas]);
+
+  const toggleCategoria = (categoriaId: string) => {
+    setOpenCategorias(prev =>
+      prev.includes(categoriaId)
+        ? prev.filter(c => c !== categoriaId)
+        : [...prev, categoriaId]
+    );
+  };
+
+  const getFotoUrl = (fotoId: string): string | undefined => {
+    const foto = fotosEnviadas.find(f => f.tipo === fotoId);
+    return foto?.arquivo_url;
+  };
+
+  const getProgressoCategoria = (fotos: { id: string }[]) => {
+    const enviadas = fotos.filter(f => getFotoUrl(f.id)).length;
+    return { enviadas, total: fotos.length };
+  };
 
   const handleChecklistChange = (itemId: string, status: ChecklistStatus) => {
     setChecklist(prev => ({
@@ -123,16 +188,43 @@ export default function InstaladorChecklist() {
     }));
   };
 
-  const handleFotoCapture = async (tipo: string, file: File) => {
-    if (!id) return;
-    setUploadingFoto(tipo);
+  const handleFotoCapture = async (fotoId: string, file: File) => {
+    if (!vistoriaId) {
+      toast.error('Aguarde a vistoria carregar');
+      return;
+    }
+    
+    const fotoConfig = FOTOS_VISTORIA_COMPLETA.find(f => f.id === fotoId);
+    const visivelCliente = fotoConfig?.visivelCliente ?? true;
+    
+    setUploadingFoto(fotoId);
     try {
-      await uploadFotoMutation.mutateAsync({ instalacaoId: id, tipo, file });
-      toast.success('Foto enviada com sucesso!');
+      await uploadFotoMutation.mutateAsync({ 
+        vistoriaId, 
+        tipo: fotoId, 
+        file,
+        visivelCliente 
+      });
+      toast.success('Foto enviada!');
     } catch (err) {
       toast.error('Erro ao enviar foto');
     } finally {
       setUploadingFoto(null);
+    }
+  };
+
+  const handleVideoCapture = async (file: File) => {
+    if (!vistoriaId) {
+      toast.error('Aguarde a vistoria carregar');
+      return;
+    }
+    setUploadingVideo(true);
+    try {
+      await uploadVideoMutation.mutateAsync({ vistoriaId, file });
+    } catch (err) {
+      // Erro já tratado no hook
+    } finally {
+      setUploadingVideo(false);
     }
   };
 
@@ -183,7 +275,7 @@ export default function InstaladorChecklist() {
     switch (etapaAtual) {
       case 1: return true;
       case 2: return checklistCompleto;
-      case 3: return fotosObrigatoriasCompletas;
+      case 3: return fotosObrigatoriasCompletas && video360Enviado;
       case 4: return !!assinaturaUrl || !!instalacao?.assinatura_cliente_url;
       default: return true;
     }
@@ -443,28 +535,186 @@ export default function InstaladorChecklist() {
           </div>
         )}
 
-        {/* Etapa 3: Fotos */}
+        {/* Etapa 3: Fotos da Vistoria Completa (31 fotos + vídeo) */}
         {etapaAtual === 3 && (
           <div className="space-y-4">
-            <p className="text-sm text-slate-400">
-              Capture as fotos obrigatórias da instalação:
-            </p>
-            <div className="grid grid-cols-3 gap-3">
-              {FOTOS_INSTALACAO.map((fotoConfig) => {
-                const fotoExistente = fotos.find(f => f.tipo === fotoConfig.tipo);
-                return (
-                  <FotoCapture
-                    key={fotoConfig.tipo}
-                    tipo={fotoConfig.tipo}
-                    label={fotoConfig.label}
-                    obrigatoria={fotoConfig.obrigatoria}
-                    fotoUrl={fotoExistente?.arquivo_url}
-                    uploading={uploadingFoto === fotoConfig.tipo}
-                    onCapture={(file) => handleFotoCapture(fotoConfig.tipo, file)}
-                  />
-                );
-              })}
+            {/* Header com progresso geral */}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-400">
+                  Capture as fotos obrigatórias da vistoria:
+                </p>
+              </div>
+              <div className={cn(
+                "text-sm font-medium px-3 py-1 rounded-full",
+                totalFotosEnviadas === TOTAL_FOTOS_OBRIGATORIAS
+                  ? "bg-emerald-500/20 text-emerald-400"
+                  : "bg-blue-500/20 text-blue-400"
+              )}>
+                {totalFotosEnviadas}/{TOTAL_FOTOS_OBRIGATORIAS} fotos
+              </div>
             </div>
+
+            {/* Loading da vistoria */}
+            {isLoadingVistoria && (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
+                <span className="ml-2 text-slate-400">Carregando vistoria...</span>
+              </div>
+            )}
+
+            {/* Categorias de Fotos */}
+            {!isLoadingVistoria && vistoriaId && (
+              <div className="space-y-3">
+                {categoriasComFotos.map((categoria) => {
+                  const { enviadas, total } = getProgressoCategoria(categoria.fotos);
+                  const isComplete = enviadas === total;
+                  const isOpen = openCategorias.includes(categoria.id);
+
+                  return (
+                    <Collapsible
+                      key={categoria.id}
+                      open={isOpen}
+                      onOpenChange={() => toggleCategoria(categoria.id)}
+                    >
+                      <CollapsibleTrigger className="w-full">
+                        <div
+                          className={cn(
+                            "flex items-center justify-between p-3 rounded-lg border transition-all",
+                            isComplete
+                              ? "bg-emerald-950/30 border-emerald-800"
+                              : "bg-slate-800 border-slate-700 hover:border-slate-600"
+                          )}
+                        >
+                          <div className="flex items-center gap-2">
+                            {isOpen ? (
+                              <ChevronDown className="h-4 w-4 text-slate-400" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4 text-slate-400" />
+                            )}
+                            <span className="font-medium text-white text-sm">{categoria.nome}</span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            {isComplete && (
+                              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                            )}
+                            <span
+                              className={cn(
+                                "text-xs font-medium px-2 py-0.5 rounded-full",
+                                isComplete
+                                  ? "bg-emerald-900/50 text-emerald-300"
+                                  : "bg-slate-700 text-slate-400"
+                              )}
+                            >
+                              {enviadas}/{total}
+                            </span>
+                          </div>
+                        </div>
+                      </CollapsibleTrigger>
+
+                      <CollapsibleContent>
+                        <div className="grid grid-cols-2 gap-3 mt-3 px-1">
+                          {categoria.fotos.map((foto) => (
+                            <VistoriaFotoCard
+                              key={foto.id}
+                              foto={foto}
+                              fotoUrl={getFotoUrl(foto.id)}
+                              isUploading={uploadingFoto === foto.id}
+                              onUpload={(file) => handleFotoCapture(foto.id, file)}
+                            />
+                          ))}
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  );
+                })}
+
+                {/* Vídeo 360 Obrigatório */}
+                <Card className={cn(
+                  "border transition-all",
+                  video360Enviado
+                    ? "bg-emerald-950/30 border-emerald-800"
+                    : "bg-slate-800 border-slate-700"
+                )}>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="flex items-center justify-between text-sm">
+                      <div className="flex items-center gap-2 text-white">
+                        <Video className="h-4 w-4" />
+                        Vídeo 360° Obrigatório
+                      </div>
+                      {video360Enviado && (
+                        <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                      )}
+                    </CardTitle>
+                    <p className="text-xs text-slate-400">
+                      Inicie pelo chassi e faça uma volta completa ao redor do veículo
+                    </p>
+                  </CardHeader>
+                  <CardContent>
+                    {video360Enviado ? (
+                      <div className="space-y-3">
+                        <video 
+                          src={videoUrl} 
+                          controls 
+                          className="w-full rounded-lg max-h-48"
+                        />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full border-slate-600 text-slate-300"
+                          onClick={() => {
+                            const input = document.getElementById('video-input') as HTMLInputElement;
+                            input?.click();
+                          }}
+                          disabled={uploadingVideo}
+                        >
+                          {uploadingVideo ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <Video className="h-4 w-4 mr-2" />
+                          )}
+                          Substituir vídeo
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        className="w-full"
+                        onClick={() => {
+                          const input = document.getElementById('video-input') as HTMLInputElement;
+                          input?.click();
+                        }}
+                        disabled={uploadingVideo}
+                      >
+                        {uploadingVideo ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Enviando...
+                          </>
+                        ) : (
+                          <>
+                            <Video className="h-4 w-4 mr-2" />
+                            Gravar Vídeo 360°
+                          </>
+                        )}
+                      </Button>
+                    )}
+                    <input
+                      id="video-input"
+                      type="file"
+                      accept="video/*"
+                      capture="environment"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleVideoCapture(file);
+                        e.target.value = '';
+                      }}
+                    />
+                  </CardContent>
+                </Card>
+              </div>
+            )}
           </div>
         )}
 
@@ -545,7 +795,13 @@ export default function InstaladorChecklist() {
               )}
               <div className="flex justify-between rounded-lg bg-slate-800 p-3">
                 <span className="text-slate-400">Fotos capturadas</span>
-                <span className="text-white">{fotos.length}</span>
+                <span className="text-white">{totalFotosEnviadas}/{TOTAL_FOTOS_OBRIGATORIAS}</span>
+              </div>
+              <div className="flex justify-between rounded-lg bg-slate-800 p-3">
+                <span className="text-slate-400">Vídeo 360°</span>
+                <span className={video360Enviado ? "text-green-400" : "text-red-400"}>
+                  {video360Enviado ? 'Enviado ✓' : 'Pendente'}
+                </span>
               </div>
               <div className="flex justify-between rounded-lg bg-slate-800 p-3">
                 <span className="text-slate-400">Assinatura</span>
