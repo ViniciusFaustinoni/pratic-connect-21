@@ -12,6 +12,7 @@ import { EtapaAssinaturaContrato } from '@/components/cotacao-publica/EtapaAssin
 import { EtapaVistoria } from '@/components/cotacao-publica/EtapaVistoria';
 import { EtapaPagamentoCotacao } from '@/components/cotacao-publica/EtapaPagamentoCotacao';
 import { AgendamentoVistoriaCompleta } from '@/components/cotacao-publica/AgendamentoVistoriaCompleta';
+import { DocumentosPendentesPublico } from '@/components/cotacao-publica/DocumentosPendentesPublico';
 import type { DadosPessoaisForm } from '@/components/cotacao-publica/FormularioDadosPessoais';
 import { useState, useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
@@ -46,6 +47,11 @@ export default function CotacaoContratacao() {
     selecionarPlano,
     salvarDadosPessoais,
     isPending,
+    // Novos campos para documentos pendentes
+    associadoId,
+    docsPendentes,
+    refetch,
+    refetchDocs,
   } = useCotacaoContratacao(token);
 
   const [planoSelecionadoId, setPlanoSelecionadoId] = useState<string | null>(null);
@@ -381,7 +387,18 @@ export default function CotacaoContratacao() {
                   animate="animate"
                   exit="exit"
                 >
-                  {(cotacao?.tipo_vistoria === 'autovistoria' || 
+                  {/* VERIFICAR DOCUMENTOS PENDENTES PRIMEIRO */}
+                  {docsPendentes && docsPendentes.length > 0 && associadoId ? (
+                    <DocumentosPendentesPublico
+                      associadoId={associadoId}
+                      docsPendentes={docsPendentes}
+                      onTodosEnviados={() => {
+                        // Recarregar dados para atualizar estado
+                        refetch();
+                        refetchDocs();
+                      }}
+                    />
+                  ) : (cotacao?.tipo_vistoria === 'autovistoria' || 
                     (!cotacao?.vistoria_data_agendada && cotacao?.status_contratacao === 'pagamento_ok')) ? (
                     // AUTOVISTORIA ou caso sem agendamento - Verificar se já agendou vistoria completa/instalação
                     cotacao?.vistoria_completa_data_agendada ? (

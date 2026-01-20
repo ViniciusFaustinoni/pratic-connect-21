@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { toast } from 'sonner';
@@ -38,6 +38,25 @@ export interface CotacaoContratacao extends Omit<Cotacao, 'dados_extras'> {
   planos?: Tables<'planos'> | null;
   plano_escolhido?: Tables<'planos'> | null;
   dados_extras?: DadosExtrasCotacao | null;
+  contrato?: {
+    id: string;
+    associado_id: string;
+    associados?: {
+      id: string;
+      status: string;
+    } | null;
+  } | null;
+}
+
+// Interface para documentos pendentes
+export interface DocumentoPendentePublico {
+  id: string;
+  associado_id: string;
+  tipo_documento: string;
+  descricao: string | null;
+  status: string;
+  observacao_solicitacao: string | null;
+  created_at: string;
 }
 
 export function useCotacaoContratacao(token: string | undefined) {
@@ -46,7 +65,7 @@ export function useCotacaoContratacao(token: string | undefined) {
 
   // Buscar cotação pelo token público usando cliente ANÔNIMO
   // Isso garante que funcione mesmo se o usuário estiver logado no painel
-  const { data: cotacao, isLoading, error } = useQuery({
+  const { data: cotacao, isLoading, error, refetch } = useQuery({
     queryKey: ['cotacao-contratacao', token],
     queryFn: async (): Promise<CotacaoContratacao> => {
       if (!token) throw new Error('Token não informado');
@@ -56,7 +75,15 @@ export function useCotacaoContratacao(token: string | undefined) {
         .select(`
           *,
           planos:planos!plano_id(id, nome, codigo, coberturas, valor_adesao),
-          plano_escolhido:planos!plano_escolhido_id(id, nome, codigo, coberturas, valor_adesao)
+          plano_escolhido:planos!plano_escolhido_id(id, nome, codigo, coberturas, valor_adesao),
+          contrato:contratos!contratos_cotacao_id_fkey(
+            id,
+            associado_id,
+            associados:associados!fk_contratos_associado(
+              id,
+              status
+            )
+          )
         `)
         .eq('token_publico', token)
         .maybeSingle();
@@ -84,6 +111,40 @@ export function useCotacaoContratacao(token: string | undefined) {
     enabled: !!token,
     retry: 2,
     retryDelay: 500,
+  });
+
+  // Extrair associadoId do contrato vinculado
+  const associadoId = useMemo(() => {
+    return cotacao?.contrato?.associado_id || null;
+  }, [cotacao?.contrato?.associado_id]);
+
+  // Status do associado
+  const associadoStatus = useMemo(() => {
+    return cotacao?.contrato?.associados?.status || null;
+  }, [cotacao?.contrato?.associados?.status]);
+
+  // Buscar documentos pendentes para o associado
+  const { data: docsPendentes, isLoading: isLoadingDocs, refetch: refetchDocs } = useQuery({
+    queryKey: ['docs-pendentes-public', associadoId],
+    queryFn: async (): Promise<DocumentoPendentePublico[]> => {
+      if (!associadoId) return [];
+
+      const { data, error } = await publicSupabase
+        .from('documentos_solicitados')
+        .select('id, associado_id, tipo_documento, descricao, status, observacao_solicitacao, created_at')
+        .eq('associado_id', associadoId)
+        .eq('status', 'pendente')
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        console.error('[CotacaoContratacao] Erro ao buscar docs pendentes:', error);
+        return [];
+      }
+
+      return (data || []) as DocumentoPendentePublico[];
+    },
+    enabled: !!associadoId,
+    refetchInterval: 30000, // Revalidar a cada 30 segundos
   });
 
   // Extrair planos disponíveis para escolha
@@ -349,7 +410,7 @@ export function useCotacaoContratacao(token: string | undefined) {
 
   return {
     cotacao,
-    isLoading,
+    isLoading: isLoading || isLoadingDocs,
     error,
     planosDisponiveis,
     etapaAtual,
@@ -366,5 +427,11 @@ export function useCotacaoContratacao(token: string | undefined) {
       atualizarDocumentos.isPending ||
       selecionarVistoria.isPending ||
       confirmarPagamento.isPending,
+    // Novos campos para documentos pendentes
+    associadoId,
+    associadoStatus,
+    docsPendentes: docsPendentes || [],
+    refetch,
+    refetchDocs,
   };
 }
