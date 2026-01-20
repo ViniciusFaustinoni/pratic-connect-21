@@ -120,12 +120,14 @@ export function useInstalacoes(filtersOrParams?: InstalacaoFilters | UseInstalac
     queryFn: async () => {
       let query = supabase
         .from('instalacoes')
-        .select(`
-          *,
-          associados (id, nome, telefone, email),
-          veiculos (id, marca, modelo, placa, ano_modelo, cor),
-          rastreadores (id, codigo, numero_serie, imei)
-        `, { count: 'exact' })
+      .select(`
+        *,
+        associados (id, nome, telefone, email),
+        veiculos (id, marca, modelo, placa, ano_modelo, cor),
+        rastreadores (id, codigo, numero_serie, imei),
+        instalador:profiles!instalacoes_instalador_id_fkey (id, nome, telefone),
+        instalador_responsavel:profiles!instalacoes_instalador_responsavel_id_fkey (id, nome, telefone)
+      `, { count: 'exact' })
         .order('data_agendada', { ascending: true });
 
       // Filtro por status

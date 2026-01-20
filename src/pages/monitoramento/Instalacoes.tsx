@@ -248,9 +248,9 @@ export default function Instalacoes() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <span className="text-sm">
-                          {instalacao.profiles?.nome || '-'}
-                        </span>
+                        {(instalacao as any).instalador?.nome || (instalacao as any).instalador_responsavel?.nome || (
+                          <span className="text-muted-foreground">Não atribuído</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Badge className={STATUS_INSTALACAO_COLORS[instalacao.status]}>
