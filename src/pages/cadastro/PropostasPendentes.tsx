@@ -311,7 +311,7 @@ export default function PropostasPendentes() {
                         </div>
                       </TableCell>
                       <TableCell className="text-foreground">
-                        {proposta.plano?.nome || '---'}
+                        {proposta.plano?.nome || proposta.plano_nome || '---'}
                       </TableCell>
                       <TableCell className="text-foreground font-medium">
                         {formatCurrency(proposta.valor_mensal || proposta.plano?.valor_mensal)}
