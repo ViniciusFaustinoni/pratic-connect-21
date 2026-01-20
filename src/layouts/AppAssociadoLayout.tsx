@@ -1,13 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Outlet, useLocation, Link } from 'react-router-dom';
 import { Home, Receipt, MapPin, Phone, User } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 import { useNotificacoesRealtime } from '@/hooks/useNotificacoesRealtime';
 import { useNotificacoesPreferencias } from '@/hooks/useNotificacoesPreferencias';
+import { useAppAssociadoRealtime } from '@/hooks/useAppAssociadoRealtime';
 import { NotificacoesOnboarding } from '@/components/app/NotificacoesOnboarding';
-
 const NAV_ITEMS = [
   { icon: Home, label: 'Início', path: '/app' },
   { icon: Receipt, label: 'Boletos', path: '/app/boletos' },
@@ -21,8 +20,11 @@ export function AppAssociadoLayout({ children }: { children?: React.ReactNode })
   const { data: preferencias } = useNotificacoesPreferencias();
   const [showOnboarding, setShowOnboarding] = useState(false);
 
-  // Ativar realtime (sem som para associados por padrão)
+  // Ativar realtime para notificações (sem som para associados por padrão)
   useNotificacoesRealtime({ enableSound: false });
+  
+  // Ativar realtime para status do associado e boletos
+  useAppAssociadoRealtime();
 
   // Mostrar onboarding se não foi completado
   useEffect(() => {
