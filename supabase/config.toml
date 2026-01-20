@@ -143,3 +143,6 @@ verify_jwt = false
 
 [functions.delete-ativacao]
 verify_jwt = false
+
+[functions.agendar-vistoria-completa]
+verify_jwt = false
