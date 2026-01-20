@@ -13,6 +13,17 @@ export interface PlanoComparativo {
   coberturas?: string[];
   naoInclui?: string[];
   destaque?: boolean;
+  // Campos expandidos para PDF e exibição
+  coberturaFipe?: number;
+  cota?: string;
+  cotaPercentual?: number;
+  cotaMinima?: number;
+  cotaDesagio?: number;
+  cotaMinimaDesagio?: number;
+  adicionalMensal?: number;
+  anoMinimo?: number;
+  alertaDesagio?: string;
+  coberturasRemovidas?: string[];
 }
 
 interface PlanoCardComparativoProps {

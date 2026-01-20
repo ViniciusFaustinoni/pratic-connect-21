@@ -39,6 +39,10 @@ export interface PlanoCotacao {
   // Restrições por categoria de veículo
   coberturasRemovidas: string[];
   categoriaVeiculo?: string;
+  // Campos adicionais para PDF
+  cotaDesagio?: number;
+  cotaMinimaDesagio?: number;
+  anoMinimo?: number;
 }
 
 interface CalcularPlanosParams {
@@ -326,6 +330,10 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         valorAssistencia,
         coberturasRemovidas,
         categoriaVeiculo: categoria,
+        // Campos adicionais para PDF
+        cotaDesagio: Number(plano.cota_desagio) || undefined,
+        cotaMinimaDesagio: Number(plano.cota_minima_desagio) || undefined,
+        anoMinimo: anoMinimo || undefined,
       });
     }
 

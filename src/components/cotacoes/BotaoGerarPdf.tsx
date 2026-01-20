@@ -15,7 +15,19 @@ interface PlanoComparacaoExtras {
   nome: string;
   codigo?: string;
   valorMensal: number;
+  valorAdesao?: number;
   coberturas?: string[];
+  naoInclui?: string[];
+  coberturaFipe?: number;
+  cota?: string;
+  cotaPercentual?: number;
+  cotaMinima?: number;
+  cotaDesagio?: number;
+  cotaMinimaDesagio?: number;
+  adicionalMensal?: number;
+  anoMinimo?: number;
+  alertaDesagio?: string;
+  coberturasRemovidas?: string[];
 }
 
 interface DadosExtras {
@@ -55,11 +67,19 @@ export function BotaoGerarPdf({
         const planosParaPdf: PlanoParaPdf[] = planosComparacao.map(plano => ({
           nome: plano.nome,
           valorMensal: plano.valorMensal,
-          valorAdesao: valorAdesao,
+          valorAdesao: plano.valorAdesao ?? valorAdesao,
           coberturas: plano.coberturas || [],
-          naoInclui: [],
-          coberturaFipe: 100,
-          cota: '',
+          naoInclui: plano.naoInclui || [],
+          coberturaFipe: plano.coberturaFipe || 100,
+          cota: plano.cota || '',
+          cotaPercentual: plano.cotaPercentual,
+          cotaMinima: plano.cotaMinima,
+          cotaDesagio: plano.cotaDesagio,
+          cotaMinimaDesagio: plano.cotaMinimaDesagio,
+          adicionalMensal: plano.adicionalMensal,
+          anoMinimo: plano.anoMinimo,
+          alertaDesagio: plano.alertaDesagio,
+          coberturasRemovidas: plano.coberturasRemovidas,
         }));
 
         const cotacaoComparativa: CotacaoComparativaParaPdf = {
