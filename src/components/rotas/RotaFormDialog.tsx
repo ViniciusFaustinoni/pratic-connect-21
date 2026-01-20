@@ -42,9 +42,10 @@ interface RotaFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   rota?: Rota | null;
+  dataInicial?: Date | null;
 }
 
-export function RotaFormDialog({ open, onOpenChange, rota }: RotaFormDialogProps) {
+export function RotaFormDialog({ open, onOpenChange, rota, dataInicial }: RotaFormDialogProps) {
   const queryClient = useQueryClient();
   const { data: instaladores } = useInstaladores();
   const isEditing = !!rota;
@@ -69,7 +70,7 @@ export function RotaFormDialog({ open, onOpenChange, rota }: RotaFormDialogProps
         setSelectedInstaladores(rota.instalador_id ? [rota.instalador_id] : []);
         setSelectedBairros([]);
       } else {
-        setDataRota(new Date());
+        setDataRota(dataInicial || new Date());
         setSelectedInstaladores([]);
         setSelectedBairros([]);
         setCorSelecionada(ROTA_COLORS[Math.floor(Math.random() * ROTA_COLORS.length)]);
