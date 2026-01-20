@@ -531,12 +531,39 @@ export function useDeleteAssociado() {
 
   return useMutation({
     mutationFn: async (associadoId: string) => {
-      const { error } = await supabase
-        .from('associados')
-        .delete()
-        .eq('id', associadoId);
+      const attemptDelete = async () => {
+        const { error } = await supabase
+          .from('associados')
+          .delete()
+          .eq('id', associadoId);
+        return { error };
+      };
 
-      if (error) throw error;
+      const { error: deleteError } = await attemptDelete();
+
+      // Se houver dependências (FK), tentamos resolver casos conhecidos (ex.: leads) e repetir.
+      if (deleteError) {
+        const msg = deleteError.message || '';
+        const isFkViolation = (deleteError as any).code === '23503' || /foreign key/i.test(msg);
+
+        // Caso comum: leads.associado_id aponta para este associado.
+        if (isFkViolation && msg.includes('leads_associado_id_fkey')) {
+          const { error: desvincularError } = await supabase
+            .from('leads')
+            .update({ associado_id: null })
+            .eq('associado_id', associadoId);
+
+          if (desvincularError) throw desvincularError;
+
+          const { error: retryError } = await attemptDelete();
+          if (retryError) throw retryError;
+
+          return associadoId;
+        }
+
+        throw deleteError;
+      }
+
       return associadoId;
     },
     onSuccess: () => {
