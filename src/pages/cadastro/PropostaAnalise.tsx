@@ -423,39 +423,80 @@ export default function PropostaAnalise() {
             <CardHeader>
               <CardTitle className="text-foreground">Ações</CardTitle>
               <CardDescription>
-                Analise os dados e tome uma decisão
+                {proposta.status === 'assinado' && !proposta.tem_documento_pendente
+                  ? 'Analise os dados e tome uma decisão'
+                  : 'Ações indisponíveis no momento'}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <Button
-                className="w-full bg-success hover:bg-success/90 text-white"
-                size="lg"
-                onClick={handleAprovar}
-                disabled={aprovarMutation.isPending}
-              >
-                <CheckCircle className="mr-2 h-5 w-5" />
-                {aprovarMutation.isPending ? 'Aprovando...' : 'Aprovar Proposta'}
-              </Button>
+              {proposta.status === 'assinado' && !proposta.tem_documento_pendente ? (
+                <>
+                  <Button
+                    className="w-full bg-success hover:bg-success/90 text-white"
+                    size="lg"
+                    onClick={handleAprovar}
+                    disabled={aprovarMutation.isPending}
+                  >
+                    <CheckCircle className="mr-2 h-5 w-5" />
+                    {aprovarMutation.isPending ? 'Aprovando...' : 'Aprovar Proposta'}
+                  </Button>
 
-              <Button
-                variant="outline"
-                className="w-full border-warning text-warning hover:bg-warning/10"
-                size="lg"
-                onClick={() => setShowSolicitarDocs(true)}
-              >
-                <FileText className="mr-2 h-5 w-5" />
-                Solicitar Documentos
-              </Button>
+                  <Button
+                    variant="outline"
+                    className="w-full border-warning text-warning hover:bg-warning/10"
+                    size="lg"
+                    onClick={() => setShowSolicitarDocs(true)}
+                  >
+                    <FileText className="mr-2 h-5 w-5" />
+                    Solicitar Documentos
+                  </Button>
 
-              <Button
-                variant="outline"
-                className="w-full border-destructive text-destructive hover:bg-destructive/10"
-                size="lg"
-                onClick={() => setShowReprovar(true)}
-              >
-                <XCircle className="mr-2 h-5 w-5" />
-                Reprovar Proposta
-              </Button>
+                  <Button
+                    variant="outline"
+                    className="w-full border-destructive text-destructive hover:bg-destructive/10"
+                    size="lg"
+                    onClick={() => setShowReprovar(true)}
+                  >
+                    <XCircle className="mr-2 h-5 w-5" />
+                    Reprovar Proposta
+                  </Button>
+                </>
+              ) : (
+                <div className="text-center py-4 space-y-3">
+                  {proposta.tem_documento_pendente && (
+                    <div className="flex items-center justify-center gap-2 text-warning">
+                      <Clock className="h-5 w-5" />
+                      <span className="text-sm font-medium">
+                        Aguardando envio de documentos pelo cliente
+                      </span>
+                    </div>
+                  )}
+                  {proposta.status === 'ativo' && (
+                    <div className="flex items-center justify-center gap-2 text-success">
+                      <CheckCircle className="h-5 w-5" />
+                      <span className="text-sm font-medium">
+                        Esta proposta já foi aprovada
+                      </span>
+                    </div>
+                  )}
+                  {proposta.status === 'reprovado' && (
+                    <div className="flex items-center justify-center gap-2 text-destructive">
+                      <XCircle className="h-5 w-5" />
+                      <span className="text-sm font-medium">
+                        Esta proposta foi reprovada
+                      </span>
+                    </div>
+                  )}
+                  {proposta.status === 'em_analise' && !proposta.tem_documento_pendente && (
+                    <div className="flex items-center justify-center gap-2 text-info">
+                      <Clock className="h-5 w-5" />
+                      <span className="text-sm font-medium">
+                        Esta proposta está em análise
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <Separator className="my-4" />
 
