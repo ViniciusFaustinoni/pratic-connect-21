@@ -48,16 +48,17 @@ export function AtivacaoCardNew({
   isAtivando,
   isExcluindo
 }: AtivacaoCardNewProps) {
-  const propostaAssinada = !!contrato.data_assinatura;
+  const isAtivado = contrato.status === 'ativo';
+  const propostaAssinada = !!contrato.data_assinatura || isAtivado; // Se ativado, considera assinado
   const isAutovistoria = contrato.vistoria?.modalidade === 'autovistoria';
   
-  // Autovistoria: em_analise ou aprovada são válidos para ativação
-  // Presencial: apenas aprovada
-  const vistoriaOk = isAutovistoria 
-    ? ['em_analise', 'aprovada'].includes(contrato.vistoria?.status || '')
-    : contrato.vistoria?.status === 'aprovada';
-  
-  const isAtivado = contrato.status === 'ativo';
+  // Se contrato está ativo, vistoria foi aprovada (implicitamente)
+  // Caso contrário, verificar status da vistoria
+  const vistoriaOk = isAtivado 
+    ? true 
+    : isAutovistoria 
+      ? ['em_analise', 'aprovada'].includes(contrato.vistoria?.status || '')
+      : contrato.vistoria?.status === 'aprovada';
   
   const requisitos = (propostaAssinada ? 1 : 0) + (vistoriaOk ? 1 : 0);
   const progressValue = (requisitos / 2) * 100;
