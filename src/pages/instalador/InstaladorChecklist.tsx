@@ -20,7 +20,8 @@ import {
   Lock,
   Video,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  Bike
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -28,6 +29,7 @@ import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { 
   useInstalacaoDetalhes, 
@@ -40,8 +42,10 @@ import { useVistoriaCompleta } from '@/hooks/useVistorias';
 import { useUploadFotoVistoriaCompleta, useUploadVideo360 } from '@/hooks/useVistoriaCompleta';
 import { 
   agruparFotosPorCategoriaCompleta, 
-  FOTOS_VISTORIA_COMPLETA, 
-  TOTAL_FOTOS_OBRIGATORIAS 
+  getFotosByTipoVeiculo,
+  getTotalFotosObrigatorias,
+  detectarTipoVeiculo,
+  type TipoVeiculo
 } from '@/data/vistoriaConfigCompleta';
 import { useSaveAssinatura } from '@/hooks/useAssinatura';
 import { ChecklistItem, type ChecklistStatus } from '@/components/instalador/ChecklistItem';
@@ -102,8 +106,16 @@ export default function InstaladorChecklist() {
   const videoUrl = (vistoriaCompleta as any)?.video_360_url as string | undefined;
   const vistoriaId = vistoriaCompleta?.id;
 
-  // Agrupar fotos por categoria
-  const categoriasComFotos = useMemo(() => agruparFotosPorCategoriaCompleta(), []);
+  // Detectar tipo de veículo (moto ou automóvel)
+  const tipoVeiculo: TipoVeiculo = useMemo(() => {
+    const veiculoData = instalacao?.veiculos as { tipo_veiculo?: string } | undefined;
+    return detectarTipoVeiculo(veiculoData?.tipo_veiculo);
+  }, [instalacao?.veiculos]);
+
+  // Configuração dinâmica baseada no tipo de veículo
+  const fotosConfig = useMemo(() => getFotosByTipoVeiculo(tipoVeiculo), [tipoVeiculo]);
+  const totalObrigatorias = useMemo(() => getTotalFotosObrigatorias(tipoVeiculo), [tipoVeiculo]);
+  const categoriasComFotos = useMemo(() => agruparFotosPorCategoriaCompleta(tipoVeiculo), [tipoVeiculo]);
 
   // Carregar checklist e quilometragem salvos
   useEffect(() => {
@@ -141,20 +153,20 @@ export default function InstaladorChecklist() {
     [checklist]
   );
 
-  // Verificar se todas as fotos obrigatórias foram enviadas (31 fotos)
+  // Verificar se todas as fotos obrigatórias foram enviadas (dinâmico por tipo)
   const fotosObrigatoriasCompletas = useMemo(() => {
-    const obrigatorias = FOTOS_VISTORIA_COMPLETA.filter(f => f.categoria !== 'instalacao');
+    const obrigatorias = fotosConfig.filter(f => f.categoria !== 'instalacao');
     return obrigatorias.every(f => fotosEnviadas.some(foto => foto.tipo === f.id));
-  }, [fotosEnviadas]);
+  }, [fotosEnviadas, fotosConfig]);
 
   // Verificar se o vídeo 360 foi enviado
   const video360Enviado = !!videoUrl;
 
   // Contagem de fotos enviadas
   const totalFotosEnviadas = useMemo(() => {
-    const obrigatorias = FOTOS_VISTORIA_COMPLETA.filter(f => f.categoria !== 'instalacao');
+    const obrigatorias = fotosConfig.filter(f => f.categoria !== 'instalacao');
     return obrigatorias.filter(f => fotosEnviadas.some(foto => foto.tipo === f.id)).length;
-  }, [fotosEnviadas]);
+  }, [fotosEnviadas, fotosConfig]);
 
   const toggleCategoria = (categoriaId: string) => {
     setOpenCategorias(prev =>
@@ -194,7 +206,7 @@ export default function InstaladorChecklist() {
       return;
     }
     
-    const fotoConfig = FOTOS_VISTORIA_COMPLETA.find(f => f.id === fotoId);
+    const fotoConfig = fotosConfig.find(f => f.id === fotoId);
     const visivelCliente = fotoConfig?.visivelCliente ?? true;
     
     setUploadingFoto(fotoId);
@@ -444,7 +456,7 @@ export default function InstaladorChecklist() {
                   Veículo
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-1 text-sm">
+              <CardContent className="space-y-2 text-sm">
                 <p className="font-medium text-white">
                   {instalacao.veiculos?.marca} {instalacao.veiculos?.modelo}
                 </p>
@@ -453,6 +465,20 @@ export default function InstaladorChecklist() {
                 {instalacao.veiculos?.cor && (
                   <p className="text-slate-400">Cor: {instalacao.veiculos.cor}</p>
                 )}
+                {/* Badge indicando tipo de checklist */}
+                <div className="pt-2">
+                  {tipoVeiculo === 'moto' ? (
+                    <Badge variant="secondary" className="bg-orange-500/20 text-orange-400 border-orange-500/30">
+                      <Bike className="h-3 w-3 mr-1" />
+                      Checklist de Moto ({totalObrigatorias} fotos)
+                    </Badge>
+                  ) : (
+                    <Badge variant="secondary" className="bg-blue-500/20 text-blue-400 border-blue-500/30">
+                      <Car className="h-3 w-3 mr-1" />
+                      Checklist de Automóvel ({totalObrigatorias} fotos)
+                    </Badge>
+                  )}
+                </div>
               </CardContent>
             </Card>
 
@@ -547,11 +573,11 @@ export default function InstaladorChecklist() {
               </div>
               <div className={cn(
                 "text-sm font-medium px-3 py-1 rounded-full",
-                totalFotosEnviadas === TOTAL_FOTOS_OBRIGATORIAS
+                totalFotosEnviadas === totalObrigatorias
                   ? "bg-emerald-500/20 text-emerald-400"
                   : "bg-blue-500/20 text-blue-400"
               )}>
-                {totalFotosEnviadas}/{TOTAL_FOTOS_OBRIGATORIAS} fotos
+                {totalFotosEnviadas}/{totalObrigatorias} fotos
               </div>
             </div>
 
@@ -648,7 +674,9 @@ export default function InstaladorChecklist() {
                       )}
                     </CardTitle>
                     <p className="text-xs text-slate-400">
-                      Inicie pelo chassi e faça uma volta completa ao redor do veículo
+                      {tipoVeiculo === 'moto' 
+                        ? 'Inicie pelo chassi e dê a volta completa na moto (foco em tanque, manetes e escape)'
+                        : 'Inicie pelo chassi e faça uma volta completa ao redor do veículo'}
                     </p>
                   </CardHeader>
                   <CardContent>
@@ -795,7 +823,7 @@ export default function InstaladorChecklist() {
               )}
               <div className="flex justify-between rounded-lg bg-slate-800 p-3">
                 <span className="text-slate-400">Fotos capturadas</span>
-                <span className="text-white">{totalFotosEnviadas}/{TOTAL_FOTOS_OBRIGATORIAS}</span>
+                <span className="text-white">{totalFotosEnviadas}/{totalObrigatorias}</span>
               </div>
               <div className="flex justify-between rounded-lg bg-slate-800 p-3">
                 <span className="text-slate-400">Vídeo 360°</span>
