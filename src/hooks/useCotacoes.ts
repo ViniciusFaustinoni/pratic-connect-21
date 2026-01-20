@@ -29,7 +29,19 @@ export interface PlanoComparacao {
   nome: string;
   codigo?: string;
   valorMensal: number;
+  valorAdesao?: number;
   coberturas?: string[];
+  naoInclui?: string[];
+  coberturaFipe?: number;
+  cota?: string;
+  cotaPercentual?: number;
+  cotaMinima?: number;
+  cotaDesagio?: number;
+  cotaMinimaDesagio?: number;
+  adicionalMensal?: number;
+  anoMinimo?: number;
+  alertaDesagio?: string;
+  coberturasRemovidas?: string[];
 }
 
 export interface DadosExtrasCotacao {
