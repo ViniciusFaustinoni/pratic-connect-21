@@ -524,13 +524,15 @@ export function useVistoriasDisponiveis(data?: Date) {
 }
 
 // Hook para buscar vistoria completa com dados do veículo expandidos
-export function useVistoriaCompleta(id: string | null) {
+// Hook para buscar vistoria por instalacao_id (criando se não existir)
+export function useVistoriaCompleta(instalacaoId: string | null) {
   return useQuery({
-    queryKey: ['vistoria-completa', id],
+    queryKey: ['vistoria-completa', instalacaoId],
     queryFn: async () => {
-      if (!id) return null;
+      if (!instalacaoId) return null;
 
-      const { data, error } = await supabase
+      // Primeiro, buscar vistoria existente vinculada à instalação
+      let { data, error } = await supabase
         .from('vistorias')
         .select(`
           *,
@@ -543,8 +545,50 @@ export function useVistoriaCompleta(id: string | null) {
           vistoriador:profiles!vistorias_vistoriador_id_fkey(id, nome),
           fotos:vistoria_fotos(*)
         `)
-        .eq('id', id)
-        .single();
+        .eq('instalacao_id', instalacaoId)
+        .maybeSingle();
+
+      // Se não existir, criar nova vistoria vinculada à instalação
+      if (!data && !error) {
+        // Buscar dados da instalação
+        const { data: instalacao } = await supabase
+          .from('instalacoes')
+          .select('associado_id, veiculo_id, instalador_id, contrato_id, cotacao_id')
+          .eq('id', instalacaoId)
+          .single();
+
+        if (instalacao) {
+          const { data: novaVistoria, error: insertError } = await supabase
+            .from('vistorias')
+            .insert({
+              instalacao_id: instalacaoId,
+              associado_id: instalacao.associado_id,
+              veiculo_id: instalacao.veiculo_id,
+              vistoriador_id: instalacao.instalador_id,
+              contrato_id: instalacao.contrato_id,
+              cotacao_id: instalacao.cotacao_id,
+              tipo: 'entrada',
+              modalidade: 'presencial',
+              status: 'em_analise',
+              origem: 'instalacao',
+            })
+            .select(`
+              *,
+              veiculo:veiculos(
+                id, placa, chassi, marca, modelo, 
+                ano_fabricacao, ano_modelo, cor,
+                associado:associados(id, nome, cpf, telefone)
+              ),
+              associado:associados!vistorias_associado_id_fkey(id, nome, cpf, telefone),
+              vistoriador:profiles!vistorias_vistoriador_id_fkey(id, nome),
+              fotos:vistoria_fotos(*)
+            `)
+            .single();
+
+          if (insertError) throw insertError;
+          data = novaVistoria;
+        }
+      }
 
       if (error) throw error;
       return data as Vistoria & {
@@ -559,9 +603,10 @@ export function useVistoriaCompleta(id: string | null) {
           cor: string | null;
           associado: { id: string; nome: string; cpf: string; telefone: string } | null;
         } | null;
+        instalacao_id?: string;
       };
     },
-    enabled: !!id,
+    enabled: !!instalacaoId,
   });
 }
 
