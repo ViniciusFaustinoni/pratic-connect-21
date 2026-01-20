@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Plus, Search, Clock, RefreshCw, CheckCircle, XCircle, ClipboardList } from 'lucide-react';
+import { useFilasRealtime } from '@/hooks/useFilasRealtime';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -14,6 +15,9 @@ import { Loader2 } from 'lucide-react';
 type FilterStatus = VistoriaStatus | 'todos';
 
 export default function Vistorias() {
+  // Ativar realtime para atualizações automáticas
+  useFilasRealtime();
+
   const [filter, setFilter] = useState<FilterStatus>('todos');
   const [search, setSearch] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
