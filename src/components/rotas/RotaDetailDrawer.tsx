@@ -43,6 +43,7 @@ import { InstalacaoMiniCard } from './InstalacaoMiniCard';
 import { VistoriaMiniCard } from './VistoriaMiniCard';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { usePermissions } from '@/hooks/usePermissions';
 import { useQueryClient } from '@tanstack/react-query';
 
 interface RotaDetailDrawerProps {
@@ -66,6 +67,9 @@ export function RotaDetailDrawer({
   const deleteRota = useDeleteRota();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [updatingInstalacao, setUpdatingInstalacao] = useState<string | null>(null);
+  
+  // Verificar se é coordenador de monitoramento (não pode concluir rotas)
+  const { isCoordenadorMonitoramentoOnly } = usePermissions();
 
   // Ativar atualizações em tempo real para esta rota específica
   useRotaRealtime(open ? rotaId : null);
@@ -273,7 +277,7 @@ export function RotaDetailDrawer({
                       Iniciar Rota
                     </Button>
                   )}
-                  {rota.status === 'em_andamento' && (
+                  {rota.status === 'em_andamento' && !isCoordenadorMonitoramentoOnly && (
                     <Button 
                       onClick={() => handleUpdateStatus('concluida')}
                       disabled={updateStatus.isPending}
