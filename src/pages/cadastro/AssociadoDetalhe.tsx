@@ -56,7 +56,7 @@ import {
 } from '@/types/cadastro';
 import { useAssociado, useVeiculosDoAssociado, useAssociadoStats, useAssociadoActions } from '@/hooks/useAssociados';
 import { useDocumentosPorAssociado } from '@/hooks/useDocumentos';
-import { useContratoDoAssociado, useDocumentosCotacao } from '@/hooks/useDocumentosCotacao';
+import { useContratoDoAssociado, useDocumentosCotacao, useResumoFinanceiroAssociado } from '@/hooks/useDocumentosCotacao';
 import { useFotosAutovistoriaCotacao, agruparFotosPorCategoria, formatarTipoFoto } from '@/hooks/useFotosAutovistoria';
 import { cn } from '@/lib/utils';
 
@@ -147,9 +147,12 @@ export default function AssociadoDetalhe() {
   const { data: documentos, isLoading: isLoadingDocs } = useDocumentosPorAssociado(id);
   const { data: stats } = useAssociadoStats(id);
   
-  // Buscar contrato do associado para obter cotacao_id
+  // Buscar contrato do associado para obter cotacao_id e dados financeiros
   const { data: contrato } = useContratoDoAssociado(id);
   const cotacaoId = contrato?.cotacao_id;
+  
+  // Resumo financeiro real (meses em dia, próximo vencimento)
+  const { data: resumoFinanceiro } = useResumoFinanceiroAssociado(id);
   
   // Buscar documentos da cotação (contratos_documentos)
   const { data: documentosCotacao, isLoading: isLoadingDocsCotacao } = useDocumentosCotacao(cotacaoId);
@@ -405,9 +408,19 @@ export default function AssociadoDetalhe() {
             </Card>
             <Card>
               <CardContent className="p-4 text-center">
-                <CheckCircle className="h-8 w-8 mx-auto text-green-500" />
-                <p className="text-2xl font-bold mt-2">12 meses</p>
-                <p className="text-sm text-muted-foreground">Em Dia</p>
+                {resumoFinanceiro?.emAtraso && resumoFinanceiro.emAtraso > 0 ? (
+                  <>
+                    <AlertTriangle className="h-8 w-8 mx-auto text-orange-500" />
+                    <p className="text-2xl font-bold mt-2">{resumoFinanceiro.emAtraso}</p>
+                    <p className="text-sm text-muted-foreground">Em atraso</p>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="h-8 w-8 mx-auto text-green-500" />
+                    <p className="text-2xl font-bold mt-2">{resumoFinanceiro?.mesesPagos || 0} {resumoFinanceiro?.mesesPagos === 1 ? 'mês' : 'meses'}</p>
+                    <p className="text-sm text-muted-foreground">Em dia</p>
+                  </>
+                )}
               </CardContent>
             </Card>
             <Card>
@@ -427,9 +440,9 @@ export default function AssociadoDetalhe() {
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
                 <div className="flex justify-between"><span className="text-muted-foreground">Plano</span><span className="font-medium">{associado.planos?.nome || '—'}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Mensalidade</span><span className="font-medium">R$ 249,90</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Dia vencimento</span><span className="font-medium">Todo dia {associado.dia_vencimento || 15}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Forma pagamento</span><span className="font-medium">Boleto</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Mensalidade</span><span className="font-medium">{contrato?.valor_mensal ? formatCurrency(contrato.valor_mensal) : '—'}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Dia vencimento</span><span className="font-medium">Todo dia {contrato?.dia_vencimento || associado.dia_vencimento || 15}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Início contrato</span><span className="font-medium">{contrato?.data_inicio ? formatDate(contrato.data_inicio) : '—'}</span></div>
               </CardContent>
             </Card>
             <Card>
@@ -437,9 +450,19 @@ export default function AssociadoDetalhe() {
                 <CardTitle className="text-base">Próximos Vencimentos</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
-                <div className="flex justify-between"><span className="text-muted-foreground">Mensalidade</span><span className="font-medium">15/02/2026</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">CNH vence</span><span className="font-medium">10/05/2026</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">CRLV vence</span><span className="font-medium">Dez/2026</span></div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Mensalidade</span>
+                  <span className="font-medium">{resumoFinanceiro?.proximaCobranca?.data_vencimento ? formatDate(resumoFinanceiro.proximaCobranca.data_vencimento) : '—'}</span>
+                </div>
+                {/* CNH e CRLV viriam dos documentos - verificar validade */}
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">CNH vence</span>
+                  <span className="font-medium">—</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">CRLV vence</span>
+                  <span className="font-medium">—</span>
+                </div>
               </CardContent>
             </Card>
           </div>
