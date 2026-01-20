@@ -250,6 +250,27 @@ export function useCriarVistoriaAgendada() {
         // Não falhar a operação principal, apenas logar
       }
       
+      // Atualizar contrato com dados do agendamento (persistir para detectar após reload)
+      const { error: contratoUpdateError } = await supabase
+        .from('contratos')
+        .update({
+          vistoria_completa_data_agendada: dataAgendada,
+          vistoria_completa_horario_agendado: horarioAgendado,
+          vistoria_completa_endereco_cep: endereco?.cep || null,
+          vistoria_completa_endereco_logradouro: endereco?.logradouro || null,
+          vistoria_completa_endereco_numero: endereco?.numero || null,
+          vistoria_completa_endereco_bairro: endereco?.bairro || null,
+          vistoria_completa_endereco_cidade: endereco?.cidade || null,
+          vistoria_completa_endereco_estado: endereco?.uf || null,
+          vistoria_id: vistoria.id,
+        })
+        .eq('id', contratoId);
+      
+      if (contratoUpdateError) {
+        console.error('[useCriarVistoriaAgendada] Erro ao atualizar contrato:', contratoUpdateError);
+        // Não falhar a operação principal, apenas logar
+      }
+      
       // Registrar no histórico do contrato
       await supabase.from('contratos_historico').insert({
         contrato_id: contratoId,
