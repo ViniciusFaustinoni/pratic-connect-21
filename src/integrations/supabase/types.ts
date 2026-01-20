@@ -4073,6 +4073,7 @@ export type Database = {
           valor_total_mensal: number
           veiculo_ano: number | null
           veiculo_combustivel: string | null
+          veiculo_cor: string | null
           veiculo_marca: string | null
           veiculo_modelo: string | null
           veiculo_placa: string | null
@@ -4160,6 +4161,7 @@ export type Database = {
           valor_total_mensal: number
           veiculo_ano?: number | null
           veiculo_combustivel?: string | null
+          veiculo_cor?: string | null
           veiculo_marca?: string | null
           veiculo_modelo?: string | null
           veiculo_placa?: string | null
@@ -4247,6 +4249,7 @@ export type Database = {
           valor_total_mensal?: number
           veiculo_ano?: number | null
           veiculo_combustivel?: string | null
+          veiculo_cor?: string | null
           veiculo_marca?: string | null
           veiculo_modelo?: string | null
           veiculo_placa?: string | null
@@ -7744,6 +7747,7 @@ export type Database = {
           utm_source: string | null
           utm_term: string | null
           veiculo_ano: number | null
+          veiculo_cor: string | null
           veiculo_fipe: number | null
           veiculo_marca: string | null
           veiculo_modelo: string | null
@@ -7791,6 +7795,7 @@ export type Database = {
           utm_source?: string | null
           utm_term?: string | null
           veiculo_ano?: number | null
+          veiculo_cor?: string | null
           veiculo_fipe?: number | null
           veiculo_marca?: string | null
           veiculo_modelo?: string | null
@@ -7838,6 +7843,7 @@ export type Database = {
           utm_source?: string | null
           utm_term?: string | null
           veiculo_ano?: number | null
+          veiculo_cor?: string | null
           veiculo_fipe?: number | null
           veiculo_marca?: string | null
           veiculo_modelo?: string | null
