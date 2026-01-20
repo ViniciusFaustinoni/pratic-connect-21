@@ -547,57 +547,27 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
 
   y = startY + Math.max(coberturasCol1.length, coberturasCol2.length) * coberturaLineHeight + SECTION_GAP;
 
-  // ============= COMPOSIÇÃO DO VALOR =============
-  checkPageBreak(100);
-  drawPremiumSectionHeader(doc, margin, y, contentWidth, 'COMPOSIÇÃO DO VALOR');
-  y += HEADER_HEIGHT + INNER_GAP;
-
+  // ============= VALORES (SIMPLIFICADO - SEM COMPOSIÇÃO INTERNA) =============
+  checkPageBreak(80);
+  
   const labelCol = margin + 5;
   const valueCol = pageWidth - margin - 5;
-  const valorLineHeight = 8; // Reduzido de 9
 
-  const valores = [
-    { label: 'Cota Base (mensalidade)', valor: cotacao.valor_cota },
-    { label: 'Taxa Administrativa', valor: cotacao.taxa_administrativa },
-    { label: 'Rastreamento', valor: cotacao.valor_rastreamento },
-    { label: 'Assistência 24h', valor: cotacao.valor_assistencia },
-  ];
-
-  valores.forEach(({ label, valor }, index) => {
-    // Fundo alternado
-    if (index % 2 === 0) {
-      doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
-      doc.rect(margin, y - 2, contentWidth, valorLineHeight, 'F');
-    }
-    doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    doc.text(label, labelCol, y + 3);
-    doc.setTextColor(textLight.r, textLight.g, textLight.b);
-    doc.text(formatCurrency(valor), valueCol, y + 3, { align: 'right' });
-    y += valorLineHeight;
-  });
-
-  // Linha separadora com gradiente
-  y += 2;
-  drawGradientRect(doc, margin, y, contentWidth, 1, glowBlue, brandRed, 40);
-  y += 6;
-
-  // Total mensal (card destacado)
+  // Card: MENSALIDADE TOTAL (destaque azul)
   doc.setFillColor(brandBlue.r, brandBlue.g, brandBlue.b);
-  doc.roundedRect(margin, y - 2, contentWidth, 14, 3, 3, 'F');
+  doc.roundedRect(margin, y, contentWidth, 18, 3, 3, 'F');
   doc.setDrawColor(glowBlue.r, glowBlue.g, glowBlue.b);
   doc.setLineWidth(1);
-  doc.roundedRect(margin, y - 2, contentWidth, 14, 3, 3, 'S');
+  doc.roundedRect(margin, y, contentWidth, 18, 3, 3, 'S');
   
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
-  doc.text('MENSALIDADE TOTAL', labelCol, y + 6);
-  doc.setFontSize(13);
-  doc.text(formatCurrency(cotacao.valor_total_mensal), valueCol, y + 6, { align: 'right' });
+  doc.text('MENSALIDADE', labelCol, y + 11);
+  doc.setFontSize(14);
+  doc.text(formatCurrency(cotacao.valor_total_mensal) + '/mês', valueCol, y + 11, { align: 'right' });
 
-  y += 18;
+  y += 24;
 
   // Taxa de adesão
   doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
@@ -608,18 +578,18 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
   doc.setFont('helvetica', 'bold');
   doc.text(formatCurrency(cotacao.valor_adesao), valueCol, y, { align: 'right' });
 
-  y += 10;
+  y += 12;
 
   // Primeiro pagamento (destaque verde)
   const primeiroPagamento = (cotacao.valor_adesao || 0) + (cotacao.valor_total_mensal || 0);
   doc.setFillColor(successGreen.r, successGreen.g, successGreen.b);
-  doc.roundedRect(margin, y - 3, contentWidth, 16, 3, 3, 'F');
+  doc.roundedRect(margin, y, contentWidth, 18, 3, 3, 'F');
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
-  doc.text('PRIMEIRO PAGAMENTO', labelCol, y + 6);
+  doc.text('PRIMEIRO PAGAMENTO', labelCol, y + 11);
   doc.setFontSize(14);
-  doc.text(formatCurrency(primeiroPagamento), valueCol, y + 6, { align: 'right' });
+  doc.text(formatCurrency(primeiroPagamento), valueCol, y + 11, { align: 'right' });
 
   // ============= RODAPÉ PREMIUM =============
   const footerY = pageHeight - 30;
@@ -1126,42 +1096,41 @@ const desenharPaginaDetalhesPlano = (
     y = startNaoY + Math.max(naoIncluiCol1.length, naoIncluiCol2.length) * coberturaLineHeight + 10;
   }
 
-  // Seção: Composição do valor
-  drawPremiumSectionHeader(doc, margin, y, contentWidth, 'COMPOSIÇÃO DO VALOR');
-  y += HEADER_HEIGHT + 6;
-
-  const valorLineHeight = 11;
+  // ============= VALORES (SIMPLIFICADO - SEM COMPOSIÇÃO INTERNA) =============
   const labelCol = margin + 8;
   const valueCol = pageWidth - margin - 8;
 
-  // Linha: Taxa de adesão
-  doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
-  doc.rect(margin, y - 2, contentWidth, valorLineHeight, 'F');
+  // Card: MENSALIDADE (destaque azul)
+  doc.setFillColor(brandBlue.r, brandBlue.g, brandBlue.b);
+  doc.roundedRect(margin, y, contentWidth, 20, 3, 3, 'F');
+  doc.setDrawColor(glowBlue.r, glowBlue.g, glowBlue.b);
+  doc.setLineWidth(1);
+  doc.roundedRect(margin, y, contentWidth, 20, 3, 3, 'S');
+  
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.text('MENSALIDADE', labelCol, y + 13);
+  doc.setFontSize(16);
+  doc.text(formatCurrency(plano.valorMensal) + '/mês', valueCol, y + 13, { align: 'right' });
+  y += 26;
+
+  // Taxa de adesão
   doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
-  doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
-  doc.text('Taxa de Adesão (pagamento único)', labelCol, y + 5);
+  doc.setFontSize(10);
+  doc.text('Taxa de Adesão (pagamento único)', labelCol, y);
   doc.setTextColor(textLight.r, textLight.g, textLight.b);
-  doc.text(formatCurrency(plano.valorAdesao), valueCol, y + 5, { align: 'right' });
-  y += valorLineHeight;
+  doc.setFont('helvetica', 'bold');
+  doc.text(formatCurrency(plano.valorAdesao), valueCol, y, { align: 'right' });
+  y += 14;
 
-  // Linha: Mensalidade
-  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
-  doc.text('Mensalidade', labelCol, y + 5);
-  doc.setTextColor(textLight.r, textLight.g, textLight.b);
-  doc.text(formatCurrency(plano.valorMensal), valueCol, y + 5, { align: 'right' });
-  y += valorLineHeight + 4;
-
-  // Linha separadora
-  drawGradientRect(doc, margin, y, contentWidth, 1.5, glowBlue, brandRed, 40);
-  y += 8;
-
-  // Card: PRIMEIRO PAGAMENTO
+  // Card: PRIMEIRO PAGAMENTO (destaque verde)
   const primeiroPagamento = plano.valorAdesao + plano.valorMensal;
   doc.setFillColor(successGreen.r, successGreen.g, successGreen.b);
   doc.roundedRect(margin, y, contentWidth, 22, 3, 3, 'F');
   doc.setTextColor(255, 255, 255);
-  doc.setFontSize(12);
+  doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
   doc.text('PRIMEIRO PAGAMENTO', labelCol, y + 14);
   doc.setFontSize(18);
