@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
+import { registrarLog } from './useAuditLog';
 
 type Veiculo = Tables<'veiculos'>;
 type VeiculoInsert = TablesInsert<'veiculos'>;
@@ -86,6 +87,13 @@ export function useCreateVeiculo() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['veiculos'] });
       queryClient.invalidateQueries({ queryKey: ['associados', data.associado_id] });
+      registrarLog({
+        acao: 'criar',
+        modulo: 'veiculos',
+        descricao: `Veículo ${data.placa} cadastrado`,
+        entidade_id: data.id,
+        dados_novos: { placa: data.placa, marca: data.marca, modelo: data.modelo },
+      });
     },
   });
 }
@@ -108,6 +116,12 @@ export function useUpdateVeiculo() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['veiculos'] });
       queryClient.invalidateQueries({ queryKey: ['veiculos', 'detail', data.id] });
+      registrarLog({
+        acao: 'editar',
+        modulo: 'veiculos',
+        descricao: `Veículo ${data.placa} atualizado`,
+        entidade_id: data.id,
+      });
     },
   });
 }

@@ -1478,6 +1478,7 @@ export type Database = {
           id: string
           ip_address: unknown
           metadata: Json | null
+          modulo: string | null
           navegador: string | null
           pais: string | null
           profile_id: string | null
@@ -1493,6 +1494,7 @@ export type Database = {
           id?: string
           ip_address?: unknown
           metadata?: Json | null
+          modulo?: string | null
           navegador?: string | null
           pais?: string | null
           profile_id?: string | null
@@ -1508,6 +1510,7 @@ export type Database = {
           id?: string
           ip_address?: unknown
           metadata?: Json | null
+          modulo?: string | null
           navegador?: string | null
           pais?: string | null
           profile_id?: string | null

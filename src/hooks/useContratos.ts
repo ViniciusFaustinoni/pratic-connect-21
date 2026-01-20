@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 import type { StatusContrato } from '@/types/vendas';
+import { registrarLog } from './useAuditLog';
 
 type Contrato = Tables<'contratos'>;
 type ContratoInsert = TablesInsert<'contratos'>;
@@ -104,9 +105,15 @@ export function useContratoActions() {
 
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: ['contratos'] });
       toast.success('Proposta reenviada para assinatura!');
+      registrarLog({
+        acao: 'enviar',
+        modulo: 'contratos',
+        descricao: 'Contrato reenviado para assinatura',
+        entidade_id: id,
+      });
     },
     onError: () => {
       toast.error('Erro ao reenviar proposta');
@@ -125,9 +132,15 @@ export function useContratoActions() {
 
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: ['contratos'] });
       toast.success('Proposta cancelada');
+      registrarLog({
+        acao: 'cancelar',
+        modulo: 'contratos',
+        descricao: 'Contrato cancelado',
+        entidade_id: id,
+      });
     },
     onError: () => {
       toast.error('Erro ao cancelar proposta');
@@ -167,8 +180,14 @@ export function useCreateContrato() {
       if (error) throw error;
       return data as Contrato;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['contratos'] });
+      registrarLog({
+        acao: 'criar',
+        modulo: 'contratos',
+        descricao: `Contrato ${data.numero} criado`,
+        entidade_id: data.id,
+      });
     },
   });
 }
@@ -191,6 +210,12 @@ export function useUpdateContrato() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['contratos'] });
       queryClient.invalidateQueries({ queryKey: ['contratos', data.id] });
+      registrarLog({
+        acao: 'editar',
+        modulo: 'contratos',
+        descricao: `Contrato ${data.numero} atualizado`,
+        entidade_id: data.id,
+      });
     },
   });
 }
@@ -338,11 +363,18 @@ export function useAtivarContrato() {
         novoAssociadoId: novoAssociado.id,
       };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['contratos'] });
       queryClient.invalidateQueries({ queryKey: ['associados'] });
       queryClient.invalidateQueries({ queryKey: ['veiculos'] });
       queryClient.invalidateQueries({ queryKey: ['leads'] });
+      registrarLog({
+        acao: 'ativar',
+        modulo: 'contratos',
+        descricao: `Contrato ativado`,
+        entidade_id: data.id,
+        dados_novos: { status: 'ativo', associado_id: data.associado_id },
+      });
     },
   });
 }

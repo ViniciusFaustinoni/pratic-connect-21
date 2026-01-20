@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { registrarLog } from './useAuditLog';
 
 interface CobrancaFilters {
   status?: string;
@@ -75,9 +76,16 @@ export function useCobrancas(filters?: CobrancaFilters) {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast.success('Cobrança criada!');
       queryClient.invalidateQueries({ queryKey: ['cobrancas'] });
+      registrarLog({
+        acao: 'criar',
+        modulo: 'cobrancas',
+        descricao: `Cobrança de R$ ${data.valor} criada`,
+        entidade_id: data.id,
+        dados_novos: { valor: data.valor, tipo: data.tipo },
+      });
     },
     onError: (error) => {
       toast.error('Erro ao criar cobrança');
@@ -106,10 +114,17 @@ export function useCobrancas(filters?: CobrancaFilters) {
 
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       toast.success('Pagamento registrado!');
       queryClient.invalidateQueries({ queryKey: ['cobrancas'] });
       queryClient.invalidateQueries({ queryKey: ['cobranca'] });
+      registrarLog({
+        acao: 'baixar',
+        modulo: 'cobrancas',
+        descricao: `Pagamento de R$ ${variables.valorPago} registrado`,
+        entidade_id: variables.cobrancaId,
+        dados_novos: { valor_pago: variables.valorPago, forma_pagamento: variables.formaPagamento },
+      });
     },
     onError: (error) => {
       toast.error('Erro ao registrar pagamento');
@@ -132,9 +147,15 @@ export function useCobrancas(filters?: CobrancaFilters) {
 
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       toast.success('Cobrança cancelada');
       queryClient.invalidateQueries({ queryKey: ['cobrancas'] });
+      registrarLog({
+        acao: 'cancelar',
+        modulo: 'cobrancas',
+        descricao: `Cobrança cancelada: ${variables.motivo}`,
+        entidade_id: variables.cobrancaId,
+      });
     }
   });
 

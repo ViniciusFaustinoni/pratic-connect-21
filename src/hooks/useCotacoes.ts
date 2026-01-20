@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 import type { StatusCotacao } from '@/types/vendas';
+import { registrarLog } from './useAuditLog';
 
 type Cotacao = Tables<'cotacoes'>;
 type CotacaoInsert = TablesInsert<'cotacoes'>;
@@ -172,8 +173,15 @@ export function useCreateCotacao() {
       if (error) throw error;
       return data as Cotacao;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
+      registrarLog({
+        acao: 'criar',
+        modulo: 'cotacoes',
+        descricao: `Cotação ${data.numero} criada`,
+        entidade_id: data.id,
+        dados_novos: { numero: data.numero, status: data.status },
+      });
     },
   });
 }
@@ -196,6 +204,12 @@ export function useUpdateCotacao() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
       queryClient.invalidateQueries({ queryKey: ['cotacoes', data.id] });
+      registrarLog({
+        acao: 'editar',
+        modulo: 'cotacoes',
+        descricao: `Cotação ${data.numero} atualizada`,
+        entidade_id: data.id,
+      });
     },
   });
 }
@@ -220,6 +234,12 @@ export function useReenviarCotacao() {
       queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
       queryClient.invalidateQueries({ queryKey: ['cotacoes', data.id] });
       toast.success('Cotação reenviada com sucesso!');
+      registrarLog({
+        acao: 'enviar',
+        modulo: 'cotacoes',
+        descricao: `Cotação ${data.numero} reenviada`,
+        entidade_id: data.id,
+      });
     },
     onError: () => {
       toast.error('Erro ao reenviar cotação');
@@ -247,6 +267,13 @@ export function useAtualizarStatusCotacao() {
       queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
       queryClient.invalidateQueries({ queryKey: ['cotacoes', data.id] });
       toast.success('Status atualizado!');
+      registrarLog({
+        acao: 'editar',
+        modulo: 'cotacoes',
+        descricao: `Status da cotação ${data.numero} alterado para ${data.status}`,
+        entidade_id: data.id,
+        dados_novos: { status: data.status },
+      });
     },
     onError: () => {
       toast.error('Erro ao atualizar status');
@@ -282,6 +309,11 @@ export function useAceitarCotacaoEGerarContrato() {
       queryClient.invalidateQueries({ queryKey: ['contratos'] });
       queryClient.invalidateQueries({ queryKey: ['ativacoes'] });
       toast.success('Cotação aceita e contrato gerado com sucesso!');
+      registrarLog({
+        acao: 'aprovar',
+        modulo: 'cotacoes',
+        descricao: 'Cotação aceita e contrato gerado',
+      });
     },
     onError: (error: Error) => {
       console.error('Erro ao aceitar cotação:', error);
@@ -336,9 +368,15 @@ export function useDuplicarCotacao() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
       toast.success('Cotação duplicada com sucesso!');
+      registrarLog({
+        acao: 'duplicar',
+        modulo: 'cotacoes',
+        descricao: `Cotação duplicada: ${data.numero}`,
+        entidade_id: data.id,
+      });
     },
     onError: () => {
       toast.error('Erro ao duplicar cotação');

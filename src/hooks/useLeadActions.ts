@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
+import { registrarLog } from './useAuditLog';
 
 type LeadInsert = TablesInsert<'leads'>;
 type LeadUpdate = TablesUpdate<'leads'>;
@@ -37,9 +38,16 @@ export function useLeadActions() {
       if (error) throw error;
       return lead;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       invalidateLeadQueries();
       toast.success('Lead criado com sucesso!');
+      registrarLog({
+        acao: 'criar',
+        modulo: 'leads',
+        descricao: `Lead "${data.nome}" criado`,
+        entidade_id: data.id,
+        dados_novos: { nome: data.nome, telefone: data.telefone, email: data.email },
+      });
     },
     onError: (error: Error) => {
       console.error('Erro ao criar lead:', error);
@@ -62,9 +70,15 @@ export function useLeadActions() {
       if (error) throw error;
       return lead;
     },
-    onSuccess: (_, variables) => {
+    onSuccess: (data, variables) => {
       invalidateLeadQueries(variables.id);
       toast.success('Lead atualizado com sucesso!');
+      registrarLog({
+        acao: 'editar',
+        modulo: 'leads',
+        descricao: `Lead "${data.nome}" atualizado`,
+        entidade_id: data.id,
+      });
     },
     onError: (error: Error) => {
       console.error('Erro ao atualizar lead:', error);
@@ -93,6 +107,13 @@ export function useLeadActions() {
     onSuccess: (_, variables) => {
       invalidateLeadQueries(variables.leadId);
       toast.success('Vendedor atribuído com sucesso!');
+      registrarLog({
+        acao: 'atribuir',
+        modulo: 'leads',
+        descricao: `Vendedor atribuído ao lead`,
+        entidade_id: variables.leadId,
+        dados_novos: { vendedor_id: variables.vendedorId },
+      });
     },
     onError: (error: Error) => {
       toast.error('Erro ao atribuir vendedor: ' + error.message);
@@ -111,9 +132,15 @@ export function useLeadActions() {
 
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_, id) => {
       invalidateLeadQueries();
       toast.success('Lead excluído com sucesso!');
+      registrarLog({
+        acao: 'excluir',
+        modulo: 'leads',
+        descricao: 'Lead excluído',
+        entidade_id: id,
+      });
     },
     onError: (error: Error) => {
       console.error('Erro ao excluir lead:', error);
