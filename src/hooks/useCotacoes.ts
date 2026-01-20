@@ -49,6 +49,7 @@ export interface CotacaoWithRelations extends Omit<Cotacao, 'dados_extras'> {
     id: string;
     numero: string;
     status: string;
+    adesao_paga?: boolean;
     associados?: { id: string; status: string } | null;
   } | null;
   instalacoes?: { id: string; status: string; data_agendada: string | null }[];
@@ -74,6 +75,7 @@ export function useCotacoes(options?: UseCotacoesOptions) {
             id, 
             numero, 
             status,
+            adesao_paga,
             associados:associados!fk_contratos_associado(id, status)
           ),
           instalacoes:instalacoes!instalacoes_cotacao_id_fkey(id, status, data_agendada),
