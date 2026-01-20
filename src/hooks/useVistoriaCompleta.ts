@@ -99,7 +99,7 @@ export function useAprovarVeiculoVistoria() {
       // 6. Propagar conclusão para cotações/contratos
       const { data: vistoriaData } = await supabase
         .from('vistorias')
-        .select('cotacao_id, contrato_id')
+        .select('cotacao_id, contrato_id, veiculos:veiculo_id(placa)')
         .eq('id', data.vistoriaId)
         .single();
 
@@ -121,6 +121,22 @@ export function useAprovarVeiculoVistoria() {
             vistoria_concluida_em: agora,
           })
           .eq('id', vistoriaData.contrato_id);
+      }
+
+      // 7. Gerar laudo de vistoria em PDF (async, não bloqueia aprovação)
+      const veiculoData = vistoriaData?.veiculos as any;
+      if (vistoriaData?.contrato_id && veiculoData?.placa) {
+        // Importar dinamicamente para evitar dependência circular
+        import('./useGerarLaudoVistoria').then(({ useGerarLaudoVistoria }) => {
+          // Chamar edge function para gerar PDF em background
+          supabase.functions.invoke('gerar-laudo-vistoria', {
+            body: {
+              vistoriaId: data.vistoriaId,
+              contratoId: vistoriaData.contrato_id,
+              placa: veiculoData.placa,
+            }
+          }).catch(err => console.warn('Erro ao gerar laudo (não crítico):', err));
+        }).catch(err => console.warn('Erro ao importar hook:', err));
       }
     },
     onSuccess: () => {
