@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { cn } from '@/lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -37,7 +38,7 @@ import { GlossarioTermos, RegrasImportantes, TabelaCotasTaxas } from '@/componen
 import { ContatosInline } from '@/components/planos/ContatosRapidos';
 import { BuscaPlanos } from '@/components/planos/BuscaPlanos';
 import { ComparadorNiveisSelect, ComparadorNiveisMotos } from '@/components/planos/ComparadorNiveis';
-import { RankingPlanos } from '@/components/planos/RankingPlanos';
+import { RankingVendedores } from '@/components/planos/RankingVendedores';
 import { RegioesConfig } from '@/components/planos/RegioesConfig';
 import { PlanosConfig } from '@/components/planos/PlanosConfig';
 import { BeneficiosAdicionaisConfig } from '@/components/planos/BeneficiosAdicionaisConfig';
@@ -79,8 +80,9 @@ function PlanosSkeleton() {
 export default function PlanosBeneficios() {
   const [activeTab, setActiveTab] = useState('visao-geral');
   const [searchTerm, setSearchTerm] = useState('');
-  const { isDiretor, isDesenvolvedor } = usePermissions();
+  const { isDiretor, isDesenvolvedor, isGerente, isSupervisor, isAdminMaster } = usePermissions();
   const podeEditar = isDiretor || isDesenvolvedor;
+  const podeVerConfigAvancada = isDiretor || isGerente || isSupervisor || isDesenvolvedor || isAdminMaster;
 
   // Estados para edição de planos
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -225,16 +227,23 @@ export default function PlanosBeneficios() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4 lg:grid-cols-7 lg:w-auto">
+        <TabsList className={cn(
+          "grid w-full lg:w-auto",
+          podeVerConfigAvancada ? "grid-cols-4 lg:grid-cols-7" : "grid-cols-5"
+        )}>
           <TabsTrigger value="visao-geral">Visão Geral</TabsTrigger>
           <TabsTrigger value="carros">Carros</TabsTrigger>
           <TabsTrigger value="motos">Motos</TabsTrigger>
-          <TabsTrigger value="adicionais">Adicionais</TabsTrigger>
+          {podeVerConfigAvancada && (
+            <TabsTrigger value="adicionais">Adicionais</TabsTrigger>
+          )}
           <TabsTrigger value="ranking">Ranking</TabsTrigger>
-          <TabsTrigger value="regioes" className="flex items-center gap-1">
-            <MapPin className="h-3.5 w-3.5" />
-            Regiões
-          </TabsTrigger>
+          {podeVerConfigAvancada && (
+            <TabsTrigger value="regioes" className="flex items-center gap-1">
+              <MapPin className="h-3.5 w-3.5" />
+              Regiões
+            </TabsTrigger>
+          )}
           <TabsTrigger value="glossario">Glossário</TabsTrigger>
         </TabsList>
 
@@ -344,7 +353,8 @@ export default function PlanosBeneficios() {
         </TabsContent>
 
 
-        {/* Tab Adicionais */}
+        {/* Tab Adicionais - Apenas para gestores */}
+        {podeVerConfigAvancada && (
         <TabsContent value="adicionais" className="space-y-4">
           {/* Resumo de Saúde Financeira */}
           {podeEditar && (
@@ -438,16 +448,19 @@ export default function PlanosBeneficios() {
             </CardContent>
           </Card>
         </TabsContent>
+        )}
 
         {/* Tab Ranking */}
         <TabsContent value="ranking" className="space-y-8">
-          <RankingPlanos />
+          <RankingVendedores />
         </TabsContent>
 
-        {/* Tab Regiões */}
+        {/* Tab Regiões - Apenas para gestores */}
+        {podeVerConfigAvancada && (
         <TabsContent value="regioes" className="space-y-8">
           <RegioesConfig />
         </TabsContent>
+        )}
 
         {/* Tab Glossário */}
         <TabsContent value="glossario" className="space-y-8">
