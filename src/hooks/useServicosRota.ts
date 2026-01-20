@@ -8,9 +8,9 @@ import type { ServicoRota, BairroServico, FiltroTipoServico, TipoVistoria } from
  * Hook para buscar bairros com serviços pendentes (instalações + vistorias)
  * Agrupa por bairro/cidade e conta quantos serviços existem de cada tipo
  */
-export function useBairrosServicos(data?: Date) {
+export function useBairrosServicos(data?: Date, filtroTipos?: FiltroTipoServico) {
   return useQuery({
-    queryKey: ['bairros-servicos', data ? format(data, 'yyyy-MM-dd') : 'todas'],
+    queryKey: ['bairros-servicos', data ? format(data, 'yyyy-MM-dd') : 'todas', filtroTipos],
     queryFn: async () => {
       const dataFormatada = data ? format(data, 'yyyy-MM-dd') : null;
       
@@ -27,10 +27,26 @@ export function useBairrosServicos(data?: Date) {
       const { data: servicos, error } = await query;
       if (error) throw error;
 
+      // Filtrar por tipo de serviço se filtro fornecido
+      let servicosFiltrados = (servicos as ServicoRota[]) || [];
+      if (filtroTipos) {
+        servicosFiltrados = servicosFiltrados.filter((srv) => {
+          if (srv.tipo_servico === 'instalacao') {
+            return filtroTipos.instalacao;
+          }
+          // Para vistorias, filtrar pelo tipo_vistoria
+          const tipoVistoria = srv.tipo_vistoria as TipoVistoria;
+          if (tipoVistoria && tipoVistoria in filtroTipos) {
+            return filtroTipos[tipoVistoria as keyof FiltroTipoServico];
+          }
+          return true;
+        });
+      }
+
       // Agrupar por bairro e cidade
       const agrupado = new Map<string, BairroServico>();
 
-      (servicos as ServicoRota[])?.forEach((srv) => {
+      servicosFiltrados.forEach((srv) => {
         const bairro = srv.endereco_bairro || 'Sem bairro';
         const cidade = srv.endereco_cidade || 'Sem cidade';
         const key = `${cidade}-${bairro}`;

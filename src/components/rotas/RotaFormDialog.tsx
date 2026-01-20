@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { CalendarIcon, Check } from 'lucide-react';
+import { CalendarIcon, Check, Wrench, ClipboardCheck } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -18,14 +18,16 @@ import {
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { useInstaladores, type Rota } from '@/hooks/useRotas';
-import { useBairrosDisponiveis, useInstalacoesPorBairros } from '@/hooks/useBairrosDisponiveis';
+import { useBairrosServicos, useServicosPorBairros } from '@/hooks/useServicosRota';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { InstaladorMultiSelect } from './InstaladorMultiSelect';
 import { BairroSelector } from './BairroSelector';
-import { DistribuicaoPreview, distribuirInstalacoes, type DistribuicaoItem } from './DistribuicaoPreview';
-
+import { DistribuicaoServicosPreview } from './DistribuicaoServicosPreview';
+import { distribuirServicos } from '@/hooks/useServicosRota';
+import { TipoServicoFilter } from './TipoServicoFilter';
+import { FiltroTipoServico, FILTRO_TIPO_SERVICO_DEFAULT, DistribuicaoServico } from '@/types/servicos-rota';
 // Cores predefinidas para rotas
 const ROTA_COLORS = [
   '#3B82F6', // Azul
@@ -56,11 +58,12 @@ export function RotaFormDialog({ open, onOpenChange, rota, dataInicial }: RotaFo
   const [selectedBairros, setSelectedBairros] = useState<string[]>([]);
   const [corSelecionada, setCorSelecionada] = useState(ROTA_COLORS[0]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [distribuicao, setDistribuicao] = useState<DistribuicaoItem[]>([]);
+  const [distribuicao, setDistribuicao] = useState<DistribuicaoServico[]>([]);
+  const [filtroTipos, setFiltroTipos] = useState<FiltroTipoServico>(FILTRO_TIPO_SERVICO_DEFAULT);
 
-  // Data hooks
-  const { data: bairrosDisponiveis, isLoading: loadingBairros } = useBairrosDisponiveis(dataRota);
-  const { data: instalacoesSelecionadas } = useInstalacoesPorBairros(selectedBairros, dataRota);
+  // Data hooks - usando hooks unificados que buscam instalações + vistorias
+  const { data: bairrosDisponiveis, isLoading: loadingBairros } = useBairrosServicos(dataRota, filtroTipos);
+  const { data: servicosSelecionados } = useServicosPorBairros(selectedBairros, dataRota, filtroTipos);
 
   // Reset form when dialog opens
   useEffect(() => {
@@ -79,29 +82,29 @@ export function RotaFormDialog({ open, onOpenChange, rota, dataInicial }: RotaFo
     }
   }, [open, rota]);
 
-  // Calculate distribution when instaladores or instalacoes change
+  // Calculate distribution when instaladores or servicos change
   useEffect(() => {
-    if (selectedInstaladores.length && instalacoesSelecionadas?.length && instaladores) {
+    if (selectedInstaladores.length && servicosSelecionados?.length && instaladores) {
       const instaladoresInfo = instaladores
         .filter((i) => selectedInstaladores.includes(i.id))
         .map((i) => ({ id: i.id, nome: i.nome }));
       
-      const dist = distribuirInstalacoes(instalacoesSelecionadas, instaladoresInfo);
+      const dist = distribuirServicos(servicosSelecionados, instaladoresInfo);
       setDistribuicao(dist);
     } else {
       setDistribuicao([]);
     }
-  }, [selectedInstaladores, instalacoesSelecionadas, instaladores]);
+  }, [selectedInstaladores, servicosSelecionados, instaladores]);
 
   const handleRedistribuir = () => {
-    if (selectedInstaladores.length && instalacoesSelecionadas?.length && instaladores) {
+    if (selectedInstaladores.length && servicosSelecionados?.length && instaladores) {
       const instaladoresInfo = instaladores
         .filter((i) => selectedInstaladores.includes(i.id))
         .map((i) => ({ id: i.id, nome: i.nome }));
       
-      // Shuffle instalacoes for different distribution
-      const shuffled = [...instalacoesSelecionadas].sort(() => Math.random() - 0.5);
-      const dist = distribuirInstalacoes(shuffled, instaladoresInfo);
+      // Shuffle servicos for different distribution
+      const shuffled = [...servicosSelecionados].sort(() => Math.random() - 0.5);
+      const dist = distribuirServicos(shuffled, instaladoresInfo);
       setDistribuicao(dist);
     }
   };
@@ -124,7 +127,7 @@ export function RotaFormDialog({ open, onOpenChange, rota, dataInicial }: RotaFo
           data_rota: dataFormatada,
           instalador_id: selectedInstaladores[0],
           codigo,
-          cidade: selectedBairros.length ? instalacoesSelecionadas?.[0]?.cidade : null,
+          cidade: selectedBairros.length ? servicosSelecionados?.[0]?.endereco_cidade : null,
           regiao: selectedBairros.join(', ').substring(0, 100),
           cor: corSelecionada,
         })
@@ -144,15 +147,19 @@ export function RotaFormDialog({ open, onOpenChange, rota, dataInicial }: RotaFo
           .from('rota_instaladores')
           .insert(rotaInstaladores);
 
-        if (instError) console.error('Error adding rota_instaladores:', instError);
+      if (instError) console.error('Error adding rota_instaladores:', instError);
       }
 
-      // Assign instalacoes to rota with their responsible instalador
+      // Assign serviços to rota with their responsible instalador
       if (distribuicao.length) {
         for (const item of distribuicao) {
-          const instalacaoIds = item.instalacoes.map((i) => i.id);
-          if (instalacaoIds.length) {
-            // Atualizar instalações
+          // Separar instalações de vistorias
+          const instalacoes = item.servicos.filter(s => s.tipo_servico === 'instalacao');
+          const vistorias = item.servicos.filter(s => s.tipo_servico !== 'instalacao');
+          
+          // Atualizar instalações
+          if (instalacoes.length) {
+            const instalacaoIds = instalacoes.map((i) => i.id);
             await supabase
               .from('instalacoes')
               .update({
@@ -162,7 +169,7 @@ export function RotaFormDialog({ open, onOpenChange, rota, dataInicial }: RotaFo
               })
               .in('id', instalacaoIds);
             
-            // IMPORTANTE: Atualizar vistorias vinculadas às instalações
+            // Atualizar vistorias vinculadas às instalações
             await supabase
               .from('vistorias')
               .update({
@@ -170,6 +177,18 @@ export function RotaFormDialog({ open, onOpenChange, rota, dataInicial }: RotaFo
                 vistoriador_id: item.instaladorId,
               })
               .in('instalacao_id', instalacaoIds);
+          }
+          
+          // Atualizar vistorias diretamente
+          if (vistorias.length) {
+            const vistoriaIds = vistorias.map((v) => v.id);
+            await supabase
+              .from('vistorias')
+              .update({
+                rota_id: novaRota.id,
+                vistoriador_id: item.instaladorId,
+              })
+              .in('id', vistoriaIds);
           }
         }
       }
@@ -295,11 +314,17 @@ export function RotaFormDialog({ open, onOpenChange, rota, dataInicial }: RotaFo
       queryClient.invalidateQueries({ queryKey: ['rotas-semana'] });
       queryClient.invalidateQueries({ queryKey: ['instalacoes-disponiveis'] });
       queryClient.invalidateQueries({ queryKey: ['bairros-disponiveis'] });
+      queryClient.invalidateQueries({ queryKey: ['bairros-servicos'] });
+      queryClient.invalidateQueries({ queryKey: ['servicos-por-bairros'] });
       queryClient.invalidateQueries({ queryKey: ['vistorias-mapa'] });
 
-      const totalInstalacoes = distribuicao.reduce((acc, d) => acc + d.instalacoes.length, 0);
+      const totalServicos = distribuicao.reduce((acc, d) => acc + d.servicos.length, 0);
+      const totalInst = distribuicao.reduce((acc, d) => acc + d.servicos.filter(s => s.tipo_servico === 'instalacao').length, 0);
+      const totalVist = distribuicao.reduce((acc, d) => acc + d.servicos.filter(s => s.tipo_servico !== 'instalacao').length, 0);
+      
       const vinculosMensagem = [
-        totalInstalacoes > 0 ? `${totalInstalacoes} instalações` : null,
+        totalInst > 0 ? `${totalInst} instalações` : null,
+        totalVist > 0 ? `${totalVist} vistorias` : null,
         cotacoesVinculadas > 0 ? `${cotacoesVinculadas} cotações` : null,
         contratosVinculados > 0 ? `${contratosVinculados} contratos` : null,
       ].filter(Boolean).join(', ');
@@ -314,7 +339,10 @@ export function RotaFormDialog({ open, onOpenChange, rota, dataInicial }: RotaFo
     }
   };
 
-  const totalInstalacoes = instalacoesSelecionadas?.length || 0;
+  // Contagem de serviços
+  const totalServicos = servicosSelecionados?.length || 0;
+  const totalInstalacoes = servicosSelecionados?.filter(s => s.tipo_servico === 'instalacao').length || 0;
+  const totalVistorias = servicosSelecionados?.filter(s => s.tipo_servico !== 'instalacao').length || 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -392,9 +420,15 @@ export function RotaFormDialog({ open, onOpenChange, rota, dataInicial }: RotaFo
             </div>
           </div>
 
+          {/* Filtro de Tipos de Serviço */}
+          <TipoServicoFilter
+            filtros={filtroTipos}
+            onChange={setFiltroTipos}
+          />
+
           {/* Bairros */}
           <div className="space-y-2">
-            <Label>Bairros com Instalações Pendentes</Label>
+            <Label>Bairros com Serviços Pendentes</Label>
             <BairroSelector
               bairros={bairrosDisponiveis || []}
               selectedBairros={selectedBairros}
@@ -402,20 +436,27 @@ export function RotaFormDialog({ open, onOpenChange, rota, dataInicial }: RotaFo
               isLoading={loadingBairros}
               placeholder="Selecione os bairros"
             />
-            {totalInstalacoes > 0 && (
-              <p className="text-xs text-muted-foreground">
-                {totalInstalacoes} instalação(ões) serão vinculadas à rota
-              </p>
+            {totalServicos > 0 && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                {totalInstalacoes > 0 && (
+                  <span className="flex items-center gap-1">
+                    <Wrench className="h-3 w-3" />
+                    {totalInstalacoes} instalação(ões)
+                  </span>
+                )}
+                {totalVistorias > 0 && (
+                  <span className="flex items-center gap-1">
+                    <ClipboardCheck className="h-3 w-3" />
+                    {totalVistorias} vistoria(s)
+                  </span>
+                )}
+              </div>
             )}
           </div>
 
           {/* Preview da Distribuição */}
           {distribuicao.length > 0 && (
-            <DistribuicaoPreview
-              instaladores={(instaladores || [])
-                .filter((i) => selectedInstaladores.includes(i.id))
-                .map((i) => ({ id: i.id, nome: i.nome }))}
-              instalacoes={instalacoesSelecionadas || []}
+            <DistribuicaoServicosPreview
               distribuicao={distribuicao}
               onRedistribuir={handleRedistribuir}
             />

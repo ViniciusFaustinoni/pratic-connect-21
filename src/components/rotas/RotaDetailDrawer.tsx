@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { MapPin, Phone, User, Calendar, Route, Play, CheckCircle, Plus, X, Loader2, Trash2, Users, ArrowRight } from 'lucide-react';
+import { MapPin, Phone, User, Calendar, Route, Play, CheckCircle, Plus, X, Loader2, Trash2, Users, ArrowRight, Wrench, ClipboardCheck } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -30,6 +30,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   useRota, 
   useUpdateRotaStatus,
@@ -41,6 +42,7 @@ import {
 } from '@/hooks/useRotas';
 import { useRotaRealtime } from '@/hooks/useRotasRealtime';
 import { InstalacaoMiniCard } from './InstalacaoMiniCard';
+import { VistoriaMiniCard } from './VistoriaMiniCard';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
@@ -49,7 +51,7 @@ interface RotaDetailDrawerProps {
   rotaId: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onAddInstalacoes?: () => void;
+  onAddServicos?: () => void;
   onEdit?: () => void;
 }
 
@@ -57,7 +59,7 @@ export function RotaDetailDrawer({
   rotaId, 
   open, 
   onOpenChange,
-  onAddInstalacoes,
+  onAddServicos,
   onEdit,
 }: RotaDetailDrawerProps) {
   const queryClient = useQueryClient();
@@ -121,6 +123,11 @@ export function RotaDetailDrawer({
   const instaladoresDaRota = rota?.rota_instaladores || [];
   const hasMultipleInstaladores = instaladoresDaRota.length > 1;
 
+  // Contagem de serviços
+  const totalInstalacoes = rota?.instalacoes?.length || 0;
+  const totalVistorias = (rota as any)?.vistorias?.length || 0;
+  const totalServicos = totalInstalacoes + totalVistorias;
+
   // Group instalacoes by instalador_responsavel
   const instalacoesPorInstalador = rota?.instalacoes?.reduce((acc, inst) => {
     const responsavelId = inst.instalador_responsavel_id || 'sem_responsavel';
@@ -130,6 +137,16 @@ export function RotaDetailDrawer({
     acc[responsavelId].push(inst);
     return acc;
   }, {} as Record<string, typeof rota.instalacoes>);
+
+  // Group vistorias by vistoriador
+  const vistoriasPorInstalador = ((rota as any)?.vistorias || []).reduce((acc: Record<string, any[]>, vist: any) => {
+    const responsavelId = vist.vistoriador_id || 'sem_responsavel';
+    if (!acc[responsavelId]) {
+      acc[responsavelId] = [];
+    }
+    acc[responsavelId].push(vist);
+    return acc;
+  }, {} as Record<string, any[]>);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -241,7 +258,22 @@ export function RotaDetailDrawer({
                   <h4 className="mb-3 text-sm font-medium text-muted-foreground">Progresso</h4>
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
-                      <span>{rota.total_concluidos} de {rota.total_servicos} instalações</span>
+                      <span>{rota.total_concluidos} de {rota.total_servicos} serviços</span>
+                      <span className="font-medium">{progresso}%</span>
+                    </div>
+                    <Progress value={progresso} className="h-2" />
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground mt-2">
+                      <span className="flex items-center gap-1">
+                        <Wrench className="h-3 w-3" />
+                        {totalInstalacoes} instalação(ões)
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <ClipboardCheck className="h-3 w-3" />
+                        {totalVistorias} vistoria(s)
+                      </span>
+                    </div>
+                  </div>
+                </div>
                       <span className="font-medium">{progresso}%</span>
                     </div>
                     <Progress value={progresso} className="h-2" />
@@ -270,9 +302,9 @@ export function RotaDetailDrawer({
                   )}
                   {rota.status !== 'concluida' && rota.status !== 'cancelada' && (
                     <>
-                      <Button variant="outline" onClick={onAddInstalacoes}>
+                      <Button variant="outline" onClick={onAddServicos}>
                         <Plus className="mr-2 h-4 w-4" />
-                        Adicionar Instalações
+                        Adicionar Serviços
                       </Button>
                       <Button variant="outline" onClick={onEdit}>
                         Editar
