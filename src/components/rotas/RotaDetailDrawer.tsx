@@ -40,6 +40,7 @@ import {
 } from '@/hooks/useRotas';
 import { useRotaRealtime } from '@/hooks/useRotasRealtime';
 import { InstalacaoMiniCard } from './InstalacaoMiniCard';
+import { VistoriaMiniCard } from './VistoriaMiniCard';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
@@ -320,7 +321,7 @@ export function RotaDetailDrawer({
                 <div>
                   <h4 className="mb-4 text-sm font-medium text-muted-foreground flex items-center gap-2">
                     <Wrench className="h-4 w-4" />
-                    Instalações ({rota.instalacoes?.length || 0})
+                    Instalações ({totalInstalacoes})
                   </h4>
                   
                   {rota.instalacoes?.length ? (
@@ -442,7 +443,7 @@ export function RotaDetailDrawer({
                     <div className="rounded-lg border border-dashed p-6 text-center">
                       <Route className="mx-auto h-8 w-8 text-muted-foreground/50" />
                       <p className="mt-2 text-sm text-muted-foreground">
-                        Nenhum serviço vinculado
+                        Nenhuma instalação vinculada
                       </p>
                       <Button 
                         variant="outline" 
@@ -456,6 +457,29 @@ export function RotaDetailDrawer({
                     </div>
                   )}
                 </div>
+
+                {/* Vistorias - seção separada */}
+                {totalVistorias > 0 && (
+                  <>
+                    <Separator />
+                    <div>
+                      <h4 className="mb-4 text-sm font-medium text-muted-foreground flex items-center gap-2">
+                        <ClipboardCheck className="h-4 w-4" />
+                        Vistorias ({totalVistorias})
+                      </h4>
+                      <div className="space-y-3">
+                        {((rota as any)?.vistorias || []).map((vistoria: any) => (
+                          <VistoriaMiniCard 
+                            key={vistoria.id} 
+                            vistoria={vistoria}
+                            rotaId={rota.id}
+                            showRemove={rota.status === 'pendente'}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             </ScrollArea>
           </>
@@ -477,7 +501,8 @@ export function RotaDetailDrawer({
                 <br /><br />
                 <strong>As seguintes ações serão realizadas:</strong>
                 <ul className="list-disc list-inside mt-2 space-y-1">
-                  <li>{rota?.instalacoes?.length || 0} instalação(ões) serão desvinculadas</li>
+                  <li>{totalInstalacoes} instalação(ões) serão desvinculadas</li>
+                  <li>{totalVistorias} vistoria(s) serão desvinculadas</li>
                   <li>A rota será removida permanentemente do sistema</li>
                 </ul>
                 <br />
