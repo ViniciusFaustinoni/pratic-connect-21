@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap, GeoJSON } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from "react-leaflet";
 import L from "leaflet";
 import { format, isSameDay, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -42,17 +42,9 @@ import { TIPO_VISTORIA_LABELS } from "@/types/servicos-rota";
 import { getRotaColor, SEM_ROTA_COLOR, createColoredMarkerSvg, svgToDataUrl } from "@/lib/rota-colors";
 import { MapaRotasLegenda } from "./MapaRotasLegenda";
 import { cn } from "@/lib/utils";
-import { useBairrosGeoJSONDinamico, identificarCidadePredominante } from "@/hooks/useBairrosGeoJSONDinamico";
-import { normalizarNomeBairro } from "@/lib/bairros";
 
-// Cor fixa vermelha para pinos de vistorias
-const VISTORIA_PIN_COLOR = "#EF4444";
-
-// Cache de ícones por cor - limpar para garantir atualização
+// Cache de ícones por cor
 const iconCache = new Map<string, L.Icon>();
-
-// Limpar cache ao iniciar para forçar ícones vermelhos
-iconCache.clear();
 
 function getColoredIcon(color: string): L.Icon {
   const cacheKey = `icon-${color}`;
@@ -93,14 +85,6 @@ export function MapaVistoriasContent() {
   
   // Hook para buscar bairros das rotas - após filtroData ser declarado
   const { data: rotasBairros } = useRotasBairros(filtroData);
-
-  // Identificar cidade predominante das vistorias para buscar GeoJSON dinâmico
-  const cidadePredominante = useMemo(() => {
-    return identificarCidadePredominante(vistorias || []);
-  }, [vistorias]);
-
-  // Buscar GeoJSON de bairros dinamicamente para a cidade identificada
-  const { data: bairrosGeoJSON, isLoading: isLoadingGeoJSON } = useBairrosGeoJSONDinamico(cidadePredominante);
 
   // Obter lista de IDs de rotas únicas
   const rotasIds = useMemo(() => {
@@ -187,74 +171,6 @@ export function MapaVistoriasContent() {
     
     return rotasDoDb;
   }, [rotasBairros, vistoriasComCoordenadas, rotasAgrupadas]);
-
-  // Mapear bairros com cores de rotas para polígonos - FONTE: ROTAS (não vistorias)
-  const bairrosComRota = useMemo(() => {
-    const mapa = new Map<string, string>(); // bairro normalizado -> cor
-    
-    rotasBairros?.forEach((rota) => {
-      rota.bairros.forEach((bairro) => {
-        const bairroNormalizado = normalizarNomeBairro(bairro);
-        if (!mapa.has(bairroNormalizado)) {
-          mapa.set(bairroNormalizado, rota.cor);
-        }
-      });
-    });
-    
-    // Debug log
-    console.log('🗓️ Data filtro:', filtroData);
-    console.log('📍 Rotas Bairros:', rotasBairros);
-    console.log('🗺️ Bairros com Rota:', Array.from(mapa.entries()));
-    
-    return mapa;
-  }, [rotasBairros, filtroData]);
-
-  // Função de estilo para os polígonos dos bairros
-  const styleBairro = useMemo(() => (feature: GeoJSON.Feature | undefined) => {
-    if (!feature?.properties?.name) {
-      return { fillOpacity: 0, weight: 0 };
-    }
-    
-    const nomeOriginal = feature.properties.name;
-    const nomeBairro = normalizarNomeBairro(nomeOriginal);
-    const corRota = bairrosComRota.get(nomeBairro);
-    
-    // Debug: tentar variantes de normalização
-    if (!corRota) {
-      // Tentar encontrar match parcial
-      for (const [bairroRota, cor] of bairrosComRota.entries()) {
-        if (bairroRota.includes(nomeBairro) || nomeBairro.includes(bairroRota)) {
-          console.log(`🔍 Match parcial: "${nomeOriginal}" -> "${bairroRota}"`);
-          return {
-            fillColor: cor,
-            fillOpacity: 0.25,
-            color: cor,
-            weight: 2,
-            opacity: 0.7,
-          };
-        }
-      }
-    }
-    
-    if (corRota) {
-      return {
-        fillColor: corRota,
-        fillOpacity: 0.25,
-        color: corRota,
-        weight: 2,
-        opacity: 0.7,
-      };
-    }
-    
-    // Bairro sem rota: transparente/invisível
-    return {
-      fillColor: "transparent",
-      fillOpacity: 0,
-      color: "#aaa",
-      weight: 0.5,
-      opacity: 0.2,
-    };
-  }, [bairrosComRota]);
 
   // Selecionar vistoria
   const selecionarVistoria = (vistoria: VistoriaMapa) => {
@@ -550,23 +466,6 @@ export function MapaVistoriasContent() {
 
             <FlyToPosition position={posicaoSelecionada} />
 
-            {/* Camada de polígonos dos bairros */}
-            {bairrosGeoJSON && bairrosGeoJSON.features.length > 0 && (
-              <GeoJSON
-                key={`bairros-${cidadePredominante || 'all'}-${filtroData?.getTime() || 0}-${bairrosComRota.size}-${Array.from(bairrosComRota.keys()).join(',')}`}
-                data={bairrosGeoJSON as GeoJSON.FeatureCollection}
-                style={styleBairro}
-                onEachFeature={(feature, layer) => {
-                  const nome = feature.properties?.name || 'Desconhecido';
-                  const normalizado = normalizarNomeBairro(nome);
-                  const temRota = bairrosComRota.has(normalizado);
-                  layer.bindTooltip(`${nome}${temRota ? ' ✓' : ''}`, { 
-                    permanent: false,
-                    className: temRota ? 'leaflet-tooltip-rota' : ''
-                  });
-                }}
-              />
-            )}
 
             {/* Polylines conectando pontos de cada rota */}
             {rotasAgrupadas.map((rota) => {
@@ -592,19 +491,25 @@ export function MapaVistoriasContent() {
               );
             })}
 
-            {/* Marcadores - Pinos vermelhos fixos para vistorias */}
+            {/* Marcadores - Pinos coloridos pela cor da rota */}
             {vistoriasComCoordenadas.map((v) => {
+              // Usar cor da rota se atribuída, ou cinza se sem rota
+              const markerColor = v.rota_cor || SEM_ROTA_COLOR;
+              
               return (
                 <Marker
-                  key={`marker-${v.id}-red`}
+                  key={`marker-${v.id}-${markerColor}`}
                   position={[v.latitude!, v.longitude!]}
-                  icon={getColoredIcon(VISTORIA_PIN_COLOR)}
+                  icon={getColoredIcon(markerColor)}
                 >
                   <Popup>
                     <div className="min-w-[200px]">
                       <div className="flex items-center justify-between mb-2">
                         <h3 className="font-bold text-sm">{v.veiculo_placa || "Sem placa"}</h3>
-                        <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded">
+                        <span 
+                          className="text-xs px-2 py-0.5 rounded text-white"
+                          style={{ backgroundColor: markerColor }}
+                        >
                           {TIPO_VISTORIA_LABELS[v.tipo_vistoria as keyof typeof TIPO_VISTORIA_LABELS] || v.tipo_vistoria}
                         </span>
                       </div>
@@ -669,19 +574,8 @@ export function MapaVistoriasContent() {
           />
 
           <div className="absolute bottom-4 left-4 bg-background/90 backdrop-blur-sm px-3 py-1.5 rounded-full text-xs text-muted-foreground border shadow-sm flex items-center gap-2">
-            {isLoadingGeoJSON ? (
-              <>
-                <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
-                Carregando bairros...
-              </>
-            ) : (
-              <>
-                <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-                {vistoriasComCoordenadas.length} vistorias
-                {cidadePredominante && ` • ${cidadePredominante}`}
-                {bairrosGeoJSON?.features?.length && ` • ${bairrosGeoJSON.features.length} bairros`}
-              </>
-            )}
+            <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+            {vistoriasComCoordenadas.length} vistorias no mapa
           </div>
         </CardContent>
       </Card>
