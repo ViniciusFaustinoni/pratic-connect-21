@@ -31,7 +31,7 @@ export function useEquipeHoje() {
           id,
           status,
           instalacoes(id, status),
-          vistorias:cotacoes!cotacoes_vistoria_rota_id_fkey(id, status_vistoria)
+          vistorias:vistorias!vistorias_rota_id_fkey(id, status)
         `)
         .eq('data_rota', hoje);
 
@@ -69,7 +69,7 @@ export function useEquipeHoje() {
           const instTotal = rota.instalacoes?.length || 0;
           const instConcluidas = rota.instalacoes?.filter((i: any) => i.status === 'concluida').length || 0;
           const vistTotal = rota.vistorias?.length || 0;
-          const vistConcluidas = rota.vistorias?.filter((v: any) => v.status_vistoria === 'aprovada' || v.status_vistoria === 'reprovada').length || 0;
+          const vistConcluidas = rota.vistorias?.filter((v: any) => v.status === 'aprovada' || v.status === 'reprovada' || v.status === 'concluida').length || 0;
 
           const tarefasTotal = instTotal + vistTotal;
           const tarefasConcluidas = instConcluidas + vistConcluidas;

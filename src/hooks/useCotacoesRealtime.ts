@@ -28,16 +28,25 @@ export function useCotacoesRealtime() {
           table: 'cotacoes',
         },
         (payload) => {
-          console.log('[useCotacoesRealtime] Cotação alterada:', payload.eventType);
+          console.log('[useCotacoesRealtime] Cotação alterada:', payload.eventType, payload.new);
           
-          // Invalidar queries de cotações
-          queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
+          // Forçar refetch imediato de todas as cotações
+          queryClient.refetchQueries({ queryKey: ['cotacoes'] });
           
           // Se for update de uma cotação específica
           if (payload.eventType === 'UPDATE' && payload.new) {
             const newData = payload.new as { id?: string; status?: string; status_contratacao?: string };
+            const oldData = payload.old as { status_contratacao?: string };
+            
             if (newData.id) {
-              queryClient.invalidateQueries({ queryKey: ['cotacoes', newData.id] });
+              queryClient.refetchQueries({ queryKey: ['cotacoes', newData.id] });
+            }
+            
+            // Toast para mudança de status_contratacao (cliente avançou no fluxo)
+            if (newData.status_contratacao && 
+                newData.status_contratacao !== 'aguardando' && 
+                newData.status_contratacao !== oldData?.status_contratacao) {
+              toast.info('📋 Cliente avançou na contratação!', { duration: 4000 });
             }
             
             // Toast para mudança de status importante
