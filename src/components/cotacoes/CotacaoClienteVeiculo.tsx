@@ -83,15 +83,10 @@ export function CotacaoClienteVeiculo({
                 <User className="h-4 w-4" />
                 Cliente
               </CardTitle>
-              {temLead ? (
+              {temLead && (
                 <Button variant="ghost" size="sm" onClick={onTrocarLead}>
                   <RefreshCw className="h-3 w-3 mr-1" />
                   Trocar
-                </Button>
-              ) : (
-                <Button variant="outline" size="sm" onClick={onVincularLead}>
-                  <Link2 className="h-3 w-3 mr-1" />
-                  Vincular Lead
                 </Button>
               )}
             </div>
