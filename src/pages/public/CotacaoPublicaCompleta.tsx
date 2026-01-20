@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { 
   Loader2, Car, Shield, CheckCircle2, Clock, AlertTriangle,
@@ -110,6 +110,9 @@ export default function CotacaoPublicaCompleta() {
   );
   const [termosAceitos, setTermosAceitos] = useState(false);
   const [loading, setLoading] = useState(false);
+  
+  // Ref para prevenir duplo clique
+  const isSubmittingRef = useRef(false);
 
   // ──────────────────────────────────────────────────────────
   // EFEITOS
@@ -195,7 +198,8 @@ export default function CotacaoPublicaCompleta() {
   // ──────────────────────────────────────────────────────────
 
   const handleDefinirUso = async () => {
-    if (!token) return;
+    if (!token || isSubmittingRef.current || loading) return;
+    isSubmittingRef.current = true;
     setLoading(true);
     try {
       await atualizarCotacao.mutateAsync({
@@ -213,14 +217,16 @@ export default function CotacaoPublicaCompleta() {
       toast.error('Erro ao salvar. Tente novamente.');
     } finally {
       setLoading(false);
+      isSubmittingRef.current = false;
     }
   };
 
   const handleEscolherPlano = async () => {
-    if (!token || !planoEscolhido || !resultado) return;
+    if (!token || !planoEscolhido || !resultado || isSubmittingRef.current || loading) return;
     const plano = resultado.planos.find(p => p.categoria === planoEscolhido);
     if (!plano) return;
 
+    isSubmittingRef.current = true;
     setLoading(true);
     try {
       await atualizarCotacao.mutateAsync({
@@ -240,11 +246,13 @@ export default function CotacaoPublicaCompleta() {
       toast.error('Erro ao salvar. Tente novamente.');
     } finally {
       setLoading(false);
+      isSubmittingRef.current = false;
     }
   };
 
   const handleAceitarProposta = async () => {
-    if (!token || !propostaAceita) return;
+    if (!token || !propostaAceita || isSubmittingRef.current || loading) return;
+    isSubmittingRef.current = true;
     setLoading(true);
     try {
       await atualizarCotacao.mutateAsync({
@@ -261,6 +269,7 @@ export default function CotacaoPublicaCompleta() {
       toast.error('Erro ao salvar. Tente novamente.');
     } finally {
       setLoading(false);
+      isSubmittingRef.current = false;
     }
   };
 
@@ -288,13 +297,14 @@ export default function CotacaoPublicaCompleta() {
   };
 
   const handleConcluirDocumentos = async () => {
-    if (!token) return;
+    if (!token || isSubmittingRef.current || loading) return;
     const todosEnviados = documentos.filter(d => d.obrigatorio).every(d => d.status === 'enviado');
     if (!todosEnviados) {
       toast.error('Envie todos os documentos obrigatórios');
       return;
     }
 
+    isSubmittingRef.current = true;
     setLoading(true);
     try {
       const docUrls: Record<string, string> = {};
@@ -317,6 +327,7 @@ export default function CotacaoPublicaCompleta() {
       toast.error('Erro ao salvar. Tente novamente.');
     } finally {
       setLoading(false);
+      isSubmittingRef.current = false;
     }
   };
 
@@ -340,7 +351,8 @@ export default function CotacaoPublicaCompleta() {
   };
 
   const handleConcluirSelfie = async () => {
-    if (!token || !selfieUrl) return;
+    if (!token || !selfieUrl || isSubmittingRef.current || loading) return;
+    isSubmittingRef.current = true;
     setLoading(true);
     try {
       await atualizarCotacao.mutateAsync({
@@ -360,6 +372,7 @@ export default function CotacaoPublicaCompleta() {
       toast.error('Erro ao salvar. Tente novamente.');
     } finally {
       setLoading(false);
+      isSubmittingRef.current = false;
     }
   };
 
@@ -403,7 +416,7 @@ export default function CotacaoPublicaCompleta() {
   };
 
   const handleConcluirVistoria = async () => {
-    if (!token) return;
+    if (!token || isSubmittingRef.current || loading) return;
     
     if (tipoVistoria === 'auto') {
       const enviadas = fotosVistoria.filter(f => f.status === 'enviado').length;
@@ -413,6 +426,7 @@ export default function CotacaoPublicaCompleta() {
       }
     }
 
+    isSubmittingRef.current = true;
     setLoading(true);
     try {
       await atualizarCotacao.mutateAsync({
@@ -430,11 +444,13 @@ export default function CotacaoPublicaCompleta() {
       toast.error('Erro ao salvar. Tente novamente.');
     } finally {
       setLoading(false);
+      isSubmittingRef.current = false;
     }
   };
 
   const handleAceitarTermos = async () => {
-    if (!token || !termosAceitos) return;
+    if (!token || !termosAceitos || isSubmittingRef.current || loading) return;
+    isSubmittingRef.current = true;
     setLoading(true);
     try {
       await atualizarCotacao.mutateAsync({
@@ -452,6 +468,7 @@ export default function CotacaoPublicaCompleta() {
       toast.error('Erro ao salvar. Tente novamente.');
     } finally {
       setLoading(false);
+      isSubmittingRef.current = false;
     }
   };
 

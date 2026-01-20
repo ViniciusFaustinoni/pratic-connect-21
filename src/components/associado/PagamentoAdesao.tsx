@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { CreditCard, QrCode, Loader2, Check, Copy, FileText } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -34,9 +34,16 @@ export function PagamentoAdesao({
   const [cobranca, setCobranca] = useState<CobrancaData | null>(null);
   const [loading, setLoading] = useState(true);
   const [verificando, setVerificando] = useState(false);
+  
+  // Ref para prevenir execução duplicada do useEffect
+  const iniciouRef = useRef(false);
 
   // Verificar cobrança existente ou criar nova ao montar componente
   useEffect(() => {
+    // Prevenir execução duplicada (StrictMode ou remontagem rápida)
+    if (iniciouRef.current) return;
+    iniciouRef.current = true;
+    
     verificarOuCriarCobranca();
   }, []);
 
