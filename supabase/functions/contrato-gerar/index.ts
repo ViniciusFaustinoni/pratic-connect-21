@@ -168,6 +168,7 @@ serve(async (req) => {
 
     // 7. Criar ou encontrar associado
     let associadoId = null;
+    let veiculoId: string | null = null;
     
     const cpfLimpo = cpfFinal.replace(/\D/g, '');
     const { data: associadoExistente } = await supabase
@@ -233,9 +234,11 @@ serve(async (req) => {
           placa: cotacao.veiculo_placa,
           marca: cotacao.veiculo_marca,
           modelo: cotacao.veiculo_modelo,
-          ano: cotacao.veiculo_ano,
+          ano_fabricacao: cotacao.veiculo_ano,
+          ano_modelo: cotacao.veiculo_ano,
           cor: cotacao.veiculo_cor || null,
           valor_fipe: cotacao.valor_fipe || null,
+          codigo_fipe: cotacao.codigo_fipe || null,
           status: 'em_analise',
           cobertura_roubo_furto: false,
           cobertura_total: false,
@@ -244,11 +247,12 @@ serve(async (req) => {
         .single();
 
       if (veiculoError) {
-        console.error('Erro ao criar veículo:', veiculoError);
-        // Não falhar, veículo pode ser criado depois
-      } else {
-        console.log('Novo veículo criado:', novoVeiculo.id);
+        console.error('Erro CRÍTICO ao criar veículo:', veiculoError);
+        throw new Error(`Falha ao criar veículo: ${veiculoError.message}`);
       }
+      
+      veiculoId = novoVeiculo.id;
+      console.log('Novo veículo criado:', veiculoId);
     }
 
     // 8. Criar o contrato
@@ -266,6 +270,7 @@ serve(async (req) => {
             cotacao_id,
             lead_id: leadId, // Usa o lead original se existir (não cria mais retroativamente)
             associado_id: associadoId,
+            veiculo_id: veiculoId, // CORREÇÃO: Vincular veículo ao contrato
             plano_id: cotacao.plano_escolhido_id || cotacao.plano_id,
             valor_adesao: cotacao.valor_adesao || 0,
             valor_mensal: cotacao.valor_total_mensal || cotacao.valor_mensal,
