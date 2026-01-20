@@ -883,8 +883,8 @@ export default function InstaladorChecklist() {
         )}
       </div>
 
-      {/* Footer com navegação - FIXO na parte inferior */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-slate-700 bg-slate-800 p-4 safe-area-pb">
+      {/* Footer com navegação - FIXO na parte inferior - z-index maior que o menu do layout */}
+      <div className="fixed bottom-0 left-0 right-0 z-[60] border-t border-slate-700 bg-slate-800 p-4 safe-area-pb">
         <div className="flex gap-3 max-w-lg mx-auto">
           <Button
             variant="outline"
