@@ -462,16 +462,36 @@ export function useAssociadoActions() {
 
   const excluirAssociado = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('associados')
-        .delete()
-        .eq('id', id);
-      if (error) throw error;
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.access_token) {
+        throw new Error('Você precisa estar autenticado');
+      }
+
+      const response = await fetch(
+        'https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/delete-associado',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ associadoId: id }),
+        }
+      );
+
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Erro ao excluir associado');
+      }
+      
+      return result;
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       invalidateAll();
       queryClient.invalidateQueries({ queryKey: ['associados-cidades'] });
-      toast.success('Associado excluído permanentemente');
+      toast.success(result.message || 'Associado excluído permanentemente');
     },
     onError: (error) => toast.error(`Erro ao excluir associado: ${error.message}`),
   });
