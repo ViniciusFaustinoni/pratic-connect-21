@@ -152,6 +152,7 @@ export function RotaFormDialog({ open, onOpenChange, rota, dataInicial }: RotaFo
         for (const item of distribuicao) {
           const instalacaoIds = item.instalacoes.map((i) => i.id);
           if (instalacaoIds.length) {
+            // Atualizar instalações
             await supabase
               .from('instalacoes')
               .update({
@@ -160,6 +161,15 @@ export function RotaFormDialog({ open, onOpenChange, rota, dataInicial }: RotaFo
                 instalador_responsavel_id: item.instaladorId,
               })
               .in('id', instalacaoIds);
+            
+            // IMPORTANTE: Atualizar vistorias vinculadas às instalações
+            await supabase
+              .from('vistorias')
+              .update({
+                rota_id: novaRota.id,
+                vistoriador_id: item.instaladorId,
+              })
+              .in('instalacao_id', instalacaoIds);
           }
         }
       }
@@ -251,6 +261,31 @@ export function RotaFormDialog({ open, onOpenChange, rota, dataInicial }: RotaFo
               console.error('Erro ao vincular vistorias de contratos:', vistContError);
             }
           }
+        }
+        
+        // BUSCA DIRETA: Vincular vistorias que não estão em cotações/contratos mas têm endereço no bairro
+        const { data: vistoriasDiretas, error: vistDiretasError } = await supabase
+          .from('vistorias')
+          .select('id')
+          .in('endereco_bairro', selectedBairros)
+          .is('rota_id', null)
+          .not('status', 'eq', 'concluida')
+          .not('status', 'eq', 'aprovada')
+          .not('status', 'eq', 'reprovada')
+          .lte('data_agendada', dataFormatada);
+        
+        if (!vistDiretasError && vistoriasDiretas?.length) {
+          const vistoriasIds = vistoriasDiretas.map(v => v.id);
+          
+          await supabase
+            .from('vistorias')
+            .update({ 
+              rota_id: novaRota.id,
+              vistoriador_id: selectedInstaladores[0],
+            })
+            .in('id', vistoriasIds);
+            
+          console.log(`✅ ${vistoriasIds.length} vistorias vinculadas diretamente pela tabela vistorias`);
         }
       }
 
