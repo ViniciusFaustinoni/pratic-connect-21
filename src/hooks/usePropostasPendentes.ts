@@ -621,7 +621,8 @@ export function useAprovarProposta() {
       const diaVencimento = contrato.dia_vencimento || (contrato.associado as any)?.dia_vencimento || 15;
 
       // 2. Atualizar CONTRATO para ativo (contrato ativo, mas associado ainda aguarda instalação)
-      const { error: contratoError } = await supabase
+      // IMPORTANTE: Usar select().single() para garantir que a atualização realmente ocorreu
+      const { data: contratoAtualizado, error: contratoError } = await supabase
         .from('contratos')
         .update({
           status: 'ativo',
@@ -629,13 +630,24 @@ export function useAprovarProposta() {
           aprovado_por: profile.id,
           aprovado_em: agora,
         })
-        .eq('id', contratoId);
+        .eq('id', contratoId)
+        .select('id, status, aprovado_em, aprovado_por, data_ativacao')
+        .single();
 
-      if (contratoError) throw contratoError;
+      if (contratoError) {
+        console.error('Erro ao atualizar contrato:', contratoError);
+        throw new Error(`Falha ao atualizar contrato: ${contratoError.message}`);
+      }
+      
+      // Validar que a atualização realmente ocorreu
+      if (!contratoAtualizado || contratoAtualizado.status !== 'ativo') {
+        console.error('Contrato não foi atualizado corretamente:', contratoAtualizado);
+        throw new Error('Sem permissão para aprovar este contrato (RLS) ou contrato não encontrado');
+      }
 
       // 3. Atualizar ASSOCIADO para aguardando_instalacao (NÃO ativo ainda)
       // A ativação completa ocorre após técnico aprovar vistoria presencial
-      const { error: associadoError } = await supabase
+      const { data: associadoAtualizado, error: associadoError } = await supabase
         .from('associados')
         .update({
           status: 'aguardando_instalacao',
@@ -643,9 +655,20 @@ export function useAprovarProposta() {
           aprovado_por: profile.id,
           aprovado_em: agora,
         })
-        .eq('id', associadoId);
+        .eq('id', associadoId)
+        .select('id, status')
+        .single();
 
-      if (associadoError) throw associadoError;
+      if (associadoError) {
+        console.error('Erro ao atualizar associado:', associadoError);
+        throw new Error(`Falha ao atualizar associado: ${associadoError.message}`);
+      }
+      
+      // Validar que a atualização realmente ocorreu
+      if (!associadoAtualizado || associadoAtualizado.status !== 'aguardando_instalacao') {
+        console.error('Associado não foi atualizado corretamente:', associadoAtualizado);
+        throw new Error('Sem permissão para atualizar associado (RLS) ou associado não encontrado');
+      }
 
       // 4. Buscar veículo do associado para ativar cobertura roubo/furto
       const { data: veiculos } = await supabase
@@ -673,7 +696,7 @@ export function useAprovarProposta() {
 
         // 6. Criar INSTALAÇÃO agendada (se tiver veículo)
         const associadoData = contrato.associado as any;
-        await supabase
+        const { error: instalacaoError } = await supabase
           .from('instalacoes')
           .insert({
             associado_id: associadoId,
@@ -686,6 +709,11 @@ export function useAprovarProposta() {
             uf: associadoData?.uf || null,
             cep: associadoData?.cep || null,
           } as any);
+        
+        if (instalacaoError) {
+          console.error('Erro ao criar instalação:', instalacaoError);
+          throw new Error(`Falha ao criar instalação: ${instalacaoError.message}`);
+        }
       }
 
       // 7. Registrar histórico
@@ -711,7 +739,7 @@ export function useAprovarProposta() {
       // Cobrança de adesão (se houver valor)
       if (plano?.valor_adesao && plano.valor_adesao > 0) {
         const dataVencimentoAdesao = new Date(hoje.getTime() + 3 * 24 * 60 * 60 * 1000); // 3 dias
-        await supabase
+        const { error: cobrancaAdesaoError } = await supabase
           .from('cobrancas')
           .insert({
             associado_id: associadoId,
@@ -723,6 +751,11 @@ export function useAprovarProposta() {
             data_emissao: hoje.toISOString().split('T')[0],
             status: 'pendente',
           } as any);
+        
+        if (cobrancaAdesaoError) {
+          console.error('Erro ao criar cobrança de adesão:', cobrancaAdesaoError);
+          throw new Error(`Falha ao criar cobrança de adesão: ${cobrancaAdesaoError.message}`);
+        }
       }
 
       // Primeira mensalidade (usar valor do contrato)
@@ -734,7 +767,7 @@ export function useAprovarProposta() {
 
         const mesAno = dataVencimento.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
 
-        await supabase
+        const { error: cobrancaMensalidadeError } = await supabase
           .from('cobrancas')
           .insert({
             associado_id: associadoId,
@@ -748,6 +781,11 @@ export function useAprovarProposta() {
             data_emissao: hoje.toISOString().split('T')[0],
             status: 'pendente',
           } as any);
+        
+        if (cobrancaMensalidadeError) {
+          console.error('Erro ao criar cobrança de mensalidade:', cobrancaMensalidadeError);
+          throw new Error(`Falha ao criar cobrança de mensalidade: ${cobrancaMensalidadeError.message}`);
+        }
       }
 
       return { 
@@ -756,19 +794,26 @@ export function useAprovarProposta() {
         mensagem: 'Proposta aprovada! Cobertura Roubo/Furto ativada. Aguardando instalação para cobertura total.'
       };
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success('Proposta aprovada! Cobertura Roubo/Furto ativada. Aguardando instalação para cobertura total.');
-      queryClient.invalidateQueries({ queryKey: ['propostas-pendentes'] });
-      queryClient.invalidateQueries({ queryKey: ['propostas-stats'] });
-      queryClient.invalidateQueries({ queryKey: ['proposta'] });
-      queryClient.invalidateQueries({ queryKey: ['associados'] });
-      queryClient.invalidateQueries({ queryKey: ['contratos'] });
-      queryClient.invalidateQueries({ queryKey: ['instalacoes'] });
-      queryClient.invalidateQueries({ queryKey: ['cobrancas'] });
+      
+      // Invalidar e forçar refetch imediato de todas as queries relacionadas
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['propostas-pendentes'] }),
+        queryClient.invalidateQueries({ queryKey: ['propostas-stats'] }),
+        queryClient.invalidateQueries({ queryKey: ['proposta'] }),
+        queryClient.invalidateQueries({ queryKey: ['associados'] }),
+        queryClient.invalidateQueries({ queryKey: ['contratos'] }),
+        queryClient.invalidateQueries({ queryKey: ['instalacoes'] }),
+        queryClient.invalidateQueries({ queryKey: ['cobrancas'] }),
+      ]);
+      
+      // Forçar refetch imediato das propostas pendentes
+      await queryClient.refetchQueries({ queryKey: ['propostas-pendentes'] });
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       console.error('Erro ao aprovar proposta:', error);
-      toast.error('Erro ao aprovar proposta. Tente novamente.');
+      toast.error(error.message || 'Erro ao aprovar proposta. Tente novamente.');
     },
   });
 }
