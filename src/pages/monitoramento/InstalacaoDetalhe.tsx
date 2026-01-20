@@ -111,7 +111,16 @@ export default function InstalacaoDetalhePage() {
   };
 
   const handleIniciarRota = () => { if (id) iniciarRota(id); };
-  const handleIniciarInstalacao = () => { if (id) iniciarInstalacao(id); };
+  const handleIniciarInstalacao = () => { 
+    if (id) {
+      iniciarInstalacao(id, {
+        onSuccess: () => {
+          // Redireciona para a tela de execução da vistoria completa
+          navigate(`/vistoriador/vistoria-completa/${id}`);
+        }
+      });
+    }
+  };
 
   const handleConcluir = () => {
     if (!id || !instalacao?.rastreador_id) return;
