@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { toast } from 'sonner';
 import { geocodificarEndereco } from '@/services/geocodingService';
 
@@ -171,7 +172,7 @@ export function useAgendarVistoriaCompleta() {
   
   return useMutation({
     mutationFn: async ({ cotacaoId, dataAgendada, horarioAgendado, endereco, responsavel }: AgendarVistoriaCompletaParams) => {
-      // Geocodificar endereço antes de salvar
+      // Geocodificar endereço antes de enviar
       const coords = await geocodificarEndereco({
         logradouro: endereco.logradouro,
         numero: endereco.numero,
@@ -181,140 +182,31 @@ export function useAgendarVistoriaCompleta() {
         cep: endereco.cep,
       });
       
-      const updateData: Record<string, unknown> = {
-        vistoria_completa_data_agendada: dataAgendada,
-        vistoria_completa_horario_agendado: horarioAgendado,
-        vistoria_completa_endereco_cep: endereco.cep,
-        vistoria_completa_endereco_logradouro: endereco.logradouro,
-        vistoria_completa_endereco_numero: endereco.numero,
-        vistoria_completa_endereco_bairro: endereco.bairro,
-        vistoria_completa_endereco_cidade: endereco.cidade,
-        vistoria_completa_endereco_estado: endereco.estado,
-        vistoria_completa_responsavel_eu_mesmo: responsavel.euMesmo,
-        vistoria_completa_responsavel_nome: responsavel.nome || null,
-        vistoria_completa_responsavel_telefone: responsavel.telefone || null,
-      };
+      // Chamar Edge Function que usa service_role para bypassar RLS
+      const { data, error } = await publicSupabase.functions.invoke('agendar-vistoria-completa', {
+        body: {
+          cotacaoId,
+          dataAgendada,
+          horarioAgendado,
+          endereco,
+          responsavel,
+          latitude: coords.success ? coords.latitude : null,
+          longitude: coords.success ? coords.longitude : null,
+        },
+      });
       
-      // Adicionar coordenadas se geocodificação foi bem sucedida
-      if (coords.success) {
-        updateData.vistoria_endereco_latitude = coords.latitude;
-        updateData.vistoria_endereco_longitude = coords.longitude;
+      if (error) {
+        console.error('[AgendarVistoriaCompleta] Erro na edge function:', error);
+        throw error;
       }
       
-      // 1. Atualizar cotação
-      const { error: cotacaoError } = await supabase
-        .from('cotacoes')
-        .update(updateData)
-        .eq('id', cotacaoId);
-      
-      if (cotacaoError) throw cotacaoError;
-      
-      // 2. Buscar dados da cotação para obter informações do cliente
-      const { data: cotacao } = await supabase
-        .from('cotacoes')
-        .select('id, nome_solicitante, telefone1_solicitante, veiculo_placa, veiculo_marca, veiculo_modelo')
-        .eq('id', cotacaoId)
-        .single();
-      
-      // 3. Buscar contrato vinculado para obter associado_id e veiculo_id
-      const { data: contrato } = await supabase
-        .from('contratos')
-        .select('id, associado_id, veiculo_id')
-        .eq('cotacao_id', cotacaoId)
-        .single();
-      
-      // 4. CRIAR REGISTRO NA TABELA VISTORIAS
-      // Montar observações com dados do responsável
-      const obsResponsavel = responsavel.euMesmo 
-        ? `Responsável: ${cotacao?.nome_solicitante} - ${cotacao?.telefone1_solicitante}` 
-        : `Responsável: ${responsavel.nome} - ${responsavel.telefone}`;
-      
-      const vistoriaData = {
-        cotacao_id: cotacaoId,
-        contrato_id: contrato?.id || null,
-        associado_id: contrato?.associado_id || null,
-        veiculo_id: contrato?.veiculo_id || null,
-        tipo: 'entrada' as const,
-        modalidade: 'presencial',
-        status: 'agendada' as const,
-        origem: 'cotacao',
-        data_agendada: dataAgendada,
-        horario_agendado: horarioAgendado,
-        endereco_cep: endereco.cep,
-        endereco_logradouro: endereco.logradouro,
-        endereco_numero: endereco.numero,
-        endereco_bairro: endereco.bairro,
-        endereco_cidade: endereco.cidade,
-        endereco_estado: endereco.estado,
-        endereco_latitude: coords.success ? coords.latitude : null,
-        endereco_longitude: coords.success ? coords.longitude : null,
-        observacoes: obsResponsavel,
-      };
-      
-      const { data: novaVistoria, error: vistoriaError } = await supabase
-        .from('vistorias')
-        .insert(vistoriaData)
-        .select('id')
-        .single();
-      
-      if (vistoriaError) {
-        console.error('[AgendarVistoriaCompleta] Erro ao criar vistoria:', vistoriaError);
-        throw vistoriaError;
+      if (!data?.success) {
+        console.error('[AgendarVistoriaCompleta] Erro:', data?.error);
+        throw new Error(data?.error || 'Erro ao agendar vistoria');
       }
       
-      console.log('[AgendarVistoriaCompleta] Vistoria criada com sucesso:', novaVistoria.id);
-      
-      // 5. Atualizar contrato com vistoria_id
-      if (contrato?.id && novaVistoria?.id) {
-        await supabase
-          .from('contratos')
-          .update({ vistoria_id: novaVistoria.id })
-          .eq('id', contrato.id);
-      }
-      
-      // 6. CRIAR REGISTRO NA TABELA INSTALACOES
-      const instalacaoData = {
-        contrato_id: contrato?.id || null,
-        associado_id: contrato?.associado_id || null,
-        veiculo_id: contrato?.veiculo_id || null,
-        vistoria_id: novaVistoria.id,
-        status: 'agendada' as const,
-        data_agendada: dataAgendada,
-        horario_agendado: horarioAgendado,
-        endereco_cep: endereco.cep,
-        endereco_logradouro: endereco.logradouro,
-        endereco_numero: endereco.numero,
-        endereco_bairro: endereco.bairro,
-        endereco_cidade: endereco.cidade,
-        endereco_estado: endereco.estado,
-        endereco_latitude: coords.success ? coords.latitude : null,
-        endereco_longitude: coords.success ? coords.longitude : null,
-        observacoes: obsResponsavel,
-      };
-      
-      const { data: novaInstalacao, error: instalacaoError } = await supabase
-        .from('instalacoes')
-        .insert(instalacaoData)
-        .select('id')
-        .single();
-      
-      if (instalacaoError) {
-        console.error('[AgendarVistoriaCompleta] Erro ao criar instalação:', instalacaoError);
-        // Não vamos dar throw aqui para não interromper o fluxo
-        // A instalação pode ser criada manualmente depois
-      } else {
-        console.log('[AgendarVistoriaCompleta] Instalação criada com sucesso:', novaInstalacao.id);
-        
-        // 7. VINCULAR INSTALAÇÃO À VISTORIA (para que useVistoriaCompleta encontre a vistoria correta)
-        await supabase
-          .from('vistorias')
-          .update({ instalacao_id: novaInstalacao.id })
-          .eq('id', novaVistoria.id);
-        
-        console.log('[AgendarVistoriaCompleta] Vistoria vinculada à instalação');
-      }
-      
-      return novaVistoria;
+      console.log('[AgendarVistoriaCompleta] Sucesso:', data);
+      return { id: data.vistoriaId };
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['cotacao', variables.cotacaoId] });
