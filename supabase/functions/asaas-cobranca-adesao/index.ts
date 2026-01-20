@@ -203,6 +203,53 @@ serve(async (req) => {
       .single();
 
     if (saveError) {
+      // TRATAMENTO DE RACE CONDITION: Se erro for de constraint unique (23505), 
+      // significa que outra requisição simultânea já inseriu - retorna a existente
+      if (saveError.code === '23505') {
+        console.log('[asaas-cobranca-adesao] ⚠️ Conflito de duplicata detectado (race condition), buscando cobrança existente...');
+        
+        // Aguardar um momento para a outra transação commitar
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        const { data: cobrancaExistenteDup } = await supabase
+          .from('asaas_cobrancas')
+          .select('*')
+          .eq('contrato_id', contratoId)
+          .eq('tipo', 'adesao')
+          .not('status', 'in', '(CANCELLED,REFUNDED,REFUND_REQUESTED)')
+          .single();
+
+        if (cobrancaExistenteDup) {
+          console.log(`[asaas-cobranca-adesao] ✅ Retornando cobrança existente após conflito: ${cobrancaExistenteDup.id}`);
+          
+          // Tentar cancelar a cobrança recém-criada no Asaas (para evitar duplicata lá também)
+          try {
+            await asaasRequest(`/payments/${cobrancaData.id}`, 'DELETE');
+            console.log(`[asaas-cobranca-adesao] 🗑️ Cobrança duplicada cancelada no Asaas: ${cobrancaData.id}`);
+          } catch (cancelError) {
+            console.warn('[asaas-cobranca-adesao] Não foi possível cancelar duplicata no Asaas (pode já estar paga):', cancelError);
+          }
+          
+          return new Response(
+            JSON.stringify({
+              success: true,
+              cobranca_id: cobrancaExistenteDup.id,
+              asaas_id: cobrancaExistenteDup.asaas_id,
+              pix_copia_cola: cobrancaExistenteDup.pix_copia_cola,
+              pix_qrcode: cobrancaExistenteDup.pix_qrcode,
+              boleto_url: cobrancaExistenteDup.boleto_url,
+              linha_digitavel: cobrancaExistenteDup.linha_digitavel,
+              valor: cobrancaExistenteDup.valor,
+              vencimento: cobrancaExistenteDup.data_vencimento,
+              message: 'Cobrança existente retornada (race condition tratada)',
+            }),
+            {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            }
+          );
+        }
+      }
+      
       console.error('[asaas-cobranca-adesao] ❌ ERRO CRÍTICO ao salvar cobrança no banco:', saveError);
       console.error('[asaas-cobranca-adesao] Dados que tentaram ser inseridos:', {
         asaas_id: cobrancaData.id,
