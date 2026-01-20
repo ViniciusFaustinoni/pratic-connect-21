@@ -31,6 +31,7 @@ export default function Rotas() {
   const [editRota, setEditRota] = useState<Rota | null>(null);
   const [addInstalacaoOpen, setAddInstalacaoOpen] = useState(false);
   const [filters, setFilters] = useState<RotaFiltersType>({});
+  const [dataSelecionada, setDataSelecionada] = useState<Date | null>(null);
   
   const { data: metricas, isLoading: loadingMetricas } = useRotasMetricas();
   const { data: rotas, isLoading: loadingRotas } = useRotas(filters);
@@ -55,6 +56,7 @@ export default function Rotas() {
   };
 
   const handleNewRota = () => {
+    setDataSelecionada(null);
     setEditRota(null);
     setFormOpen(true);
   };
@@ -166,6 +168,7 @@ export default function Rotas() {
           <RotaCalendario 
             onRotaClick={handleOpenRota}
             onDayClick={(data) => {
+              setDataSelecionada(data);
               setEditRota(null);
               setFormOpen(true);
             }}
@@ -251,6 +254,7 @@ export default function Rotas() {
         open={formOpen} 
         onOpenChange={setFormOpen} 
         rota={editRota}
+        dataInicial={dataSelecionada}
       />
 
       <RotaDetailDrawer
