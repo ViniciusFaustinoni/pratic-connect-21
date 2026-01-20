@@ -227,7 +227,8 @@ export function useInstalacao(id: string | undefined) {
           veiculos (id, marca, modelo, placa, ano_modelo, cor, chassi, renavam),
           rastreadores (id, codigo, numero_serie, imei),
           instalador:profiles!instalacoes_instalador_id_fkey (id, nome, telefone, email),
-          instalador_responsavel:profiles!instalacoes_instalador_responsavel_id_fkey (id, nome, telefone, email)
+          instalador_responsavel:profiles!instalacoes_instalador_responsavel_id_fkey (id, nome, telefone, email),
+          rota:rotas!instalacoes_rota_id_fkey (id, codigo, status)
         `)
         .eq('id', id)
         .maybeSingle();
