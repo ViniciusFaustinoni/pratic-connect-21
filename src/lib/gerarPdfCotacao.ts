@@ -258,25 +258,11 @@ const drawPremiumSectionHeader = (
 const drawPageBackground = (
   doc: jsPDF,
   pageWidth: number,
-  pageHeight: number,
-  vehicleBase64: string | null
+  pageHeight: number
 ) => {
   // Fundo escuro premium
   doc.setFillColor(premiumDark.r, premiumDark.g, premiumDark.b);
   doc.rect(0, 0, pageWidth, pageHeight, 'F');
-
-  // Veículo como marca d'água sutil (centralizado, sem borda/quadrado)
-  if (vehicleBase64) {
-    const gState = new GState({ opacity: 0.03 });
-    doc.setGState(gState);
-    // Centralizado na página
-    const watermarkWidth = 150;
-    const watermarkHeight = 80;
-    const watermarkX = (pageWidth - watermarkWidth) / 2;
-    const watermarkY = (pageHeight - watermarkHeight) / 2;
-    doc.addImage(vehicleBase64, 'PNG', watermarkX, watermarkY, watermarkWidth, watermarkHeight);
-    doc.setGState(new GState({ opacity: 1 }));
-  }
 };
 
 // ============= Geração do PDF Premium =============
@@ -301,7 +287,7 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
       doc.addPage();
       
       // Desenhar background e marca d'água na nova página
-      drawPageBackground(doc, pageWidth, pageHeight, vehicleBase64);
+      drawPageBackground(doc, pageWidth, pageHeight);
       
       // Header compacto para páginas subsequentes
       drawGradientRect(doc, 0, 0, pageWidth, 20, brandBlue, brandRed);
@@ -315,7 +301,7 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
   };
 
   // ============= BACKGROUND PREMIUM (primeira página) =============
-  drawPageBackground(doc, pageWidth, pageHeight, vehicleBase64);
+  drawPageBackground(doc, pageWidth, pageHeight);
 
   // ============= HEADER PREMIUM COM GRADIENTE =============
   const headerHeight = 55;
@@ -687,7 +673,7 @@ export async function gerarPdfCotacaoComparativa(cotacao: CotacaoComparativaPara
   ]);
 
   // ============= BACKGROUND PREMIUM ESCURO =============
-  drawPageBackground(doc, pageWidth, pageHeight, vehicleBase64);
+  drawPageBackground(doc, pageWidth, pageHeight);
 
   // ============= HEADER PREMIUM =============
   const headerHeight = 50;
