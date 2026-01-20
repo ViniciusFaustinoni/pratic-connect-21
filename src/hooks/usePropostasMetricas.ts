@@ -106,22 +106,32 @@ export function usePropostasMetricas(periodo: PeriodoFiltro = 'mes') {
         .select('id, vendedor_id, etapa, created_at')
         .in('vendedor_id', vendedorIds);
 
-      // Buscar contratos período atual (contratos.vendedor_id = profiles.id)
+      // Buscar contratos período atual - usar data_assinatura para contratos assinados
       const { data: contratosAtuais } = await supabase
         .from('contratos')
         .select('id, vendedor_id, status, valor_mensal, created_at, data_assinatura')
         .in('vendedor_id', profileIds)
-        .gte('created_at', periodoInicioStr)
-        .lte('created_at', periodoFimStr);
+        .in('status', ['assinado', 'ativo', 'enviado', 'rascunho'])
+        .or(`created_at.gte.${periodoInicioStr},data_assinatura.gte.${periodoInicioStr}`)
+        .or(`created_at.lte.${periodoFimStr}T23:59:59,data_assinatura.lte.${periodoFimStr}T23:59:59`);
 
-      // Buscar contratos período anterior
-      const { data: contratosAnteriores } = await supabase
+      // Buscar contratos ASSINADOS no período atual (por data_assinatura)
+      const { data: contratosAssinadosAtuais } = await supabase
         .from('contratos')
-        .select('id, vendedor_id, status, valor_mensal')
+        .select('id, vendedor_id, status, valor_mensal, created_at, data_assinatura')
         .in('vendedor_id', profileIds)
         .in('status', ['assinado', 'ativo'])
-        .gte('created_at', periodoAnteriorInicioStr)
-        .lte('created_at', periodoAnteriorFimStr);
+        .gte('data_assinatura', periodoInicioStr)
+        .lte('data_assinatura', `${periodoFimStr}T23:59:59`);
+
+      // Buscar contratos período anterior (por data_assinatura)
+      const { data: contratosAnteriores } = await supabase
+        .from('contratos')
+        .select('id, vendedor_id, status, valor_mensal, data_assinatura')
+        .in('vendedor_id', profileIds)
+        .in('status', ['assinado', 'ativo'])
+        .gte('data_assinatura', periodoAnteriorInicioStr)
+        .lte('data_assinatura', `${periodoAnteriorFimStr}T23:59:59`);
 
       // Buscar todos os contratos para métricas globais
       const { data: todosContratos } = await supabase
@@ -139,14 +149,14 @@ export function usePropostasMetricas(periodo: PeriodoFiltro = 'mes') {
         const vendedorContratosAtuais = contratosAtuais?.filter(c => c.vendedor_id === profile.id) || [];
         const vendedorContratosAnteriores = contratosAnteriores?.filter(c => c.vendedor_id === profile.id) || [];
         
-        const propostasFechadas = vendedorContratosAtuais.filter(c => 
-          c.status === 'assinado' || c.status === 'ativo'
-        ).length;
+        // Usar contratosAssinadosAtuais para métricas de fechamento (por data_assinatura)
+        const vendedorAssinadosAtuais = contratosAssinadosAtuais?.filter(c => c.vendedor_id === profile.id) || [];
+        
+        const propostasFechadas = vendedorAssinadosAtuais.length;
         
         const propostasFechadasAnterior = vendedorContratosAnteriores.length;
         
-        const valorFechado = vendedorContratosAtuais
-          .filter(c => c.status === 'assinado' || c.status === 'ativo')
+        const valorFechado = vendedorAssinadosAtuais
           .reduce((acc, c) => acc + (c.valor_mensal || 0), 0);
           
         const valorFechadoAnterior = vendedorContratosAnteriores
@@ -236,28 +246,27 @@ export function usePropostasMetricas(periodo: PeriodoFiltro = 'mes') {
         totalPropostas: todosContratos?.length || 0,
         emCotacao: leads?.filter(l => l.etapa === 'cotacao_enviada').length || 0,
         aguardandoAssinatura: todosContratos?.filter(c => c.status === 'enviado').length || 0,
-        assinadas: contratosAtuais?.filter(c => c.status === 'assinado' || c.status === 'ativo').length || 0,
+        assinadas: contratosAssinadosAtuais?.length || 0,
         valorTotalMensal: todosContratos
           ?.filter(c => c.status === 'ativo')
           .reduce((acc, c) => acc + (c.valor_mensal || 0), 0) || 0,
         variacaoPropostas: calcularVariacao(
-          contratosAtuais?.length || 0,
+          contratosAssinadosAtuais?.length || 0,
           contratosAnteriores?.length || 0
         ),
         variacaoAssinadas: calcularVariacao(
-          contratosAtuais?.filter(c => c.status === 'assinado' || c.status === 'ativo').length || 0,
+          contratosAssinadosAtuais?.length || 0,
           contratosAnteriores?.length || 0
         ),
         variacaoValor: calcularVariacao(
-          contratosAtuais?.filter(c => c.status === 'assinado' || c.status === 'ativo')
-            .reduce((acc, c) => acc + (c.valor_mensal || 0), 0) || 0,
+          contratosAssinadosAtuais?.reduce((acc, c) => acc + (c.valor_mensal || 0), 0) || 0,
           contratosAnteriores?.reduce((acc, c) => acc + (c.valor_mensal || 0), 0) || 0
         ),
       };
 
       return { consultores, globais };
     },
-    staleTime: 1000 * 60 * 5, // 5 minutos
+    staleTime: 1000 * 30, // 30 segundos - mais rápido para ver assinaturas
   });
 }
 
