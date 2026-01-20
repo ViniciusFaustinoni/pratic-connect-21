@@ -18,6 +18,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
+import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { toast } from 'sonner';
 import { isPdf, convertPdfToImage, getPdfConvertedName } from '@/lib/pdfToImage';
 
@@ -134,14 +135,16 @@ export function UnifiedDocumentUploader({
       }
 
       // 1. Upload para storage
-      // Usar bucket público para cotações (cliente não autenticado) ou bucket de contratos (autenticado)
-      const bucketName = cotacaoId && !contratoId ? 'cotacoes-docs' : 'contratos-documentos';
+      // Usar cliente e bucket público para cotações (cliente não autenticado) ou bucket de contratos (autenticado)
+      const isPublicFlow = cotacaoId && !contratoId;
+      const supabaseClient = isPublicFlow ? publicSupabase : supabase;
+      const bucketName = isPublicFlow ? 'cotacoes-docs' : 'contratos-documentos';
       
       const timestamp = Date.now();
       const sanitizedFileName = finalFileName.replace(/[^a-zA-Z0-9.-]/g, '_');
       const filePath = `${entityId}/documentos/${timestamp}_${sanitizedFileName}`;
 
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      const { data: uploadData, error: uploadError } = await supabaseClient.storage
         .from(bucketName)
         .upload(filePath, fileToUpload, {
           cacheControl: '3600',
@@ -154,7 +157,7 @@ export function UnifiedDocumentUploader({
       }
 
       // 2. Obter URL pública
-      const { data: urlData } = supabase.storage
+      const { data: urlData } = supabaseClient.storage
         .from(bucketName)
         .getPublicUrl(uploadData.path);
 
@@ -183,8 +186,8 @@ export function UnifiedDocumentUploader({
 
       const ocrResult = ocrData as OcrResultadoUnificado;
 
-      // 4. Inserir no banco com tipo detectado
-      const { data: docData, error: insertError } = await supabase
+      // 4. Inserir no banco com tipo detectado (usar cliente apropriado)
+      const { data: docData, error: insertError } = await supabaseClient
         .from('contratos_documentos')
         .insert({
           contrato_id: contratoId || null,
