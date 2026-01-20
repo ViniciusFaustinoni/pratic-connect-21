@@ -43,6 +43,11 @@ const TEMPLATES: Record<string, {
     mensagem: 'Parabéns {nome}! A instalação foi realizada com sucesso. Seu veículo agora está protegido!',
     emailTemplate: 'generico',
   },
+  cobertura_total_ativada: {
+    titulo: '🛡️ Cobertura Total Ativada!',
+    mensagem: 'Parabéns {nome}! Seu veículo {placa} agora está com COBERTURA TOTAL ativa. A instalação do rastreador e vistoria foram concluídas com sucesso. Bem-vindo à PRATIC!',
+    emailTemplate: 'generico',
+  },
 };
 
 serve(async (req) => {

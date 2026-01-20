@@ -387,8 +387,72 @@ export default function CotacaoContratacao() {
                   animate="animate"
                   exit="exit"
                 >
-                  {/* VERIFICAR DOCUMENTOS PENDENTES PRIMEIRO */}
-                  {docsPendentes && docsPendentes.length > 0 && associadoId ? (
+                  {/* COBERTURA TOTAL ATIVADA - Tela de boas-vindas */}
+                  {cotacao?.status_contratacao === 'ativo' ? (
+                    <Card className="border-green-500/30 bg-card/80 backdrop-blur-xl">
+                      <CardContent className="py-12 text-center space-y-6">
+                        <motion.div 
+                          className="w-20 h-20 mx-auto rounded-full bg-green-500/10 flex items-center justify-center"
+                          initial={{ scale: 0 }}
+                          animate={{ scale: 1 }}
+                          transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
+                        >
+                          <PartyPopper className="h-10 w-10 text-green-500" />
+                        </motion.div>
+                        
+                        <div>
+                          <Badge className="bg-green-500/20 text-green-400 border-green-500/30 mb-4">
+                            Cobertura Total Ativada
+                          </Badge>
+                          <h2 className="text-2xl font-bold mb-3 text-foreground">
+                            Bem-vindo à PRATIC!
+                          </h2>
+                          <p className="text-muted-foreground max-w-md mx-auto">
+                            Seu veículo <strong className="text-foreground">{cotacao?.veiculo_placa}</strong> está protegido com <strong className="text-green-400">cobertura total</strong>.
+                            Instalação e vistoria foram concluídas com sucesso!
+                          </p>
+                        </div>
+
+                        {/* Checklist visual */}
+                        <div className="bg-muted/30 rounded-lg p-4 max-w-md mx-auto text-left space-y-3">
+                          <div className="flex items-center gap-2">
+                            <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0" />
+                            <span className="text-sm text-muted-foreground">Documentos verificados</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0" />
+                            <span className="text-sm text-muted-foreground">Contrato assinado</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0" />
+                            <span className="text-sm text-muted-foreground">Vistoria aprovada</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0" />
+                            <span className="text-sm text-muted-foreground">Rastreador instalado</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Shield className="h-5 w-5 text-primary flex-shrink-0" />
+                            <span className="text-sm font-medium text-primary">Cobertura total ativada</span>
+                          </div>
+                        </div>
+
+                        <div className="pt-4">
+                          <p className="text-sm text-muted-foreground mb-3">
+                            Baixe nosso aplicativo para acessar todos os serviços:
+                          </p>
+                          <div className="flex justify-center gap-4">
+                            <div className="bg-muted/50 rounded-lg px-4 py-2 text-sm">
+                              📱 Em breve na App Store
+                            </div>
+                            <div className="bg-muted/50 rounded-lg px-4 py-2 text-sm">
+                              📱 Em breve no Google Play
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ) : docsPendentes && docsPendentes.length > 0 && associadoId ? (
                     <DocumentosPendentesPublico
                       associadoId={associadoId}
                       docsPendentes={docsPendentes}
@@ -398,7 +462,7 @@ export default function CotacaoContratacao() {
                         refetchDocs();
                       }}
                     />
-                  ) : (cotacao?.tipo_vistoria === 'autovistoria' || 
+                  ) : (cotacao?.tipo_vistoria === 'autovistoria' ||
                     (!cotacao?.vistoria_data_agendada && cotacao?.status_contratacao === 'pagamento_ok')) ? (
                     // AUTOVISTORIA ou caso sem agendamento - Verificar se já agendou vistoria completa/instalação
                     cotacao?.vistoria_completa_data_agendada ? (
