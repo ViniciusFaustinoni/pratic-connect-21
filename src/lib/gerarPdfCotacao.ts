@@ -656,26 +656,68 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
   doc.save(fileName);
 }
 
-// ============= PDF COMPARATIVO PREMIUM =============
+// ============= PDF COMPARATIVO PREMIUM MULTI-PÁGINAS =============
 
-export async function gerarPdfCotacaoComparativa(cotacao: CotacaoComparativaParaPdf): Promise<void> {
-  const doc = new jsPDF();
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
-  const margin = 15;
+// Função auxiliar para desenhar rodapé compacto (páginas subsequentes)
+const desenharRodapeCompacto = (
+  doc: jsPDF,
+  cotacao: CotacaoComparativaParaPdf,
+  logoBase64: string | null,
+  pageWidth: number,
+  pageHeight: number,
+  margin: number,
+  paginaAtual: number,
+  totalPaginas: number
+) => {
+  const footerY = pageHeight - 20;
+
+  // Linha gradiente
+  drawGradientRect(doc, margin, footerY - 4, pageWidth - margin * 2, 1.5, glowBlue, brandRed, 40);
+
+  // Fundo do rodapé
+  doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
+  doc.rect(0, footerY, pageWidth, 20, 'F');
+
+  // Logo pequeno
+  if (logoBase64) {
+    doc.addImage(logoBase64, 'PNG', margin, footerY + 2, 14, 14);
+  }
+
+  const footerTextX = logoBase64 ? margin + 18 : margin;
+
+  doc.setTextColor(textLight.r, textLight.g, textLight.b);
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.text('PRATICCAR', footerTextX, footerY + 7);
+
+  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+  doc.setFontSize(6);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Proteção Veicular', footerTextX, footerY + 12);
+
+  // Número da cotação e página
+  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+  doc.setFontSize(7);
+  doc.text(`#${cotacao.numero || 'N/A'} | Página ${paginaAtual} de ${totalPaginas}`, pageWidth - margin, footerY + 10, { align: 'right' });
+};
+
+// Função para desenhar página de capa (Página 1)
+const desenharPaginaCapa = (
+  doc: jsPDF,
+  cotacao: CotacaoComparativaParaPdf,
+  logoBase64: string | null,
+  pageWidth: number,
+  pageHeight: number,
+  margin: number,
+  totalPaginas: number
+) => {
   const contentWidth = pageWidth - margin * 2;
   let y = 0;
 
-  // Carregar imagens
-  const [logoBase64, vehicleBase64] = await Promise.all([
-    loadImageAsBase64('/pratic-logo.png'),
-    loadImageAsBase64('/vehicle-silhouette.png'),
-  ]);
-
-  // ============= BACKGROUND PREMIUM ESCURO =============
+  // Background
   drawPageBackground(doc, pageWidth, pageHeight);
 
-  // ============= HEADER PREMIUM =============
+  // Header
   const headerHeight = 50;
   drawGradientRect(doc, 0, 0, pageWidth, headerHeight, brandBlue, { r: 30, g: 70, b: 130 });
   drawGradientRect(doc, 0, headerHeight - 3, pageWidth, 3, glowBlue, brandRed, 60);
@@ -716,121 +758,123 @@ export async function gerarPdfCotacaoComparativa(cotacao: CotacaoComparativaPara
 
   y = headerHeight + 6;
 
-  // ============= BARRA DE VALIDADE =============
+  // Barra de validade
   doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
   doc.roundedRect(margin, y, contentWidth, 12, 3, 3, 'F');
 
   const dataValidade = new Date(cotacao.created_at);
   dataValidade.setDate(dataValidade.getDate() + (cotacao.validade_dias || 7));
+
+  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+  doc.setFontSize(8);
+  doc.text(`Emitido em: ${formatDate(cotacao.created_at)}`, margin + 5, y + 8);
   
   doc.setTextColor(warningYellow.r, warningYellow.g, warningYellow.b);
-  doc.setFontSize(8);
   doc.setFont('helvetica', 'bold');
   doc.text(`Válida até: ${formatDate(dataValidade.toISOString())}`, pageWidth - margin - 5, y + 8, { align: 'right' });
 
-  y += 14;
+  y += 16;
 
-  // ============= DADOS DO SOLICITANTE E VEÍCULO (compacto) =============
+  // Dados do solicitante e veículo
   doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
-  doc.roundedRect(margin, y, contentWidth, 20, 3, 3, 'F');
+  doc.roundedRect(margin, y, contentWidth, 28, 3, 3, 'F');
 
   doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
   doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
   
-  // Linha 1: Solicitante
-  doc.text('Cliente:', margin + 5, y + 7);
+  doc.text('Cliente:', margin + 5, y + 9);
   doc.setTextColor(textLight.r, textLight.g, textLight.b);
   doc.setFont('helvetica', 'bold');
-  doc.text(cotacao.nome_solicitante || 'Não informado', margin + 25, y + 7);
+  doc.text(cotacao.nome_solicitante || 'Não informado', margin + 25, y + 9);
   
   doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
   doc.setFont('helvetica', 'normal');
-  doc.text('Tel:', pageWidth / 2 + 10, y + 7);
+  doc.text('Telefone:', pageWidth / 2 + 10, y + 9);
   doc.setTextColor(textLight.r, textLight.g, textLight.b);
-  doc.text(formatPhone(cotacao.telefone1_solicitante), pageWidth / 2 + 22, y + 7);
+  doc.text(formatPhone(cotacao.telefone1_solicitante), pageWidth / 2 + 32, y + 9);
 
-  // Linha 2: Veículo
   doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
   doc.setFont('helvetica', 'normal');
-  doc.text('Veículo:', margin + 5, y + 15);
+  doc.text('Veículo:', margin + 5, y + 18);
   doc.setTextColor(textLight.r, textLight.g, textLight.b);
   doc.setFont('helvetica', 'bold');
-  doc.text(`${cotacao.veiculo_marca || ''} ${cotacao.veiculo_modelo || ''} ${cotacao.veiculo_ano || ''}`, margin + 28, y + 15);
+  doc.text(`${cotacao.veiculo_marca || ''} ${cotacao.veiculo_modelo || ''} ${cotacao.veiculo_ano || ''}`, margin + 28, y + 18);
   
   doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
   doc.setFont('helvetica', 'normal');
-  doc.text('FIPE:', pageWidth / 2 + 10, y + 15);
+  doc.text('Placa:', pageWidth / 2 + 10, y + 18);
+  doc.setTextColor(textLight.r, textLight.g, textLight.b);
+  doc.text(formatPlaca(cotacao.veiculo_placa), pageWidth / 2 + 28, y + 18);
+
+  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Valor FIPE:', margin + 5, y + 26);
   doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
   doc.setFont('helvetica', 'bold');
-  doc.text(formatCurrency(cotacao.valor_fipe), pageWidth / 2 + 24, y + 15);
+  doc.text(formatCurrency(cotacao.valor_fipe), margin + 32, y + 26);
 
-  y += 24;
+  y += 34;
 
-  // ============= TÍTULO DA SEÇÃO DE PLANOS =============
+  // Título da seção de planos
   doc.setTextColor(textLight.r, textLight.g, textLight.b);
-  doc.setFontSize(11);
+  doc.setFontSize(12);
   doc.setFont('helvetica', 'bold');
-  doc.text('ESCOLHA O PLANO IDEAL PARA SUA PROTEÇÃO', pageWidth / 2, y, { align: 'center' });
-  y += 3;
-  drawGradientRect(doc, margin, y, contentWidth, 1, glowBlue, brandRed, 40);
-  y += 6;
+  doc.text(`${cotacao.planosComparar.length} OPÇÕES PARA SUA PROTEÇÃO`, pageWidth / 2, y, { align: 'center' });
+  y += 4;
+  drawGradientRect(doc, margin, y, contentWidth, 1.5, glowBlue, brandRed, 40);
+  y += 10;
 
-  // ============= CARDS DOS PLANOS =============
+  // Cards resumidos dos planos
   const numPlanos = cotacao.planosComparar.length;
-  const cardGap = 6;
-  
-  // Layout responsivo: plano único = card grande centralizado
-  const isSinglePlan = numPlanos === 1;
-  const cardWidth = isSinglePlan 
-    ? contentWidth * 0.65 // Card maior para plano único
-    : (contentWidth - (cardGap * (numPlanos - 1))) / numPlanos;
-  const cardHeight = isSinglePlan ? 110 : 85; // Card mais alto para mostrar mais coberturas
-  const startX = isSinglePlan 
-    ? margin + (contentWidth - cardWidth) / 2 // Centralizado
-    : margin;
-
-  // Determinar qual plano é recomendado (o do meio ou premium, ou o único)
+  const cardGap = 8;
+  const cardWidth = (contentWidth - (cardGap * (numPlanos - 1))) / numPlanos;
+  const cardHeight = 95;
   const planoRecomendadoIndex = numPlanos > 1 ? 1 : 0;
 
   cotacao.planosComparar.forEach((plano, index) => {
-    const cardX = isSinglePlan 
-      ? startX 
-      : margin + (cardWidth + cardGap) * index;
+    const cardX = margin + (cardWidth + cardGap) * index;
     const isRecommended = index === planoRecomendadoIndex;
+    const paginaDetalhes = index + 2;
 
-    // Card premium
+    // Card
     drawPremiumCard(doc, cardX, y, cardWidth, cardHeight, { 
-      isRecommended: true, // Plano único sempre destacado
+      isRecommended, 
       hasGlow: true 
     });
 
     const centerX = cardX + cardWidth / 2;
-    let cardY = y + 8;
+    let cardY = y + 6;
 
-    // Badge de recomendado/selecionado
-    if (isRecommended || isSinglePlan) {
+    // Badge de recomendado
+    if (isRecommended) {
       doc.setFillColor(brandRed.r, brandRed.g, brandRed.b);
-      const badgeText = isSinglePlan ? 'PLANO SELECIONADO' : 'RECOMENDADO';
-      const badgeWidth = isSinglePlan ? cardWidth - 16 : cardWidth - 8;
-      doc.roundedRect(cardX + (cardWidth - badgeWidth) / 2, cardY - 4, badgeWidth, 10, 2, 2, 'F');
+      const badgeWidth = cardWidth - 10;
+      doc.roundedRect(cardX + 5, cardY - 2, badgeWidth, 10, 2, 2, 'F');
       doc.setTextColor(255, 255, 255);
-      doc.setFontSize(isSinglePlan ? 8 : 6);
+      doc.setFontSize(6);
       doc.setFont('helvetica', 'bold');
-      doc.text(badgeText, centerX, cardY + 2, { align: 'center' });
-      cardY += 12;
+      doc.text('⭐ RECOMENDADO', centerX, cardY + 4, { align: 'center' });
+      cardY += 14;
+    } else {
+      cardY += 4;
     }
 
     // Nome do plano
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(isSinglePlan ? 14 : (isRecommended ? 12 : 10));
+    doc.setFontSize(9);
     doc.setFont('helvetica', 'bold');
-    doc.text(plano.nome.toUpperCase(), centerX, cardY, { align: 'center' });
-    cardY += isSinglePlan ? 12 : (isRecommended ? 10 : 8);
+    const nomeLinhas = plano.nome.length > 18 
+      ? [plano.nome.substring(0, 18), plano.nome.substring(18, 36)]
+      : [plano.nome];
+    nomeLinhas.forEach((linha, i) => {
+      doc.text(linha.toUpperCase(), centerX, cardY + (i * 5), { align: 'center' });
+    });
+    cardY += nomeLinhas.length * 5 + 6;
 
-    // Valor mensal (destaque)
+    // Valor mensal
     doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
-    doc.setFontSize(isSinglePlan ? 22 : (isRecommended ? 18 : 14));
+    doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
     doc.text(formatCurrency(plano.valorMensal), centerX, cardY, { align: 'center' });
     cardY += 5;
@@ -841,115 +885,498 @@ export async function gerarPdfCotacaoComparativa(cotacao: CotacaoComparativaPara
     doc.text('/mês', centerX, cardY, { align: 'center' });
     cardY += 8;
 
-    // Info rápida
+    // Cobertura FIPE
     doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
     doc.setFontSize(7);
-    doc.text(`${plano.coberturaFipe}% FIPE`, centerX, cardY, { align: 'center' });
-    cardY += 8;
+    doc.text(`Cobertura: ${plano.coberturaFipe}% FIPE`, centerX, cardY, { align: 'center' });
+    cardY += 10;
 
-    // Linha divisória
-    doc.setDrawColor(premiumCardLight.r, premiumCardLight.g, premiumCardLight.b);
-    doc.setLineWidth(0.3);
-    doc.line(cardX + 8, cardY, cardX + cardWidth - 8, cardY);
-    cardY += 6;
-
-    // Coberturas - mais coberturas para plano único
-    const maxCoberturas = isSinglePlan ? 6 : 4;
-    const coberturaMaxLen = isSinglePlan ? 35 : 18;
-    doc.setFontSize(isSinglePlan ? 7 : 6);
-    
-    // Para plano único, usar 2 colunas de coberturas
-    if (isSinglePlan && plano.coberturas.length > 3) {
-      const coberturasCol1 = plano.coberturas.slice(0, Math.ceil(Math.min(plano.coberturas.length, maxCoberturas) / 2));
-      const coberturasCol2 = plano.coberturas.slice(Math.ceil(Math.min(plano.coberturas.length, maxCoberturas) / 2), maxCoberturas);
-      const colWidth = (cardWidth - 20) / 2;
-      
-      coberturasCol1.forEach((cobertura, i) => {
-        drawCheckIndicator(doc, cardX + 10, cardY + (i * 6));
-        doc.setTextColor(textLight.r, textLight.g, textLight.b);
-        const cobText = cobertura.length > 16 ? cobertura.substring(0, 14) + '...' : cobertura;
-        doc.text(cobText, cardX + 16, cardY + (i * 6));
-      });
-      
-      coberturasCol2.forEach((cobertura, i) => {
-        drawCheckIndicator(doc, cardX + colWidth + 10, cardY + (i * 6));
-        doc.setTextColor(textLight.r, textLight.g, textLight.b);
-        const cobText = cobertura.length > 16 ? cobertura.substring(0, 14) + '...' : cobertura;
-        doc.text(cobText, cardX + colWidth + 16, cardY + (i * 6));
-      });
-    } else {
-      plano.coberturas.slice(0, maxCoberturas).forEach(cobertura => {
-        drawCheckIndicator(doc, cardX + 8, cardY);
-        doc.setTextColor(textLight.r, textLight.g, textLight.b);
-        const cobText = cobertura.length > coberturaMaxLen ? cobertura.substring(0, coberturaMaxLen - 2) + '...' : cobertura;
-        doc.text(cobText, cardX + 14, cardY);
-        cardY += 5;
-      });
-    }
+    // Link para página de detalhes
+    doc.setFillColor(glowBlue.r, glowBlue.g, glowBlue.b);
+    const linkWidth = cardWidth - 16;
+    doc.roundedRect(cardX + 8, cardY, linkWidth, 12, 2, 2, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Ver detalhes → Pág. ${paginaDetalhes}`, centerX, cardY + 8, { align: 'center' });
   });
 
-  y += cardHeight + 6;
+  y += cardHeight + 10;
 
-  // ============= TABELA COMPARATIVA DE VALORES =============
+  // Tabela resumo de valores
   doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
-  doc.roundedRect(margin, y, contentWidth, 26, 3, 3, 'F');
+  doc.roundedRect(margin, y, contentWidth, 32, 3, 3, 'F');
 
-  // Header da tabela
+  // Labels
   doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
   doc.setFontSize(8);
   doc.setFont('helvetica', 'bold');
-  doc.text('VALOR ADESÃO', margin + 5, y + 9);
-  doc.text('1º PAGAMENTO', margin + 5, y + 20);
+  doc.text('ADESÃO', margin + 5, y + 10);
+  doc.text('MENSAL', margin + 5, y + 18);
+  doc.text('1º PAGAMENTO', margin + 5, y + 28);
 
   // Valores por plano
   cotacao.planosComparar.forEach((plano, index) => {
-    const cardX = isSinglePlan 
-      ? startX 
-      : margin + (cardWidth + cardGap) * index;
+    const cardX = margin + (cardWidth + cardGap) * index;
     const centerX = cardX + cardWidth / 2;
     const primeiroPagamento = plano.valorAdesao + plano.valorMensal;
 
     doc.setTextColor(textLight.r, textLight.g, textLight.b);
-    doc.setFontSize(isSinglePlan ? 11 : 9);
+    doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
-    doc.text(formatCurrency(plano.valorAdesao), centerX, y + 9, { align: 'center' });
+    doc.text(formatCurrency(plano.valorAdesao), centerX, y + 10, { align: 'center' });
+    doc.text(formatCurrency(plano.valorMensal), centerX, y + 18, { align: 'center' });
     
     doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
     doc.setFont('helvetica', 'bold');
-    doc.text(formatCurrency(primeiroPagamento), centerX, y + 20, { align: 'center' });
+    doc.text(formatCurrency(primeiroPagamento), centerX, y + 28, { align: 'center' });
   });
 
-  // ============= RODAPÉ PREMIUM =============
-  const footerY = pageHeight - 25;
+  // Rodapé
+  desenharRodapeCompacto(doc, cotacao, logoBase64, pageWidth, pageHeight, margin, 1, totalPaginas);
+};
 
-  drawGradientRect(doc, margin, footerY - 6, contentWidth, 2, glowBlue, brandRed, 50);
+// Função para desenhar página de detalhes de um plano
+const desenharPaginaDetalhesPlano = (
+  doc: jsPDF,
+  cotacao: CotacaoComparativaParaPdf,
+  plano: PlanoParaPdf,
+  numeroPlano: number,
+  totalPlanos: number,
+  logoBase64: string | null,
+  pageWidth: number,
+  pageHeight: number,
+  margin: number,
+  paginaAtual: number,
+  totalPaginas: number
+) => {
+  const contentWidth = pageWidth - margin * 2;
+  let y = 0;
 
+  // Background
+  drawPageBackground(doc, pageWidth, pageHeight);
+
+  // Header compacto
+  const headerHeight = 38;
+  drawGradientRect(doc, 0, 0, pageWidth, headerHeight, brandBlue, { r: 30, g: 70, b: 130 });
+  drawGradientRect(doc, 0, headerHeight - 2, pageWidth, 2, glowBlue, brandRed, 60);
+
+  // Badge plano X de Y
   doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
-  doc.rect(0, footerY, pageWidth, 25, 'F');
-
-  if (logoBase64) {
-    doc.addImage(logoBase64, 'PNG', margin, footerY + 2, 16, 16);
-  }
-
-  const footerTextX = logoBase64 ? margin + 22 : margin;
-
-  doc.setTextColor(textLight.r, textLight.g, textLight.b);
-  doc.setFontSize(9);
+  doc.roundedRect(margin, 8, 55, 12, 2, 2, 'F');
+  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+  doc.setFontSize(7);
   doc.setFont('helvetica', 'bold');
-  doc.text('PRATICCAR', footerTextX, footerY + 8);
-  
+  doc.text(`PLANO ${numeroPlano} DE ${totalPlanos}`, margin + 27.5, 16, { align: 'center' });
+
+  // Nome do plano
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(18);
+  doc.setFont('helvetica', 'bold');
+  doc.text(truncateText(plano.nome.toUpperCase(), 28), margin + 65, 18);
+
+  // Cotação no canto
   doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
   doc.setFontSize(7);
   doc.setFont('helvetica', 'normal');
-  doc.text('Proteção Veicular', footerTextX, footerY + 14);
-  doc.text(`Gerado em: ${formatDate(new Date().toISOString())}`, footerTextX, footerY + 20);
+  doc.text(`#${cotacao.numero || 'N/A'}`, pageWidth - margin, 12, { align: 'right' });
 
+  // Dados do veículo resumido
+  doc.setTextColor(textLight.r, textLight.g, textLight.b);
+  doc.setFontSize(8);
+  doc.text(`${cotacao.veiculo_marca} ${cotacao.veiculo_modelo} ${cotacao.veiculo_ano}`, pageWidth - margin, 20, { align: 'right' });
+  doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
+  doc.text(formatCurrency(cotacao.valor_fipe), pageWidth - margin, 28, { align: 'right' });
+
+  y = headerHeight + 8;
+
+  // Card principal do valor
+  const valorCardHeight = 55;
+  drawPremiumCard(doc, margin, y, contentWidth, valorCardHeight, { isRecommended: true, hasGlow: true });
+
+  // Valor mensal grande
+  doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
+  doc.setFontSize(36);
+  doc.setFont('helvetica', 'bold');
+  doc.text(formatCurrency(plano.valorMensal), pageWidth / 2, y + 28, { align: 'center' });
+  
   doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
-  doc.setFontSize(6);
-  doc.text('Esta cotação não tem valor contratual e está sujeita a análise.', pageWidth - margin, footerY + 12, { align: 'right' });
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'normal');
+  doc.text('mensalidade', pageWidth / 2, y + 42, { align: 'center' });
+
+  // Badge de cobertura FIPE
+  doc.setFillColor(glowBlue.r, glowBlue.g, glowBlue.b);
+  doc.roundedRect(pageWidth - margin - 60, y + 8, 55, 14, 2, 2, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.text(`${plano.coberturaFipe}% FIPE`, pageWidth - margin - 32.5, y + 17, { align: 'center' });
+
+  // Badge de cota
+  doc.setFillColor(premiumCardLight.r, premiumCardLight.g, premiumCardLight.b);
+  doc.roundedRect(margin + 5, y + 8, 40, 14, 2, 2, 'F');
+  doc.setTextColor(textLight.r, textLight.g, textLight.b);
+  doc.setFontSize(7);
+  doc.text(plano.cota || 'COTA', margin + 25, y + 17, { align: 'center' });
+
+  y += valorCardHeight + 10;
+
+  // Seção de coberturas
+  drawPremiumSectionHeader(doc, margin, y, contentWidth, 'COBERTURAS INCLUÍDAS');
+  y += HEADER_HEIGHT + 6;
+
+  // Coberturas em 2 colunas
+  const coberturas = plano.coberturas;
+  const coberturasCol1 = coberturas.slice(0, Math.ceil(coberturas.length / 2));
+  const coberturasCol2 = coberturas.slice(Math.ceil(coberturas.length / 2));
+  const coberturaLineHeight = 9;
+  const col1X = margin;
+  const col2X = margin + contentWidth / 2 + 4;
+  const colWidth = contentWidth / 2 - 4;
+
+  const startCobY = y;
+  coberturasCol1.forEach((cobertura, index) => {
+    const lineY = startCobY + index * coberturaLineHeight;
+    const textY = lineY + 6;
+    
+    if (index % 2 === 0) {
+      doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
+      doc.rect(col1X, lineY, colWidth, coberturaLineHeight, 'F');
+    }
+    
+    drawCheckIndicator(doc, col1X + 6, textY);
+    doc.setTextColor(textLight.r, textLight.g, textLight.b);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text(truncateText(cobertura, 32), col1X + 14, textY);
+  });
+
+  coberturasCol2.forEach((cobertura, index) => {
+    const lineY = startCobY + index * coberturaLineHeight;
+    const textY = lineY + 6;
+    
+    if (index % 2 === 0) {
+      doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
+      doc.rect(col2X, lineY, colWidth, coberturaLineHeight, 'F');
+    }
+    
+    drawCheckIndicator(doc, col2X + 6, textY);
+    doc.setTextColor(textLight.r, textLight.g, textLight.b);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text(truncateText(cobertura, 32), col2X + 14, textY);
+  });
+
+  y = startCobY + Math.max(coberturasCol1.length, coberturasCol2.length) * coberturaLineHeight + 10;
+
+  // Seção: Não inclui (se houver)
+  if (plano.naoInclui && plano.naoInclui.length > 0) {
+    drawPremiumSectionHeader(doc, margin, y, contentWidth, 'NÃO INCLUI NESTE PLANO');
+    y += HEADER_HEIGHT + 6;
+
+    const naoIncluiCol1 = plano.naoInclui.slice(0, Math.ceil(plano.naoInclui.length / 2));
+    const naoIncluiCol2 = plano.naoInclui.slice(Math.ceil(plano.naoInclui.length / 2));
+    
+    const startNaoY = y;
+    naoIncluiCol1.forEach((item, index) => {
+      const lineY = startNaoY + index * coberturaLineHeight;
+      const textY = lineY + 6;
+      
+      if (index % 2 === 0) {
+        doc.setFillColor(30, 30, 40);
+        doc.rect(col1X, lineY, colWidth, coberturaLineHeight, 'F');
+      }
+      
+      // X vermelho
+      doc.setTextColor(glowRed.r, glowRed.g, glowRed.b);
+      doc.setFontSize(9);
+      doc.text('✗', col1X + 6, textY);
+      doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+      doc.setFont('helvetica', 'normal');
+      doc.text(truncateText(item, 32), col1X + 14, textY);
+    });
+
+    naoIncluiCol2.forEach((item, index) => {
+      const lineY = startNaoY + index * coberturaLineHeight;
+      const textY = lineY + 6;
+      
+      if (index % 2 === 0) {
+        doc.setFillColor(30, 30, 40);
+        doc.rect(col2X, lineY, colWidth, coberturaLineHeight, 'F');
+      }
+      
+      doc.setTextColor(glowRed.r, glowRed.g, glowRed.b);
+      doc.setFontSize(9);
+      doc.text('✗', col2X + 6, textY);
+      doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+      doc.setFont('helvetica', 'normal');
+      doc.text(truncateText(item, 32), col2X + 14, textY);
+    });
+
+    y = startNaoY + Math.max(naoIncluiCol1.length, naoIncluiCol2.length) * coberturaLineHeight + 10;
+  }
+
+  // Seção: Composição do valor
+  drawPremiumSectionHeader(doc, margin, y, contentWidth, 'COMPOSIÇÃO DO VALOR');
+  y += HEADER_HEIGHT + 6;
+
+  const valorLineHeight = 11;
+  const labelCol = margin + 8;
+  const valueCol = pageWidth - margin - 8;
+
+  // Linha: Taxa de adesão
+  doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
+  doc.rect(margin, y - 2, contentWidth, valorLineHeight, 'F');
+  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Taxa de Adesão (pagamento único)', labelCol, y + 5);
+  doc.setTextColor(textLight.r, textLight.g, textLight.b);
+  doc.text(formatCurrency(plano.valorAdesao), valueCol, y + 5, { align: 'right' });
+  y += valorLineHeight;
+
+  // Linha: Mensalidade
+  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+  doc.text('Mensalidade', labelCol, y + 5);
+  doc.setTextColor(textLight.r, textLight.g, textLight.b);
+  doc.text(formatCurrency(plano.valorMensal), valueCol, y + 5, { align: 'right' });
+  y += valorLineHeight + 4;
+
+  // Linha separadora
+  drawGradientRect(doc, margin, y, contentWidth, 1.5, glowBlue, brandRed, 40);
+  y += 8;
+
+  // Card: PRIMEIRO PAGAMENTO
+  const primeiroPagamento = plano.valorAdesao + plano.valorMensal;
+  doc.setFillColor(successGreen.r, successGreen.g, successGreen.b);
+  doc.roundedRect(margin, y, contentWidth, 22, 3, 3, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.text('PRIMEIRO PAGAMENTO', labelCol, y + 14);
+  doc.setFontSize(18);
+  doc.text(formatCurrency(primeiroPagamento), valueCol, y + 14, { align: 'right' });
+
+  // Rodapé
+  desenharRodapeCompacto(doc, cotacao, logoBase64, pageWidth, pageHeight, margin, paginaAtual, totalPaginas);
+};
+
+// Função para desenhar página comparativa (última página)
+const desenharPaginaComparativa = (
+  doc: jsPDF,
+  cotacao: CotacaoComparativaParaPdf,
+  logoBase64: string | null,
+  pageWidth: number,
+  pageHeight: number,
+  margin: number,
+  paginaAtual: number,
+  totalPaginas: number
+) => {
+  const contentWidth = pageWidth - margin * 2;
+  let y = 0;
+
+  // Background
+  drawPageBackground(doc, pageWidth, pageHeight);
+
+  // Header
+  const headerHeight = 32;
+  drawGradientRect(doc, 0, 0, pageWidth, headerHeight, brandBlue, { r: 30, g: 70, b: 130 });
+  drawGradientRect(doc, 0, headerHeight - 2, pageWidth, 2, glowBlue, brandRed, 60);
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(16);
+  doc.setFont('helvetica', 'bold');
+  doc.text('TABELA COMPARATIVA DE COBERTURAS', pageWidth / 2, 20, { align: 'center' });
+
+  y = headerHeight + 8;
+
+  // Configurar colunas
+  const numPlanos = cotacao.planosComparar.length;
+  const labelColWidth = 65;
+  const planoColWidth = (contentWidth - labelColWidth) / numPlanos;
+
+  // Header da tabela
+  doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
+  doc.rect(margin, y, contentWidth, 16, 'F');
+  
+  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.text('COBERTURA', margin + 5, y + 10);
+
+  cotacao.planosComparar.forEach((plano, index) => {
+    const colX = margin + labelColWidth + (planoColWidth * index) + planoColWidth / 2;
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'bold');
+    
+    // Quebrar nome se muito longo
+    const nomeLinhas = plano.nome.length > 14 
+      ? [plano.nome.substring(0, 14), plano.nome.substring(14, 28)]
+      : [plano.nome];
+    nomeLinhas.forEach((linha, i) => {
+      doc.text(linha.toUpperCase(), colX, y + 6 + (i * 5), { align: 'center' });
+    });
+  });
+
+  y += 18;
+
+  // Coletar todas as coberturas únicas
+  const todasCoberturas = new Set<string>();
+  cotacao.planosComparar.forEach(plano => {
+    plano.coberturas.forEach(c => todasCoberturas.add(c));
+  });
+
+  const coberturasArray = Array.from(todasCoberturas);
+  const rowHeight = 8;
+
+  coberturasArray.forEach((cobertura, index) => {
+    // Verificar se precisa de nova página
+    if (y + rowHeight > pageHeight - 50) {
+      // Para simplificar, vamos apenas limitar o número de linhas
+      return;
+    }
+
+    // Fundo alternado
+    if (index % 2 === 0) {
+      doc.setFillColor(30, 41, 59);
+      doc.rect(margin, y, contentWidth, rowHeight, 'F');
+    }
+    
+    // Nome da cobertura
+    doc.setTextColor(textLight.r, textLight.g, textLight.b);
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'normal');
+    doc.text(truncateText(cobertura, 38), margin + 5, y + 5);
+    
+    // Check ou traço para cada plano
+    cotacao.planosComparar.forEach((plano, planoIndex) => {
+      const colX = margin + labelColWidth + (planoColWidth * planoIndex) + planoColWidth / 2;
+      const temCobertura = plano.coberturas.some(c => 
+        c.toLowerCase() === cobertura.toLowerCase()
+      );
+      
+      if (temCobertura) {
+        doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
+        doc.setFontSize(10);
+        doc.text('✓', colX, y + 5.5, { align: 'center' });
+      } else {
+        doc.setTextColor(100, 100, 100);
+        doc.setFontSize(8);
+        doc.text('—', colX, y + 5, { align: 'center' });
+      }
+    });
+    
+    y += rowHeight;
+  });
+
+  y += 6;
+
+  // Linha separadora
+  drawGradientRect(doc, margin, y, contentWidth, 1.5, glowBlue, brandRed, 40);
+  y += 8;
+
+  // Linhas de valores
+  const linhasValores = [
+    { label: 'MENSALIDADE', key: 'valorMensal', highlight: false },
+    { label: 'TAXA DE ADESÃO', key: 'valorAdesao', highlight: false },
+    { label: '1º PAGAMENTO', key: 'primeiroPagamento', highlight: true },
+  ];
+
+  linhasValores.forEach((linha, index) => {
+    const isHighlight = linha.highlight;
+    
+    if (isHighlight) {
+      doc.setFillColor(successGreen.r, successGreen.g, successGreen.b);
+    } else if (index % 2 === 0) {
+      doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
+    } else {
+      doc.setFillColor(premiumDark.r, premiumDark.g, premiumDark.b);
+    }
+    doc.rect(margin, y, contentWidth, 12, 'F');
+    
+    doc.setTextColor(isHighlight ? 255 : textLight.r, isHighlight ? 255 : textLight.g, isHighlight ? 255 : textLight.b);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.text(linha.label, margin + 5, y + 8);
+    
+    cotacao.planosComparar.forEach((plano, planoIndex) => {
+      const colX = margin + labelColWidth + (planoColWidth * planoIndex) + planoColWidth / 2;
+      let valor: number;
+      
+      if (linha.key === 'primeiroPagamento') {
+        valor = plano.valorAdesao + plano.valorMensal;
+      } else {
+        valor = plano[linha.key as keyof PlanoParaPdf] as number;
+      }
+      
+      doc.setFontSize(isHighlight ? 11 : 9);
+      doc.text(formatCurrency(valor), colX, y + 8, { align: 'center' });
+    });
+    
+    y += 12;
+  });
+
+  // Rodapé
+  desenharRodapeCompacto(doc, cotacao, logoBase64, pageWidth, pageHeight, margin, paginaAtual, totalPaginas);
+};
+
+export async function gerarPdfCotacaoComparativa(cotacao: CotacaoComparativaParaPdf): Promise<void> {
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 15;
+
+  // Carregar logo
+  const logoBase64 = await loadImageAsBase64('/pratic-logo.png');
+
+  const numPlanos = cotacao.planosComparar.length;
+  
+  // Calcular total de páginas:
+  // 1 capa + N planos + 1 comparativa (se > 1 plano)
+  const totalPaginas = numPlanos > 1 
+    ? 1 + numPlanos + 1  // capa + detalhes + comparativa
+    : 1 + numPlanos;      // capa + detalhes (sem comparativa para 1 plano)
+
+  // ============= PÁGINA 1: CAPA COM RESUMO DOS PLANOS =============
+  desenharPaginaCapa(doc, cotacao, logoBase64, pageWidth, pageHeight, margin, totalPaginas);
+
+  // ============= PÁGINAS 2+: DETALHES DE CADA PLANO =============
+  for (let i = 0; i < numPlanos; i++) {
+    const plano = cotacao.planosComparar[i];
+    doc.addPage();
+    desenharPaginaDetalhesPlano(
+      doc, 
+      cotacao, 
+      plano, 
+      i + 1, 
+      numPlanos,
+      logoBase64, 
+      pageWidth, 
+      pageHeight, 
+      margin,
+      i + 2, // página atual (2, 3, 4...)
+      totalPaginas
+    );
+  }
+
+  // ============= ÚLTIMA PÁGINA: TABELA COMPARATIVA (se mais de 1 plano) =============
+  if (numPlanos > 1) {
+    doc.addPage();
+    desenharPaginaComparativa(
+      doc, 
+      cotacao, 
+      logoBase64, 
+      pageWidth, 
+      pageHeight, 
+      margin,
+      totalPaginas,
+      totalPaginas
+    );
+  }
 
   // ============= DOWNLOAD =============
   const numeroLimpo = (cotacao.numero || 'PRATICCAR').replace(/[^a-zA-Z0-9-]/g, '');
-  const fileName = `cotacao-comparativa-${numeroLimpo}.pdf`;
-  doc.save(fileName);
+  doc.save(`cotacao-comparativa-${numeroLimpo}.pdf`);
 }
