@@ -731,12 +731,16 @@ export function useAprovarProposta() {
 
         // 6. Criar INSTALAÇÃO agendada (se tiver veículo)
         const associadoData = contrato.associado as any;
+        const dataAgendada = new Date().toISOString().split('T')[0]; // Data atual como placeholder
         const { error: instalacaoError } = await supabase
           .from('instalacoes')
           .insert({
             associado_id: associadoId,
             veiculo_id: veiculoId,
-            status: 'pendente',
+            contrato_id: contratoId,
+            status: 'agendada', // Valor válido do enum status_instalacao
+            data_agendada: dataAgendada,
+            periodo: 'manha',
             logradouro: associadoData?.logradouro || null,
             numero: associadoData?.numero || null,
             bairro: associadoData?.bairro || null,
