@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Camera, Calendar, Smartphone, CheckCircle2, ArrowLeft } from 'lucide-react';
+import { Camera, Calendar, Smartphone, CheckCircle2, ArrowLeft, Car, Bike } from 'lucide-react';
 import { AutovistoriaCotacao } from './AutovistoriaCotacao';
 import { AgendamentoCotacao } from './AgendamentoCotacao';
 import type { TipoVeiculo } from '@/data/autovistoriaConfig';
 import { motion, AnimatePresence } from 'framer-motion';
+import { cn } from '@/lib/utils';
 
 interface EtapaVistoriaProps {
   cotacaoId: string;
@@ -16,10 +17,11 @@ interface EtapaVistoriaProps {
   tipoVistoriaRealizada?: 'autovistoria' | 'agendada';
 }
 
-type ModoVistoria = 'escolha' | 'autovistoria' | 'agendada';
+type ModoVistoria = 'escolha' | 'selecao-veiculo' | 'autovistoria' | 'agendada';
 
 export function EtapaVistoria({ cotacaoId, tipoVeiculo, onComplete, onAgendar, readOnly = false, tipoVistoriaRealizada }: EtapaVistoriaProps) {
   const [modo, setModo] = useState<ModoVistoria>('escolha');
+  const [tipoSelecionado, setTipoSelecionado] = useState<TipoVeiculo | null>(null);
 
   const handleVoltarEscolha = () => {
     setModo('escolha');
@@ -90,7 +92,7 @@ export function EtapaVistoria({ cotacaoId, tipoVeiculo, onComplete, onAgendar, r
             <CardContent className="space-y-4">
               {/* Opção Autovistoria */}
               <button
-                onClick={() => setModo('autovistoria')}
+                onClick={() => setModo('selecao-veiculo')}
                 className="w-full p-4 rounded-xl border border-border/50 bg-card/50 hover:bg-accent/10 hover:border-primary/50 transition-all group text-left"
               >
                 <div className="flex items-start gap-4">
@@ -105,7 +107,7 @@ export function EtapaVistoria({ cotacaoId, tipoVeiculo, onComplete, onAgendar, r
                       </span>
                     </div>
                     <p className="text-sm text-muted-foreground">
-                      Tire {tipoVeiculo === 'moto' ? '10' : '15'} fotos do veículo agora mesmo usando seu celular
+                      Tire fotos do veículo agora mesmo usando seu celular
                     </p>
                     <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1">
@@ -149,6 +151,115 @@ export function EtapaVistoria({ cotacaoId, tipoVeiculo, onComplete, onAgendar, r
         </motion.div>
       )}
 
+      {/* NOVA TELA: Seleção de tipo de veículo */}
+      {modo === 'selecao-veiculo' && (
+        <motion.div
+          key="selecao-veiculo"
+          initial={{ opacity: 0, x: 50 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -50 }}
+          transition={{ duration: 0.3 }}
+        >
+          <div className="mb-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setModo('escolha');
+                setTipoSelecionado(null);
+              }}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Voltar
+            </Button>
+          </div>
+          
+          <Card className="border-border/50 bg-card/80 backdrop-blur-xl">
+            <CardHeader className="text-center pb-2">
+              <CardTitle className="text-xl">Qual é o seu veículo?</CardTitle>
+              <p className="text-muted-foreground text-sm mt-1">
+                Selecione o tipo para ajustar as fotos necessárias
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                {/* Botão Automóvel */}
+                <button
+                  onClick={() => setTipoSelecionado('carro')}
+                  className={cn(
+                    "p-6 rounded-xl border-2 transition-all flex flex-col items-center gap-3",
+                    tipoSelecionado === 'carro'
+                      ? "border-primary bg-primary/10 shadow-lg shadow-primary/20"
+                      : "border-border/50 bg-card/50 hover:border-primary/50 hover:bg-accent/10"
+                  )}
+                >
+                  <div className={cn(
+                    "w-16 h-16 rounded-full flex items-center justify-center transition-colors",
+                    tipoSelecionado === 'carro' ? "bg-primary/20" : "bg-muted/50"
+                  )}>
+                    <Car className={cn(
+                      "h-8 w-8 transition-colors",
+                      tipoSelecionado === 'carro' ? "text-primary" : "text-muted-foreground"
+                    )} />
+                  </div>
+                  <div className="text-center">
+                    <span className={cn(
+                      "font-semibold block",
+                      tipoSelecionado === 'carro' ? "text-primary" : "text-foreground"
+                    )}>Automóvel</span>
+                    <span className="text-xs text-muted-foreground">15 fotos</span>
+                  </div>
+                  {tipoSelecionado === 'carro' && (
+                    <CheckCircle2 className="h-5 w-5 text-primary" />
+                  )}
+                </button>
+
+                {/* Botão Moto */}
+                <button
+                  onClick={() => setTipoSelecionado('moto')}
+                  className={cn(
+                    "p-6 rounded-xl border-2 transition-all flex flex-col items-center gap-3",
+                    tipoSelecionado === 'moto'
+                      ? "border-primary bg-primary/10 shadow-lg shadow-primary/20"
+                      : "border-border/50 bg-card/50 hover:border-primary/50 hover:bg-accent/10"
+                  )}
+                >
+                  <div className={cn(
+                    "w-16 h-16 rounded-full flex items-center justify-center transition-colors",
+                    tipoSelecionado === 'moto' ? "bg-primary/20" : "bg-muted/50"
+                  )}>
+                    <Bike className={cn(
+                      "h-8 w-8 transition-colors",
+                      tipoSelecionado === 'moto' ? "text-primary" : "text-muted-foreground"
+                    )} />
+                  </div>
+                  <div className="text-center">
+                    <span className={cn(
+                      "font-semibold block",
+                      tipoSelecionado === 'moto' ? "text-primary" : "text-foreground"
+                    )}>Moto</span>
+                    <span className="text-xs text-muted-foreground">10 fotos</span>
+                  </div>
+                  {tipoSelecionado === 'moto' && (
+                    <CheckCircle2 className="h-5 w-5 text-primary" />
+                  )}
+                </button>
+              </div>
+
+              <Button
+                onClick={() => setModo('autovistoria')}
+                disabled={!tipoSelecionado}
+                className="w-full mt-4"
+                size="lg"
+              >
+                Continuar
+              </Button>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
+
       {modo === 'autovistoria' && (
         <motion.div
           key="autovistoria"
@@ -161,7 +272,9 @@ export function EtapaVistoria({ cotacaoId, tipoVeiculo, onComplete, onAgendar, r
             <Button
               variant="ghost"
               size="sm"
-              onClick={handleVoltarEscolha}
+              onClick={() => {
+                setModo('selecao-veiculo');
+              }}
               className="text-muted-foreground hover:text-foreground"
             >
               <ArrowLeft className="h-4 w-4 mr-2" />
@@ -170,7 +283,7 @@ export function EtapaVistoria({ cotacaoId, tipoVeiculo, onComplete, onAgendar, r
           </div>
           <AutovistoriaCotacao
             cotacaoId={cotacaoId}
-            tipoVeiculo={tipoVeiculo}
+            tipoVeiculo={tipoSelecionado || tipoVeiculo}
             onComplete={onComplete}
           />
         </motion.div>
