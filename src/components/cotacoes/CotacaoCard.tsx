@@ -145,10 +145,12 @@ const etapaVendaConfig: Record<EtapaVenda, { label: string; color: string; bgCol
 const getEtapaVenda = (cotacao: CotacaoWithRelations): EtapaVenda | null => {
   // Verificar se há status_contratacao ativo (indica contratação pública em andamento)
   const statusContratacao = cotacao.status_contratacao;
-  const temContratacaoAtiva = statusContratacao && statusContratacao !== 'aguardando';
+  const temContratacaoAtiva = statusContratacao && 
+    statusContratacao !== 'aguardando' && 
+    statusContratacao !== null;
   
-  // Se é rascunho SEM contratação ativa, não mostra etapa
-  if (cotacao.status === 'rascunho' && !temContratacaoAtiva) return null;
+  // Se é rascunho SEM contratação ativa e sem contrato vinculado, não mostra etapa
+  if (cotacao.status === 'rascunho' && !temContratacaoAtiva && !cotacao.contrato) return null;
   
   // PRIORIDADE 1: Verificar se associado está ativo
   const associadoStatus = cotacao.contrato?.associados?.status;
@@ -195,7 +197,14 @@ const getEtapaVenda = (cotacao: CotacaoWithRelations): EtapaVenda | null => {
   }
   
   // Default para cotações enviadas/aceitas sem status_contratacao específico
-  return 'cotacao_realizada';
+  if (cotacao.status === 'enviada' || cotacao.status === 'aceita') {
+    return 'cotacao_realizada';
+  }
+  
+  // Para rascunho com contratação ativa mas status não mapeado, mostrar etapa inicial
+  if (temContratacaoAtiva) return 'cotacao_realizada';
+  
+  return null;
 };
 
 export interface CotacaoCardPermissions {
