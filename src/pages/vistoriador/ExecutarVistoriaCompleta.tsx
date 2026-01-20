@@ -30,11 +30,11 @@ import {
 } from '@/data/vistoriaConfigCompleta';
 
 export default function ExecutarVistoriaCompleta() {
-  const { id } = useParams<{ id: string }>();
+  const { id: instalacaoId } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  // Hooks
-  const { data: vistoria, isLoading, error } = useVistoriaCompleta(id || null);
+  // Hooks - busca por instalacao_id
+  const { data: vistoria, isLoading, error } = useVistoriaCompleta(instalacaoId || null);
   const uploadFoto = useUploadFotoVistoriaCompleta();
   const uploadVideo = useUploadVideo360();
   const aprovarVeiculo = useAprovarVeiculoVistoria();
@@ -54,6 +54,7 @@ export default function ExecutarVistoriaCompleta() {
   const [hodometro, setHodometro] = useState('');
 
   // Dados
+  const vistoriaId = vistoria?.id;
   const veiculo = vistoria?.veiculo;
   const associado = vistoria?.associado || vistoria?.veiculo?.associado;
   const fotosEnviadas = vistoria?.fotos || [];
@@ -94,10 +95,10 @@ export default function ExecutarVistoriaCompleta() {
 
   // Handlers
   const handleUploadFoto = async (tipo: string, file: File, visivelCliente: boolean = true) => {
-    if (!id) return;
+    if (!vistoriaId) return;
     setUploadingFoto(tipo);
     try {
-      await uploadFoto.mutateAsync({ vistoriaId: id, tipo, file, visivelCliente });
+      await uploadFoto.mutateAsync({ vistoriaId, tipo, file, visivelCliente });
       toast.success('Foto enviada!');
     } catch (e) {
       toast.error('Erro ao enviar foto');
@@ -107,10 +108,10 @@ export default function ExecutarVistoriaCompleta() {
   };
 
   const handleUploadVideo = async (file: File) => {
-    if (!id) return;
+    if (!vistoriaId) return;
     setUploadingVideo(true);
     try {
-      await uploadVideo.mutateAsync({ vistoriaId: id, file });
+      await uploadVideo.mutateAsync({ vistoriaId, file });
     } catch (e) {
       toast.error('Erro ao enviar vídeo');
     } finally {
@@ -119,11 +120,12 @@ export default function ExecutarVistoriaCompleta() {
   };
 
   const handleAprovar = async () => {
-    if (!id || !veiculo || !associado) return;
+    if (!vistoriaId || !veiculo || !associado) return;
     setProcessando(true);
     try {
       await aprovarVeiculo.mutateAsync({
-        vistoriaId: id,
+        vistoriaId,
+        instalacaoId,
         veiculoId: veiculo.id,
         associadoId: associado.id,
         hodometro: parseInt(hodometro),
@@ -137,10 +139,11 @@ export default function ExecutarVistoriaCompleta() {
   };
 
   const handleRecusar = async (data: { motivo: string; motivoCompleto: string; detalhes: string; fotos: File[] }) => {
-    if (!id || !veiculo || !associado) return;
+    if (!vistoriaId || !veiculo || !associado) return;
     try {
       await recusarVeiculo.mutateAsync({
-        vistoriaId: id,
+        vistoriaId,
+        instalacaoId,
         veiculoId: veiculo.id,
         associadoId: associado.id,
         motivo: data.motivoCompleto,

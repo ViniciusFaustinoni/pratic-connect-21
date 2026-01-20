@@ -189,6 +189,7 @@ export default function InstalacaoDetalhePage() {
   const podeIniciarRota = instalacao.status === 'agendada' && instalacao.instalador_id && !rotaJaIniciada;
   const podeIniciarVistoria = instalacao.status === 'agendada' && instalacao.instalador_id && rotaJaIniciada;
   const podeIniciar = instalacao.status === 'em_rota';
+  const podeContinuar = instalacao.status === 'em_andamento';
   const podeConcluir = instalacao.status === 'em_andamento' && instalacao.rastreador_id;
   const podeReagendar = ['agendada', 'reagendada'].includes(instalacao.status);
   const podeCancelar = !['concluida', 'cancelada'].includes(instalacao.status);
@@ -251,6 +252,15 @@ export default function InstalacaoDetalhePage() {
             <Button onClick={handleIniciarInstalacao} disabled={isIniciando}>
               {isIniciando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
               Iniciar Instalação
+            </Button>
+          )}
+          {podeContinuar && (
+            <Button 
+              onClick={() => navigate(`/vistoriador/vistoria-completa/${id}`)}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              <Play className="mr-2 h-4 w-4" />
+              Continuar Instalação
             </Button>
           )}
           {podeConcluir && (

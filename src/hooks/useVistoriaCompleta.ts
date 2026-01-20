@@ -252,12 +252,28 @@ export function useRecusarVeiculoVistoria() {
   });
 }
 
-// Hook para upload de vídeo 360
+// Hook para upload de vídeo 360 (substitui vídeo existente)
 export function useUploadVideo360() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (data: { vistoriaId: string; file: File }) => {
+      // Buscar vídeo existente para deletar
+      const { data: vistoria } = await supabase
+        .from('vistorias')
+        .select('video_360_url')
+        .eq('id', data.vistoriaId)
+        .single();
+
+      // Se existir vídeo anterior, deletar do storage
+      if (vistoria?.video_360_url) {
+        const urlParts = vistoria.video_360_url.split('/vistoria-videos/');
+        if (urlParts[1]) {
+          const filePath = urlParts[1];
+          await supabase.storage.from('vistoria-videos').remove([filePath]);
+        }
+      }
+
       const fileExt = data.file.name.split('.').pop();
       const fileName = `${data.vistoriaId}/video_360_${Date.now()}.${fileExt}`;
 
@@ -284,7 +300,7 @@ export function useUploadVideo360() {
       return publicUrl.publicUrl;
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['vistoria-completa', variables.vistoriaId] });
+      queryClient.invalidateQueries({ queryKey: ['vistoria-completa'] });
       toast.success('Vídeo 360° enviado com sucesso!');
     },
     onError: (error) => {
@@ -294,7 +310,7 @@ export function useUploadVideo360() {
   });
 }
 
-// Hook para upload de foto com flag visivel_cliente
+// Hook para upload de foto com flag visivel_cliente (substitui foto existente do mesmo tipo)
 export function useUploadFotoVistoriaCompleta() {
   const queryClient = useQueryClient();
 
@@ -305,10 +321,30 @@ export function useUploadFotoVistoriaCompleta() {
       file: File;
       visivelCliente?: boolean;
     }) => {
+      // Primeiro, verificar se já existe uma foto desse tipo para essa vistoria
+      const { data: fotoExistente } = await supabase
+        .from('vistoria_fotos')
+        .select('id, arquivo_url')
+        .eq('vistoria_id', data.vistoriaId)
+        .eq('tipo', data.tipo)
+        .maybeSingle();
+
+      // Se existir, deletar do storage e da tabela
+      if (fotoExistente) {
+        // Extrair o path do arquivo da URL
+        const urlParts = fotoExistente.arquivo_url.split('/vistoria-fotos/');
+        if (urlParts[1]) {
+          const filePath = urlParts[1];
+          await supabase.storage.from('vistoria-fotos').remove([filePath]);
+        }
+        // Deletar registro da tabela
+        await supabase.from('vistoria_fotos').delete().eq('id', fotoExistente.id);
+      }
+
+      // Fazer upload do novo arquivo
       const fileExt = data.file.name.split('.').pop();
       const fileName = `${data.vistoriaId}/${data.tipo}_${Date.now()}.${fileExt}`;
 
-      // Upload para storage
       const { error: uploadError } = await supabase.storage
         .from('vistoria-fotos')
         .upload(fileName, data.file);
@@ -320,7 +356,7 @@ export function useUploadFotoVistoriaCompleta() {
         .from('vistoria-fotos')
         .getPublicUrl(fileName);
 
-      // Inserir registro na tabela
+      // Inserir novo registro na tabela
       const { data: result, error } = await supabase
         .from('vistoria_fotos')
         .insert({
@@ -335,8 +371,8 @@ export function useUploadFotoVistoriaCompleta() {
       if (error) throw error;
       return result;
     },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['vistoria-completa', variables.vistoriaId] });
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vistoria-completa'] });
     },
     onError: (error) => {
       console.error('Erro ao fazer upload:', error);
