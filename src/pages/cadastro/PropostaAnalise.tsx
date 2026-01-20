@@ -44,6 +44,7 @@ import {
 } from '@/hooks/usePropostasPendentes';
 import { SolicitarDocumentosDialog } from '@/components/cadastro/SolicitarDocumentosDialog';
 import { DocumentosAnexadosCard } from '@/components/cadastro/DocumentosAnexadosCard';
+import { DocumentosSolicitadosCard } from '@/components/cadastro/DocumentosSolicitadosCard';
 import { VistoriaFotosCard } from '@/components/cadastro/VistoriaFotosCard';
 import { ReprovarPropostaDialog } from '@/components/cadastro/ReprovarPropostaDialog';
 import { format } from 'date-fns';
@@ -406,6 +407,13 @@ export default function PropostaAnalise() {
               )}
             </CardContent>
           </Card>
+
+          {/* Documentos Solicitados (Pendência Resolvida) */}
+          {proposta.documentos_solicitados_enviados && proposta.documentos_solicitados_enviados.length > 0 && (
+            <DocumentosSolicitadosCard 
+              documentosSolicitados={proposta.documentos_solicitados_enviados} 
+            />
+          )}
 
           {/* Documentos Anexados */}
           <DocumentosAnexadosCard documentos={proposta.documentos || []} />

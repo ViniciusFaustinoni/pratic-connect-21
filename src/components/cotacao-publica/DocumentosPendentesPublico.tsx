@@ -1,11 +1,11 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { AlertTriangle, Upload, FileCheck, Loader2, FileText, CheckCircle2, Clock } from 'lucide-react';
+import { AlertTriangle, Upload, FileCheck, Loader2, FileText, CheckCircle2, Clock, Send, AlertCircle } from 'lucide-react';
 import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { motion } from 'framer-motion';
 import type { DocumentoPendentePublico } from '@/hooks/useCotacaoContratacao';
@@ -43,6 +43,7 @@ export function DocumentosPendentesPublico({
   onTodosEnviados 
 }: DocumentosPendentesPublicoProps) {
   const [uploadStates, setUploadStates] = useState<Record<string, DocUploadState>>({});
+  const [enviandoTodos, setEnviandoTodos] = useState(false);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const formatTipoDocumento = (tipo: string, descricao?: string | null) => {
@@ -76,17 +77,26 @@ export function DocumentosPendentesPublico({
     }));
   };
 
-  const handleEnviarDocumento = async (doc: DocumentoPendentePublico) => {
-    const state = uploadStates[doc.id];
-    if (!state?.file) {
-      toast.error('Selecione um arquivo para enviar');
-      return;
-    }
+  // Verificar se todos os arquivos foram selecionados
+  const todosArquivosSelecionados = useMemo(() => {
+    return docsPendentes.every(doc => {
+      const state = uploadStates[doc.id];
+      return state?.file || state?.enviado;
+    });
+  }, [docsPendentes, uploadStates]);
 
-    setUploadStates(prev => ({
-      ...prev,
-      [doc.id]: { ...prev[doc.id], uploading: true }
-    }));
+  // Documentos prontos para envio (com arquivo selecionado e ainda não enviados)
+  const docsParaEnviar = useMemo(() => {
+    return docsPendentes.filter(doc => {
+      const state = uploadStates[doc.id];
+      return state?.file && !state?.enviado;
+    });
+  }, [docsPendentes, uploadStates]);
+
+  // Enviar um único documento
+  const enviarDocumento = async (doc: DocumentoPendentePublico): Promise<boolean> => {
+    const state = uploadStates[doc.id];
+    if (!state?.file) return false;
 
     try {
       const file = state.file;
@@ -153,15 +163,40 @@ export function DocumentosPendentesPublico({
         [doc.id]: { ...prev[doc.id], uploading: false, enviado: true }
       }));
 
-      toast.success('Documento enviado com sucesso!');
+      return true;
+    } catch (error) {
+      console.error('Erro ao enviar documento:', error);
+      throw error;
+    }
+  };
 
-      // Verificar se todos foram enviados
-      const docsEnviados = docsPendentes.filter(d => 
-        d.id === doc.id || uploadStates[d.id]?.enviado
-      );
-      
-      if (docsEnviados.length === docsPendentes.length) {
-        // Todos enviados - atualizar status do associado para em_analise
+  // Enviar todos os documentos de uma vez
+  const handleEnviarTodos = async () => {
+    if (docsParaEnviar.length === 0) return;
+
+    setEnviandoTodos(true);
+    let erros = 0;
+
+    try {
+      for (const doc of docsParaEnviar) {
+        setUploadStates(prev => ({
+          ...prev,
+          [doc.id]: { ...prev[doc.id], uploading: true }
+        }));
+
+        try {
+          await enviarDocumento(doc);
+        } catch (error) {
+          erros++;
+          setUploadStates(prev => ({
+            ...prev,
+            [doc.id]: { ...prev[doc.id], uploading: false }
+          }));
+        }
+      }
+
+      if (erros === 0) {
+        // Todos enviados com sucesso - atualizar status do associado
         await publicSupabase
           .from('associados')
           .update({
@@ -176,21 +211,18 @@ export function DocumentosPendentesPublico({
         setTimeout(() => {
           onTodosEnviados();
         }, 1500);
+      } else {
+        toast.error(`${erros} documento(s) falharam. Tente enviar novamente.`);
       }
-
-    } catch (error) {
-      console.error('Erro ao enviar documento:', error);
-      toast.error(error instanceof Error ? error.message : 'Erro ao enviar documento');
-      setUploadStates(prev => ({
-        ...prev,
-        [doc.id]: { ...prev[doc.id], uploading: false }
-      }));
+    } finally {
+      setEnviandoTodos(false);
     }
   };
 
   // Verificar quantos já foram enviados nesta sessão
   const enviados = docsPendentes.filter(d => uploadStates[d.id]?.enviado).length;
   const pendentes = docsPendentes.length - enviados;
+  const arquivosSelecionados = docsPendentes.filter(d => uploadStates[d.id]?.file && !uploadStates[d.id]?.enviado).length;
 
   return (
     <Card className="border-amber-500/30 bg-card/80 backdrop-blur-xl">
@@ -208,7 +240,7 @@ export function DocumentosPendentesPublico({
         </Badge>
         <CardTitle className="text-xl">Documentos Solicitados</CardTitle>
         <p className="text-muted-foreground text-sm mt-2">
-          O setor de cadastro solicitou os documentos abaixo. Por favor, envie-os para continuar a análise.
+          O setor de cadastro solicitou os documentos abaixo. Por favor, selecione todos os arquivos para enviar.
         </p>
       </CardHeader>
 
@@ -221,6 +253,14 @@ export function DocumentosPendentesPublico({
               {pendentes} pendente{pendentes !== 1 ? 's' : ''}
             </span>
           </div>
+          {arquivosSelecionados > 0 && (
+            <div className="flex items-center gap-2">
+              <FileText className="h-4 w-4 text-primary" />
+              <span className="text-muted-foreground">
+                {arquivosSelecionados} selecionado{arquivosSelecionados !== 1 ? 's' : ''}
+              </span>
+            </div>
+          )}
           {enviados > 0 && (
             <div className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-success" />
@@ -247,19 +287,23 @@ export function DocumentosPendentesPublico({
                   border rounded-lg p-4 transition-colors
                   ${isEnviado 
                     ? 'bg-success/5 border-success/30' 
-                    : 'bg-muted/30 border-border/50 hover:border-primary/30'
+                    : state.file 
+                      ? 'bg-primary/5 border-primary/30'
+                      : 'bg-muted/30 border-border/50 hover:border-primary/30'
                   }
                 `}
               >
                 <div className="flex items-start gap-3">
                   <div className={`
                     p-2 rounded-lg
-                    ${isEnviado ? 'bg-success/10' : 'bg-primary/10'}
+                    ${isEnviado ? 'bg-success/10' : state.file ? 'bg-primary/10' : 'bg-muted'}
                   `}>
                     {isEnviado ? (
                       <FileCheck className="h-5 w-5 text-success" />
+                    ) : state.file ? (
+                      <FileCheck className="h-5 w-5 text-primary" />
                     ) : (
-                      <FileText className="h-5 w-5 text-primary" />
+                      <FileText className="h-5 w-5 text-muted-foreground" />
                     )}
                   </div>
                   
@@ -271,6 +315,11 @@ export function DocumentosPendentesPublico({
                       {isEnviado && (
                         <Badge variant="outline" className="text-xs border-success/30 text-success">
                           Enviado
+                        </Badge>
+                      )}
+                      {state.file && !isEnviado && (
+                        <Badge variant="outline" className="text-xs border-primary/30 text-primary">
+                          Pronto
                         </Badge>
                       )}
                     </div>
@@ -296,50 +345,34 @@ export function DocumentosPendentesPublico({
                             type="button"
                             variant="outline"
                             size="sm"
-                            className="w-full justify-start text-left"
+                            className={`w-full justify-start text-left ${state.file ? 'border-primary/30 text-primary' : ''}`}
                             onClick={() => fileInputRefs.current[doc.id]?.click()}
+                            disabled={state.uploading}
                           >
-                            <Upload className="h-4 w-4 mr-2" />
+                            {state.uploading ? (
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            ) : (
+                              <Upload className="h-4 w-4 mr-2" />
+                            )}
                             {state.file ? state.file.name : 'Selecionar arquivo'}
                           </Button>
                         </div>
 
                         {/* Observação opcional */}
                         {state.file && (
-                          <>
-                            <div>
-                              <Label className="text-xs text-muted-foreground">
-                                Observação (opcional)
-                              </Label>
-                              <Textarea
-                                placeholder="Adicione uma observação se necessário..."
-                                value={state.observacao}
-                                onChange={(e) => handleObservacaoChange(doc.id, e.target.value)}
-                                className="mt-1 text-sm resize-none"
-                                rows={2}
-                              />
-                            </div>
-
-                            {/* Botão enviar */}
-                            <Button
-                              onClick={() => handleEnviarDocumento(doc)}
+                          <div>
+                            <Label className="text-xs text-muted-foreground">
+                              Observação (opcional)
+                            </Label>
+                            <Textarea
+                              placeholder="Adicione uma observação se necessário..."
+                              value={state.observacao}
+                              onChange={(e) => handleObservacaoChange(doc.id, e.target.value)}
+                              className="mt-1 text-sm resize-none"
+                              rows={2}
                               disabled={state.uploading}
-                              className="w-full"
-                              size="sm"
-                            >
-                              {state.uploading ? (
-                                <>
-                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                  Enviando...
-                                </>
-                              ) : (
-                                <>
-                                  <Upload className="h-4 w-4 mr-2" />
-                                  Enviar Documento
-                                </>
-                              )}
-                            </Button>
-                          </>
+                            />
+                          </div>
                         )}
                       </div>
                     )}
@@ -349,6 +382,46 @@ export function DocumentosPendentesPublico({
             );
           })}
         </div>
+
+        {/* Indicador quando faltam arquivos */}
+        {!todosArquivosSelecionados && pendentes > 0 && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="flex items-center justify-center gap-2 text-sm text-muted-foreground mt-4 py-3 bg-muted/30 rounded-lg"
+          >
+            <AlertCircle className="h-4 w-4" />
+            Selecione todos os {pendentes} arquivos para habilitar o envio
+          </motion.div>
+        )}
+
+        {/* Botão de Envio Unificado - só aparece quando todos selecionados */}
+        {todosArquivosSelecionados && docsParaEnviar.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-6"
+          >
+            <Button
+              onClick={handleEnviarTodos}
+              disabled={enviandoTodos}
+              className="w-full bg-success hover:bg-success/90 text-white py-6 text-lg"
+              size="lg"
+            >
+              {enviandoTodos ? (
+                <>
+                  <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                  Enviando {docsParaEnviar.length} documento(s)...
+                </>
+              ) : (
+                <>
+                  <Send className="h-5 w-5 mr-2" />
+                  Enviar Todos os Documentos ({docsParaEnviar.length})
+                </>
+              )}
+            </Button>
+          </motion.div>
+        )}
 
         {/* Aviso */}
         <div className="flex items-start gap-2 bg-muted/30 rounded-lg p-3 mt-4">
