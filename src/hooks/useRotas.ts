@@ -401,12 +401,25 @@ export function useDeleteRota() {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      // Primeiro desvincula instalações
+      // Desvincular instalações
       await supabase
         .from('instalacoes')
         .update({ rota_id: null })
         .eq('rota_id', id);
 
+      // Desvincular vistorias
+      await supabase
+        .from('vistorias')
+        .update({ rota_id: null })
+        .eq('rota_id', id);
+
+      // Excluir vínculos N:N com instaladores
+      await supabase
+        .from('rota_instaladores')
+        .delete()
+        .eq('rota_id', id);
+
+      // Excluir a rota
       const { error } = await supabase
         .from('rotas')
         .delete()
@@ -419,6 +432,7 @@ export function useDeleteRota() {
       queryClient.invalidateQueries({ queryKey: ['rotas-metricas'] });
       queryClient.invalidateQueries({ queryKey: ['rotas-semana'] });
       queryClient.invalidateQueries({ queryKey: ['instalacoes-disponiveis'] });
+      queryClient.invalidateQueries({ queryKey: ['vistorias'] });
     },
   });
 }
