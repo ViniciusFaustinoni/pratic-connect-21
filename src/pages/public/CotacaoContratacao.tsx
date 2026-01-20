@@ -14,7 +14,7 @@ import { EtapaPagamentoCotacao } from '@/components/cotacao-publica/EtapaPagamen
 import { AgendamentoVistoriaCompleta } from '@/components/cotacao-publica/AgendamentoVistoriaCompleta';
 import { DocumentosPendentesPublico } from '@/components/cotacao-publica/DocumentosPendentesPublico';
 import type { DadosPessoaisForm } from '@/components/cotacao-publica/FormularioDadosPessoais';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { formatarMoeda } from '@/config/pricing';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -57,17 +57,34 @@ export default function CotacaoContratacao() {
   const [planoSelecionadoId, setPlanoSelecionadoId] = useState<string | null>(null);
 
   // Determinar etapa baseada no status para saber o que está concluído
-  const etapaDoStatus = cotacao?.status_contratacao 
-    ? determinarEtapa(cotacao.status_contratacao) 
-    : 0;
+  // IMPORTANTE: Se tipo_vistoria já está preenchido, considera vistoria como concluída (etapa 4+)
+  const etapaDoStatus = useMemo(() => {
+    if (!cotacao?.status_contratacao) return 0;
+    
+    const etapaBase = determinarEtapa(cotacao.status_contratacao);
+    
+    // Se vistoria já foi escolhida/agendada (tipo_vistoria preenchido) e ainda está na etapa 3,
+    // avança para a etapa 4 (pagamento) para não pedir agendamento novamente
+    if (etapaBase === 3 && cotacao.tipo_vistoria) {
+      return 4;
+    }
+    
+    return etapaBase;
+  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, determinarEtapa]);
 
   // Sincronizar etapa com status da cotação
   useEffect(() => {
     if (cotacao?.status_contratacao) {
-      const etapa = determinarEtapa(cotacao.status_contratacao);
+      let etapa = determinarEtapa(cotacao.status_contratacao);
+      
+      // Se vistoria já foi escolhida/agendada, avança para pagamento
+      if (etapa === 3 && cotacao.tipo_vistoria) {
+        etapa = 4;
+      }
+      
       setEtapaAtual(etapa);
     }
-  }, [cotacao?.status_contratacao, determinarEtapa, setEtapaAtual]);
+  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, determinarEtapa, setEtapaAtual]);
 
   // Pré-selecionar plano se já escolhido
   useEffect(() => {
