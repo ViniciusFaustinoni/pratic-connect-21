@@ -65,7 +65,7 @@ export interface PropostaPendente {
   associado_id: string | null;
   cotacao_id: string | null;
   associado: Associado | null;
-  plano: { nome: string; valor_mensal: number } | null;
+  plano: { nome: string } | null;
   plano_nome: string | null; // Fallback do nome do plano
   endereco_completo: string | null; // Endereço completo da cotação
   vendedor: { nome: string | null } | null;
@@ -138,7 +138,7 @@ export function usePropostasPendentes() {
           if (contrato.plano_id) {
             const { data } = await supabase
               .from('planos')
-              .select('nome, valor_mensal')
+              .select('nome')
               .eq('id', contrato.plano_id)
               .single();
             plano = data;
@@ -303,7 +303,8 @@ export function usePropostasPendentes() {
 
       return propostasComRelacoes;
     },
-    staleTime: 30000, // 30 segundos
+    staleTime: 30000,
+    refetchInterval: 30000, // Atualização automática a cada 30 segundos
   });
 }
 
@@ -360,7 +361,7 @@ export function useProposta(contratoId: string | undefined) {
       if (contrato.plano_id) {
         const { data } = await supabase
           .from('planos')
-          .select('nome, valor_mensal')
+          .select('nome')
           .eq('id', contrato.plano_id)
           .single();
         plano = data;
