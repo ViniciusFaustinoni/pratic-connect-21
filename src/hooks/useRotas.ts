@@ -88,7 +88,7 @@ export function useRotas(filters?: RotaFilters) {
   });
 }
 
-// Rota única com instalações e múltiplos instaladores
+// Rota única com instalações, vistorias e múltiplos instaladores
 export function useRota(id: string | undefined) {
   return useQuery({
     queryKey: ['rota', id],
@@ -134,11 +134,27 @@ export function useRota(id: string | undefined) {
 
       if (instError) throw instError;
 
+      // Buscar vistorias vinculadas à rota
+      const { data: vistorias, error: vistError } = await supabase
+        .from('vistorias')
+        .select(`
+          id, tipo, origem, status, data_agendada, periodo,
+          endereco_bairro, endereco_cidade, endereco_logradouro, endereco_numero, endereco_cep,
+          associados:associado_id(*),
+          veiculos:veiculo_id(*),
+          vistoriador:profiles!vistorias_vistoriador_id_fkey(id, nome, telefone)
+        `)
+        .eq('rota_id', id)
+        .order('data_agendada');
+
+      if (vistError) console.error('Error fetching vistorias:', vistError);
+
       return { 
         ...rota, 
         instalacoes,
+        vistorias: vistorias || [],
         rota_instaladores: rotaInstaladores || []
-      } as RotaWithRelations;
+      } as RotaWithRelations & { vistorias: any[] };
     },
     enabled: !!id,
   });
