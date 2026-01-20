@@ -590,11 +590,12 @@ export function useAprovarProposta() {
 
       const agora = new Date().toISOString();
 
-      // 1. Buscar contrato com dados do associado e veículo
+      // 1. Buscar contrato com dados do associado, veículo e STATUS
       const { data: contrato, error: fetchError } = await supabase
         .from('contratos')
         .select(`
           id,
+          status,
           associado_id,
           plano_id,
           valor_mensal,
@@ -617,11 +618,27 @@ export function useAprovarProposta() {
       if (fetchError) throw fetchError;
       if (!contrato?.associado_id) throw new Error('Associado não encontrado');
 
+      // IDEMPOTÊNCIA: Se já está ativo, retornar sucesso sem tentar atualizar
+      if (contrato.status === 'ativo') {
+        console.log('Contrato já aprovado anteriormente:', contratoId);
+        return { 
+          contratoId, 
+          associadoId: contrato.associado_id,
+          jaAprovado: true,
+          mensagem: 'Este contrato já foi aprovado anteriormente.'
+        };
+      }
+
+      // Se não está em status "assinado", não pode ser aprovado
+      if (contrato.status !== 'assinado') {
+        throw new Error(`Este contrato não pode ser aprovado. Status atual: ${contrato.status}`);
+      }
+
       const associadoId = contrato.associado_id;
       const diaVencimento = contrato.dia_vencimento || (contrato.associado as any)?.dia_vencimento || 15;
 
       // 2. Atualizar CONTRATO para ativo (contrato ativo, mas associado ainda aguarda instalação)
-      // IMPORTANTE: Usar select().single() para garantir que a atualização realmente ocorreu
+      // IMPORTANTE: Usar .eq('status', 'assinado') para atomicidade e .maybeSingle() para evitar erro
       const { data: contratoAtualizado, error: contratoError } = await supabase
         .from('contratos')
         .update({
@@ -631,18 +648,35 @@ export function useAprovarProposta() {
           aprovado_em: agora,
         })
         .eq('id', contratoId)
+        .eq('status', 'assinado') // Garante que só atualiza se ainda está assinado
         .select('id, status, aprovado_em, aprovado_por, data_ativacao')
-        .single();
+        .maybeSingle();
 
       if (contratoError) {
         console.error('Erro ao atualizar contrato:', contratoError);
         throw new Error(`Falha ao atualizar contrato: ${contratoError.message}`);
       }
       
-      // Validar que a atualização realmente ocorreu
-      if (!contratoAtualizado || contratoAtualizado.status !== 'ativo') {
-        console.error('Contrato não foi atualizado corretamente:', contratoAtualizado);
-        throw new Error('Sem permissão para aprovar este contrato (RLS) ou contrato não encontrado');
+      // Se não retornou linha, significa que outro processo já aprovou ou mudou o status
+      if (!contratoAtualizado) {
+        // Refetch para verificar status atual
+        const { data: contratoRefetch } = await supabase
+          .from('contratos')
+          .select('status')
+          .eq('id', contratoId)
+          .single();
+        
+        if (contratoRefetch?.status === 'ativo') {
+          // Foi aprovado por outro processo - sucesso
+          return { 
+            contratoId, 
+            associadoId,
+            jaAprovado: true,
+            mensagem: 'Este contrato já foi aprovado por outro usuário.'
+          };
+        }
+        
+        throw new Error(`Não foi possível aprovar o contrato. Status atual: ${contratoRefetch?.status || 'desconhecido'}`);
       }
 
       // 3. Atualizar ASSOCIADO para aguardando_instalacao (NÃO ativo ainda)
@@ -735,8 +769,13 @@ export function useAprovarProposta() {
         mensagem: 'Proposta aprovada! Cobertura Roubo/Furto ativada. Aguardando instalação para cobertura total.'
       };
     },
-    onSuccess: async () => {
-      toast.success('Proposta aprovada! Cobertura Roubo/Furto ativada. Aguardando instalação para cobertura total.');
+    onSuccess: async (result) => {
+      // Mostrar mensagem apropriada baseada no resultado
+      if (result.jaAprovado) {
+        toast.info(result.mensagem);
+      } else {
+        toast.success(result.mensagem);
+      }
       
       // Invalidar e forçar refetch imediato de todas as queries relacionadas
       await Promise.all([
