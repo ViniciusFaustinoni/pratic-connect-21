@@ -3532,6 +3532,7 @@ export type Database = {
           cliente_telefone: string | null
           cliente_uf: string | null
           cotacao_id: string | null
+          cotacao_token_publico: string | null
           created_at: string
           created_by: string | null
           data_assinatura: string | null
@@ -3605,6 +3606,7 @@ export type Database = {
           cliente_telefone?: string | null
           cliente_uf?: string | null
           cotacao_id?: string | null
+          cotacao_token_publico?: string | null
           created_at?: string
           created_by?: string | null
           data_assinatura?: string | null
@@ -3678,6 +3680,7 @@ export type Database = {
           cliente_telefone?: string | null
           cliente_uf?: string | null
           cotacao_id?: string | null
+          cotacao_token_publico?: string | null
           created_at?: string
           created_by?: string | null
           data_assinatura?: string | null

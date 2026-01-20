@@ -256,43 +256,46 @@ serve(async (req) => {
     const random = Math.random().toString(36).substring(2, 8).toUpperCase();
     const numeroTemp = `CTR-${timestamp}-${random}`;
     
-    // Gerar link_token para permitir acesso público ao contrato (satisfaz RLS)
-    const linkToken = crypto.randomUUID();
+        // Gerar link_token para permitir acesso público ao contrato (satisfaz RLS)
+        const linkToken = crypto.randomUUID();
 
-    const { data: contrato, error: contratoError } = await supabase
-      .from('contratos')
-      .insert({
-        numero: numeroTemp,
-        cotacao_id,
-        lead_id: leadId, // Usa o lead original se existir (não cria mais retroativamente)
-        associado_id: associadoId,
-        plano_id: cotacao.plano_escolhido_id || cotacao.plano_id,
-        valor_adesao: cotacao.valor_adesao || 0,
-        valor_mensal: cotacao.valor_total_mensal || cotacao.valor_mensal,
-        vendedor_id: vendedorIdFinal, // CORREÇÃO: Usar profile.id validado
-        status: 'rascunho',
-        
-        // Dados do veículo
-        veiculo_marca: cotacao.veiculo_marca,
-        veiculo_modelo: cotacao.veiculo_modelo,
-        veiculo_ano: cotacao.veiculo_ano,
-        veiculo_placa: cotacao.veiculo_placa,
-        veiculo_valor_fipe: cotacao.valor_fipe,
-        
-        // Dados do cliente
-        cliente_nome: nomeFinal,
-        cliente_email: emailFinal,
-        cliente_telefone: telefoneFinal,
-        cliente_cpf: cpfFinal,
-        
-        // Link público para satisfazer RLS em acesso anônimo
-        link_token: linkToken,
-        link_gerado_em: new Date().toISOString(),
-        
-        data_inicio: new Date().toISOString().split('T')[0],
-        validade_link: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-        created_by: vendedorIdFinal, // CORREÇÃO: Usar profile.id validado
-      })
+        const { data: contrato, error: contratoError } = await supabase
+          .from('contratos')
+          .insert({
+            numero: numeroTemp,
+            cotacao_id,
+            lead_id: leadId, // Usa o lead original se existir (não cria mais retroativamente)
+            associado_id: associadoId,
+            plano_id: cotacao.plano_escolhido_id || cotacao.plano_id,
+            valor_adesao: cotacao.valor_adesao || 0,
+            valor_mensal: cotacao.valor_total_mensal || cotacao.valor_mensal,
+            vendedor_id: vendedorIdFinal, // CORREÇÃO: Usar profile.id validado
+            status: 'rascunho',
+            
+            // Dados do veículo
+            veiculo_marca: cotacao.veiculo_marca,
+            veiculo_modelo: cotacao.veiculo_modelo,
+            veiculo_ano: cotacao.veiculo_ano,
+            veiculo_placa: cotacao.veiculo_placa,
+            veiculo_valor_fipe: cotacao.valor_fipe,
+            
+            // Dados do cliente
+            cliente_nome: nomeFinal,
+            cliente_email: emailFinal,
+            cliente_telefone: telefoneFinal,
+            cliente_cpf: cpfFinal,
+            
+            // Link público para satisfazer RLS em acesso anônimo
+            link_token: linkToken,
+            link_gerado_em: new Date().toISOString(),
+            
+            // NOVO: token público da cotação para acesso anon via RLS
+            cotacao_token_publico: cotacao.token_publico || null,
+            
+            data_inicio: new Date().toISOString().split('T')[0],
+            validade_link: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+            created_by: vendedorIdFinal, // CORREÇÃO: Usar profile.id validado
+          })
       .select()
       .single();
 
