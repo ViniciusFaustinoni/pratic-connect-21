@@ -54,11 +54,10 @@ export function AtivacaoCardNew({
   
   // Se contrato está ativo, vistoria foi aprovada (implicitamente)
   // Caso contrário, verificar status da vistoria
+  // Para autovistoria E presencial: em_analise ou aprovada são considerados OK
   const vistoriaOk = isAtivado 
     ? true 
-    : isAutovistoria 
-      ? ['em_analise', 'aprovada'].includes(contrato.vistoria?.status || '')
-      : contrato.vistoria?.status === 'aprovada';
+    : ['em_analise', 'aprovada'].includes(contrato.vistoria?.status || '');
   
   const requisitos = (propostaAssinada ? 1 : 0) + (vistoriaOk ? 1 : 0);
   const progressValue = (requisitos / 2) * 100;
