@@ -21,7 +21,7 @@ export function useBairrosServicos(data?: Date) {
         .is('rota_id', null);
       
       if (dataFormatada) {
-        query = query.eq('data_agendada', dataFormatada);
+        query = query.lte('data_agendada', dataFormatada);
       }
       
       const { data: servicos, error } = await query;
@@ -89,7 +89,7 @@ export function useServicosPorBairros(
         .in('endereco_bairro', bairros);
 
       if (dataFormatada) {
-        query = query.eq('data_agendada', dataFormatada);
+        query = query.lte('data_agendada', dataFormatada);
       }
 
       const { data: servicos, error } = await query;

@@ -24,7 +24,7 @@ export function useBairrosDisponiveis(data?: Date) {
         .not('bairro', 'is', null);
 
       if (data) {
-        query = query.eq('data_agendada', format(data, 'yyyy-MM-dd'));
+        query = query.lte('data_agendada', format(data, 'yyyy-MM-dd'));
       }
 
       const { data: instalacoes, error } = await query;
@@ -89,7 +89,7 @@ export function useInstalacoesPorBairros(bairros: string[], data?: Date) {
         .order('data_agendada');
 
       if (data) {
-        query = query.eq('data_agendada', format(data, 'yyyy-MM-dd'));
+        query = query.lte('data_agendada', format(data, 'yyyy-MM-dd'));
       }
 
       const { data: instalacoes, error } = await query;
