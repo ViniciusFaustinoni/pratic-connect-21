@@ -48,8 +48,8 @@ export function BotaoGerarPdf({
     try {
       const planosComparacao = cotacao.dados_extras?.planos_comparacao;
       
-      // Se há múltiplos planos, usar PDF comparativo
-      if (planosComparacao && planosComparacao.length > 1) {
+      // Se há planos em dados_extras (1 ou mais), usar PDF comparativo
+      if (planosComparacao && planosComparacao.length > 0) {
         const valorAdesao = cotacao.valor_adesao || 0;
         
         const planosParaPdf: PlanoParaPdf[] = planosComparacao.map(plano => ({
@@ -79,7 +79,7 @@ export function BotaoGerarPdf({
 
         await gerarPdfCotacaoComparativa(cotacaoComparativa);
       } else {
-        // Plano único - usar PDF padrão
+        // Fallback: sem dados_extras, usar PDF padrão
         await gerarPdfCotacao(cotacao as CotacaoParaPdf);
       }
       

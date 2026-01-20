@@ -779,46 +779,58 @@ export async function gerarPdfCotacaoComparativa(cotacao: CotacaoComparativaPara
   // ============= CARDS DOS PLANOS =============
   const numPlanos = cotacao.planosComparar.length;
   const cardGap = 6;
-  const cardWidth = (contentWidth - (cardGap * (numPlanos - 1))) / numPlanos;
-  const cardHeight = 85;
+  
+  // Layout responsivo: plano único = card grande centralizado
+  const isSinglePlan = numPlanos === 1;
+  const cardWidth = isSinglePlan 
+    ? contentWidth * 0.65 // Card maior para plano único
+    : (contentWidth - (cardGap * (numPlanos - 1))) / numPlanos;
+  const cardHeight = isSinglePlan ? 110 : 85; // Card mais alto para mostrar mais coberturas
+  const startX = isSinglePlan 
+    ? margin + (contentWidth - cardWidth) / 2 // Centralizado
+    : margin;
 
-  // Determinar qual plano é recomendado (o do meio ou premium)
+  // Determinar qual plano é recomendado (o do meio ou premium, ou o único)
   const planoRecomendadoIndex = numPlanos > 1 ? 1 : 0;
 
   cotacao.planosComparar.forEach((plano, index) => {
-    const cardX = margin + (cardWidth + cardGap) * index;
+    const cardX = isSinglePlan 
+      ? startX 
+      : margin + (cardWidth + cardGap) * index;
     const isRecommended = index === planoRecomendadoIndex;
 
     // Card premium
     drawPremiumCard(doc, cardX, y, cardWidth, cardHeight, { 
-      isRecommended,
-      hasGlow: isRecommended 
+      isRecommended: true, // Plano único sempre destacado
+      hasGlow: true 
     });
 
     const centerX = cardX + cardWidth / 2;
     let cardY = y + 8;
 
-    // Badge de recomendado (sem estrela Unicode)
-    if (isRecommended) {
+    // Badge de recomendado/selecionado
+    if (isRecommended || isSinglePlan) {
       doc.setFillColor(brandRed.r, brandRed.g, brandRed.b);
-      doc.roundedRect(cardX + 4, cardY - 4, cardWidth - 8, 10, 2, 2, 'F');
+      const badgeText = isSinglePlan ? 'PLANO SELECIONADO' : 'RECOMENDADO';
+      const badgeWidth = isSinglePlan ? cardWidth - 16 : cardWidth - 8;
+      doc.roundedRect(cardX + (cardWidth - badgeWidth) / 2, cardY - 4, badgeWidth, 10, 2, 2, 'F');
       doc.setTextColor(255, 255, 255);
-      doc.setFontSize(6);
+      doc.setFontSize(isSinglePlan ? 8 : 6);
       doc.setFont('helvetica', 'bold');
-      doc.text('RECOMENDADO', centerX, cardY + 2, { align: 'center' });
+      doc.text(badgeText, centerX, cardY + 2, { align: 'center' });
       cardY += 12;
     }
 
-    // Nome do plano (sem ícones Unicode problemáticos)
+    // Nome do plano
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(isRecommended ? 12 : 10);
+    doc.setFontSize(isSinglePlan ? 14 : (isRecommended ? 12 : 10));
     doc.setFont('helvetica', 'bold');
     doc.text(plano.nome.toUpperCase(), centerX, cardY, { align: 'center' });
-    cardY += isRecommended ? 10 : 8;
+    cardY += isSinglePlan ? 12 : (isRecommended ? 10 : 8);
 
     // Valor mensal (destaque)
     doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
-    doc.setFontSize(isRecommended ? 18 : 14);
+    doc.setFontSize(isSinglePlan ? 22 : (isRecommended ? 18 : 14));
     doc.setFont('helvetica', 'bold');
     doc.text(formatCurrency(plano.valorMensal), centerX, cardY, { align: 'center' });
     cardY += 5;
@@ -841,15 +853,39 @@ export async function gerarPdfCotacaoComparativa(cotacao: CotacaoComparativaPara
     doc.line(cardX + 8, cardY, cardX + cardWidth - 8, cardY);
     cardY += 6;
 
-    // Coberturas (máximo 4) - usando círculos verdes ao invés de checkmarks Unicode
-    doc.setFontSize(6);
-    plano.coberturas.slice(0, 4).forEach(cobertura => {
-      drawCheckIndicator(doc, cardX + 8, cardY);
-      doc.setTextColor(textLight.r, textLight.g, textLight.b);
-      const cobText = cobertura.length > 18 ? cobertura.substring(0, 16) + '...' : cobertura;
-      doc.text(cobText, cardX + 14, cardY);
-      cardY += 5;
-    });
+    // Coberturas - mais coberturas para plano único
+    const maxCoberturas = isSinglePlan ? 6 : 4;
+    const coberturaMaxLen = isSinglePlan ? 35 : 18;
+    doc.setFontSize(isSinglePlan ? 7 : 6);
+    
+    // Para plano único, usar 2 colunas de coberturas
+    if (isSinglePlan && plano.coberturas.length > 3) {
+      const coberturasCol1 = plano.coberturas.slice(0, Math.ceil(Math.min(plano.coberturas.length, maxCoberturas) / 2));
+      const coberturasCol2 = plano.coberturas.slice(Math.ceil(Math.min(plano.coberturas.length, maxCoberturas) / 2), maxCoberturas);
+      const colWidth = (cardWidth - 20) / 2;
+      
+      coberturasCol1.forEach((cobertura, i) => {
+        drawCheckIndicator(doc, cardX + 10, cardY + (i * 6));
+        doc.setTextColor(textLight.r, textLight.g, textLight.b);
+        const cobText = cobertura.length > 16 ? cobertura.substring(0, 14) + '...' : cobertura;
+        doc.text(cobText, cardX + 16, cardY + (i * 6));
+      });
+      
+      coberturasCol2.forEach((cobertura, i) => {
+        drawCheckIndicator(doc, cardX + colWidth + 10, cardY + (i * 6));
+        doc.setTextColor(textLight.r, textLight.g, textLight.b);
+        const cobText = cobertura.length > 16 ? cobertura.substring(0, 14) + '...' : cobertura;
+        doc.text(cobText, cardX + colWidth + 16, cardY + (i * 6));
+      });
+    } else {
+      plano.coberturas.slice(0, maxCoberturas).forEach(cobertura => {
+        drawCheckIndicator(doc, cardX + 8, cardY);
+        doc.setTextColor(textLight.r, textLight.g, textLight.b);
+        const cobText = cobertura.length > coberturaMaxLen ? cobertura.substring(0, coberturaMaxLen - 2) + '...' : cobertura;
+        doc.text(cobText, cardX + 14, cardY);
+        cardY += 5;
+      });
+    }
   });
 
   y += cardHeight + 6;
@@ -867,12 +903,14 @@ export async function gerarPdfCotacaoComparativa(cotacao: CotacaoComparativaPara
 
   // Valores por plano
   cotacao.planosComparar.forEach((plano, index) => {
-    const cardX = margin + (cardWidth + cardGap) * index;
+    const cardX = isSinglePlan 
+      ? startX 
+      : margin + (cardWidth + cardGap) * index;
     const centerX = cardX + cardWidth / 2;
     const primeiroPagamento = plano.valorAdesao + plano.valorMensal;
 
     doc.setTextColor(textLight.r, textLight.g, textLight.b);
-    doc.setFontSize(9);
+    doc.setFontSize(isSinglePlan ? 11 : 9);
     doc.setFont('helvetica', 'normal');
     doc.text(formatCurrency(plano.valorAdesao), centerX, y + 9, { align: 'center' });
     
