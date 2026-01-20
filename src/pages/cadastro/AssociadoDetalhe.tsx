@@ -764,14 +764,10 @@ export default function AssociadoDetalhe() {
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div className="text-sm">
                           <div>
                             <p className="text-muted-foreground">Valor FIPE</p>
                             <p className="font-medium">{formatCurrency(v.valor_fipe)}</p>
-                          </div>
-                          <div>
-                            <p className="text-muted-foreground">Código FIPE</p>
-                            <p className="font-medium">{v.codigo_fipe || '—'}</p>
                           </div>
                         </div>
 
