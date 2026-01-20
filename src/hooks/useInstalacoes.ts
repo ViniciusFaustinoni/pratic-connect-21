@@ -124,9 +124,7 @@ export function useInstalacoes(filtersOrParams?: InstalacaoFilters | UseInstalac
           *,
           associados (id, nome, telefone, email),
           veiculos (id, marca, modelo, placa, ano_modelo, cor),
-          rastreadores (id, codigo, numero_serie, imei),
-          instalador:profiles!instalacoes_instalador_id_fkey (id, nome, telefone),
-          instalador_responsavel:profiles!instalacoes_instalador_responsavel_id_fkey (id, nome, telefone)
+          rastreadores (id, codigo, numero_serie, imei)
         `, { count: 'exact' })
         .order('data_agendada', { ascending: true });
 
@@ -175,19 +173,12 @@ export function useInstalacoes(filtersOrParams?: InstalacaoFilters | UseInstalac
 
       const { data, error, count } = await query;
 
-      if (error) throw error;
+      if (error) {
+        console.error('Erro ao buscar instalações:', error);
+        throw error;
+      }
 
-      // Mapear instalador_responsavel para profiles como fallback
-      let result = (data || []).map((inst: any) => {
-        const mapped = inst as InstalacaoWithRelations;
-        // Se não tem instalador mas tem instalador_responsavel, usar como profiles
-        if (!mapped.instalador && mapped.instalador_responsavel) {
-          mapped.profiles = mapped.instalador_responsavel;
-        } else if (mapped.instalador) {
-          mapped.profiles = mapped.instalador;
-        }
-        return mapped;
-      });
+      let result = (data || []) as InstalacaoWithRelations[];
 
       // Filtro por busca no client side
       if (filters?.search) {
