@@ -178,14 +178,26 @@ export function useFinalizarVistoriaCotacao() {
           observacoes: obsResponsavel,
         };
         
-        const { error: vistoriaError } = await supabase
+        const { data: novaVistoria, error: vistoriaError } = await supabase
           .from('vistorias')
-          .insert([vistoriaData]);
+          .insert([vistoriaData])
+          .select('id')
+          .single();
         
         if (vistoriaError) {
           console.error('[FinalizarVistoria] Erro ao criar vistoria:', vistoriaError);
         } else {
-          console.log('[FinalizarVistoria] Vistoria criada para cotação:', cotacaoId);
+          console.log('[FinalizarVistoria] Vistoria criada:', novaVistoria.id);
+          
+          // Vincular vistoria ao contrato
+          const { error: contratoError } = await supabase
+            .from('contratos')
+            .update({ vistoria_id: novaVistoria.id })
+            .eq('cotacao_id', cotacaoId);
+          
+          if (contratoError) {
+            console.error('[FinalizarVistoria] Erro ao vincular vistoria ao contrato:', contratoError);
+          }
         }
       }
     },
