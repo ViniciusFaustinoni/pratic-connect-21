@@ -56,8 +56,9 @@ import {
 } from '@/types/cadastro';
 import { useAssociado, useVeiculosDoAssociado, useAssociadoStats, useAssociadoActions } from '@/hooks/useAssociados';
 import { useDocumentosPorAssociado } from '@/hooks/useDocumentos';
-import { useContratoDoAssociado, useDocumentosCotacao, useResumoFinanceiroAssociado } from '@/hooks/useDocumentosCotacao';
+import { useContratoDoAssociado, useDocumentosCotacao, useResumoFinanceiroAssociado, useCobrancasAssociado } from '@/hooks/useDocumentosCotacao';
 import { useFotosAutovistoriaCotacao, agruparFotosPorCategoria, formatarTipoFoto } from '@/hooks/useFotosAutovistoria';
+import { useAssociadoHistoricoCompleto } from '@/hooks/useAssociadoHistoricoCompleto';
 import { cn } from '@/lib/utils';
 
 // ============================================
@@ -110,24 +111,100 @@ const getInitials = (nome: string) => {
 };
 
 // ============================================
-// MOCK DATA
+// HELPERS PARA HISTÓRICO
 // ============================================
-const MOCK_FATURAS = [
-  { id: '1', referencia: 'Jan/2026', vencimento: '2026-01-15', valor: 249.90, status: 'pago' },
-  { id: '2', referencia: 'Dez/2025', vencimento: '2025-12-15', valor: 249.90, status: 'pago' },
-  { id: '3', referencia: 'Nov/2025', vencimento: '2025-11-15', valor: 249.90, status: 'pago' },
-  { id: '4', referencia: 'Out/2025', vencimento: '2025-10-15', valor: 249.90, status: 'pago' },
-  { id: '5', referencia: 'Set/2025', vencimento: '2025-09-15', valor: 249.90, status: 'pago' },
-];
+const getIconeEvento = (tipo: string) => {
+  const mapa: Record<string, typeof CheckCircle> = {
+    'associado_criado': Shield,
+    'status_alterado': Clock,
+    'dados_atualizados': Edit,
+    'documento_enviado': FileText,
+    'documento_aprovado': CheckCircle,
+    'documento_reprovado': XCircle,
+    'veiculo_adicionado': Car,
+    'veiculo_removido': XCircle,
+    'instalacao_agendada': Calendar,
+    'instalacao_concluida': CheckCircle,
+    'instalacao_cancelada': XCircle,
+    'boleto_gerado': Receipt,
+    'boleto_pago': CheckCircle,
+    'boleto_cancelado': XCircle,
+    'chamado_aberto': MessageCircle,
+    'chamado_concluido': CheckCircle,
+    'sinistro_aberto': AlertTriangle,
+    'sinistro_atualizado': Clock,
+    'sinistro_encerrado': CheckCircle,
+    'contrato_assinado': FileCheck,
+    'observacao_adicionada': MessageCircle,
+  };
+  return mapa[tipo] || MessageCircle;
+};
 
-const MOCK_HISTORICO = [
-  { id: '1', tipo: 'pagamento', data: '2026-01-15T14:32:00', titulo: 'Pagamento confirmado', descricao: 'Fatura Jan/2026 - R$ 249,90 via Boleto', icone: CheckCircle, cor: 'text-green-500' },
-  { id: '2', tipo: 'documento', data: '2026-01-10T16:45:00', titulo: 'Documento aprovado', descricao: 'CNH aprovada por Maria Santos', icone: FileText, cor: 'text-blue-500' },
-  { id: '3', tipo: 'veiculo', data: '2026-01-05T10:20:00', titulo: 'Veículo adicionado', descricao: 'Hyundai HB20 2022 - Placa DEF-5678', icone: Car, cor: 'text-purple-500' },
-  { id: '4', tipo: 'atendimento', data: '2026-01-02T09:15:00', titulo: 'Atendimento finalizado', descricao: 'Chamado #1234 - Dúvida sobre cobertura', icone: MessageCircle, cor: 'text-yellow-500' },
-  { id: '5', tipo: 'fatura', data: '2026-01-01T00:01:00', titulo: 'Fatura gerada', descricao: 'Fatura Jan/2026 - R$ 249,90', icone: Receipt, cor: 'text-muted-foreground' },
-  { id: '6', tipo: 'contrato', data: '2024-01-15T11:30:00', titulo: 'Contrato assinado', descricao: 'Adesão concluída - Plano Completo', icone: Shield, cor: 'text-green-600' },
-];
+const getCorEvento = (tipo: string) => {
+  const mapa: Record<string, string> = {
+    'associado_criado': 'text-blue-500',
+    'documento_aprovado': 'text-green-500',
+    'documento_reprovado': 'text-red-500',
+    'boleto_pago': 'text-green-500',
+    'boleto_cancelado': 'text-red-500',
+    'status_alterado': 'text-blue-500',
+    'veiculo_adicionado': 'text-purple-500',
+    'instalacao_concluida': 'text-green-500',
+    'instalacao_cancelada': 'text-red-500',
+    'chamado_concluido': 'text-green-500',
+    'sinistro_aberto': 'text-orange-500',
+    'sinistro_encerrado': 'text-green-500',
+    'contrato_assinado': 'text-green-600',
+  };
+  return mapa[tipo] || 'text-muted-foreground';
+};
+
+const getTituloEvento = (tipo: string) => {
+  const mapa: Record<string, string> = {
+    'associado_criado': 'Cadastro realizado',
+    'status_alterado': 'Status alterado',
+    'dados_atualizados': 'Dados atualizados',
+    'documento_enviado': 'Documento enviado',
+    'documento_aprovado': 'Documento aprovado',
+    'documento_reprovado': 'Documento reprovado',
+    'veiculo_adicionado': 'Veículo cadastrado',
+    'veiculo_removido': 'Veículo removido',
+    'instalacao_agendada': 'Instalação agendada',
+    'instalacao_concluida': 'Instalação concluída',
+    'instalacao_cancelada': 'Instalação cancelada',
+    'boleto_gerado': 'Boleto gerado',
+    'boleto_pago': 'Pagamento confirmado',
+    'boleto_cancelado': 'Boleto cancelado',
+    'chamado_aberto': 'Chamado aberto',
+    'chamado_concluido': 'Chamado finalizado',
+    'sinistro_aberto': 'Sinistro aberto',
+    'sinistro_atualizado': 'Sinistro atualizado',
+    'sinistro_encerrado': 'Sinistro encerrado',
+    'contrato_assinado': 'Contrato assinado',
+    'observacao_adicionada': 'Observação',
+  };
+  return mapa[tipo] || tipo.replace(/_/g, ' ');
+};
+
+const getStatusCobrancaLabel = (status: string) => {
+  const mapa: Record<string, string> = {
+    'RECEIVED': 'Pago',
+    'CONFIRMED': 'Pago',
+    'RECEIVED_IN_CASH': 'Pago',
+    'PENDING': 'Pendente',
+    'OVERDUE': 'Vencido',
+    'REFUNDED': 'Reembolsado',
+    'DELETED': 'Cancelado',
+  };
+  return mapa[status] || status;
+};
+
+const getStatusCobrancaClass = (status: string) => {
+  if (['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'].includes(status)) return 'bg-green-100 text-green-800';
+  if (status === 'OVERDUE') return 'bg-red-100 text-red-800';
+  if (['REFUNDED', 'DELETED'].includes(status)) return 'bg-gray-100 text-gray-800';
+  return 'bg-yellow-100 text-yellow-800';
+};
 
 // ============================================
 // COMPONENTE PRINCIPAL
@@ -153,6 +230,12 @@ export default function AssociadoDetalhe() {
   
   // Resumo financeiro real (meses em dia, próximo vencimento)
   const { data: resumoFinanceiro } = useResumoFinanceiroAssociado(id);
+  
+  // Cobranças do associado (para aba financeiro)
+  const { data: cobrancasData, isLoading: isLoadingCobrancas } = useCobrancasAssociado(id);
+  
+  // Histórico real do associado
+  const { data: historico, isLoading: isLoadingHistorico } = useAssociadoHistoricoCompleto(id);
   
   // Buscar documentos da cotação (contratos_documentos)
   const { data: documentosCotacao, isLoading: isLoadingDocsCotacao } = useDocumentosCotacao(cotacaoId);
@@ -473,23 +556,32 @@ export default function AssociadoDetalhe() {
               <CardTitle className="text-base">Últimas Atividades</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {MOCK_HISTORICO.slice(0, 5).map((e) => {
-                  const Icon = e.icone;
-                  return (
-                    <div key={e.id} className="flex items-start gap-3">
-                      <Icon className={cn('h-5 w-5 mt-0.5', e.cor)} />
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm">{e.titulo}</p>
-                        <p className="text-sm text-muted-foreground truncate">{e.descricao}</p>
+              {isLoadingHistorico ? (
+                <Skeleton className="h-32 w-full" />
+              ) : historico && historico.length > 0 ? (
+                <div className="space-y-4">
+                  {historico.slice(0, 5).map((evento) => {
+                    const Icon = getIconeEvento(evento.tipo);
+                    const cor = getCorEvento(evento.tipo);
+                    return (
+                      <div key={evento.id} className="flex items-start gap-3">
+                        <Icon className={cn('h-5 w-5 mt-0.5', cor)} />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm">{getTituloEvento(evento.tipo)}</p>
+                          <p className="text-sm text-muted-foreground truncate">{evento.descricao}</p>
+                        </div>
+                        <span className="text-xs text-muted-foreground whitespace-nowrap">
+                          {formatDate(evento.data.split('T')[0])}
+                        </span>
                       </div>
-                      <span className="text-xs text-muted-foreground whitespace-nowrap">
-                        {formatDate(e.data.split('T')[0])}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  Nenhuma atividade registrada
+                </p>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -1035,25 +1127,37 @@ export default function AssociadoDetalhe() {
             <Card>
               <CardContent className="p-4 text-center">
                 <p className="text-sm text-muted-foreground">Situação</p>
-                <Badge className="mt-2 bg-green-100 text-green-800">EM DIA</Badge>
+                {resumoFinanceiro?.emAtraso && resumoFinanceiro.emAtraso > 0 ? (
+                  <Badge className="mt-2 bg-destructive/10 text-destructive">EM ATRASO</Badge>
+                ) : (
+                  <Badge className="mt-2 bg-primary/10 text-primary">EM DIA</Badge>
+                )}
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-4 text-center">
                 <p className="text-sm text-muted-foreground">Próxima Fatura</p>
-                <p className="text-xl font-bold mt-1">15/02/2026</p>
+                <p className="text-xl font-bold mt-1">
+                  {resumoFinanceiro?.proximaCobranca?.data_vencimento
+                    ? formatDate(resumoFinanceiro.proximaCobranca.data_vencimento)
+                    : '—'}
+                </p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-4 text-center">
                 <p className="text-sm text-muted-foreground">Total Pago</p>
-                <p className="text-xl font-bold mt-1 text-green-600">R$ 2.998,80</p>
+                <p className="text-xl font-bold mt-1 text-primary">
+                  {formatCurrency(cobrancasData?.totais.pago || 0)}
+                </p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-4 text-center">
                 <p className="text-sm text-muted-foreground">Em Aberto</p>
-                <p className="text-xl font-bold mt-1">R$ 0,00</p>
+                <p className="text-xl font-bold mt-1">
+                  {formatCurrency(cobrancasData?.totais.emAberto || 0)}
+                </p>
               </CardContent>
             </Card>
           </div>
@@ -1067,34 +1171,45 @@ export default function AssociadoDetalhe() {
               </Button>
             </CardHeader>
             <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Referência</TableHead>
-                    <TableHead>Vencimento</TableHead>
-                    <TableHead>Valor</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Ação</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {MOCK_FATURAS.map((f) => (
-                    <TableRow key={f.id}>
-                      <TableCell className="font-medium">{f.referencia}</TableCell>
-                      <TableCell>{formatDate(f.vencimento)}</TableCell>
-                      <TableCell>{formatCurrency(f.valor)}</TableCell>
-                      <TableCell>
-                        <Badge className="bg-green-100 text-green-800">Pago</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Button size="sm" variant="ghost">
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
+              {isLoadingCobrancas ? (
+                <Skeleton className="h-48 w-full" />
+              ) : cobrancasData?.faturas && cobrancasData.faturas.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Referência</TableHead>
+                      <TableHead>Vencimento</TableHead>
+                      <TableHead>Valor</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Ação</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {cobrancasData.faturas.slice(0, 10).map((f) => (
+                      <TableRow key={f.id}>
+                        <TableCell className="font-medium">{f.referencia || f.tipo}</TableCell>
+                        <TableCell>{formatDate(f.data_vencimento)}</TableCell>
+                        <TableCell>{formatCurrency(f.valor)}</TableCell>
+                        <TableCell>
+                          <Badge className={getStatusCobrancaClass(f.status)}>
+                            {getStatusCobrancaLabel(f.status)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Button size="sm" variant="ghost">
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-8">
+                  <Receipt className="h-10 w-10 text-muted-foreground/50" />
+                  <p className="mt-2 text-muted-foreground">Nenhuma cobrança encontrada</p>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -1120,39 +1235,51 @@ export default function AssociadoDetalhe() {
           
           <Card>
             <CardContent className="p-6">
-              <div className="space-y-0">
-                {MOCK_HISTORICO.map((e, i) => {
-                  const Icon = e.icone;
-                  const isLast = i === MOCK_HISTORICO.length - 1;
-                  return (
-                    <div key={e.id} className="flex gap-4">
-                      <div className="flex flex-col items-center">
-                        <div className={cn('p-2 rounded-full bg-muted')}>
-                          <Icon className={cn('h-4 w-4', e.cor)} />
-                        </div>
-                        {!isLast && <div className="w-px h-full bg-border min-h-[40px]" />}
-                      </div>
-                      <div className="pb-6 flex-1">
-                        <div className="flex items-start justify-between gap-4">
-                          <div>
-                            <p className="font-medium">{e.titulo}</p>
-                            <p className="text-sm text-muted-foreground">{e.descricao}</p>
+              {isLoadingHistorico ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin" />
+                </div>
+              ) : historico && historico.length > 0 ? (
+                <div className="space-y-0">
+                  {historico.map((evento, i) => {
+                    const Icon = getIconeEvento(evento.tipo);
+                    const cor = getCorEvento(evento.tipo);
+                    const isLast = i === historico.length - 1;
+                    return (
+                      <div key={evento.id} className="flex gap-4">
+                        <div className="flex flex-col items-center">
+                          <div className={cn('p-2 rounded-full bg-muted')}>
+                            <Icon className={cn('h-4 w-4', cor)} />
                           </div>
-                          <span className="text-xs text-muted-foreground whitespace-nowrap">
-                            {formatDateTime(e.data)}
-                          </span>
+                          {!isLast && <div className="w-px h-full bg-border min-h-[40px]" />}
+                        </div>
+                        <div className="pb-6 flex-1">
+                          <div className="flex items-start justify-between gap-4">
+                            <div>
+                              <p className="font-medium">{getTituloEvento(evento.tipo)}</p>
+                              <p className="text-sm text-muted-foreground">{evento.descricao}</p>
+                              {evento.usuario && (
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  Por: {evento.usuario.nome}
+                                </p>
+                              )}
+                            </div>
+                            <span className="text-xs text-muted-foreground whitespace-nowrap">
+                              {formatDateTime(evento.data)}
+                            </span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center text-muted-foreground py-8">
+                  Nenhum histórico registrado
+                </div>
+              )}
             </CardContent>
           </Card>
-
-          <Button variant="outline" className="w-full">
-            <Clock className="mr-2 h-4 w-4" /> Carregar mais
-          </Button>
         </TabsContent>
       </Tabs>
 
