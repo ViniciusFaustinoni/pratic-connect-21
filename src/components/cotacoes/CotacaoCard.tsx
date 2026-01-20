@@ -423,14 +423,27 @@ export function CotacaoCard({
           )}
           
           {cotacao.status === 'rascunho' && !hasLead && onCopiarWhatsApp && permissions?.canSend !== false && (
-            <Button
-              size="sm"
-              className="bg-green-600 hover:bg-green-700 text-white"
-              onClick={() => onCopiarWhatsApp(cotacao)}
-            >
-              <ClipboardCopy className="h-4 w-4 mr-1" />
-              Copiar para WhatsApp
-            </Button>
+            <>
+              <Button
+                size="sm"
+                className="bg-green-600 hover:bg-green-700 text-white"
+                onClick={() => onCopiarWhatsApp(cotacao)}
+              >
+                <ClipboardCopy className="h-4 w-4 mr-1" />
+                Copiar para WhatsApp
+              </Button>
+              
+              {cotacao.token_publico && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => window.open(`/cotacao/${cotacao.token_publico}`, '_blank')}
+                >
+                  <ExternalLink className="h-4 w-4 mr-1" />
+                  Acessar Link do Cliente
+                </Button>
+              )}
+            </>
           )}
           
           {/* Botão Gerar Proposta removido conforme solicitação */}
