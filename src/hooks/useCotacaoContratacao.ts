@@ -114,15 +114,56 @@ export function useCotacaoContratacao(token: string | undefined) {
     retryDelay: 500,
   });
 
-  // Extrair associadoId do contrato vinculado
-  const associadoId = useMemo(() => {
-    return cotacao?.contrato?.associado_id || null;
-  }, [cotacao?.contrato?.associado_id]);
+  // Query de fallback para buscar contrato via cotacao_token_publico
+  // Isso resolve o problema quando o embed via FK é bloqueado por RLS para anon
+  const { data: contratoFallback } = useQuery({
+    queryKey: ['contrato-publico-fallback', token],
+    queryFn: async () => {
+      if (!token) return null;
+      
+      console.log('[CotacaoContratacao] Buscando contrato via cotacao_token_publico...');
+      
+      const { data, error } = await publicSupabase
+        .from('contratos')
+        .select(`
+          id,
+          associado_id,
+          associados:associados!fk_contratos_associado(
+            id,
+            status
+          )
+        `)
+        .eq('cotacao_token_publico', token)
+        .maybeSingle();
 
-  // Status do associado
+      if (error) {
+        console.error('[CotacaoContratacao] Erro na query fallback:', error);
+        return null;
+      }
+      
+      console.log('[CotacaoContratacao] Contrato fallback encontrado:', data?.id);
+      return data;
+    },
+    enabled: !!token,
+  });
+
+  // Extrair associadoId do contrato vinculado - priorizar embed, usar fallback se necessário
+  const associadoId = useMemo(() => {
+    const fromEmbed = cotacao?.contrato?.associado_id;
+    const fromFallback = contratoFallback?.associado_id;
+    
+    console.log('[CotacaoContratacao] associadoId - embed:', fromEmbed, 'fallback:', fromFallback);
+    
+    return fromEmbed || fromFallback || null;
+  }, [cotacao?.contrato?.associado_id, contratoFallback?.associado_id]);
+
+  // Status do associado - também com fallback
   const associadoStatus = useMemo(() => {
-    return cotacao?.contrato?.associados?.status || null;
-  }, [cotacao?.contrato?.associados?.status]);
+    const fromEmbed = cotacao?.contrato?.associados?.status;
+    const fromFallback = contratoFallback?.associados?.status;
+    
+    return fromEmbed || fromFallback || null;
+  }, [cotacao?.contrato?.associados?.status, contratoFallback?.associados?.status]);
 
   // Buscar documentos pendentes para o associado
   const { data: docsPendentes, isLoading: isLoadingDocs, refetch: refetchDocs } = useQuery({
