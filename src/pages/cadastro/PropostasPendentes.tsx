@@ -336,17 +336,32 @@ export default function PropostasPendentes() {
                         />
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          size="sm"
-                          className="bg-purple-600 hover:bg-purple-700 text-white"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigate(`/cadastro/propostas/${proposta.id}`);
-                          }}
-                        >
-                          <Eye className="mr-1 h-4 w-4" />
-                          Analisar
-                        </Button>
+                        {proposta.tem_documento_pendente ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="border-muted-foreground/30"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/cadastro/propostas/${proposta.id}`);
+                            }}
+                          >
+                            <Eye className="mr-1 h-4 w-4" />
+                            Ver Detalhes
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            className="bg-purple-600 hover:bg-purple-700 text-white"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/cadastro/propostas/${proposta.id}`);
+                            }}
+                          >
+                            <Eye className="mr-1 h-4 w-4" />
+                            Analisar
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
