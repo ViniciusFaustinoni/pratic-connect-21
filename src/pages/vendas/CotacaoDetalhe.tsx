@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { useCotacao, useCotacaoActions, useAtualizarStatusCotacao, useExcluirCotacao } from '@/hooks/useCotacoes';
+import { useCotacao, useCotacaoActions, useAtualizarStatusCotacao, useExcluirCotacao, useDuplicarCotacao } from '@/hooks/useCotacoes';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -10,6 +10,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ArrowLeft, AlertCircle, Shield, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
+
+// Hooks
+import { useHistoricoCotacao, registrarEventoCotacao } from '@/hooks/useCotacaoHistorico';
+import { useCotacoesRealtime } from '@/hooks/useCotacoesRealtime';
 
 // Componentes novos
 import { CotacaoHeader } from '@/components/cotacoes/CotacaoHeader';
@@ -24,6 +28,7 @@ import { PlanoDetalhesModal } from '@/components/cotacoes/PlanoDetalhesModal';
 import { EnviarEmailModal } from '@/components/cotacoes/EnviarEmailModal';
 import { VincularLeadModal } from '@/components/cotacoes/VincularLeadModal';
 import { ContratoWizard } from '@/components/contratos/ContratoWizard';
+import { CotacaoFormDialog } from '@/components/cotacoes/CotacaoFormDialog';
 import { isCoberturaRemovida } from '@/data/restricoesCategorias';
 import { gerarPdfCotacaoComparativa } from '@/lib/gerarPdfCotacao';
 import type { StatusCotacao } from '@/types/vendas';
@@ -48,19 +53,25 @@ export default function CotacaoDetalhe() {
   const queryClient = useQueryClient();
   const { profile } = useAuth();
 
+  // Realtime para notificações
+  useCotacoesRealtime();
+
   // Estados dos modais
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [showVincularModal, setShowVincularModal] = useState(false);
   const [showContratoWizard, setShowContratoWizard] = useState(false);
+  const [showEditarModal, setShowEditarModal] = useState(false);
   const [planoDetalhesModal, setPlanoDetalhesModal] = useState<PlanoComparativo | null>(null);
   const [planoSelecionado, setPlanoSelecionado] = useState<string | null>(null);
   const [isGerando, setIsGerando] = useState(false);
 
   // Hooks de dados
   const { data: cotacao, isLoading, error } = useCotacao(id);
+  const { data: historico, isLoading: isLoadingHistorico } = useHistoricoCotacao(id);
   const { reenviarCotacao, atualizarStatus, isReenviando, isAtualizando } = useCotacaoActions();
   const atualizarStatusMutation = useAtualizarStatusCotacao();
   const excluirMutation = useExcluirCotacao();
+  const duplicarMutation = useDuplicarCotacao();
 
   // ============================================
   // HANDLERS
@@ -93,6 +104,14 @@ Ficou com alguma dúvida? Estou à disposição!
     
     window.open(url, '_blank');
     
+    // Registrar no histórico
+    registrarEventoCotacao({
+      cotacaoId: cotacao.id,
+      acao: 'whatsapp_enviado',
+      autorId: profile?.id,
+      autorNome: profile?.nome,
+    });
+    
     // Atualizar status para 'enviada'
     if (cotacao.status === 'rascunho') {
       atualizarStatus({ id: cotacao.id, status: 'enviada' });
@@ -107,8 +126,19 @@ Ficou com alguma dúvida? Estou à disposição!
   };
 
   const handleMudarStatus = (status: StatusCotacao) => {
-    if (!id) return;
+    if (!id || !cotacao) return;
+    
+    const statusAnterior = cotacao.status;
     atualizarStatus({ id, status });
+    
+    // Registrar no histórico
+    registrarEventoCotacao({
+      cotacaoId: id,
+      acao: 'status_alterado',
+      detalhes: { status_anterior: statusAnterior, novo_status: status },
+      autorId: profile?.id,
+      autorNome: profile?.nome,
+    });
   };
 
   const handleExcluir = () => {
@@ -118,6 +148,42 @@ Ficou com alguma dúvida? Estou à disposição!
         toast.success('Cotação excluída');
         navigate('/vendas/cotacoes');
       },
+    });
+  };
+
+  const handleDuplicar = () => {
+    if (!cotacao) return;
+    
+    duplicarMutation.mutate(cotacao.id, {
+      onSuccess: (novaCotacao) => {
+        // Registrar evento no histórico da cotação original
+        registrarEventoCotacao({
+          cotacaoId: cotacao.id,
+          acao: 'duplicada',
+          detalhes: { nova_cotacao_id: novaCotacao.id, nova_cotacao_numero: novaCotacao.numero },
+          autorId: profile?.id,
+          autorNome: profile?.nome,
+        });
+        
+        // Navegar para a nova cotação
+        navigate(`/vendas/cotacoes/${novaCotacao.id}`);
+      },
+    });
+  };
+
+  const handleEditar = () => {
+    if (cotacao?.status === 'rascunho') {
+      setShowEditarModal(true);
+    }
+  };
+
+  const handleCopiarLink = () => {
+    if (!cotacao) return;
+    registrarEventoCotacao({
+      cotacaoId: cotacao.id,
+      acao: 'link_copiado',
+      autorId: profile?.id,
+      autorNome: profile?.nome,
     });
   };
 
@@ -162,6 +228,14 @@ Ficou com alguma dúvida? Estou à disposição!
         veiculo_placa: cotacao.veiculo_placa || null,
         valor_fipe: cotacao.valor_fipe || null,
         planosComparar: planosParaPdf,
+      });
+      
+      // Registrar no histórico
+      registrarEventoCotacao({
+        cotacaoId: cotacao.id,
+        acao: 'pdf_baixado',
+        autorId: profile?.id,
+        autorNome: profile?.nome,
       });
       
       toast.success('PDF gerado com sucesso!');
