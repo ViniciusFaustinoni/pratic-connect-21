@@ -32,6 +32,7 @@ import {
   Loader2,
   Send,
   FileSignature,
+  Pencil,
 } from 'lucide-react';
 import { STATUS_COTACAO_LABELS } from '@/types/vendas';
 import type { StatusCotacao } from '@/types/vendas';
@@ -48,14 +49,17 @@ interface CotacaoAcoesProps {
   onEnviarWhatsApp: () => void;
   onEnviarEmail: () => void;
   onDuplicar?: () => void;
+  onEditar?: () => void;
   onMudarStatus: (status: StatusCotacao) => void;
   onExcluir: () => void;
   onReenviar: () => void;
   onAceitarEContrato?: () => void;
+  onCopiarLink?: () => void;
   isReenviando?: boolean;
   isAtualizando?: boolean;
   isExcluindo?: boolean;
   isGerando?: boolean;
+  isDuplicando?: boolean;
 }
 
 export function CotacaoAcoes({
@@ -64,18 +68,22 @@ export function CotacaoAcoes({
   onEnviarWhatsApp,
   onEnviarEmail,
   onDuplicar,
+  onEditar,
   onMudarStatus,
   onExcluir,
   onReenviar,
   onAceitarEContrato,
+  onCopiarLink,
   isReenviando,
   isAtualizando,
   isExcluindo,
   isGerando,
+  isDuplicando,
 }: CotacaoAcoesProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   
   const temLead = !!cotacao.lead_id;
+  const podeEditar = cotacao.status === 'rascunho';
 
   const handleCopiarLink = async () => {
     if (!cotacao.token_publico) {
@@ -85,6 +93,9 @@ export function CotacaoAcoes({
     const url = `${window.location.origin}/cotacao/${cotacao.token_publico}`;
     await navigator.clipboard.writeText(url);
     toast.success('Link copiado!');
+    
+    // Callback opcional para registrar no histórico
+    onCopiarLink?.();
   };
 
   const canAceitarContrato = 
@@ -171,17 +182,37 @@ export function CotacaoAcoes({
           Reenviar Cotação
         </Button>
 
-        {/* Duplicar */}
-        {onDuplicar && (
+        <Separator className="my-3" />
+
+        {/* Duplicar e Editar na mesma linha */}
+        <div className="grid grid-cols-2 gap-2">
+          {/* Duplicar */}
           <Button
             variant="outline"
-            className="w-full justify-start"
+            className="justify-start"
             onClick={onDuplicar}
+            disabled={isDuplicando}
           >
-            <Copy className="mr-2 h-4 w-4" />
-            Duplicar Cotação
+            {isDuplicando ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Copy className="mr-2 h-4 w-4" />
+            )}
+            Duplicar
           </Button>
-        )}
+
+          {/* Editar */}
+          <Button
+            variant="outline"
+            className="justify-start"
+            onClick={onEditar}
+            disabled={!podeEditar}
+            title={!podeEditar ? 'Apenas rascunhos podem ser editados' : undefined}
+          >
+            <Pencil className="mr-2 h-4 w-4" />
+            Editar
+          </Button>
+        </div>
 
         {/* Copiar Link */}
         <Button

@@ -4349,6 +4349,44 @@ export type Database = {
           },
         ]
       }
+      cotacoes_historico: {
+        Row: {
+          acao: string
+          autor_id: string | null
+          autor_nome: string | null
+          cotacao_id: string
+          created_at: string | null
+          detalhes: Json | null
+          id: string
+        }
+        Insert: {
+          acao: string
+          autor_id?: string | null
+          autor_nome?: string | null
+          cotacao_id: string
+          created_at?: string | null
+          detalhes?: Json | null
+          id?: string
+        }
+        Update: {
+          acao?: string
+          autor_id?: string | null
+          autor_nome?: string | null
+          cotacao_id?: string
+          created_at?: string | null
+          detalhes?: Json | null
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cotacoes_historico_cotacao_id_fkey"
+            columns: ["cotacao_id"]
+            isOneToOne: false
+            referencedRelation: "cotacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cotacoes_publicas: {
         Row: {
           adicionais_selecionados: Json | null

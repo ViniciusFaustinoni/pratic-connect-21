@@ -10,6 +10,7 @@ import { toast } from 'sonner';
  * - contratos (afeta status_contratacao/etapa da venda)
  * - instalacoes (afeta etapa vistoria_agendada/instalacao_agendada)
  * - vistorias (afeta etapa de vistoria realizada)
+ * - cotacoes_historico (atualiza timeline em tempo real)
  */
 export function useCotacoesRealtime() {
   const queryClient = useQueryClient();
@@ -165,6 +166,41 @@ export function useCotacoesRealtime() {
             if (newData.status === 'concluida' && oldData?.status !== 'concluida') {
               toast.success('✅ Vistoria concluída!', { duration: 5000 });
             }
+          }
+        }
+      )
+      // Escutar mudanças no histórico de cotações (atualiza timeline em tempo real)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'cotacoes_historico',
+        },
+        (payload) => {
+          console.log('[useCotacoesRealtime] Novo evento no histórico:', payload.new);
+          
+          const evento = payload.new as { cotacao_id?: string; acao?: string; autor_nome?: string };
+          
+          // Invalidar histórico da cotação específica
+          if (evento.cotacao_id) {
+            queryClient.invalidateQueries({ queryKey: ['cotacao-historico', evento.cotacao_id] });
+          }
+          
+          // Notificação especial para visualização do cliente
+          if (evento.acao === 'visualizada_cliente') {
+            toast.info('👀 Cliente visualizou a cotação!', {
+              description: 'O link público foi acessado agora',
+              duration: 6000,
+            });
+          }
+          
+          // Notificação para plano escolhido pelo cliente
+          if (evento.acao === 'plano_escolhido') {
+            toast.info('📋 Cliente escolheu um plano!', {
+              description: 'O cliente selecionou um plano na cotação pública',
+              duration: 5000,
+            });
           }
         }
       )
