@@ -213,14 +213,30 @@ export default function Associados() {
 
   const handleAcaoConfirm = async (motivo: string) => {
     if (!acaoDialog) return;
-    
+
     // Handle exclusão usando o hook com invalidação automática
     if (acaoDialog.acao === 'excluir') {
-      await deleteAssociado.mutateAsync(acaoDialog.associadoId);
-      toast({
-        title: 'Associado excluído',
-        description: 'O associado foi removido permanentemente do sistema.',
-      });
+      try {
+        await Promise.race([
+          deleteAssociado.mutateAsync(acaoDialog.associadoId),
+          new Promise<void>((_, reject) =>
+            setTimeout(() => reject(new Error('Tempo excedido ao excluir. Tente novamente.')), 15000)
+          ),
+        ]);
+
+        toast({
+          title: 'Associado excluído',
+          description: 'O associado foi removido permanentemente do sistema.',
+        });
+      } catch (err: any) {
+        console.error('[excluir-associado] erro:', err);
+        toast({
+          title: 'Erro ao excluir',
+          description: err?.message || 'Não foi possível excluir o associado.',
+          variant: 'destructive',
+        });
+        throw err;
+      }
       return;
     }
     
