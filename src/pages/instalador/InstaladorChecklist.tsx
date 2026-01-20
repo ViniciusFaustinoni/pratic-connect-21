@@ -15,7 +15,9 @@ import {
   Phone,
   Gauge,
   XCircle,
-  ShieldCheck
+  ShieldCheck,
+  ShieldX,
+  Lock
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -229,6 +231,69 @@ export default function InstaladorChecklist() {
         <p className="mt-4 text-white">Instalação não encontrada</p>
         <Button onClick={() => navigate('/instalador')} className="mt-4">
           Voltar
+        </Button>
+      </div>
+    );
+  }
+
+  // Verificar se a instalação já foi finalizada (bloqueio de edição)
+  const instalacaoFinalizada = ['concluida', 'cancelada'].includes(instalacao?.status || '');
+  
+  if (instalacaoFinalizada) {
+    const foiConcluida = instalacao.status === 'concluida';
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-slate-900 p-6">
+        <div className={`rounded-full p-6 ${foiConcluida ? 'bg-green-500/20' : 'bg-red-500/20'}`}>
+          {foiConcluida ? (
+            <ShieldCheck className="h-16 w-16 text-green-500" />
+          ) : (
+            <ShieldX className="h-16 w-16 text-red-500" />
+          )}
+        </div>
+        
+        <div className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-sm font-medium ${
+          foiConcluida ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+        }`}>
+          <Lock className="h-3 w-3" />
+          Instalação {foiConcluida ? 'Concluída' : 'Cancelada'}
+        </div>
+        
+        <div className="text-center space-y-2">
+          <h2 className="text-xl font-bold text-white">
+            Instalação Finalizada
+          </h2>
+          <p className="text-slate-400 max-w-sm">
+            Esta instalação já foi {foiConcluida ? 'concluída' : 'cancelada'} e não pode mais ser editada.
+          </p>
+        </div>
+
+        <Card className="border-slate-700 bg-slate-800 w-full max-w-sm">
+          <CardContent className="py-4 space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span className="text-slate-400">Veículo:</span>
+              <span className="text-white font-medium">{instalacao.veiculos?.placa}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">Associado:</span>
+              <span className="text-white">{instalacao.associados?.nome}</span>
+            </div>
+            {instalacao.updated_at && (
+              <div className="flex justify-between">
+                <span className="text-slate-400">Concluída em:</span>
+                <span className="text-white">
+                  {new Date(instalacao.updated_at).toLocaleDateString('pt-BR')}
+                </span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+        
+        <Button 
+          onClick={() => navigate('/instalador')} 
+          className="mt-4"
+        >
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Voltar para Fila
         </Button>
       </div>
     );
