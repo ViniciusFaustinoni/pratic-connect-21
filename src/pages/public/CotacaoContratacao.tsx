@@ -750,10 +750,29 @@ export default function CotacaoContratacao() {
                         <p className="text-muted-foreground">Verificando status...</p>
                       </CardContent>
                     </Card>
+                  ) : cotacao?.tipo_vistoria === 'agendada' ? (
+                    // Vistoria agendada mas dados ainda não atualizados - aguardar
+                    <Card className="border-primary/30 bg-card/80 backdrop-blur-xl">
+                      <CardContent className="py-12 text-center space-y-4">
+                        <motion.div 
+                          className="w-16 h-16 mx-auto rounded-full bg-primary/10 flex items-center justify-center"
+                          initial={{ scale: 0 }}
+                          animate={{ scale: 1 }}
+                        >
+                          <CalendarCheck className="h-8 w-8 text-primary" />
+                        </motion.div>
+                        <h2 className="text-xl font-bold text-foreground">Agendamento Confirmado!</h2>
+                        <p className="text-muted-foreground">
+                          Sua vistoria presencial foi agendada com sucesso.<br />
+                          Aguarde o contato do vistoriador.
+                        </p>
+                      </CardContent>
+                    </Card>
                   ) : (
+                    // Apenas para autovistoria: agendar instalação
                     <AgendamentoVistoriaCompleta
                       cotacaoId={cotacao.id}
-                      tipoVistoria={cotacao?.tipo_vistoria as 'autovistoria' | 'agendada'}
+                      tipoVistoria="autovistoria"
                       onConfirmar={() => {
                         setAgendamentoConcluido(true);
                         queryClient.invalidateQueries({ queryKey: ['cotacao-contratacao'] });
