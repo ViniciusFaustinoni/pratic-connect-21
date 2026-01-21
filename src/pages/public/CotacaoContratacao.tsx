@@ -420,6 +420,16 @@ export default function CotacaoContratacao() {
                     clienteCpf={cotacao.cliente_cpf || ''}
                     onPagamentoConfirmado={() => setEtapaAtual(5)}
                     readOnly={isEtapaConcluida(4)}
+                    tipoVistoria={cotacao.tipo_vistoria as 'autovistoria' | 'agendada'}
+                    vistoriaAgendada={cotacao.vistoria_data_agendada ? {
+                      data: cotacao.vistoria_data_agendada,
+                      horario: cotacao.vistoria_horario_agendado || undefined,
+                      logradouro: cotacao.vistoria_endereco_logradouro || undefined,
+                      numero: cotacao.vistoria_endereco_numero || undefined,
+                      bairro: cotacao.vistoria_endereco_bairro || undefined,
+                      cidade: cotacao.vistoria_endereco_cidade || undefined,
+                      estado: cotacao.vistoria_endereco_estado || undefined,
+                    } : undefined}
                   />
                 </motion.div>
               )}

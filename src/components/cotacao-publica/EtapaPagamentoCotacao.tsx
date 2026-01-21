@@ -1,11 +1,24 @@
 import { useState, useEffect, useCallback } from 'react';
-import { CreditCard, QrCode, Loader2, Check, Copy, FileText, AlertCircle, RefreshCw } from 'lucide-react';
+import { CreditCard, QrCode, Loader2, Check, Copy, FileText, AlertCircle, RefreshCw, Calendar, Clock, MapPin, Wrench } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { Badge } from '@/components/ui/badge';
+
+interface VistoriaAgendadaInfo {
+  data: string;
+  horario?: string;
+  logradouro?: string;
+  numero?: string;
+  bairro?: string;
+  cidade?: string;
+  estado?: string;
+}
 
 interface EtapaPagamentoCotacaoProps {
   cotacaoId: string;
@@ -15,6 +28,8 @@ interface EtapaPagamentoCotacaoProps {
   clienteCpf: string;
   onPagamentoConfirmado: () => void;
   readOnly?: boolean;
+  tipoVistoria?: 'autovistoria' | 'agendada';
+  vistoriaAgendada?: VistoriaAgendadaInfo;
 }
 
 interface CobrancaData {
@@ -36,6 +51,8 @@ export function EtapaPagamentoCotacao({
   clienteCpf,
   onPagamentoConfirmado,
   readOnly = false,
+  tipoVistoria,
+  vistoriaAgendada,
 }: EtapaPagamentoCotacaoProps) {
   const [etapaInterna, setEtapaInterna] = useState<EtapaInterna>('gerando_contrato');
   const [contratoId, setContratoId] = useState<string | null>(null);
@@ -319,11 +336,79 @@ export function EtapaPagamentoCotacao({
     }).format(value);
   };
 
+  // Componente reutilizável para detalhes da instalação agendada
+  const InstalacaoAgendadaInfo = () => {
+    if (tipoVistoria !== 'agendada' || !vistoriaAgendada) return null;
+    
+    return (
+      <motion.div 
+        className="mt-6 space-y-4"
+        initial={{ y: 10, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ delay: 0.3 }}
+      >
+        <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 max-w-md mx-auto">
+          <div className="flex items-center justify-center gap-2 mb-3">
+            <Wrench className="h-5 w-5 text-primary" />
+            <h4 className="font-semibold text-foreground">Instalação Agendada</h4>
+          </div>
+          
+          <div className="space-y-3 text-left">
+            <div className="flex items-center gap-3">
+              <Calendar className="h-4 w-4 text-primary flex-shrink-0" />
+              <div>
+                <p className="text-xs text-muted-foreground">Data</p>
+                <p className="text-sm font-medium">
+                  {format(new Date(vistoriaAgendada.data + 'T12:00:00'), "EEEE, dd 'de' MMMM", { locale: ptBR })}
+                </p>
+              </div>
+            </div>
+            
+            {vistoriaAgendada.horario && (
+              <div className="flex items-center gap-3">
+                <Clock className="h-4 w-4 text-primary flex-shrink-0" />
+                <div>
+                  <p className="text-xs text-muted-foreground">Horário</p>
+                  <p className="text-sm font-medium">{vistoriaAgendada.horario}</p>
+                </div>
+              </div>
+            )}
+            
+            {vistoriaAgendada.logradouro && (
+              <div className="flex items-start gap-3">
+                <MapPin className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-xs text-muted-foreground">Local</p>
+                  <p className="text-sm font-medium">
+                    {vistoriaAgendada.logradouro}
+                    {vistoriaAgendada.numero && `, ${vistoriaAgendada.numero}`}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {vistoriaAgendada.bairro}
+                    {vistoriaAgendada.cidade && ` - ${vistoriaAgendada.cidade}`}
+                    {vistoriaAgendada.estado && `/${vistoriaAgendada.estado}`}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+        
+        <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30">
+          Aguardando Instalação
+        </Badge>
+        <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+          A cobertura total será ativada após a instalação do rastreador no seu veículo.
+        </p>
+      </motion.div>
+    );
+  };
+
   // Modo read-only: mostrar pagamento confirmado
   if (readOnly) {
     return (
       <Card className="border-success/30 bg-card/80 backdrop-blur-xl">
-        <CardContent className="py-16 text-center">
+        <CardContent className="py-12 text-center">
           <motion.div
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
@@ -337,6 +422,8 @@ export function EtapaPagamentoCotacao({
               Taxa de adesão paga com sucesso.
             </p>
             <p className="text-lg font-bold text-success">{formatCurrency(valorAdesao)}</p>
+            
+            <InstalacaoAgendadaInfo />
           </motion.div>
         </CardContent>
       </Card>
@@ -347,7 +434,7 @@ export function EtapaPagamentoCotacao({
   if (etapaInterna === 'pago') {
     return (
       <Card className="border-success/30 bg-card/80 backdrop-blur-xl">
-        <CardContent className="py-16 text-center">
+        <CardContent className="py-12 text-center">
           <motion.div
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
@@ -361,6 +448,8 @@ export function EtapaPagamentoCotacao({
               Taxa de adesão paga com sucesso.
             </p>
             <p className="text-lg font-bold text-success">{formatCurrency(valorAdesao)}</p>
+            
+            <InstalacaoAgendadaInfo />
           </motion.div>
         </CardContent>
       </Card>
