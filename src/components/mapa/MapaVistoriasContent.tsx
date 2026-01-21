@@ -149,28 +149,45 @@ export function MapaVistoriasContent() {
     return agruparPorRota(vistoriasComCoordenadas);
   }, [vistoriasComCoordenadas]);
 
-  // Criar legenda baseada nas ROTAS DO BANCO (não das vistorias filtradas)
+  // Criar legenda baseada nas ROTAS DA DATA SELECIONADA (não rotas de vistorias atrasadas)
   const rotasParaLegenda = useMemo(() => {
-    if (!rotasBairros?.length) return rotasAgrupadas;
+    // IDs das rotas válidas para a data selecionada
+    const rotasIdsDodia = new Set(rotasBairros?.map(r => r.rota_id) || []);
     
-    // Usar rotas do banco como base para a legenda
-    const rotasDoDb = rotasBairros.map(rota => ({
+    // Separar vistorias: aquelas com rota do dia vs as demais (atrasadas/sem rota)
+    const vistoriasComRotaDoDia = vistoriasComCoordenadas.filter(
+      v => v.rota_id && rotasIdsDodia.has(v.rota_id)
+    );
+    const vistoriasSemRotaDoDia = vistoriasComCoordenadas.filter(
+      v => !v.rota_id || !rotasIdsDodia.has(v.rota_id)
+    );
+    
+    // Construir legenda apenas com rotas da data selecionada
+    const rotasDoDb: typeof rotasAgrupadas = (rotasBairros || []).map(rota => ({
       rota_id: rota.rota_id,
       rota_codigo: rota.codigo,
       rota_cor: rota.cor,
       rota_regiao: rota.bairros.slice(0, 3).join(', '),
-      vistoriador_nome: null as string | null,
-      vistorias: vistoriasComCoordenadas.filter(v => v.rota_id === rota.rota_id),
+      vistoriador_nome: null,
+      vistorias: vistoriasComRotaDoDia.filter(v => v.rota_id === rota.rota_id),
     }));
     
-    // Adicionar grupo "sem rota" se houver vistorias sem rota
-    const semRota = rotasAgrupadas.find(r => !r.rota_id);
-    if (semRota && semRota.vistorias.length > 0) {
-      rotasDoDb.push(semRota);
+    // Adicionar grupo "sem rota" para:
+    // - Vistorias realmente sem rota
+    // - Vistorias atrasadas com rotas de outras datas
+    if (vistoriasSemRotaDoDia.length > 0) {
+      rotasDoDb.push({
+        rota_id: null,
+        rota_codigo: null,
+        rota_cor: null,
+        rota_regiao: null,
+        vistoriador_nome: null,
+        vistorias: vistoriasSemRotaDoDia,
+      });
     }
     
     return rotasDoDb;
-  }, [rotasBairros, vistoriasComCoordenadas, rotasAgrupadas]);
+  }, [rotasBairros, vistoriasComCoordenadas]);
 
   // Selecionar vistoria
   const selecionarVistoria = (vistoria: VistoriaMapa) => {
