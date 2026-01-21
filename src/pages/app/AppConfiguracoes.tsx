@@ -25,7 +25,17 @@ import {
   Globe,
   MessageSquare,
   AlertTriangle,
-  User
+  User,
+  MapPin,
+  Key,
+  Gauge,
+  Clock,
+  BarChart3,
+  Sun,
+  Moon,
+  Code,
+  ExternalLink,
+  Gift
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -41,15 +51,23 @@ import {
 } from '@/components/ui/dialog';
 import { useMyAssociado } from '@/hooks/useMyData';
 import { useNotificacoesPreferencias, useUpdateNotificacoesPreferencias } from '@/hooks/useNotificacoesPreferencias';
+import { useRastreadorPreferencias, useUpdateRastreadorPreferencias } from '@/hooks/useRastreadorPreferencias';
+import { useTheme } from 'next-themes';
 import { CreditCard, Car, AlertTriangle as AlertTriangleIcon, Megaphone } from 'lucide-react';
+
 export default function AppConfiguracoes() {
   const { signOut, profile } = useAuth();
   const navigate = useNavigate();
   const { data: associado } = useMyAssociado();
+  const { theme, setTheme } = useTheme();
   
   // Notificações - usar hook de preferências
   const { data: preferencias, isLoading: loadingPreferencias } = useNotificacoesPreferencias();
   const updatePreferencias = useUpdateNotificacoesPreferencias();
+  
+  // Rastreador preferências
+  const { data: rastreadorPrefs, isLoading: loadingRastreador } = useRastreadorPreferencias();
+  const updateRastreadorPrefs = useUpdateRastreadorPreferencias();
   
   const handleUpdatePreferencia = async (key: string, value: boolean) => {
     try {
@@ -58,6 +76,10 @@ export default function AppConfiguracoes() {
     } catch {
       toast.error('Erro ao salvar preferência');
     }
+  };
+
+  const handleUpdateRastreador = (updates: Record<string, unknown>) => {
+    updateRastreadorPrefs.mutate(updates as any);
   };
 
   const handleTogglePush = async (checked: boolean) => {
@@ -79,6 +101,7 @@ export default function AppConfiguracoes() {
   // Modais
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showSenhaModal, setShowSenhaModal] = useState(false);
+  const [showLicencasModal, setShowLicencasModal] = useState(false);
   const [modalSobre, setModalSobre] = useState(false);
 
   // Form senha
@@ -131,6 +154,18 @@ export default function AppConfiguracoes() {
   const dataAdesao = associado?.data_adesao 
     ? new Date(associado.data_adesao).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })
     : 'Jan/2024';
+
+  // Licenças de software
+  const licencas = [
+    { name: 'React', license: 'MIT', url: 'https://reactjs.org' },
+    { name: 'Tailwind CSS', license: 'MIT', url: 'https://tailwindcss.com' },
+    { name: 'Radix UI', license: 'MIT', url: 'https://radix-ui.com' },
+    { name: 'Lucide Icons', license: 'ISC', url: 'https://lucide.dev' },
+    { name: 'React Query', license: 'MIT', url: 'https://tanstack.com/query' },
+    { name: 'Supabase', license: 'Apache 2.0', url: 'https://supabase.com' },
+    { name: 'Framer Motion', license: 'MIT', url: 'https://www.framer.com/motion' },
+    { name: 'React Router', license: 'MIT', url: 'https://reactrouter.com' },
+  ];
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -291,6 +326,23 @@ export default function AppConfiguracoes() {
                   disabled={loadingPreferencias}
                 />
               </div>
+              {/* Novidades e Promoções */}
+              <div className="flex items-center justify-between p-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-pink-100 rounded-lg">
+                    <Gift className="h-5 w-5 text-pink-600" />
+                  </div>
+                  <div>
+                    <div className="font-medium text-foreground">Novidades e promoções</div>
+                    <div className="text-sm text-muted-foreground">Ofertas e novos recursos</div>
+                  </div>
+                </div>
+                <Switch
+                  checked={rastreadorPrefs?.novidades_promocoes ?? true}
+                  onCheckedChange={(checked) => handleUpdateRastreador({ novidades_promocoes: checked })}
+                  disabled={loadingRastreador}
+                />
+              </div>
               {/* Segurança - Sempre ativa */}
               <div className="flex items-center justify-between p-4 bg-muted/30">
                 <div className="flex items-center gap-3">
@@ -306,6 +358,173 @@ export default function AppConfiguracoes() {
                 <Switch
                   checked={true}
                   disabled={true}
+                />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Alertas do Rastreador */}
+        <div>
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-1">
+            Alertas do Rastreador
+          </h2>
+          <Card className="border-0 shadow-sm">
+            <CardContent className="p-0 divide-y">
+              {/* Cerca Virtual */}
+              <div className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-teal-100 rounded-lg">
+                      <MapPin className="h-5 w-5 text-teal-600" />
+                    </div>
+                    <div>
+                      <div className="font-medium text-foreground">Cerca Virtual</div>
+                      <div className="text-sm text-muted-foreground">Alerta quando sair da área</div>
+                    </div>
+                  </div>
+                  <Switch
+                    checked={rastreadorPrefs?.alerta_cerca_ativo ?? true}
+                    onCheckedChange={(checked) => handleUpdateRastreador({ alerta_cerca_ativo: checked })}
+                    disabled={loadingRastreador}
+                  />
+                </div>
+                {rastreadorPrefs?.alerta_cerca_ativo && (
+                  <Button 
+                    variant="link" 
+                    className="mt-2 h-auto p-0 text-primary text-sm"
+                    onClick={() => navigate('/app/rastreamento?tab=cerca')}
+                  >
+                    Configurar cerca <ChevronRight className="h-4 w-4 ml-1" />
+                  </Button>
+                )}
+              </div>
+
+              {/* Alerta de Ignição */}
+              <div className="flex items-center justify-between p-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-orange-100 rounded-lg">
+                    <Key className="h-5 w-5 text-orange-600" />
+                  </div>
+                  <div>
+                    <div className="font-medium text-foreground">Alerta de Ignição</div>
+                    <div className="text-sm text-muted-foreground">Quando ligar/desligar o veículo</div>
+                  </div>
+                </div>
+                <Switch
+                  checked={rastreadorPrefs?.alerta_ignicao_ativo ?? false}
+                  onCheckedChange={(checked) => handleUpdateRastreador({ alerta_ignicao_ativo: checked })}
+                  disabled={loadingRastreador}
+                />
+              </div>
+
+              {/* Alerta de Velocidade */}
+              <div className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-red-100 rounded-lg">
+                      <Gauge className="h-5 w-5 text-red-600" />
+                    </div>
+                    <div>
+                      <div className="font-medium text-foreground">Alerta de Velocidade</div>
+                      <div className="text-sm text-muted-foreground">Quando exceder o limite</div>
+                    </div>
+                  </div>
+                  <Switch
+                    checked={rastreadorPrefs?.alerta_velocidade_ativo ?? false}
+                    onCheckedChange={(checked) => handleUpdateRastreador({ alerta_velocidade_ativo: checked })}
+                    disabled={loadingRastreador}
+                  />
+                </div>
+                {rastreadorPrefs?.alerta_velocidade_ativo && (
+                  <div className="mt-3 flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">Limite:</span>
+                    <Input
+                      type="number"
+                      value={rastreadorPrefs?.velocidade_limite ?? 80}
+                      onChange={(e) => handleUpdateRastreador({ velocidade_limite: parseInt(e.target.value) || 80 })}
+                      className="w-20 h-8 text-center"
+                      min={20}
+                      max={200}
+                    />
+                    <span className="text-sm text-muted-foreground">km/h</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Horário dos Alertas */}
+              <div className="p-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="p-2 bg-indigo-100 rounded-lg">
+                    <Clock className="h-5 w-5 text-indigo-600" />
+                  </div>
+                  <div>
+                    <div className="font-medium text-foreground">Horário dos Alertas</div>
+                    <div className="text-sm text-muted-foreground">Quando receber notificações</div>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  {[
+                    { value: 'sempre', label: 'Sempre' },
+                    { value: 'comercial', label: 'Comercial' },
+                    { value: 'noturno', label: 'Só à noite' },
+                  ].map((opt) => (
+                    <Button
+                      key={opt.value}
+                      variant={rastreadorPrefs?.horario_alerta === opt.value ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => handleUpdateRastreador({ horario_alerta: opt.value })}
+                      disabled={loadingRastreador}
+                    >
+                      {opt.label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Privacidade */}
+        <div>
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-1">
+            Privacidade
+          </h2>
+          <Card className="border-0 shadow-sm">
+            <CardContent className="p-0 divide-y">
+              {/* Compartilhar Localização */}
+              <div className="flex items-center justify-between p-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <MapPin className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <div className="font-medium text-foreground">Compartilhar localização</div>
+                    <div className="text-sm text-muted-foreground">Permitir rastreamento do veículo</div>
+                  </div>
+                </div>
+                <Switch
+                  checked={rastreadorPrefs?.compartilhar_localizacao ?? true}
+                  onCheckedChange={(checked) => handleUpdateRastreador({ compartilhar_localizacao: checked })}
+                  disabled={loadingRastreador}
+                />
+              </div>
+
+              {/* Dados Anônimos */}
+              <div className="flex items-center justify-between p-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-purple-100 rounded-lg">
+                    <BarChart3 className="h-5 w-5 text-purple-600" />
+                  </div>
+                  <div>
+                    <div className="font-medium text-foreground">Dados de uso anônimos</div>
+                    <div className="text-sm text-muted-foreground">Ajudar a melhorar o app</div>
+                  </div>
+                </div>
+                <Switch
+                  checked={rastreadorPrefs?.dados_anonimos ?? true}
+                  onCheckedChange={(checked) => handleUpdateRastreador({ dados_anonimos: checked })}
+                  disabled={loadingRastreador}
                 />
               </div>
             </CardContent>
@@ -374,45 +593,43 @@ export default function AppConfiguracoes() {
           </Card>
         </div>
 
-        {/* Preferências */}
+        {/* Aparência */}
         <div>
           <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-1">
-            Preferências
+            Aparência
           </h2>
           <Card className="border-0 shadow-sm">
-            <CardContent className="p-0 divide-y">
-              {/* Tema */}
-              <button 
-                className="flex w-full items-center justify-between p-4 hover:bg-gray-50 transition-colors"
-                onClick={() => handleEmBreve('Alteração de tema')}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-pink-100 rounded-lg">
-                    <Palette className="h-5 w-5 text-pink-600" />
-                  </div>
-                  <div className="text-left">
-                    <div className="font-medium text-foreground">Tema</div>
-                    <div className="text-sm text-muted-foreground">Claro</div>
-                  </div>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-pink-100 rounded-lg">
+                  <Palette className="h-5 w-5 text-pink-600" />
                 </div>
-                <ChevronRight className="h-5 w-5 text-muted-foreground" />
-              </button>
-              {/* Idioma */}
-              <button 
-                className="flex w-full items-center justify-between p-4 hover:bg-gray-50 transition-colors"
-                onClick={() => handleEmBreve('Alteração de idioma')}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-cyan-100 rounded-lg">
-                    <Globe className="h-5 w-5 text-cyan-600" />
-                  </div>
-                  <div className="text-left">
-                    <div className="font-medium text-foreground">Idioma</div>
-                    <div className="text-sm text-muted-foreground">Português (Brasil)</div>
-                  </div>
+                <div>
+                  <div className="font-medium text-foreground">Tema</div>
+                  <div className="text-sm text-muted-foreground">Aparência do aplicativo</div>
                 </div>
-                <ChevronRight className="h-5 w-5 text-muted-foreground" />
-              </button>
+              </div>
+              <div className="flex gap-2">
+                {[
+                  { value: 'light', label: 'Claro', icon: Sun },
+                  { value: 'dark', label: 'Escuro', icon: Moon },
+                  { value: 'system', label: 'Sistema', icon: Monitor },
+                ].map((opt) => {
+                  const Icon = opt.icon;
+                  return (
+                    <Button
+                      key={opt.value}
+                      variant={theme === opt.value ? 'default' : 'outline'}
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => setTheme(opt.value)}
+                    >
+                      <Icon className="h-4 w-4 mr-1" />
+                      {opt.label}
+                    </Button>
+                  );
+                })}
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -427,15 +644,15 @@ export default function AppConfiguracoes() {
               {/* Central de Ajuda */}
               <button 
                 className="flex w-full items-center justify-between p-4 hover:bg-gray-50 transition-colors"
-                onClick={() => window.open('https://wa.me/5500000000000?text=Olá! Preciso de ajuda com o app PRATIC.', '_blank')}
+                onClick={() => navigate('/app/ajuda')}
               >
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-blue-100 rounded-lg">
                     <HelpCircle className="h-5 w-5 text-blue-600" />
                   </div>
                   <div className="text-left">
-                    <div className="font-medium text-foreground">Central de Ajuda</div>
-                    <div className="text-sm text-muted-foreground">Perguntas frequentes</div>
+                    <div className="font-medium text-foreground">Perguntas Frequentes</div>
+                    <div className="text-sm text-muted-foreground">FAQ e central de ajuda</div>
                   </div>
                 </div>
                 <ChevronRight className="h-5 w-5 text-muted-foreground" />
@@ -506,6 +723,19 @@ export default function AppConfiguracoes() {
                     <Shield className="h-5 w-5 text-gray-600" />
                   </div>
                   <span className="font-medium text-foreground">Política de Privacidade</span>
+                </div>
+                <ChevronRight className="h-5 w-5 text-muted-foreground" />
+              </button>
+              {/* Licenças de Software */}
+              <button 
+                className="flex w-full items-center justify-between p-4 hover:bg-gray-50 transition-colors"
+                onClick={() => setShowLicencasModal(true)}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-gray-100 rounded-lg">
+                    <Code className="h-5 w-5 text-gray-600" />
+                  </div>
+                  <span className="font-medium text-foreground">Licenças de Software</span>
                 </div>
                 <ChevronRight className="h-5 w-5 text-muted-foreground" />
               </button>
@@ -629,6 +859,43 @@ export default function AppConfiguracoes() {
               onClick={handleAlterarSenha}
             >
               Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Licenças de Software */}
+      <Dialog open={showLicencasModal} onOpenChange={setShowLicencasModal}>
+        <DialogContent className="sm:max-w-md max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Licenças de Software</DialogTitle>
+            <DialogDescription>
+              Bibliotecas de código aberto utilizadas neste aplicativo
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1 py-4">
+            {licencas.map((lib) => (
+              <div 
+                key={lib.name} 
+                className="flex justify-between items-center py-3 border-b last:border-0"
+              >
+                <div>
+                  <p className="font-medium text-foreground">{lib.name}</p>
+                  <p className="text-xs text-muted-foreground">{lib.license}</p>
+                </div>
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => window.open(lib.url, '_blank')}
+                >
+                  <ExternalLink className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setShowLicencasModal(false)} className="w-full">
+              Fechar
             </Button>
           </DialogFooter>
         </DialogContent>
