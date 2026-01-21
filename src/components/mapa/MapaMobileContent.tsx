@@ -118,19 +118,29 @@ export function MapaMobileContent() {
     return ids;
   }, [vistorias]);
 
+  // Status que não devem ser considerados atrasados
+  const statusNaoAtrasados = ['concluida', 'cancelada', 'aprovada', 'reprovada', 'em_analise', 'em_rota'];
+
   // Filtrar vistorias por data e busca
   const vistoriasFiltradas = useMemo(() => {
     if (!vistorias) return [];
 
+    // Normalizar data do filtro para meia-noite local
+    const filtroNormalizado = new Date(filtroData);
+    filtroNormalizado.setHours(0, 0, 0, 0);
+
     return vistorias.filter((v) => {
       // Filtro por data - inclui vistorias do dia selecionado E vistorias atrasadas
       if (!v.data_agendada) return false;
-      const dataVistoria = new Date(v.data_agendada);
-      const isDataSelecionada = isSameDay(dataVistoria, filtroData);
       
-      // Considerar atrasada se: data anterior ao dia selecionado E status diferente de concluída/cancelada/aprovada/reprovada
-      const statusFinais = ['concluida', 'cancelada', 'aprovada', 'reprovada'];
-      const isAtrasada = dataVistoria < filtroData && !statusFinais.includes(v.status);
+      // Normalizar data da vistoria para meia-noite local
+      const dataAgendadaStr = v.data_agendada.split(' ')[0]; // "2026-01-23"
+      const dataVistoria = new Date(dataAgendadaStr + 'T00:00:00');
+      
+      const isDataSelecionada = isSameDay(dataVistoria, filtroNormalizado);
+      
+      // Considerar atrasada se: data anterior ao dia selecionado E status diferente dos finais
+      const isAtrasada = dataVistoria < filtroNormalizado && !statusNaoAtrasados.includes(v.status);
       
       if (!isDataSelecionada && !isAtrasada) return false;
 
@@ -204,9 +214,17 @@ export function MapaMobileContent() {
   // Verificar se é atrasada
   const isAtrasada = (v: VistoriaMapa) => {
     if (!v.data_agendada) return false;
-    const dataVistoria = new Date(v.data_agendada);
-    const statusFinais = ['concluida', 'cancelada', 'aprovada', 'reprovada'];
-    return dataVistoria < filtroData && !statusFinais.includes(v.status);
+    if (statusNaoAtrasados.includes(v.status)) return false;
+    
+    // Normalizar data da vistoria para meia-noite local
+    const dataAgendadaStr = v.data_agendada.split(' ')[0]; // "2026-01-23"
+    const dataVistoria = new Date(dataAgendadaStr + 'T00:00:00');
+    
+    // Normalizar data do filtro para meia-noite local
+    const filtroNormalizado = new Date(filtroData);
+    filtroNormalizado.setHours(0, 0, 0, 0);
+    
+    return dataVistoria < filtroNormalizado;
   };
 
   const centroInicial: [number, number] = [-22.9068, -43.1729]; // Rio de Janeiro
