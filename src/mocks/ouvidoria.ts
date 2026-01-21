@@ -130,7 +130,7 @@ export const mockManifestacoes = [
     tipo: 'elogio' as const,
     categoria: 'contrato' as const,
     assunto: 'Equipe comercial muito atenciosa',
-    descricao: 'Toda a equipe comercial foi muito prestativa durante o processo de adesão. Parabéns!',
+    descricao: 'Toda a equipe comercial foi muito prestativa durante o processo de filiação. Parabéns!',
     status: 'encerrado' as const,
     prioridade: 'baixa' as const,
     canal: 'email' as const,

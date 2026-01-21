@@ -114,7 +114,7 @@ export function DocumentosPendentes({ associadoId, readOnly, onTodosEnviados }: 
             </CardTitle>
           </div>
           <p className="text-sm text-orange-600 dark:text-orange-300">
-            Para prosseguir com sua adesão, precisamos dos seguintes documentos:
+            Para prosseguir com sua filiação, precisamos dos seguintes documentos:
           </p>
         </CardHeader>
         <CardContent className="space-y-4">

@@ -210,7 +210,7 @@ export function ContratoDetailDrawer({ contratoId, open, onClose }: ContratoDeta
     }
     const url = getAssociadoLinkUrl(contrato.link_token);
     const message = encodeURIComponent(
-      `Olá ${client?.nome?.split(' ')[0]}! 👋\n\nAcesse o link abaixo para completar sua adesão:\n\n${url}\n\n*Próximos passos:*\n1️⃣ Escolha o tipo de vistoria\n2️⃣ Realize a vistoria\n3️⃣ Pague a taxa de adesão\n\nQualquer dúvida, estamos à disposição!`
+      `Olá ${client?.nome?.split(' ')[0]}! 👋\n\nAcesse o link abaixo para completar sua filiação:\n\n${url}\n\n*Próximos passos:*\n1️⃣ Escolha o tipo de vistoria\n2️⃣ Realize a vistoria\n3️⃣ Pague a taxa de filiação\n\nQualquer dúvida, estamos à disposição!`
     );
     window.open(`https://wa.me/55${phone.replace(/\D/g, '')}?text=${message}`, '_blank');
   };

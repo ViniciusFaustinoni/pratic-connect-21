@@ -188,7 +188,7 @@ export function PrimeiroAcessoModal({ open, onClose }: PrimeiroAcessoModalProps)
               </Button>
 
               <p className="text-sm text-muted-foreground text-center">
-                📱 Enviaremos um link para o WhatsApp e Email cadastrados na sua adesão.
+                📱 Enviaremos um link para o WhatsApp e Email cadastrados na sua filiação.
               </p>
             </form>
           </>
