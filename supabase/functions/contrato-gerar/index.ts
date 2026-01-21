@@ -180,6 +180,51 @@ serve(async (req) => {
     if (associadoExistente) {
       associadoId = associadoExistente.id;
       console.log('Associado existente encontrado pelo CPF:', associadoId);
+      
+      // CORREÇÃO: Buscar ou criar veículo para associado existente
+      const placaLimpa = cotacao.veiculo_placa?.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+      
+      if (placaLimpa) {
+        // Tentar encontrar veículo existente pela placa
+        const { data: veiculoExistente } = await supabase
+          .from('veiculos')
+          .select('id')
+          .eq('placa', placaLimpa)
+          .maybeSingle();
+        
+        if (veiculoExistente) {
+          veiculoId = veiculoExistente.id;
+          console.log('Veículo existente encontrado pela placa:', veiculoId);
+        } else {
+          // Criar novo veículo para associado existente
+          const { data: novoVeiculoExistente, error: veiculoExistenteError } = await supabase
+            .from('veiculos')
+            .insert({
+              associado_id: associadoId,
+              placa: placaLimpa,
+              marca: cotacao.veiculo_marca,
+              modelo: cotacao.veiculo_modelo,
+              ano_fabricacao: cotacao.veiculo_ano,
+              ano_modelo: cotacao.veiculo_ano,
+              cor: cotacao.veiculo_cor || null,
+              valor_fipe: cotacao.valor_fipe || null,
+              codigo_fipe: cotacao.codigo_fipe || null,
+              status: 'em_analise',
+              cobertura_roubo_furto: false,
+              cobertura_total: false,
+            })
+            .select('id')
+            .single();
+          
+          if (veiculoExistenteError) {
+            console.error('Erro ao criar veículo para associado existente:', veiculoExistenteError);
+            throw new Error(`Falha ao criar veículo: ${veiculoExistenteError.message}`);
+          }
+          
+          veiculoId = novoVeiculoExistente.id;
+          console.log('Novo veículo criado para associado existente:', veiculoId);
+        }
+      }
     } else if (emailFinal) {
       const { data: byEmail } = await supabase
         .from('associados')
@@ -190,6 +235,49 @@ serve(async (req) => {
       if (byEmail) {
         associadoId = byEmail.id;
         console.log('Associado existente encontrado pelo email:', associadoId);
+        
+        // CORREÇÃO: Buscar ou criar veículo para associado encontrado por email
+        const placaLimpa = cotacao.veiculo_placa?.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+        
+        if (placaLimpa) {
+          const { data: veiculoExistente } = await supabase
+            .from('veiculos')
+            .select('id')
+            .eq('placa', placaLimpa)
+            .maybeSingle();
+          
+          if (veiculoExistente) {
+            veiculoId = veiculoExistente.id;
+            console.log('Veículo existente encontrado pela placa:', veiculoId);
+          } else {
+            const { data: novoVeiculoEmail, error: veiculoEmailError } = await supabase
+              .from('veiculos')
+              .insert({
+                associado_id: associadoId,
+                placa: placaLimpa,
+                marca: cotacao.veiculo_marca,
+                modelo: cotacao.veiculo_modelo,
+                ano_fabricacao: cotacao.veiculo_ano,
+                ano_modelo: cotacao.veiculo_ano,
+                cor: cotacao.veiculo_cor || null,
+                valor_fipe: cotacao.valor_fipe || null,
+                codigo_fipe: cotacao.codigo_fipe || null,
+                status: 'em_analise',
+                cobertura_roubo_furto: false,
+                cobertura_total: false,
+              })
+              .select('id')
+              .single();
+            
+            if (veiculoEmailError) {
+              console.error('Erro ao criar veículo para associado existente (email):', veiculoEmailError);
+              throw new Error(`Falha ao criar veículo: ${veiculoEmailError.message}`);
+            }
+            
+            veiculoId = novoVeiculoEmail.id;
+            console.log('Novo veículo criado para associado existente (email):', veiculoId);
+          }
+        }
       }
     }
     
