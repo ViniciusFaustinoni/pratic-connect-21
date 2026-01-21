@@ -476,7 +476,7 @@ export function CotacaoCard({
               })}
             >
               <FileSignature className="h-4 w-4 mr-1" />
-              Ver Contrato
+              Verificar Proposta
             </Button>
           )}
           
