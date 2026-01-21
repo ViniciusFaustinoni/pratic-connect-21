@@ -300,6 +300,91 @@ export function useVeiculoPosicao(veiculoId?: string) {
   };
 }
 
+// Hook para histórico de posições do veículo
+export interface VeiculoHistoricoResponse {
+  success: boolean;
+  plataforma: 'softruck' | 'rede_veiculos' | 'local';
+  fonte: 'api' | 'local';
+  trajeto: Array<{
+    latitude: number;
+    longitude: number;
+    velocidade: number;
+    ignicao: boolean;
+    data_hora: string;
+    endereco?: string;
+    direcao?: number;
+  }>;
+  resumo: {
+    distancia_total_km: number;
+    tempo_movimento_minutos: number;
+    tempo_parado_minutos: number;
+    velocidade_media_kmh: number;
+    velocidade_maxima_kmh: number;
+    total_pontos: number;
+    periodo: {
+      inicio: string;
+      fim: string;
+    };
+  };
+  veiculo: {
+    id: string;
+    placa: string;
+    modelo: string;
+    marca: string;
+  } | null;
+  rastreador: {
+    id: string;
+    codigo: string;
+  } | null;
+}
+
+interface HistoricoParams {
+  veiculoId?: string;
+  dataInicio?: Date;
+  dataFim?: Date;
+  intervaloMinutos?: number;
+  enabled?: boolean;
+}
+
+export function useVeiculoHistorico({
+  veiculoId,
+  dataInicio,
+  dataFim,
+  intervaloMinutos = 15,
+  enabled = true,
+}: HistoricoParams) {
+  return useQuery({
+    queryKey: [
+      'veiculo-historico', 
+      veiculoId, 
+      dataInicio?.toISOString(), 
+      dataFim?.toISOString(),
+      intervaloMinutos
+    ],
+    queryFn: async (): Promise<VeiculoHistoricoResponse> => {
+      if (!veiculoId || !dataInicio || !dataFim) {
+        throw new Error('Parâmetros obrigatórios faltando');
+      }
+
+      const { data, error } = await supabase.functions.invoke('historico-posicoes', {
+        body: {
+          veiculo_id: veiculoId,
+          data_inicio: dataInicio.toISOString(),
+          data_fim: dataFim.toISOString(),
+          intervalo_minutos: intervaloMinutos,
+        }
+      });
+
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error);
+
+      return data;
+    },
+    enabled: !!veiculoId && !!dataInicio && !!dataFim && enabled,
+    staleTime: 5 * 60 * 1000, // 5 minutos
+  });
+}
+
 export function useMyDocumentos() {
   const { data: associado } = useMyAssociado();
 

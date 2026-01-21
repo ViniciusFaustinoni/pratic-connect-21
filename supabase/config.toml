@@ -84,6 +84,9 @@ verify_jwt = false
 [functions.rastreador-historico]
 verify_jwt = false
 
+[functions.historico-posicoes]
+verify_jwt = false
+
 [functions.rastreador-redefinir-senha]
 verify_jwt = false
 
