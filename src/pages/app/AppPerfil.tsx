@@ -75,7 +75,19 @@ const STATUS_VEICULO: Record<string, { label: string; variant: 'default' | 'seco
   em_analise: { label: 'Em Análise', variant: 'secondary' },
   suspenso: { label: 'Suspenso', variant: 'destructive' },
   cancelado: { label: 'Cancelado', variant: 'outline' },
+  instalacao_pendente: { label: 'Instalação Pendente', variant: 'secondary' },
+  sinistrado: { label: 'Sinistrado', variant: 'destructive' },
+  aprovado: { label: 'Aprovado', variant: 'default' },
 };
+
+const COBERTURAS_RESUMIDAS = [
+  'Roubo/Furto',
+  'Colisão',
+  'Assistência 24h',
+  'Vidros',
+  'Incêndio',
+  'Alagamento'
+];
 
 export default function AppPerfil() {
   const navigate = useNavigate();
@@ -98,7 +110,6 @@ export default function AppPerfil() {
   const removeAvatar = useRemoveAvatar();
 
   const isLoading = associadoLoading || vehiclesLoading;
-  const vehicle = vehicles?.[0];
 
   // Handler para seleção de arquivo
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -354,34 +365,45 @@ export default function AppPerfil() {
         </CardContent>
       </Card>
 
-      {/* Veículo */}
+      {/* Veículos */}
       <Card className="border-0 shadow-sm">
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
             <Car className="h-4 w-4 text-primary" />
-            Meu Veículo
+            Meus Veículos
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          {vehicle ? (
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xl font-bold tracking-wider text-foreground">
-                  {vehicle.placa}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {vehicle.marca} {vehicle.modelo}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Ano {vehicle.ano_fabricacao}/{vehicle.ano_modelo} • {vehicle.cor || 'Cor não informada'}
-                </p>
+        <CardContent className="space-y-3">
+          {vehicles && vehicles.length > 0 ? (
+            vehicles.map((vehicle) => (
+              <div 
+                key={vehicle.id}
+                className="flex items-center justify-between p-3 rounded-lg bg-muted/50 cursor-pointer hover:bg-muted transition-colors"
+                onClick={() => navigate(`/app/veiculos/${vehicle.id}`)}
+              >
+                <div>
+                  <p className="text-lg font-bold tracking-wider text-foreground">
+                    {vehicle.placa}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {vehicle.marca} {vehicle.modelo}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Ano {vehicle.ano_fabricacao}/{vehicle.ano_modelo}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant={STATUS_VEICULO[vehicle.status || 'em_analise']?.variant || 'secondary'}>
+                    {STATUS_VEICULO[vehicle.status || 'em_analise']?.label || vehicle.status}
+                  </Badge>
+                  <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                </div>
               </div>
-              <Badge variant={STATUS_VEICULO[vehicle.status || 'em_analise']?.variant || 'secondary'}>
-                {STATUS_VEICULO[vehicle.status || 'em_analise']?.label || vehicle.status}
-              </Badge>
-            </div>
+            ))
           ) : (
-            <p className="text-sm text-muted-foreground">Nenhum veículo cadastrado</p>
+            <p className="text-sm text-muted-foreground text-center py-4">
+              Nenhum veículo cadastrado
+            </p>
           )}
         </CardContent>
       </Card>
@@ -401,23 +423,38 @@ export default function AppPerfil() {
               <ChevronRight className="h-5 w-5 text-muted-foreground" />
             </div>
           </CardHeader>
-          <CardContent>
-            <p className="font-medium text-foreground">{associado.planos.nome}</p>
-            <p className="text-sm text-muted-foreground capitalize">
-              Tipo: {associado.planos.tipo_uso}
-            </p>
-            {associado.contratos && (
-              <>
-                <p className="text-sm text-muted-foreground">
-                  Mensalidade: R$ {associado.contratos.valor_mensal.toFixed(2).replace('.', ',')}
-                </p>
-                {associado.contratos.dia_vencimento && (
+          <CardContent className="space-y-3">
+            <div>
+              <p className="font-medium text-foreground">{associado.planos.nome}</p>
+              <p className="text-sm text-muted-foreground capitalize">
+                Tipo: {associado.planos.tipo_uso}
+              </p>
+              {associado.contratos && (
+                <>
                   <p className="text-sm text-muted-foreground">
-                    Vencimento: Dia {associado.contratos.dia_vencimento}
+                    Mensalidade: R$ {associado.contratos.valor_mensal.toFixed(2).replace('.', ',')}
                   </p>
-                )}
-              </>
-            )}
+                  <p className="text-sm text-muted-foreground">
+                    Associado desde: {formatDataAdesao(associado.contratos.data_inicio)}
+                  </p>
+                </>
+              )}
+            </div>
+            
+            {/* Coberturas Resumidas */}
+            <div className="pt-3 border-t">
+              <p className="text-xs font-medium text-muted-foreground mb-2">Coberturas incluídas:</p>
+              <div className="flex flex-wrap gap-1">
+                {COBERTURAS_RESUMIDAS.slice(0, 4).map((cobertura) => (
+                  <Badge key={cobertura} variant="secondary" className="text-xs">
+                    {cobertura}
+                  </Badge>
+                ))}
+                <Badge variant="outline" className="text-xs">
+                  + mais
+                </Badge>
+              </div>
+            </div>
           </CardContent>
         </Card>
       ) : (
