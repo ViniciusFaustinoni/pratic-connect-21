@@ -213,7 +213,7 @@ import HistoricoChamados from "./pages/app/HistoricoChamados";
 
 import AppAssistenciaNova from "./pages/app/AppAssistenciaNova";
 import AppSinistros from "./pages/app/AppSinistros";
-import AppSinistroNovo from "./pages/app/AppSinistroNovo";
+import NovoSinistro from "./pages/app/NovoSinistro";
 import AppSinistroDetalhe from "./pages/app/AppSinistroDetalhe";
 import AppPerfil from "./pages/app/AppPerfil";
 import AppConfiguracoes from "./pages/app/AppConfiguracoes";
@@ -520,7 +520,7 @@ const App = () => (
               <Route path="/app/assistencia/historico" element={<HistoricoChamados />} />
               <Route path="/app/assistencia/:id" element={<AcompanharChamado />} />
               <Route path="/app/sinistros" element={<AppSinistros />} />
-              <Route path="/app/sinistros/novo" element={<AppSinistroNovo />} />
+              <Route path="/app/sinistros/novo" element={<NovoSinistro />} />
               <Route path="/app/sinistros/:id" element={<AppSinistroDetalhe />} />
               <Route path="/app/perfil" element={<AppPerfil />} />
               <Route path="/app/plano" element={<AppPlano />} />
