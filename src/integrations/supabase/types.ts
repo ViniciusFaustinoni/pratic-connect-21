@@ -12257,6 +12257,7 @@ export type Database = {
         Row: {
           arquivo_url: string
           created_at: string | null
+          enviado_em: string | null
           id: string
           motivo_reprovacao: string | null
           nome_arquivo: string | null
@@ -12267,6 +12268,7 @@ export type Database = {
         Insert: {
           arquivo_url: string
           created_at?: string | null
+          enviado_em?: string | null
           id?: string
           motivo_reprovacao?: string | null
           nome_arquivo?: string | null
@@ -12277,6 +12279,7 @@ export type Database = {
         Update: {
           arquivo_url?: string
           created_at?: string | null
+          enviado_em?: string | null
           id?: string
           motivo_reprovacao?: string | null
           nome_arquivo?: string | null
@@ -12399,6 +12402,9 @@ export type Database = {
       }
       sinistro_mensagens: {
         Row: {
+          anexo_nome: string | null
+          anexo_tipo: string | null
+          anexo_url: string | null
           created_at: string | null
           id: string
           lida: boolean | null
@@ -12408,6 +12414,9 @@ export type Database = {
           sinistro_id: string
         }
         Insert: {
+          anexo_nome?: string | null
+          anexo_tipo?: string | null
+          anexo_url?: string | null
           created_at?: string | null
           id?: string
           lida?: boolean | null
@@ -12417,6 +12426,9 @@ export type Database = {
           sinistro_id: string
         }
         Update: {
+          anexo_nome?: string | null
+          anexo_tipo?: string | null
+          anexo_url?: string | null
           created_at?: string | null
           id?: string
           lida?: boolean | null

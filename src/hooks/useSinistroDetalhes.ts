@@ -114,26 +114,77 @@ export function useSinistroMensagens(sinistroId: string | undefined) {
   });
 }
 
-// Mutation para enviar mensagem
+// Função helper para converter File para base64
+async function fileToBase64(file: File | Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = (error) => reject(error);
+  });
+}
+
+// Mutation para enviar mensagem via Edge Function (com suporte a anexos)
 export function useEnviarMensagemSinistro() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async ({ sinistroId, mensagem }: { sinistroId: string; mensagem: string }) => {
-      const { data, error } = await supabase
-        .from('sinistro_mensagens')
-        .insert({
+    mutationFn: async ({ 
+      sinistroId, 
+      mensagem,
+      anexo 
+    }: { 
+      sinistroId: string; 
+      mensagem: string;
+      anexo?: File;
+    }) => {
+      let anexo_base64: string | undefined;
+      
+      if (anexo) {
+        anexo_base64 = await fileToBase64(anexo);
+      }
+      
+      const { data, error } = await supabase.functions.invoke('enviar-mensagem-sinistro', {
+        body: {
           sinistro_id: sinistroId,
-          remetente_tipo: 'associado',
           mensagem,
-        })
-        .select()
-        .single();
+          anexo_base64,
+          anexo_nome: anexo?.name,
+          anexo_mime_type: anexo?.type,
+        }
+      });
         
       if (error) throw error;
+      if (!data.success) throw new Error(data.error);
       return data;
     },
     onSuccess: (_, { sinistroId }) => {
+      toast.success('Mensagem enviada!');
+      queryClient.invalidateQueries({ queryKey: ['sinistro-mensagens', sinistroId] });
+    },
+    onError: (error) => {
+      console.error('Erro ao enviar mensagem:', error);
+      toast.error(error instanceof Error ? error.message : 'Erro ao enviar mensagem');
+    },
+  });
+}
+
+// Mutation para marcar mensagens como lidas
+export function useMarcarMensagensLidas() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (sinistroId: string) => {
+      const { error } = await supabase
+        .from('sinistro_mensagens')
+        .update({ lida: true })
+        .eq('sinistro_id', sinistroId)
+        .eq('remetente_tipo', 'analista')
+        .eq('lida', false);
+        
+      if (error) throw error;
+    },
+    onSuccess: (_, sinistroId) => {
       queryClient.invalidateQueries({ queryKey: ['sinistro-mensagens', sinistroId] });
     },
   });
@@ -218,7 +269,7 @@ export function useExcluirFotoSinistro() {
   });
 }
 
-// Mutation para upload de documento
+// Mutation para upload de documento via Edge Function
 export function useUploadDocumentoSinistro() {
   const queryClient = useQueryClient();
   
@@ -226,45 +277,68 @@ export function useUploadDocumentoSinistro() {
     mutationFn: async ({ 
       sinistroId, 
       file, 
-      tipo 
+      tipo,
+      observacao
     }: { 
       sinistroId: string; 
       file: File; 
       tipo: string;
+      observacao?: string;
     }) => {
-      // Upload do arquivo
-      const ext = file.name.split('.').pop();
-      const path = `${sinistroId}/documentos/${tipo}_${Date.now()}.${ext}`;
+      // Converter arquivo para base64
+      const base64 = await fileToBase64(file);
       
-      const { error: uploadError } = await supabase.storage
-        .from('sinistros')
-        .upload(path, file);
-        
-      if (uploadError) throw uploadError;
-      
-      // Obter URL pública
-      const { data: urlData } = supabase.storage
-        .from('sinistros')
-        .getPublicUrl(path);
-      
-      // Salvar registro do documento
-      const { data, error } = await supabase
-        .from('sinistro_documentos')
-        .insert({
+      const { data, error } = await supabase.functions.invoke('enviar-documento-sinistro', {
+        body: {
           sinistro_id: sinistroId,
-          tipo,
+          tipo_documento: tipo,
+          arquivo_base64: base64,
           nome_arquivo: file.name,
-          arquivo_url: urlData.publicUrl,
-          status: 'enviado',
-        })
-        .select()
-        .single();
-        
+          mime_type: file.type,
+          observacao,
+        }
+      });
+      
       if (error) throw error;
+      if (!data.success) throw new Error(data.error);
+      
       return data;
     },
-    onSuccess: (_, { sinistroId }) => {
+    onSuccess: (data, { sinistroId }) => {
       queryClient.invalidateQueries({ queryKey: ['sinistro-documentos', sinistroId] });
+      queryClient.invalidateQueries({ queryKey: ['sinistro', sinistroId] });
+      
+      if (data.sinistro_novo_status === 'em_analise') {
+        toast.success('Todos os documentos enviados! Sinistro em análise.');
+      } else {
+        toast.success(data.mensagem_confirmacao);
+      }
     },
+    onError: (error) => {
+      console.error('Erro no upload de documento:', error);
+      toast.error(error instanceof Error ? error.message : 'Erro ao enviar documento');
+    },
+  });
+}
+
+// Hook para contar mensagens não lidas
+export function useMensagensNaoLidas(sinistroId: string | undefined) {
+  return useQuery({
+    queryKey: ['sinistro-mensagens-nao-lidas', sinistroId],
+    queryFn: async () => {
+      if (!sinistroId) return 0;
+      
+      const { count, error } = await supabase
+        .from('sinistro_mensagens')
+        .select('id', { count: 'exact', head: true })
+        .eq('sinistro_id', sinistroId)
+        .eq('remetente_tipo', 'analista')
+        .eq('lida', false);
+        
+      if (error) throw error;
+      return count || 0;
+    },
+    enabled: !!sinistroId,
+    refetchInterval: 30000, // Verificar a cada 30s
   });
 }
