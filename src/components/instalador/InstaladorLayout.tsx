@@ -131,10 +131,16 @@ export function InstaladorLayout() {
           </header>
 
           {/* Conteúdo Principal */}
-          <main className="flex-1 overflow-hidden pb-16 relative">
-            <div className="h-full min-h-0 overflow-y-auto">
-              <Outlet />
-            </div>
+          <main className="flex-1 overflow-hidden pb-16 relative min-h-0">
+            {location.pathname.includes('/mapa') ? (
+              <div className="absolute inset-0">
+                <Outlet />
+              </div>
+            ) : (
+              <div className="h-full overflow-y-auto">
+                <Outlet />
+              </div>
+            )}
           </main>
 
           {/* Bottom Navigation */}

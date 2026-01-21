@@ -70,6 +70,29 @@ function FlyToPosition({ position, zoom = 15 }: { position: [number, number] | n
   return null;
 }
 
+// Componente para garantir que o mapa recalcule suas dimensões após montar
+function MapResizer() {
+  const map = useMap();
+  
+  useEffect(() => {
+    // Pequeno delay para garantir que o container tenha dimensões
+    const timer = setTimeout(() => {
+      map.invalidateSize();
+    }, 100);
+    
+    // Recalcula também quando a janela redimensiona
+    const handleResize = () => map.invalidateSize();
+    window.addEventListener('resize', handleResize);
+    
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [map]);
+  
+  return null;
+}
+
 // Componente para localização do usuário
 function UserLocationButton() {
   const map = useMap();
@@ -256,6 +279,7 @@ export function MapaMobileContent() {
           url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
         />
 
+        <MapResizer />
         <FlyToPosition position={posicaoSelecionada} />
         <UserLocationButton />
 
