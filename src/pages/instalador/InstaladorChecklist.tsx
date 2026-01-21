@@ -22,7 +22,8 @@ import {
   ChevronDown,
   ChevronRight,
   Bike,
-  Router
+  Router,
+  Search
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -33,6 +34,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
 import { 
   useInstalacaoDetalhes, 
   useConcluirInstalacao, 
@@ -92,6 +94,11 @@ export default function InstaladorChecklist() {
   const [openCategorias, setOpenCategorias] = useState<string[]>([]);
   const [imeiRastreador, setImeiRastreador] = useState('');
   const [imeiError, setImeiError] = useState('');
+  
+  // Estados para validação em tempo real do IMEI
+  const [imeiValidando, setImeiValidando] = useState(false);
+  const [imeiStatus, setImeiStatus] = useState<'idle' | 'validando' | 'disponivel' | 'nao_encontrado' | 'indisponivel'>('idle');
+  const [imeiInfo, setImeiInfo] = useState<{ codigo?: string; plataforma?: string; status?: string } | null>(null);
 
   const { data: instalacao, isLoading, error } = useInstalacaoDetalhes(id);
   const { data: vistoriaCompleta, isLoading: isLoadingVistoria } = useVistoriaCompleta(id ?? null);
@@ -257,6 +264,54 @@ export default function InstaladorChecklist() {
 
   // Validação de IMEI (15-17 dígitos)
   const isImeiValido = /^\d{15,17}$/.test(imeiRastreador);
+
+  // Validação em tempo real do IMEI no banco de dados (com debounce)
+  useEffect(() => {
+    const validarImeiNoBanco = async () => {
+      if (!isImeiValido) {
+        setImeiStatus('idle');
+        setImeiInfo(null);
+        return;
+      }
+
+      setImeiStatus('validando');
+      setImeiValidando(true);
+
+      try {
+        const { data: rastreador, error } = await supabase
+          .from('rastreadores')
+          .select('id, codigo, status, plataforma')
+          .eq('imei', imeiRastreador)
+          .maybeSingle();
+
+        if (error) throw error;
+
+        if (!rastreador) {
+          setImeiStatus('nao_encontrado');
+          setImeiInfo(null);
+          setImeiError('IMEI não encontrado no estoque. Cadastre o rastreador antes.');
+        } else if (rastreador.status !== 'estoque') {
+          setImeiStatus('indisponivel');
+          setImeiInfo({ codigo: rastreador.codigo, plataforma: rastreador.plataforma, status: rastreador.status });
+          setImeiError(`Rastreador ${rastreador.codigo || rastreador.id.slice(0, 8)} não está disponível (status: ${rastreador.status})`);
+        } else {
+          setImeiStatus('disponivel');
+          setImeiInfo({ codigo: rastreador.codigo, plataforma: rastreador.plataforma });
+          setImeiError('');
+        }
+      } catch (err) {
+        console.error('Erro ao validar IMEI:', err);
+        setImeiStatus('idle');
+        setImeiError('Erro ao validar IMEI');
+      } finally {
+        setImeiValidando(false);
+      }
+    };
+
+    // Debounce de 500ms para evitar requisições excessivas
+    const timeout = setTimeout(validarImeiNoBanco, 500);
+    return () => clearTimeout(timeout);
+  }, [imeiRastreador, isImeiValido]);
 
   const handleConcluirInstalacao = async () => {
     if (!id || !instalacao?.veiculos?.id || !instalacao?.associados?.id) {
@@ -823,7 +878,12 @@ export default function InstaladorChecklist() {
             </Card>
 
             {/* Campo de IMEI do Rastreador */}
-            <Card className="border-purple-500/50 bg-purple-500/10">
+            <Card className={cn(
+              "border-purple-500/50 bg-purple-500/10",
+              imeiStatus === 'disponivel' && "border-green-500/50 bg-green-500/10",
+              imeiStatus === 'nao_encontrado' && "border-destructive/50 bg-destructive/10",
+              imeiStatus === 'indisponivel' && "border-amber-500/50 bg-amber-500/10"
+            )}>
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2 text-base text-white">
                   <Router className="h-5 w-5 text-purple-400" />
@@ -833,36 +893,108 @@ export default function InstaladorChecklist() {
                   Digite o IMEI do rastreador que foi instalado no veículo (15-17 dígitos)
                 </p>
               </CardHeader>
-              <CardContent>
-                <Input
-                  id="imei-rastreador"
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="000000000000000"
-                  value={imeiRastreador}
-                  onChange={(e) => {
-                    const value = e.target.value.replace(/\D/g, '');
-                    setImeiRastreador(value);
-                    if (value && !/^\d{15,17}$/.test(value)) {
-                      setImeiError('IMEI deve ter entre 15 e 17 dígitos');
-                    } else {
-                      setImeiError('');
-                    }
-                  }}
-                  maxLength={17}
-                  className={cn(
-                    "text-lg font-mono tracking-wider bg-slate-800 border-slate-600",
-                    imeiError ? 'border-destructive' : isImeiValido ? 'border-green-500' : ''
-                  )}
-                />
-                {imeiError && (
-                  <p className="text-sm text-destructive mt-2">{imeiError}</p>
+              <CardContent className="space-y-3">
+                <div className="relative">
+                  <Input
+                    id="imei-rastreador"
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="000000000000000"
+                    value={imeiRastreador}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/\D/g, '');
+                      setImeiRastreador(value);
+                      // Reset status quando digita
+                      setImeiStatus('idle');
+                      setImeiInfo(null);
+                      if (value && !/^\d{15,17}$/.test(value)) {
+                        setImeiError('IMEI deve ter entre 15 e 17 dígitos');
+                      } else {
+                        setImeiError('');
+                      }
+                    }}
+                    maxLength={17}
+                    className={cn(
+                      "text-lg font-mono tracking-wider bg-slate-800 border-slate-600 pr-10",
+                      imeiStatus === 'nao_encontrado' && 'border-destructive',
+                      imeiStatus === 'indisponivel' && 'border-amber-500',
+                      imeiStatus === 'disponivel' && 'border-green-500'
+                    )}
+                  />
+                  {/* Ícone de status no canto do input */}
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    {imeiValidando && (
+                      <Loader2 className="h-5 w-5 animate-spin text-blue-400" />
+                    )}
+                    {imeiStatus === 'disponivel' && (
+                      <CheckCircle2 className="h-5 w-5 text-green-500" />
+                    )}
+                    {imeiStatus === 'nao_encontrado' && (
+                      <XCircle className="h-5 w-5 text-destructive" />
+                    )}
+                    {imeiStatus === 'indisponivel' && (
+                      <AlertCircle className="h-5 w-5 text-amber-500" />
+                    )}
+                  </div>
+                </div>
+
+                {/* Feedback de validação em tempo real */}
+                {imeiValidando && (
+                  <div className="rounded-lg bg-blue-500/10 border border-blue-500/30 p-3">
+                    <p className="text-sm text-blue-400 flex items-center gap-2">
+                      <Search className="h-4 w-4" />
+                      Verificando disponibilidade no estoque...
+                    </p>
+                  </div>
                 )}
-                {isImeiValido && (
-                  <p className="text-sm text-green-400 mt-2 flex items-center gap-1">
-                    <CheckCircle2 className="h-4 w-4" />
-                    IMEI válido
-                  </p>
+
+                {imeiStatus === 'disponivel' && imeiInfo && (
+                  <div className="rounded-lg bg-green-500/10 border border-green-500/30 p-3">
+                    <p className="text-sm text-green-400 flex items-center gap-2 font-medium">
+                      <CheckCircle2 className="h-4 w-4" />
+                      Rastreador disponível no estoque
+                    </p>
+                    <div className="mt-2 text-xs text-slate-300 space-y-1">
+                      {imeiInfo.codigo && (
+                        <p>Código: <span className="font-mono font-medium">{imeiInfo.codigo}</span></p>
+                      )}
+                      {imeiInfo.plataforma && (
+                        <p>Plataforma: <span className="capitalize">{imeiInfo.plataforma.replace('_', ' ')}</span></p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {imeiStatus === 'nao_encontrado' && (
+                  <div className="rounded-lg bg-destructive/10 border border-destructive/30 p-3">
+                    <p className="text-sm text-destructive flex items-center gap-2 font-medium">
+                      <XCircle className="h-4 w-4" />
+                      IMEI não encontrado no estoque
+                    </p>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Cadastre o rastreador no sistema antes de instalá-lo.
+                    </p>
+                  </div>
+                )}
+
+                {imeiStatus === 'indisponivel' && imeiInfo && (
+                  <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 p-3">
+                    <p className="text-sm text-amber-400 flex items-center gap-2 font-medium">
+                      <AlertCircle className="h-4 w-4" />
+                      Rastreador não disponível
+                    </p>
+                    <div className="mt-2 text-xs text-slate-300 space-y-1">
+                      {imeiInfo.codigo && (
+                        <p>Código: <span className="font-mono font-medium">{imeiInfo.codigo}</span></p>
+                      )}
+                      <p>Status atual: <Badge variant="outline" className="text-amber-400 border-amber-400/50 ml-1">{imeiInfo.status}</Badge></p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Erro de formato (apenas se não estiver validando no banco) */}
+                {imeiError && imeiStatus === 'idle' && !imeiValidando && (
+                  <p className="text-sm text-destructive">{imeiError}</p>
                 )}
               </CardContent>
             </Card>
@@ -902,7 +1034,7 @@ export default function InstaladorChecklist() {
             <div className="space-y-3 mt-6">
               <Button
                 onClick={handleConcluirInstalacao}
-                disabled={!isImeiValido || aprovarVeiculoMutation.isPending || recusarVeiculoMutation.isPending}
+                disabled={imeiStatus !== 'disponivel' || aprovarVeiculoMutation.isPending || recusarVeiculoMutation.isPending}
                 className="w-full bg-emerald-600 py-6 text-lg font-semibold hover:bg-emerald-700"
               >
                 {aprovarVeiculoMutation.isPending ? (
