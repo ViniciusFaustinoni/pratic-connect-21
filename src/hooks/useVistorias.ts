@@ -587,10 +587,10 @@ export function useVistoriaCompleta(instalacaoId: string | null) {
     queryFn: async () => {
       if (!instalacaoId) return null;
 
-      // Buscar dados da instalação primeiro para obter cotacao_id
+      // Buscar dados da instalação primeiro para obter cotacao_id e rota_id
       const { data: instalacao } = await supabase
         .from('instalacoes')
-        .select('associado_id, veiculo_id, instalador_id, contrato_id, cotacao_id')
+        .select('associado_id, veiculo_id, instalador_id, contrato_id, cotacao_id, rota_id')
         .eq('id', instalacaoId)
         .single();
 
@@ -644,13 +644,29 @@ export function useVistoriaCompleta(instalacaoId: string | null) {
 
       // Se ainda não existir, criar nova vistoria vinculada à instalação
       if (!data && !error && instalacao) {
+        // Buscar vistoriador_id: primeiro da instalação, depois da rota_instaladores
+        let vistoriadorId = instalacao.instalador_id;
+        
+        if (!vistoriadorId && instalacao.rota_id) {
+          // Buscar instalador atribuído via rota_instaladores
+          const { data: rotaInstalador } = await supabase
+            .from('rota_instaladores')
+            .select('instalador_id')
+            .eq('rota_id', instalacao.rota_id)
+            .limit(1)
+            .maybeSingle();
+          
+          vistoriadorId = rotaInstalador?.instalador_id ?? null;
+          console.log('[useVistoriaCompleta] Instalador obtido da rota:', vistoriadorId);
+        }
+
         const { data: novaVistoria, error: insertError } = await supabase
           .from('vistorias')
           .insert({
             instalacao_id: instalacaoId,
             associado_id: instalacao.associado_id,
             veiculo_id: instalacao.veiculo_id,
-            vistoriador_id: instalacao.instalador_id,
+            vistoriador_id: vistoriadorId,
             contrato_id: instalacao.contrato_id,
             cotacao_id: instalacao.cotacao_id,
             tipo: 'entrada',
