@@ -152,7 +152,7 @@ export function VistoriadorLayout({ children }: VistoriadorLayoutProps) {
 
         {/* Área de Conteúdo */}
         <main className="flex-1 overflow-hidden pb-20">
-          <div className="h-full overflow-y-auto px-4 py-4">
+          <div className="h-full overflow-y-auto px-4 py-4 relative">
             {children || <Outlet />}
           </div>
         </main>
