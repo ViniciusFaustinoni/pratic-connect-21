@@ -261,11 +261,12 @@ function RastreadoresContent({
               <TableHeader>
                 <TableRow>
                   <TableHead>Código</TableHead>
-                  <TableHead>Nº Série</TableHead>
+                  <TableHead>Nº Série / IMEI</TableHead>
                   <TableHead>Plataforma</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Comunicação</TableHead>
                   <TableHead>Veículo</TableHead>
+                  <TableHead>Email Associado</TableHead>
                   <TableHead className="w-[70px]">Ações</TableHead>
                 </TableRow>
               </TableHeader>
@@ -277,7 +278,19 @@ function RastreadoresContent({
                   return (
                     <TableRow key={rastreador.id}>
                       <TableCell className="font-medium">{rastreador.codigo}</TableCell>
-                      <TableCell>{rastreador.numero_serie || '-'}</TableCell>
+                      <TableCell>
+                        <div className="space-y-0.5">
+                          {rastreador.numero_serie && (
+                            <span className="block text-sm">{rastreador.numero_serie}</span>
+                          )}
+                          {rastreador.imei && (
+                            <span className="block text-xs font-mono text-muted-foreground">
+                              IMEI: {rastreador.imei}
+                            </span>
+                          )}
+                          {!rastreador.numero_serie && !rastreador.imei && '-'}
+                        </div>
+                      </TableCell>
                       <TableCell>
                         {getPlataformaLabel(rastreador.plataforma)}
                       </TableCell>
@@ -320,6 +333,19 @@ function RastreadoresContent({
                               </span>
                             )}
                           </div>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {rastreador.veiculos?.associados?.email ? (
+                          <span className="text-sm text-muted-foreground">
+                            {rastreador.veiculos.associados.email}
+                          </span>
+                        ) : (rastreador as any).associado_email ? (
+                          <span className="text-sm text-muted-foreground">
+                            {(rastreador as any).associado_email}
+                          </span>
                         ) : (
                           <span className="text-muted-foreground">-</span>
                         )}

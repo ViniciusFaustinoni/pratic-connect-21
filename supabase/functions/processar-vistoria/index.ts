@@ -111,32 +111,20 @@ serve(async (req) => {
 
     // 4. Processar baseado na decisão
     if (decisao === 'aprovada' || decisao === 'aprovada_com_ressalvas') {
-      // === VISTORIA APROVADA (Técnico aprova vistoria presencial/instalação) ===
-      console.log('[processar-vistoria] Processando aprovação do técnico...');
+      // === VISTORIA APROVADA (Aguardando ativação do rastreador pelo analista) ===
+      console.log('[processar-vistoria] Processando aprovação da análise...');
 
-      // 4.1 Atualizar status do associado para ATIVO (ativação final)
-      const { error: assocError } = await supabase
-        .from('associados')
-        .update({ 
-          status: 'ativo',
-          data_ativacao: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', vistoria.associado_id);
+      // 4.1 NÃO atualizar status do associado automaticamente
+      // O associado só será ativado quando o analista clicar em "Ativar Rastreador"
+      // Mantemos o associado em status pendente/em_analise
 
-      if (assocError) {
-        console.error('[processar-vistoria] Erro ao atualizar associado:', assocError);
-      } else {
-        console.log('[processar-vistoria] Status do associado atualizado para ATIVO');
-      }
-
-      // 4.2 Atualizar status do veículo para ATIVO e ativar cobertura TOTAL
+      // 4.2 Atualizar status do veículo para em_analise (aguardando ativação do rastreador)
       const { error: veicError } = await supabase
         .from('veiculos')
         .update({ 
-          status: 'ativo',
+          status: 'em_analise',
           cobertura_roubo_furto: true,
-          cobertura_total: true, // Técnico aprova = cobertura total ativada
+          // cobertura_total será ativada quando o rastreador for ativado
           updated_at: new Date().toISOString(),
         })
         .eq('id', vistoria.veiculo_id);
@@ -144,71 +132,24 @@ serve(async (req) => {
       if (veicError) {
         console.error('[processar-vistoria] Erro ao atualizar veículo:', veicError);
       } else {
-        console.log('[processar-vistoria] Status do veículo atualizado para ATIVO com cobertura_total ativada');
+        console.log('[processar-vistoria] Veículo em análise - aguardando ativação do rastreador');
       }
 
-      // 4.3 Atualizar instalação existente para concluída (se existir)
-      if (vistoria.associado_id && vistoria.veiculo_id) {
-        const { data: instalacaoExistente } = await supabase
-          .from('instalacoes')
-          .select('id')
-          .eq('associado_id', vistoria.associado_id)
-          .eq('veiculo_id', vistoria.veiculo_id)
-          .in('status', ['pendente', 'agendada', 'reagendada', 'em_andamento'])
-          .limit(1)
-          .maybeSingle();
-
-        if (instalacaoExistente) {
-          const { error: updateInstalacaoError } = await supabase
-            .from('instalacoes')
-            .update({
-              status: 'concluida',
-              data_conclusao: new Date().toISOString(),
-              instalador_id: analista_id,
-            })
-            .eq('id', instalacaoExistente.id);
-
-          if (!updateInstalacaoError) {
-            instalacao_id = instalacaoExistente.id;
-            console.log(`[processar-vistoria] Instalação atualizada para concluída: ${instalacao_id}`);
-          }
-        } else {
-          // Criar nova instalação já concluída
-          const { data: instalacao, error: instalacaoError } = await supabase
-            .from('instalacoes')
-            .insert({
-              associado_id: vistoria.associado_id,
-              veiculo_id: vistoria.veiculo_id,
-              status: 'concluida',
-              data_conclusao: new Date().toISOString(),
-              instalador_id: analista_id,
-            })
-            .select('id')
-            .single();
-
-          if (instalacaoError) {
-            console.error('[processar-vistoria] Erro ao criar instalação:', instalacaoError);
-          } else {
-            instalacao_id = instalacao.id;
-            console.log(`[processar-vistoria] Instalação criada como concluída: ${instalacao_id}`);
-          }
-        }
-      }
-
+      // 4.3 NÃO atualizar instalação - aguardando ativação do rastreador
+      // A instalação será atualizada quando o rastreador for ativado
       // 4.4 Registrar no histórico
       try {
         await supabase.from('associados_historico').insert({
           associado_id: vistoria.associado_id,
           tipo: 'vistoria_aprovada',
           descricao: decisao === 'aprovada' 
-            ? 'Vistoria presencial aprovada pelo técnico. Associado e veículo ativados com cobertura TOTAL.'
-            : `Vistoria aprovada com ressalvas: ${ressalvas}. Associado e veículo ativados com cobertura TOTAL.`,
+            ? 'Vistoria de entrada aprovada. Aguardando ativação do rastreador pelo analista.'
+            : `Vistoria aprovada com ressalvas: ${ressalvas}. Aguardando ativação do rastreador.`,
           dados_novos: { 
             vistoria_id, 
-            instalacao_id,
             decisao,
             ressalvas: ressalvas || null,
-            cobertura_total: true,
+            status: 'aguardando_ativacao_rastreador',
           },
           usuario_id: analista_id,
         });
@@ -217,15 +158,15 @@ serve(async (req) => {
         console.error('[processar-vistoria] Erro ao registrar histórico:', histError);
       }
 
-      // 4.5 Criar notificação interna para gestão
+      // 4.5 Criar notificação interna para que analista ative o rastreador
       try {
         await supabase.from('notificacoes_sistema').insert({
-          titulo: '✅ Associado ativado com cobertura total',
-          mensagem: `${vistoria.associado?.nome} - ${vistoria.veiculo?.modelo} (${vistoria.veiculo?.placa}) - Instalação concluída`,
-          tipo: 'success',
+          titulo: '📋 Vistoria aprovada - Aguardando ativação',
+          mensagem: `${vistoria.associado?.nome} - ${vistoria.veiculo?.modelo} (${vistoria.veiculo?.placa}) - Clique em "Ativar Rastreador" para concluir`,
+          tipo: 'info',
           destino: 'perfil',
-          destino_role: 'diretor',
-          link: `/cadastro/associados/${vistoria.associado_id}`,
+          destino_role: 'analista_cadastro',
+          link: `/cadastro/vistorias/${vistoria_id}/analise`,
         });
         console.log('[processar-vistoria] Notificação de sistema criada');
       } catch (notifError) {
@@ -291,7 +232,7 @@ serve(async (req) => {
     // 5. Notificar cliente via edge function
     const tipoNotificacao = decisao === 'reprovada' 
       ? (permitir_nova_tentativa ? 'vistoria_nova_tentativa' : 'vistoria_reprovada')
-      : 'vistoria_aprovada';
+      : 'vistoria_aprovada_aguardando_ativacao';
 
     try {
       await supabase.functions.invoke('notificar-cliente', {
@@ -323,7 +264,7 @@ serve(async (req) => {
         nova_vistoria_id,
         mensagem: decisao === 'reprovada' 
           ? 'Vistoria reprovada. Cliente notificado.'
-          : 'Vistoria presencial aprovada. Associado e veículo ativados com cobertura TOTAL.',
+          : 'Vistoria aprovada. Aguardando ativação do rastreador pelo analista.',
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
