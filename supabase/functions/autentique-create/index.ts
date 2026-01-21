@@ -621,13 +621,15 @@ serve(async (req) => {
     console.log("[autentique-create] Criando documento para contrato:", contratoId);
 
     // Buscar dados do contrato com plano e lead
+    // Usando sintaxe explícita para resolver ambiguidade entre contratos/associados
+    // (existem 2 FKs: contratos.associado_id -> associados.id E associados.contrato_id -> contratos.id)
     const { data: contrato, error: contratoError } = await supabase
       .from("contratos")
       .select(`
         *,
         planos (*),
         leads (*),
-        associados (*)
+        associados:associados!fk_contratos_associado(*)
       `)
       .eq("id", contratoId)
       .single();
