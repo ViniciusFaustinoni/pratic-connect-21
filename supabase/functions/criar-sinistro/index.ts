@@ -1,0 +1,478 @@
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+// Labels para tipos de sinistro
+const TIPO_LABELS: Record<string, string> = {
+  colisao: 'Colisão',
+  roubo: 'Roubo',
+  furto: 'Furto',
+  incendio: 'Incêndio',
+  fenomeno_natural: 'Fenômeno Natural',
+  terceiros: 'Terceiros',
+  vidros: 'Vidros',
+  vandalismo: 'Vandalismo',
+  outro: 'Outro',
+};
+
+// Documentos obrigatórios por tipo de sinistro
+const DOCUMENTOS_OBRIGATORIOS: Record<string, Array<{tipo: string; nome: string; obrigatorio: boolean}>> = {
+  colisao: [
+    { tipo: 'cnh', nome: 'CNH do Condutor', obrigatorio: true },
+    { tipo: 'crlv', nome: 'CRLV do Veículo', obrigatorio: true },
+    { tipo: 'foto_dano', nome: 'Fotos dos Danos', obrigatorio: true },
+    { tipo: 'foto_local', nome: 'Fotos do Local', obrigatorio: false },
+    { tipo: 'bo', nome: 'Boletim de Ocorrência', obrigatorio: false },
+  ],
+  roubo: [
+    { tipo: 'cnh', nome: 'CNH do Condutor', obrigatorio: true },
+    { tipo: 'crlv', nome: 'CRLV do Veículo', obrigatorio: true },
+    { tipo: 'bo', nome: 'Boletim de Ocorrência', obrigatorio: true },
+    { tipo: 'chaves', nome: 'Declaração das Chaves', obrigatorio: true },
+  ],
+  furto: [
+    { tipo: 'cnh', nome: 'CNH do Condutor', obrigatorio: true },
+    { tipo: 'crlv', nome: 'CRLV do Veículo', obrigatorio: true },
+    { tipo: 'bo', nome: 'Boletim de Ocorrência', obrigatorio: true },
+    { tipo: 'chaves', nome: 'Declaração das Chaves', obrigatorio: true },
+  ],
+  incendio: [
+    { tipo: 'cnh', nome: 'CNH do Condutor', obrigatorio: true },
+    { tipo: 'crlv', nome: 'CRLV do Veículo', obrigatorio: true },
+    { tipo: 'bo', nome: 'Boletim de Ocorrência', obrigatorio: true },
+    { tipo: 'laudo_bombeiros', nome: 'Laudo dos Bombeiros', obrigatorio: true },
+    { tipo: 'foto_dano', nome: 'Fotos do Veículo', obrigatorio: true },
+  ],
+  fenomeno_natural: [
+    { tipo: 'cnh', nome: 'CNH do Condutor', obrigatorio: true },
+    { tipo: 'crlv', nome: 'CRLV do Veículo', obrigatorio: true },
+    { tipo: 'foto_dano', nome: 'Fotos dos Danos', obrigatorio: true },
+    { tipo: 'comprovante_evento', nome: 'Comprovante do Evento (notícia/defesa civil)', obrigatorio: false },
+  ],
+  vandalismo: [
+    { tipo: 'cnh', nome: 'CNH do Condutor', obrigatorio: true },
+    { tipo: 'crlv', nome: 'CRLV do Veículo', obrigatorio: true },
+    { tipo: 'bo', nome: 'Boletim de Ocorrência', obrigatorio: true },
+    { tipo: 'foto_dano', nome: 'Fotos dos Danos', obrigatorio: true },
+  ],
+  terceiros: [
+    { tipo: 'cnh', nome: 'CNH do Condutor', obrigatorio: true },
+    { tipo: 'crlv', nome: 'CRLV do Veículo', obrigatorio: true },
+    { tipo: 'foto_dano', nome: 'Fotos dos Danos', obrigatorio: true },
+    { tipo: 'dados_terceiro', nome: 'Dados do Terceiro', obrigatorio: true },
+  ],
+  vidros: [
+    { tipo: 'cnh', nome: 'CNH do Condutor', obrigatorio: true },
+    { tipo: 'crlv', nome: 'CRLV do Veículo', obrigatorio: true },
+    { tipo: 'foto_dano', nome: 'Fotos dos Danos', obrigatorio: true },
+  ],
+  outro: [
+    { tipo: 'cnh', nome: 'CNH do Condutor', obrigatorio: true },
+    { tipo: 'crlv', nome: 'CRLV do Veículo', obrigatorio: true },
+    { tipo: 'foto_dano', nome: 'Fotos do Ocorrido', obrigatorio: false },
+  ],
+};
+
+// Status considerados como "sinistro em aberto"
+const STATUS_ABERTOS = [
+  'comunicado',
+  'em_analise',
+  'documentacao_pendente',
+  'em_regulacao',
+];
+
+interface CriarSinistroRequest {
+  veiculo_id: string;
+  tipo_sinistro: string;
+  data_evento: string;
+  hora_evento?: string;
+  endereco_evento: string;
+  cidade_evento: string;
+  estado_evento: string;
+  latitude?: number;
+  longitude?: number;
+  descricao: string;
+  numero_bo?: string;
+  delegacia_bo?: string;
+  fotos?: string[];
+  envolveu_terceiros?: boolean;
+}
+
+// Gerar protocolo único
+function gerarProtocolo(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const random = Math.floor(Math.random() * 9999).toString().padStart(4, '0');
+  return `SIN-${year}${month}${day}-${random}`;
+}
+
+Deno.serve(async (req) => {
+  // Handle CORS preflight
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+
+    // Cliente com service role para operações administrativas
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+    
+    // Cliente com anon key para validar JWT do usuário
+    const supabaseAnon = createClient(supabaseUrl, supabaseAnonKey);
+
+    // ============================================
+    // 1. VALIDAR AUTENTICAÇÃO
+    // ============================================
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      console.error('[criar-sinistro] Token não fornecido');
+      return new Response(
+        JSON.stringify({ success: false, error: 'Token de autenticação não fornecido' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: authError } = await supabaseAnon.auth.getUser(token);
+
+    if (authError || !user) {
+      console.error('[criar-sinistro] Erro de autenticação:', authError);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Não autenticado' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('[criar-sinistro] Usuário autenticado:', user.id);
+
+    // ============================================
+    // 2. BUSCAR ASSOCIADO VINCULADO AO USUÁRIO
+    // ============================================
+    const { data: associado, error: assocError } = await supabaseAdmin
+      .from('associados')
+      .select('id, nome, telefone, whatsapp, email, user_id, status, bloqueado')
+      .eq('user_id', user.id)
+      .single();
+
+    if (assocError || !associado) {
+      console.error('[criar-sinistro] Associado não encontrado:', assocError);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Associado não encontrado' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Verificar se associado está bloqueado
+    if (associado.bloqueado) {
+      console.error('[criar-sinistro] Associado bloqueado:', associado.id);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Sua conta está bloqueada. Entre em contato com a central.' 
+        }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('[criar-sinistro] Associado encontrado:', associado.nome);
+
+    // ============================================
+    // 3. PARSEAR E VALIDAR PAYLOAD
+    // ============================================
+    const payload: CriarSinistroRequest = await req.json();
+    console.log('[criar-sinistro] Payload recebido:', JSON.stringify(payload, null, 2));
+
+    // Validar campos obrigatórios
+    if (!payload.veiculo_id) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Veículo não informado' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (!payload.tipo_sinistro) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Tipo de sinistro não informado' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (!payload.data_evento) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Data do evento não informada' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (!payload.descricao || payload.descricao.trim().length < 10) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Descrição muito curta. Detalhe o ocorrido.' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // ============================================
+    // 4. VERIFICAR SE VEÍCULO PERTENCE AO ASSOCIADO
+    // ============================================
+    const { data: veiculo, error: veicError } = await supabaseAdmin
+      .from('veiculos')
+      .select('id, placa, marca, modelo, ano_modelo, cor, status')
+      .eq('id', payload.veiculo_id)
+      .eq('associado_id', associado.id)
+      .single();
+
+    if (veicError || !veiculo) {
+      console.error('[criar-sinistro] Veículo não encontrado:', veicError);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Veículo não encontrado ou não pertence ao associado' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Verificar se veículo está ativo
+    if (veiculo.status !== 'ativo') {
+      console.error('[criar-sinistro] Veículo não está ativo:', veiculo.status);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: `Este veículo não está ativo (status: ${veiculo.status}). Entre em contato com a central.` 
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('[criar-sinistro] Veículo validado:', veiculo.placa);
+
+    // ============================================
+    // 5. VERIFICAR SE JÁ EXISTE SINISTRO EM ABERTO
+    // ============================================
+    const { data: sinistroExistente, error: sinistroExistenteError } = await supabaseAdmin
+      .from('sinistros')
+      .select('id, protocolo, status, created_at')
+      .eq('veiculo_id', payload.veiculo_id)
+      .in('status', STATUS_ABERTOS)
+      .limit(1)
+      .maybeSingle();
+
+    if (sinistroExistente) {
+      console.log('[criar-sinistro] Sinistro já existe:', sinistroExistente.protocolo);
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: `Já existe um sinistro em aberto para este veículo`,
+          sinistro_existente: {
+            id: sinistroExistente.id,
+            protocolo: sinistroExistente.protocolo,
+            status: sinistroExistente.status,
+          }
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // ============================================
+    // 6. GERAR PROTOCOLO E CRIAR SINISTRO
+    // ============================================
+    const protocolo = gerarProtocolo();
+    const dataCriacao = new Date().toISOString();
+
+    // Formatar data/hora do evento
+    let dataHoraOcorrencia = payload.data_evento;
+    if (payload.hora_evento) {
+      // Se tem hora, combinar com data
+      const [ano, mes, dia] = payload.data_evento.split('-');
+      dataHoraOcorrencia = `${ano}-${mes}-${dia}T${payload.hora_evento}:00`;
+    }
+
+    const { data: sinistro, error: insertError } = await supabaseAdmin
+      .from('sinistros')
+      .insert({
+        associado_id: associado.id,
+        veiculo_id: payload.veiculo_id,
+        protocolo: protocolo,
+        tipo: payload.tipo_sinistro,
+        data_ocorrencia: dataHoraOcorrencia,
+        local_ocorrencia: payload.endereco_evento || '',
+        cidade_ocorrencia: payload.cidade_evento || '',
+        estado_ocorrencia: payload.estado_evento || '',
+        descricao: payload.descricao,
+        bo_numero: payload.numero_bo || null,
+        status: 'comunicado',
+        canal: 'app',
+      })
+      .select()
+      .single();
+
+    if (insertError) {
+      console.error('[criar-sinistro] Erro ao inserir sinistro:', insertError);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Erro ao criar sinistro. Tente novamente.' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('[criar-sinistro] Sinistro criado:', sinistro.id, protocolo);
+
+    // ============================================
+    // 7. REGISTRAR NO HISTÓRICO
+    // ============================================
+    await supabaseAdmin.from('sinistro_historico').insert({
+      sinistro_id: sinistro.id,
+      status_novo: 'comunicado',
+      usuario_id: user.id,
+      observacao: `Sinistro comunicado via app - ${TIPO_LABELS[payload.tipo_sinistro] || payload.tipo_sinistro}`,
+    });
+
+    console.log('[criar-sinistro] Histórico registrado');
+
+    // ============================================
+    // 8. CRIAR DOCUMENTOS PENDENTES
+    // ============================================
+    const documentosPendentes = DOCUMENTOS_OBRIGATORIOS[payload.tipo_sinistro] || DOCUMENTOS_OBRIGATORIOS.outro;
+
+    for (const doc of documentosPendentes) {
+      await supabaseAdmin.from('sinistro_documentos').insert({
+        sinistro_id: sinistro.id,
+        tipo: doc.tipo,
+        nome: doc.nome,
+        obrigatorio: doc.obrigatorio,
+        status: 'pendente',
+      });
+    }
+
+    console.log('[criar-sinistro] Documentos pendentes criados:', documentosPendentes.length);
+
+    // ============================================
+    // 9. NOTIFICAR ANALISTAS DE SINISTROS
+    // ============================================
+    try {
+      // Buscar usuários com role de analista de sinistros
+      const { data: analistas } = await supabaseAdmin
+        .from('user_roles')
+        .select('user_id')
+        .eq('role', 'analista_sinistros');
+
+      // Se não encontrar analistas específicos, buscar diretores
+      let destinatarios = analistas || [];
+      if (destinatarios.length === 0) {
+        const { data: diretores } = await supabaseAdmin
+          .from('user_roles')
+          .select('user_id')
+          .eq('role', 'diretor');
+        destinatarios = diretores || [];
+      }
+
+      // Criar notificação para cada analista/diretor
+      for (const dest of destinatarios) {
+        await supabaseAdmin.from('notificacoes').insert({
+          user_id: dest.user_id,
+          titulo: '🆕 Novo Sinistro Registrado',
+          mensagem: `Sinistro ${protocolo} - ${TIPO_LABELS[payload.tipo_sinistro] || payload.tipo_sinistro} - Veículo ${veiculo.placa}`,
+          tipo: 'alerta',
+          categoria: 'sinistros',
+          referencia_tipo: 'sinistro',
+          referencia_id: sinistro.id,
+          link: `/sinistros/${sinistro.id}`,
+          lida: false,
+        });
+      }
+
+      console.log('[criar-sinistro] Notificações enviadas para', destinatarios.length, 'analistas');
+
+      // Enviar email para equipe de sinistros
+      await supabaseAdmin.functions.invoke('send-email', {
+        body: {
+          to: 'sinistros@praticprotect.com.br',
+          subject: `Novo Sinistro: ${protocolo} - ${veiculo.placa}`,
+          html: `
+            <h2>Novo Sinistro Registrado</h2>
+            <p><strong>Protocolo:</strong> ${protocolo}</p>
+            <p><strong>Tipo:</strong> ${TIPO_LABELS[payload.tipo_sinistro] || payload.tipo_sinistro}</p>
+            <p><strong>Associado:</strong> ${associado.nome}</p>
+            <p><strong>Veículo:</strong> ${veiculo.placa} - ${veiculo.marca} ${veiculo.modelo}</p>
+            <p><strong>Local:</strong> ${payload.cidade_evento || 'Não informado'}/${payload.estado_evento || ''}</p>
+            <p><strong>Data do evento:</strong> ${payload.data_evento}</p>
+            <br>
+            <p><strong>Descrição:</strong></p>
+            <p>${payload.descricao}</p>
+          `,
+        }
+      });
+
+      console.log('[criar-sinistro] Email enviado para equipe');
+    } catch (notifError) {
+      console.error('[criar-sinistro] Erro ao enviar notificações (não bloqueante):', notifError);
+      // Não bloqueia o fluxo - sinistro foi criado
+    }
+
+    // ============================================
+    // 10. NOTIFICAR ASSOCIADO
+    // ============================================
+    if (associado.user_id) {
+      await supabaseAdmin.from('notificacoes').insert({
+        user_id: associado.user_id,
+        titulo: '✅ Sinistro Registrado',
+        mensagem: `Seu sinistro foi registrado com sucesso. Protocolo: ${protocolo}. Em breve iniciaremos a análise.`,
+        tipo: 'info',
+        categoria: 'sinistros',
+        referencia_tipo: 'sinistro',
+        referencia_id: sinistro.id,
+        link: `/app/sinistros/${sinistro.id}`,
+        lida: false,
+      });
+    }
+
+    // Notificar via edge function se houver
+    try {
+      await supabaseAdmin.functions.invoke('notificar-sinistro', {
+        body: {
+          sinistro_id: sinistro.id,
+          status: 'comunicado',
+        }
+      });
+    } catch (e) {
+      console.log('[criar-sinistro] Notificação adicional não enviada:', e);
+    }
+
+    // ============================================
+    // 11. RETORNAR RESPOSTA DE SUCESSO
+    // ============================================
+    console.log('[criar-sinistro] Sucesso! Protocolo:', protocolo);
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        sinistro_id: sinistro.id,
+        numero_sinistro: protocolo,
+        status: 'comunicado',
+        documentos_pendentes: documentosPendentes,
+        analista_responsavel: null,
+        mensagem_confirmacao: `Sinistro registrado com sucesso! Protocolo: ${protocolo}. Em breve iniciaremos a análise.`,
+        veiculo: {
+          placa: veiculo.placa,
+          modelo: `${veiculo.marca} ${veiculo.modelo}`,
+        },
+        data_criacao: dataCriacao,
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+
+  } catch (error) {
+    console.error('[criar-sinistro] Erro geral:', error);
+    return new Response(
+      JSON.stringify({ 
+        success: false, 
+        error: 'Erro interno ao processar sinistro. Tente novamente.' 
+      }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+});
