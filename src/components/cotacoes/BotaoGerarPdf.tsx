@@ -38,6 +38,7 @@ interface DadosExtras {
 interface CotacaoComPlanosExtras extends Omit<CotacaoParaPdf, 'valor_adesao'> {
   dados_extras?: DadosExtras | null;
   valor_adesao: number | null;
+  dia_vencimento?: number | null;
 }
 
 interface BotaoGerarPdfProps {
@@ -86,6 +87,7 @@ export function BotaoGerarPdf({
           numero: cotacao.numero,
           created_at: cotacao.created_at,
           validade_dias: cotacao.validade_dias,
+          dia_vencimento: cotacao.dia_vencimento,
           nome_solicitante: cotacao.leads?.nome || cotacao.nome_solicitante,
           telefone1_solicitante: cotacao.leads?.telefone || cotacao.telefone1_solicitante,
           email_solicitante: cotacao.leads?.email || cotacao.email_solicitante,
