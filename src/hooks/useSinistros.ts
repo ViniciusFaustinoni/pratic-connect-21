@@ -106,42 +106,79 @@ export function useSinistro(id: string | undefined) {
   });
 }
 
-// Hook para criar sinistro
+// Interface para criar sinistro via edge function
+export interface CriarSinistroPayload {
+  veiculo_id: string;
+  tipo_sinistro: string;
+  data_evento: string;
+  hora_evento?: string;
+  endereco_evento?: string;
+  cidade_evento?: string;
+  estado_evento?: string;
+  latitude?: number;
+  longitude?: number;
+  descricao: string;
+  numero_bo?: string;
+  delegacia_bo?: string;
+  fotos?: string[];
+  envolveu_terceiros?: boolean;
+}
+
+export interface CriarSinistroResponse {
+  success: boolean;
+  sinistro_id?: string;
+  numero_sinistro?: string;
+  status?: string;
+  documentos_pendentes?: Array<{
+    tipo: string;
+    nome: string;
+    obrigatorio: boolean;
+  }>;
+  analista_responsavel?: { id: string; nome: string } | null;
+  mensagem_confirmacao?: string;
+  veiculo?: {
+    placa: string;
+    modelo: string;
+  };
+  data_criacao?: string;
+  error?: string;
+  sinistro_existente?: {
+    id: string;
+    protocolo: string;
+    status: string;
+  };
+}
+
+// Hook para criar sinistro via edge function
 export function useCreateSinistro() {
   const queryClient = useQueryClient();
-  const { user } = useAuth();
 
   return useMutation({
-    mutationFn: async (data: Omit<SinistroInsert, 'protocolo' | 'status'>) => {
-      // Protocolo gerado pelo trigger no banco
-      const { data: sinistro, error } = await supabase
-        .from('sinistros')
-        .insert({ 
-          ...data, 
-          status: 'comunicado' 
-        } as SinistroInsert)
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // Registrar histórico
-      await supabase.from('sinistro_historico').insert({
-        sinistro_id: sinistro.id,
-        status_novo: 'comunicado',
-        usuario_id: user?.id,
-        observacao: 'Sinistro registrado'
+    mutationFn: async (payload: CriarSinistroPayload): Promise<CriarSinistroResponse> => {
+      const { data, error } = await supabase.functions.invoke<CriarSinistroResponse>('criar-sinistro', {
+        body: payload
       });
 
-      return sinistro;
+      if (error) throw error;
+      
+      if (!data?.success) {
+        // Se já existe sinistro aberto, retornar erro específico
+        if (data?.sinistro_existente) {
+          throw new Error(`Já existe um sinistro aberto: ${data.sinistro_existente.protocolo}`);
+        }
+        throw new Error(data?.error || 'Erro ao criar sinistro');
+      }
+
+      return data;
     },
-    onSuccess: () => {
-      toast.success('Sinistro registrado com sucesso!');
+    onSuccess: (data) => {
+      toast.success(data.mensagem_confirmacao || 'Sinistro registrado com sucesso!');
       queryClient.invalidateQueries({ queryKey: ['sinistros'] });
+      queryClient.invalidateQueries({ queryKey: ['meus-sinistros'] });
     },
     onError: (error) => {
       console.error('Erro ao criar sinistro:', error);
-      toast.error('Erro ao registrar sinistro');
+      toast.error(error instanceof Error ? error.message : 'Erro ao registrar sinistro');
     }
   });
 }

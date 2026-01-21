@@ -1,5 +1,8 @@
 project_id = "iyxdgmukrrdkffraptsx"
 
+[functions.criar-sinistro]
+verify_jwt = false
+
 [functions.buscar-boletos-associado]
 verify_jwt = false
 

@@ -333,47 +333,47 @@ export default function NovoSinistro() {
     
     try {
       const veiculo = veiculos[0];
-      const horaFormatada = naoLembraHora ? '00:00' : (horaOcorrencia || '00:00');
-      const dataHora = `${format(dataOcorrencia!, 'yyyy-MM-dd')}T${horaFormatada}:00`;
+      const horaFormatada = naoLembraHora ? undefined : (horaOcorrencia || undefined);
       
-      // Criar sinistro
-      const sinistro = await createSinistro.mutateAsync({
+      // Criar sinistro via edge function
+      const resultado = await createSinistro.mutateAsync({
         veiculo_id: veiculo.id,
-        associado_id: veiculo.associado_id,
-        tipo: tipoSelecionado as any,
-        data_ocorrencia: dataHora,
-        local_ocorrencia: endereco,
-        cidade_ocorrencia: cidade,
-        estado_ocorrencia: estado,
+        tipo_sinistro: tipoSelecionado as string,
+        data_evento: format(dataOcorrencia!, 'yyyy-MM-dd'),
+        hora_evento: horaFormatada,
+        endereco_evento: endereco,
+        cidade_evento: cidade,
+        estado_evento: estado,
         descricao: descricao,
-        bo_numero: numeroBO || null,
-        canal: 'app',
+        numero_bo: numeroBO || undefined,
+        latitude: coordenadas?.[0],
+        longitude: coordenadas?.[1],
       });
       
-      // Upload fotos
-      if (fotos.length > 0) {
+      // Upload fotos após criar sinistro
+      if (fotos.length > 0 && resultado.sinistro_id) {
         for (const foto of fotos) {
           const ext = foto.file.name.split('.').pop() || 'jpg';
-          const path = `${sinistro.id}/fotos/${foto.id}.${ext}`;
+          const path = `${resultado.sinistro_id}/fotos/${foto.id}.${ext}`;
           await supabase.storage.from('sinistros').upload(path, foto.file);
         }
       }
       
-      // Upload B.O.
-      if (arquivoBO) {
+      // Upload B.O. se houver
+      if (arquivoBO && resultado.sinistro_id) {
         const ext = arquivoBO.type.includes('pdf') ? 'pdf' : 'jpg';
-        const path = `${sinistro.id}/bo.${ext}`;
+        const path = `${resultado.sinistro_id}/bo.${ext}`;
         const { error: uploadError } = await supabase.storage.from('sinistros').upload(path, arquivoBO);
         
         if (!uploadError) {
           await supabase
             .from('sinistros')
             .update({ bo_arquivo_url: path })
-            .eq('id', sinistro.id);
+            .eq('id', resultado.sinistro_id);
         }
       }
       
-      setProtocoloGerado(sinistro.protocolo);
+      setProtocoloGerado(resultado.numero_sinistro || null);
       
     } catch (error) {
       console.error('Erro ao criar sinistro:', error);
