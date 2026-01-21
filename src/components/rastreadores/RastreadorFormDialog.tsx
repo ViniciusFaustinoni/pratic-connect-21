@@ -39,7 +39,10 @@ import { STATUS_RASTREADOR_LABELS } from '@/types/database';
 const rastreadorSchema = z.object({
   codigo: z.string().min(1, 'Código é obrigatório').max(50),
   numero_serie: z.string().max(100).optional().nullable(),
-  imei: z.string().max(15).optional().nullable(),
+  imei: z.string().max(17).optional().nullable().refine(
+    (val) => !val || /^\d{15,17}$/.test(val),
+    { message: 'IMEI deve ter entre 15 e 17 dígitos numéricos' }
+  ),
   chip_iccid: z.string().max(20).optional().nullable(),
   plataforma: z.string().min(1, 'Plataforma é obrigatória'),
   id_plataforma: z.string().max(100).optional().nullable(),
@@ -225,10 +228,16 @@ export function RastreadorFormDialog({
                       <FormLabel>IMEI</FormLabel>
                       <FormControl>
                         <Input
-                          placeholder="123456789012345"
-                          maxLength={15}
+                          placeholder="000000000000000"
+                          maxLength={17}
+                          inputMode="numeric"
                           {...field}
                           value={field.value || ''}
+                          onChange={(e) => {
+                            const value = e.target.value.replace(/\D/g, '');
+                            field.onChange(value);
+                          }}
+                          className="font-mono"
                         />
                       </FormControl>
                       <FormMessage />
