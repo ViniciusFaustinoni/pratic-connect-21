@@ -12294,6 +12294,64 @@ export type Database = {
           },
         ]
       }
+      sinistro_fotos: {
+        Row: {
+          created_at: string | null
+          enviado_por: string | null
+          id: string
+          nome_arquivo: string | null
+          sinistro_id: string
+          status: string | null
+          storage_path: string
+          tamanho_bytes: number | null
+          tipo: string
+        }
+        Insert: {
+          created_at?: string | null
+          enviado_por?: string | null
+          id?: string
+          nome_arquivo?: string | null
+          sinistro_id: string
+          status?: string | null
+          storage_path: string
+          tamanho_bytes?: number | null
+          tipo?: string
+        }
+        Update: {
+          created_at?: string | null
+          enviado_por?: string | null
+          id?: string
+          nome_arquivo?: string | null
+          sinistro_id?: string
+          status?: string | null
+          storage_path?: string
+          tamanho_bytes?: number | null
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sinistro_fotos_enviado_por_fkey"
+            columns: ["enviado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sinistro_fotos_enviado_por_fkey"
+            columns: ["enviado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "sinistro_fotos_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "sinistros"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sinistro_historico: {
         Row: {
           created_at: string | null
