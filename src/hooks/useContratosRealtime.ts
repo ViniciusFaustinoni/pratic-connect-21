@@ -2,13 +2,16 @@ import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
 
 /**
  * Hook para escutar atualizações em tempo real da tabela de contratos
  * Invalida queries automaticamente e exibe toast quando contrato é assinado
+ * IMPORTANTE: Toasts são exibidos APENAS para o vendedor responsável pela proposta
  */
 export function useContratosRealtime() {
   const queryClient = useQueryClient();
+  const { profile } = useAuth();
 
   useEffect(() => {
     console.log('[useContratosRealtime] Iniciando listener realtime para contratos');
@@ -38,28 +41,34 @@ export function useContratosRealtime() {
             const newData = payload.new as any;
             const oldData = payload.old as any;
             
-            // Contrato foi assinado
+            // Contrato foi assinado - mostrar APENAS para o vendedor responsável
             if (newData.status === 'assinado' && oldData.status !== 'assinado') {
-              toast.success('🎉 Contrato Assinado!', {
-                description: `Contrato ${newData.numero || ''} foi assinado com sucesso!`,
-                duration: 10000,
-              });
+              if (profile?.id && newData.vendedor_id === profile.id) {
+                toast.success('🎉 Contrato Assinado!', {
+                  description: `Contrato ${newData.numero || ''} foi assinado com sucesso!`,
+                  duration: 10000,
+                });
+              }
             }
             
-            // Contrato foi visualizado
+            // Contrato foi visualizado - mostrar APENAS para o vendedor responsável
             if (newData.status === 'visualizado' && oldData.status !== 'visualizado') {
-              toast.info('👁️ Contrato Visualizado', {
-                description: `O cliente abriu o contrato ${newData.numero || ''}`,
-                duration: 5000,
-              });
+              if (profile?.id && newData.vendedor_id === profile.id) {
+                toast.info('👁️ Contrato Visualizado', {
+                  description: `O cliente abriu o contrato ${newData.numero || ''}`,
+                  duration: 5000,
+                });
+              }
             }
             
-            // Contrato foi rejeitado
+            // Contrato foi rejeitado - mostrar APENAS para o vendedor responsável
             if (newData.status === 'rejeitado' && oldData.status !== 'rejeitado') {
-              toast.warning('⚠️ Contrato Rejeitado', {
-                description: `Contrato ${newData.numero || ''} foi rejeitado pelo cliente`,
-                duration: 8000,
-              });
+              if (profile?.id && newData.vendedor_id === profile.id) {
+                toast.warning('⚠️ Contrato Rejeitado', {
+                  description: `Contrato ${newData.numero || ''} foi rejeitado pelo cliente`,
+                  duration: 8000,
+                });
+              }
             }
           }
         }
@@ -90,7 +99,7 @@ export function useContratosRealtime() {
       supabase.removeChannel(channel);
       supabase.removeChannel(vistoriasChannel);
     };
-  }, [queryClient]);
+  }, [queryClient, profile?.id]);
 }
 
 /**

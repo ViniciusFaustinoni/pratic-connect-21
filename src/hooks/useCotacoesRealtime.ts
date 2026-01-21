@@ -85,6 +85,7 @@ export function useCotacoesRealtime() {
         }
       )
       // Escutar mudanças em contratos (afeta etapa da venda na cotação)
+      // NOTA: Toasts de contrato são gerenciados pelo useContratosRealtime (apenas para vendedor responsável)
       .on(
         'postgres_changes',
         {
@@ -99,19 +100,6 @@ export function useCotacoesRealtime() {
           queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
           queryClient.invalidateQueries({ queryKey: ['contratos'] });
           queryClient.invalidateQueries({ queryKey: ['ativacoes'] });
-          
-          // Toast para contrato assinado
-          if (payload.eventType === 'UPDATE') {
-            const newData = payload.new as { status?: string; numero?: string };
-            const oldData = payload.old as { status?: string };
-            
-            if (newData.status === 'assinado' && oldData?.status !== 'assinado') {
-              toast.success('🎉 Contrato assinado!', {
-                description: `Contrato ${newData.numero || ''} foi assinado`,
-                duration: 8000,
-              });
-            }
-          }
         }
       )
       // Escutar mudanças em instalações (afeta etapa instalacao_agendada/vistoria_agendada)
