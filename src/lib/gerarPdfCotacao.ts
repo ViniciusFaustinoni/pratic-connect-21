@@ -17,6 +17,7 @@ export interface CotacaoParaPdf {
   codigo_fipe: string | null;
   created_at: string;
   validade_dias: number | null;
+  dia_vencimento?: number | null; // Dia do vencimento (5, 10, 15, 20, 25, 30)
   // Dados diretos da cotação (prioridade)
   nome_solicitante?: string | null;
   telefone1_solicitante?: string | null;
@@ -58,6 +59,7 @@ export interface CotacaoComparativaParaPdf {
   numero: string | null;
   created_at: string;
   validade_dias: number | null;
+  dia_vencimento?: number | null; // Dia do vencimento (5, 10, 15, 20, 25, 30)
   nome_solicitante?: string | null;
   telefone1_solicitante?: string | null;
   email_solicitante?: string | null;
@@ -97,7 +99,8 @@ const LINE_HEIGHT = 7;       // Altura de linha de texto (era 8)
 // ============= FUNÇÃO DE TRUNCAMENTO =============
 const truncateText = (text: string | null | undefined, maxLength: number): string => {
   if (!text) return '—';
-  return text.length > maxLength ? text.substring(0, maxLength - 2) + '...' : text;
+  // Aumentado para evitar cortes prematuros
+  return text.length > maxLength ? text.substring(0, maxLength - 1) + '…' : text;
 };
 
 // ============= Funções auxiliares =============
@@ -410,12 +413,12 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
   doc.setFont('helvetica', 'normal');
   doc.text('Marca:', col1X, y);
   doc.setTextColor(textLight.r, textLight.g, textLight.b);
-  doc.text(truncateText(cotacao.veiculo_marca, 22), col1ValueX, y);
+  doc.text(truncateText(cotacao.veiculo_marca, 26), col1ValueX, y);
 
   doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
   doc.text('Modelo:', col2X, y);
   doc.setTextColor(textLight.r, textLight.g, textLight.b);
-  doc.text(truncateText(cotacao.veiculo_modelo, 25), col2ValueX, y);
+  doc.text(truncateText(cotacao.veiculo_modelo, 30), col2ValueX, y);
 
   y += LINE_HEIGHT;
 
@@ -467,12 +470,12 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
   doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
   doc.setFontSize(24);
   doc.setFont('helvetica', 'bold');
-  doc.text(formatCurrency(cotacao.valor_total_mensal), pageWidth - margin - 15, y + 20, { align: 'right' });
+  doc.text(formatCurrency(cotacao.valor_total_mensal), pageWidth - margin - 15, y + 18, { align: 'right' });
   
   doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
-  doc.setFontSize(10);
+  doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
-  doc.text('/mês', pageWidth - margin - 15, y + 32, { align: 'right' });
+  doc.text('valor médio mensal', pageWidth - margin - 15, y + 28, { align: 'right' });
 
   y += cardHeight + INNER_GAP;
 
@@ -539,7 +542,7 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
   const labelCol = margin + 5;
   const valueCol = pageWidth - margin - 5;
 
-  // Card: MENSALIDADE TOTAL (destaque azul)
+  // Card: VALOR MÉDIO MENSAL (destaque azul)
   doc.setFillColor(brandBlue.r, brandBlue.g, brandBlue.b);
   doc.roundedRect(margin, y, contentWidth, 18, 3, 3, 'F');
   doc.setDrawColor(glowBlue.r, glowBlue.g, glowBlue.b);
@@ -549,9 +552,9 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
-  doc.text('MENSALIDADE', labelCol, y + 11);
+  doc.text('VALOR MÉDIO MENSAL', labelCol, y + 11);
   doc.setFontSize(14);
-  doc.text(formatCurrency(cotacao.valor_total_mensal) + '/mês', valueCol, y + 11, { align: 'right' });
+  doc.text(formatCurrency(cotacao.valor_total_mensal), valueCol, y + 11, { align: 'right' });
 
   y += 24;
 
@@ -566,16 +569,42 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
 
   y += 12;
 
-  // Primeiro pagamento (destaque verde)
+  // Primeiro pagamento (destaque verde) com dia de vencimento
   const primeiroPagamento = (cotacao.valor_adesao || 0) + (cotacao.valor_total_mensal || 0);
+  const diaVencimento = cotacao.dia_vencimento || 10;
+  
   doc.setFillColor(successGreen.r, successGreen.g, successGreen.b);
-  doc.roundedRect(margin, y, contentWidth, 18, 3, 3, 'F');
+  doc.roundedRect(margin, y, contentWidth, 24, 3, 3, 'F');
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
-  doc.text('PRIMEIRO PAGAMENTO', labelCol, y + 11);
-  doc.setFontSize(14);
-  doc.text(formatCurrency(primeiroPagamento), valueCol, y + 11, { align: 'right' });
+  doc.text('PRIMEIRO PAGAMENTO', labelCol, y + 10);
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Vencimento: dia ${diaVencimento}`, labelCol, y + 18);
+  doc.setFontSize(16);
+  doc.setFont('helvetica', 'bold');
+  doc.text(formatCurrency(primeiroPagamento), valueCol, y + 14, { align: 'right' });
+
+  y += 30;
+
+  // ============= MENSAGEM INSTITUCIONAL =============
+  doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
+  doc.roundedRect(margin, y, contentWidth, 26, 3, 3, 'F');
+  
+  // Borda gradiente no topo
+  drawGradientRect(doc, margin, y, contentWidth, 2, glowBlue, brandRed, 40);
+  
+  doc.setTextColor(textLight.r, textLight.g, textLight.b);
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'italic');
+  doc.text('Será um prazer ter você como nosso associado.', pageWidth / 2, y + 10, { align: 'center' });
+  doc.text('Estaremos aqui para o que precisar.', pageWidth / 2, y + 17, { align: 'center' });
+  
+  doc.setTextColor(glowBlue.r, glowBlue.g, glowBlue.b);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Conte com a Praticcar 💙❤️', pageWidth / 2, y + 24, { align: 'center' });
 
   // ============= RODAPÉ PREMIUM =============
   const footerY = pageHeight - 30;
@@ -848,9 +877,9 @@ const desenharPaginaCapa = (
     innerY += 4;
     
     doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
-    doc.setFontSize(6);
+    doc.setFontSize(5);
     doc.setFont('helvetica', 'normal');
-    doc.text('/mês', centerX, innerY, { align: 'center' });
+    doc.text('médio mensal', centerX, innerY, { align: 'center' });
     innerY += 7;
 
     // Badge FIPE
@@ -879,7 +908,7 @@ const desenharPaginaCapa = (
   doc.setFontSize(7);
   doc.setFont('helvetica', 'bold');
   doc.text('ADESÃO', tabelaX + 5, y + 8);
-  doc.text('MENSAL', tabelaX + 5, y + 15);
+  doc.text('MÉDIO MENSAL', tabelaX + 5, y + 15);
   doc.text('1º PAGAMENTO', tabelaX + 5, y + 22);
 
   // Valores por plano (max 3 por linha)
@@ -915,7 +944,7 @@ const desenharPaginaCapa = (
     doc.setFontSize(7);
     doc.setFont('helvetica', 'bold');
     doc.text('ADESÃO', tabelaX2 + 5, y + 8);
-    doc.text('MENSAL', tabelaX2 + 5, y + 15);
+    doc.text('MÉDIO MENSAL', tabelaX2 + 5, y + 15);
     doc.text('1º PAGAMENTO', tabelaX2 + 5, y + 22);
 
     const valorWidth2 = (tabelaWidth2 - labelWidth) / planosRestantes.length;
@@ -1192,7 +1221,7 @@ const desenharPaginaDetalhesPlano = (
   const labelCol = margin + 8;
   const valueCol = pageWidth - margin - 8;
 
-  // Card: MENSALIDADE (destaque azul)
+  // Card: VALOR MÉDIO MENSAL (destaque azul)
   doc.setFillColor(brandBlue.r, brandBlue.g, brandBlue.b);
   doc.roundedRect(margin, y, contentWidth, 20, 3, 3, 'F');
   doc.setDrawColor(glowBlue.r, glowBlue.g, glowBlue.b);
@@ -1202,9 +1231,9 @@ const desenharPaginaDetalhesPlano = (
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
-  doc.text('MENSALIDADE', labelCol, y + 13);
+  doc.text('VALOR MÉDIO MENSAL', labelCol, y + 13);
   doc.setFontSize(16);
-  doc.text(formatCurrency(plano.valorMensal) + '/mês', valueCol, y + 13, { align: 'right' });
+  doc.text(formatCurrency(plano.valorMensal), valueCol, y + 13, { align: 'right' });
   y += 26;
 
   // Taxa de adesão
@@ -1349,7 +1378,7 @@ const desenharPaginaComparativa = (
 
   // Linhas de valores
   const linhasValores = [
-    { label: 'MENSALIDADE', key: 'valorMensal', highlight: false },
+    { label: 'VALOR MÉDIO MENSAL', key: 'valorMensal', highlight: false },
     { label: 'TAXA DE ADESÃO', key: 'valorAdesao', highlight: false },
     { label: '1º PAGAMENTO', key: 'primeiroPagamento', highlight: true },
   ];
