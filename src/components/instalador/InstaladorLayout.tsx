@@ -131,8 +131,10 @@ export function InstaladorLayout() {
           </header>
 
           {/* Conteúdo Principal */}
-          <main className="flex-1 pb-20">
-            <Outlet />
+          <main className="flex-1 overflow-hidden pb-16">
+            <div className="h-full overflow-y-auto">
+              <Outlet />
+            </div>
           </main>
 
           {/* Bottom Navigation */}

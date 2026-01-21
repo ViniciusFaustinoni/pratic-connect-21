@@ -24,7 +24,7 @@ export function MapaRotasLegenda({
   if (rotas.length === 0) return null;
 
   return (
-    <div className="absolute top-4 right-4 z-[1000] bg-background/95 backdrop-blur-sm rounded-lg shadow-lg border max-w-[220px]">
+    <div className="absolute top-4 right-4 z-40 bg-background/95 backdrop-blur-sm rounded-lg shadow-lg border max-w-[220px]">
       <div className="p-3 border-b">
         <h4 className="font-semibold text-sm flex items-center gap-2">
           <Users className="h-4 w-4 text-primary" />

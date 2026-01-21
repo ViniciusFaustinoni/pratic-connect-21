@@ -94,7 +94,7 @@ function UserLocationButton() {
     <Button
       size="icon"
       variant="secondary"
-      className="absolute top-4 right-4 z-[1000] h-10 w-10 rounded-full shadow-lg"
+      className="absolute top-4 right-4 z-40 h-10 w-10 rounded-full shadow-lg"
       onClick={handleLocate}
       disabled={isLocating}
     >
@@ -372,7 +372,7 @@ export function MapaMobileContent() {
       </MapContainer>
 
       {/* Controles de data flutuantes no topo */}
-      <div className="absolute top-4 left-4 right-16 z-[1000]">
+      <div className="absolute top-4 left-4 right-16 z-40">
         <div className="bg-background/95 backdrop-blur-sm rounded-lg shadow-lg border p-2">
           <div className="flex items-center gap-1">
             <Button
@@ -412,7 +412,7 @@ export function MapaMobileContent() {
       <Drawer open={drawerOpen} onOpenChange={setDrawerOpen}>
         <DrawerTrigger asChild>
           <Button
-            className="absolute bottom-4 left-4 right-4 z-[1000] shadow-lg"
+            className="absolute bottom-4 left-4 right-4 z-40 shadow-lg"
             size="lg"
           >
             <List className="h-4 w-4 mr-2" />
