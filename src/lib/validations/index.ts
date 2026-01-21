@@ -177,6 +177,12 @@ export const cotacaoSchema = z.object({
   valor_total_mensal: z.number().min(0),
   valor_assistencia: z.number().min(0).optional(),
   validade_dias: z.number().min(1).max(30).default(7),
+  // Dia de vencimento da mensalidade (5, 10, 15, 20, 25 ou 30)
+  dia_vencimento: z.number()
+    .int()
+    .refine((val) => [5, 10, 15, 20, 25, 30].includes(val), 'Dia de vencimento inválido')
+    .optional()
+    .nullable(),
   // Campos do veículo
   veiculo_marca: z.string().optional(),
   veiculo_modelo: z.string().optional(),

@@ -4031,6 +4031,7 @@ export type Database = {
           created_at: string
           dados_extras: Json | null
           desagio_aplicado: number | null
+          dia_vencimento: number | null
           doc_cnh_frente: string | null
           doc_cnh_verso: string | null
           doc_comprovante: string | null
@@ -4119,6 +4120,7 @@ export type Database = {
           created_at?: string
           dados_extras?: Json | null
           desagio_aplicado?: number | null
+          dia_vencimento?: number | null
           doc_cnh_frente?: string | null
           doc_cnh_verso?: string | null
           doc_comprovante?: string | null
@@ -4207,6 +4209,7 @@ export type Database = {
           created_at?: string
           dados_extras?: Json | null
           desagio_aplicado?: number | null
+          dia_vencimento?: number | null
           doc_cnh_frente?: string | null
           doc_cnh_verso?: string | null
           doc_comprovante?: string | null

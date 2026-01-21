@@ -4,7 +4,7 @@ import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Loader2, Car, Search, CheckCircle2, Shield, Check, AlertCircle, Copy, MessageCircle, Zap, User, Link, UserCheck, Phone, Mail, AlertTriangle, Info, MapPin, HelpCircle, X } from 'lucide-react';
+import { Loader2, Car, Search, CheckCircle2, Shield, Check, AlertCircle, Copy, MessageCircle, Zap, User, Link, UserCheck, Phone, Mail, AlertTriangle, Info, MapPin, HelpCircle, X, Calendar } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Button } from '@/components/ui/button';
@@ -186,6 +186,23 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   // Estado para região selecionada
   const [regiaoSelecionada, setRegiaoSelecionada] = useState<string>('');
   
+  // Estado para dia de vencimento
+  const [diaVencimento, setDiaVencimento] = useState<number | null>(null);
+  
+  // Função para calcular opções de vencimento baseado no dia atual
+  const opcoesVencimento = useMemo((): [number, number] => {
+    const hoje = new Date().getDate();
+    
+    if (hoje >= 30 || hoje <= 4) return [5, 10];
+    if (hoje >= 5 && hoje <= 9) return [10, 15];
+    if (hoje >= 10 && hoje <= 14) return [15, 20];
+    if (hoje >= 15 && hoje <= 19) return [20, 25];
+    if (hoje >= 20 && hoje <= 24) return [25, 30];
+    if (hoje >= 25 && hoje <= 29) return [30, 5];
+    
+    return [5, 10]; // fallback
+  }, []);
+  
   // Loading states
   const [loadingMarcas, setLoadingMarcas] = useState(false);
   const [loadingModelos, setLoadingModelos] = useState(false);
@@ -293,6 +310,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       setCategoria('nenhuma');
       setUsoVeiculo('particular');
       setRegiaoSelecionada('');
+      setDiaVencimento(null);
     }
   }, [open, leadId, form]);
 
@@ -778,6 +796,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         email_solicitante: emailAssociado.trim() || null,
         // Categoria do veículo
         categoria: categoria && categoria !== 'nenhuma' ? categoria : null,
+        // Dia de vencimento
+        dia_vencimento: diaVencimento,
         // Região selecionada
         regiao: regiaoSelecionada || null,
         // Planos para comparação (múltiplos planos selecionados)
@@ -850,6 +870,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       setCategoria('nenhuma');
       setUsoVeiculo('particular');
       setRegiaoSelecionada('');
+      setDiaVencimento(null);
       
       // Fechar modal
       onOpenChange(false);
@@ -932,6 +953,50 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                     onChange={(e) => setEmailAssociado(e.target.value)}
                   />
                 </div>
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* BLOCO: DATA DE VENCIMENTO */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-primary" />
+                Data de Vencimento
+              </h3>
+              
+              <p className="text-xs text-muted-foreground">
+                Selecione o dia de vencimento das mensalidades
+              </p>
+              
+              <div className="grid grid-cols-2 gap-3">
+                {opcoesVencimento.map((dia) => (
+                  <div
+                    key={dia}
+                    onClick={() => setDiaVencimento(dia)}
+                    className={cn(
+                      "relative cursor-pointer rounded-lg border-2 p-4 transition-all hover:shadow-md text-center",
+                      diaVencimento === dia
+                        ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+                        : "border-border hover:border-primary/50"
+                    )}
+                  >
+                    <p className={cn(
+                      "text-2xl font-bold",
+                      diaVencimento === dia && "text-primary"
+                    )}>
+                      {String(dia).padStart(2, '0')}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Todo dia {dia}
+                    </p>
+                    {diaVencimento === dia && (
+                      <div className="absolute top-2 right-2">
+                        <CheckCircle2 className="h-5 w-5 text-primary" />
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
 
