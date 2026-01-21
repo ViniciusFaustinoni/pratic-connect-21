@@ -277,39 +277,28 @@ export function EtapaPagamentoCotacao({
     return () => clearInterval(interval);
   }, [etapaInterna, contratoId, cotacaoId, onPagamentoConfirmado]);
 
-  // Verificar pagamento manualmente
+  // Verificar pagamento manualmente - agora consulta diretamente no Asaas
   const verificarPagamento = async () => {
     if (!contratoId) return;
 
     try {
       setVerificando(true);
+      console.log('[EtapaPagamento] Verificando pagamento diretamente no Asaas...');
 
-      const { data, error } = await publicSupabase
-        .from('contratos')
-        .select('adesao_paga')
-        .eq('id', contratoId)
-        .maybeSingle();
+      // Chamar Edge Function que consulta a API do Asaas
+      const { data: verificacao, error } = await publicSupabase.functions.invoke('asaas-verificar-pagamento', {
+        body: { contratoId }
+      });
 
-      if (error) throw error;
+      if (error) {
+        console.error('[EtapaPagamento] Erro na verificação:', error);
+        throw error;
+      }
 
-      if (data?.adesao_paga) {
+      console.log('[EtapaPagamento] Resultado da verificação:', verificacao);
+
+      if (verificacao?.pago) {
         toast.success('Pagamento confirmado!');
-        
-        await publicSupabase
-          .from('cotacoes')
-          .update({ 
-            status_contratacao: 'pagamento_ok',
-            status: 'aceita' 
-          })
-          .eq('id', cotacaoId);
-
-        // Atualizar status da cobrança para RECEIVED
-        await publicSupabase
-          .from('asaas_cobrancas')
-          .update({ status: 'RECEIVED' })
-          .eq('contrato_id', contratoId)
-          .eq('tipo', 'adesao')
-          .in('status', ['PENDING', 'OVERDUE']);
 
         // Criar instalação após pagamento confirmado
         try {
@@ -328,7 +317,7 @@ export function EtapaPagamentoCotacao({
         await new Promise(resolve => setTimeout(resolve, 500));
         onPagamentoConfirmado();
       } else {
-        toast.info('Pagamento ainda não identificado. Aguarde alguns minutos.');
+        toast.info(`Pagamento ainda não identificado (Status: ${verificacao?.status || 'PENDING'}). Aguarde alguns minutos.`);
       }
     } catch (error) {
       console.error('[EtapaPagamento] Erro ao verificar:', error);

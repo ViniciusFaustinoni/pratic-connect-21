@@ -152,3 +152,6 @@ verify_jwt = false
 
 [functions.criar-instalacao-pos-pagamento]
 verify_jwt = false
+
+[functions.asaas-verificar-pagamento]
+verify_jwt = false
