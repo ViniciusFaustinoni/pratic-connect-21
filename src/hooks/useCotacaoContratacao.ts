@@ -71,20 +71,14 @@ export function useCotacaoContratacao(token: string | undefined) {
     queryFn: async (): Promise<CotacaoContratacao> => {
       if (!token) throw new Error('Token não informado');
 
+      // Query simplificada - sem JOINs com contratos/associados que têm RLS restritivo
+      // O contrato é buscado separadamente via contratoFallback abaixo
       const { data, error } = await publicSupabase
         .from('cotacoes')
         .select(`
           *,
           planos:planos!plano_id(id, nome, codigo, coberturas, valor_adesao),
-          plano_escolhido:planos!plano_escolhido_id(id, nome, codigo, coberturas, valor_adesao),
-          contrato:contratos!contratos_cotacao_id_fkey(
-            id,
-            associado_id,
-            associados:associados!fk_contratos_associado(
-              id,
-              status
-            )
-          )
+          plano_escolhido:planos!plano_escolhido_id(id, nome, codigo, coberturas, valor_adesao)
         `)
         .eq('token_publico', token)
         .maybeSingle();
