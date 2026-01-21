@@ -87,6 +87,9 @@ verify_jwt = false
 [functions.historico-posicoes]
 verify_jwt = false
 
+[functions.criar-chamado-assistencia]
+verify_jwt = false
+
 [functions.rastreador-redefinir-senha]
 verify_jwt = false
 

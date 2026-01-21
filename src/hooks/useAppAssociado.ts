@@ -11,14 +11,7 @@ import type {
   StatusBoleto,
 } from '@/types/app-associado';
 
-// ============================================
-// HELPER: Gerar protocolo único
-// ============================================
-function gerarProtocolo(): string {
-  const data = new Date();
-  const seq = Math.floor(Math.random() * 10000);
-  return `ASS-${data.getFullYear()}${String(data.getMonth() + 1).padStart(2, '0')}${String(data.getDate()).padStart(2, '0')}-${String(seq).padStart(4, '0')}`;
-}
+// Protocolo agora é gerado pela edge function
 
 // ============================================
 // HOOK: DADOS DO ASSOCIADO LOGADO
@@ -273,51 +266,45 @@ export function useAssistenciaAtiva() {
 }
 
 // ============================================
-// HOOK: SOLICITAR ASSISTÊNCIA
+// HOOK: SOLICITAR ASSISTÊNCIA (via Edge Function)
 // ============================================
 export function useSolicitarAssistencia() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (payload: SolicitarAssistenciaPayload) => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Não autenticado');
-
-      const { data: assoc } = await supabase
-        .from('associados')
-        .select('id')
-        .eq('user_id', user.id)
-        .single();
-
-      if (!assoc) throw new Error('Associado não encontrado');
-
-      const { data, error } = await supabase
-        .from('chamados_assistencia')
-        .insert({
-          associado_id: assoc.id,
+      const { data, error } = await supabase.functions.invoke('criar-chamado-assistencia', {
+        body: {
           veiculo_id: payload.veiculo_id,
-          tipo_servico: payload.tipo,
-          status: 'aberto',
-          protocolo: gerarProtocolo(),
-          canal: 'app',
-          origem_endereco: payload.endereco,
-          origem_lat: payload.latitude,
-          origem_lng: payload.longitude,
+          tipo_assistencia: payload.tipo,
           descricao: payload.descricao,
-          data_abertura: new Date().toISOString(),
-        })
-        .select()
-        .single();
+          latitude: payload.latitude,
+          longitude: payload.longitude,
+          endereco: payload.endereco,
+        }
+      });
 
       if (error) throw error;
+      
+      if (!data.success) {
+        // Se já existe chamado aberto, retornar erro específico
+        if (data.chamado_existente) {
+          throw new Error(`Você já possui o chamado ${data.chamado_existente.protocolo} em aberto`);
+        }
+        throw new Error(data.error || 'Erro ao criar chamado');
+      }
+
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['app-assistencias'] });
       queryClient.invalidateQueries({ queryKey: ['app-assistencia-ativa'] });
-      toast.success('Assistência solicitada! Aguarde contato.');
+      queryClient.invalidateQueries({ queryKey: ['meu-chamado-aberto'] });
+      toast.success(data.mensagem_confirmacao || 'Assistência solicitada! Aguarde contato.');
     },
-    onError: () => toast.error('Erro ao solicitar assistência'),
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Erro ao solicitar assistência');
+    },
   });
 }
 
