@@ -335,21 +335,7 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
   doc.setFont('helvetica', 'normal');
   doc.text('Proteção Veicular', titleX, 36);
 
-  // Badge da cotação (canto direito)
-  const cotacaoNumero = cotacao.numero || 'N/A';
-  doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
-  doc.roundedRect(pageWidth - margin - 50, 12, 50, 16, 3, 3, 'F');
-  doc.setDrawColor(glowBlue.r, glowBlue.g, glowBlue.b);
-  doc.setLineWidth(0.5);
-  doc.roundedRect(pageWidth - margin - 50, 12, 50, 16, 3, 3, 'S');
-  
-  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
-  doc.setFontSize(7);
-  doc.text('COTAÇÃO', pageWidth - margin - 25, 18, { align: 'center' });
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'bold');
-  doc.text(`#${cotacaoNumero}`, pageWidth - margin - 25, 25, { align: 'center' });
+  // Removido: Badge da cotação não é mais exibido no PDF
 
   y = headerHeight + SECTION_GAP;
 
@@ -721,19 +707,7 @@ const desenharPaginaCapa = (
   doc.setFont('helvetica', 'bold');
   doc.text('COMPARATIVO DE PLANOS', titleX, 42);
 
-  // Badge cotação
-  doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
-  doc.roundedRect(pageWidth - margin - 45, 10, 45, 14, 3, 3, 'F');
-  doc.setDrawColor(glowBlue.r, glowBlue.g, glowBlue.b);
-  doc.setLineWidth(0.5);
-  doc.roundedRect(pageWidth - margin - 45, 10, 45, 14, 3, 3, 'S');
-  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
-  doc.setFontSize(6);
-  doc.text('COTAÇÃO', pageWidth - margin - 22, 16, { align: 'center' });
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'bold');
-  doc.text(`#${cotacao.numero || 'N/A'}`, pageWidth - margin - 22, 22, { align: 'center' });
+  // Removido: Badge cotação não é mais exibido
 
   y = headerHeight + 6;
 
@@ -954,11 +928,7 @@ const desenharPaginaDetalhesPlano = (
   doc.setFont('helvetica', 'bold');
   doc.text(truncateText(plano.nome.toUpperCase(), 28), margin + 65, 18);
 
-  // Cotação no canto
-  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
-  doc.setFontSize(7);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`#${cotacao.numero || 'N/A'}`, pageWidth - margin, 12, { align: 'right' });
+  // Removido: Código da cotação não é mais exibido
 
   // Dados do veículo resumido
   doc.setTextColor(textLight.r, textLight.g, textLight.b);
@@ -969,37 +939,108 @@ const desenharPaginaDetalhesPlano = (
 
   y = headerHeight + 8;
 
-  // Card principal do valor
-  const valorCardHeight = 55;
+  // Card principal do plano - NOVO LAYOUT
+  const valorCardHeight = 85;
   drawPremiumCard(doc, margin, y, contentWidth, valorCardHeight, { isRecommended: true, hasGlow: true });
 
-  // Valor mensal grande
-  doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
-  doc.setFontSize(36);
-  doc.setFont('helvetica', 'bold');
-  doc.text(formatCurrency(plano.valorMensal), pageWidth / 2, y + 28, { align: 'center' });
-  
-  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'normal');
-  doc.text('mensalidade', pageWidth / 2, y + 42, { align: 'center' });
+  let cardY = y + 10;
 
-  // Badge de cobertura FIPE
+  // Linha 1: Nome do plano + Badge adicional mensal
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(16);
+  doc.setFont('helvetica', 'bold');
+  doc.text(truncateText(plano.nome.toUpperCase(), 26), margin + 10, cardY);
+
+  // Badge adicional mensal (se existir)
+  if (plano.adicionalMensal && plano.adicionalMensal > 0) {
+    const adicionalText = `+${formatCurrency(plano.adicionalMensal)}/mês`;
+    const adicionalWidth = adicionalText.length * 3.5 + 10;
+    doc.setFillColor(successGreen.r, successGreen.g, successGreen.b);
+    doc.roundedRect(pageWidth - margin - adicionalWidth - 10, cardY - 6, adicionalWidth, 12, 2, 2, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(8);
+    doc.text(adicionalText, pageWidth - margin - adicionalWidth / 2 - 10, cardY, { align: 'center' });
+  }
+
+  cardY += 12;
+
+  // Linha 2: Tags horizontais (100% FIPE + > ANO)
+  let tagX = margin + 10;
+  
+  // Tag cobertura FIPE
+  const fipeText = `${plano.coberturaFipe}% FIPE`;
+  const fipeWidth = fipeText.length * 3 + 12;
   doc.setFillColor(glowBlue.r, glowBlue.g, glowBlue.b);
-  doc.roundedRect(pageWidth - margin - 60, y + 8, 55, 14, 2, 2, 'F');
+  doc.roundedRect(tagX, cardY - 4, fipeWidth, 11, 2, 2, 'F');
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(8);
   doc.setFont('helvetica', 'bold');
-  doc.text(`${plano.coberturaFipe}% FIPE`, pageWidth - margin - 32.5, y + 17, { align: 'center' });
+  doc.text(fipeText, tagX + fipeWidth / 2, cardY + 3, { align: 'center' });
+  tagX += fipeWidth + 6;
 
-  // Badge de cota
-  doc.setFillColor(premiumCardLight.r, premiumCardLight.g, premiumCardLight.b);
-  doc.roundedRect(margin + 5, y + 8, 40, 14, 2, 2, 'F');
-  doc.setTextColor(textLight.r, textLight.g, textLight.b);
-  doc.setFontSize(7);
-  doc.text(plano.cota || 'COTA', margin + 25, y + 17, { align: 'center' });
+  // Tag ano mínimo (se existir)
+  if (plano.anoMinimo) {
+    const anoText = `> ${plano.anoMinimo}`;
+    const anoWidth = anoText.length * 3.5 + 10;
+    doc.setFillColor(premiumCardLight.r, premiumCardLight.g, premiumCardLight.b);
+    doc.roundedRect(tagX, cardY - 4, anoWidth, 11, 2, 2, 'F');
+    doc.setTextColor(textLight.r, textLight.g, textLight.b);
+    doc.setFontSize(8);
+    doc.text(anoText, tagX + anoWidth / 2, cardY + 3, { align: 'center' });
+  }
 
-  y += valorCardHeight + 10;
+  cardY += 18;
+
+  // Linha 3: Cota Passeio
+  if (plano.cotaPercentual && plano.cotaMinima) {
+    doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Cota Passeio:', margin + 10, cardY);
+    
+    doc.setTextColor(textLight.r, textLight.g, textLight.b);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`${plano.cotaPercentual}% (mín ${formatCurrency(plano.cotaMinima)})`, margin + 45, cardY);
+    cardY += 12;
+  }
+
+  // Linha 4: Com Deságio (verde, se existir)
+  if (plano.cotaDesagio && plano.cotaMinimaDesagio) {
+    doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Com Deságio: ${plano.cotaDesagio}% (mín ${formatCurrency(plano.cotaMinimaDesagio)})`, margin + 10, cardY);
+    cardY += 12;
+  }
+
+  // Valor mensal grande - lado direito do card
+  doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
+  doc.setFontSize(28);
+  doc.setFont('helvetica', 'bold');
+  doc.text(formatCurrency(plano.valorMensal), pageWidth - margin - 10, y + 32, { align: 'right' });
+  
+  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.text('/mês', pageWidth - margin - 10, y + 44, { align: 'right' });
+
+  y += valorCardHeight + 8;
+
+  // Card de Alerta de Deságio (amarelo, se existir)
+  if (plano.alertaDesagio) {
+    const alertaHeight = 18;
+    doc.setFillColor(warningYellow.r, warningYellow.g, warningYellow.b);
+    doc.roundedRect(margin, y, contentWidth, alertaHeight, 3, 3, 'F');
+    
+    doc.setTextColor(30, 30, 30);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.text('⚠', margin + 10, y + 11);
+    doc.text(truncateText(plano.alertaDesagio, 70), margin + 22, y + 11);
+    
+    y += alertaHeight + 8;
+  }
 
   // Seção de coberturas
   drawPremiumSectionHeader(doc, margin, y, contentWidth, 'COBERTURAS INCLUÍDAS');
