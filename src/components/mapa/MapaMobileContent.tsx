@@ -149,9 +149,13 @@ export function MapaMobileContent() {
   const vistoriasFiltradas = useMemo(() => {
     if (!vistorias) return [];
 
-    // Normalizar data do filtro para meia-noite local
+    // Data do filtro selecionado (normalizada para meia-noite)
     const filtroNormalizado = new Date(filtroData);
     filtroNormalizado.setHours(0, 0, 0, 0);
+
+    // Data de HOJE (normalizada para meia-noite)
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
 
     return vistorias.filter((v) => {
       // Sem data agendada = não mostrar
@@ -166,17 +170,20 @@ export function MapaMobileContent() {
         return true;
       }
       
-      // Serviço de data anterior
-      if (dataVistoria < filtroNormalizado) {
+      // Serviço de data anterior a HOJE (não ao filtro!)
+      // Só é atrasado se a data agendada já passou em relação a HOJE
+      if (dataVistoria < hoje) {
         // Se status é finalizado = NÃO MOSTRAR
         if (statusFinalizados.includes(v.status)) {
           return false;
         }
-        // Se status indica pendente (agendada, em_rota, etc) = MOSTRAR como atrasado
-        return true;
+        // Se está atrasado, só mostra se o filtro é de HOJE ou futuro
+        if (filtroNormalizado >= hoje) {
+          return true;
+        }
       }
       
-      // Serviço de data futura = NÃO MOSTRAR
+      // Caso contrário = NÃO MOSTRAR
       return false;
 
       // Filtro por busca
@@ -246,20 +253,19 @@ export function MapaMobileContent() {
     window.open(`https://www.google.com/maps?q=${lat},${lng}`, "_blank");
   };
 
-  // Verificar se é atrasada
+  // Verificar se é atrasada (compara com HOJE, não com o filtro)
   const isAtrasada = (v: VistoriaMapa) => {
     if (!v.data_agendada) return false;
     if (statusFinalizados.includes(v.status)) return false;
     
-    // Normalizar data da vistoria para meia-noite local (funciona com ISO e "YYYY-MM-DD HH:mm")
-    const dataAgendadaStr = v.data_agendada.slice(0, 10); // "2026-01-23"
+    const dataAgendadaStr = v.data_agendada.slice(0, 10);
     const dataVistoria = new Date(dataAgendadaStr + 'T00:00:00');
     
-    // Normalizar data do filtro para meia-noite local
-    const filtroNormalizado = new Date(filtroData);
-    filtroNormalizado.setHours(0, 0, 0, 0);
+    // Comparar com HOJE, não com o filtro
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
     
-    return dataVistoria < filtroNormalizado;
+    return dataVistoria < hoje;
   };
 
   const centroInicial: [number, number] = [-22.9068, -43.1729]; // Rio de Janeiro
