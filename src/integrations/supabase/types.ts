@@ -12245,6 +12245,58 @@ export type Database = {
           },
         ]
       }
+      sinistro_mensagens: {
+        Row: {
+          created_at: string | null
+          id: string
+          lida: boolean | null
+          mensagem: string
+          remetente_id: string | null
+          remetente_tipo: string
+          sinistro_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          lida?: boolean | null
+          mensagem: string
+          remetente_id?: string | null
+          remetente_tipo: string
+          sinistro_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          lida?: boolean | null
+          mensagem?: string
+          remetente_id?: string | null
+          remetente_tipo?: string
+          sinistro_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sinistro_mensagens_remetente_id_fkey"
+            columns: ["remetente_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sinistro_mensagens_remetente_id_fkey"
+            columns: ["remetente_id"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "sinistro_mensagens_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "sinistros"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sinistros: {
         Row: {
           analista_id: string | null
