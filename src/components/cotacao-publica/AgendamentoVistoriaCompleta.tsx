@@ -15,9 +15,10 @@ import { Badge } from '@/components/ui/badge';
 interface AgendamentoVistoriaCompletaProps {
   cotacaoId: string;
   onConfirmar: () => void;
+  tipoVistoria?: 'autovistoria' | 'agendada';
 }
 
-export function AgendamentoVistoriaCompleta({ cotacaoId, onConfirmar }: AgendamentoVistoriaCompletaProps) {
+export function AgendamentoVistoriaCompleta({ cotacaoId, onConfirmar, tipoVistoria }: AgendamentoVistoriaCompletaProps) {
   const [dataSelecionada, setDataSelecionada] = useState<Date | null>(null);
   const [horarioSelecionado, setHorarioSelecionado] = useState<string | null>(null);
   
@@ -127,27 +128,50 @@ export function AgendamentoVistoriaCompleta({ cotacaoId, onConfirmar }: Agendame
   
   return (
     <div className="space-y-6">
-      {/* Banner de cobertura parcial ativa */}
-      <Card className="border-success/30 bg-success/5 backdrop-blur-xl">
-        <CardContent className="py-6">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-full bg-success/10 flex items-center justify-center flex-shrink-0">
-              <Shield className="h-7 w-7 text-success" />
+      {/* Banner de cobertura - só mostra cobertura ativa se fez autovistoria */}
+      {tipoVistoria === 'autovistoria' ? (
+        <Card className="border-success/30 bg-success/5 backdrop-blur-xl">
+          <CardContent className="py-6">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-full bg-success/10 flex items-center justify-center flex-shrink-0">
+                <Shield className="h-7 w-7 text-success" />
+              </div>
+              <div>
+                <Badge className="bg-success/20 text-success border-success/30 mb-1">
+                  Cobertura Ativa
+                </Badge>
+                <h3 className="text-lg font-semibold text-foreground">
+                  Roubo e Furto
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  Seu veículo já está protegido contra roubo e furto!
+                </p>
+              </div>
             </div>
-            <div>
-              <Badge className="bg-success/20 text-success border-success/30 mb-1">
-                Cobertura Ativa
-              </Badge>
-              <h3 className="text-lg font-semibold text-foreground">
-                Roubo e Furto
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                Seu veículo já está protegido contra roubo e furto!
-              </p>
+          </CardContent>
+        </Card>
+      ) : tipoVistoria === 'agendada' ? (
+        <Card className="border-amber-500/30 bg-amber-500/5 backdrop-blur-xl">
+          <CardContent className="py-6">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-full bg-amber-500/10 flex items-center justify-center flex-shrink-0">
+                <AlertTriangle className="h-7 w-7 text-amber-500" />
+              </div>
+              <div>
+                <Badge className="bg-amber-500/20 text-amber-600 border-amber-500/30 mb-1">
+                  Aguardando Vistoria
+                </Badge>
+                <h3 className="text-lg font-semibold text-foreground">
+                  Cobertura em Análise
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  A cobertura será ativada após a vistoria presencial ser aprovada.
+                </p>
+              </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      ) : null}
       
       {/* Formulário de agendamento */}
       <Card className="border-border/50 bg-card/80 backdrop-blur-xl">
