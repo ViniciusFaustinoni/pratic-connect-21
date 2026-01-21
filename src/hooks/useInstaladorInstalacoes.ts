@@ -36,6 +36,16 @@ export interface InstalacaoComRelacoes extends Instalacao {
   } | null;
 }
 
+// Helper para buscar IDs de rotas atribuídas ao instalador
+async function buscarRotasDoInstalador(instaladorId: string): Promise<string[]> {
+  const { data: rotasData } = await supabase
+    .from('rota_instaladores')
+    .select('rota_id')
+    .eq('instalador_id', instaladorId);
+  
+  return rotasData?.map(r => r.rota_id) || [];
+}
+
 // Hook para estatísticas do instalador
 export function useEstatisticasInstalador() {
   const { profile } = useAuth();
@@ -49,15 +59,23 @@ export function useEstatisticasInstalador() {
       const inicioSemana = format(startOfWeek(new Date(), { weekStartsOn: 0 }), 'yyyy-MM-dd');
       const inicioMes = format(startOfMonth(new Date()), 'yyyy-MM-dd');
 
+      // Buscar rotas onde o instalador está atribuído
+      const rotaIds = await buscarRotasDoInstalador(profile.id);
+      
+      // Filtro que considera atribuição direta OU via rota
+      const orFilter = rotaIds.length > 0 
+        ? `instalador_id.eq.${profile.id},rota_id.in.(${rotaIds.join(',')})` 
+        : `instalador_id.eq.${profile.id}`;
+
       const [hojeConcluidas, semanaConcluidas, mesConcluidas, pendentes] = await Promise.all([
         supabase.from('instalacoes').select('*', { count: 'exact', head: true })
-          .eq('instalador_id', profile.id).eq('data_agendada', hoje).eq('status', 'concluida'),
+          .or(orFilter).eq('data_agendada', hoje).eq('status', 'concluida'),
         supabase.from('instalacoes').select('*', { count: 'exact', head: true })
-          .eq('instalador_id', profile.id).gte('data_agendada', inicioSemana).eq('status', 'concluida'),
+          .or(orFilter).gte('data_agendada', inicioSemana).eq('status', 'concluida'),
         supabase.from('instalacoes').select('*', { count: 'exact', head: true })
-          .eq('instalador_id', profile.id).gte('data_agendada', inicioMes).eq('status', 'concluida'),
+          .or(orFilter).gte('data_agendada', inicioMes).eq('status', 'concluida'),
         supabase.from('instalacoes').select('*', { count: 'exact', head: true })
-          .eq('instalador_id', profile.id).in('status', ['agendada', 'em_andamento', 'em_rota']),
+          .or(orFilter).in('status', ['agendada', 'em_andamento', 'em_rota']),
       ]);
 
       return {
@@ -79,7 +97,17 @@ export function useInstaladorInstalacoes(data?: Date) {
   return useQuery({
     queryKey: ['instalador-instalacoes', profile?.id, dataFormatada],
     queryFn: async () => {
-      const { data: instalacoes, error } = await supabase
+      // 1. Buscar rotas onde o instalador está atribuído para a data
+      const { data: rotasDoInstalador } = await supabase
+        .from('rota_instaladores')
+        .select('rota_id, rotas!inner(id, data_rota)')
+        .eq('instalador_id', profile?.id)
+        .eq('rotas.data_rota', dataFormatada);
+      
+      const rotaIds = rotasDoInstalador?.map(r => r.rota_id) || [];
+      
+      // 2. Buscar instalações com atribuição direta OU via rota
+      let query = supabase
         .from('instalacoes')
         .select(`
           *,
@@ -87,11 +115,18 @@ export function useInstaladorInstalacoes(data?: Date) {
           veiculos (id, marca, modelo, placa, ano_modelo, cor),
           rastreadores (codigo, numero_serie)
         `)
-        .eq('instalador_id', profile?.id)
         .eq('data_agendada', dataFormatada)
         .in('status', ['agendada', 'em_rota', 'em_andamento', 'concluida'])
         .order('periodo', { ascending: true });
 
+      // Filtrar por: instalador_id direto OU rota_id nas rotas atribuídas
+      if (rotaIds.length > 0) {
+        query = query.or(`instalador_id.eq.${profile?.id},rota_id.in.(${rotaIds.join(',')})`);
+      } else {
+        query = query.eq('instalador_id', profile?.id);
+      }
+
+      const { data: instalacoes, error } = await query;
       if (error) throw error;
       return instalacoes as InstalacaoComRelacoes[];
     },
