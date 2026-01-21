@@ -252,6 +252,9 @@ export function EtapaPagamentoCotacao({
             .in('status', ['PENDING', 'OVERDUE']);
 
           setEtapaInterna('pago');
+          
+          // Pequeno delay para garantir que o banco propagou as alterações
+          await new Promise(resolve => setTimeout(resolve, 500));
           onPagamentoConfirmado();
         }
       } catch (error) {
@@ -297,6 +300,9 @@ export function EtapaPagamentoCotacao({
           .in('status', ['PENDING', 'OVERDUE']);
 
         setEtapaInterna('pago');
+        
+        // Pequeno delay para garantir que o banco propagou as alterações
+        await new Promise(resolve => setTimeout(resolve, 500));
         onPagamentoConfirmado();
       } else {
         toast.info('Pagamento ainda não identificado. Aguarde alguns minutos.');

@@ -427,7 +427,12 @@ export default function CotacaoContratacao() {
                     clienteNome={cotacao.nome_solicitante || ''}
                     clienteEmail={cotacao.email_solicitante || ''}
                     clienteCpf={cotacao.cliente_cpf || ''}
-                    onPagamentoConfirmado={() => setEtapaAtual(5)}
+                    onPagamentoConfirmado={async () => {
+                      // Invalidar e refetch para garantir dados atualizados na Etapa 5
+                      await queryClient.invalidateQueries({ queryKey: ['cotacao-contratacao', token] });
+                      await refetch();
+                      setEtapaAtual(5);
+                    }}
                     readOnly={isEtapaConcluida(4)}
                     tipoVistoria={cotacao.tipo_vistoria as 'autovistoria' | 'agendada'}
                     vistoriaAgendada={cotacao.vistoria_data_agendada ? {
