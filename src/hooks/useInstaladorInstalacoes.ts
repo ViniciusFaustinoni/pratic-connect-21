@@ -219,49 +219,38 @@ export function useAprovarVeiculo() {
     }) => {
       let rastreadorId: string | null = null;
 
-      // 1. Vincular/criar rastreador com o IMEI (status: estoque - aguardando análise)
+      // 1. Buscar rastreador existente pelo IMEI (deve estar no estoque)
       if (imeiRastreador) {
-        // Verificar se rastreador já existe pelo IMEI
         const { data: rastreadorExistente } = await supabase
           .from('rastreadores')
-          .select('id')
+          .select('id, status')
           .eq('imei', imeiRastreador)
           .maybeSingle();
 
-        if (rastreadorExistente) {
-          // Atualizar rastreador existente (manter em estoque até análise)
-          await supabase
-            .from('rastreadores')
-            .update({ 
-              veiculo_id: veiculoId,
-              associado_id: associadoId,
-              status: 'estoque',
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', rastreadorExistente.id);
-          rastreadorId = rastreadorExistente.id;
-        } else {
-          // Criar novo rastreador (em estoque)
-          const { data: novoRastreador, error: rastreadorError } = await supabase
-            .from('rastreadores')
-            .insert({
-              imei: imeiRastreador,
-              codigo: `INS-${Date.now()}`,
-              plataforma: 'manual',
-              veiculo_id: veiculoId,
-              associado_id: associadoId,
-              status: 'estoque',
-            })
-            .select('id')
-            .single();
-          
-          if (rastreadorError) {
-            console.error('Erro ao criar rastreador:', rastreadorError);
-            // Continuar mesmo com erro - será registrado no histórico
-          } else if (novoRastreador) {
-            rastreadorId = novoRastreador.id;
-          }
+        if (!rastreadorExistente) {
+          throw new Error(`Rastreador com IMEI ${imeiRastreador} não encontrado no estoque. Cadastre o rastreador antes de instalá-lo.`);
         }
+
+        if (rastreadorExistente.status !== 'estoque') {
+          throw new Error(`Rastreador com IMEI ${imeiRastreador} não está disponível no estoque (status atual: ${rastreadorExistente.status}).`);
+        }
+
+        // Dar baixa no estoque - vincular ao veículo/associado e mudar status para instalado
+        const { error: updateError } = await supabase
+          .from('rastreadores')
+          .update({ 
+            veiculo_id: veiculoId,
+            associado_id: associadoId,
+            status: 'instalado',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', rastreadorExistente.id);
+
+        if (updateError) {
+          throw new Error(`Erro ao vincular rastreador: ${updateError.message}`);
+        }
+
+        rastreadorId = rastreadorExistente.id;
       }
 
       // 2. Concluir instalação e vincular rastreador (NÃO ativa veículo/associado)
