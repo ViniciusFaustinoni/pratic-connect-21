@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 export interface VistoriaMapa {
   id: string;
@@ -40,19 +41,33 @@ export interface RotaAgrupada {
   vistorias: VistoriaMapa[];
 }
 
-export function useVistoriasMapa() {
+interface UseVistoriasMapaOptions {
+  filtrarPorUsuario?: boolean;
+}
+
+export function useVistoriasMapa(options: UseVistoriasMapaOptions = {}) {
+  const { profile } = useAuth();
+  const { filtrarPorUsuario = false } = options;
+
   return useQuery({
-    queryKey: ["vistorias-mapa"],
+    queryKey: ["vistorias-mapa", filtrarPorUsuario ? profile?.id : "all"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("view_vistorias_mapa")
         .select("*")
         .order("data_agendada", { ascending: true });
 
+      // Filtrar pelo usuário logado se solicitado
+      if (filtrarPorUsuario && profile?.id) {
+        query = query.eq("vistoriador_id", profile.id);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       return (data || []) as VistoriaMapa[];
     },
-    refetchInterval: 60000, // Atualizar a cada 1 minuto
+    enabled: !filtrarPorUsuario || !!profile?.id,
+    refetchInterval: 60000,
   });
 }
 
