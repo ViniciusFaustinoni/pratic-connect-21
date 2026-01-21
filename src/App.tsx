@@ -203,6 +203,7 @@ import RelatoriosCentral from "./pages/relatorios/RelatoriosCentral";
 import AppLogin from "./pages/app/AppLogin";
 import AppCriarSenha from "./pages/app/AppCriarSenha";
 import AppForgotPassword from "./pages/app/AppForgotPassword";
+import AppVerificarCodigo from "./pages/app/AppVerificarCodigo";
 import AppRedefinirSenha from "./pages/app/AppRedefinirSenha";
 import AppHome from "./pages/app/AppHome";
 import MeusBoletos from "./pages/app/MeusBoletos";
@@ -510,6 +511,7 @@ const App = () => (
             <Route path="/app/login" element={<AppLogin />} />
             <Route path="/app/criar-senha" element={<AppCriarSenha />} />
             <Route path="/app/forgot-password" element={<AppForgotPassword />} />
+            <Route path="/app/verificar-codigo" element={<AppVerificarCodigo />} />
             <Route path="/app/redefinir-senha" element={<AppRedefinirSenha />} />
             <Route element={<AssociadoAppLayout />}>
               <Route path="/app/home" element={<AppHome />} />
