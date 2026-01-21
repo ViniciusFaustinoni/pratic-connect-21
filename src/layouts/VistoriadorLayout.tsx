@@ -151,8 +151,10 @@ export function VistoriadorLayout({ children }: VistoriadorLayoutProps) {
         </header>
 
         {/* Área de Conteúdo */}
-        <main className="flex-1 overflow-y-auto pb-24 px-4 py-4">
-          {children || <Outlet />}
+        <main className="flex-1 overflow-hidden pb-20">
+          <div className="h-full overflow-y-auto px-4 py-4">
+            {children || <Outlet />}
+          </div>
         </main>
 
         {/* Bottom Navigation */}
