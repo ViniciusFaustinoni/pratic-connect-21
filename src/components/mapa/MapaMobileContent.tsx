@@ -142,8 +142,8 @@ export function MapaMobileContent() {
     return ids;
   }, [vistorias]);
 
-  // Status que não devem ser considerados atrasados
-  const statusNaoAtrasados = ['concluida', 'cancelada', 'aprovada', 'reprovada', 'em_analise', 'em_rota'];
+  // Status que indicam que o serviço foi finalizado (não é atrasado)
+  const statusFinalizados = ['concluida', 'cancelada', 'aprovada', 'reprovada', 'em_analise'];
 
   // Filtrar vistorias por data e busca
   const vistoriasFiltradas = useMemo(() => {
@@ -154,19 +154,30 @@ export function MapaMobileContent() {
     filtroNormalizado.setHours(0, 0, 0, 0);
 
     return vistorias.filter((v) => {
-      // Filtro por data - inclui vistorias do dia selecionado E vistorias atrasadas
+      // Sem data agendada = não mostrar
       if (!v.data_agendada) return false;
       
-      // Normalizar data da vistoria para meia-noite local (funciona com ISO e "YYYY-MM-DD HH:mm")
-      const dataAgendadaStr = v.data_agendada.slice(0, 10); // "2026-01-23"
+      // Normalizar data da vistoria para meia-noite local
+      const dataAgendadaStr = v.data_agendada.slice(0, 10);
       const dataVistoria = new Date(dataAgendadaStr + 'T00:00:00');
       
-      const isDataSelecionada = isSameDay(dataVistoria, filtroNormalizado);
+      // Serviço da data selecionada = MOSTRAR
+      if (isSameDay(dataVistoria, filtroNormalizado)) {
+        return true;
+      }
       
-      // Considerar atrasada se: data anterior ao dia selecionado E status diferente dos finais
-      const isAtrasada = dataVistoria < filtroNormalizado && !statusNaoAtrasados.includes(v.status);
+      // Serviço de data anterior
+      if (dataVistoria < filtroNormalizado) {
+        // Se status é finalizado = NÃO MOSTRAR
+        if (statusFinalizados.includes(v.status)) {
+          return false;
+        }
+        // Se status indica pendente (agendada, em_rota, etc) = MOSTRAR como atrasado
+        return true;
+      }
       
-      if (!isDataSelecionada && !isAtrasada) return false;
+      // Serviço de data futura = NÃO MOSTRAR
+      return false;
 
       // Filtro por busca
       if (filtroBusca) {
@@ -238,7 +249,7 @@ export function MapaMobileContent() {
   // Verificar se é atrasada
   const isAtrasada = (v: VistoriaMapa) => {
     if (!v.data_agendada) return false;
-    if (statusNaoAtrasados.includes(v.status)) return false;
+    if (statusFinalizados.includes(v.status)) return false;
     
     // Normalizar data da vistoria para meia-noite local (funciona com ISO e "YYYY-MM-DD HH:mm")
     const dataAgendadaStr = v.data_agendada.slice(0, 10); // "2026-01-23"
