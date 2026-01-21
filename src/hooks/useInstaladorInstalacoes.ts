@@ -200,7 +200,7 @@ export function useConcluirInstalacao() {
   });
 }
 
-// Hook para aprovar veículo e ativar cobertura total
+// Hook para concluir instalação (NÃO ativa veículo/associado - aguarda análise cadastral)
 export function useAprovarVeiculo() {
   const queryClient = useQueryClient();
   const { profile } = useAuth();
@@ -217,42 +217,9 @@ export function useAprovarVeiculo() {
       associadoId: string;
       imeiRastreador: string;
     }) => {
-      // 1. Atualizar veículo com cobertura total
-      const { error: veiculoError } = await supabase
-        .from('veiculos')
-        .update({ 
-          status: 'ativo',
-          cobertura_total: true,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', veiculoId);
+      let rastreadorId: string | null = null;
 
-      if (veiculoError) throw veiculoError;
-
-      // 2. Atualizar associado para ativo
-      const { error: associadoError } = await supabase
-        .from('associados')
-        .update({ 
-          status: 'ativo',
-          data_ativacao: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', associadoId);
-
-      if (associadoError) throw associadoError;
-
-      // 3. Concluir instalação
-      const { error: instalacaoError } = await supabase
-        .from('instalacoes')
-        .update({ 
-          status: 'concluida',
-          concluida_em: new Date().toISOString(),
-        })
-        .eq('id', instalacaoId);
-
-      if (instalacaoError) throw instalacaoError;
-
-      // 4. Vincular/criar rastreador com o IMEI
+      // 1. Vincular/criar rastreador com o IMEI (status: estoque - aguardando análise)
       if (imeiRastreador) {
         // Verificar se rastreador já existe pelo IMEI
         const { data: rastreadorExistente } = await supabase
@@ -262,19 +229,20 @@ export function useAprovarVeiculo() {
           .maybeSingle();
 
         if (rastreadorExistente) {
-          // Atualizar rastreador existente
+          // Atualizar rastreador existente (manter em estoque até análise)
           await supabase
             .from('rastreadores')
             .update({ 
               veiculo_id: veiculoId,
               associado_id: associadoId,
-              status: 'instalado',
+              status: 'estoque',
               updated_at: new Date().toISOString()
             })
             .eq('id', rastreadorExistente.id);
+          rastreadorId = rastreadorExistente.id;
         } else {
-          // Criar novo rastreador
-          await supabase
+          // Criar novo rastreador (em estoque)
+          const { data: novoRastreador } = await supabase
             .from('rastreadores')
             .insert({
               imei: imeiRastreador,
@@ -282,21 +250,39 @@ export function useAprovarVeiculo() {
               plataforma: 'manual',
               veiculo_id: veiculoId,
               associado_id: associadoId,
-              status: 'instalado',
-            });
+              status: 'estoque',
+            })
+            .select('id')
+            .single();
+          
+          if (novoRastreador) {
+            rastreadorId = novoRastreador.id;
+          }
         }
       }
 
-      // 5. Registrar no histórico
+      // 2. Concluir instalação e vincular rastreador (NÃO ativa veículo/associado)
+      const { error: instalacaoError } = await supabase
+        .from('instalacoes')
+        .update({ 
+          status: 'concluida',
+          concluida_em: new Date().toISOString(),
+          rastreador_id: rastreadorId,
+        })
+        .eq('id', instalacaoId);
+
+      if (instalacaoError) throw instalacaoError;
+
+      // 3. Registrar no histórico (aguardando análise cadastral)
       await supabase.from('associados_historico').insert({
         associado_id: associadoId,
-        tipo: 'veiculo_aprovado',
-        descricao: 'Veículo aprovado pelo técnico instalador - Cobertura total ativada',
+        tipo: 'instalacao_concluida',
+        descricao: 'Instalação do rastreador concluída - Aguardando análise cadastral',
         dados_novos: { 
           instalacao_id: instalacaoId, 
           veiculo_id: veiculoId,
-          cobertura_total: true,
           imei_rastreador: imeiRastreador,
+          rastreador_id: rastreadorId,
         },
         usuario_id: profile?.id,
       });
@@ -305,8 +291,6 @@ export function useAprovarVeiculo() {
       queryClient.invalidateQueries({ queryKey: ['instalador-instalacoes'] });
       queryClient.invalidateQueries({ queryKey: ['instalacao-detalhes'] });
       queryClient.invalidateQueries({ queryKey: ['instalacoes'] });
-      queryClient.invalidateQueries({ queryKey: ['veiculos'] });
-      queryClient.invalidateQueries({ queryKey: ['associados'] });
       queryClient.invalidateQueries({ queryKey: ['rastreadores'] });
     },
   });
