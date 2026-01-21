@@ -528,10 +528,10 @@ export default function CotacaoContratacao() {
                       }}
                     />
                   ) : cotacao?.tipo_vistoria === 'autovistoria' ? (
-                    // AUTOVISTORIA ou caso sem agendamento - Verificar se já agendou vistoria completa/instalação
-                    // Usa verificação robusta: campo da cotação OU registro na tabela OU estado local
+                    // ========== FLUXO AUTOVISTORIA ==========
+                    // Verificar se já agendou instalação: campo da cotação OU registro na tabela OU estado local
                     (cotacao?.vistoria_completa_data_agendada || hasInstalacaoAgendada || agendamentoConcluido) ? (
-                      // Vistoria completa já agendada - mostrar tela de análise
+                      // Instalação já agendada - mostrar tela de análise
                       <Card className="border-primary/30 bg-card/80 backdrop-blur-xl">
                         <CardContent className="py-12 text-center space-y-6">
                           <motion.div 
@@ -580,7 +580,7 @@ export default function CotacaoContratacao() {
                             </div>
                           </div>
 
-                          {/* Detalhes do agendamento da vistoria completa */}
+                          {/* Detalhes do agendamento da instalação */}
                           {cotacao?.vistoria_completa_data_agendada && (
                             <div className="bg-muted/30 rounded-lg p-4 max-w-md mx-auto text-left space-y-3">
                               <div className="flex items-center gap-2 mb-3">
@@ -651,11 +651,11 @@ export default function CotacaoContratacao() {
                         </CardContent>
                       </Card>
                     ) : (
-                      // Autovistoria concluída, mas ainda precisa agendar instalação/vistoria completa
+                      // Autovistoria concluída, mas ainda precisa agendar instalação
                       <AgendamentoVistoriaCompleta
                         cotacaoId={cotacao.id}
+                        tipoVistoria="autovistoria"
                         onConfirmar={() => {
-                          // Travar UI imediatamente e fazer refetch
                           setAgendamentoConcluido(true);
                           queryClient.invalidateQueries({ queryKey: ['cotacao-contratacao'] });
                           queryClient.invalidateQueries({ queryKey: ['instalacao-existente'] });
@@ -664,121 +664,122 @@ export default function CotacaoContratacao() {
                         }}
                       />
                     )
-                  ) : cotacao?.vistoria_data_agendada ? (
-                    // VISTORIA AGENDADA DIRETO - Ainda não está coberto
-                    <Card className="border-primary/30 bg-card/80 backdrop-blur-xl">
-                      <CardContent className="py-12 text-center space-y-6">
-                        <motion.div 
-                          className="w-20 h-20 mx-auto rounded-full bg-primary/10 flex items-center justify-center"
-                          initial={{ scale: 0 }}
-                          animate={{ scale: 1 }}
-                          transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
-                        >
-                          <CalendarCheck className="h-10 w-10 text-primary" />
-                        </motion.div>
-                        
-                        <div>
-                          <Badge className="bg-primary/20 text-primary border-primary/30 mb-4">
-                            Agendamento Confirmado
-                          </Badge>
-                          <h2 className="text-2xl font-bold mb-3 text-foreground">
-                            Vistoria Agendada com Sucesso!
-                          </h2>
-                        </div>
-
-                        {/* Detalhes do agendamento */}
-                        <div className="bg-muted/30 rounded-lg p-4 max-w-md mx-auto text-left space-y-3">
-                          {cotacao?.vistoria_data_agendada && (
-                            <div className="flex items-center gap-3">
-                              <Calendar className="h-5 w-5 text-primary flex-shrink-0" />
-                              <div>
-                                <p className="text-sm text-muted-foreground">Data</p>
-                                <p className="font-medium">
-                                  {format(new Date(cotacao.vistoria_data_agendada + 'T12:00:00'), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
-                                </p>
-                              </div>
-                            </div>
-                          )}
+                  ) : cotacao?.tipo_vistoria === 'agendada' ? (
+                    // ========== FLUXO VISTORIA PRESENCIAL (AGENDADA) ==========
+                    // Cliente já agendou na Etapa 3 - NUNCA mostrar formulário de agendamento aqui
+                    cotacao?.vistoria_data_agendada ? (
+                      // Tem dados do agendamento - mostrar detalhes
+                      <Card className="border-primary/30 bg-card/80 backdrop-blur-xl">
+                        <CardContent className="py-12 text-center space-y-6">
+                          <motion.div 
+                            className="w-20 h-20 mx-auto rounded-full bg-primary/10 flex items-center justify-center"
+                            initial={{ scale: 0 }}
+                            animate={{ scale: 1 }}
+                            transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
+                          >
+                            <CalendarCheck className="h-10 w-10 text-primary" />
+                          </motion.div>
                           
-                          {cotacao?.vistoria_horario_agendado && (
-                            <div className="flex items-center gap-3">
-                              <Clock className="h-5 w-5 text-primary flex-shrink-0" />
-                              <div>
-                                <p className="text-sm text-muted-foreground">Horário</p>
-                                <p className="font-medium">{cotacao.vistoria_horario_agendado}</p>
-                              </div>
-                            </div>
-                          )}
-                          
-                          {cotacao?.vistoria_endereco_logradouro && (
-                            <div className="flex items-start gap-3">
-                              <MapPin className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
-                              <div>
-                                <p className="text-sm text-muted-foreground">Local</p>
-                                <p className="font-medium">
-                                  {cotacao.vistoria_endereco_logradouro}
-                                  {cotacao.vistoria_endereco_numero && `, ${cotacao.vistoria_endereco_numero}`}
-                                </p>
-                                <p className="text-sm text-muted-foreground">
-                                  {cotacao.vistoria_endereco_bairro}
-                                  {cotacao.vistoria_endereco_cidade && ` - ${cotacao.vistoria_endereco_cidade}`}
-                                  {cotacao.vistoria_endereco_estado && `/${cotacao.vistoria_endereco_estado}`}
-                                </p>
-                              </div>
-                            </div>
-                          )}
-                        </div>
+                          <div>
+                            <Badge className="bg-primary/20 text-primary border-primary/30 mb-4">
+                              Agendamento Confirmado
+                            </Badge>
+                            <h2 className="text-2xl font-bold mb-3 text-foreground">
+                              Vistoria Agendada com Sucesso!
+                            </h2>
+                          </div>
 
-                        {/* Aviso importante */}
-                        <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 max-w-md mx-auto">
-                          <AlertTriangle className="h-5 w-5 text-amber-500 mt-0.5 flex-shrink-0" />
-                          <p className="text-sm text-left text-amber-200">
-                            <strong>Importante:</strong> A cobertura do seu veículo será ativada 
-                            após a realização da vistoria presencial.
+                          {/* Detalhes do agendamento */}
+                          <div className="bg-muted/30 rounded-lg p-4 max-w-md mx-auto text-left space-y-3">
+                            {cotacao?.vistoria_data_agendada && (
+                              <div className="flex items-center gap-3">
+                                <Calendar className="h-5 w-5 text-primary flex-shrink-0" />
+                                <div>
+                                  <p className="text-sm text-muted-foreground">Data</p>
+                                  <p className="font-medium">
+                                    {format(new Date(cotacao.vistoria_data_agendada + 'T12:00:00'), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+                            
+                            {cotacao?.vistoria_horario_agendado && (
+                              <div className="flex items-center gap-3">
+                                <Clock className="h-5 w-5 text-primary flex-shrink-0" />
+                                <div>
+                                  <p className="text-sm text-muted-foreground">Horário</p>
+                                  <p className="font-medium">{cotacao.vistoria_horario_agendado}</p>
+                                </div>
+                              </div>
+                            )}
+                            
+                            {cotacao?.vistoria_endereco_logradouro && (
+                              <div className="flex items-start gap-3">
+                                <MapPin className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                                <div>
+                                  <p className="text-sm text-muted-foreground">Local</p>
+                                  <p className="font-medium">
+                                    {cotacao.vistoria_endereco_logradouro}
+                                    {cotacao.vistoria_endereco_numero && `, ${cotacao.vistoria_endereco_numero}`}
+                                  </p>
+                                  <p className="text-sm text-muted-foreground">
+                                    {cotacao.vistoria_endereco_bairro}
+                                    {cotacao.vistoria_endereco_cidade && ` - ${cotacao.vistoria_endereco_cidade}`}
+                                    {cotacao.vistoria_endereco_estado && `/${cotacao.vistoria_endereco_estado}`}
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Aviso importante */}
+                          <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 max-w-md mx-auto">
+                            <AlertTriangle className="h-5 w-5 text-amber-500 mt-0.5 flex-shrink-0" />
+                            <p className="text-sm text-left text-amber-200">
+                              <strong>Importante:</strong> A cobertura do seu veículo será ativada 
+                              após a realização da vistoria presencial.
+                            </p>
+                          </div>
+
+                          <p className="text-sm text-muted-foreground">
+                            Aguarde o contato do vistoriador no dia agendado.
                           </p>
-                        </div>
-
-                        <p className="text-sm text-muted-foreground">
-                          Aguarde o contato do vistoriador no dia agendado.
-                        </p>
-                      </CardContent>
-                    </Card>
-                  ) : isLoadingAgendamento ? (
+                        </CardContent>
+                      </Card>
+                    ) : isLoadingAgendamento ? (
+                      <Card className="border-border/50 bg-card/80 backdrop-blur-xl">
+                        <CardContent className="py-12 text-center space-y-4">
+                          <Loader2 className="h-10 w-10 animate-spin text-primary mx-auto" />
+                          <p className="text-muted-foreground">Verificando status...</p>
+                        </CardContent>
+                      </Card>
+                    ) : (
+                      // Vistoria presencial agendada mas dados ainda não sincronizados - mostrar confirmação genérica
+                      <Card className="border-primary/30 bg-card/80 backdrop-blur-xl">
+                        <CardContent className="py-12 text-center space-y-4">
+                          <motion.div 
+                            className="w-16 h-16 mx-auto rounded-full bg-primary/10 flex items-center justify-center"
+                            initial={{ scale: 0 }}
+                            animate={{ scale: 1 }}
+                          >
+                            <CalendarCheck className="h-8 w-8 text-primary" />
+                          </motion.div>
+                          <h2 className="text-xl font-bold text-foreground">Agendamento Confirmado!</h2>
+                          <p className="text-muted-foreground">
+                            Sua vistoria presencial foi agendada com sucesso.<br />
+                            Aguarde o contato do vistoriador.
+                          </p>
+                        </CardContent>
+                      </Card>
+                    )
+                  ) : (
+                    // ========== FALLBACK: Tipo não definido ou estado inconsistente ==========
                     <Card className="border-border/50 bg-card/80 backdrop-blur-xl">
                       <CardContent className="py-12 text-center space-y-4">
                         <Loader2 className="h-10 w-10 animate-spin text-primary mx-auto" />
-                        <p className="text-muted-foreground">Verificando status...</p>
+                        <p className="text-muted-foreground">Verificando status da sua proposta...</p>
                       </CardContent>
                     </Card>
-                  ) : cotacao?.tipo_vistoria === 'agendada' ? (
-                    // Vistoria agendada mas dados ainda não atualizados - aguardar
-                    <Card className="border-primary/30 bg-card/80 backdrop-blur-xl">
-                      <CardContent className="py-12 text-center space-y-4">
-                        <motion.div 
-                          className="w-16 h-16 mx-auto rounded-full bg-primary/10 flex items-center justify-center"
-                          initial={{ scale: 0 }}
-                          animate={{ scale: 1 }}
-                        >
-                          <CalendarCheck className="h-8 w-8 text-primary" />
-                        </motion.div>
-                        <h2 className="text-xl font-bold text-foreground">Agendamento Confirmado!</h2>
-                        <p className="text-muted-foreground">
-                          Sua vistoria presencial foi agendada com sucesso.<br />
-                          Aguarde o contato do vistoriador.
-                        </p>
-                      </CardContent>
-                    </Card>
-                  ) : (
-                    // Apenas para autovistoria: agendar instalação
-                    <AgendamentoVistoriaCompleta
-                      cotacaoId={cotacao.id}
-                      tipoVistoria="autovistoria"
-                      onConfirmar={() => {
-                        setAgendamentoConcluido(true);
-                        queryClient.invalidateQueries({ queryKey: ['cotacao-contratacao'] });
-                        refetch();
-                      }}
-                    />
                   )}
                 </motion.div>
               )}
