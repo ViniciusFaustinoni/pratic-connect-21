@@ -251,6 +251,18 @@ export function EtapaPagamentoCotacao({
             .eq('tipo', 'adesao')
             .in('status', ['PENDING', 'OVERDUE']);
 
+          // Criar instalação após pagamento confirmado
+          try {
+            console.log('[EtapaPagamento] Criando instalação pós-pagamento...');
+            await publicSupabase.functions.invoke('criar-instalacao-pos-pagamento', {
+              body: { cotacaoId }
+            });
+            console.log('[EtapaPagamento] Instalação criada com sucesso');
+          } catch (instError) {
+            console.error('[EtapaPagamento] Erro ao criar instalação:', instError);
+            // Não bloquear o fluxo, a instalação pode ser criada manualmente depois
+          }
+
           setEtapaInterna('pago');
           
           // Pequeno delay para garantir que o banco propagou as alterações
@@ -298,6 +310,17 @@ export function EtapaPagamentoCotacao({
           .eq('contrato_id', contratoId)
           .eq('tipo', 'adesao')
           .in('status', ['PENDING', 'OVERDUE']);
+
+        // Criar instalação após pagamento confirmado
+        try {
+          console.log('[EtapaPagamento] Criando instalação pós-pagamento (manual)...');
+          await publicSupabase.functions.invoke('criar-instalacao-pos-pagamento', {
+            body: { cotacaoId }
+          });
+          console.log('[EtapaPagamento] Instalação criada com sucesso');
+        } catch (instError) {
+          console.error('[EtapaPagamento] Erro ao criar instalação:', instError);
+        }
 
         setEtapaInterna('pago');
         

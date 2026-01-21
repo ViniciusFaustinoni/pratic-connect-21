@@ -149,3 +149,6 @@ verify_jwt = false
 
 [functions.agendar-vistoria-presencial]
 verify_jwt = false
+
+[functions.criar-instalacao-pos-pagamento]
+verify_jwt = false

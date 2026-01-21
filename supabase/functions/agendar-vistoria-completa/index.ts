@@ -47,7 +47,7 @@ serve(async (req) => {
 
     console.log('[AgendarVistoriaCompleta] Iniciando para cotação:', cotacaoId);
 
-    // 0. VERIFICAR SE JÁ EXISTE INSTALAÇÃO/VISTORIA PARA EVITAR DUPLICATAS
+    // 0. VERIFICAR SE JÁ EXISTE INSTALAÇÃO PARA EVITAR DUPLICATAS
     const { data: instalacaoExistente } = await supabase
       .from('instalacoes')
       .select('id, status')
@@ -61,7 +61,6 @@ serve(async (req) => {
       // Retornar sucesso com o ID existente (idempotência)
       return new Response(JSON.stringify({
         success: true,
-        vistoriaId: null,
         instalacaoId: instalacaoExistente.id,
         message: 'Agendamento já existente'
       }), {
@@ -100,7 +99,7 @@ serve(async (req) => {
       });
     }
 
-    // Validação de segurança: só permite se o contrato tem link_token (foi gerado para acesso público)
+    // Validação de segurança: só permite se o contrato tem link_token
     if (!contrato.link_token) {
       console.error('[AgendarVistoriaCompleta] Contrato sem link_token');
       return new Response(JSON.stringify({ success: false, error: 'Acesso não autorizado' }), {
@@ -109,7 +108,7 @@ serve(async (req) => {
       });
     }
 
-    // 3. Atualizar cotação com dados da vistoria completa
+    // 3. Atualizar cotação com dados da vistoria completa (SEM criar instalação ainda)
     const updateData: Record<string, unknown> = {
       vistoria_completa_data_agendada: dataAgendada,
       vistoria_completa_horario_agendado: horarioAgendado,
@@ -139,92 +138,15 @@ serve(async (req) => {
       throw updateCotacaoError;
     }
 
-    // 4. Montar observações do responsável
-    const obsResponsavel = responsavel.euMesmo 
-      ? `Responsável: ${cotacao.nome_solicitante} - ${cotacao.telefone1_solicitante}` 
-      : `Responsável: ${responsavel.nome} - ${responsavel.telefone}`;
+    console.log('[AgendarVistoriaCompleta] Agendamento salvo na cotação. Instalação será criada após pagamento.');
 
-    // 5. CRIAR VISTORIA
-    const vistoriaData = {
-      cotacao_id: cotacaoId,
-      contrato_id: contrato.id,
-      associado_id: contrato.associado_id,
-      veiculo_id: contrato.veiculo_id,
-      tipo: 'entrada',
-      modalidade: 'presencial',
-      status: 'agendada',
-      origem: 'cotacao',
-      data_agendada: dataAgendada,
-      horario_agendado: horarioAgendado,
-      endereco_cep: endereco.cep,
-      endereco_logradouro: endereco.logradouro,
-      endereco_numero: endereco.numero,
-      endereco_bairro: endereco.bairro,
-      endereco_cidade: endereco.cidade,
-      endereco_estado: endereco.estado,
-      endereco_latitude: latitude || null,
-      endereco_longitude: longitude || null,
-      observacoes: obsResponsavel,
-    };
-
-    const { data: novaVistoria, error: vistoriaError } = await supabase
-      .from('vistorias')
-      .insert(vistoriaData)
-      .select('id')
-      .single();
-
-    if (vistoriaError) {
-      console.error('[AgendarVistoriaCompleta] Erro ao criar vistoria:', vistoriaError);
-      throw vistoriaError;
-    }
-
-    console.log('[AgendarVistoriaCompleta] Vistoria criada:', novaVistoria.id);
-
-    // 6. Atualizar contrato com vistoria_id
-    await supabase
-      .from('contratos')
-      .update({ vistoria_id: novaVistoria.id })
-      .eq('id', contrato.id);
-
-    // 7. CRIAR INSTALAÇÃO (usando nomes de colunas corretos da tabela instalacoes)
-    const instalacaoData = {
-      contrato_id: contrato.id,
-      cotacao_id: cotacaoId,
-      associado_id: contrato.associado_id,
-      veiculo_id: contrato.veiculo_id,
-      status: 'agendada',
-      data_agendada: dataAgendada,
-      hora_agendada: horarioAgendado,
-      cep: endereco.cep,
-      logradouro: endereco.logradouro,
-      numero: endereco.numero,
-      bairro: endereco.bairro,
-      cidade: endereco.cidade,
-      uf: endereco.estado,
-      endereco_latitude: latitude || null,
-      endereco_longitude: longitude || null,
-      observacoes: obsResponsavel,
-    };
-
-    console.log('[AgendarVistoriaCompleta] Dados da instalação:', JSON.stringify(instalacaoData));
-
-    const { data: novaInstalacao, error: instalacaoError } = await supabase
-      .from('instalacoes')
-      .insert(instalacaoData)
-      .select('id')
-      .single();
-
-    if (instalacaoError) {
-      console.error('[AgendarVistoriaCompleta] Erro ao criar instalação:', instalacaoError);
-      throw new Error(`Erro ao criar instalação: ${instalacaoError.message}`);
-    }
-    
-    console.log('[AgendarVistoriaCompleta] Instalação criada com sucesso:', novaInstalacao.id);
+    // NÃO criar vistoria nem instalação aqui
+    // A instalação será criada em criar-instalacao-pos-pagamento após o pagamento ser confirmado
 
     return new Response(JSON.stringify({
       success: true,
-      vistoriaId: novaVistoria.id,
-      instalacaoId: novaInstalacao?.id || null
+      instalacaoId: null, // Será criada após pagamento
+      message: 'Agendamento salvo com sucesso. A instalação será criada após o pagamento.'
     }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }

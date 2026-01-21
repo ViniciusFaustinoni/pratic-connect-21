@@ -58,36 +58,15 @@ serve(async (req) => {
     if (instalacaoExistente) {
       console.log('[AgendarVistoriaPresencial] Instalação já existe:', instalacaoExistente.id);
       
-      // Buscar vistoria existente também
-      const { data: vistoriaExistente } = await supabase
-        .from('vistorias')
-        .select('id')
-        .eq('cotacao_id', cotacaoId)
-        .eq('modalidade', 'presencial')
-        .maybeSingle();
-      
-      // Retornar sucesso com os IDs existentes (idempotência)
+      // Retornar sucesso com o ID existente (idempotência)
       return new Response(JSON.stringify({
         success: true,
-        vistoriaId: vistoriaExistente?.id || null,
         instalacaoId: instalacaoExistente.id,
         message: 'Agendamento já existente'
       }), {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
-    }
-
-    // Verificar se já existe vistoria presencial
-    const { data: vistoriaExistente } = await supabase
-      .from('vistorias')
-      .select('id')
-      .eq('cotacao_id', cotacaoId)
-      .eq('modalidade', 'presencial')
-      .maybeSingle();
-
-    if (vistoriaExistente) {
-      console.log('[AgendarVistoriaPresencial] Vistoria já existe, criando apenas instalação');
     }
 
     // 1. Buscar cotação
@@ -129,7 +108,8 @@ serve(async (req) => {
       });
     }
 
-    // 3. Atualizar cotação com dados da vistoria presencial (campos vistoria_*, não vistoria_completa_*)
+    // 3. Atualizar cotação com dados do agendamento (SEM criar vistoria/instalação ainda)
+    // A instalação será criada apenas após o pagamento
     const updateData: Record<string, unknown> = {
       tipo_vistoria: 'agendada',
       status_contratacao: 'vistoria_ok',
@@ -161,69 +141,15 @@ serve(async (req) => {
       throw updateCotacaoError;
     }
 
-    console.log('[AgendarVistoriaPresencial] Cotação atualizada com sucesso');
+    console.log('[AgendarVistoriaPresencial] Agendamento salvo na cotação. Instalação será criada após pagamento.');
 
-    // 4. Montar observações do responsável
-    const obsResponsavel = responsavel.euMesmo 
-      ? `Responsável: ${cotacao.nome_solicitante} - ${cotacao.telefone1_solicitante}` 
-      : `Responsável: ${responsavel.nome} - ${responsavel.telefone}`;
-
-    let vistoriaId = vistoriaExistente?.id || null;
-
-    // 5. CRIAR VISTORIA (se não existir)
-    if (!vistoriaExistente) {
-      const vistoriaData = {
-        cotacao_id: cotacaoId,
-        contrato_id: contrato.id,
-        associado_id: contrato.associado_id,
-        veiculo_id: contrato.veiculo_id,
-        tipo: 'entrada',
-        modalidade: 'presencial',
-        status: 'agendada',
-        origem: 'cotacao',
-        data_agendada: dataAgendada,
-        horario_agendado: horarioAgendado,
-        endereco_cep: endereco.cep,
-        endereco_logradouro: endereco.logradouro,
-        endereco_numero: endereco.numero,
-        endereco_bairro: endereco.bairro,
-        endereco_cidade: endereco.cidade,
-        endereco_estado: endereco.estado,
-        endereco_latitude: latitude || null,
-        endereco_longitude: longitude || null,
-        observacoes: obsResponsavel,
-      };
-
-      const { data: novaVistoria, error: vistoriaError } = await supabase
-        .from('vistorias')
-        .insert(vistoriaData)
-        .select('id')
-        .single();
-
-      if (vistoriaError) {
-        console.error('[AgendarVistoriaPresencial] Erro ao criar vistoria:', vistoriaError);
-        throw vistoriaError;
-      }
-
-      vistoriaId = novaVistoria.id;
-      console.log('[AgendarVistoriaPresencial] Vistoria criada:', vistoriaId);
-
-      // 6. Atualizar contrato com vistoria_id
-      await supabase
-        .from('contratos')
-        .update({ vistoria_id: vistoriaId })
-        .eq('id', contrato.id);
-    }
-
-    // 7. A instalação será criada apenas quando a vistoria for aprovada (processar-vistoria)
-    // Não criar instalação prematuramente para evitar duplicação no mapa
-    console.log('[AgendarVistoriaPresencial] Vistoria agendada. Instalação será criada após aprovação.');
+    // NÃO criar vistoria nem instalação aqui
+    // A instalação será criada em criar-instalacao-pos-pagamento após o pagamento ser confirmado
 
     return new Response(JSON.stringify({
       success: true,
-      vistoriaId,
-      instalacaoId: null, // Será criada após aprovação da vistoria
-      message: 'Vistoria presencial agendada com sucesso'
+      instalacaoId: null, // Será criada após pagamento
+      message: 'Agendamento salvo com sucesso. A instalação será criada após o pagamento.'
     }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
