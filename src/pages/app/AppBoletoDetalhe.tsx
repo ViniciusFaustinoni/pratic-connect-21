@@ -543,6 +543,12 @@ export default function AppBoletoDetalhe() {
             <span className="text-muted-foreground">Competência</span>
             <span>{boleto.competencia}</span>
           </div>
+          {boleto.dataEmissao && (
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Data de emissão</span>
+              <span>{boleto.dataEmissao}</span>
+            </div>
+          )}
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Vencimento</span>
             <span>{boleto.dataVencimento}</span>

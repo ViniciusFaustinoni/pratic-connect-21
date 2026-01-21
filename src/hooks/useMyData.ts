@@ -16,6 +16,7 @@ export interface Boleto {
   competencia: string;
   competenciaMes: number;
   competenciaAno: number;
+  dataEmissao?: string;
   dataVencimento: string;
   dataPagamento?: string;
   dataCredito?: string;
@@ -344,6 +345,7 @@ export function useMyBoletos() {
           competencia: c.competencia || '',
           competenciaMes: mes,
           competenciaAno: ano,
+          dataEmissao: c.data_emissao ? formatDateBR(c.data_emissao) : undefined,
           dataVencimento: formatDateBR(c.data_vencimento),
           dataPagamento: c.data_pagamento ? formatDateBR(c.data_pagamento) : undefined,
           dataCredito: c.pagamento_data ? formatDateBR(c.pagamento_data) : undefined,
@@ -356,7 +358,7 @@ export function useMyBoletos() {
           status: mapAsaasStatus(c.status),
           pixCopiaCola: c.pix_copia_cola || undefined,
           pixQrCode: c.pix_qrcode || undefined,
-          linhaDigitavel: undefined,
+          linhaDigitavel: c.linha_digitavel || undefined,
           codigoBarras: c.boleto_codigo_barras || undefined,
           urlBoleto: c.boleto_url || undefined,
           formaPagamento: c.pagamento_forma || c.forma_pagamento || undefined,
