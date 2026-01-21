@@ -206,7 +206,7 @@ import AppForgotPassword from "./pages/app/AppForgotPassword";
 import AppRedefinirSenha from "./pages/app/AppRedefinirSenha";
 import AppHome from "./pages/app/AppHome";
 import MeusBoletos from "./pages/app/MeusBoletos";
-import BoletoDetalhe from "./pages/app/BoletoDetalhe";
+import AppBoletoDetalhe from "./pages/app/AppBoletoDetalhe";
 import AppRastreamento from "./pages/app/AppRastreamento";
 import SolicitarAssistencia from "./pages/app/SolicitarAssistencia";
 import HistoricoChamados from "./pages/app/HistoricoChamados";
@@ -513,7 +513,7 @@ const App = () => (
             <Route element={<AssociadoAppLayout />}>
               <Route path="/app/home" element={<AppHome />} />
               <Route path="/app/boletos" element={<MeusBoletos />} />
-              <Route path="/app/boletos/:id" element={<BoletoDetalhe />} />
+              <Route path="/app/boletos/:id" element={<AppBoletoDetalhe />} />
               <Route path="/app/rastreamento" element={<AppRastreamento />} />
               <Route path="/app/assistencia" element={<SolicitarAssistencia />} />
               <Route path="/app/assistencia/nova" element={<AppAssistenciaNova />} />
