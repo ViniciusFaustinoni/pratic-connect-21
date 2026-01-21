@@ -492,11 +492,67 @@ export function useAtualizarBoleto() {
 }
 
 export function useMyBoleto(id: string | undefined) {
-  const { data: boletos, isLoading } = useMyBoletos();
-  
-  const boleto = boletos?.find(b => b.id === id);
-  
-  // Mock de histórico para desenvolvimento
+  const { data: boletos, isLoading: listLoading } = useMyBoletos();
+  const queryClient = useQueryClient();
+
+  // Query para buscar detalhes em tempo real via edge function
+  const { data: detalheAtualizado, isLoading: detalheLoading } = useQuery({
+    queryKey: ['boleto-detalhe', id],
+    queryFn: async () => {
+      if (!id) return null;
+
+      try {
+        const { data, error } = await supabase.functions.invoke('detalhe-boleto', {
+          body: { payment_id: id }
+        });
+
+        if (error || !data?.success) {
+          console.warn('Fallback para dados da lista:', error?.message || data?.error);
+          return null;
+        }
+
+        // Mapear resposta da API para formato do app
+        const b = data.boleto;
+        return {
+          id: b.id,
+          competencia: b.referencia || '',
+          competenciaMes: 0,
+          competenciaAno: 0,
+          dataEmissao: undefined,
+          dataVencimento: b.vencimento ? formatDateBR(b.vencimento) : '',
+          dataPagamento: b.data_pagamento ? formatDateBR(b.data_pagamento) : undefined,
+          valorOriginal: Number(b.valorOriginal) || 0,
+          valorFinal: Number(b.valor) || 0,
+          valorPago: b.valorPago ? Number(b.valorPago) : undefined,
+          status: b.status as Boleto['status'],
+          pixCopiaCola: b.pix_payload || undefined,
+          pixQrCode: b.pix_qrcode_base64 || undefined,
+          linhaDigitavel: b.linha_digitavel || undefined,
+          codigoBarras: b.codigo_barras || undefined,
+          urlBoleto: b.link_pdf || b.invoice_url || undefined,
+          formaPagamento: b.forma_pagamento || undefined,
+          nossoNumero: b.nosso_numero || undefined,
+          juros: b.juros || undefined,
+          multa: b.multa || undefined,
+          desconto: b.desconto || undefined,
+        } as Boleto;
+      } catch (err) {
+        console.error('Erro ao buscar detalhe do boleto:', err);
+        return null;
+      }
+    },
+    enabled: !!id,
+    staleTime: 0, // Sempre buscar dados atualizados
+    gcTime: 30000, // Manter em cache por 30 segundos
+  });
+
+  // Usar detalhe atualizado ou fallback para lista
+  const boletoFromList = boletos?.find(b => b.id === id);
+  const boleto = detalheAtualizado || boletoFromList;
+
+  const isLoading = listLoading || detalheLoading;
+
+  // Gerar histórico baseado nos dados do boleto
   const historico: BoletoHistorico[] = boleto ? [
     { id: '1', data: '02/01/2026 10:30', tipo: 'geracao', descricao: 'Boleto gerado automaticamente' },
     { id: '2', data: '02/01/2026 10:31', tipo: 'envio', descricao: 'Enviado por e-mail' },
@@ -508,11 +564,12 @@ export function useMyBoleto(id: string | undefined) {
       { id: '5', data: '05/01/2026 09:00', tipo: 'cancelamento' as const, descricao: 'Boleto cancelado' }
     ] : [])
   ] : [];
-  
+
   return {
     boleto,
     historico,
     isLoading,
-    notFound: !isLoading && !boleto
+    notFound: !isLoading && !boleto,
+    refetch: () => queryClient.invalidateQueries({ queryKey: ['boleto-detalhe', id] })
   };
 }
