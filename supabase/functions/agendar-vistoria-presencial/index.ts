@@ -215,50 +215,19 @@ serve(async (req) => {
         .eq('id', contrato.id);
     }
 
-    // 7. CRIAR INSTALAÇÃO
-    const instalacaoData = {
-      contrato_id: contrato.id,
-      cotacao_id: cotacaoId,
-      associado_id: contrato.associado_id,
-      veiculo_id: contrato.veiculo_id,
-      status: 'agendada',
-      data_agendada: dataAgendada,
-      hora_agendada: horarioAgendado,
-      cep: endereco.cep,
-      logradouro: endereco.logradouro,
-      numero: endereco.numero,
-      bairro: endereco.bairro,
-      cidade: endereco.cidade,
-      uf: endereco.estado,
-      endereco_latitude: latitude || null,
-      endereco_longitude: longitude || null,
-      observacoes: obsResponsavel,
-    };
-
-    console.log('[AgendarVistoriaPresencial] Dados da instalação:', JSON.stringify(instalacaoData));
-
-    const { data: novaInstalacao, error: instalacaoError } = await supabase
-      .from('instalacoes')
-      .insert(instalacaoData)
-      .select('id')
-      .single();
-
-    if (instalacaoError) {
-      console.error('[AgendarVistoriaPresencial] Erro ao criar instalação:', instalacaoError);
-      throw new Error(`Erro ao criar instalação: ${instalacaoError.message}`);
-    }
-    
-    console.log('[AgendarVistoriaPresencial] Instalação criada com sucesso:', novaInstalacao.id);
+    // 7. A instalação será criada apenas quando a vistoria for aprovada (processar-vistoria)
+    // Não criar instalação prematuramente para evitar duplicação no mapa
+    console.log('[AgendarVistoriaPresencial] Vistoria agendada. Instalação será criada após aprovação.');
 
     return new Response(JSON.stringify({
       success: true,
       vistoriaId,
-      instalacaoId: novaInstalacao.id
+      instalacaoId: null, // Será criada após aprovação da vistoria
+      message: 'Vistoria presencial agendada com sucesso'
     }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
-
   } catch (error) {
     console.error('[AgendarVistoriaPresencial] Erro geral:', error);
     return new Response(JSON.stringify({
