@@ -79,9 +79,60 @@ serve(async (req) => {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
   try {
-    const { contratoId, valor, cliente }: CobrancaAdesaoRequest = await req.json();
+    let { contratoId, valor, cliente }: CobrancaAdesaoRequest = await req.json();
 
-    console.log(`[asaas-cobranca-adesao] Verificando cobrança existente para contrato ${contratoId}`);
+    console.log(`[asaas-cobranca-adesao] Iniciando para contrato ${contratoId}, valor recebido: R$ ${valor}`);
+
+    // VALIDAÇÃO DE VALOR MÍNIMO - Asaas não aceita cobranças abaixo de R$ 5,00
+    const VALOR_MINIMO_ASAAS = 5;
+    
+    if (valor < VALOR_MINIMO_ASAAS) {
+      console.log(`[asaas-cobranca-adesao] ⚠️ Valor ${valor} abaixo do mínimo. Buscando valor do plano...`);
+      
+      // Buscar valor correto do plano através do contrato -> cotação -> plano
+      const { data: contratoInfo, error: contratoInfoError } = await supabase
+        .from('contratos')
+        .select(`
+          cotacao_id,
+          cotacoes:cotacao_id (
+            plano_id,
+            valor_adesao,
+            planos:plano_id (
+              valor_adesao
+            )
+          )
+        `)
+        .eq('id', contratoId)
+        .single();
+
+      if (contratoInfoError) {
+        console.error('[asaas-cobranca-adesao] Erro ao buscar info do contrato:', contratoInfoError);
+      }
+
+      // Tentar obter valor do plano
+      const cotacao = contratoInfo?.cotacoes as any;
+      const valorPlano = cotacao?.planos?.valor_adesao || cotacao?.valor_adesao;
+      
+      if (valorPlano && valorPlano >= VALOR_MINIMO_ASAAS) {
+        console.log(`[asaas-cobranca-adesao] ✅ Valor corrigido de R$ ${valor} para R$ ${valorPlano} (valor do plano)`);
+        valor = valorPlano;
+      } else {
+        // Se ainda não encontrou valor válido, retornar erro claro
+        console.error(`[asaas-cobranca-adesao] ❌ Valor inválido: R$ ${valor}. Valor do plano: ${valorPlano}`);
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: `Valor de adesão inválido: R$ ${valor.toFixed(2)}. O valor mínimo aceito pelo Asaas é R$ 5,00. Por favor, verifique a configuração do plano.`,
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
+      }
+    }
+
+    console.log(`[asaas-cobranca-adesao] Verificando cobrança existente para contrato ${contratoId}, valor final: R$ ${valor}`);
 
     // PROTEÇÃO CONTRA DUPLICIDADE: Verificar se já existe cobrança de adesão pendente
     const { data: cobrancaExistente, error: existenteError } = await supabase
