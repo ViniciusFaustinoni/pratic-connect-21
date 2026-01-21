@@ -39,6 +39,18 @@ serve(async (req) => {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
   try {
+    // Validar token de autenticação do ASAAS (se configurado)
+    const asaasWebhookToken = Deno.env.get('ASAAS_WEBHOOK_TOKEN');
+    const headerToken = req.headers.get('asaas-access-token');
+
+    if (asaasWebhookToken && headerToken !== asaasWebhookToken) {
+      console.error('[asaas-webhook] Token de autenticação inválido');
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const event: AsaasWebhookEvent = await req.json();
     
     console.log(`[asaas-webhook] Evento recebido: ${event.event}`);
@@ -297,13 +309,30 @@ serve(async (req) => {
               comprovante_url: payment.transactionReceiptUrl,
             });
 
-            // Criar notificação para o associado
-            await supabase.from('notificacoes').insert({
-              user_id: cobranca.associado_id,
-              titulo: 'Pagamento Confirmado',
-              mensagem: `Seu pagamento de R$ ${payment.value.toFixed(2)} foi confirmado.`,
-              tipo: 'sucesso',
-            });
+            // Buscar user_id do associado para notificações
+            const { data: associadoUser } = await supabase
+              .from('associados')
+              .select('user_id')
+              .eq('id', cobranca.associado_id)
+              .single();
+
+            // Disparar notificação centralizada
+            if (associadoUser?.user_id) {
+              await supabase.functions.invoke('disparar-notificacao', {
+                body: {
+                  user_id: associadoUser.user_id,
+                  associado_id: cobranca.associado_id,
+                  tipo: 'boleto',
+                  subtipo: 'pago',
+                  dados: { 
+                    valor: payment.value.toFixed(2),
+                    mes: cobranca.competencia || 'Mensalidade'
+                  },
+                  referencia_tipo: 'cobranca',
+                  referencia_id: cobranca.id
+                }
+              });
+            }
 
             // Enviar email de confirmação de pagamento
             if (associado?.email) {
@@ -515,20 +544,62 @@ serve(async (req) => {
           break;
 
         case 'PAYMENT_OVERDUE':
-          // Criar notificação de cobrança vencida
+          // Disparar notificação de cobrança vencida via edge function centralizada
           if (cobranca) {
-            await supabase.from('notificacoes').insert({
-              user_id: cobranca.associado_id,
-              titulo: 'Cobrança Vencida',
-              mensagem: `Sua cobrança de R$ ${payment.value.toFixed(2)} está vencida. Regularize para evitar bloqueio.`,
-              tipo: 'alerta',
-            });
+            const { data: associadoOverdue } = await supabase
+              .from('associados')
+              .select('user_id')
+              .eq('id', cobranca.associado_id)
+              .single();
+
+            if (associadoOverdue?.user_id) {
+              await supabase.functions.invoke('disparar-notificacao', {
+                body: {
+                  user_id: associadoOverdue.user_id,
+                  associado_id: cobranca.associado_id,
+                  tipo: 'boleto',
+                  subtipo: 'vencido',
+                  dados: { 
+                    valor: payment.value.toFixed(2),
+                    data: new Date(payment.dueDate).toLocaleDateString('pt-BR')
+                  },
+                  referencia_tipo: 'cobranca',
+                  referencia_id: cobranca.id,
+                  forcar_envio: true // Notificação urgente
+                }
+              });
+            }
           }
           break;
 
         case 'PAYMENT_DELETED':
+          updateData.status = 'CANCELLED';
+          break;
+
         case 'PAYMENT_REFUNDED':
-          updateData.status = event.event === 'PAYMENT_DELETED' ? 'CANCELLED' : 'REFUNDED';
+          updateData.status = 'REFUNDED';
+          // Notificar estorno
+          if (cobranca) {
+            const { data: associadoRefund } = await supabase
+              .from('associados')
+              .select('user_id')
+              .eq('id', cobranca.associado_id)
+              .single();
+
+            if (associadoRefund?.user_id) {
+              await supabase.functions.invoke('disparar-notificacao', {
+                body: {
+                  user_id: associadoRefund.user_id,
+                  associado_id: cobranca.associado_id,
+                  tipo: 'sistema',
+                  subtipo: 'atualizacao',
+                  dados: { 
+                    mensagem: `Estorno de R$ ${payment.value.toFixed(2)} processado`
+                  }
+                }
+              });
+            }
+          }
           break;
 
         case 'PAYMENT_UPDATED':

@@ -1621,6 +1621,94 @@ export type Database = {
         }
         Relationships: []
       }
+      auth_tokens_app: {
+        Row: {
+          associado_id: string
+          canal_envio: string | null
+          codigo: string
+          created_at: string | null
+          expira_em: string
+          id: string
+          ip_solicitante: string | null
+          max_tentativas: number | null
+          tentativas: number | null
+          tipo: string
+          usado: boolean | null
+          usado_em: string | null
+        }
+        Insert: {
+          associado_id: string
+          canal_envio?: string | null
+          codigo: string
+          created_at?: string | null
+          expira_em: string
+          id?: string
+          ip_solicitante?: string | null
+          max_tentativas?: number | null
+          tentativas?: number | null
+          tipo: string
+          usado?: boolean | null
+          usado_em?: string | null
+        }
+        Update: {
+          associado_id?: string
+          canal_envio?: string | null
+          codigo?: string
+          created_at?: string | null
+          expira_em?: string
+          id?: string
+          ip_solicitante?: string | null
+          max_tentativas?: number | null
+          tentativas?: number | null
+          tipo?: string
+          usado?: boolean | null
+          usado_em?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "auth_tokens_app_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "auth_tokens_app_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "auth_tokens_app_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "auth_tokens_app_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "auth_tokens_app_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "auth_tokens_app_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+        ]
+      }
       auth_tokens_primeiro_acesso: {
         Row: {
           associado_id: string
@@ -8578,6 +8666,7 @@ export type Database = {
           canal_whatsapp: boolean | null
           categoria: string | null
           created_at: string
+          dados: Json | null
           data_expiracao: string | null
           destino: string | null
           destino_id: string | null
@@ -8591,6 +8680,7 @@ export type Database = {
           prioridade: string | null
           referencia_id: string | null
           referencia_tipo: string | null
+          subtipo: string | null
           tipo: string
           titulo: string
           user_id: string
@@ -8602,6 +8692,7 @@ export type Database = {
           canal_whatsapp?: boolean | null
           categoria?: string | null
           created_at?: string
+          dados?: Json | null
           data_expiracao?: string | null
           destino?: string | null
           destino_id?: string | null
@@ -8615,6 +8706,7 @@ export type Database = {
           prioridade?: string | null
           referencia_id?: string | null
           referencia_tipo?: string | null
+          subtipo?: string | null
           tipo?: string
           titulo: string
           user_id: string
@@ -8626,6 +8718,7 @@ export type Database = {
           canal_whatsapp?: boolean | null
           categoria?: string | null
           created_at?: string
+          dados?: Json | null
           data_expiracao?: string | null
           destino?: string | null
           destino_id?: string | null
@@ -8639,6 +8732,7 @@ export type Database = {
           prioridade?: string | null
           referencia_id?: string | null
           referencia_tipo?: string | null
+          subtipo?: string | null
           tipo?: string
           titulo?: string
           user_id?: string
@@ -14504,6 +14598,7 @@ export type Database = {
       }
       fn_calcular_total_cotas_ativos: { Args: never; Returns: number }
       fn_get_cotas_por_fipe: { Args: { p_valor_fipe: number }; Returns: number }
+      fn_limpar_tokens_expirados: { Args: never; Returns: undefined }
       fn_resumo_saude_beneficios: {
         Args: never
         Returns: {
