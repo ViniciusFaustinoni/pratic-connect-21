@@ -1,73 +1,97 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Car, Receipt, MapPin, Phone, MessageCircle, CheckCircle, ChevronRight, Shield, AlertTriangle, Camera, Loader2 } from 'lucide-react';
+import { Car, Receipt, MapPin, Phone, AlertTriangle, FileText, Loader2 } from 'lucide-react';
 import { useAssociado } from '@/contexts/AssociadoContext';
 import { useResumoApp } from '@/hooks/useAppAssociado';
 import { RevistoriaBanner } from '@/components/app/RevistoriaBanner';
 
+// ============================================
+// HELPERS
+// ============================================
 const formatCurrency = (v: number) => 
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 
 const formatDate = (d: string) => 
   new Date(d + 'T12:00:00').toLocaleDateString('pt-BR');
 
-const getGreeting = () => {
-  const hour = new Date().getHours();
-  if (hour < 12) return 'Bom dia';
-  if (hour < 18) return 'Boa tarde';
-  return 'Boa noite';
+const formatRelativeTime = (dateStr?: string) => {
+  if (!dateStr) return 'Nunca';
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+  
+  if (diffMin < 1) return 'Agora';
+  if (diffMin < 60) return `há ${diffMin} min`;
+  const diffHours = Math.floor(diffMin / 60);
+  if (diffHours < 24) return `há ${diffHours}h`;
+  return `há ${Math.floor(diffHours / 24)} dias`;
 };
 
+const getStatusLabel = (status: string) => {
+  const labels: Record<string, string> = {
+    ativo: 'Ativo',
+    suspenso: 'Suspenso',
+    em_analise: 'Em Análise',
+    bloqueado: 'Bloqueado',
+    cancelado: 'Cancelado',
+    inadimplente: 'Inadimplente',
+  };
+  return labels[status] || status;
+};
+
+const getStatusColor = (status: string) => {
+  const colors: Record<string, string> = {
+    ativo: 'bg-green-100 text-green-800',
+    suspenso: 'bg-red-100 text-red-800',
+    em_analise: 'bg-yellow-100 text-yellow-800',
+    bloqueado: 'bg-gray-100 text-gray-800',
+    inadimplente: 'bg-red-100 text-red-800',
+  };
+  return colors[status] || 'bg-gray-100 text-gray-800';
+};
+
+// ============================================
+// COMPONENT
+// ============================================
 export default function AppHome() {
-  const { revistoria, manifestacoes } = useAssociado();
+  const navigate = useNavigate();
+  const { revistoria } = useAssociado();
   const { associado, veiculos, boletoPendente, isLoading } = useResumoApp();
   
-  // Contar manifestações com resposta não lida
-  const manifestacoesNaoLidas = manifestacoes?.filter(m => m.status === 'respondido').length || 0;
-  
-  // Usar dados reais ou fallback
+  // Dados do associado
   const nomeAssociado = associado?.nome || 'Associado';
   const primeiroNome = nomeAssociado.split(' ')[0];
   const statusAssociado = associado?.status || 'em_analise';
-  const plano = associado?.plano_nome || 'Sem plano';
-  const desde = associado?.data_adesao?.split('-')[0] || new Date().getFullYear().toString();
   
-  // Determinar estados
-  const isEmAnalise = statusAssociado === 'em_analise';
-  const isSuspenso = statusAssociado === 'suspenso';
-  const isInadimplente = statusAssociado === 'inadimplente';
+  // Veículo principal
+  const veiculoPrincipal = veiculos.length > 0 ? veiculos[0] : null;
   
   // Mostrar banner de revistoria apenas a partir do 6° dia de atraso
   const mostrarBannerRevistoria = revistoria && (
     revistoria.diasAtraso >= 6 || revistoria.status === 'em_analise'
   );
-  
-  // Veículo desprotegido: após 1 dia de atraso na revistoria
-  const veiculoDesprotegido = revistoria && revistoria.diasAtraso >= 1 && 
-    revistoria.status !== 'em_analise' && revistoria.status !== 'aprovada';
-
-  // Status final
-  const isDesprotegido = veiculoDesprotegido;
-  const isAtivo = !isDesprotegido && statusAssociado === 'ativo';
 
   // Loading state
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <p className="text-muted-foreground">Carregando...</p>
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        <p className="text-gray-500">Carregando...</p>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-6 pb-24 px-4">
+    <div className="p-4 space-y-4 pb-24">
       {/* SAUDAÇÃO */}
-      <div className="pt-2">
-        <p className="text-sm text-muted-foreground">{getGreeting()},</p>
-        <h1 className="text-2xl font-bold text-foreground">{primeiroNome}! 👋</h1>
+      <div>
+        <h1 className="text-xl font-semibold text-gray-900">
+          Olá, {primeiroNome}!
+        </h1>
+        <p className="text-sm text-gray-500">Bem-vindo de volta</p>
       </div>
 
       {/* BANNER REVISTORIA */}
@@ -78,215 +102,150 @@ export default function AppHome() {
         />
       )}
 
-      {/* CARD DE SITUAÇÃO - EM ANÁLISE */}
-      {isEmAnalise && (
-        <Card className="border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950">
-          <CardContent className="p-6 text-center">
-            <div className="flex flex-col items-center gap-4">
-              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-500">
-                <Loader2 className="h-8 w-8 text-white animate-spin" />
-              </div>
-              <div>
-                <p className="text-lg font-bold text-blue-700 dark:text-blue-300">
-                  Cadastro em Análise
-                </p>
-                <p className="text-sm text-blue-600 dark:text-blue-400 mt-2">
-                  Estamos analisando seus documentos. Você será notificado assim que o processo for concluído.
-                </p>
-                <p className="text-xs text-blue-500 dark:text-blue-400 mt-3">
-                  ⏱️ Tempo médio: 24 horas úteis
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* CARD DE SITUAÇÃO - ATIVO/SUSPENSO/INADIMPLENTE */}
-      {!isEmAnalise && (
-        <Card className={isAtivo 
-          ? "border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950"
-          : "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950"
-        }>
+      {/* CARD DO VEÍCULO PRINCIPAL */}
+      {veiculoPrincipal && (
+        <Card className="bg-white shadow-sm">
           <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className={`flex h-12 w-12 items-center justify-center rounded-full ${isAtivo ? 'bg-green-500' : 'bg-red-500'}`}>
-                  {isAtivo ? <Shield className="h-6 w-6 text-white" /> : <AlertTriangle className="h-6 w-6 text-white" />}
-                </div>
-                <div>
-                  <p className={`text-sm ${isAtivo ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}`}>
-                    {isDesprotegido ? 'Seu veículo está' : 'Sua proteção está'}
-                  </p>
-                  <p className={`text-lg font-bold ${isAtivo ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}`}>
-                    {isAtivo ? 'ATIVA' : isDesprotegido ? 'DESPROTEGIDO' : isSuspenso ? 'SUSPENSA' : isInadimplente ? 'INADIMPLENTE' : 'INATIVA'}
-                  </p>
-                </div>
+            <div className="flex items-center gap-4">
+              {/* Ícone de carro */}
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-100">
+                <Car className="h-6 w-6 text-blue-600" />
               </div>
-              {isAtivo ? (
-                <CheckCircle className="h-8 w-8 text-green-500" />
-              ) : (
-                <AlertTriangle className="h-8 w-8 text-red-500" />
-              )}
-            </div>
-            <div className={`mt-3 flex items-center gap-2 text-sm ${isAtivo ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-              <span>{plano}</span>
-              <span>•</span>
-              <span>Desde {desde}</span>
+              
+              <div className="flex-1 min-w-0">
+                {/* Placa em destaque */}
+                <p className="font-mono text-lg font-bold text-gray-900">
+                  {veiculoPrincipal.placa}
+                </p>
+                {/* Modelo */}
+                <p className="text-sm text-gray-500 truncate">
+                  {veiculoPrincipal.marca} {veiculoPrincipal.modelo}
+                </p>
+              </div>
+              
+              {/* Badge de status */}
+              <Badge className={getStatusColor(statusAssociado)}>
+                {getStatusLabel(statusAssociado)}
+              </Badge>
             </div>
           </CardContent>
         </Card>
       )}
 
-      {/* BOLETO PENDENTE */}
+      {/* CARD PRÓXIMO BOLETO */}
       {boletoPendente && (
-        <Link to={`/app/boletos/${boletoPendente.id}`}>
-          <Card className="border-yellow-200 bg-yellow-50 transition-colors hover:bg-yellow-100 dark:border-yellow-900 dark:bg-yellow-950 dark:hover:bg-yellow-900">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-yellow-500">
-                    <Receipt className="h-5 w-5 text-white" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-                      Boleto {boletoPendente.status === 'vencido' ? 'vencido' : 'pendente'}
-                    </p>
-                    <p className="text-lg font-bold text-yellow-900 dark:text-yellow-100">
-                      {formatCurrency(boletoPendente.valor || 0)}
-                    </p>
-                    <p className="text-xs text-yellow-700 dark:text-yellow-300">
-                      {boletoPendente.status === 'vencido' ? 'Venceu em' : 'Vence em'} {formatDate(boletoPendente.data_vencimento)}
-                    </p>
-                  </div>
-                </div>
-                <ChevronRight className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+        <Card className="bg-white shadow-sm border-l-4 border-l-yellow-500">
+          <CardContent className="p-4">
+            <div className="flex items-start gap-4">
+              {/* Ícone documento */}
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-yellow-100">
+                <FileText className="h-5 w-5 text-yellow-600" />
               </div>
-            </CardContent>
-          </Card>
-        </Link>
+              
+              <div className="flex-1">
+                <p className="text-sm text-gray-500">Próximo vencimento</p>
+                <p className="text-lg font-bold text-gray-900">
+                  {formatDate(boletoPendente.data_vencimento)}
+                </p>
+                <p className="text-xl font-bold text-blue-600 mt-1">
+                  {formatCurrency(boletoPendente.valor || 0)}
+                </p>
+              </div>
+            </div>
+            
+            {/* Botão Pagar agora */}
+            <Button 
+              variant="outline" 
+              className="w-full mt-4 border-blue-600 text-blue-600 hover:bg-blue-50"
+              onClick={() => navigate(`/app/boletos/${boletoPendente.id}`)}
+            >
+              Pagar agora
+            </Button>
+          </CardContent>
+        </Card>
       )}
 
-      {/* MEUS VEÍCULOS */}
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-foreground">Meus Veículos</h2>
-          <Badge variant="secondary">{veiculos.length} veículo(s)</Badge>
-        </div>
+      {/* CARD RASTREAMENTO RÁPIDO */}
+      {veiculoPrincipal?.rastreador_ativo && (
+        <Card className="bg-white shadow-sm">
+          <CardContent className="p-4">
+            <div className="flex items-start gap-4">
+              {/* Ícone localização */}
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100">
+                <MapPin className="h-5 w-5 text-green-600" />
+              </div>
+              
+              <div className="flex-1">
+                <p className="text-sm text-gray-500">Última posição</p>
+                <p className="text-sm font-medium text-gray-900 line-clamp-2">
+                  Localização disponível no mapa
+                </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Atualizado {formatRelativeTime(new Date().toISOString())}
+                </p>
+              </div>
+            </div>
+            
+            <Button 
+              variant="outline" 
+              className="w-full mt-4"
+              onClick={() => navigate('/app/rastreamento')}
+            >
+              Ver no mapa
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
-        {veiculos.length === 0 ? (
-          <Card>
-            <CardContent className="p-4 text-center text-muted-foreground">
-              Nenhum veículo cadastrado
+      {/* GRID DE ATALHOS RÁPIDOS 2x2 */}
+      <div className="grid grid-cols-2 gap-3">
+        {/* Assistência 24h */}
+        <Link to="/app/assistencia">
+          <Card className="bg-white shadow-sm hover:bg-gray-50 transition-colors">
+            <CardContent className="p-4 flex flex-col items-center gap-2">
+              <div className="h-12 w-12 rounded-full bg-orange-100 flex items-center justify-center">
+                <Phone className="h-6 w-6 text-orange-600" />
+              </div>
+              <span className="text-sm font-medium text-gray-700">Assistência 24h</span>
             </CardContent>
           </Card>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {veiculos.map((veiculo) => (
-              <Link key={veiculo.id} to={`/app/veiculos/${veiculo.id}`}>
-                <Card className="transition-colors hover:bg-muted/50">
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                          <Car className="h-5 w-5 text-primary" />
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <p className="font-bold text-foreground">{veiculo.placa}</p>
-                            {veiculo.rastreador_ativo && (
-                              <Badge variant="outline" className="border-green-500 text-xs text-green-600">
-                                Rastreado
-                              </Badge>
-                            )}
-                          </div>
-                          <p className="text-sm text-muted-foreground">
-                            {veiculo.marca} {veiculo.modelo} {veiculo.ano_modelo}
-                          </p>
-                        </div>
-                      </div>
-                      <ChevronRight className="h-5 w-5 text-muted-foreground" />
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* ATALHOS RÁPIDOS */}
-      <div className="flex flex-col gap-3">
-        <h2 className="text-lg font-semibold text-foreground">Acesso Rápido</h2>
-        <div className="grid grid-cols-3 gap-3">
-          <Link to="/app/boletos" className="flex flex-col items-center gap-2 rounded-xl bg-muted/50 p-4 transition-colors hover:bg-muted">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900">
-              <Receipt className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-            </div>
-            <span className="text-xs font-medium text-foreground">Boletos</span>
-          </Link>
-
-          <Link to="/app/rastreamento" className="flex flex-col items-center gap-2 rounded-xl bg-muted/50 p-4 transition-colors hover:bg-muted">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-900">
-              <MapPin className="h-6 w-6 text-green-600 dark:text-green-400" />
-            </div>
-            <span className="text-xs font-medium text-foreground">Rastrear</span>
-          </Link>
-
-          <Link to="/app/revistoria" className="relative flex flex-col items-center gap-2 rounded-xl bg-muted/50 p-4 transition-colors hover:bg-muted">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-purple-100 dark:bg-purple-900">
-              <Camera className="h-6 w-6 text-purple-600 dark:text-purple-400" />
-            </div>
-            <span className="text-xs font-medium text-foreground">Revistoria</span>
-            {revistoria && revistoria.diasAtraso >= 6 && revistoria.status !== 'em_analise' && revistoria.status !== 'aprovada' && (
-              <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-xs font-bold text-destructive-foreground">
-                !
-              </span>
-            )}
-          </Link>
-
-          <Link to="/app/assistencia" className="flex flex-col items-center gap-2 rounded-xl bg-muted/50 p-4 transition-colors hover:bg-muted">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-orange-100 dark:bg-orange-900">
-              <Phone className="h-6 w-6 text-orange-600 dark:text-orange-400" />
-            </div>
-            <span className="text-xs font-medium text-foreground">Ajuda 24h</span>
-          </Link>
-
-          <Link to="/app/sinistros" className="flex flex-col items-center gap-2 rounded-xl bg-muted/50 p-4 transition-colors hover:bg-muted">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-100 dark:bg-red-900">
-              <AlertTriangle className="h-6 w-6 text-red-600 dark:text-red-400" />
-            </div>
-            <span className="text-xs font-medium text-foreground">Sinistros</span>
-          </Link>
-
-          <Link to="/app/ouvidoria" className="relative flex flex-col items-center gap-2 rounded-xl bg-muted/50 p-4 transition-colors hover:bg-muted">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-cyan-100 dark:bg-cyan-900">
-              <MessageCircle className="h-6 w-6 text-cyan-600 dark:text-cyan-400" />
-            </div>
-            <span className="text-xs font-medium text-foreground">Ouvidoria</span>
-            {manifestacoesNaoLidas > 0 && (
-              <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
-                {manifestacoesNaoLidas}
-              </span>
-            )}
-          </Link>
-        </div>
-      </div>
-
-      {/* BOTÃO EMERGÊNCIA */}
-      <div className="mt-2">
-        <Link to="/app/assistencia/nova">
-          <Button 
-            size="lg" 
-            className="w-full bg-destructive py-6 text-destructive-foreground hover:bg-destructive/90"
-          >
-            <Phone className="mr-2 h-5 w-5" />
-            Solicitar Assistência 24h
-          </Button>
         </Link>
-        <p className="mt-2 text-center text-xs text-muted-foreground">
-          Guincho, pane seca, chaveiro, bateria
-        </p>
+        
+        {/* Abrir Sinistro */}
+        <Link to="/app/sinistros/novo">
+          <Card className="bg-white shadow-sm hover:bg-gray-50 transition-colors">
+            <CardContent className="p-4 flex flex-col items-center gap-2">
+              <div className="h-12 w-12 rounded-full bg-red-100 flex items-center justify-center">
+                <AlertTriangle className="h-6 w-6 text-red-600" />
+              </div>
+              <span className="text-sm font-medium text-gray-700">Abrir Sinistro</span>
+            </CardContent>
+          </Card>
+        </Link>
+        
+        {/* Meus Boletos */}
+        <Link to="/app/boletos">
+          <Card className="bg-white shadow-sm hover:bg-gray-50 transition-colors">
+            <CardContent className="p-4 flex flex-col items-center gap-2">
+              <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
+                <Receipt className="h-6 w-6 text-blue-600" />
+              </div>
+              <span className="text-sm font-medium text-gray-700">Meus Boletos</span>
+            </CardContent>
+          </Card>
+        </Link>
+        
+        {/* Documentos */}
+        <Link to="/app/documentos">
+          <Card className="bg-white shadow-sm hover:bg-gray-50 transition-colors">
+            <CardContent className="p-4 flex flex-col items-center gap-2">
+              <div className="h-12 w-12 rounded-full bg-purple-100 flex items-center justify-center">
+                <FileText className="h-6 w-6 text-purple-600" />
+              </div>
+              <span className="text-sm font-medium text-gray-700">Documentos</span>
+            </CardContent>
+          </Card>
+        </Link>
       </div>
     </div>
   );
