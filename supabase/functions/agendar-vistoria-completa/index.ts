@@ -47,6 +47,29 @@ serve(async (req) => {
 
     console.log('[AgendarVistoriaCompleta] Iniciando para cotação:', cotacaoId);
 
+    // 0. VERIFICAR SE JÁ EXISTE INSTALAÇÃO/VISTORIA PARA EVITAR DUPLICATAS
+    const { data: instalacaoExistente } = await supabase
+      .from('instalacoes')
+      .select('id, status')
+      .eq('cotacao_id', cotacaoId)
+      .in('status', ['agendada', 'concluida', 'em_andamento', 'em_rota'])
+      .maybeSingle();
+
+    if (instalacaoExistente) {
+      console.log('[AgendarVistoriaCompleta] Instalação já existe:', instalacaoExistente.id);
+      
+      // Retornar sucesso com o ID existente (idempotência)
+      return new Response(JSON.stringify({
+        success: true,
+        vistoriaId: null,
+        instalacaoId: instalacaoExistente.id,
+        message: 'Agendamento já existente'
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
     // 1. Buscar cotação e contrato
     const { data: cotacao, error: cotacaoError } = await supabase
       .from('cotacoes')
