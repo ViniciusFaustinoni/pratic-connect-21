@@ -819,12 +819,28 @@ export function useAprovarProposta() {
         throw new Error(`Não foi possível aprovar o contrato. Status atual: ${contratoRefetch?.status || 'desconhecido'}`);
       }
 
-      // 3. Atualizar ASSOCIADO para aguardando_instalacao (NÃO ativo ainda)
-      // A ativação completa ocorre após técnico aprovar vistoria presencial
+      // 3. Verificar se já existe instalação CONCLUÍDA para este contrato
+      // (fluxo: instalação é feita ANTES da análise cadastral)
+      const { data: instalacaoConcluida } = await supabase
+        .from('instalacoes')
+        .select('id, status, rastreador_id')
+        .eq('contrato_id', contratoId)
+        .eq('status', 'concluida')
+        .maybeSingle();
+      
+      const jaTemInstalacaoConcluida = !!instalacaoConcluida;
+      
+      // 4. Definir status do associado baseado na instalação
+      // Se instalação JÁ concluída: 'em_analise' (aguardando ativação do rastreador)
+      // Se instalação NÃO concluída: 'aguardando_instalacao'
+      const statusAssociado = jaTemInstalacaoConcluida 
+        ? 'em_analise' 
+        : 'aguardando_instalacao';
+
       const { data: associadoAtualizado, error: associadoError } = await supabase
         .from('associados')
         .update({
-          status: 'aguardando_instalacao',
+          status: statusAssociado,
           data_adesao: agora.split('T')[0],
           aprovado_por: profile.id,
           aprovado_em: agora,
@@ -839,26 +855,29 @@ export function useAprovarProposta() {
       }
       
       // Validar que a atualização realmente ocorreu
-      if (!associadoAtualizado || associadoAtualizado.status !== 'aguardando_instalacao') {
+      if (!associadoAtualizado || associadoAtualizado.status !== statusAssociado) {
         console.error('Associado não foi atualizado corretamente:', associadoAtualizado);
         throw new Error('Sem permissão para atualizar associado (RLS) ou associado não encontrado');
       }
 
-      // 4. Buscar veículo do associado para ativar cobertura roubo/furto
+      // 5. Buscar veículo do associado para ativar cobertura roubo/furto
       const { data: veiculos } = await supabase
         .from('veiculos')
         .select('id, placa, modelo')
         .eq('associado_id', associadoId)
         .limit(1);
 
-      // 5. Atualizar VEÍCULO para cobertura roubo/furto (parcial)
+      // 6. Atualizar VEÍCULO e criar instalação SE NECESSÁRIO
       if (veiculos && veiculos.length > 0) {
         const veiculoId = veiculos[0].id;
+        
+        // Status do veículo depende se instalação foi concluída
+        const statusVeiculo = jaTemInstalacaoConcluida ? 'em_analise' : 'instalacao_pendente';
         
         const { error: veiculoError } = await supabase
           .from('veiculos')
           .update({
-            status: 'instalacao_pendente',
+            status: statusVeiculo,
             cobertura_roubo_furto: true,
             cobertura_total: false,
           })
@@ -868,40 +887,46 @@ export function useAprovarProposta() {
           console.error('Erro ao atualizar veículo:', veiculoError);
         }
 
-        // 6. Criar INSTALAÇÃO agendada (se tiver veículo)
-        const associadoData = contrato.associado as any;
-        const dataAgendada = new Date().toISOString().split('T')[0]; // Data atual como placeholder
-        const { error: instalacaoError } = await supabase
-          .from('instalacoes')
-          .insert({
-            associado_id: associadoId,
-            veiculo_id: veiculoId,
-            contrato_id: contratoId,
-            status: 'agendada', // Valor válido do enum status_instalacao
-            data_agendada: dataAgendada,
-            periodo: 'manha',
-            logradouro: associadoData?.logradouro || null,
-            numero: associadoData?.numero || null,
-            bairro: associadoData?.bairro || null,
-            cidade: associadoData?.cidade || null,
-            uf: associadoData?.uf || null,
-            cep: associadoData?.cep || null,
-          } as any);
-        
-        if (instalacaoError) {
-          console.error('Erro ao criar instalação:', instalacaoError);
-          throw new Error(`Falha ao criar instalação: ${instalacaoError.message}`);
+        // Criar INSTALAÇÃO APENAS se NÃO existir instalação concluída
+        if (!jaTemInstalacaoConcluida) {
+          const associadoData = contrato.associado as any;
+          const dataAgendada = new Date().toISOString().split('T')[0];
+          const { error: instalacaoError } = await supabase
+            .from('instalacoes')
+            .insert({
+              associado_id: associadoId,
+              veiculo_id: veiculoId,
+              contrato_id: contratoId,
+              status: 'agendada',
+              data_agendada: dataAgendada,
+              periodo: 'manha',
+              logradouro: associadoData?.logradouro || null,
+              numero: associadoData?.numero || null,
+              bairro: associadoData?.bairro || null,
+              cidade: associadoData?.cidade || null,
+              uf: associadoData?.uf || null,
+              cep: associadoData?.cep || null,
+            } as any);
+          
+          if (instalacaoError) {
+            console.error('Erro ao criar instalação:', instalacaoError);
+            throw new Error(`Falha ao criar instalação: ${instalacaoError.message}`);
+          }
         }
       }
 
-      // 7. Registrar histórico
+      // 7. Registrar histórico com mensagem apropriada
+      const mensagemHistorico = jaTemInstalacaoConcluida
+        ? 'Proposta aprovada pelo analista de cadastro. Instalação já concluída. Aguardando ativação do rastreador para cobertura total.'
+        : 'Proposta aprovada pelo analista de cadastro. Cobertura Roubo/Furto ativada. Aguardando instalação para cobertura total.';
+      
       await supabase
         .from('associados_historico')
         .insert({
           associado_id: associadoId,
           contrato_id: contratoId,
           tipo: 'status_alterado',
-          descricao: 'Proposta aprovada pelo analista de cadastro. Cobertura Roubo/Furto ativada. Aguardando instalação para cobertura total.',
+          descricao: mensagemHistorico,
           usuario_id: profile.id,
         });
 
@@ -942,10 +967,14 @@ export function useAprovarProposta() {
 
       // Nota: Cobranças serão geradas em outro momento do fluxo (após instalação ou pelo financeiro)
 
+      const mensagemRetorno = jaTemInstalacaoConcluida
+        ? 'Proposta aprovada! Instalação já concluída. Aguardando ativação do rastreador.'
+        : 'Proposta aprovada! Cobertura Roubo/Furto ativada. Aguardando instalação para cobertura total.';
+
       return {
         contratoId, 
         associadoId,
-        mensagem: 'Proposta aprovada! Cobertura Roubo/Furto ativada. Aguardando instalação para cobertura total.'
+        mensagem: mensagemRetorno
       };
     },
     onSuccess: async (result) => {
