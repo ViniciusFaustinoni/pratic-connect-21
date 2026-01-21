@@ -261,7 +261,8 @@ function RastreadoresContent({
               <TableHeader>
                 <TableRow>
                   <TableHead>Código</TableHead>
-                  <TableHead>Nº Série / IMEI</TableHead>
+                  <TableHead>Nº Série</TableHead>
+                  <TableHead>IMEI</TableHead>
                   <TableHead>Plataforma</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Comunicação</TableHead>
@@ -279,17 +280,12 @@ function RastreadoresContent({
                     <TableRow key={rastreador.id}>
                       <TableCell className="font-medium">{rastreador.codigo}</TableCell>
                       <TableCell>
-                        <div className="space-y-0.5">
-                          {rastreador.numero_serie && (
-                            <span className="block text-sm">{rastreador.numero_serie}</span>
-                          )}
-                          {rastreador.imei && (
-                            <span className="block text-xs font-mono text-muted-foreground">
-                              IMEI: {rastreador.imei}
-                            </span>
-                          )}
-                          {!rastreador.numero_serie && !rastreador.imei && '-'}
-                        </div>
+                        {rastreador.numero_serie || '-'}
+                      </TableCell>
+                      <TableCell>
+                        <span className="font-mono text-sm">
+                          {rastreador.imei || '-'}
+                        </span>
                       </TableCell>
                       <TableCell>
                         {getPlataformaLabel(rastreador.plataforma)}
