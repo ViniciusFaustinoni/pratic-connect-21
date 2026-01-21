@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { getHojeBrasilia } from "@/lib/date-utils";
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from "react-leaflet";
 import L from "leaflet";
 import { format, isSameDay, addDays } from "date-fns";
@@ -130,7 +131,7 @@ export function MapaMobileContent() {
   const navigate = useNavigate();
   // Filtrar apenas serviços do usuário logado (vistoriador/instalador)
   const { data: vistorias, isLoading } = useVistoriasMapa({ filtrarPorUsuario: true });
-  const [filtroData, setFiltroData] = useState<Date>(new Date());
+  const [filtroData, setFiltroData] = useState<Date>(() => getHojeBrasilia());
   const [filtroBusca, setFiltroBusca] = useState("");
   const [posicaoSelecionada, setPosicaoSelecionada] = useState<[number, number] | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -153,9 +154,8 @@ export function MapaMobileContent() {
     const filtroNormalizado = new Date(filtroData);
     filtroNormalizado.setHours(0, 0, 0, 0);
 
-    // Data de HOJE (normalizada para meia-noite)
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
+    // Data de HOJE no timezone de Brasília (normalizada para meia-noite)
+    const hoje = getHojeBrasilia();
 
     return vistorias.filter((v) => {
       // Sem data agendada = não mostrar
@@ -261,9 +261,8 @@ export function MapaMobileContent() {
     const dataAgendadaStr = v.data_agendada.slice(0, 10);
     const dataVistoria = new Date(dataAgendadaStr + 'T00:00:00');
     
-    // Comparar com HOJE, não com o filtro
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
+    // Comparar com HOJE no timezone de Brasília
+    const hoje = getHojeBrasilia();
     
     return dataVistoria < hoje;
   };
@@ -429,10 +428,10 @@ export function MapaMobileContent() {
               variant="outline"
               size="sm"
               className="flex-1 h-8 text-xs font-medium"
-              onClick={() => setFiltroData(new Date())}
+              onClick={() => setFiltroData(getHojeBrasilia())}
             >
               <CalendarIcon className="h-3 w-3 mr-1.5" />
-              {isSameDay(filtroData, new Date()) 
+              {isSameDay(filtroData, getHojeBrasilia()) 
                 ? "Hoje" 
                 : format(filtroData, "dd/MM", { locale: ptBR })}
             </Button>
