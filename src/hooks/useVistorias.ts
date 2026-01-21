@@ -259,8 +259,18 @@ export function useFinalizarVistoriaComDecisao() {
       contrato_id?: string | null;
       km_atual?: number;
       observacoes?: string;
+      imei_rastreador?: string;
     }) => {
       const status: VistoriaStatus = data.aceito ? 'aprovada' : 'reprovada';
+      
+      // Buscar dados da vistoria para obter veiculo_id
+      const { data: vistoriaData, error: vistoriaError } = await supabase
+        .from('vistorias')
+        .select('veiculo_id')
+        .eq('id', data.id)
+        .single();
+      
+      if (vistoriaError) throw vistoriaError;
       
       // Se aceito e tem contrato_id, buscar o associado_id do contrato
       let associadoId: string | undefined;
@@ -295,18 +305,64 @@ export function useFinalizarVistoriaComDecisao() {
 
       if (error) throw error;
 
-      return { status, contrato_id: data.contrato_id };
+      // Se aprovado e tem IMEI, vincular rastreador ao veículo
+      if (data.aceito && data.imei_rastreador && vistoriaData.veiculo_id) {
+        // Verificar se rastreador já existe pelo IMEI
+        const { data: rastreadorExistente } = await supabase
+          .from('rastreadores')
+          .select('id')
+          .eq('imei', data.imei_rastreador)
+          .maybeSingle();
+        
+        if (rastreadorExistente) {
+          // Atualizar rastreador existente para vincular ao veículo
+          const { error: rastreadorError } = await supabase
+            .from('rastreadores')
+            .update({ 
+              veiculo_id: vistoriaData.veiculo_id,
+              status: 'instalado',
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', rastreadorExistente.id);
+          
+          if (rastreadorError) {
+            console.error('Erro ao atualizar rastreador:', rastreadorError);
+            // Não lançar erro, pois a vistoria já foi aprovada
+          }
+        } else {
+          // Criar novo rastreador
+          const { error: rastreadorError } = await supabase
+            .from('rastreadores')
+            .insert({
+              imei: data.imei_rastreador,
+              codigo: `RAW-${Date.now()}`,
+              plataforma: 'manual',
+              veiculo_id: vistoriaData.veiculo_id,
+              status: 'instalado',
+            });
+          
+          if (rastreadorError) {
+            console.error('Erro ao criar rastreador:', rastreadorError);
+            // Não lançar erro, pois a vistoria já foi aprovada
+          }
+        }
+      }
+
+      return { status, contrato_id: data.contrato_id, imei_rastreador: data.imei_rastreador };
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['vistorias'] });
       queryClient.invalidateQueries({ queryKey: ['ativacoes'] });
       queryClient.invalidateQueries({ queryKey: ['contratos-pendentes-vinculo'] });
+      queryClient.invalidateQueries({ queryKey: ['rastreadores'] });
       
       if (result.status === 'aprovada') {
-        if (result.contrato_id) {
+        if (result.imei_rastreador) {
+          toast.success('Vistoria aprovada e rastreador vinculado ao veículo!');
+        } else if (result.contrato_id) {
           toast.success('Vistoria aprovada e vinculada ao contrato!');
         } else {
-          toast.success('Vistoria aprovada! Você pode vincular a um contrato depois.');
+          toast.success('Vistoria aprovada!');
         }
       } else {
         toast.success('Vistoria finalizada como não aceita.');
