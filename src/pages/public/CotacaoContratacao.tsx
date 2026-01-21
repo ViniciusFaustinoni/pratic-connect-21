@@ -508,8 +508,7 @@ export default function CotacaoContratacao() {
                         refetchDocs();
                       }}
                     />
-                  ) : (cotacao?.tipo_vistoria === 'autovistoria' ||
-                    (!cotacao?.vistoria_data_agendada && cotacao?.status_contratacao === 'pagamento_ok')) ? (
+                  ) : cotacao?.tipo_vistoria === 'autovistoria' ? (
                     // AUTOVISTORIA ou caso sem agendamento - Verificar se já agendou vistoria completa/instalação
                     cotacao?.vistoria_completa_data_agendada ? (
                       // Vistoria completa já agendada - mostrar tela de análise
@@ -710,15 +709,16 @@ export default function CotacaoContratacao() {
                         </p>
                       </CardContent>
                     </Card>
-                  ) : (
-                    // Fallback - precisa agendar instalação
+                  ) : !cotacao?.vistoria_completa_data_agendada && !cotacao?.vistoria_data_agendada ? (
+                    // Fallback - só mostra se não tem nenhuma vistoria agendada
                     <AgendamentoVistoriaCompleta
                       cotacaoId={cotacao.id}
+                      tipoVistoria={cotacao?.tipo_vistoria as 'autovistoria' | 'agendada'}
                       onConfirmar={() => {
                         window.location.reload();
                       }}
                     />
-                  )}
+                  ) : null}
                 </motion.div>
               )}
             </AnimatePresence>
