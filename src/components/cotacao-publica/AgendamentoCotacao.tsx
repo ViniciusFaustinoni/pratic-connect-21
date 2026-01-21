@@ -36,17 +36,65 @@ export function AgendamentoCotacao({ cotacaoId, onConfirmar }: AgendamentoCotaca
   
   const finalizarMutation = useFinalizarVistoriaCotacao();
   
-  // Gerar próximos 7 dias úteis
   const hoje = new Date();
-  const datasDisponiveis: Date[] = [];
-  let dia = addDays(hoje, 1); // Começar de amanhã
   
+  // Função para obter horários disponíveis para uma data específica
+  const getHorariosDisponiveis = (data: Date) => {
+    const agora = new Date();
+    const isHoje = format(data, 'yyyy-MM-dd') === format(agora, 'yyyy-MM-dd');
+    
+    if (!isHoje) {
+      return HORARIOS_DISPONIVEIS;
+    }
+    
+    // Para hoje, filtrar horários que são >= 2 horas após agora
+    const horaMinima = agora.getHours() + 2;
+    
+    return HORARIOS_DISPONIVEIS.filter(horario => {
+      const hora = parseInt(horario.split(':')[0], 10);
+      return hora > horaMinima;
+    });
+  };
+  
+  // Verificar se hoje tem horários disponíveis (pelo menos 1 slot 2h+ à frente)
+  const hojeTemHorarios = () => {
+    if (isWeekend(hoje)) return false;
+    return getHorariosDisponiveis(hoje).length > 0;
+  };
+  
+  // Gerar próximos 7 dias úteis (incluindo hoje se válido)
+  const datasDisponiveis: Date[] = [];
+  
+  // Incluir hoje se válido
+  if (hojeTemHorarios()) {
+    datasDisponiveis.push(hoje);
+  }
+  
+  // Continuar com dias futuros até ter 7 datas
+  let dia = addDays(hoje, 1);
   while (datasDisponiveis.length < 7) {
     if (!isWeekend(dia)) {
       datasDisponiveis.push(dia);
     }
     dia = addDays(dia, 1);
   }
+  
+  // Handler para seleção de data - limpa horário se inválido
+  const handleSelecionarData = (data: Date) => {
+    setDataSelecionada(data);
+    
+    if (horarioSelecionado) {
+      const horariosValidos = getHorariosDisponiveis(data);
+      if (!horariosValidos.includes(horarioSelecionado)) {
+        setHorarioSelecionado(null);
+      }
+    }
+  };
+  
+  // Horários disponíveis para a data selecionada
+  const horariosParaData = dataSelecionada 
+    ? getHorariosDisponiveis(dataSelecionada) 
+    : HORARIOS_DISPONIVEIS;
   
   const handleCepChange = async (value: string) => {
     const cepLimpo = value.replace(/\D/g, '');
@@ -147,11 +195,12 @@ export function AgendamentoCotacao({ cotacaoId, onConfirmar }: AgendamentoCotaca
             {datasDisponiveis.map((data) => {
               const selecionada = dataSelecionada && 
                 format(dataSelecionada, 'yyyy-MM-dd') === format(data, 'yyyy-MM-dd');
+              const isHoje = format(data, 'yyyy-MM-dd') === format(hoje, 'yyyy-MM-dd');
               
               return (
                 <button
                   key={data.toISOString()}
-                  onClick={() => setDataSelecionada(data)}
+                  onClick={() => handleSelecionarData(data)}
                   className={cn(
                     "p-3 rounded-lg border text-center transition-all",
                     selecionada
@@ -159,8 +208,11 @@ export function AgendamentoCotacao({ cotacaoId, onConfirmar }: AgendamentoCotaca
                       : "border-border/50 bg-card/50 hover:bg-accent/10 hover:border-primary/50"
                   )}
                 >
-                  <div className="text-xs text-muted-foreground">
-                    {format(data, 'EEE', { locale: ptBR })}
+                  <div className={cn(
+                    "text-xs",
+                    isHoje ? "text-primary font-semibold" : "text-muted-foreground"
+                  )}>
+                    {isHoje ? 'hoje' : format(data, 'EEE', { locale: ptBR })}
                   </div>
                   <div className="font-semibold text-lg text-foreground">
                     {format(data, 'd')}
@@ -181,24 +233,30 @@ export function AgendamentoCotacao({ cotacaoId, onConfirmar }: AgendamentoCotaca
             Horário
           </label>
           <div className="grid grid-cols-4 gap-2">
-            {HORARIOS_DISPONIVEIS.map((horario) => {
-              const selecionado = horarioSelecionado === horario;
-              
-              return (
-                <button
-                  key={horario}
-                  onClick={() => setHorarioSelecionado(horario)}
-                  className={cn(
-                    "p-2.5 rounded-lg border text-center font-medium transition-all",
-                    selecionado
-                      ? "border-primary bg-primary/10 ring-2 ring-primary/20 text-primary"
-                      : "border-border/50 bg-card/50 hover:bg-accent/10 hover:border-primary/50 text-foreground"
-                  )}
-                >
-                  {horario}
-                </button>
-              );
-            })}
+            {horariosParaData.length > 0 ? (
+              horariosParaData.map((horario) => {
+                const selecionado = horarioSelecionado === horario;
+                
+                return (
+                  <button
+                    key={horario}
+                    onClick={() => setHorarioSelecionado(horario)}
+                    className={cn(
+                      "p-2.5 rounded-lg border text-center font-medium transition-all",
+                      selecionado
+                        ? "border-primary bg-primary/10 ring-2 ring-primary/20 text-primary"
+                        : "border-border/50 bg-card/50 hover:bg-accent/10 hover:border-primary/50 text-foreground"
+                    )}
+                  >
+                    {horario}
+                  </button>
+                );
+              })
+            ) : (
+              <p className="col-span-4 text-sm text-muted-foreground text-center py-4">
+                Selecione uma data para ver os horários disponíveis
+              </p>
+            )}
           </div>
         </div>
         
