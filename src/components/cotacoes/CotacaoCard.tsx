@@ -386,7 +386,7 @@ export function CotacaoCard({
             
             return (
               <div>
-                <span className="text-muted-foreground text-sm">Mensal: </span>
+                <span className="text-muted-foreground text-sm">Médio mensal: </span>
                 <span className="font-semibold text-primary text-base">
                   {formatCurrency(cotacao.valor_total_mensal)}
                 </span>
