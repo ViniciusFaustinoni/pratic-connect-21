@@ -416,7 +416,7 @@ const generateStyles = () => `
 
 const generateHeader = (data: ContratoTemplateData) => `
   <div class="header">
-    <h1>CONTRATO DE ADESÃO</h1>
+    <h1>CONTRATO DE FILIAÇÃO</h1>
     <span class="plano-badge">${data.planoNome.toUpperCase()}</span>
     <p><strong>Nº ${data.numero}</strong></p>
     <p>Data de Emissão: ${formatDate(new Date().toISOString())}</p>

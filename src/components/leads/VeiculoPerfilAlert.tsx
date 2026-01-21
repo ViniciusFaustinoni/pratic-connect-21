@@ -28,7 +28,7 @@ export function VeiculoPerfilAlert({ anoVeiculo, valorFipe, className }: Veiculo
       alertas.push({
         tipo: 'idade',
         mensagem: `Veículo com ${idadeVeiculo} anos`,
-        detalhe: `Veículos com mais de ${LIMITE_IDADE_ANOS} anos podem ter restrições para adesão. Consulte as regras de aceitação.`,
+        detalhe: `Veículos com mais de ${LIMITE_IDADE_ANOS} anos podem ter restrições para filiação. Consulte as regras de aceitação.`,
       });
     }
   }

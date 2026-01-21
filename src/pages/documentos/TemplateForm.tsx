@@ -198,7 +198,7 @@ export default function TemplateForm() {
                           <FormLabel>Nome do Template *</FormLabel>
                           <FormControl>
                             <Input 
-                              placeholder="Ex: Contrato de Adesão"
+                              placeholder="Ex: Contrato de Filiação"
                               {...field}
                               onChange={(e) => {
                                 field.onChange(e);

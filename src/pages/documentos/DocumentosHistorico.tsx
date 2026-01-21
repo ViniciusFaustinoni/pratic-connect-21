@@ -12,11 +12,11 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 const mockHistorico = [
-  { id: '1', data: '2026-01-16T14:30:00', associado: 'João da Silva', documento: 'Contrato de Adesão', categoria: 'Contratos', geradoPor: 'Carlos Vendedor', assinado: true },
+  { id: '1', data: '2026-01-16T14:30:00', associado: 'João da Silva', documento: 'Contrato de Filiação', categoria: 'Contratos', geradoPor: 'Carlos Vendedor', assinado: true },
   { id: '2', data: '2026-01-16T11:20:00', associado: 'Maria Santos', documento: 'Termo de Vistoria', categoria: 'Termos', geradoPor: 'Ana Analista', assinado: false },
   { id: '3', data: '2026-01-15T16:45:00', associado: 'Pedro Costa', documento: 'Declaração de Quitação', categoria: 'Declarações', geradoPor: 'Carlos Vendedor', assinado: false },
   { id: '4', data: '2026-01-15T09:10:00', associado: 'Ana Souza', documento: 'Ficha Cadastral', categoria: 'Fichas', geradoPor: 'Julia Cadastro', assinado: false },
-  { id: '5', data: '2026-01-14T15:00:00', associado: 'Lucas Ferreira', documento: 'Contrato de Adesão', categoria: 'Contratos', geradoPor: 'Roberto Vendedor', assinado: true },
+  { id: '5', data: '2026-01-14T15:00:00', associado: 'Lucas Ferreira', documento: 'Contrato de Filiação', categoria: 'Contratos', geradoPor: 'Roberto Vendedor', assinado: true },
 ];
 
 const mockEstatisticas = {

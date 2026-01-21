@@ -183,7 +183,7 @@ export default function AssociadoVistoria() {
             <div className="h-6 w-px bg-border/50" />
             <div className="flex items-center gap-2 text-primary">
               <Shield className="h-5 w-5" />
-              <span className="font-semibold text-sm hidden sm:inline">Proposta de Adesão</span>
+              <span className="font-semibold text-sm hidden sm:inline">Proposta de Filiação</span>
             </div>
           </div>
           <Badge variant="outline" className="bg-primary/10 border-primary/30 text-primary">
