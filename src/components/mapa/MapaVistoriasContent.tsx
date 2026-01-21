@@ -346,10 +346,18 @@ export function MapaVistoriasContent() {
                     ? getRotaColor(v.rota_id, rotasIds)
                     : SEM_ROTA_COLOR);
                   
-                  // Verificar se está atrasada
-                  const isAtrasada = filtroData && v.data_agendada && 
-                    new Date(v.data_agendada) < filtroData && 
-                    v.status !== 'concluida' && v.status !== 'cancelada';
+                  // Verificar se está atrasada - normalizar datas para evitar bugs de timezone
+                  const isAtrasada = (() => {
+                    if (!filtroData || !v.data_agendada) return false;
+                    if (v.status === 'concluida' || v.status === 'cancelada') return false;
+                    
+                    // Normalizar ambas as datas para meia-noite
+                    const dataAgendada = new Date(v.data_agendada + 'T00:00:00');
+                    const filtroNormalizado = new Date(filtroData);
+                    filtroNormalizado.setHours(0, 0, 0, 0);
+                    
+                    return dataAgendada < filtroNormalizado;
+                  })();
                   
                   return (
                     <div
