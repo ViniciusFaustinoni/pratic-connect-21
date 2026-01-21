@@ -1,10 +1,11 @@
 import { useParams } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertTriangle, Car, CheckCircle2, CalendarCheck, Calendar, Clock, MapPin, PartyPopper, Shield } from 'lucide-react';
+import { AlertTriangle, Car, CheckCircle2, CalendarCheck, Calendar, Clock, MapPin, PartyPopper, Shield, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useCotacaoContratacao } from '@/hooks/useCotacaoContratacao';
+import { useAgendamentoExistente } from '@/hooks/useAgendamentoExistente';
 import { StepperCotacao, type Step } from '@/components/cotacao-publica/StepperCotacao';
 import { EscolhaPlano } from '@/components/cotacao-publica/EscolhaPlano';
 import { EtapaDadosPessoaisDocumentos } from '@/components/cotacao-publica/EtapaDadosPessoaisDocumentos';
@@ -18,6 +19,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { formatarMoeda } from '@/config/pricing';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useQueryClient } from '@tanstack/react-query';
 
 // NOVO FLUXO: 1-Plano, 2-Docs, 3-Contrato (Autentique), 4-Vistoria, 5-Pagamento
 const STEPS: Step[] = [
@@ -36,6 +38,7 @@ const pageVariants = {
 
 export default function CotacaoContratacao() {
   const { token } = useParams<{ token: string }>();
+  const queryClient = useQueryClient();
   const {
     cotacao,
     isLoading,
@@ -53,6 +56,12 @@ export default function CotacaoContratacao() {
     refetch,
     refetchDocs,
   } = useCotacaoContratacao(token);
+
+  // Verificar se já existe agendamento nas tabelas operacionais (fonte da verdade)
+  const { hasVistoriaAgendada, hasInstalacaoAgendada, isLoading: isLoadingAgendamento } = useAgendamentoExistente(cotacao?.id);
+  
+  // Estado local para travar UI após agendamento bem-sucedido
+  const [agendamentoConcluido, setAgendamentoConcluido] = useState(false);
 
   const [planoSelecionadoId, setPlanoSelecionadoId] = useState<string | null>(null);
 
@@ -520,7 +529,8 @@ export default function CotacaoContratacao() {
                     />
                   ) : cotacao?.tipo_vistoria === 'autovistoria' ? (
                     // AUTOVISTORIA ou caso sem agendamento - Verificar se já agendou vistoria completa/instalação
-                    cotacao?.vistoria_completa_data_agendada ? (
+                    // Usa verificação robusta: campo da cotação OU registro na tabela OU estado local
+                    (cotacao?.vistoria_completa_data_agendada || hasInstalacaoAgendada || agendamentoConcluido) ? (
                       // Vistoria completa já agendada - mostrar tela de análise
                       <Card className="border-primary/30 bg-card/80 backdrop-blur-xl">
                         <CardContent className="py-12 text-center space-y-6">
@@ -571,50 +581,52 @@ export default function CotacaoContratacao() {
                           </div>
 
                           {/* Detalhes do agendamento da vistoria completa */}
-                          <div className="bg-muted/30 rounded-lg p-4 max-w-md mx-auto text-left space-y-3">
-                            <div className="flex items-center gap-2 mb-3">
-                              <CalendarCheck className="h-5 w-5 text-primary" />
-                              <span className="font-medium text-foreground">Instalação Agendada</span>
-                            </div>
-                            
-                            <div className="flex items-center gap-3">
-                              <Calendar className="h-5 w-5 text-primary flex-shrink-0" />
-                              <div>
-                                <p className="text-sm text-muted-foreground">Data</p>
-                                <p className="font-medium">
-                                  {format(new Date(cotacao.vistoria_completa_data_agendada + 'T12:00:00'), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
-                                </p>
+                          {cotacao?.vistoria_completa_data_agendada && (
+                            <div className="bg-muted/30 rounded-lg p-4 max-w-md mx-auto text-left space-y-3">
+                              <div className="flex items-center gap-2 mb-3">
+                                <CalendarCheck className="h-5 w-5 text-primary" />
+                                <span className="font-medium text-foreground">Instalação Agendada</span>
                               </div>
-                            </div>
-                            
-                            {cotacao?.vistoria_completa_horario_agendado && (
+                              
                               <div className="flex items-center gap-3">
-                                <Clock className="h-5 w-5 text-primary flex-shrink-0" />
+                                <Calendar className="h-5 w-5 text-primary flex-shrink-0" />
                                 <div>
-                                  <p className="text-sm text-muted-foreground">Horário</p>
-                                  <p className="font-medium">{cotacao.vistoria_completa_horario_agendado}</p>
-                                </div>
-                              </div>
-                            )}
-                            
-                            {cotacao?.vistoria_completa_endereco_logradouro && (
-                              <div className="flex items-start gap-3">
-                                <MapPin className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
-                                <div>
-                                  <p className="text-sm text-muted-foreground">Local</p>
+                                  <p className="text-sm text-muted-foreground">Data</p>
                                   <p className="font-medium">
-                                    {cotacao.vistoria_completa_endereco_logradouro}
-                                    {cotacao.vistoria_completa_endereco_numero && `, ${cotacao.vistoria_completa_endereco_numero}`}
-                                  </p>
-                                  <p className="text-sm text-muted-foreground">
-                                    {cotacao.vistoria_completa_endereco_bairro}
-                                    {cotacao.vistoria_completa_endereco_cidade && ` - ${cotacao.vistoria_completa_endereco_cidade}`}
-                                    {cotacao.vistoria_completa_endereco_estado && `/${cotacao.vistoria_completa_endereco_estado}`}
+                                    {format(new Date(cotacao.vistoria_completa_data_agendada + 'T12:00:00'), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
                                   </p>
                                 </div>
                               </div>
-                            )}
-                          </div>
+                              
+                              {cotacao?.vistoria_completa_horario_agendado && (
+                                <div className="flex items-center gap-3">
+                                  <Clock className="h-5 w-5 text-primary flex-shrink-0" />
+                                  <div>
+                                    <p className="text-sm text-muted-foreground">Horário</p>
+                                    <p className="font-medium">{cotacao.vistoria_completa_horario_agendado}</p>
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {cotacao?.vistoria_completa_endereco_logradouro && (
+                                <div className="flex items-start gap-3">
+                                  <MapPin className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                                  <div>
+                                    <p className="text-sm text-muted-foreground">Local</p>
+                                    <p className="font-medium">
+                                      {cotacao.vistoria_completa_endereco_logradouro}
+                                      {cotacao.vistoria_completa_endereco_numero && `, ${cotacao.vistoria_completa_endereco_numero}`}
+                                    </p>
+                                    <p className="text-sm text-muted-foreground">
+                                      {cotacao.vistoria_completa_endereco_bairro}
+                                      {cotacao.vistoria_completa_endereco_cidade && ` - ${cotacao.vistoria_completa_endereco_cidade}`}
+                                      {cotacao.vistoria_completa_endereco_estado && `/${cotacao.vistoria_completa_endereco_estado}`}
+                                    </p>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
 
                           {/* Aviso importante */}
                           <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 max-w-md mx-auto">
@@ -630,13 +642,25 @@ export default function CotacaoContratacao() {
                           </p>
                         </CardContent>
                       </Card>
+                    ) : isLoadingAgendamento ? (
+                      // Carregando verificação de agendamento existente
+                      <Card className="border-border/50 bg-card/80 backdrop-blur-xl">
+                        <CardContent className="py-12 text-center space-y-4">
+                          <Loader2 className="h-10 w-10 animate-spin text-primary mx-auto" />
+                          <p className="text-muted-foreground">Verificando status do agendamento...</p>
+                        </CardContent>
+                      </Card>
                     ) : (
                       // Autovistoria concluída, mas ainda precisa agendar instalação/vistoria completa
                       <AgendamentoVistoriaCompleta
                         cotacaoId={cotacao.id}
                         onConfirmar={() => {
-                          // Força refresh dos dados
-                          window.location.reload();
+                          // Travar UI imediatamente e fazer refetch
+                          setAgendamentoConcluido(true);
+                          queryClient.invalidateQueries({ queryKey: ['cotacao-contratacao'] });
+                          queryClient.invalidateQueries({ queryKey: ['instalacao-existente'] });
+                          queryClient.invalidateQueries({ queryKey: ['vistoria-existente'] });
+                          refetch();
                         }}
                       />
                     )
@@ -719,16 +743,24 @@ export default function CotacaoContratacao() {
                         </p>
                       </CardContent>
                     </Card>
-                  ) : !cotacao?.vistoria_completa_data_agendada && !cotacao?.vistoria_data_agendada ? (
-                    // Fallback - só mostra se não tem nenhuma vistoria agendada
+                  ) : isLoadingAgendamento ? (
+                    <Card className="border-border/50 bg-card/80 backdrop-blur-xl">
+                      <CardContent className="py-12 text-center space-y-4">
+                        <Loader2 className="h-10 w-10 animate-spin text-primary mx-auto" />
+                        <p className="text-muted-foreground">Verificando status...</p>
+                      </CardContent>
+                    </Card>
+                  ) : (
                     <AgendamentoVistoriaCompleta
                       cotacaoId={cotacao.id}
                       tipoVistoria={cotacao?.tipo_vistoria as 'autovistoria' | 'agendada'}
                       onConfirmar={() => {
-                        window.location.reload();
+                        setAgendamentoConcluido(true);
+                        queryClient.invalidateQueries({ queryKey: ['cotacao-contratacao'] });
+                        refetch();
                       }}
                     />
-                  ) : null}
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>
