@@ -173,3 +173,9 @@ verify_jwt = false
 
 [functions.asaas-verificar-pagamento]
 verify_jwt = false
+
+[functions.enviar-documento-sinistro]
+verify_jwt = false
+
+[functions.enviar-mensagem-sinistro]
+verify_jwt = false
