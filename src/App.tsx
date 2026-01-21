@@ -217,7 +217,7 @@ import NovoSinistro from "./pages/app/NovoSinistro";
 import AppSinistroDetalhe from "./pages/app/SinistroDetalhe";
 import AppPerfil from "./pages/app/AppPerfil";
 import AppConfiguracoes from "./pages/app/AppConfiguracoes";
-import AppDocumentos from "./pages/app/AppDocumentos";
+import AppDocumentos from "./pages/app/Documentos";
 import AppNotificacoes from "./pages/app/AppNotificacoes";
 import AppPlano from "./pages/app/AppPlano";
 import AppInstall from "./pages/app/AppInstall";
