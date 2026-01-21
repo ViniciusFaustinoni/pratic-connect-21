@@ -61,12 +61,14 @@ import { useSinistro } from '@/hooks/useSinistros';
 import { 
   useSinistroHistorico, 
   useSinistroDocumentos, 
-  useSinistroFotos, 
+  useSinistroFotosComUrls, 
   useSinistroMensagens,
   useEnviarMensagemSinistro,
-  useUploadFotoSinistro,
+  useUploadFotoSinistroCompleto,
+  useExcluirFotoSinistro,
   useUploadDocumentoSinistro,
 } from '@/hooks/useSinistroDetalhes';
+import { useSinistroRealtime } from '@/hooks/useSinistroRealtime';
 import { TIPO_SINISTRO_LABELS, STATUS_SINISTRO_LABELS } from '@/types/sinistros';
 
 // Status configuration
@@ -220,16 +222,19 @@ export default function SinistroDetalhe() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   
+  // Ativar realtime para este sinistro
+  useSinistroRealtime(id);
+  
   // Queries
   const { data: sinistro, isLoading } = useSinistro(id);
   const { data: historico } = useSinistroHistorico(id);
   const { data: documentos } = useSinistroDocumentos(id);
-  const { data: fotos } = useSinistroFotos(id);
+  const { data: fotos } = useSinistroFotosComUrls(id);
   const { data: mensagens } = useSinistroMensagens(id);
   
   // Mutations
   const enviarMensagem = useEnviarMensagemSinistro();
-  const uploadFoto = useUploadFotoSinistro();
+  const uploadFoto = useUploadFotoSinistroCompleto();
   const uploadDocumento = useUploadDocumentoSinistro();
   
   // State
@@ -674,12 +679,12 @@ export default function SinistroDetalhe() {
                 <div className="grid grid-cols-3 gap-2">
                   {fotos?.map((foto, index) => (
                     <div 
-                      key={foto.name || index} 
+                      key={foto.id || index} 
                       className="aspect-square rounded-lg overflow-hidden bg-muted cursor-pointer"
-                      onClick={() => setFotoViewer(foto.url)}
+                      onClick={() => setFotoViewer(foto.url_assinada || '')}
                     >
                       <img 
-                        src={foto.url} 
+                        src={foto.url_assinada || ''} 
                         alt={`Foto ${index + 1}`}
                         className="w-full h-full object-cover"
                       />
