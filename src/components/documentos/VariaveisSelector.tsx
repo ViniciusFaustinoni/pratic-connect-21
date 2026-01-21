@@ -13,7 +13,9 @@ import {
   ChevronDown, 
   Search, 
   Copy, 
-  Check 
+  Check,
+  Shield,
+  Calendar
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -22,6 +24,7 @@ const iconesPorGrupo: Record<string, React.ComponentType<{ className?: string }>
   associado: User,
   veiculo: Car,
   contrato: FileText,
+  plano: Shield,
   sistema: Settings,
   empresa: Building,
 };
@@ -30,19 +33,23 @@ const iconesPorGrupo: Record<string, React.ComponentType<{ className?: string }>
 const VARIAVEIS_DISPONIVEIS: Record<string, { codigo: string; descricao: string }[]> = {
   associado: [
     { codigo: 'associado.nome', descricao: 'Nome completo do associado' },
-    { codigo: 'associado.cpf', descricao: 'CPF do associado' },
+    { codigo: 'associado.cpf', descricao: 'CPF do associado (formatado)' },
     { codigo: 'associado.rg', descricao: 'RG do associado' },
-    { codigo: 'associado.telefone', descricao: 'Telefone principal' },
+    { codigo: 'associado.telefone', descricao: 'Telefone principal (formatado)' },
+    { codigo: 'associado.whatsapp', descricao: 'WhatsApp do associado' },
     { codigo: 'associado.email', descricao: 'E-mail do associado' },
     { codigo: 'associado.data_nascimento', descricao: 'Data de nascimento' },
     { codigo: 'associado.data_adesao', descricao: 'Data de adesão à associação' },
     { codigo: 'associado.endereco_completo', descricao: 'Endereço formatado completo' },
-    { codigo: 'associado.logradouro', descricao: 'Logradouro' },
+    { codigo: 'associado.logradouro', descricao: 'Logradouro (rua, avenida, etc.)' },
     { codigo: 'associado.numero', descricao: 'Número do endereço' },
+    { codigo: 'associado.complemento', descricao: 'Complemento do endereço' },
     { codigo: 'associado.bairro', descricao: 'Bairro' },
     { codigo: 'associado.cidade', descricao: 'Cidade' },
-    { codigo: 'associado.estado', descricao: 'UF' },
+    { codigo: 'associado.uf', descricao: 'UF (estado)' },
     { codigo: 'associado.cep', descricao: 'CEP' },
+    { codigo: 'associado.profissao', descricao: 'Profissão' },
+    { codigo: 'associado.estado_civil', descricao: 'Estado civil' },
   ],
   veiculo: [
     { codigo: 'veiculo.marca', descricao: 'Marca do veículo' },
@@ -52,22 +59,34 @@ const VARIAVEIS_DISPONIVEIS: Record<string, { codigo: string; descricao: string 
     { codigo: 'veiculo.placa', descricao: 'Placa do veículo' },
     { codigo: 'veiculo.chassi', descricao: 'Número do chassi' },
     { codigo: 'veiculo.renavam', descricao: 'Número do RENAVAM' },
-    { codigo: 'veiculo.valor_fipe', descricao: 'Valor FIPE formatado' },
+    { codigo: 'veiculo.valor_fipe', descricao: 'Valor FIPE formatado (R$)' },
     { codigo: 'veiculo.combustivel', descricao: 'Tipo de combustível' },
     { codigo: 'veiculo.categoria', descricao: 'Categoria do veículo' },
+    { codigo: 'veiculo.tipo', descricao: 'Tipo (carro, moto, caminhão)' },
   ],
   contrato: [
     { codigo: 'contrato.numero', descricao: 'Número do contrato' },
-    { codigo: 'contrato.plano', descricao: 'Nome do plano contratado' },
-    { codigo: 'contrato.valor_adesao', descricao: 'Valor de adesão' },
-    { codigo: 'contrato.valor_mensal', descricao: 'Valor da mensalidade' },
+    { codigo: 'contrato.valor_adesao', descricao: 'Valor de adesão (R$)' },
+    { codigo: 'contrato.valor_mensal', descricao: 'Valor da mensalidade (R$)' },
     { codigo: 'contrato.dia_vencimento', descricao: 'Dia de vencimento' },
     { codigo: 'contrato.data_inicio', descricao: 'Data de início do contrato' },
     { codigo: 'contrato.data_fim', descricao: 'Data de fim do contrato' },
+    { codigo: 'contrato.status', descricao: 'Status atual do contrato' },
+  ],
+  plano: [
+    { codigo: 'plano.nome', descricao: 'Nome do plano contratado' },
+    { codigo: 'plano.codigo', descricao: 'Código do plano' },
+    { codigo: 'plano.descricao', descricao: 'Descrição do plano' },
+    { codigo: 'plano.tipo_uso', descricao: 'Tipo de uso (particular, comercial)' },
+    { codigo: 'plano.franquia', descricao: 'Valor/percentual da franquia' },
+    { codigo: 'plano.carencia', descricao: 'Período de carência' },
+    { codigo: 'plano.coberturas_html', descricao: 'Tabela de coberturas em HTML' },
+    { codigo: 'plano.valor_base', descricao: 'Valor base do plano' },
+    { codigo: 'plano.cobertura_fipe', descricao: 'Percentual de cobertura FIPE' },
   ],
   sistema: [
     { codigo: 'sistema.data_atual', descricao: 'Data atual (DD/MM/AAAA)' },
-    { codigo: 'sistema.hora_atual', descricao: 'Hora atual (HH:MM)' },
+    { codigo: 'sistema.hora_atual', descricao: 'Hora atual (HH:MM:SS)' },
     { codigo: 'sistema.data_extenso', descricao: 'Data por extenso' },
     { codigo: 'sistema.ano_atual', descricao: 'Ano atual' },
     { codigo: 'sistema.mes_atual', descricao: 'Mês atual por extenso' },
@@ -76,7 +95,14 @@ const VARIAVEIS_DISPONIVEIS: Record<string, { codigo: string; descricao: string 
     { codigo: 'empresa.nome', descricao: 'Nome fantasia da empresa' },
     { codigo: 'empresa.razao_social', descricao: 'Razão social' },
     { codigo: 'empresa.cnpj', descricao: 'CNPJ da empresa' },
-    { codigo: 'empresa.endereco', descricao: 'Endereço completo' },
+    { codigo: 'empresa.endereco_completo', descricao: 'Endereço completo formatado' },
+    { codigo: 'empresa.logradouro', descricao: 'Logradouro' },
+    { codigo: 'empresa.numero', descricao: 'Número' },
+    { codigo: 'empresa.complemento', descricao: 'Complemento' },
+    { codigo: 'empresa.bairro', descricao: 'Bairro' },
+    { codigo: 'empresa.cidade', descricao: 'Cidade' },
+    { codigo: 'empresa.uf', descricao: 'UF (estado)' },
+    { codigo: 'empresa.cep', descricao: 'CEP' },
     { codigo: 'empresa.telefone', descricao: 'Telefone da empresa' },
     { codigo: 'empresa.email', descricao: 'E-mail da empresa' },
     { codigo: 'empresa.site', descricao: 'Website da empresa' },
@@ -94,6 +120,7 @@ export function VariaveisSelector({ onSelect }: VariaveisSelectorProps) {
     associado: true,
     veiculo: false,
     contrato: false,
+    plano: false,
     sistema: false,
     empresa: false,
   });
@@ -121,8 +148,20 @@ export function VariaveisSelector({ onSelect }: VariaveisSelectorProps) {
     );
   };
 
+  // Contar total de variáveis
+  const totalVariaveis = Object.values(VARIAVEIS_DISPONIVEIS).reduce(
+    (acc, arr) => acc + arr.length, 0
+  );
+
   return (
     <div className="space-y-3">
+      {/* Header com contador */}
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">
+          {totalVariaveis} variáveis disponíveis
+        </p>
+      </div>
+
       {/* Busca */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
