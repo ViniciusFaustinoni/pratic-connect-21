@@ -163,25 +163,27 @@ serve(async (req) => {
       .update({ vistoria_id: novaVistoria.id })
       .eq('id', contrato.id);
 
-    // 7. CRIAR INSTALAÇÃO
+    // 7. CRIAR INSTALAÇÃO (usando nomes de colunas corretos da tabela instalacoes)
     const instalacaoData = {
       contrato_id: contrato.id,
+      cotacao_id: cotacaoId,
       associado_id: contrato.associado_id,
       veiculo_id: contrato.veiculo_id,
-      vistoria_id: novaVistoria.id,
       status: 'agendada',
       data_agendada: dataAgendada,
-      horario_agendado: horarioAgendado,
-      endereco_cep: endereco.cep,
-      endereco_logradouro: endereco.logradouro,
-      endereco_numero: endereco.numero,
-      endereco_bairro: endereco.bairro,
-      endereco_cidade: endereco.cidade,
-      endereco_estado: endereco.estado,
+      hora_agendada: horarioAgendado,
+      cep: endereco.cep,
+      logradouro: endereco.logradouro,
+      numero: endereco.numero,
+      bairro: endereco.bairro,
+      cidade: endereco.cidade,
+      uf: endereco.estado,
       endereco_latitude: latitude || null,
       endereco_longitude: longitude || null,
       observacoes: obsResponsavel,
     };
+
+    console.log('[AgendarVistoriaCompleta] Dados da instalação:', JSON.stringify(instalacaoData));
 
     const { data: novaInstalacao, error: instalacaoError } = await supabase
       .from('instalacoes')
@@ -190,18 +192,11 @@ serve(async (req) => {
       .single();
 
     if (instalacaoError) {
-      console.error('[AgendarVistoriaCompleta] Erro ao criar instalação (não crítico):', instalacaoError);
-    } else {
-      console.log('[AgendarVistoriaCompleta] Instalação criada:', novaInstalacao.id);
-
-      // 8. Vincular instalação à vistoria
-      await supabase
-        .from('vistorias')
-        .update({ instalacao_id: novaInstalacao.id })
-        .eq('id', novaVistoria.id);
-
-      console.log('[AgendarVistoriaCompleta] Vistoria vinculada à instalação');
+      console.error('[AgendarVistoriaCompleta] Erro ao criar instalação:', instalacaoError);
+      throw new Error(`Erro ao criar instalação: ${instalacaoError.message}`);
     }
+    
+    console.log('[AgendarVistoriaCompleta] Instalação criada com sucesso:', novaInstalacao.id);
 
     return new Response(JSON.stringify({
       success: true,
