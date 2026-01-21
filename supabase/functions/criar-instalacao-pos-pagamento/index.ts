@@ -120,6 +120,54 @@ serve(async (req) => {
       });
     }
 
+    // 3.1 CORREÇÃO: Garantir que veiculo_id existe, buscar pela placa se necessário
+    let veiculoIdFinal = contrato.veiculo_id;
+
+    if (!veiculoIdFinal) {
+      console.log('[CriarInstalacaoPosPagamento] veiculo_id null no contrato, buscando pela placa...');
+      
+      // Buscar placa da cotação
+      const { data: cotacaoVeiculo } = await supabase
+        .from('cotacoes')
+        .select('veiculo_placa')
+        .eq('id', cotacaoId)
+        .single();
+      
+      if (cotacaoVeiculo?.veiculo_placa) {
+        const placaLimpa = cotacaoVeiculo.veiculo_placa.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+        
+        const { data: veiculo } = await supabase
+          .from('veiculos')
+          .select('id')
+          .eq('placa', placaLimpa)
+          .maybeSingle();
+        
+        if (veiculo) {
+          veiculoIdFinal = veiculo.id;
+          console.log('[CriarInstalacaoPosPagamento] Veículo encontrado pela placa:', veiculoIdFinal);
+          
+          // Atualizar contrato com o veiculo_id correto
+          await supabase
+            .from('contratos')
+            .update({ veiculo_id: veiculoIdFinal })
+            .eq('id', contrato.id);
+          
+          console.log('[CriarInstalacaoPosPagamento] Contrato atualizado com veiculo_id');
+        }
+      }
+    }
+
+    if (!veiculoIdFinal) {
+      console.error('[CriarInstalacaoPosPagamento] Não foi possível encontrar veículo');
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: 'Veículo não encontrado para criar instalação'
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
     // 4. Determinar qual conjunto de dados usar (vistoria agendada ou vistoria completa)
     const tipoVistoria = cotacao.tipo_vistoria;
     let dataAgendada: string | null = null;
@@ -190,7 +238,7 @@ serve(async (req) => {
       contrato_id: contrato.id,
       cotacao_id: cotacaoId,
       associado_id: contrato.associado_id,
-      veiculo_id: contrato.veiculo_id,
+      veiculo_id: veiculoIdFinal, // CORREÇÃO: Usar veiculoIdFinal que foi validado/recuperado
       status: 'agendada',
       data_agendada: dataAgendada,
       hora_agendada: horarioAgendado,
