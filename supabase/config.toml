@@ -1,5 +1,8 @@
 project_id = "iyxdgmukrrdkffraptsx"
 
+[functions.buscar-boletos-associado]
+verify_jwt = false
+
 [functions.leads-webhook]
 verify_jwt = false
 
