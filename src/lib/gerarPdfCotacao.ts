@@ -778,112 +778,163 @@ const desenharPaginaCapa = (
   drawGradientRect(doc, margin, y, contentWidth, 1.5, glowBlue, brandRed, 40);
   y += 10;
 
-  // Cards resumidos dos planos
+  // Cards resumidos dos planos - Máximo 3 por linha, centralizados
   const numPlanos = cotacao.planosComparar.length;
-  const cardGap = 8;
-  const cardWidth = (contentWidth - (cardGap * (numPlanos - 1))) / numPlanos;
-  const cardHeight = 95;
+  const MAX_CARDS_POR_LINHA = 3;
+  const cardGap = 6;
+  const cardWidth = 55; // Largura fixa menor
+  const cardHeight = 72; // Altura reduzida
   const planoRecomendadoIndex = numPlanos > 1 ? 1 : 0;
 
   cotacao.planosComparar.forEach((plano, index) => {
-    const cardX = margin + (cardWidth + cardGap) * index;
+    // Calcular posição na grade
+    const linhaAtual = Math.floor(index / MAX_CARDS_POR_LINHA);
+    const posicaoNaLinha = index % MAX_CARDS_POR_LINHA;
+    const planosNestaLinha = Math.min(
+      MAX_CARDS_POR_LINHA, 
+      numPlanos - (linhaAtual * MAX_CARDS_POR_LINHA)
+    );
+    
+    // Largura total ocupada pelos cards nesta linha
+    const larguraLinha = (cardWidth * planosNestaLinha) + (cardGap * (planosNestaLinha - 1));
+    
+    // Posição X inicial para centralizar
+    const startX = (pageWidth - larguraLinha) / 2;
+    
+    // Posição X do card atual
+    const cardX = startX + (cardWidth + cardGap) * posicaoNaLinha;
+    
+    // Posição Y baseada na linha
+    const cardY = y + (cardHeight + cardGap) * linhaAtual;
+
     const isRecommended = index === planoRecomendadoIndex;
-    const paginaDetalhes = index + 2;
 
     // Card
-    drawPremiumCard(doc, cardX, y, cardWidth, cardHeight, { 
+    drawPremiumCard(doc, cardX, cardY, cardWidth, cardHeight, { 
       isRecommended, 
       hasGlow: true 
     });
 
     const centerX = cardX + cardWidth / 2;
-    let cardY = y + 6;
+    let innerY = cardY + 5;
 
     // Badge de recomendado
     if (isRecommended) {
       doc.setFillColor(brandRed.r, brandRed.g, brandRed.b);
-      const badgeWidth = cardWidth - 10;
-      doc.roundedRect(cardX + 5, cardY - 2, badgeWidth, 10, 2, 2, 'F');
+      const badgeWidth = cardWidth - 8;
+      doc.roundedRect(cardX + 4, innerY - 2, badgeWidth, 9, 2, 2, 'F');
       doc.setTextColor(255, 255, 255);
-      doc.setFontSize(6);
+      doc.setFontSize(5);
       doc.setFont('helvetica', 'bold');
-      doc.text('⭐ RECOMENDADO', centerX, cardY + 4, { align: 'center' });
-      cardY += 14;
+      doc.text('⭐ RECOMENDADO', centerX, innerY + 4, { align: 'center' });
+      innerY += 12;
     } else {
-      cardY += 4;
+      innerY += 3;
     }
 
     // Nome do plano
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(9);
+    doc.setFontSize(7);
     doc.setFont('helvetica', 'bold');
-    const nomeLinhas = plano.nome.length > 18 
-      ? [plano.nome.substring(0, 18), plano.nome.substring(18, 36)]
-      : [plano.nome];
-    nomeLinhas.forEach((linha, i) => {
-      doc.text(linha.toUpperCase(), centerX, cardY + (i * 5), { align: 'center' });
-    });
-    cardY += nomeLinhas.length * 5 + 6;
+    const nomeTruncado = plano.nome.length > 20 ? plano.nome.substring(0, 18) + '...' : plano.nome;
+    doc.text(nomeTruncado.toUpperCase(), centerX, innerY, { align: 'center' });
+    innerY += 8;
 
     // Valor mensal
     doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
-    doc.setFontSize(16);
+    doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
-    doc.text(formatCurrency(plano.valorMensal), centerX, cardY, { align: 'center' });
-    cardY += 5;
+    doc.text(formatCurrency(plano.valorMensal), centerX, innerY, { align: 'center' });
+    innerY += 4;
     
     doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
-    doc.setFontSize(7);
+    doc.setFontSize(6);
     doc.setFont('helvetica', 'normal');
-    doc.text('/mês', centerX, cardY, { align: 'center' });
-    cardY += 8;
+    doc.text('/mês', centerX, innerY, { align: 'center' });
+    innerY += 7;
 
-    // Cobertura FIPE
-    doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
-    doc.setFontSize(7);
-    doc.text(`Cobertura: ${plano.coberturaFipe}% FIPE`, centerX, cardY, { align: 'center' });
-    cardY += 10;
-
-    // Link para página de detalhes
+    // Badge FIPE
     doc.setFillColor(glowBlue.r, glowBlue.g, glowBlue.b);
-    const linkWidth = cardWidth - 16;
-    doc.roundedRect(cardX + 8, cardY, linkWidth, 12, 2, 2, 'F');
+    doc.roundedRect(cardX + 6, innerY - 3, cardWidth - 12, 8, 2, 2, 'F');
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(7);
+    doc.setFontSize(5);
     doc.setFont('helvetica', 'bold');
-    doc.text(`Ver detalhes → Pág. ${paginaDetalhes}`, centerX, cardY + 8, { align: 'center' });
+    doc.text(`${plano.coberturaFipe}% FIPE`, centerX, innerY + 2, { align: 'center' });
   });
 
-  y += cardHeight + 10;
+  // Calcular quantas linhas de cards foram usadas
+  const numLinhas = Math.ceil(numPlanos / MAX_CARDS_POR_LINHA);
+  y += (cardHeight + cardGap) * numLinhas + 4;
 
-  // Tabela resumo de valores
+  // Tabela resumo de valores - Layout centralizado
+  const tabelaWidth = Math.min(contentWidth, (cardWidth + cardGap) * Math.min(numPlanos, MAX_CARDS_POR_LINHA) + 40);
+  const tabelaX = (pageWidth - tabelaWidth) / 2;
+  
   doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
-  doc.roundedRect(margin, y, contentWidth, 32, 3, 3, 'F');
+  doc.roundedRect(tabelaX, y, tabelaWidth, 28, 3, 3, 'F');
 
   // Labels
+  const labelWidth = 45;
   doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
-  doc.setFontSize(8);
+  doc.setFontSize(7);
   doc.setFont('helvetica', 'bold');
-  doc.text('ADESÃO', margin + 5, y + 10);
-  doc.text('MENSAL', margin + 5, y + 18);
-  doc.text('1º PAGAMENTO', margin + 5, y + 28);
+  doc.text('ADESÃO', tabelaX + 5, y + 8);
+  doc.text('MENSAL', tabelaX + 5, y + 15);
+  doc.text('1º PAGAMENTO', tabelaX + 5, y + 22);
 
-  // Valores por plano
-  cotacao.planosComparar.forEach((plano, index) => {
-    const cardX = margin + (cardWidth + cardGap) * index;
-    const centerX = cardX + cardWidth / 2;
+  // Valores por plano (max 3 por linha)
+  const planosExibidos = cotacao.planosComparar.slice(0, MAX_CARDS_POR_LINHA);
+  const valorWidth = (tabelaWidth - labelWidth) / planosExibidos.length;
+  
+  planosExibidos.forEach((plano, index) => {
+    const valorX = tabelaX + labelWidth + valorWidth * index + valorWidth / 2;
     const primeiroPagamento = plano.valorAdesao + plano.valorMensal;
 
     doc.setTextColor(textLight.r, textLight.g, textLight.b);
-    doc.setFontSize(8);
+    doc.setFontSize(7);
     doc.setFont('helvetica', 'normal');
-    doc.text(formatCurrency(plano.valorAdesao), centerX, y + 10, { align: 'center' });
-    doc.text(formatCurrency(plano.valorMensal), centerX, y + 18, { align: 'center' });
+    doc.text(formatCurrency(plano.valorAdesao), valorX, y + 8, { align: 'center' });
+    doc.text(formatCurrency(plano.valorMensal), valorX, y + 15, { align: 'center' });
     
     doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
     doc.setFont('helvetica', 'bold');
-    doc.text(formatCurrency(primeiroPagamento), centerX, y + 28, { align: 'center' });
+    doc.text(formatCurrency(primeiroPagamento), valorX, y + 22, { align: 'center' });
   });
+
+  // Se houver mais de 3 planos, adicionar segunda tabela
+  if (numPlanos > MAX_CARDS_POR_LINHA) {
+    y += 32;
+    const planosRestantes = cotacao.planosComparar.slice(MAX_CARDS_POR_LINHA);
+    const tabelaWidth2 = Math.min(contentWidth, (cardWidth + cardGap) * planosRestantes.length + 40);
+    const tabelaX2 = (pageWidth - tabelaWidth2) / 2;
+    
+    doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
+    doc.roundedRect(tabelaX2, y, tabelaWidth2, 28, 3, 3, 'F');
+
+    doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'bold');
+    doc.text('ADESÃO', tabelaX2 + 5, y + 8);
+    doc.text('MENSAL', tabelaX2 + 5, y + 15);
+    doc.text('1º PAGAMENTO', tabelaX2 + 5, y + 22);
+
+    const valorWidth2 = (tabelaWidth2 - labelWidth) / planosRestantes.length;
+    
+    planosRestantes.forEach((plano, index) => {
+      const valorX = tabelaX2 + labelWidth + valorWidth2 * index + valorWidth2 / 2;
+      const primeiroPagamento = plano.valorAdesao + plano.valorMensal;
+
+      doc.setTextColor(textLight.r, textLight.g, textLight.b);
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'normal');
+      doc.text(formatCurrency(plano.valorAdesao), valorX, y + 8, { align: 'center' });
+      doc.text(formatCurrency(plano.valorMensal), valorX, y + 15, { align: 'center' });
+      
+      doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
+      doc.setFont('helvetica', 'bold');
+      doc.text(formatCurrency(primeiroPagamento), valorX, y + 22, { align: 'center' });
+    });
+  }
 
   // Rodapé
   desenharRodapeCompacto(doc, cotacao, logoBase64, pageWidth, pageHeight, margin, 1, totalPaginas);
@@ -1352,35 +1403,14 @@ export async function gerarPdfCotacaoComparativa(cotacao: CotacaoComparativaPara
 
   const numPlanos = cotacao.planosComparar.length;
   
-  // Calcular total de páginas:
-  // 1 capa + N planos + 1 comparativa (se > 1 plano)
-  const totalPaginas = numPlanos > 1 
-    ? 1 + numPlanos + 1  // capa + detalhes + comparativa
-    : 1 + numPlanos;      // capa + detalhes (sem comparativa para 1 plano)
+  // PDF simplificado: apenas 2 páginas
+  // 1 capa com cards + 1 tabela comparativa (se > 1 plano)
+  const totalPaginas = numPlanos > 1 ? 2 : 1;
 
-  // ============= PÁGINA 1: CAPA COM RESUMO DOS PLANOS =============
+  // ============= PÁGINA 1: CAPA COM CARDS DOS PLANOS =============
   desenharPaginaCapa(doc, cotacao, logoBase64, pageWidth, pageHeight, margin, totalPaginas);
 
-  // ============= PÁGINAS 2+: DETALHES DE CADA PLANO =============
-  for (let i = 0; i < numPlanos; i++) {
-    const plano = cotacao.planosComparar[i];
-    doc.addPage();
-    desenharPaginaDetalhesPlano(
-      doc, 
-      cotacao, 
-      plano, 
-      i + 1, 
-      numPlanos,
-      logoBase64, 
-      pageWidth, 
-      pageHeight, 
-      margin,
-      i + 2, // página atual (2, 3, 4...)
-      totalPaginas
-    );
-  }
-
-  // ============= ÚLTIMA PÁGINA: TABELA COMPARATIVA (se mais de 1 plano) =============
+  // ============= PÁGINA 2: TABELA COMPARATIVA (se mais de 1 plano) =============
   if (numPlanos > 1) {
     doc.addPage();
     desenharPaginaComparativa(
@@ -1390,7 +1420,7 @@ export async function gerarPdfCotacaoComparativa(cotacao: CotacaoComparativaPara
       pageWidth, 
       pageHeight, 
       margin,
-      totalPaginas,
+      2,
       totalPaginas
     );
   }
