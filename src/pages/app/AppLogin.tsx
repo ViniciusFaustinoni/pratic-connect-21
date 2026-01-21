@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -15,7 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Shield, Eye, EyeOff, Loader2, AlertCircle, Lock, CheckCircle, FlaskConical, Copy, Check, User } from 'lucide-react';
+import { Eye, EyeOff, Loader2, AlertCircle, Lock, CheckCircle, FlaskConical, Copy, Check, User } from 'lucide-react';
 import { z } from 'zod';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -49,6 +50,9 @@ const ERROR_MESSAGES: Record<LoginError, string> = {
   network_error: 'Erro de conexão. Verifique sua internet.',
   unknown_error: 'Erro inesperado. Tente novamente.',
 };
+
+const STORAGE_KEY_REMEMBER_CPF = 'pratic_remember_cpf';
+const WHATSAPP_SUPORTE = 'https://wa.me/5511999999999?text=Olá, preciso de ajuda para acessar o app PRATIC';
 
 // ============================================
 // CPF UTILITIES
@@ -127,6 +131,7 @@ export default function AppLogin() {
   const [cpf, setCpf] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<LoginError | string | null>(null);
   const [accountLocked, setAccountLocked] = useState(false);
@@ -140,6 +145,15 @@ export default function AppLogin() {
   const [copiedField, setCopiedField] = useState<'cpf' | 'password' | null>(null);
 
   const cpfKey = unformatCPF(cpf);
+
+  // Carregar CPF salvo ao montar
+  useEffect(() => {
+    const savedCpf = localStorage.getItem(STORAGE_KEY_REMEMBER_CPF);
+    if (savedCpf) {
+      setCpf(formatCPF(savedCpf));
+      setRememberMe(true);
+    }
+  }, []);
 
   // Check lock status and countdown
   useEffect(() => {
@@ -199,6 +213,11 @@ export default function AppLogin() {
 
     // 1. VERIFICAR LOGIN DE TESTE
     if (rawCPF === TEST_CREDENTIALS.cpf && password === TEST_CREDENTIALS.password) {
+      if (rememberMe) {
+        localStorage.setItem(STORAGE_KEY_REMEMBER_CPF, rawCPF);
+      } else {
+        localStorage.removeItem(STORAGE_KEY_REMEMBER_CPF);
+      }
       loginTeste();
       toast.success('Login de teste realizado!');
       navigate('/app/home');
@@ -245,6 +264,12 @@ export default function AppLogin() {
           setError(parsedError);
         }
       } else {
+        // Login bem-sucedido - salvar CPF se "lembrar" estiver marcado
+        if (rememberMe) {
+          localStorage.setItem(STORAGE_KEY_REMEMBER_CPF, rawCPF);
+        } else {
+          localStorage.removeItem(STORAGE_KEY_REMEMBER_CPF);
+        }
         resetAttempts(rawCPF);
       }
     } catch (err) {
@@ -301,38 +326,33 @@ export default function AppLogin() {
     }
   };
 
+  const handlePrecisaAjuda = () => {
+    window.open(WHATSAPP_SUPORTE, '_blank');
+  };
+
   if (authLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-primary to-primary/80">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-foreground" />
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="max-w-md mx-auto bg-white min-h-screen flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-gradient-to-b from-primary to-primary/80">
-      {/* Header com Logo */}
-      <div className="flex flex-1 flex-col items-center justify-center px-4 pb-4 pt-12">
-        <div className="flex flex-col items-center gap-3">
-          <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-white/20 shadow-lg backdrop-blur-sm">
-            <Shield className="h-12 w-12 text-primary-foreground" />
-          </div>
-          <div className="text-center">
-            <h1 className="text-3xl font-bold text-primary-foreground">PRATIC</h1>
-            <p className="text-sm text-primary-foreground/80">Proteção Veicular</p>
-          </div>
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-md mx-auto min-h-screen bg-white flex flex-col justify-center p-6">
+        
+        {/* CABEÇALHO */}
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold text-blue-600">PRATIC</h1>
+          <p className="text-gray-600 mt-2">Área do Associado</p>
         </div>
-      </div>
 
-      {/* Card do Formulário */}
-      <div className="w-full rounded-t-3xl bg-background px-6 pb-8 pt-6 shadow-2xl">
-        <div className="mx-auto w-full max-w-sm">
-          {/* Título */}
-          <div className="mb-6 text-center">
-            <h2 className="text-xl font-semibold text-foreground">Acesse sua conta</h2>
-            <p className="text-sm text-muted-foreground">Digite seu CPF e senha</p>
-          </div>
-
+        {/* CARD DO FORMULÁRIO */}
+        <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+          
           {/* Erro geral */}
           {error && (
             <Alert variant="destructive" className="mb-4">
@@ -353,12 +373,15 @@ export default function AppLogin() {
             </Alert>
           )}
 
-          {/* Formulário CPF + Senha */}
+          {/* Formulário */}
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Campo CPF */}
             <div className="space-y-2">
-              <Label htmlFor="cpf">CPF</Label>
+              <Label htmlFor="cpf" className="text-sm font-medium text-gray-700">
+                CPF
+              </Label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                <User className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
                 <Input
                   id="cpf"
                   type="text"
@@ -372,8 +395,11 @@ export default function AppLogin() {
               </div>
             </div>
 
+            {/* Campo Senha */}
             <div className="space-y-2">
-              <Label htmlFor="password">Senha</Label>
+              <Label htmlFor="password" className="text-sm font-medium text-gray-700">
+                Senha
+              </Label>
               <div className="relative">
                 <Input
                   id="password"
@@ -397,17 +423,33 @@ export default function AppLogin() {
                   aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
                 >
                   {showPassword ? (
-                    <EyeOff className="h-5 w-5 text-muted-foreground" />
+                    <EyeOff className="h-5 w-5 text-gray-400" />
                   ) : (
-                    <Eye className="h-5 w-5 text-muted-foreground" />
+                    <Eye className="h-5 w-5 text-gray-400" />
                   )}
                 </Button>
               </div>
             </div>
 
+            {/* Checkbox Lembrar */}
+            <div className="flex items-center space-x-2">
+              <Checkbox 
+                id="remember" 
+                checked={rememberMe}
+                onCheckedChange={(checked) => setRememberMe(checked === true)}
+              />
+              <Label 
+                htmlFor="remember" 
+                className="text-sm text-gray-600 cursor-pointer"
+              >
+                Lembrar meu acesso
+              </Label>
+            </div>
+
+            {/* Botão Entrar */}
             <Button
               type="submit"
-              className="h-12 w-full text-base font-semibold"
+              className="h-12 w-full text-base font-semibold bg-blue-600 hover:bg-blue-700"
               disabled={loading || accountLocked}
             >
               {loading ? (
@@ -425,39 +467,33 @@ export default function AppLogin() {
               )}
             </Button>
           </form>
+        </div>
 
-          {/* Link Esqueci Senha */}
-          <div className="mt-4 text-center">
-            <Link
-              to="/app/forgot-password"
-              className="text-sm font-medium text-primary hover:underline"
-            >
-              Esqueci minha senha
-            </Link>
-          </div>
-
-          {/* Divisor */}
-          <div className="my-6 flex items-center gap-3">
-            <div className="h-px flex-1 bg-border" />
-          </div>
-
-          {/* Botão Primeiro Acesso */}
-          <Button
-            type="button"
-            variant="outline"
-            className="h-12 w-full border-2 border-primary text-base font-semibold text-primary hover:bg-primary/5"
-            onClick={() => setModalPrimeiroAcesso(true)}
+        {/* LINKS AUXILIARES */}
+        <div className="mt-6 text-center space-y-3">
+          <Link
+            to="/app/forgot-password"
+            className="block text-sm font-medium text-blue-600 hover:underline"
           >
-            Primeiro acesso
-          </Button>
+            Esqueci minha senha
+          </Link>
+          <button
+            type="button"
+            onClick={() => setModalPrimeiroAcesso(true)}
+            className="block w-full text-sm font-medium text-blue-600 hover:underline"
+          >
+            Primeiro acesso? Criar senha
+          </button>
+        </div>
 
-          {/* Credenciais de Teste */}
-          <div className="mt-6 rounded-lg border-2 border-dashed border-yellow-400 bg-yellow-50 p-4 dark:border-yellow-600 dark:bg-yellow-950/30">
-            <div className="flex items-center gap-2 text-yellow-700 dark:text-yellow-400">
+        {/* CREDENCIAIS DE TESTE - Apenas em DEV */}
+        {isDev && (
+          <div className="mt-6 rounded-lg border-2 border-dashed border-yellow-400 bg-yellow-50 p-4">
+            <div className="flex items-center gap-2 text-yellow-700">
               <FlaskConical className="h-4 w-4" />
               <span className="text-sm font-medium">ACESSO DE TESTE</span>
             </div>
-            <div className="mt-2 space-y-1 text-sm text-yellow-800 dark:text-yellow-300">
+            <div className="mt-2 space-y-1 text-sm text-yellow-800">
               <p><strong>CPF:</strong> {TEST_CREDENTIALS.cpfFormatted}</p>
               <p><strong>Senha:</strong> {TEST_CREDENTIALS.password}</p>
             </div>
@@ -465,7 +501,7 @@ export default function AppLogin() {
               type="button"
               variant="outline"
               size="sm"
-              className="mt-3 w-full border-yellow-500 text-yellow-700 hover:bg-yellow-100 dark:border-yellow-600 dark:text-yellow-400 dark:hover:bg-yellow-950"
+              className="mt-3 w-full border-yellow-500 text-yellow-700 hover:bg-yellow-100"
               onClick={() => {
                 setCpf(TEST_CREDENTIALS.cpfFormatted);
                 setPassword(TEST_CREDENTIALS.password);
@@ -474,36 +510,41 @@ export default function AppLogin() {
             >
               Usar credenciais de teste
             </Button>
-          </div>
-
-          {/* Botão Conta de Teste - Apenas em desenvolvimento */}
-          {isDev && (
             <Button
               type="button"
               variant="ghost"
-              className="mt-3 h-10 w-full text-sm text-muted-foreground hover:text-foreground"
+              size="sm"
+              className="mt-2 w-full text-yellow-700 hover:bg-yellow-100"
               onClick={() => setModalContaTeste(true)}
             >
               <FlaskConical className="mr-2 h-4 w-4" />
               Criar Conta de Teste (Supabase)
             </Button>
-          )}
-
-          {/* Link para Sistema Interno */}
-          <div className="mt-4 text-center">
-            <p className="text-sm text-muted-foreground">
-              É funcionário?{' '}
-              <Link to="/login" className="font-medium text-primary hover:underline">
-                Acesse o Sistema
-              </Link>
-            </p>
           </div>
+        )}
 
-          {/* Versão */}
-          <p className="mt-6 text-center text-xs text-muted-foreground">
-            Versão 2.0.1 {isDev && <span className="text-orange-500">(DEV)</span>}
+        {/* RODAPÉ */}
+        <div className="mt-8 text-center space-y-2">
+          <p className="text-xs text-gray-400">Versão 2.0</p>
+          <button
+            type="button"
+            onClick={handlePrecisaAjuda}
+            className="text-xs text-blue-600 hover:underline"
+          >
+            Precisa de ajuda?
+          </button>
+        </div>
+
+        {/* Link para Sistema Interno */}
+        <div className="mt-4 text-center">
+          <p className="text-sm text-gray-500">
+            É funcionário?{' '}
+            <Link to="/login" className="font-medium text-blue-600 hover:underline">
+              Acesse o Sistema
+            </Link>
           </p>
         </div>
+
       </div>
 
       {/* Modal Primeiro Acesso */}
