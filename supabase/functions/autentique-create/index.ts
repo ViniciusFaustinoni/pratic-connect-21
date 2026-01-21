@@ -11,46 +11,6 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-// Função para validar autorização (chamada interna ou usuário autenticado)
-async function validateAuthorization(req: Request): Promise<{ authorized: boolean; method?: string; error?: string }> {
-  const authHeader = req.headers.get('Authorization');
-  const apiKey = req.headers.get('apikey') || req.headers.get('x-apikey');
-  
-  console.log('[autentique-create] Validando auth - tem Authorization:', !!authHeader, '- tem apikey:', !!apiKey);
-  
-  // Cenário A: Chamada interna com apikey = service role key
-  if (apiKey === SUPABASE_SERVICE_ROLE_KEY) {
-    console.log('[autentique-create] Auth via apikey (service role)');
-    return { authorized: true, method: 'apikey' };
-  }
-  
-  // Cenário B: Chamada interna com Authorization Bearer = service role key
-  if (authHeader === `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`) {
-    console.log('[autentique-create] Auth via bearer (service role)');
-    return { authorized: true, method: 'bearer' };
-  }
-  
-  // Cenário C: Usuário autenticado via JWT
-  if (authHeader?.startsWith('Bearer ')) {
-    try {
-      const supabaseUser = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-        global: { headers: { Authorization: authHeader } }
-      });
-      
-      const { data: { user }, error } = await supabaseUser.auth.getUser();
-      if (user && !error) {
-        console.log('[autentique-create] Auth via JWT user:', user.email);
-        return { authorized: true, method: 'jwt' };
-      }
-    } catch (e) {
-      console.error('[autentique-create] Erro ao validar JWT:', e);
-    }
-  }
-  
-  console.warn('[autentique-create] Nenhum método de auth válido encontrado');
-  return { authorized: false, error: 'Unauthorized - Token inválido ou ausente' };
-}
-
 interface ContratoRequest {
   contratoId: string;
   clienteNome: string;
@@ -58,6 +18,261 @@ interface ContratoRequest {
   clienteCpf?: string;
   clienteTelefone?: string;
 }
+
+interface TemplateData {
+  associado: Record<string, string>;
+  veiculo: Record<string, string>;
+  contrato: Record<string, string>;
+  plano: Record<string, string>;
+  empresa: Record<string, string>;
+  sistema: Record<string, string>;
+  [key: string]: Record<string, string>;
+}
+
+// ============= UTILIDADES =============
+
+const formatCurrency = (value: number | null | undefined): string => {
+  if (value === null || value === undefined) return "R$ 0,00";
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+};
+
+const formatDate = (dateStr: string | null | undefined): string => {
+  if (!dateStr) return new Date().toLocaleDateString("pt-BR");
+  const date = new Date(dateStr);
+  return date.toLocaleDateString("pt-BR");
+};
+
+const formatCPF = (cpf: string | null | undefined): string => {
+  if (!cpf) return "";
+  const cleaned = cpf.replace(/\D/g, "");
+  if (cleaned.length !== 11) return cpf;
+  return cleaned.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+};
+
+const formatPhone = (phone: string | null | undefined): string => {
+  if (!phone) return "";
+  const cleaned = phone.replace(/\D/g, "");
+  if (cleaned.length === 11) {
+    return cleaned.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
+  }
+  if (cleaned.length === 10) {
+    return cleaned.replace(/(\d{2})(\d{4})(\d{4})/, "($1) $2-$3");
+  }
+  return phone;
+};
+
+// ============= PROCESSAMENTO DE TEMPLATE =============
+
+/**
+ * Substitui variáveis {{grupo.campo}} no template pelos dados reais
+ */
+function processarVariaveis(conteudo: string, dados: TemplateData): string {
+  return conteudo.replace(/\{\{(\w+)\.(\w+)\}\}/g, (match, grupo, campo) => {
+    const valor = dados[grupo]?.[campo];
+    return valor !== undefined && valor !== null ? String(valor) : "";
+  });
+}
+
+/**
+ * Converte Markdown simples para HTML
+ */
+function markdownToHtml(markdown: string): string {
+  let html = markdown;
+  
+  // Headers
+  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+  
+  // Bold
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  
+  // Italic
+  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  
+  // Horizontal rules
+  html = html.replace(/^---$/gm, '<hr>');
+  
+  // Tables - processamento básico
+  const lines = html.split('\n');
+  let inTable = false;
+  let tableHtml = '';
+  const result: string[] = [];
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    
+    if (line.startsWith('|') && line.endsWith('|')) {
+      if (!inTable) {
+        inTable = true;
+        tableHtml = '<table class="values-table">';
+      }
+      
+      // Check if separator row
+      if (line.match(/^\|[\s\-|]+\|$/)) {
+        continue; // Skip separator
+      }
+      
+      const cells = line.split('|').filter(c => c.trim());
+      const isHeader = i === 0 || (i > 0 && lines[i - 1]?.trim().startsWith('|') === false);
+      
+      tableHtml += '<tr>';
+      cells.forEach((cell, idx) => {
+        if (isHeader && idx < 2) {
+          tableHtml += `<th>${cell.trim()}</th>`;
+        } else {
+          tableHtml += `<td>${cell.trim()}</td>`;
+        }
+      });
+      tableHtml += '</tr>';
+    } else {
+      if (inTable) {
+        tableHtml += '</table>';
+        result.push(tableHtml);
+        tableHtml = '';
+        inTable = false;
+      }
+      
+      // Lists
+      if (line.startsWith('- ')) {
+        result.push(`<li>${line.substring(2)}</li>`);
+      } else if (line === '') {
+        result.push('<br>');
+      } else {
+        result.push(`<p>${line}</p>`);
+      }
+    }
+  }
+  
+  if (inTable) {
+    tableHtml += '</table>';
+    result.push(tableHtml);
+  }
+  
+  return result.join('\n');
+}
+
+/**
+ * Envolve o HTML com estilos para o PDF
+ */
+function wrapWithStyles(html: string): string {
+  const styles = `
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      font-size: 12px;
+      line-height: 1.6;
+      color: #333;
+      padding: 40px;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    h1 {
+      font-size: 24px;
+      color: #1e40af;
+      text-align: center;
+      margin-bottom: 5px;
+    }
+    h2 {
+      font-size: 16px;
+      color: #1e40af;
+      border-bottom: 2px solid #1e40af;
+      padding-bottom: 5px;
+      margin-top: 25px;
+      margin-bottom: 15px;
+    }
+    h3 {
+      font-size: 13px;
+      color: #374151;
+      margin-top: 15px;
+      margin-bottom: 10px;
+    }
+    p {
+      margin: 8px 0;
+      text-align: justify;
+    }
+    hr {
+      border: none;
+      border-top: 1px solid #e5e7eb;
+      margin: 20px 0;
+    }
+    .values-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 15px 0;
+    }
+    .values-table th, .values-table td {
+      border: 1px solid #e5e7eb;
+      padding: 10px;
+      text-align: left;
+    }
+    .values-table th {
+      background-color: #f3f4f6;
+      font-weight: bold;
+    }
+    .values-table tr:nth-child(even) {
+      background-color: #f9fafb;
+    }
+    ul, ol {
+      margin: 10px 0;
+      padding-left: 25px;
+    }
+    li {
+      margin: 5px 0;
+    }
+    strong {
+      font-weight: bold;
+    }
+    .highlight-box {
+      background-color: #eff6ff;
+      border: 1px solid #1e40af;
+      border-radius: 8px;
+      padding: 15px;
+      margin: 15px 0;
+    }
+    .signature-area {
+      margin-top: 50px;
+      padding-top: 20px;
+      border-top: 1px solid #e5e7eb;
+    }
+    .footer {
+      margin-top: 40px;
+      text-align: center;
+      font-size: 10px;
+      color: #666;
+    }
+  </style>
+  `;
+  
+  return `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  ${styles}
+</head>
+<body>
+  ${html}
+</body>
+</html>
+  `;
+}
+
+/**
+ * Processa um template do banco de dados
+ */
+function processarTemplateDB(conteudo: string, dados: TemplateData): string {
+  // 1. Substituir variáveis
+  const comVariaveis = processarVariaveis(conteudo, dados);
+  
+  // 2. Converter Markdown para HTML
+  const htmlContent = markdownToHtml(comVariaveis);
+  
+  // 3. Envolver com estilos
+  return wrapWithStyles(htmlContent);
+}
+
+// ============= TEMPLATES HARDCODED (FALLBACK) =============
 
 interface ContratoTemplateData {
   numero: string;
@@ -79,18 +294,6 @@ interface ContratoTemplateData {
   veiculoAno?: number;
   valorFipe?: number;
 }
-
-// ============= UTILIDADES =============
-
-const formatCurrency = (value: number) =>
-  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
-
-const formatDate = (dateStr: string) => {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString("pt-BR");
-};
-
-// ============= SEÇÕES COMUNS =============
 
 const generateStyles = () => `
   <style>
@@ -320,184 +523,7 @@ const generateFooter = () => `
   </div>
 `;
 
-// ============= COBERTURAS POR PLANO =============
-
-const generateCoberturasBasico = (data: ContratoTemplateData) => `
-  <div class="section">
-    <h2>4. COBERTURAS CONTRATADAS - PLANO BÁSICO</h2>
-    <table class="coverage-table">
-      <tr>
-        <td><span class="coverage-check">✓</span> Roubo e Furto</td>
-        <td>100% Tabela FIPE</td>
-      </tr>
-      <tr>
-        <td><span class="coverage-check">✓</span> Assistência 24h</td>
-        <td>Guincho até 100km</td>
-      </tr>
-      <tr>
-        <td><span class="coverage-check">✓</span> Rastreamento Veicular</td>
-        <td>Monitoramento 24h</td>
-      </tr>
-      <tr>
-        <td><span class="coverage-x">✗</span> Colisão</td>
-        <td>Não incluso</td>
-      </tr>
-      <tr>
-        <td><span class="coverage-x">✗</span> Danos a Terceiros</td>
-        <td>Não incluso</td>
-      </tr>
-      <tr>
-        <td><span class="coverage-x">✗</span> Carro Reserva</td>
-        <td>Não incluso</td>
-      </tr>
-    </table>
-    
-    <div class="highlight-box">
-      <strong>Franquia:</strong> 10% do valor FIPE em caso de indenização<br>
-      <strong>Carência:</strong> 90 dias após instalação do rastreador
-    </div>
-  </div>
-`;
-
-const generateCoberturasIntermediario = (data: ContratoTemplateData) => `
-  <div class="section">
-    <h2>4. COBERTURAS CONTRATADAS - PLANO INTERMEDIÁRIO</h2>
-    <table class="coverage-table">
-      <tr>
-        <td><span class="coverage-check">✓</span> Roubo e Furto</td>
-        <td>100% Tabela FIPE</td>
-      </tr>
-      <tr>
-        <td><span class="coverage-check">✓</span> Colisão</td>
-        <td>Franquia: 8% FIPE</td>
-      </tr>
-      <tr>
-        <td><span class="coverage-check">✓</span> Incêndio e Fenômenos Naturais</td>
-        <td>100% Tabela FIPE</td>
-      </tr>
-      <tr>
-        <td><span class="coverage-check">✓</span> Assistência 24h Completa</td>
-        <td>Guincho até 200km</td>
-      </tr>
-      <tr>
-        <td><span class="coverage-check">✓</span> Rastreamento Veicular</td>
-        <td>Monitoramento 24h</td>
-      </tr>
-      <tr>
-        <td><span class="coverage-check">✓</span> Carro Reserva</td>
-        <td>7 dias</td>
-      </tr>
-      <tr>
-        <td><span class="coverage-x">✗</span> Danos a Terceiros</td>
-        <td>Não incluso</td>
-      </tr>
-      <tr>
-        <td><span class="coverage-x">✗</span> Vidros e Faróis</td>
-        <td>Não incluso</td>
-      </tr>
-    </table>
-    
-    <div class="highlight-box">
-      <strong>Franquia:</strong> 8% do valor FIPE em caso de indenização<br>
-      <strong>Carência:</strong> 60 dias após instalação do rastreador
-    </div>
-  </div>
-`;
-
-const generateCoberturasPremium = (data: ContratoTemplateData) => `
-  <div class="section">
-    <h2>4. COBERTURAS CONTRATADAS - PLANO PREMIUM</h2>
-    <table class="coverage-table">
-      <tr>
-        <td><span class="coverage-check">✓</span> Roubo e Furto</td>
-        <td>100% Tabela FIPE</td>
-      </tr>
-      <tr>
-        <td><span class="coverage-check">✓</span> Colisão</td>
-        <td>Franquia: 5% FIPE</td>
-      </tr>
-      <tr>
-        <td><span class="coverage-check">✓</span> Incêndio e Fenômenos Naturais</td>
-        <td>100% Tabela FIPE</td>
-      </tr>
-      <tr>
-        <td><span class="coverage-check">✓</span> Danos a Terceiros</td>
-        <td>Até R$ 50.000,00</td>
-      </tr>
-      <tr>
-        <td><span class="coverage-check">✓</span> Vidros, Faróis e Retrovisores</td>
-        <td>Sem franquia</td>
-      </tr>
-      <tr>
-        <td><span class="coverage-check">✓</span> Assistência 24h Premium</td>
-        <td>Guincho ilimitado + chaveiro</td>
-      </tr>
-      <tr>
-        <td><span class="coverage-check">✓</span> Rastreamento Veicular</td>
-        <td>Monitoramento 24h + bloqueio remoto</td>
-      </tr>
-      <tr>
-        <td><span class="coverage-check">✓</span> Carro Reserva</td>
-        <td>15 dias</td>
-      </tr>
-    </table>
-    
-    <div class="highlight-box">
-      <strong>Franquia:</strong> 5% do valor FIPE em caso de indenização<br>
-      <strong>Carência:</strong> 30 dias após instalação do rastreador<br>
-      <strong>Benefício exclusivo:</strong> Desconto de 10% na renovação
-    </div>
-  </div>
-`;
-
-const generateCoberturasAplicativo = (data: ContratoTemplateData) => `
-  <div class="section">
-    <h2>4. COBERTURAS CONTRATADAS - PLANO APLICATIVO</h2>
-    <p><em>Plano especial para veículos utilizados em aplicativos de transporte (Uber, 99, etc.)</em></p>
-    <table class="coverage-table">
-      <tr>
-        <td><span class="coverage-check">✓</span> Roubo e Furto</td>
-        <td>100% Tabela FIPE</td>
-      </tr>
-      <tr>
-        <td><span class="coverage-check">✓</span> Colisão</td>
-        <td>Franquia: 6% FIPE</td>
-      </tr>
-      <tr>
-        <td><span class="coverage-check">✓</span> Incêndio e Fenômenos Naturais</td>
-        <td>100% Tabela FIPE</td>
-      </tr>
-      <tr>
-        <td><span class="coverage-check">✓</span> Danos a Terceiros</td>
-        <td>Até R$ 40.000,00</td>
-      </tr>
-      <tr>
-        <td><span class="coverage-check">✓</span> Assistência 24h Comercial</td>
-        <td>Guincho ilimitado + pane seca</td>
-      </tr>
-      <tr>
-        <td><span class="coverage-check">✓</span> Rastreamento Veicular</td>
-        <td>Monitoramento 24h + relatório de uso</td>
-      </tr>
-      <tr>
-        <td><span class="coverage-check">✓</span> Carro Reserva</td>
-        <td>10 dias</td>
-      </tr>
-      <tr>
-        <td><span class="coverage-check">✓</span> Lucros Cessantes</td>
-        <td>5 diárias de R$ 100,00</td>
-      </tr>
-    </table>
-    
-    <div class="highlight-box">
-      <strong>Franquia:</strong> 6% do valor FIPE em caso de indenização<br>
-      <strong>Carência:</strong> 15 dias após instalação do rastreador<br>
-      <strong>Observação:</strong> Cobertura válida durante uso comercial em aplicativos
-    </div>
-  </div>
-`;
-
-const generateCoberturasDefault = (data: ContratoTemplateData) => `
+const generateCoberturasDefault = () => `
   <div class="section">
     <h2>4. COBERTURAS CONTRATADAS</h2>
     <table class="coverage-table">
@@ -522,131 +548,6 @@ const generateCoberturasDefault = (data: ContratoTemplateData) => `
   </div>
 `;
 
-// ============= TERMOS POR PLANO =============
-
-const generateTermosBasico = () => `
-  <div class="section terms">
-    <h2>5. TERMOS E CONDIÇÕES - PLANO BÁSICO</h2>
-    
-    <h3>5.1 Objeto do Contrato</h3>
-    <p>O presente contrato tem por objeto a prestação de serviços de proteção veicular básica, incluindo rastreamento, assistência 24 horas e cobertura contra roubo e furto, conforme condições estabelecidas neste instrumento.</p>
-    
-    <h3>5.2 Coberturas e Exclusões</h3>
-    <p>O PLANO BÁSICO cobre exclusivamente eventos de roubo e furto qualificado. Não estão cobertas colisões, danos a terceiros, fenômenos naturais ou quaisquer avarias no veículo decorrentes de uso normal ou acidente.</p>
-    
-    <h3>5.3 Carência</h3>
-    <p>O período de carência para acionamento de coberturas é de 90 (noventa) dias a partir da instalação do rastreador no veículo. Durante este período, apenas a assistência 24h estará disponível.</p>
-    
-    <h3>5.4 Franquia</h3>
-    <p>Em caso de indenização, será aplicada franquia de 10% (dez por cento) do valor FIPE do veículo na data do sinistro.</p>
-    
-    <h3>5.5 Obrigações do Contratante</h3>
-    <p>O CONTRATANTE se compromete a: (a) Manter os dados cadastrais atualizados; (b) Efetuar o pagamento das mensalidades até a data de vencimento; (c) Manter o dispositivo de rastreamento em perfeito funcionamento; (d) Comunicar imediatamente qualquer sinistro em até 24 horas.</p>
-    
-    <h3>5.6 Vigência e Rescisão</h3>
-    <p>O contrato tem vigência de 12 (doze) meses, renovável automaticamente. A rescisão pode ser solicitada a qualquer momento, mediante aviso prévio de 30 dias e pagamento de eventuais débitos pendentes.</p>
-    
-    <h3>5.7 Foro</h3>
-    <p>Fica eleito o foro da comarca da sede da CONTRATADA para dirimir quaisquer controvérsias oriundas deste contrato.</p>
-  </div>
-`;
-
-const generateTermosIntermediario = () => `
-  <div class="section terms">
-    <h2>5. TERMOS E CONDIÇÕES - PLANO INTERMEDIÁRIO</h2>
-    
-    <h3>5.1 Objeto do Contrato</h3>
-    <p>O presente contrato tem por objeto a prestação de serviços de proteção veicular intermediária, incluindo rastreamento, assistência 24 horas completa, cobertura contra roubo, furto e colisão, além de carro reserva por 7 dias.</p>
-    
-    <h3>5.2 Coberturas</h3>
-    <p>O PLANO INTERMEDIÁRIO inclui: (a) Roubo e furto qualificado - 100% FIPE; (b) Colisão - mediante franquia; (c) Incêndio e fenômenos naturais; (d) Assistência 24h com guincho até 200km; (e) Carro reserva por 7 dias em caso de sinistro coberto.</p>
-    
-    <h3>5.3 Exclusões</h3>
-    <p>Não estão cobertas: danos a terceiros, vidros/faróis/retrovisores, danos por uso comercial não declarado, sinistros durante condução por pessoas não habilitadas.</p>
-    
-    <h3>5.4 Carência</h3>
-    <p>O período de carência é de 60 (sessenta) dias a partir da instalação do rastreador. A assistência 24h está disponível desde o primeiro dia.</p>
-    
-    <h3>5.5 Franquia</h3>
-    <p>Franquia de 8% (oito por cento) do valor FIPE para eventos de colisão. Roubo e furto não possuem franquia adicional.</p>
-    
-    <h3>5.6 Obrigações do Contratante</h3>
-    <p>O CONTRATANTE se compromete a: (a) Manter os dados cadastrais atualizados; (b) Efetuar o pagamento das mensalidades pontualmente; (c) Realizar vistorias periódicas quando solicitado; (d) Comunicar sinistros em até 24 horas; (e) Registrar Boletim de Ocorrência em caso de roubo/furto.</p>
-    
-    <h3>5.7 Vigência e Rescisão</h3>
-    <p>Vigência de 12 meses, renovável automaticamente. Rescisão mediante aviso prévio de 30 dias.</p>
-    
-    <h3>5.8 Foro</h3>
-    <p>Fica eleito o foro da comarca da sede da CONTRATADA para dirimir quaisquer controvérsias.</p>
-  </div>
-`;
-
-const generateTermosPremium = () => `
-  <div class="section terms">
-    <h2>5. TERMOS E CONDIÇÕES - PLANO PREMIUM</h2>
-    
-    <h3>5.1 Objeto do Contrato</h3>
-    <p>O presente contrato tem por objeto a prestação de serviços de proteção veicular completa, o mais abrangente da nossa linha de produtos, incluindo todas as coberturas disponíveis, assistência 24h premium e benefícios exclusivos.</p>
-    
-    <h3>5.2 Coberturas Completas</h3>
-    <p>O PLANO PREMIUM inclui: (a) Roubo e furto - 100% FIPE; (b) Colisão - franquia reduzida de 5%; (c) Incêndio e fenômenos naturais; (d) Danos a terceiros até R$ 50.000; (e) Vidros, faróis e retrovisores sem franquia; (f) Assistência 24h premium com guincho ilimitado e chaveiro; (g) Carro reserva por 15 dias; (h) Bloqueio remoto do veículo.</p>
-    
-    <h3>5.3 Benefícios Exclusivos</h3>
-    <p>Clientes Premium têm direito a: (a) Carência reduzida de apenas 30 dias; (b) Desconto de 10% na renovação anual; (c) Atendimento prioritário; (d) App exclusivo com funcionalidades avançadas.</p>
-    
-    <h3>5.4 Carência</h3>
-    <p>Período de carência reduzido de 30 (trinta) dias. Assistência 24h disponível imediatamente.</p>
-    
-    <h3>5.5 Franquia</h3>
-    <p>Franquia reduzida de 5% (cinco por cento) do valor FIPE para colisão. Vidros, faróis e retrovisores sem franquia.</p>
-    
-    <h3>5.6 Obrigações do Contratante</h3>
-    <p>O CONTRATANTE se compromete a manter cadastro atualizado, efetuar pagamentos pontualmente, manter rastreador funcionando, comunicar sinistros em até 24h, registrar B.O. quando aplicável e realizar vistorias quando solicitado.</p>
-    
-    <h3>5.7 Vigência e Renovação</h3>
-    <p>Vigência de 12 meses com renovação automática e desconto de fidelidade de 10%. Rescisão mediante aviso de 30 dias.</p>
-    
-    <h3>5.8 Foro</h3>
-    <p>Fica eleito o foro da comarca da sede da CONTRATADA para dirimir quaisquer controvérsias.</p>
-  </div>
-`;
-
-const generateTermosAplicativo = () => `
-  <div class="section terms">
-    <h2>5. TERMOS E CONDIÇÕES - PLANO APLICATIVO</h2>
-    
-    <h3>5.1 Objeto do Contrato</h3>
-    <p>O presente contrato tem por objeto a prestação de serviços de proteção veicular especial para veículos utilizados em aplicativos de transporte de passageiros (Uber, 99, InDriver e similares), com coberturas específicas para uso comercial.</p>
-    
-    <h3>5.2 Declaração de Uso Comercial</h3>
-    <p>O CONTRATANTE declara que o veículo objeto deste contrato é utilizado para transporte de passageiros por aplicativo, estando ciente de que esta condição é essencial para a validade das coberturas contratadas.</p>
-    
-    <h3>5.3 Coberturas Especiais</h3>
-    <p>O PLANO APLICATIVO inclui: (a) Roubo e furto - 100% FIPE; (b) Colisão - franquia de 6%; (c) Incêndio e fenômenos naturais; (d) Danos a terceiros até R$ 40.000; (e) Assistência 24h comercial com guincho ilimitado; (f) Carro reserva por 10 dias; (g) Lucros cessantes - 5 diárias de R$ 100.</p>
-    
-    <h3>5.4 Lucros Cessantes</h3>
-    <p>Em caso de sinistro coberto que impeça o uso do veículo, o CONTRATANTE receberá indenização de R$ 100,00 (cem reais) por dia, limitado a 5 (cinco) diárias, para compensar a perda de rendimentos.</p>
-    
-    <h3>5.5 Carência Reduzida</h3>
-    <p>Período de carência de apenas 15 (quinze) dias, considerando a natureza comercial da atividade. Assistência 24h disponível desde o primeiro dia.</p>
-    
-    <h3>5.6 Franquia</h3>
-    <p>Franquia de 6% (seis por cento) do valor FIPE para eventos de colisão.</p>
-    
-    <h3>5.7 Vistoria Periódica</h3>
-    <p>Devido ao uso intensivo do veículo, poderão ser solicitadas vistorias periódicas a cada 6 meses para verificação das condições do veículo e funcionamento do rastreador.</p>
-    
-    <h3>5.8 Obrigações Específicas</h3>
-    <p>Além das obrigações gerais, o CONTRATANTE deve: (a) Manter cadastro ativo na plataforma de aplicativo; (b) Informar alteração de plataforma; (c) Manter documentação do veículo em dia para transporte de passageiros.</p>
-    
-    <h3>5.9 Vigência e Rescisão</h3>
-    <p>Vigência de 12 meses, renovável. Rescisão mediante aviso de 30 dias.</p>
-    
-    <h3>5.10 Foro</h3>
-    <p>Fica eleito o foro da comarca da sede da CONTRATADA para dirimir controvérsias.</p>
-  </div>
-`;
-
 const generateTermosDefault = () => `
   <div class="section terms">
     <h2>5. TERMOS E CONDIÇÕES GERAIS</h2>
@@ -668,9 +569,7 @@ const generateTermosDefault = () => `
   </div>
 `;
 
-// ============= FUNÇÕES GERADORAS DE TEMPLATE =============
-
-function generateTemplateBasico(data: ContratoTemplateData): string {
+function generateTemplateFallback(data: ContratoTemplateData): string {
   return `
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -683,135 +582,13 @@ function generateTemplateBasico(data: ContratoTemplateData): string {
   ${generateDadosContratante(data)}
   ${generateDadosVeiculo(data)}
   ${generateValoresContrato(data)}
-  ${generateCoberturasBasico(data)}
-  ${generateTermosBasico()}
-  ${generateAssinatura(data)}
-  ${generateFooter()}
-</body>
-</html>
-  `;
-}
-
-function generateTemplateIntermediario(data: ContratoTemplateData): string {
-  return `
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  ${generateStyles()}
-</head>
-<body>
-  ${generateHeader(data)}
-  ${generateDadosContratante(data)}
-  ${generateDadosVeiculo(data)}
-  ${generateValoresContrato(data)}
-  ${generateCoberturasIntermediario(data)}
-  ${generateTermosIntermediario()}
-  ${generateAssinatura(data)}
-  ${generateFooter()}
-</body>
-</html>
-  `;
-}
-
-function generateTemplatePremium(data: ContratoTemplateData): string {
-  return `
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  ${generateStyles()}
-</head>
-<body>
-  ${generateHeader(data)}
-  ${generateDadosContratante(data)}
-  ${generateDadosVeiculo(data)}
-  ${generateValoresContrato(data)}
-  ${generateCoberturasPremium(data)}
-  ${generateTermosPremium()}
-  ${generateAssinatura(data)}
-  ${generateFooter()}
-</body>
-</html>
-  `;
-}
-
-function generateTemplateAplicativo(data: ContratoTemplateData): string {
-  return `
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  ${generateStyles()}
-</head>
-<body>
-  ${generateHeader(data)}
-  ${generateDadosContratante(data)}
-  ${generateDadosVeiculo(data)}
-  ${generateValoresContrato(data)}
-  ${generateCoberturasAplicativo(data)}
-  ${generateTermosAplicativo()}
-  ${generateAssinatura(data)}
-  ${generateFooter()}
-</body>
-</html>
-  `;
-}
-
-function generateTemplateDefault(data: ContratoTemplateData): string {
-  return `
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  ${generateStyles()}
-</head>
-<body>
-  ${generateHeader(data)}
-  ${generateDadosContratante(data)}
-  ${generateDadosVeiculo(data)}
-  ${generateValoresContrato(data)}
-  ${generateCoberturasDefault(data)}
+  ${generateCoberturasDefault()}
   ${generateTermosDefault()}
   ${generateAssinatura(data)}
   ${generateFooter()}
 </body>
 </html>
   `;
-}
-
-// ============= SELETOR DE TEMPLATE =============
-
-type TemplateGenerator = (data: ContratoTemplateData) => string;
-
-const TEMPLATES: Record<string, TemplateGenerator> = {
-  'BASICO': generateTemplateBasico,
-  'BASIC': generateTemplateBasico,
-  'INTERMEDIARIO': generateTemplateIntermediario,
-  'INTER': generateTemplateIntermediario,
-  'PREMIUM': generateTemplatePremium,
-  'PREM': generateTemplatePremium,
-  'APLICATIVO': generateTemplateAplicativo,
-  'APP': generateTemplateAplicativo,
-  'UBER': generateTemplateAplicativo,
-};
-
-function getTemplateByPlanCode(planoCodigo: string): TemplateGenerator {
-  // Normaliza o código: uppercase, remove acentos
-  const codigo = planoCodigo
-    .toUpperCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim();
-  
-  // Procura match exato ou parcial
-  for (const [key, template] of Object.entries(TEMPLATES)) {
-    if (codigo.includes(key) || key.includes(codigo)) {
-      return template;
-    }
-  }
-  
-  return generateTemplateDefault;
 }
 
 // ============= HANDLER PRINCIPAL =============
@@ -821,9 +598,6 @@ serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
-
-  // Fluxo público: não exige autenticação (igual ao contrato-gerar)
-  // A segurança é garantida pelo fato de que só quem tem o contratoId pode usá-lo
 
   try {
     const autentiqueApiKey = Deno.env.get("AUTENTIQUE_API_KEY");
@@ -844,7 +618,7 @@ serve(async (req) => {
       throw new Error("contratoId ou contrato_id é obrigatório");
     }
 
-    console.log("Criando documento Autentique para contrato:", contratoId);
+    console.log("[autentique-create] Criando documento para contrato:", contratoId);
 
     // Buscar dados do contrato com plano e lead
     const { data: contrato, error: contratoError } = await supabase
@@ -852,7 +626,8 @@ serve(async (req) => {
       .select(`
         *,
         planos (*),
-        leads (*)
+        leads (*),
+        associados (*)
       `)
       .eq("id", contratoId)
       .single();
@@ -881,37 +656,155 @@ serve(async (req) => {
 
     console.log(`[autentique-create] Nenhum documento existente, criando novo para contrato ${contratoId}`);
 
-    // Preparar dados do template - PRIORIZAR campos cliente_* do contrato antes de leads
-    const templateData: ContratoTemplateData = {
-      numero: contrato.numero,
-      clienteNome: clienteNome || contrato.cliente_nome || contrato.leads?.nome || "Cliente",
-      clienteCpf: clienteCpf || contrato.cliente_cpf || contrato.leads?.cpf || "",
-      clienteEmail: clienteEmail || contrato.cliente_email || contrato.leads?.email || "",
-      clienteTelefone: clienteTelefone || contrato.cliente_telefone || contrato.leads?.telefone || "",
-      planoNome: contrato.planos?.nome || "Plano Padrão",
-      planoCodigo: contrato.planos?.codigo || "",
-      planoDescricao: contrato.planos?.descricao || "",
-      tipoUso: contrato.planos?.tipo_uso || "particular",
-      valorAdesao: contrato.valor_adesao,
-      valorMensal: contrato.valor_mensal,
-      diaVencimento: contrato.dia_vencimento || 10,
-      dataInicio: contrato.data_inicio,
-      veiculoMarca: contrato.leads?.veiculo_marca,
-      veiculoModelo: contrato.leads?.veiculo_modelo,
-      veiculoPlaca: contrato.leads?.veiculo_placa,
-      veiculoAno: contrato.leads?.veiculo_ano,
-      valorFipe: contrato.leads?.veiculo_fipe,
+    // ============= BUSCAR TEMPLATE DO BANCO =============
+    console.log("[autentique-create] Buscando template de contrato no banco...");
+    
+    const { data: templateDb, error: templateError } = await supabase
+      .from("documento_templates")
+      .select("*")
+      .eq("codigo", "CONTRATO_ADESAO_V1")
+      .eq("ativo", true)
+      .single();
+
+    let contratoHTML: string;
+    let templateUsed: string;
+
+    // Dados do associado (pode vir do lead ou do associado vinculado)
+    const associado = contrato.associados || contrato.leads;
+    
+    // Montar endereço completo
+    const montarEndereco = (obj: any): string => {
+      if (!obj) return "";
+      const partes = [
+        obj.logradouro,
+        obj.numero,
+        obj.complemento,
+        obj.bairro,
+        obj.cidade,
+        obj.uf,
+        obj.cep
+      ].filter(Boolean);
+      return partes.join(", ");
     };
 
-    // Selecionar template baseado no código do plano
-    const planoCodigo = contrato.planos?.codigo || "";
-    const templateGenerator = getTemplateByPlanCode(planoCodigo);
-    const contratoHTML = templateGenerator(templateData);
+    // Buscar dados da empresa (configurações)
+    const { data: empresaConfig } = await supabase
+      .from("configuracoes")
+      .select("*")
+      .eq("chave", "empresa")
+      .single();
+    
+    const empresa = empresaConfig?.valor || {};
 
-    console.log(`Template selecionado para plano "${planoCodigo}": ${templateGenerator.name}`);
+    if (templateDb && !templateError) {
+      console.log(`[autentique-create] Template encontrado: ${templateDb.nome} (v${templateDb.versao})`);
+      templateUsed = `DB: ${templateDb.codigo} v${templateDb.versao}`;
+      
+      // Preparar dados para substituição de variáveis
+      const dadosTemplate: TemplateData = {
+        associado: {
+          nome: clienteNome || contrato.cliente_nome || associado?.nome || "",
+          cpf: formatCPF(clienteCpf || contrato.cliente_cpf || associado?.cpf),
+          email: clienteEmail || contrato.cliente_email || associado?.email || "",
+          telefone: formatPhone(clienteTelefone || contrato.cliente_telefone || associado?.telefone),
+          whatsapp: formatPhone(associado?.whatsapp || associado?.telefone || ""),
+          endereco_completo: montarEndereco(associado),
+          logradouro: associado?.logradouro || "",
+          numero: associado?.numero || "",
+          complemento: associado?.complemento || "",
+          bairro: associado?.bairro || "",
+          cidade: associado?.cidade || "",
+          uf: associado?.uf || "",
+          cep: associado?.cep || "",
+          rg: associado?.rg || "",
+          data_nascimento: formatDate(associado?.data_nascimento),
+        },
+        veiculo: {
+          marca: contrato.leads?.veiculo_marca || "",
+          modelo: contrato.leads?.veiculo_modelo || "",
+          placa: contrato.leads?.veiculo_placa || "",
+          ano: String(contrato.leads?.veiculo_ano || ""),
+          cor: contrato.leads?.veiculo_cor || "",
+          chassi: contrato.leads?.veiculo_chassi || "",
+          renavam: contrato.leads?.veiculo_renavam || "",
+          valor_fipe: formatCurrency(contrato.leads?.veiculo_fipe),
+          combustivel: contrato.leads?.veiculo_combustivel || "",
+        },
+        contrato: {
+          numero: contrato.numero || "",
+          valor_adesao: formatCurrency(contrato.valor_adesao),
+          valor_mensal: formatCurrency(contrato.valor_mensal),
+          dia_vencimento: String(contrato.dia_vencimento || 10),
+          data_inicio: formatDate(contrato.data_inicio),
+          data_fim: formatDate(contrato.data_fim),
+          status: contrato.status || "",
+        },
+        plano: {
+          nome: contrato.planos?.nome || "Plano Padrão",
+          codigo: contrato.planos?.codigo || "",
+          descricao: contrato.planos?.descricao || "",
+          tipo_uso: contrato.planos?.tipo_uso || "particular",
+          franquia: contrato.planos?.franquia || "Conforme tabela do plano",
+          carencia: contrato.planos?.carencia || "90 dias após instalação",
+          coberturas_html: contrato.planos?.coberturas_html || generateCoberturasDefault(),
+        },
+        empresa: {
+          nome: empresa.nome || "Associação de Proteção Veicular",
+          cnpj: empresa.cnpj || "",
+          endereco_completo: montarEndereco(empresa),
+          logradouro: empresa.logradouro || "",
+          numero: empresa.numero || "",
+          complemento: empresa.complemento || "",
+          bairro: empresa.bairro || "",
+          cidade: empresa.cidade || "",
+          uf: empresa.uf || "",
+          cep: empresa.cep || "",
+          telefone: formatPhone(empresa.telefone),
+          email: empresa.email || "",
+          site: empresa.site || "",
+        },
+        sistema: {
+          data_atual: formatDate(new Date().toISOString()),
+          hora_atual: new Date().toLocaleTimeString("pt-BR"),
+          ano_atual: String(new Date().getFullYear()),
+        },
+      };
+      
+      // Processar template do banco
+      contratoHTML = processarTemplateDB(templateDb.conteudo, dadosTemplate);
+    } else {
+      // Fallback para template hardcoded
+      console.log("[autentique-create] Template não encontrado no banco, usando fallback hardcoded");
+      templateUsed = "Fallback (hardcoded)";
+      
+      const templateData: ContratoTemplateData = {
+        numero: contrato.numero,
+        clienteNome: clienteNome || contrato.cliente_nome || contrato.leads?.nome || "Cliente",
+        clienteCpf: clienteCpf || contrato.cliente_cpf || contrato.leads?.cpf || "",
+        clienteEmail: clienteEmail || contrato.cliente_email || contrato.leads?.email || "",
+        clienteTelefone: clienteTelefone || contrato.cliente_telefone || contrato.leads?.telefone || "",
+        planoNome: contrato.planos?.nome || "Plano Padrão",
+        planoCodigo: contrato.planos?.codigo || "",
+        planoDescricao: contrato.planos?.descricao || "",
+        tipoUso: contrato.planos?.tipo_uso || "particular",
+        valorAdesao: contrato.valor_adesao,
+        valorMensal: contrato.valor_mensal,
+        diaVencimento: contrato.dia_vencimento || 10,
+        dataInicio: contrato.data_inicio,
+        veiculoMarca: contrato.leads?.veiculo_marca,
+        veiculoModelo: contrato.leads?.veiculo_modelo,
+        veiculoPlaca: contrato.leads?.veiculo_placa,
+        veiculoAno: contrato.leads?.veiculo_ano,
+        valorFipe: contrato.leads?.veiculo_fipe,
+      };
+      
+      contratoHTML = generateTemplateFallback(templateData);
+    }
+
+    console.log(`[autentique-create] Template usado: ${templateUsed}`);
+    console.log(`[autentique-create] HTML gerado: ${contratoHTML.length} bytes`);
 
     // Criar documento no Autentique via GraphQL Multipart Request Spec
-    // Referência: https://github.com/jaydenseric/graphql-multipart-request-spec
     const mutation = `
       mutation CreateDocumentMutation(
         $document: DocumentInput!
@@ -942,8 +835,8 @@ serve(async (req) => {
     `;
 
     // PRIORIZAR campos cliente_* do contrato (preenchidos quando não há lead)
-    const signerName = clienteNome || contrato.cliente_nome || contrato.leads?.nome;
-    const signerEmail = clienteEmail || contrato.cliente_email || contrato.leads?.email;
+    const signerName = clienteNome || contrato.cliente_nome || contrato.leads?.nome || contrato.associados?.nome;
+    const signerEmail = clienteEmail || contrato.cliente_email || contrato.leads?.email || contrato.associados?.email;
     const documentName = `Contrato ${contrato.numero} - ${signerName || 'Cliente'} - ${contrato.planos?.nome || 'Plano'}`;
     
     console.log("[autentique-create] Dados do signatário:", { signerName, signerEmail });
@@ -962,7 +855,7 @@ serve(async (req) => {
         },
         signers: [
           {
-            name: signerName || undefined, // Autentique aceita name OU email
+            name: signerName || undefined,
             email: signerEmail,
             action: "SIGN",
             positions: [
@@ -975,7 +868,7 @@ serve(async (req) => {
             ],
           },
         ],
-        file: null, // Placeholder - será mapeado pelo FormData
+        file: null,
       },
     };
 
@@ -993,23 +886,21 @@ serve(async (req) => {
     const htmlBlob = new Blob([contratoHTML], { type: "text/html" });
     formData.append("0", htmlBlob, `contrato-${contrato.numero}.html`);
 
-    console.log("Enviando para Autentique via multipart/form-data...");
-    console.log("Document name:", documentName);
-    console.log("Signer email:", signerEmail);
-    console.log("HTML size:", contratoHTML.length, "bytes");
+    console.log("[autentique-create] Enviando para Autentique via multipart/form-data...");
+    console.log("[autentique-create] Document name:", documentName);
+    console.log("[autentique-create] Signer email:", signerEmail);
 
     const autentiqueResponse = await fetch(AUTENTIQUE_API_URL, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${autentiqueApiKey}`,
-        // NÃO definir Content-Type - FormData define automaticamente com boundary
       },
       body: formData,
     });
 
     const autentiqueData = await autentiqueResponse.json();
     
-    console.log("Resposta Autentique:", JSON.stringify(autentiqueData, null, 2));
+    console.log("[autentique-create] Resposta Autentique:", JSON.stringify(autentiqueData, null, 2));
 
     if (autentiqueData.errors) {
       throw new Error(`Erro Autentique: ${JSON.stringify(autentiqueData.errors)}`);
@@ -1036,7 +927,7 @@ serve(async (req) => {
       .eq("id", contratoId);
 
     if (updateError) {
-      console.error("Erro ao atualizar contrato:", updateError);
+      console.error("[autentique-create] Erro ao atualizar contrato:", updateError);
     }
 
     // Registrar no histórico do contrato
@@ -1046,7 +937,8 @@ serve(async (req) => {
       descricao: `Contrato enviado para assinatura via Autentique`,
       dados: { 
         autentique_id: document.id, 
-        link: signatureLink 
+        link: signatureLink,
+        template_usado: templateUsed
       },
     });
 
@@ -1072,7 +964,7 @@ serve(async (req) => {
         success: true,
         documentId: document.id,
         signatureLink,
-        templateUsed: templateGenerator.name,
+        templateUsed,
         message: "Contrato enviado para assinatura com sucesso",
       }),
       {
@@ -1081,7 +973,7 @@ serve(async (req) => {
       }
     );
   } catch (error: any) {
-    console.error("Erro na função autentique-create:", error);
+    console.error("[autentique-create] Erro:", error);
     return new Response(
       JSON.stringify({ 
         success: false, 
