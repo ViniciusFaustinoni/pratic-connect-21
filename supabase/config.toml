@@ -179,3 +179,9 @@ verify_jwt = false
 
 [functions.enviar-mensagem-sinistro]
 verify_jwt = false
+
+[functions.disparar-notificacao]
+verify_jwt = false
+
+[functions.app-auth-token]
+verify_jwt = false
