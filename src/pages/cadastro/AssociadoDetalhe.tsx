@@ -59,6 +59,7 @@ import { useDocumentosPorAssociado } from '@/hooks/useDocumentos';
 import { useContratoDoAssociado, useDocumentosCotacao, useResumoFinanceiroAssociado, useCobrancasAssociado } from '@/hooks/useDocumentosCotacao';
 import { useFotosAutovistoriaCotacao, agruparFotosPorCategoria, formatarTipoFoto } from '@/hooks/useFotosAutovistoria';
 import { useAssociadoHistoricoCompleto } from '@/hooks/useAssociadoHistoricoCompleto';
+import { VeiculoDetalhesModal } from '@/components/cadastro/VeiculoDetalhesModal';
 import { cn } from '@/lib/utils';
 
 // ============================================
@@ -217,6 +218,7 @@ export default function AssociadoDetalhe() {
   const [suspenderDialogOpen, setSuspenderDialogOpen] = useState(false);
   const [cancelarDialogOpen, setCancelarDialogOpen] = useState(false);
   const [fotoModal, setFotoModal] = useState<{ open: boolean; url: string; tipo: string }>({ open: false, url: '', tipo: '' });
+  const [veiculoDetalhesId, setVeiculoDetalhesId] = useState<string | null>(null);
 
   // Data fetching
   const { data: associado, isLoading, refetch } = useAssociado(id);
@@ -792,7 +794,11 @@ export default function AssociadoDetalhe() {
                       </div>
 
                       <div className="flex flex-wrap gap-2">
-                        <Button size="sm" variant="outline">
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={() => setVeiculoDetalhesId(v.id)}
+                        >
                           <Eye className="mr-2 h-4 w-4" /> Detalhes
                         </Button>
                         <Button size="sm" variant="outline">
@@ -1315,6 +1321,14 @@ export default function AssociadoDetalhe() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* MODAL DETALHES DO VEÍCULO */}
+      <VeiculoDetalhesModal
+        open={!!veiculoDetalhesId}
+        onClose={() => setVeiculoDetalhesId(null)}
+        veiculo={veiculos?.find(v => v.id === veiculoDetalhesId) || null}
+        associadoId={id || ''}
+      />
     </div>
   );
 }
