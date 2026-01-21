@@ -90,7 +90,6 @@ export default function InstaladorChecklist() {
   const [assinaturaUrl, setAssinaturaUrl] = useState<string | null>(null);
   const [showModalRecusa, setShowModalRecusa] = useState(false);
   const [openCategorias, setOpenCategorias] = useState<string[]>([]);
-  const [showImeiDialog, setShowImeiDialog] = useState(false);
   const [imeiRastreador, setImeiRastreador] = useState('');
   const [imeiError, setImeiError] = useState('');
 
@@ -259,15 +258,16 @@ export default function InstaladorChecklist() {
   // Validação de IMEI (15-17 dígitos)
   const isImeiValido = /^\d{15,17}$/.test(imeiRastreador);
 
-  const handleAprovarVeiculo = () => {
-    setImeiRastreador('');
-    setImeiError('');
-    setShowImeiDialog(true);
-  };
-
-  const handleConfirmarAprovacao = async () => {
-    if (!id || !instalacao?.veiculos?.id || !instalacao?.associados?.id || !isImeiValido) return;
-    setShowImeiDialog(false);
+  const handleConcluirInstalacao = async () => {
+    if (!id || !instalacao?.veiculos?.id || !instalacao?.associados?.id) {
+      toast.error('Dados incompletos');
+      return;
+    }
+    if (!isImeiValido) {
+      toast.error('Preencha o IMEI do rastreador corretamente');
+      return;
+    }
+    
     try {
       await aprovarVeiculoMutation.mutateAsync({
         instalacaoId: id,
@@ -275,10 +275,10 @@ export default function InstaladorChecklist() {
         associadoId: instalacao.associados.id,
         imeiRastreador,
       });
-      toast.success('Veículo aprovado! Cobertura total ativada.');
+      toast.success('Instalação concluída! Aguardando análise cadastral.');
       navigate('/instalador');
     } catch (err) {
-      toast.error('Erro ao aprovar veículo');
+      toast.error('Erro ao concluir instalação');
     }
   };
 
@@ -822,6 +822,51 @@ export default function InstaladorChecklist() {
               </CardContent>
             </Card>
 
+            {/* Campo de IMEI do Rastreador */}
+            <Card className="border-purple-500/50 bg-purple-500/10">
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-base text-white">
+                  <Router className="h-5 w-5 text-purple-400" />
+                  IMEI do Rastreador Instalado
+                </CardTitle>
+                <p className="text-sm text-slate-400">
+                  Digite o IMEI do rastreador que foi instalado no veículo (15-17 dígitos)
+                </p>
+              </CardHeader>
+              <CardContent>
+                <Input
+                  id="imei-rastreador"
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="000000000000000"
+                  value={imeiRastreador}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, '');
+                    setImeiRastreador(value);
+                    if (value && !/^\d{15,17}$/.test(value)) {
+                      setImeiError('IMEI deve ter entre 15 e 17 dígitos');
+                    } else {
+                      setImeiError('');
+                    }
+                  }}
+                  maxLength={17}
+                  className={cn(
+                    "text-lg font-mono tracking-wider bg-slate-800 border-slate-600",
+                    imeiError ? 'border-destructive' : isImeiValido ? 'border-green-500' : ''
+                  )}
+                />
+                {imeiError && (
+                  <p className="text-sm text-destructive mt-2">{imeiError}</p>
+                )}
+                {isImeiValido && (
+                  <p className="text-sm text-green-400 mt-2 flex items-center gap-1">
+                    <CheckCircle2 className="h-4 w-4" />
+                    IMEI válido
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+
             <div className="space-y-2 text-sm">
               <div className="flex justify-between rounded-lg bg-slate-800 p-3">
                 <span className="text-slate-400">Associado</span>
@@ -856,19 +901,19 @@ export default function InstaladorChecklist() {
             {/* Botões de Decisão */}
             <div className="space-y-3 mt-6">
               <Button
-                onClick={handleAprovarVeiculo}
-                disabled={aprovarVeiculoMutation.isPending || recusarVeiculoMutation.isPending}
+                onClick={handleConcluirInstalacao}
+                disabled={!isImeiValido || aprovarVeiculoMutation.isPending || recusarVeiculoMutation.isPending}
                 className="w-full bg-emerald-600 py-6 text-lg font-semibold hover:bg-emerald-700"
               >
                 {aprovarVeiculoMutation.isPending ? (
                   <>
                     <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                    Aprovando...
+                    Finalizando...
                   </>
                 ) : (
                   <>
                     <ShieldCheck className="mr-2 h-5 w-5" />
-                    Aprovar Veículo - Ativar Cobertura Total
+                    Concluir Instalação
                   </>
                 )}
               </Button>
@@ -895,67 +940,6 @@ export default function InstaladorChecklist() {
                 modelo: instalacao.veiculos?.modelo,
               }}
             />
-
-            {/* Dialog de IMEI do Rastreador */}
-            <Dialog open={showImeiDialog} onOpenChange={setShowImeiDialog}>
-              <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2">
-                    <Router className="h-5 w-5" />
-                    IMEI do Rastreador
-                  </DialogTitle>
-                  <DialogDescription>
-                    Digite o IMEI do rastreador instalado no veículo (15-17 dígitos numéricos)
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="imei-rastreador">IMEI do Rastreador</Label>
-                    <Input
-                      id="imei-rastreador"
-                      type="text"
-                      inputMode="numeric"
-                      placeholder="000000000000000"
-                      value={imeiRastreador}
-                      onChange={(e) => {
-                        const value = e.target.value.replace(/\D/g, '');
-                        setImeiRastreador(value);
-                        if (value && !/^\d{15,17}$/.test(value)) {
-                          setImeiError('IMEI deve ter entre 15 e 17 dígitos');
-                        } else {
-                          setImeiError('');
-                        }
-                      }}
-                      maxLength={17}
-                      className={imeiError ? 'border-destructive' : ''}
-                    />
-                    {imeiError && (
-                      <p className="text-sm text-destructive">{imeiError}</p>
-                    )}
-                  </div>
-                </div>
-                <DialogFooter className="gap-2 sm:gap-0">
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowImeiDialog(false)}
-                  >
-                    Cancelar
-                  </Button>
-                  <Button
-                    onClick={handleConfirmarAprovacao}
-                    disabled={!isImeiValido || aprovarVeiculoMutation.isPending}
-                    className="bg-emerald-600 hover:bg-emerald-700"
-                  >
-                    {aprovarVeiculoMutation.isPending ? (
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    ) : (
-                      <ShieldCheck className="h-4 w-4 mr-2" />
-                    )}
-                    Confirmar Aprovação
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
           </div>
         )}
       </div>
