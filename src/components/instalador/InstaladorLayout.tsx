@@ -131,8 +131,8 @@ export function InstaladorLayout() {
           </header>
 
           {/* Conteúdo Principal */}
-          <main className="flex-1 overflow-hidden pb-16">
-            <div className="h-full overflow-y-auto relative">
+          <main className="flex-1 overflow-hidden pb-16 relative">
+            <div className="h-full min-h-0 overflow-y-auto">
               <Outlet />
             </div>
           </main>
