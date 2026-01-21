@@ -242,7 +242,7 @@ export function useAprovarVeiculo() {
           rastreadorId = rastreadorExistente.id;
         } else {
           // Criar novo rastreador (em estoque)
-          const { data: novoRastreador } = await supabase
+          const { data: novoRastreador, error: rastreadorError } = await supabase
             .from('rastreadores')
             .insert({
               imei: imeiRastreador,
@@ -255,7 +255,10 @@ export function useAprovarVeiculo() {
             .select('id')
             .single();
           
-          if (novoRastreador) {
+          if (rastreadorError) {
+            console.error('Erro ao criar rastreador:', rastreadorError);
+            // Continuar mesmo com erro - será registrado no histórico
+          } else if (novoRastreador) {
             rastreadorId = novoRastreador.id;
           }
         }
