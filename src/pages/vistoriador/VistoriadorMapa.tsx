@@ -3,7 +3,7 @@ import "leaflet/dist/leaflet.css";
 
 export default function VistoriadorMapa() {
   return (
-    <div className="absolute inset-0 overflow-hidden map-shell">
+    <div className="h-full w-full overflow-hidden map-shell">
       <MapaMobileContent />
     </div>
   );
