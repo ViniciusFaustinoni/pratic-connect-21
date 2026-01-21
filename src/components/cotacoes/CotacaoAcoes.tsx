@@ -27,10 +27,9 @@ import {
   MessageSquare,
   Mail,
   Copy,
-  Link,
+  ExternalLink,
   Trash2,
   Loader2,
-  Send,
   FileSignature,
   Pencil,
 } from 'lucide-react';
@@ -52,10 +51,8 @@ interface CotacaoAcoesProps {
   onEditar?: () => void;
   onMudarStatus: (status: StatusCotacao) => void;
   onExcluir: () => void;
-  onReenviar: () => void;
   onAceitarEContrato?: () => void;
   onCopiarLink?: () => void;
-  isReenviando?: boolean;
   isAtualizando?: boolean;
   isExcluindo?: boolean;
   isGerando?: boolean;
@@ -71,10 +68,8 @@ export function CotacaoAcoes({
   onEditar,
   onMudarStatus,
   onExcluir,
-  onReenviar,
   onAceitarEContrato,
   onCopiarLink,
-  isReenviando,
   isAtualizando,
   isExcluindo,
   isGerando,
@@ -85,14 +80,13 @@ export function CotacaoAcoes({
   const temLead = !!cotacao.lead_id;
   const podeEditar = cotacao.status === 'rascunho';
 
-  const handleCopiarLink = async () => {
+  const handleAcessarLink = () => {
     if (!cotacao.token_publico) {
       toast.error('Link público não disponível');
       return;
     }
     const url = `${window.location.origin}/cotacao/${cotacao.token_publico}`;
-    await navigator.clipboard.writeText(url);
-    toast.success('Link copiado!');
+    window.open(url, '_blank');
     
     // Callback opcional para registrar no histórico
     onCopiarLink?.();
@@ -150,7 +144,6 @@ export function CotacaoAcoes({
           variant="outline"
           className="w-full justify-start"
           onClick={onEnviarWhatsApp}
-          disabled={!temLead}
         >
           <MessageSquare className="mr-2 h-4 w-4" />
           Enviar WhatsApp
@@ -161,25 +154,9 @@ export function CotacaoAcoes({
           variant="outline"
           className="w-full justify-start"
           onClick={onEnviarEmail}
-          disabled={!temLead}
         >
           <Mail className="mr-2 h-4 w-4" />
           Enviar Email
-        </Button>
-
-        {/* Reenviar */}
-        <Button
-          variant="outline"
-          className="w-full justify-start"
-          onClick={onReenviar}
-          disabled={isReenviando || !temLead}
-        >
-          {isReenviando ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <Send className="mr-2 h-4 w-4" />
-          )}
-          Reenviar Cotação
         </Button>
 
         <Separator className="my-3" />
@@ -214,18 +191,16 @@ export function CotacaoAcoes({
           </Button>
         </div>
 
-        {/* Copiar Link */}
+        {/* Acessar Link Público */}
         <Button
           variant="outline"
           className="w-full justify-start"
-          onClick={handleCopiarLink}
+          onClick={handleAcessarLink}
           disabled={!cotacao.token_publico}
         >
-          <Link className="mr-2 h-4 w-4" />
-          Copiar Link Público
+          <ExternalLink className="mr-2 h-4 w-4" />
+          Acessar Link Público
         </Button>
-
-        <Separator className="my-3" />
 
         {/* Alterar Status */}
         <div className="space-y-2">

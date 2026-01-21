@@ -459,10 +459,8 @@ Ficou com alguma dúvida? Estou à disposição!
             onEditar={handleEditar}
             onMudarStatus={handleMudarStatus}
             onExcluir={handleExcluir}
-            onReenviar={() => reenviarCotacao(cotacao.id)}
             onAceitarEContrato={handleAceitarEContrato}
             onCopiarLink={handleCopiarLink}
-            isReenviando={isReenviando}
             isAtualizando={isAtualizando || atualizarStatusMutation.isPending}
             isExcluindo={excluirMutation.isPending}
             isGerando={isGerando}
