@@ -4,6 +4,15 @@ import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { toast } from 'sonner';
 import { geocodificarEndereco } from '@/services/geocodingService';
 
+// Interface para resultado da edge function de agendamento presencial
+interface AgendarPresencialResponse {
+  success: boolean;
+  vistoriaId: string | null;
+  instalacaoId: string | null;
+  error?: string;
+  message?: string;
+}
+
 export interface CotacaoVistoriaFoto {
   id: string;
   cotacao_id: string;
@@ -104,37 +113,10 @@ export function useFinalizarVistoriaCotacao() {
   
   return useMutation({
     mutationFn: async ({ cotacaoId, tipoVistoria, dataAgendada, horarioAgendado, endereco, responsavel }: FinalizarVistoriaParams) => {
-      // Buscar dados da cotação para preencher a vistoria
-      const { data: cotacao, error: cotacaoFetchError } = await supabase
-        .from('cotacoes')
-        .select('id, nome_solicitante, telefone1_solicitante, veiculo_placa, veiculo_marca, veiculo_modelo')
-        .eq('id', cotacaoId)
-        .single();
-      
-      if (cotacaoFetchError) throw cotacaoFetchError;
-      
-      const updateData: Record<string, unknown> = {
-        tipo_vistoria: tipoVistoria,
-        status_contratacao: 'vistoria_ok'
-      };
-      
-      let coords: { success: boolean; latitude?: number; longitude?: number } = { success: false };
-      
+      // FLUXO AGENDADA (sem autovistoria) - usar edge function para criar vistoria E instalacao
       if (tipoVistoria === 'agendada' && endereco && responsavel) {
-        updateData.vistoria_data_agendada = dataAgendada;
-        updateData.vistoria_horario_agendado = horarioAgendado;
-        updateData.vistoria_endereco_cep = endereco.cep;
-        updateData.vistoria_endereco_logradouro = endereco.logradouro;
-        updateData.vistoria_endereco_numero = endereco.numero;
-        updateData.vistoria_endereco_bairro = endereco.bairro;
-        updateData.vistoria_endereco_cidade = endereco.cidade;
-        updateData.vistoria_endereco_estado = endereco.estado;
-        updateData.vistoria_responsavel_eu_mesmo = responsavel.euMesmo;
-        updateData.vistoria_responsavel_nome = responsavel.nome || null;
-        updateData.vistoria_responsavel_telefone = responsavel.telefone || null;
-        
-        // Geocodificar endereço
-        coords = await geocodificarEndereco({
+        // Geocodificar endereço antes de enviar
+        const coords = await geocodificarEndereco({
           logradouro: endereco.logradouro,
           numero: endereco.numero,
           bairro: endereco.bairro,
@@ -143,70 +125,53 @@ export function useFinalizarVistoriaCotacao() {
           cep: endereco.cep,
         });
         
-        if (coords.success) {
-          updateData.vistoria_endereco_latitude = coords.latitude;
-          updateData.vistoria_endereco_longitude = coords.longitude;
+        // Chamar Edge Function que cria vistoria + instalacao usando service_role
+        const { data, error } = await publicSupabase.functions.invoke<AgendarPresencialResponse>('agendar-vistoria-presencial', {
+          body: {
+            cotacaoId,
+            dataAgendada,
+            horarioAgendado,
+            endereco,
+            responsavel,
+            latitude: coords.success ? coords.latitude : null,
+            longitude: coords.success ? coords.longitude : null,
+          },
+        });
+        
+        if (error) {
+          console.error('[FinalizarVistoria] Erro na edge function:', error);
+          throw error;
         }
+        
+        if (!data?.success) {
+          console.error('[FinalizarVistoria] Erro:', data?.error);
+          throw new Error(data?.error || 'Erro ao agendar vistoria');
+        }
+        
+        console.log('[FinalizarVistoria] Agendamento presencial criado:', data);
+        return { vistoriaId: data.vistoriaId, instalacaoId: data.instalacaoId };
       }
+      
+      // FLUXO AUTOVISTORIA - apenas atualiza cotação (a instalação será agendada depois)
+      const updateData: Record<string, unknown> = {
+        tipo_vistoria: tipoVistoria,
+        status_contratacao: 'vistoria_ok'
+      };
       
       // Atualizar cotação
       const { error } = await supabase.from('cotacoes').update(updateData).eq('id', cotacaoId);
       if (error) throw error;
       
-      // CRIAR REGISTRO NA TABELA VISTORIAS para aparecer nas rotas
-      if (tipoVistoria === 'agendada' && endereco && responsavel) {
-        const obsResponsavel = responsavel.euMesmo 
-          ? `Responsável: ${cotacao.nome_solicitante} - ${cotacao.telefone1_solicitante}` 
-          : `Responsável: ${responsavel.nome} - ${responsavel.telefone}`;
-        
-        const vistoriaData = {
-          cotacao_id: cotacaoId,
-          tipo: 'entrada' as const,
-          modalidade: 'presencial' as const,
-          status: 'pendente' as const,
-          origem: 'cotacao' as const,
-          data_agendada: dataAgendada,
-          horario_agendado: horarioAgendado,
-          endereco_cep: endereco.cep,
-          endereco_logradouro: endereco.logradouro,
-          endereco_numero: endereco.numero,
-          endereco_bairro: endereco.bairro,
-          endereco_cidade: endereco.cidade,
-          endereco_estado: endereco.estado,
-          endereco_latitude: coords.success ? coords.latitude : null,
-          endereco_longitude: coords.success ? coords.longitude : null,
-          observacoes: obsResponsavel,
-        };
-        
-        const { data: novaVistoria, error: vistoriaError } = await supabase
-          .from('vistorias')
-          .insert([vistoriaData])
-          .select('id')
-          .single();
-        
-        if (vistoriaError) {
-          console.error('[FinalizarVistoria] Erro ao criar vistoria:', vistoriaError);
-        } else {
-          console.log('[FinalizarVistoria] Vistoria criada:', novaVistoria.id);
-          
-          // Vincular vistoria ao contrato
-          const { error: contratoError } = await supabase
-            .from('contratos')
-            .update({ vistoria_id: novaVistoria.id })
-            .eq('cotacao_id', cotacaoId);
-          
-          if (contratoError) {
-            console.error('[FinalizarVistoria] Erro ao vincular vistoria ao contrato:', contratoError);
-          }
-        }
-      }
+      return { vistoriaId: null, instalacaoId: null };
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['cotacao', variables.cotacaoId] });
       queryClient.invalidateQueries({ queryKey: ['cotacao-publica'] });
       queryClient.invalidateQueries({ queryKey: ['vistorias'] });
+      queryClient.invalidateQueries({ queryKey: ['instalacoes'] });
       queryClient.invalidateQueries({ queryKey: ['servicos-disponiveis'] });
       queryClient.invalidateQueries({ queryKey: ['bairros-servicos'] });
+      queryClient.invalidateQueries({ queryKey: ['monitoramento-estatisticas'] });
       toast.success(variables.tipoVistoria === 'agendada' ? 'Vistoria agendada!' : 'Vistoria enviada!');
     },
     onError: () => toast.error('Erro ao finalizar vistoria')

@@ -146,3 +146,6 @@ verify_jwt = false
 
 [functions.agendar-vistoria-completa]
 verify_jwt = false
+
+[functions.agendar-vistoria-presencial]
+verify_jwt = false
