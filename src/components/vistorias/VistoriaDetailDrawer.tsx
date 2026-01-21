@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
@@ -6,10 +7,20 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   User,
   Car,
@@ -23,10 +34,12 @@ import {
   FileText,
   MapPin,
   Clock,
+  Wifi,
 } from 'lucide-react';
 import { useVistoria, useFinalizarVistoriaComDecisao, VistoriaStatus } from '@/hooks/useVistorias';
 import { VistoriaFotosView } from './VistoriaFotosView';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 interface VistoriaDetailDrawerProps {
   vistoriaId: string | null;
@@ -51,6 +64,12 @@ const formatarTelefone = (telefone: string | null) => {
   return `(${nums.slice(0, 2)}) ${nums.slice(2, 7)}-${nums.slice(7, 11)}`;
 };
 
+// Validação de IMEI: 15-17 dígitos numéricos
+const validarIMEI = (imei: string): boolean => {
+  const imeiLimpo = imei.replace(/\D/g, '');
+  return imeiLimpo.length >= 15 && imeiLimpo.length <= 17;
+};
+
 export function VistoriaDetailDrawer({
   vistoriaId,
   open,
@@ -58,6 +77,11 @@ export function VistoriaDetailDrawer({
 }: VistoriaDetailDrawerProps) {
   const { data: vistoria, isLoading } = useVistoria(vistoriaId);
   const finalizarVistoria = useFinalizarVistoriaComDecisao();
+  
+  // Estados para o dialog de aprovação com IMEI
+  const [showAprovarDialog, setShowAprovarDialog] = useState(false);
+  const [imeiRastreador, setImeiRastreador] = useState('');
+  const [imeiError, setImeiError] = useState('');
 
   const openWhatsApp = (phone?: string | null, nome?: string) => {
     if (!phone) return;
@@ -68,13 +92,38 @@ export function VistoriaDetailDrawer({
     window.open(`https://wa.me/55${phoneClean}?text=${encodeURIComponent(message)}`, '_blank');
   };
 
-  const handleAprovar = () => {
+  const handleAprovarClick = () => {
+    setImeiRastreador('');
+    setImeiError('');
+    setShowAprovarDialog(true);
+  };
+
+  const handleConfirmarAprovacao = () => {
+    // Validar IMEI
+    if (!imeiRastreador.trim()) {
+      setImeiError('IMEI do rastreador é obrigatório');
+      return;
+    }
+    
+    if (!validarIMEI(imeiRastreador)) {
+      setImeiError('IMEI deve ter entre 15 e 17 dígitos numéricos');
+      return;
+    }
+
     if (!vistoriaId) return;
+    
     finalizarVistoria.mutate({
       id: vistoriaId,
       aceito: true,
       km_atual: vistoria?.km_atual || undefined,
       observacoes: vistoria?.observacoes || undefined,
+      imei_rastreador: imeiRastreador.replace(/\D/g, ''),
+    }, {
+      onSuccess: () => {
+        setShowAprovarDialog(false);
+        setImeiRastreador('');
+        onOpenChange(false);
+      }
     });
   };
 
@@ -220,7 +269,7 @@ export function VistoriaDetailDrawer({
             <div className="flex gap-2">
               <Button
                 className="flex-1 bg-emerald-600 hover:bg-emerald-700"
-                onClick={handleAprovar}
+                onClick={handleAprovarClick}
                 disabled={finalizarVistoria.isPending}
               >
                 {finalizarVistoria.isPending ? (
@@ -247,6 +296,74 @@ export function VistoriaDetailDrawer({
           </div>
         )}
       </SheetContent>
+
+      {/* Dialog para informar IMEI do Rastreador ao aprovar */}
+      <Dialog open={showAprovarDialog} onOpenChange={setShowAprovarDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wifi className="h-5 w-5 text-emerald-600" />
+              Informar IMEI do Rastreador
+            </DialogTitle>
+            <DialogDescription>
+              Informe o IMEI do rastreador instalado no veículo para concluir a aprovação da vistoria.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="imei">IMEI do Rastreador *</Label>
+              <Input
+                id="imei"
+                placeholder="Digite o IMEI (15-17 dígitos)"
+                value={imeiRastreador}
+                onChange={(e) => {
+                  setImeiRastreador(e.target.value);
+                  setImeiError('');
+                }}
+                className={cn(imeiError && 'border-destructive')}
+              />
+              {imeiError && (
+                <p className="text-sm text-destructive">{imeiError}</p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                O IMEI é um número único de identificação do rastreador, geralmente com 15 dígitos.
+              </p>
+            </div>
+
+            {vistoria?.veiculo && (
+              <div className="bg-muted/50 rounded-lg p-3">
+                <p className="text-sm font-medium">Veículo</p>
+                <p className="text-sm text-muted-foreground">
+                  {vistoria.veiculo.placa} - {vistoria.veiculo.marca} {vistoria.veiculo.modelo}
+                </p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setShowAprovarDialog(false)}
+              disabled={finalizarVistoria.isPending}
+            >
+              Cancelar
+            </Button>
+            <Button
+              className="bg-emerald-600 hover:bg-emerald-700"
+              onClick={handleConfirmarAprovacao}
+              disabled={finalizarVistoria.isPending}
+            >
+              {finalizarVistoria.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <CheckCircle className="h-4 w-4 mr-2" />
+              )}
+              Confirmar Aprovação
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Sheet>
   );
 }
