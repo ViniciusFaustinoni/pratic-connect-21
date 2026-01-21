@@ -11241,6 +11241,100 @@ export type Database = {
           },
         ]
       }
+      rastreador_preferencias: {
+        Row: {
+          alerta_cerca_ativo: boolean | null
+          alerta_ignicao_ativo: boolean | null
+          alerta_velocidade_ativo: boolean | null
+          associado_id: string
+          compartilhar_localizacao: boolean | null
+          created_at: string | null
+          dados_anonimos: boolean | null
+          horario_alerta: string | null
+          horario_fim: string | null
+          horario_inicio: string | null
+          id: string
+          novidades_promocoes: boolean | null
+          updated_at: string | null
+          velocidade_limite: number | null
+        }
+        Insert: {
+          alerta_cerca_ativo?: boolean | null
+          alerta_ignicao_ativo?: boolean | null
+          alerta_velocidade_ativo?: boolean | null
+          associado_id: string
+          compartilhar_localizacao?: boolean | null
+          created_at?: string | null
+          dados_anonimos?: boolean | null
+          horario_alerta?: string | null
+          horario_fim?: string | null
+          horario_inicio?: string | null
+          id?: string
+          novidades_promocoes?: boolean | null
+          updated_at?: string | null
+          velocidade_limite?: number | null
+        }
+        Update: {
+          alerta_cerca_ativo?: boolean | null
+          alerta_ignicao_ativo?: boolean | null
+          alerta_velocidade_ativo?: boolean | null
+          associado_id?: string
+          compartilhar_localizacao?: boolean | null
+          created_at?: string | null
+          dados_anonimos?: boolean | null
+          horario_alerta?: string | null
+          horario_fim?: string | null
+          horario_inicio?: string | null
+          id?: string
+          novidades_promocoes?: boolean | null
+          updated_at?: string | null
+          velocidade_limite?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rastreador_preferencias_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: true
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rastreador_preferencias_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: true
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "rastreador_preferencias_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: true
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "rastreador_preferencias_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: true
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "rastreador_preferencias_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: true
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "rastreador_preferencias_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: true
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+        ]
+      }
       rastreadores: {
         Row: {
           associado_email: string | null
