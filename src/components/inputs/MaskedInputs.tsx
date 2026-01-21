@@ -110,13 +110,26 @@ interface CurrencyInputProps extends Omit<React.InputHTMLAttributes<HTMLInputEle
 }
 
 export function CurrencyInput({ value, onChange, className, ...props }: CurrencyInputProps) {
-  // Calcular displayValue diretamente da prop (sem estado interno para evitar perda de foco)
-  const displayValue = value ? maskCurrency((value * 100).toString()) : '';
+  // Formatar valor para exibição usando Intl.NumberFormat (mais robusto)
+  const displayValue = React.useMemo(() => {
+    if (!value || value === 0) return '';
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    }).format(value);
+  }, [value]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const rawValue = e.target.value;
-    const masked = maskCurrency(rawValue);
-    onChange(parseCurrency(masked));
+    // Extrair apenas dígitos
+    const rawValue = e.target.value.replace(/\D/g, '');
+    
+    // Limitar a 8 dígitos (máximo R$ 999.999,99)
+    const limitedValue = rawValue.slice(0, 8);
+    
+    // Converter centavos para reais
+    const numericValue = parseInt(limitedValue || '0', 10) / 100;
+    
+    onChange(numericValue);
   };
 
   return (
