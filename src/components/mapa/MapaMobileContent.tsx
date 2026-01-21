@@ -134,8 +134,8 @@ export function MapaMobileContent() {
       // Filtro por data - inclui vistorias do dia selecionado E vistorias atrasadas
       if (!v.data_agendada) return false;
       
-      // Normalizar data da vistoria para meia-noite local
-      const dataAgendadaStr = v.data_agendada.split(' ')[0]; // "2026-01-23"
+      // Normalizar data da vistoria para meia-noite local (funciona com ISO e "YYYY-MM-DD HH:mm")
+      const dataAgendadaStr = v.data_agendada.slice(0, 10); // "2026-01-23"
       const dataVistoria = new Date(dataAgendadaStr + 'T00:00:00');
       
       const isDataSelecionada = isSameDay(dataVistoria, filtroNormalizado);
@@ -217,8 +217,8 @@ export function MapaMobileContent() {
     if (!v.data_agendada) return false;
     if (statusNaoAtrasados.includes(v.status)) return false;
     
-    // Normalizar data da vistoria para meia-noite local
-    const dataAgendadaStr = v.data_agendada.split(' ')[0]; // "2026-01-23"
+    // Normalizar data da vistoria para meia-noite local (funciona com ISO e "YYYY-MM-DD HH:mm")
+    const dataAgendadaStr = v.data_agendada.slice(0, 10); // "2026-01-23"
     const dataVistoria = new Date(dataAgendadaStr + 'T00:00:00');
     
     // Normalizar data do filtro para meia-noite local
