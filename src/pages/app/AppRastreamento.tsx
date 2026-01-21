@@ -4,11 +4,6 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { 
-  Collapsible, 
-  CollapsibleContent, 
-  CollapsibleTrigger 
-} from '@/components/ui/collapsible';
 import {
   Select,
   SelectContent,
@@ -16,6 +11,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+} from '@/components/ui/drawer';
 import { 
   ArrowLeft, 
   RefreshCw, 
@@ -26,92 +27,159 @@ import {
   Clock,
   Crosshair,
   Route,
-  ChevronDown,
-  ChevronUp,
   WifiOff,
   Radio,
-  Navigation
+  Navigation,
+  Signal,
+  History
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useMyVehicleWithTracker, useMyVehicles } from '@/hooks/useMyData';
+import { useMyVehicleWithTracker, useMyVehicles, useMyVehiclePosition } from '@/hooks/useMyData';
 import { cn } from '@/lib/utils';
+import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 
-// Dados mock para demonstração (substituir por dados reais da API de rastreamento)
-const dadosMock = {
-  velocidade: 45,
-  ignicao: true,
-  endereco: "Rua das Flores, 123 - Centro, Uberlândia - MG",
-  latitude: -18.9186,
-  longitude: -48.2772,
-  emMovimento: true,
-  historico: [
-    { id: "1", hora: "08:00", evento: "Saída de casa", tipo: "inicio" },
-    { id: "2", hora: "08:45", evento: "Chegou no trabalho", tipo: "parada" },
-    { id: "3", hora: "12:30", evento: "Saiu para almoço", tipo: "movimento" },
-    { id: "4", hora: "13:15", evento: "Voltou ao trabalho", tipo: "parada" },
-    { id: "5", hora: "17:00", evento: "Posição atual", tipo: "atual" }
-  ]
-};
+// Fix Leaflet default icons
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+});
+
+// Component to fly map to position
+function FlyToPosition({ position, zoom }: { position: [number, number]; zoom: number }) {
+  const map = useMap();
+  
+  useEffect(() => {
+    if (position[0] && position[1]) {
+      map.flyTo(position, zoom, { duration: 1 });
+    }
+  }, [position, zoom, map]);
+  
+  return null;
+}
+
+// Custom marker icon based on ignition status
+function getMarkerIcon(ignicao: boolean, emMovimento: boolean) {
+  const color = emMovimento ? '#22c55e' : ignicao ? '#eab308' : '#ef4444';
+  
+  return L.divIcon({
+    className: 'custom-marker',
+    html: `
+      <div style="
+        width: 48px;
+        height: 48px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+      ">
+        <div style="
+          position: absolute;
+          width: 48px;
+          height: 48px;
+          background: ${color}40;
+          border-radius: 50%;
+          animation: pulse 2s infinite;
+        "></div>
+        <div style="
+          width: 36px;
+          height: 36px;
+          background: ${color};
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 4px 12px ${color}60;
+          z-index: 1;
+        ">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+            <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9L18 10H6l-2.5 1.1C2.7 11.3 2 12.1 2 13v3c0 .6.4 1 1 1h2"/>
+            <circle cx="7" cy="17" r="2"/>
+            <circle cx="17" cy="17" r="2"/>
+          </svg>
+        </div>
+      </div>
+      <style>
+        @keyframes pulse {
+          0% { transform: scale(1); opacity: 1; }
+          50% { transform: scale(1.3); opacity: 0.5; }
+          100% { transform: scale(1); opacity: 1; }
+        }
+      </style>
+    `,
+    iconSize: [48, 48],
+    iconAnchor: [24, 24],
+  });
+}
 
 export default function AppRastreamento() {
   const navigate = useNavigate();
   const { data: vehicles, isLoading: vehiclesLoading } = useMyVehicles();
   const { data: tracker, isLoading: trackerLoading, refetch } = useMyVehicleWithTracker();
+  const { data: posicao, refetch: refetchPosicao } = useMyVehiclePosition(tracker?.id);
   
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [historicoAberto, setHistoricoAberto] = useState(false);
-  const [simulandoOffline, setSimulandoOffline] = useState(false);
   const [veiculoSelecionado, setVeiculoSelecionado] = useState<string | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(true);
   
   const isLoading = vehiclesLoading || trackerLoading;
   const vehicle = veiculoSelecionado 
     ? vehicles?.find(v => v.id === veiculoSelecionado) 
     : vehicles?.[0];
-  const isOnline = !simulandoOffline && tracker?.status === 'instalado' && tracker?.ultima_comunicacao;
+  
+  // Position data
+  const latitude = posicao?.latitude ?? tracker?.ultima_posicao_lat ?? -18.9186;
+  const longitude = posicao?.longitude ?? tracker?.ultima_posicao_lng ?? -48.2772;
+  const velocidade = posicao?.velocidade ?? 0;
+  const ignicao = posicao?.ignicao ?? false;
+  const endereco = posicao?.endereco ?? 'Endereço não disponível';
+  
+  const hasValidPosition = latitude !== null && longitude !== null && latitude !== 0 && longitude !== 0;
+  const isOnline = tracker?.status === 'instalado' && tracker?.ultima_comunicacao;
+  const emMovimento = velocidade > 0;
 
-  // Tempo desde última atualização
+  // Time since last update
   const [tempoDesdeAtualizacao, setTempoDesdeAtualizacao] = useState('');
   
   useEffect(() => {
     const calcularTempo = () => {
-      if (!tracker?.ultima_comunicacao) {
+      const ultimaCom = posicao?.ultimaComunicacao || tracker?.ultima_comunicacao;
+      if (!ultimaCom) {
         setTempoDesdeAtualizacao('--');
         return;
       }
       const agora = new Date();
-      const ultima = new Date(tracker.ultima_comunicacao);
+      const ultima = new Date(ultimaCom);
       const diffMs = agora.getTime() - ultima.getTime();
       const diffMin = Math.floor(diffMs / 60000);
       
       if (diffMin < 1) setTempoDesdeAtualizacao('agora');
-      else if (diffMin < 60) setTempoDesdeAtualizacao(`${diffMin} min`);
-      else if (diffMin < 1440) setTempoDesdeAtualizacao(`${Math.floor(diffMin / 60)}h`);
-      else setTempoDesdeAtualizacao(`${Math.floor(diffMin / 1440)}d`);
+      else if (diffMin < 60) setTempoDesdeAtualizacao(`há ${diffMin} min`);
+      else if (diffMin < 1440) setTempoDesdeAtualizacao(`há ${Math.floor(diffMin / 60)}h`);
+      else setTempoDesdeAtualizacao(`há ${Math.floor(diffMin / 1440)}d`);
     };
     
     calcularTempo();
     const interval = setInterval(calcularTempo, 60000);
     return () => clearInterval(interval);
-  }, [tracker?.ultima_comunicacao]);
+  }, [posicao?.ultimaComunicacao, tracker?.ultima_comunicacao]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await refetch();
+    await Promise.all([refetch(), refetchPosicao()]);
     setTimeout(() => {
       setIsRefreshing(false);
       toast.success('Posição atualizada');
-    }, 1500);
-  };
-
-  const handleCentralizar = () => {
-    toast.success('Mapa centralizado no veículo');
+    }, 1000);
   };
 
   const abrirNoGoogleMaps = () => {
-    // Usar coordenadas do mock por enquanto (substituir por dados reais da API)
-    if (dadosMock.latitude && dadosMock.longitude) {
+    if (hasValidPosition) {
       window.open(
-        `https://www.google.com/maps/search/?api=1&query=${dadosMock.latitude},${dadosMock.longitude}`,
+        `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`,
         '_blank'
       );
     } else {
@@ -119,49 +187,29 @@ export default function AppRastreamento() {
     }
   };
 
-  const handleReconectar = () => {
-    toast.info('Tentando reconectar...');
-    setTimeout(() => {
-      setSimulandoOffline(false);
-      toast.success('Rastreador reconectado!');
-    }, 2000);
-  };
-
   // Loading State
   if (isLoading) {
     return (
-      <div className="flex min-h-screen flex-col bg-background pb-24">
-        {/* Header Skeleton */}
+      <div className="flex h-screen flex-col bg-background">
         <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b bg-background px-4">
           <Skeleton className="h-8 w-8 rounded-full" />
           <Skeleton className="h-6 w-32" />
           <Skeleton className="h-8 w-8 rounded-full" />
         </header>
-        
-        <div className="flex-1 space-y-4 p-4">
-          <Skeleton className="h-[60vh] w-full rounded-xl" />
-          <Skeleton className="h-20 w-full rounded-lg" />
-          <div className="grid grid-cols-3 gap-3">
-            <Skeleton className="h-24 rounded-lg" />
-            <Skeleton className="h-24 rounded-lg" />
-            <Skeleton className="h-24 rounded-lg" />
-          </div>
-        </div>
+        <Skeleton className="flex-1" />
       </div>
     );
   }
 
-  // Empty State - No vehicle or tracker
+  // Empty State
   if (!vehicle || !tracker) {
     return (
-      <div className="flex min-h-screen flex-col bg-background pb-24">
-        {/* Header */}
+      <div className="flex h-screen flex-col bg-background">
         <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b bg-background px-4">
           <Button 
             variant="ghost" 
             size="icon" 
             onClick={() => navigate('/app/home')}
-            aria-label="Voltar"
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>
@@ -190,17 +238,14 @@ export default function AppRastreamento() {
     );
   }
 
-  const emMovimento = dadosMock.velocidade > 0;
-
   return (
-    <div className="flex min-h-screen flex-col bg-background pb-24">
+    <div className="flex h-screen flex-col bg-background overflow-hidden">
       {/* Header */}
-      <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b bg-background px-4">
+      <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b bg-background px-4">
         <Button 
           variant="ghost" 
           size="icon" 
           onClick={() => navigate('/app/home')}
-          aria-label="Voltar"
         >
           <ArrowLeft className="h-5 w-5" />
         </Button>
@@ -210,15 +255,14 @@ export default function AppRastreamento() {
           size="icon" 
           onClick={handleRefresh}
           disabled={isRefreshing}
-          aria-label="Atualizar posição"
         >
           <RefreshCw className={cn("h-5 w-5", isRefreshing && "animate-spin")} />
         </Button>
       </header>
 
-      {/* Seletor de Veículo (quando há mais de 1) */}
+      {/* Vehicle Selector */}
       {vehicles && vehicles.length > 1 && (
-        <div className="border-b bg-background px-4 py-2">
+        <div className="border-b bg-background px-4 py-2 z-10">
           <Select 
             value={veiculoSelecionado || vehicle?.id} 
             onValueChange={setVeiculoSelecionado}
@@ -241,259 +285,189 @@ export default function AppRastreamento() {
         </div>
       )}
 
-      <div className="flex-1 space-y-4 p-4">
-        {/* Área do Mapa (Placeholder Visual) */}
-        <div className="relative h-[60vh] overflow-hidden rounded-xl bg-gradient-to-br from-slate-200 via-slate-100 to-slate-200 shadow-sm">
-          {/* Overlay Offline */}
-          {!isOnline && (
-            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm">
-              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
-                <WifiOff className="h-8 w-8 text-destructive" />
-              </div>
-              <h3 className="mt-4 text-lg font-semibold">Rastreador offline</h3>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Última posição conhecida: há 2 horas
-              </p>
-              <Button 
-                className="mt-4" 
-                onClick={handleReconectar}
-              >
-                Tentar reconectar
-              </Button>
+      {/* Map Container */}
+      <div className="flex-1 relative">
+        {/* Offline Overlay */}
+        {!isOnline && (
+          <div className="absolute inset-0 z-[1000] flex flex-col items-center justify-center bg-background/90 backdrop-blur-sm">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
+              <WifiOff className="h-8 w-8 text-destructive" />
             </div>
-          )}
-
-          {/* Marcador Central com Pulso */}
-          <div className="absolute inset-0 flex items-center justify-center">
-            {/* Círculo pulsante */}
-            <div className="absolute h-24 w-24 animate-ping rounded-full bg-primary/20" />
-            <div className="absolute h-16 w-16 rounded-full bg-primary/30" />
-            
-            {/* Ícone do carro */}
-            <div className="relative z-10 flex h-12 w-12 items-center justify-center rounded-full bg-primary shadow-lg">
-              <Car className="h-6 w-6 text-primary-foreground" />
-            </div>
+            <h3 className="mt-4 text-lg font-semibold">Rastreador offline</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Última posição: {tempoDesdeAtualizacao}
+            </p>
+            <Button className="mt-4" onClick={handleRefresh}>
+              Tentar reconectar
+            </Button>
           </div>
+        )}
 
-          {/* Badge AO VIVO / PARADO */}
-          {isOnline && (
-            <div className="absolute left-4 top-4 z-10">
-              {emMovimento ? (
-                <Badge className="animate-pulse gap-1.5 bg-destructive text-destructive-foreground">
-                  <Radio className="h-3 w-3" />
-                  AO VIVO
-                </Badge>
-              ) : (
-                <Badge variant="secondary" className="gap-1.5">
-                  <div className="h-2 w-2 rounded-full bg-muted-foreground" />
-                  PARADO
-                </Badge>
-              )}
-            </div>
-          )}
-
-          {/* Botão Centralizar */}
-          <Button
-            size="icon"
-            className="absolute bottom-4 right-4 z-10 h-12 w-12 rounded-full shadow-lg"
-            onClick={handleCentralizar}
-            aria-label="Centralizar no veículo"
+        {hasValidPosition ? (
+          <MapContainer
+            center={[latitude, longitude]}
+            zoom={15}
+            style={{ height: '100%', width: '100%' }}
+            zoomControl={false}
           >
-            <Crosshair className="h-5 w-5" />
-          </Button>
-
-          {/* Grid decorativo do mapa */}
-          <div className="absolute inset-0 opacity-30">
-            <div className="h-full w-full" style={{
-              backgroundImage: 'linear-gradient(rgba(0,0,0,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.1) 1px, transparent 1px)',
-              backgroundSize: '40px 40px'
-            }} />
+            <TileLayer
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+            <Marker 
+              position={[latitude, longitude]} 
+              icon={getMarkerIcon(ignicao, emMovimento)}
+            />
+            <FlyToPosition position={[latitude, longitude]} zoom={15} />
+          </MapContainer>
+        ) : (
+          <div className="flex h-full items-center justify-center bg-muted">
+            <p className="text-muted-foreground">Posição não disponível</p>
           </div>
-        </div>
+        )}
 
-        {/* Botão Ver no Google Maps */}
-        <Button 
-          variant="outline" 
-          className="w-full gap-2"
-          onClick={abrirNoGoogleMaps}
-          disabled={!isOnline}
+        {/* Live Badge */}
+        {isOnline && (
+          <div className="absolute left-4 top-4 z-[1000]">
+            {emMovimento ? (
+              <Badge className="animate-pulse gap-1.5 bg-primary text-primary-foreground shadow-lg">
+                <Radio className="h-3 w-3" />
+                EM MOVIMENTO
+              </Badge>
+            ) : ignicao ? (
+              <Badge className="gap-1.5 bg-accent text-accent-foreground shadow-lg">
+                <Power className="h-3 w-3" />
+                LIGADO
+              </Badge>
+            ) : (
+              <Badge variant="secondary" className="gap-1.5 shadow-lg">
+                <div className="h-2 w-2 rounded-full bg-muted-foreground" />
+                PARADO
+              </Badge>
+            )}
+          </div>
+        )}
+
+        {/* Center Button */}
+        <Button
+          size="icon"
+          className="absolute bottom-32 right-4 z-[1000] h-12 w-12 rounded-full shadow-lg"
+          onClick={() => toast.success('Mapa centralizado')}
         >
-          <Navigation className="h-4 w-4" />
-          Ver no Google Maps
+          <Crosshair className="h-5 w-5" />
         </Button>
+      </div>
 
-        {/* Card do Veículo */}
-        <Card className="border-0 shadow-sm">
-          <CardContent className="p-4">
-            <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                <Car className="h-5 w-5 text-primary" />
+      {/* Bottom Drawer */}
+      <Drawer open={drawerOpen} onOpenChange={setDrawerOpen} modal={false}>
+        <DrawerContent className="max-h-[60vh]">
+          <DrawerHeader className="pb-2">
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                <Car className="h-6 w-6 text-primary" />
               </div>
               <div className="flex-1">
                 <div className="flex items-center gap-2">
-                  <span className="font-semibold">{vehicle.marca} {vehicle.modelo}</span>
-                  <Badge variant="secondary" className="font-mono text-xs">
-                    {vehicle.placa}
+                  <DrawerTitle className="font-mono text-lg">{vehicle.placa}</DrawerTitle>
+                  <Badge variant={isOnline ? "default" : "secondary"} className="text-xs">
+                    <Signal className="h-3 w-3 mr-1" />
+                    {isOnline ? 'Online' : 'Offline'}
                   </Badge>
                 </div>
-                <div className="mt-2 flex items-start gap-2 text-sm text-muted-foreground">
-                  <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>{dadosMock.endereco}</span>
-                </div>
+                <p className="text-sm text-muted-foreground">{vehicle.marca} {vehicle.modelo}</p>
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </DrawerHeader>
 
-        {/* Cards de Status */}
-        <div className="grid grid-cols-3 gap-3">
-          {/* Velocidade */}
-          <Card className="border-0 shadow-sm">
-            <CardContent className="flex flex-col items-center justify-center p-4">
-              <Gauge className="h-6 w-6 text-blue-500" />
-              <span className="mt-2 text-2xl font-bold transition-all">
-                {dadosMock.velocidade}
-              </span>
-              <span className="text-xs text-muted-foreground">km/h</span>
-            </CardContent>
-          </Card>
-
-          {/* Ignição */}
-          <Card className="border-0 shadow-sm">
-            <CardContent className="flex flex-col items-center justify-center p-4">
-              <Power className={cn(
-                "h-6 w-6",
-                dadosMock.ignicao ? "text-green-500" : "text-muted-foreground"
-              )} />
-              <span className={cn(
-                "mt-2 text-2xl font-bold",
-                dadosMock.ignicao ? "text-green-600" : "text-muted-foreground"
-              )}>
-                {dadosMock.ignicao ? 'ON' : 'OFF'}
-              </span>
-              <span className="text-xs text-muted-foreground">Ignição</span>
-            </CardContent>
-          </Card>
-
-          {/* Última Atualização */}
-          <Card className="border-0 shadow-sm">
-            <CardContent className="flex flex-col items-center justify-center p-4">
-              <Clock className="h-6 w-6 text-orange-500" />
-              <span className="mt-2 text-2xl font-bold">
-                {tempoDesdeAtualizacao || '5 min'}
-              </span>
-              <span className="text-xs text-muted-foreground">atrás</span>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Histórico do Dia */}
-        <Collapsible open={historicoAberto} onOpenChange={setHistoricoAberto}>
-          <Card className="border-0 shadow-sm">
-            <CardContent className="p-4">
-              <CollapsibleTrigger asChild>
-                <button className="flex w-full items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Route className="h-5 w-5 text-primary" />
-                    <span className="font-semibold">Último trajeto (hoje)</span>
-                  </div>
-                  {historicoAberto ? (
-                    <ChevronUp className="h-5 w-5 text-muted-foreground" />
-                  ) : (
-                    <ChevronDown className="h-5 w-5 text-muted-foreground" />
-                  )}
-                </button>
-              </CollapsibleTrigger>
-
-              <div className="mt-4 space-y-0">
-                {/* Mostrar sempre os 3 primeiros */}
-                {dadosMock.historico.slice(0, 3).map((item, index) => (
-                  <TimelineItem 
-                    key={item.id} 
-                    item={item} 
-                    isLast={!historicoAberto && index === 2} 
-                  />
-                ))}
-
-                {/* Restante do histórico (colapsável) */}
-                <CollapsibleContent className="space-y-0">
-                  {dadosMock.historico.slice(3).map((item, index) => (
-                    <TimelineItem 
-                      key={item.id} 
-                      item={item} 
-                      isLast={index === dadosMock.historico.length - 4} 
-                    />
-                  ))}
-                </CollapsibleContent>
+          <div className="px-4 pb-6 space-y-4">
+            {/* Address */}
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/50">
+              <MapPin className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+              <div className="flex-1">
+                <span className="text-sm">{endereco}</span>
+                <p className="text-xs text-muted-foreground mt-1">
+                  <Clock className="h-3 w-3 inline mr-1" />
+                  Atualizado {tempoDesdeAtualizacao}
+                </p>
               </div>
+            </div>
 
-              {!historicoAberto && dadosMock.historico.length > 3 && (
-                <Button 
-                  variant="ghost" 
-                  className="mt-2 w-full text-sm"
-                  onClick={() => setHistoricoAberto(true)}
-                >
-                  Ver histórico completo ({dadosMock.historico.length - 3} mais)
-                </Button>
-              )}
-            </CardContent>
-          </Card>
-        </Collapsible>
+            {/* Metrics */}
+            <div className="grid grid-cols-3 gap-3">
+              <Card className="border-0 shadow-sm bg-muted/30">
+                <CardContent className="flex flex-col items-center justify-center p-3">
+                  <Gauge className="h-5 w-5 text-primary" />
+                  <span className="mt-1 text-xl font-bold">{velocidade}</span>
+                  <span className="text-xs text-muted-foreground">km/h</span>
+                </CardContent>
+              </Card>
 
-        {/* Toggle para testar estado offline (dev only) */}
-        {process.env.NODE_ENV === 'development' && (
-          <Button 
-            variant="outline" 
-            size="sm"
-            className="w-full opacity-50"
-            onClick={() => setSimulandoOffline(!simulandoOffline)}
-          >
-            {simulandoOffline ? 'Simular Online' : 'Simular Offline'}
-          </Button>
-        )}
-      </div>
-    </div>
-  );
-}
+              <Card className="border-0 shadow-sm bg-muted/30">
+                <CardContent className="flex flex-col items-center justify-center p-3">
+                  <Power className={cn(
+                    "h-5 w-5",
+                    ignicao ? "text-primary" : "text-muted-foreground"
+                  )} />
+                  <span className={cn(
+                    "mt-1 text-xl font-bold",
+                    ignicao ? "text-primary" : "text-muted-foreground"
+                  )}>
+                    {ignicao ? 'ON' : 'OFF'}
+                  </span>
+                  <span className="text-xs text-muted-foreground">Ignição</span>
+                </CardContent>
+              </Card>
 
-// Componente do item da timeline
-function TimelineItem({ 
-  item, 
-  isLast 
-}: { 
-  item: { id: string; hora: string; evento: string; tipo: string }; 
-  isLast: boolean;
-}) {
-  const getColor = () => {
-    switch (item.tipo) {
-      case 'inicio': return 'bg-green-500';
-      case 'atual': return 'bg-red-500 animate-pulse';
-      default: return 'bg-blue-500';
-    }
-  };
+              <Card className="border-0 shadow-sm bg-muted/30">
+                <CardContent className="flex flex-col items-center justify-center p-3">
+                  <Signal className={cn(
+                    "h-5 w-5",
+                    isOnline ? "text-primary" : "text-destructive"
+                  )} />
+                  <span className={cn(
+                    "mt-1 text-xl font-bold",
+                    isOnline ? "text-primary" : "text-destructive"
+                  )}>
+                    {isOnline ? '●' : '○'}
+                  </span>
+                  <span className="text-xs text-muted-foreground">Sinal</span>
+                </CardContent>
+              </Card>
+            </div>
 
-  return (
-    <div className="flex gap-3">
-      {/* Linha e círculo */}
-      <div className="flex flex-col items-center">
-        <div className={cn("h-3 w-3 rounded-full", getColor())} />
-        {!isLast && <div className="w-0.5 flex-1 bg-border" />}
-      </div>
-      
-      {/* Conteúdo */}
-      <div className={cn("pb-4", isLast && "pb-0")}>
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-muted-foreground">
-            {item.hora}
-          </span>
-          {item.tipo === 'atual' && (
-            <Badge variant="destructive" className="h-5 text-[10px]">
-              Agora
-            </Badge>
-          )}
-        </div>
-        <p className="text-sm font-medium">{item.evento}</p>
-      </div>
+            {/* Action Buttons */}
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                className="flex-1 gap-2"
+                onClick={() => navigate('/app/rastreamento/historico')}
+              >
+                <History className="h-4 w-4" />
+                Histórico
+              </Button>
+              <Button 
+                variant="outline" 
+                className="flex-1 gap-2"
+                onClick={abrirNoGoogleMaps}
+                disabled={!hasValidPosition}
+              >
+                <Navigation className="h-4 w-4" />
+                Google Maps
+              </Button>
+            </div>
+
+            {/* Refresh Button */}
+            <Button 
+              className="w-full gap-2" 
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+            >
+              <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
+              Atualizar Posição
+            </Button>
+          </div>
+        </DrawerContent>
+      </Drawer>
     </div>
   );
 }

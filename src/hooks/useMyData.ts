@@ -159,6 +159,54 @@ export function useMyVehicleWithTracker() {
   });
 }
 
+// Hook para posição em tempo real do veículo do associado
+export interface VehiclePosition {
+  latitude: number | null;
+  longitude: number | null;
+  velocidade: number;
+  ignicao: boolean;
+  ultimaComunicacao: string | null;
+  status: string | null;
+  endereco: string | null;
+}
+
+export function useMyVehiclePosition(rastreadorId?: string) {
+  return useQuery({
+    queryKey: ['my-vehicle-position', rastreadorId],
+    queryFn: async (): Promise<VehiclePosition | null> => {
+      if (!rastreadorId) return null;
+
+      const { data, error } = await supabase
+        .from('rastreadores')
+        .select(`
+          id,
+          ultima_posicao_lat,
+          ultima_posicao_lng,
+          ultima_velocidade,
+          ultima_ignicao,
+          ultima_comunicacao,
+          status
+        `)
+        .eq('id', rastreadorId)
+        .single();
+
+      if (error) throw error;
+      
+      return {
+        latitude: data.ultima_posicao_lat,
+        longitude: data.ultima_posicao_lng,
+        velocidade: data.ultima_velocidade || 0,
+        ignicao: data.ultima_ignicao || false,
+        ultimaComunicacao: data.ultima_comunicacao,
+        status: data.status,
+        endereco: null // Campo não existe na tabela
+      };
+    },
+    enabled: !!rastreadorId,
+    refetchInterval: 30000, // Auto-refresh a cada 30s
+  });
+}
+
 export function useMyDocumentos() {
   const { data: associado } = useMyAssociado();
 
