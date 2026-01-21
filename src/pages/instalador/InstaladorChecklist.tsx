@@ -21,7 +21,8 @@ import {
   Video,
   ChevronDown,
   ChevronRight,
-  Bike
+  Bike,
+  Router
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -30,6 +31,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { 
   useInstalacaoDetalhes, 
@@ -88,6 +90,9 @@ export default function InstaladorChecklist() {
   const [assinaturaUrl, setAssinaturaUrl] = useState<string | null>(null);
   const [showModalRecusa, setShowModalRecusa] = useState(false);
   const [openCategorias, setOpenCategorias] = useState<string[]>([]);
+  const [showImeiDialog, setShowImeiDialog] = useState(false);
+  const [imeiRastreador, setImeiRastreador] = useState('');
+  const [imeiError, setImeiError] = useState('');
 
   const { data: instalacao, isLoading, error } = useInstalacaoDetalhes(id);
   const { data: vistoriaCompleta, isLoading: isLoadingVistoria } = useVistoriaCompleta(id ?? null);
@@ -251,13 +256,24 @@ export default function InstaladorChecklist() {
     }
   };
 
-  const handleAprovarVeiculo = async () => {
-    if (!id || !instalacao?.veiculos?.id || !instalacao?.associados?.id) return;
+  // Validação de IMEI (15-17 dígitos)
+  const isImeiValido = /^\d{15,17}$/.test(imeiRastreador);
+
+  const handleAprovarVeiculo = () => {
+    setImeiRastreador('');
+    setImeiError('');
+    setShowImeiDialog(true);
+  };
+
+  const handleConfirmarAprovacao = async () => {
+    if (!id || !instalacao?.veiculos?.id || !instalacao?.associados?.id || !isImeiValido) return;
+    setShowImeiDialog(false);
     try {
       await aprovarVeiculoMutation.mutateAsync({
         instalacaoId: id,
         veiculoId: instalacao.veiculos.id,
         associadoId: instalacao.associados.id,
+        imeiRastreador,
       });
       toast.success('Veículo aprovado! Cobertura total ativada.');
       navigate('/instalador');
@@ -879,6 +895,67 @@ export default function InstaladorChecklist() {
                 modelo: instalacao.veiculos?.modelo,
               }}
             />
+
+            {/* Dialog de IMEI do Rastreador */}
+            <Dialog open={showImeiDialog} onOpenChange={setShowImeiDialog}>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <Router className="h-5 w-5" />
+                    IMEI do Rastreador
+                  </DialogTitle>
+                  <DialogDescription>
+                    Digite o IMEI do rastreador instalado no veículo (15-17 dígitos numéricos)
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="imei-rastreador">IMEI do Rastreador</Label>
+                    <Input
+                      id="imei-rastreador"
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="000000000000000"
+                      value={imeiRastreador}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/\D/g, '');
+                        setImeiRastreador(value);
+                        if (value && !/^\d{15,17}$/.test(value)) {
+                          setImeiError('IMEI deve ter entre 15 e 17 dígitos');
+                        } else {
+                          setImeiError('');
+                        }
+                      }}
+                      maxLength={17}
+                      className={imeiError ? 'border-destructive' : ''}
+                    />
+                    {imeiError && (
+                      <p className="text-sm text-destructive">{imeiError}</p>
+                    )}
+                  </div>
+                </div>
+                <DialogFooter className="gap-2 sm:gap-0">
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowImeiDialog(false)}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    onClick={handleConfirmarAprovacao}
+                    disabled={!isImeiValido || aprovarVeiculoMutation.isPending}
+                    className="bg-emerald-600 hover:bg-emerald-700"
+                  >
+                    {aprovarVeiculoMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : (
+                      <ShieldCheck className="h-4 w-4 mr-2" />
+                    )}
+                    Confirmar Aprovação
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
         )}
       </div>

@@ -209,11 +209,13 @@ export function useAprovarVeiculo() {
     mutationFn: async ({ 
       instalacaoId, 
       veiculoId,
-      associadoId 
+      associadoId,
+      imeiRastreador
     }: { 
       instalacaoId: string;
       veiculoId: string;
       associadoId: string;
+      imeiRastreador: string;
     }) => {
       // 1. Atualizar veículo com cobertura total
       const { error: veiculoError } = await supabase
@@ -250,7 +252,42 @@ export function useAprovarVeiculo() {
 
       if (instalacaoError) throw instalacaoError;
 
-      // 4. Registrar no histórico
+      // 4. Vincular/criar rastreador com o IMEI
+      if (imeiRastreador) {
+        // Verificar se rastreador já existe pelo IMEI
+        const { data: rastreadorExistente } = await supabase
+          .from('rastreadores')
+          .select('id')
+          .eq('imei', imeiRastreador)
+          .maybeSingle();
+
+        if (rastreadorExistente) {
+          // Atualizar rastreador existente
+          await supabase
+            .from('rastreadores')
+            .update({ 
+              veiculo_id: veiculoId,
+              associado_id: associadoId,
+              status: 'instalado',
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', rastreadorExistente.id);
+        } else {
+          // Criar novo rastreador
+          await supabase
+            .from('rastreadores')
+            .insert({
+              imei: imeiRastreador,
+              codigo: `INS-${Date.now()}`,
+              plataforma: 'manual',
+              veiculo_id: veiculoId,
+              associado_id: associadoId,
+              status: 'instalado',
+            });
+        }
+      }
+
+      // 5. Registrar no histórico
       await supabase.from('associados_historico').insert({
         associado_id: associadoId,
         tipo: 'veiculo_aprovado',
@@ -259,6 +296,7 @@ export function useAprovarVeiculo() {
           instalacao_id: instalacaoId, 
           veiculo_id: veiculoId,
           cobertura_total: true,
+          imei_rastreador: imeiRastreador,
         },
         usuario_id: profile?.id,
       });
@@ -269,6 +307,7 @@ export function useAprovarVeiculo() {
       queryClient.invalidateQueries({ queryKey: ['instalacoes'] });
       queryClient.invalidateQueries({ queryKey: ['veiculos'] });
       queryClient.invalidateQueries({ queryKey: ['associados'] });
+      queryClient.invalidateQueries({ queryKey: ['rastreadores'] });
     },
   });
 }
