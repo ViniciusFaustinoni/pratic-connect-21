@@ -1274,37 +1274,6 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
               />
             </div>
 
-            {/* BLOCO 1.6: VALOR ADICIONAL (equipamentos/agregados) */}
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <Label className="text-sm font-semibold">Valor Adicional</Label>
-                <div className="relative group">
-                  <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
-                  <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-64 p-2 text-xs bg-popover text-popover-foreground border rounded-md shadow-md z-50">
-                    Valor fixo que será acrescido à mensalidade (equipamentos, som, rodas, acessórios, etc.)
-                  </div>
-                </div>
-              </div>
-              <FormField
-                control={form.control}
-                name="valor_adicional"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormControl>
-                      <CurrencyInput 
-                        value={field.value || 0} 
-                        onChange={field.onChange}
-                        placeholder="R$ 0,00"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <Separator />
-
             {/* BLOCO 2: CONDIÇÕES ESPECIAIS / DESÁGIOS */}
             <div className="space-y-3">
               <h3 className="text-sm font-semibold flex items-center gap-2">
@@ -1534,6 +1503,39 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                   <p className="text-sm">Informe o valor FIPE para ver os planos disponíveis</p>
                 </div>
               )}
+            </div>
+
+            {/* BLOCO 3.5: VALOR ADICIONAL (após seleção de plano) */}
+            <Separator />
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Label className="text-sm font-semibold">Valor Adicional</Label>
+                <div className="relative group">
+                  <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
+                  <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-64 p-2 text-xs bg-popover text-popover-foreground border rounded-md shadow-md z-50">
+                    Valor fixo que será acrescido à mensalidade (equipamentos, som, rodas, acessórios, etc.)
+                  </div>
+                </div>
+              </div>
+              <FormField
+                control={form.control}
+                name="valor_adicional"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormControl>
+                      <CurrencyInput 
+                        value={field.value || 0} 
+                        onChange={field.onChange}
+                        placeholder="R$ 0,00"
+                      />
+                    </FormControl>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Será somado à mensalidade do plano selecionado
+                    </p>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
 
             {/* BLOCO 4: RESUMO INLINE (quando planos selecionados) */}
