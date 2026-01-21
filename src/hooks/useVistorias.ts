@@ -706,16 +706,24 @@ export function useExecutarVistoria() {
       avarias: string;
       observacoes: string;
       status: 'em_analise' | 'aprovada' | 'reprovada';
+      imei_rastreador?: string;
     }) => {
+      const updateData: Record<string, unknown> = {
+        km_atual: data.km_atual,
+        avarias: data.avarias,
+        observacoes: data.observacoes,
+        status: data.status,
+        updated_at: new Date().toISOString(),
+      };
+
+      // Adicionar IMEI se fornecido
+      if (data.imei_rastreador) {
+        updateData.imei_rastreador = data.imei_rastreador;
+      }
+
       const { error } = await supabase
         .from('vistorias')
-        .update({
-          km_atual: data.km_atual,
-          avarias: data.avarias,
-          observacoes: data.observacoes,
-          status: data.status,
-          updated_at: new Date().toISOString(),
-        })
+        .update(updateData)
         .eq('id', data.id);
 
       if (error) throw error;

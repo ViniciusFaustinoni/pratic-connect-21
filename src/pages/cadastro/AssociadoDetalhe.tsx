@@ -323,6 +323,7 @@ export default function AssociadoDetalhe() {
   const idade = calcularIdade(associado.data_nascimento);
   
   // Combinar documentos das duas fontes
+  // Se associado está ATIVO, todos os documentos pendentes são implicitamente aprovados
   const todosDocumentos = [
     ...(documentos || []).map(d => ({ ...d, fonte: 'documentos' as const })),
     ...(documentosCotacao || []).map(d => ({ 
@@ -330,7 +331,10 @@ export default function AssociadoDetalhe() {
       fonte: 'cotacao' as const,
       veiculo: null,
     })),
-  ];
+  ].map(d => ({
+    ...d,
+    status: (status === 'ativo' && d.status === 'pendente') ? 'aprovado' : d.status
+  }));
   
   const docsPendentes = todosDocumentos.filter(d => d.status === 'pendente').length;
   const docsAprovados = todosDocumentos.filter(d => d.status === 'aprovado').length;

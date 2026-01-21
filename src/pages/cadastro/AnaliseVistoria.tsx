@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { 
   ArrowLeft, 
   User, 
@@ -24,7 +25,9 @@ import {
   ZoomIn,
   RefreshCw,
   Calendar,
-  Loader2
+  Loader2,
+  Wifi,
+  Radio
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -81,6 +84,10 @@ export default function AnaliseVistoria() {
   const [permitirNovaTentativa, setPermitirNovaTentativa] = useState(true);
   const [showConfirmacao, setShowConfirmacao] = useState(false);
   const [fotoVisualizador, setFotoVisualizador] = useState<{ open: boolean; index: number }>({ open: false, index: 0 });
+  
+  // Estado para ativação do rastreador
+  const [showAtivarRastreador, setShowAtivarRastreador] = useState(false);
+  const [ativandoRastreador, setAtivandoRastreador] = useState(false);
 
   if (isLoading) {
     return (
@@ -254,6 +261,27 @@ export default function AnaliseVistoria() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Card IMEI do Rastreador (se informado) */}
+          {(vistoria as any)?.imei_rastreador && (
+            <Card className="border-blue-500/30 bg-blue-500/5">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Radio className="w-5 h-5 text-blue-500" />
+                  IMEI do Rastreador
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">IMEI informado pelo vistoriador</p>
+                    <p className="text-2xl font-mono font-bold tracking-wider">{(vistoria as any).imei_rastreador}</p>
+                  </div>
+                  <Wifi className="w-8 h-8 text-blue-500" />
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Card Informações da Vistoria */}
           <Card>

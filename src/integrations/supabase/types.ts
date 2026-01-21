@@ -11240,6 +11240,8 @@ export type Database = {
       }
       rastreadores: {
         Row: {
+          associado_email: string | null
+          associado_id: string | null
           bloqueado: boolean | null
           chip_iccid: string | null
           codigo: string
@@ -11263,6 +11265,8 @@ export type Database = {
           veiculo_id: string | null
         }
         Insert: {
+          associado_email?: string | null
+          associado_id?: string | null
           bloqueado?: boolean | null
           chip_iccid?: string | null
           codigo: string
@@ -11286,6 +11290,8 @@ export type Database = {
           veiculo_id?: string | null
         }
         Update: {
+          associado_email?: string | null
+          associado_id?: string | null
           bloqueado?: boolean | null
           chip_iccid?: string | null
           codigo?: string
@@ -11309,6 +11315,48 @@ export type Database = {
           veiculo_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "rastreadores_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rastreadores_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "rastreadores_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "rastreadores_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "rastreadores_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "rastreadores_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
           {
             foreignKeyName: "rastreadores_veiculo_id_fkey"
             columns: ["veiculo_id"]
@@ -13046,6 +13094,7 @@ export type Database = {
           fotos_recusa: string[] | null
           horario_agendado: string | null
           id: string
+          imei_rastreador: string | null
           instalacao_id: string | null
           km_atual: number | null
           lead_id: string | null
@@ -13090,6 +13139,7 @@ export type Database = {
           fotos_recusa?: string[] | null
           horario_agendado?: string | null
           id?: string
+          imei_rastreador?: string | null
           instalacao_id?: string | null
           km_atual?: number | null
           lead_id?: string | null
@@ -13134,6 +13184,7 @@ export type Database = {
           fotos_recusa?: string[] | null
           horario_agendado?: string | null
           id?: string
+          imei_rastreador?: string | null
           instalacao_id?: string | null
           km_atual?: number | null
           lead_id?: string | null

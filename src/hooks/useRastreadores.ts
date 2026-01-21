@@ -10,7 +10,7 @@ export type StatusRastreador = Database['public']['Enums']['status_rastreador'];
 
 export interface RastreadorWithRelations extends Rastreador {
   veiculos?: (Tables<'veiculos'> & {
-    associados?: Tables<'associados'> | null;
+    associados?: (Tables<'associados'> & { email?: string }) | null;
   }) | null;
 }
 
@@ -51,7 +51,7 @@ export function useRastreadores(filters?: RastreadorFilters) {
           *,
           veiculos (
             *,
-            associados (*)
+            associados (id, nome, email, telefone, cpf)
           )
         `)
         .order('created_at', { ascending: false });

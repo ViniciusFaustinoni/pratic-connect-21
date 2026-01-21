@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, ArrowRight, Camera, Check, AlertTriangle, 
-  FileText, PenTool, Gauge, CheckCircle2, Loader2, X, Car
+  FileText, PenTool, Gauge, CheckCircle2, Loader2, X, Car, Radio
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -128,6 +128,8 @@ export default function ExecutarVistoria() {
   const [uploadingFoto, setUploadingFoto] = useState<string | null>(null);
   const [showConfirmacao, setShowConfirmacao] = useState(false);
   const [finalizando, setFinalizando] = useState(false);
+  const [showImeiDialog, setShowImeiDialog] = useState(false);
+  const [imeiRastreador, setImeiRastreador] = useState('');
 
   // Estado dos dados coletados
   const [state, setState] = useState<VistoriaState>({
@@ -271,9 +273,18 @@ export default function ExecutarVistoria() {
     });
   };
 
+  // Validação do IMEI (15-17 dígitos)
+  const isImeiValido = /^\d{15,17}$/.test(imeiRastreador);
+
+  const handleAbrirImeiDialog = () => {
+    if (!podeAvancar(5)) return;
+    setShowImeiDialog(true);
+  };
+
   const handleFinalizarVistoria = async () => {
-    if (!id || !state.assinaturaBlob) return;
+    if (!id || !state.assinaturaBlob || !isImeiValido) return;
     setFinalizando(true);
+    setShowImeiDialog(false);
 
     try {
       // 1. Upload da assinatura
@@ -299,13 +310,14 @@ export default function ExecutarVistoria() {
         conferencia: state.conferencia,
       };
 
-      // 3. Executar vistoria
+      // 3. Executar vistoria com IMEI
       await executarVistoria.mutateAsync({
         id,
         km_atual: parseInt(state.hodometro),
         avarias: JSON.stringify(state.avarias),
         observacoes: JSON.stringify(dadosFinais),
         status: 'em_analise',
+        imei_rastreador: imeiRastreador,
       });
 
       setShowConfirmacao(true);
@@ -778,7 +790,7 @@ export default function ExecutarVistoria() {
             </Button>
           )}
           
-          {etapaAtual < 5 ? (
+        {etapaAtual < 5 ? (
             <Button
               onClick={handleAvancar}
               disabled={!podeAvancar(etapaAtual)}
@@ -789,7 +801,7 @@ export default function ExecutarVistoria() {
             </Button>
           ) : (
             <Button
-              onClick={handleFinalizarVistoria}
+              onClick={handleAbrirImeiDialog}
               disabled={!podeAvancar(5) || finalizando}
               className="flex-1 bg-green-600 hover:bg-green-700"
             >
@@ -804,6 +816,65 @@ export default function ExecutarVistoria() {
         </div>
       </footer>
 
+      {/* Modal para Informar IMEI */}
+      <Dialog open={showImeiDialog} onOpenChange={setShowImeiDialog}>
+        <DialogContent className="border-slate-700 bg-slate-800 text-white sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl flex items-center gap-2">
+              <Radio className="h-5 w-5 text-blue-400" />
+              Informar IMEI do Rastreador
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <p className="text-sm text-slate-400">
+              Digite o IMEI do rastreador que será instalado no veículo.
+            </p>
+            <div>
+              <Label htmlFor="imei" className="text-slate-300">IMEI do Rastreador *</Label>
+              <Input
+                id="imei"
+                type="text"
+                inputMode="numeric"
+                placeholder="Ex: 123456789012345"
+                value={imeiRastreador}
+                onChange={(e) => setImeiRastreador(e.target.value.replace(/\D/g, '').slice(0, 17))}
+                className="mt-2 border-slate-600 bg-slate-900 text-white font-mono text-lg tracking-wider"
+                maxLength={17}
+              />
+              <p className="mt-1 text-xs text-slate-500">
+                {imeiRastreador.length}/15-17 dígitos
+              </p>
+              {imeiRastreador.length > 0 && !isImeiValido && (
+                <p className="mt-1 text-xs text-red-400">
+                  IMEI deve ter entre 15 e 17 dígitos numéricos
+                </p>
+              )}
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <Button
+              variant="outline"
+              onClick={() => setShowImeiDialog(false)}
+              className="flex-1 border-slate-600 text-slate-300"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleFinalizarVistoria}
+              disabled={!isImeiValido || finalizando}
+              className="flex-1 bg-green-600 hover:bg-green-700"
+            >
+              {finalizando ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Check className="mr-2 h-4 w-4" />
+              )}
+              Confirmar e Enviar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Modal de Confirmação */}
       <Dialog open={showConfirmacao} onOpenChange={() => {}}>
         <DialogContent className="border-slate-700 bg-slate-800 text-white sm:max-w-md">
@@ -817,6 +888,9 @@ export default function ExecutarVistoria() {
             </p>
             <p className="font-mono text-sm text-slate-300">
               Protocolo: {codigoVistoria}
+            </p>
+            <p className="font-mono text-xs text-slate-400">
+              IMEI: {imeiRastreador}
             </p>
             <Button
               onClick={() => navigate('/vistoriador/tarefas')}
