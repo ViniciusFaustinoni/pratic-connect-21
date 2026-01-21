@@ -370,6 +370,68 @@ function parseCompetencia(competencia: string | null): { mes: number; ano: numbe
   return { mes: 0, ano: 0 };
 }
 
+// Buscar boletos do banco local (fallback)
+async function buscarBoletosLocal(associadoId: string): Promise<Boleto[]> {
+  const { data, error } = await supabase
+    .from('asaas_cobrancas')
+    .select('*')
+    .eq('associado_id', associadoId)
+    .order('data_vencimento', { ascending: false });
+
+  if (error) throw error;
+
+  return (data || []).map(c => {
+    const { mes, ano } = parseCompetencia(c.competencia);
+    return {
+      id: c.id,
+      competencia: c.competencia || '',
+      competenciaMes: mes,
+      competenciaAno: ano,
+      dataEmissao: c.data_emissao ? formatDateBR(c.data_emissao) : undefined,
+      dataVencimento: formatDateBR(c.data_vencimento),
+      dataPagamento: c.data_pagamento ? formatDateBR(c.data_pagamento) : undefined,
+      dataCredito: c.pagamento_data ? formatDateBR(c.pagamento_data) : undefined,
+      valorOriginal: Number(c.valor) || 0,
+      valorFinal: Number(c.valor_liquido) || Number(c.valor) || 0,
+      valorPago: c.pagamento_valor ? Number(c.pagamento_valor) : undefined,
+      valorDesconto: c.desconto ? Number(c.desconto) : undefined,
+      valorJuros: c.juros ? Number(c.juros) : undefined,
+      valorMulta: c.multa ? Number(c.multa) : undefined,
+      status: mapAsaasStatus(c.status),
+      pixCopiaCola: c.pix_copia_cola || undefined,
+      pixQrCode: c.pix_qrcode || undefined,
+      linhaDigitavel: c.linha_digitavel || undefined,
+      codigoBarras: c.boleto_codigo_barras || undefined,
+      urlBoleto: c.boleto_url || undefined,
+      formaPagamento: c.pagamento_forma || c.forma_pagamento || undefined,
+      nossoNumero: c.boleto_nosso_numero || undefined,
+      numeroDocumento: c.referencia || undefined,
+    };
+  });
+}
+
+// Mapear resposta da edge function para Boleto
+function mapBoletoFromApi(b: any): Boleto {
+  return {
+    id: b.id,
+    competencia: b.referencia || '',
+    competenciaMes: b.competenciaMes || 0,
+    competenciaAno: b.competenciaAno || 0,
+    dataEmissao: undefined,
+    dataVencimento: b.vencimento ? formatDateBR(b.vencimento) : '',
+    dataPagamento: b.dataPagamento ? formatDateBR(b.dataPagamento) : undefined,
+    valorOriginal: Number(b.valor) || 0,
+    valorFinal: Number(b.valorFinal) || Number(b.valor) || 0,
+    valorPago: b.valorPago ? Number(b.valorPago) : undefined,
+    status: b.status as Boleto['status'],
+    pixCopiaCola: b.pixCopiaCola || undefined,
+    pixQrCode: b.pixQrCode || undefined,
+    linhaDigitavel: b.linhaDigitavel || undefined,
+    codigoBarras: b.codigoBarras || undefined,
+    urlBoleto: b.linkBoleto || b.invoiceUrl || undefined,
+  };
+}
+
 export function useMyBoletos() {
   const { data: associado } = useMyAssociado();
 
@@ -378,44 +440,54 @@ export function useMyBoletos() {
     queryFn: async (): Promise<Boleto[]> => {
       if (!associado?.id) return [];
 
-      const { data, error } = await supabase
-        .from('asaas_cobrancas')
-        .select('*')
-        .eq('associado_id', associado.id)
-        .order('data_vencimento', { ascending: false });
+      try {
+        // Chamar edge function para dados em tempo real da API ASAAS
+        const { data, error } = await supabase.functions.invoke('buscar-boletos-associado');
 
-      if (error) throw error;
+        if (error) {
+          console.error('Erro ao buscar boletos da API:', error);
+          // Fallback: buscar do banco local
+          return buscarBoletosLocal(associado.id);
+        }
 
-      return (data || []).map(c => {
-        const { mes, ano } = parseCompetencia(c.competencia);
-        return {
-          id: c.id,
-          competencia: c.competencia || '',
-          competenciaMes: mes,
-          competenciaAno: ano,
-          dataEmissao: c.data_emissao ? formatDateBR(c.data_emissao) : undefined,
-          dataVencimento: formatDateBR(c.data_vencimento),
-          dataPagamento: c.data_pagamento ? formatDateBR(c.data_pagamento) : undefined,
-          dataCredito: c.pagamento_data ? formatDateBR(c.pagamento_data) : undefined,
-          valorOriginal: Number(c.valor) || 0,
-          valorFinal: Number(c.valor_liquido) || Number(c.valor) || 0,
-          valorPago: c.pagamento_valor ? Number(c.pagamento_valor) : undefined,
-          valorDesconto: c.desconto ? Number(c.desconto) : undefined,
-          valorJuros: c.juros ? Number(c.juros) : undefined,
-          valorMulta: c.multa ? Number(c.multa) : undefined,
-          status: mapAsaasStatus(c.status),
-          pixCopiaCola: c.pix_copia_cola || undefined,
-          pixQrCode: c.pix_qrcode || undefined,
-          linhaDigitavel: c.linha_digitavel || undefined,
-          codigoBarras: c.boleto_codigo_barras || undefined,
-          urlBoleto: c.boleto_url || undefined,
-          formaPagamento: c.pagamento_forma || c.forma_pagamento || undefined,
-          nossoNumero: c.boleto_nosso_numero || undefined,
-          numeroDocumento: c.referencia || undefined,
-        };
-      });
+        if (!data?.success || !data?.boletos) {
+          console.warn('API retornou sem sucesso, usando fallback local');
+          return buscarBoletosLocal(associado.id);
+        }
+
+        console.log(`[useMyBoletos] Recebidos ${data.boletos.length} boletos da API ASAAS`);
+        return data.boletos.map(mapBoletoFromApi);
+
+      } catch (err) {
+        console.error('Erro inesperado ao buscar boletos:', err);
+        // Fallback: buscar do banco local
+        return buscarBoletosLocal(associado.id);
+      }
     },
     enabled: !!associado?.id,
+    staleTime: 30000, // Cache por 30 segundos
+    gcTime: 60000, // Manter em cache por 1 minuto
+  });
+}
+
+// Hook para atualizar um boleto específico
+export function useAtualizarBoleto() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (boletoId: string) => {
+      const { data, error } = await supabase.functions.invoke('buscar-boletos-associado');
+
+      if (error) throw new Error(error.message);
+      if (!data?.success) throw new Error(data?.error || 'Erro ao atualizar boleto');
+
+      // Encontrar o boleto atualizado
+      const boletoAtualizado = data.boletos?.find((b: any) => b.id === boletoId);
+      return boletoAtualizado ? mapBoletoFromApi(boletoAtualizado) : null;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my-boletos'] });
+    },
   });
 }
 
