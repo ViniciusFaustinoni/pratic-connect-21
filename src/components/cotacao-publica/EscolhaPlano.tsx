@@ -206,9 +206,9 @@ export function EscolhaPlano({
         </motion.div>
       )}
 
-      {/* Cards de Planos - Grid com máximo 3 por linha */}
+      {/* Cards de Planos - Grid centralizado */}
       <motion.div 
-        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto justify-items-center"
+        className="flex flex-wrap justify-center gap-6 max-w-6xl mx-auto"
         variants={containerVariants}
         initial="hidden"
         animate="visible"
