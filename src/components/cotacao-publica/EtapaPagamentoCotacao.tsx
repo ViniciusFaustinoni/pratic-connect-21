@@ -213,44 +213,30 @@ export function EtapaPagamentoCotacao({
     inicializar();
   }, [cotacaoId, gerarContrato, criarCobranca]);
 
-  // 4. Polling automático para verificar pagamento
+  // 4. Polling automático para verificar pagamento - consulta diretamente na API do Asaas
   useEffect(() => {
     if (etapaInterna !== 'aguardando_pagamento' || !contratoId) return;
 
     const interval = setInterval(async () => {
       try {
-      const { data, error } = await publicSupabase
-          .from('contratos')
-          .select('adesao_paga')
-          .eq('id', contratoId)
-          .maybeSingle();
+        console.log('[EtapaPagamento] Verificação automática no Asaas...');
+        
+        // Chamar Edge Function que consulta diretamente na API do Asaas
+        const { data: verificacao, error } = await publicSupabase.functions.invoke('asaas-verificar-pagamento', {
+          body: { contratoId }
+        });
 
         if (error) {
-          console.error('[EtapaPagamento] Erro no polling:', error);
+          console.error('[EtapaPagamento] Erro na verificação automática:', error);
           return;
         }
 
-        if (data?.adesao_paga) {
-          console.log('[EtapaPagamento] Pagamento detectado automaticamente!');
+        console.log('[EtapaPagamento] Resultado verificação automática:', verificacao);
+
+        if (verificacao?.pago) {
+          console.log('[EtapaPagamento] Pagamento detectado automaticamente via Asaas!');
           toast.success('Pagamento confirmado!');
           
-          // Atualizar status da cotação
-          await publicSupabase
-            .from('cotacoes')
-            .update({ 
-              status_contratacao: 'pagamento_ok',
-              status: 'aceita' 
-            })
-            .eq('id', cotacaoId);
-
-          // Atualizar status da cobrança para RECEIVED
-          await publicSupabase
-            .from('asaas_cobrancas')
-            .update({ status: 'RECEIVED' })
-            .eq('contrato_id', contratoId)
-            .eq('tipo', 'adesao')
-            .in('status', ['PENDING', 'OVERDUE']);
-
           // Criar instalação após pagamento confirmado
           try {
             console.log('[EtapaPagamento] Criando instalação pós-pagamento...');
@@ -260,19 +246,18 @@ export function EtapaPagamentoCotacao({
             console.log('[EtapaPagamento] Instalação criada com sucesso');
           } catch (instError) {
             console.error('[EtapaPagamento] Erro ao criar instalação:', instError);
-            // Não bloquear o fluxo, a instalação pode ser criada manualmente depois
           }
 
           setEtapaInterna('pago');
           
-          // Pequeno delay para garantir que o banco propagou as alterações
+          // Pequeno delay para garantir propagação no banco
           await new Promise(resolve => setTimeout(resolve, 500));
           onPagamentoConfirmado();
         }
       } catch (error) {
-        console.error('[EtapaPagamento] Erro no polling:', error);
+        console.error('[EtapaPagamento] Erro no polling automático:', error);
       }
-    }, 10000); // 10 segundos
+    }, 10000); // Verificar a cada 10 segundos
 
     return () => clearInterval(interval);
   }, [etapaInterna, contratoId, cotacaoId, onPagamentoConfirmado]);
