@@ -34,6 +34,8 @@ import {
   Wrench,
   CreditCard,
   Smartphone,
+  Wifi,
+  Hash,
 } from 'lucide-react';
 import {
   useProposta,
@@ -345,6 +347,48 @@ export default function PropostaAnalise() {
               />
             </CardContent>
           </Card>
+
+          {/* Dados da Instalação e Rastreador */}
+          {proposta.instalacao_info && (
+            <Card className="border-border bg-card border-2 border-purple-500/30">
+              <CardHeader className="bg-purple-500/10">
+                <CardTitle className="flex items-center gap-2 text-foreground">
+                  <Wifi className="h-5 w-5 text-purple-500" />
+                  Dados da Instalação
+                </CardTitle>
+                <CardDescription>
+                  Informações preenchidas pelo instalador durante a instalação do rastreador
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="pt-4 grid gap-4 sm:grid-cols-2">
+                <InfoItem
+                  icon={Smartphone}
+                  label="IMEI do Rastreador"
+                  value={proposta.instalacao_info.rastreador_imei}
+                  highlight
+                />
+                <InfoItem
+                  icon={Hash}
+                  label="Código do Rastreador"
+                  value={proposta.instalacao_info.rastreador_codigo}
+                />
+                <InfoItem
+                  icon={Calendar}
+                  label="Data da Instalação"
+                  value={
+                    proposta.instalacao_info.concluida_em
+                      ? format(new Date(proposta.instalacao_info.concluida_em), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
+                      : null
+                  }
+                />
+                <InfoItem
+                  icon={Wrench}
+                  label="Instalador Responsável"
+                  value={proposta.instalacao_info.instalador_nome}
+                />
+              </CardContent>
+            </Card>
+          )}
 
           {/* Dados do Contrato */}
           <Card className="border-border bg-card">

@@ -46,6 +46,16 @@ export interface DocumentoSolicitadoEnviado {
   } | null;
 }
 
+// Informações da instalação e rastreador
+export interface InstalacaoInfo {
+  id: string;
+  status: string;
+  concluida_em: string | null;
+  rastreador_imei: string | null;
+  rastreador_codigo: string | null;
+  instalador_nome: string | null;
+}
+
 export interface PropostaPendente {
   id: string;
   numero: string | null;
@@ -74,6 +84,7 @@ export interface PropostaPendente {
   associado_status: string | null;
   vistoria: VistoriaInfo | null;
   documentos_solicitados_enviados: DocumentoSolicitadoEnviado[];
+  instalacao_info: InstalacaoInfo | null; // NOVO: Dados da instalação concluída
 }
 
 export interface PropostaStats {
@@ -285,6 +296,72 @@ export function usePropostasPendentes() {
         }
       }
 
+      // ============================================
+      // BUSCAR INSTALAÇÃO CONCLUÍDA COM IMEI DO RASTREADOR
+      // A análise cadastral só deve acontecer APÓS instalação
+      // ============================================
+      let instalacaoInfo: InstalacaoInfo | null = null;
+      
+      const { data: instalacaoData } = await supabase
+        .from('instalacoes')
+        .select(`
+          id,
+          status,
+          concluida_em,
+          rastreador_id,
+          instalador_id
+        `)
+        .eq('contrato_id', contrato.id)
+        .eq('status', 'concluida')
+        .order('concluida_em', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (instalacaoData) {
+        // Buscar dados do rastreador instalado (com IMEI)
+        let rastreadorImei: string | null = null;
+        let rastreadorCodigo: string | null = null;
+        
+        if (instalacaoData.rastreador_id) {
+          const { data: rastreador } = await supabase
+            .from('rastreadores')
+            .select('imei, codigo')
+            .eq('id', instalacaoData.rastreador_id)
+            .single();
+          
+          if (rastreador) {
+            rastreadorImei = rastreador.imei;
+            rastreadorCodigo = rastreador.codigo;
+          }
+        }
+        
+        // Buscar nome do instalador
+        let instaladorNome: string | null = null;
+        if (instalacaoData.instalador_id) {
+          const { data: instalador } = await supabase
+            .from('profiles')
+            .select('nome')
+            .eq('id', instalacaoData.instalador_id)
+            .single();
+          instaladorNome = instalador?.nome || null;
+        }
+        
+        instalacaoInfo = {
+          id: instalacaoData.id,
+          status: instalacaoData.status,
+          concluida_em: instalacaoData.concluida_em,
+          rastreador_imei: rastreadorImei,
+          rastreador_codigo: rastreadorCodigo,
+          instalador_nome: instaladorNome,
+        };
+      }
+
+      // REGRA: Só incluir propostas que já tenham instalação concluída
+      // Se não tem instalação concluída, retornar null (será filtrado)
+      if (!instalacaoInfo) {
+        return null;
+      }
+
           return {
             ...contrato,
             associado,
@@ -297,11 +374,13 @@ export function usePropostasPendentes() {
             associado_status: associado?.status || null,
             vistoria,
             documentos_solicitados_enviados: documentosSolicitadosEnviados,
+            instalacao_info: instalacaoInfo,
           } as PropostaPendente;
         })
       );
 
-      return propostasComRelacoes;
+      // Filtrar propostas nulas (sem instalação concluída)
+      return propostasComRelacoes.filter((p): p is PropostaPendente => p !== null);
     },
     staleTime: 30000,
     refetchInterval: 30000, // Atualização automática a cada 30 segundos
@@ -507,6 +586,65 @@ export function useProposta(contratoId: string | undefined) {
         }
       }
 
+      // ============================================
+      // BUSCAR INSTALAÇÃO CONCLUÍDA COM IMEI DO RASTREADOR
+      // ============================================
+      let instalacaoInfo: InstalacaoInfo | null = null;
+      
+      const { data: instalacaoData } = await supabase
+        .from('instalacoes')
+        .select(`
+          id,
+          status,
+          concluida_em,
+          rastreador_id,
+          instalador_id
+        `)
+        .eq('contrato_id', contrato.id)
+        .eq('status', 'concluida')
+        .order('concluida_em', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (instalacaoData) {
+        // Buscar dados do rastreador instalado (com IMEI)
+        let rastreadorImei: string | null = null;
+        let rastreadorCodigo: string | null = null;
+        
+        if (instalacaoData.rastreador_id) {
+          const { data: rastreador } = await supabase
+            .from('rastreadores')
+            .select('imei, codigo')
+            .eq('id', instalacaoData.rastreador_id)
+            .single();
+          
+          if (rastreador) {
+            rastreadorImei = rastreador.imei;
+            rastreadorCodigo = rastreador.codigo;
+          }
+        }
+        
+        // Buscar nome do instalador
+        let instaladorNome: string | null = null;
+        if (instalacaoData.instalador_id) {
+          const { data: instalador } = await supabase
+            .from('profiles')
+            .select('nome')
+            .eq('id', instalacaoData.instalador_id)
+            .single();
+          instaladorNome = instalador?.nome || null;
+        }
+        
+        instalacaoInfo = {
+          id: instalacaoData.id,
+          status: instalacaoData.status,
+          concluida_em: instalacaoData.concluida_em,
+          rastreador_imei: rastreadorImei,
+          rastreador_codigo: rastreadorCodigo,
+          instalador_nome: instaladorNome,
+        };
+      }
+
       return {
         ...contrato,
         associado,
@@ -519,6 +657,7 @@ export function useProposta(contratoId: string | undefined) {
         associado_status: associado?.status || null,
         vistoria,
         documentos_solicitados_enviados: documentosSolicitadosEnviados,
+        instalacao_info: instalacaoInfo,
       } as PropostaPendente;
     },
     enabled: !!contratoId,
