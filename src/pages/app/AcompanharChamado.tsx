@@ -7,17 +7,48 @@ import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import {
   ArrowLeft, Clock, Phone, Truck, Wrench, CheckCircle,
-  XCircle, MapPin, MessageSquare, Car, RefreshCw,
+  XCircle, MapPin, MessageSquare, Car, RefreshCw, Check,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader,
   AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { cn } from '@/lib/utils';
+
+// Fix Leaflet default marker icons
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+});
+
+// Custom marker icons
+const origemIcon = new L.DivIcon({
+  html: `<div class="flex items-center justify-center w-8 h-8 bg-red-500 rounded-full border-2 border-white shadow-lg">
+    <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/></svg>
+  </div>`,
+  className: 'custom-marker',
+  iconSize: [32, 32],
+  iconAnchor: [16, 32],
+});
+
+const destinoIcon = new L.DivIcon({
+  html: `<div class="flex items-center justify-center w-8 h-8 bg-blue-500 rounded-full border-2 border-white shadow-lg">
+    <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/></svg>
+  </div>`,
+  className: 'custom-marker',
+  iconSize: [32, 32],
+  iconAnchor: [16, 32],
+});
 
 interface Chamado {
   id: string;
@@ -29,6 +60,11 @@ interface Chamado {
   origem_logradouro: string | null;
   origem_cidade: string | null;
   origem_uf: string | null;
+  origem_lat: number | null;
+  origem_lng: number | null;
+  destino_lat: number | null;
+  destino_lng: number | null;
+  destino_endereco: string | null;
   prestador_nome: string | null;
   prestador_telefone: string | null;
   data_abertura: string;
@@ -139,9 +175,27 @@ const getStatusLabel = (status: string) => {
   return statusConfig[status]?.label || status;
 };
 
+const getStatusBadgeVariant = (status: string): "default" | "secondary" | "destructive" | "outline" => {
+  if (['concluido'].includes(status)) return 'default';
+  if (['cancelado_associado', 'cancelado_sistema'].includes(status)) return 'destructive';
+  if (['prestador_a_caminho', 'em_atendimento'].includes(status)) return 'secondary';
+  return 'outline';
+};
+
 const podeCancelar = (status: string) => {
   return ['aberto', 'aguardando_prestador'].includes(status);
 };
+
+// Etapas fixas da timeline
+const etapasFixas = [
+  { id: 'aberto', label: 'Chamado aberto', icon: Clock },
+  { id: 'aguardando_prestador', label: 'Prestador designado', icon: Phone },
+  { id: 'prestador_a_caminho', label: 'A caminho', icon: Truck },
+  { id: 'em_atendimento', label: 'Em atendimento', icon: Wrench },
+  { id: 'concluido', label: 'Concluído', icon: CheckCircle },
+];
+
+const statusOrdem = ['aberto', 'aguardando_prestador', 'prestador_despachado', 'prestador_a_caminho', 'em_atendimento', 'concluido'];
 
 export default function AcompanharChamado() {
   const { id } = useParams<{ id: string }>();
@@ -265,6 +319,8 @@ export default function AcompanharChamado() {
     );
   }
 
+  const statusAtualIndex = statusOrdem.indexOf(chamado.status);
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -276,9 +332,14 @@ export default function AcompanharChamado() {
         >
           <ArrowLeft className="h-5 w-5" />
         </Button>
-        <h1 className="font-semibold truncate">
-          Chamado #{chamado.protocolo}
-        </h1>
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <h1 className="font-semibold truncate">
+            Chamado #{chamado.protocolo}
+          </h1>
+          <Badge variant={getStatusBadgeVariant(chamado.status)} className="flex-shrink-0">
+            {getStatusLabel(chamado.status)}
+          </Badge>
+        </div>
       </div>
 
       <div className="p-4 space-y-4 pb-24">
@@ -307,9 +368,153 @@ export default function AcompanharChamado() {
               <p className="text-white/70 text-xs mt-2">
                 {getTipoServicoLabel(chamado.tipo_servico)}
               </p>
+
+              {/* Tempo estimado - apenas quando prestador a caminho */}
+              {(chamado.status === 'prestador_a_caminho' || chamado.status === 'prestador_despachado') && (
+                <div className="mt-4 px-4 py-2 bg-white/20 rounded-lg">
+                  <p className="text-white/80 text-xs">Tempo estimado</p>
+                  <p className="text-xl font-bold">~15-30 min</p>
+                  <p className="text-white/60 text-xs">Baseado na região</p>
+                </div>
+              )}
             </div>
           </div>
         </Card>
+
+        {/* Timeline Visual Fixa */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Progresso do Atendimento</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {etapasFixas.map((etapa, index) => {
+                const etapaIndex = statusOrdem.indexOf(etapa.id);
+                const concluida = etapaIndex !== -1 && etapaIndex < statusAtualIndex;
+                const atual = etapa.id === chamado.status || 
+                              (etapa.id === 'aguardando_prestador' && chamado.status === 'prestador_despachado');
+                const isCancelado = chamado.status.includes('cancelado');
+                const EtapaIcon = etapa.icon;
+
+                return (
+                  <div key={etapa.id} className="flex items-center gap-3">
+                    {/* Indicador circular */}
+                    <div className={cn(
+                      "h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 transition-all",
+                      isCancelado && index > 0 ? "bg-muted text-muted-foreground" :
+                      concluida ? "bg-green-500 text-white" : 
+                      atual ? "bg-primary text-primary-foreground animate-pulse" : 
+                      "bg-muted text-muted-foreground"
+                    )}>
+                      {concluida && !isCancelado ? (
+                        <Check className="h-4 w-4" />
+                      ) : (
+                        <EtapaIcon className="h-4 w-4" />
+                      )}
+                    </div>
+                    
+                    {/* Label */}
+                    <span className={cn(
+                      "text-sm",
+                      concluida && !isCancelado && "text-green-600 font-medium",
+                      atual && !isCancelado && "text-primary font-medium",
+                      (!concluida && !atual) && "text-muted-foreground"
+                    )}>
+                      {etapa.label}
+                    </span>
+
+                    {/* Linha conectora vertical */}
+                    {index < etapasFixas.length - 1 && (
+                      <div className="absolute left-[15px] mt-8 w-0.5 h-4 bg-border" style={{ display: 'none' }} />
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* Mostrar se cancelado */}
+              {chamado.status.includes('cancelado') && (
+                <div className="flex items-center gap-3 pt-2 border-t">
+                  <div className="h-8 w-8 rounded-full flex items-center justify-center bg-destructive text-destructive-foreground">
+                    <XCircle className="h-4 w-4" />
+                  </div>
+                  <span className="text-sm text-destructive font-medium">
+                    Chamado cancelado
+                  </span>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Mapa com Origem e Destino */}
+        {chamado.origem_lat && chamado.origem_lng && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <MapPin className="h-4 w-4" />
+                Mapa do Atendimento
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="h-48 rounded-lg overflow-hidden border">
+                <MapContainer
+                  center={[chamado.origem_lat, chamado.origem_lng]}
+                  zoom={14}
+                  className="h-full w-full"
+                  zoomControl={false}
+                  scrollWheelZoom={false}
+                >
+                  <TileLayer
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  />
+                  
+                  {/* Marcador Origem (você) */}
+                  <Marker 
+                    position={[chamado.origem_lat, chamado.origem_lng]}
+                    icon={origemIcon}
+                  >
+                    <Popup>
+                      <div className="text-center">
+                        <p className="font-medium">Sua localização</p>
+                        <p className="text-xs text-muted-foreground">{chamado.origem_endereco || 'Origem'}</p>
+                      </div>
+                    </Popup>
+                  </Marker>
+                  
+                  {/* Marcador Destino (se guincho/reboque) */}
+                  {chamado.destino_lat && chamado.destino_lng && (
+                    <Marker 
+                      position={[chamado.destino_lat, chamado.destino_lng]}
+                      icon={destinoIcon}
+                    >
+                      <Popup>
+                        <div className="text-center">
+                          <p className="font-medium">Destino</p>
+                          <p className="text-xs text-muted-foreground">{chamado.destino_endereco || 'Destino do reboque'}</p>
+                        </div>
+                      </Popup>
+                    </Marker>
+                  )}
+                </MapContainer>
+              </div>
+
+              {/* Legenda */}
+              <div className="flex gap-4 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1.5">
+                  <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                  Você está aqui
+                </span>
+                {chamado.destino_lat && chamado.destino_lng && (
+                  <span className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                    Destino
+                  </span>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Card Prestador */}
         {chamado.prestador_nome && (
