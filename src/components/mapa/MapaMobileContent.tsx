@@ -105,7 +105,8 @@ function UserLocationButton() {
 
 export function MapaMobileContent() {
   const navigate = useNavigate();
-  const { data: vistorias, isLoading } = useVistoriasMapa();
+  // Filtrar apenas serviços do usuário logado (vistoriador/instalador)
+  const { data: vistorias, isLoading } = useVistoriasMapa({ filtrarPorUsuario: true });
   const [filtroData, setFiltroData] = useState<Date>(new Date());
   const [filtroBusca, setFiltroBusca] = useState("");
   const [posicaoSelecionada, setPosicaoSelecionada] = useState<[number, number] | null>(null);
