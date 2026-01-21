@@ -165,9 +165,16 @@ export interface VehiclePosition {
   longitude: number | null;
   velocidade: number;
   ignicao: boolean;
+  direcao?: number;
   ultimaComunicacao: string | null;
   status: string | null;
   endereco: string | null;
+  statusRastreador: 'online' | 'offline' | 'atencao';
+  tempoReal: boolean;
+  offline: boolean;
+  plataforma?: string;
+  bateria?: number;
+  odometro?: number;
 }
 
 export function useMyVehiclePosition(rastreadorId?: string) {
@@ -199,12 +206,98 @@ export function useMyVehiclePosition(rastreadorId?: string) {
         ignicao: data.ultima_ignicao || false,
         ultimaComunicacao: data.ultima_comunicacao,
         status: data.status,
-        endereco: null // Campo não existe na tabela
+        endereco: null,
+        statusRastreador: 'offline',
+        tempoReal: false,
+        offline: true,
       };
     },
     enabled: !!rastreadorId,
-    refetchInterval: 30000, // Auto-refresh a cada 30s
+    refetchInterval: 30000,
   });
+}
+
+// Hook para posição em tempo real via Edge Function (multi-plataforma)
+export interface VeiculoPosicaoResponse {
+  success: boolean;
+  plataforma: 'softruck' | 'rede_veiculos';
+  tempo_real: boolean;
+  offline: boolean;
+  mensagem?: string;
+  posicao: {
+    latitude: number;
+    longitude: number;
+    data_hora: string;
+    velocidade: number;
+    ignicao: boolean;
+    direcao?: number;
+    endereco_aproximado: string | null;
+    status_rastreador: 'online' | 'offline' | 'atencao';
+    bateria_percentual?: number;
+    odometro?: number;
+  } | null;
+  veiculo: {
+    id: string;
+    placa: string;
+    modelo: string;
+    marca: string;
+  } | null;
+  rastreador: {
+    id: string;
+    codigo: string;
+  } | null;
+}
+
+export function useVeiculoPosicao(veiculoId?: string) {
+  const queryClient = useQueryClient();
+
+  const query = useQuery({
+    queryKey: ['veiculo-posicao', veiculoId],
+    queryFn: async (): Promise<VeiculoPosicaoResponse> => {
+      if (!veiculoId) throw new Error('ID do veículo não fornecido');
+
+      const { data, error } = await supabase.functions.invoke('posicao-veiculo', {
+        body: { veiculo_id: veiculoId }
+      });
+
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error);
+
+      return data;
+    },
+    enabled: !!veiculoId,
+    refetchInterval: 30000,
+    staleTime: 15000,
+  });
+
+  const atualizarManual = useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase.functions.invoke('posicao-veiculo', {
+        body: { veiculo_id: id }
+      });
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error);
+      return data as VeiculoPosicaoResponse;
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(['veiculo-posicao', veiculoId], data);
+    },
+  });
+
+  return {
+    posicao: query.data?.posicao ?? null,
+    veiculo: query.data?.veiculo ?? null,
+    rastreador: query.data?.rastreador ?? null,
+    tempoReal: query.data?.tempo_real ?? false,
+    offline: query.data?.offline ?? true,
+    plataforma: query.data?.plataforma,
+    mensagem: query.data?.mensagem,
+    isLoading: query.isLoading,
+    isRefetching: query.isRefetching,
+    error: query.error,
+    refetch: query.refetch,
+    atualizarManual,
+  };
 }
 
 export function useMyDocumentos() {

@@ -34,7 +34,7 @@ import {
   History
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useMyVehicleWithTracker, useMyVehicles, useMyVehiclePosition } from '@/hooks/useMyData';
+import { useMyVehicleWithTracker, useMyVehicles, useVeiculoPosicao } from '@/hooks/useMyData';
 import { cn } from '@/lib/utils';
 import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
 import L from 'leaflet';
@@ -119,7 +119,6 @@ export default function AppRastreamento() {
   const navigate = useNavigate();
   const { data: vehicles, isLoading: vehiclesLoading } = useMyVehicles();
   const { data: tracker, isLoading: trackerLoading, refetch } = useMyVehicleWithTracker();
-  const { data: posicao, refetch: refetchPosicao } = useMyVehiclePosition(tracker?.id);
   
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [veiculoSelecionado, setVeiculoSelecionado] = useState<string | null>(null);
@@ -130,15 +129,24 @@ export default function AppRastreamento() {
     ? vehicles?.find(v => v.id === veiculoSelecionado) 
     : vehicles?.[0];
   
+  // Hook de posição em tempo real via Edge Function
+  const { 
+    posicao, 
+    tempoReal, 
+    offline, 
+    refetch: refetchPosicao,
+    atualizarManual 
+  } = useVeiculoPosicao(vehicle?.id);
+  
   // Position data
   const latitude = posicao?.latitude ?? tracker?.ultima_posicao_lat ?? -18.9186;
   const longitude = posicao?.longitude ?? tracker?.ultima_posicao_lng ?? -48.2772;
   const velocidade = posicao?.velocidade ?? 0;
   const ignicao = posicao?.ignicao ?? false;
-  const endereco = posicao?.endereco ?? 'Endereço não disponível';
+  const endereco = posicao?.endereco_aproximado ?? 'Endereço não disponível';
   
   const hasValidPosition = latitude !== null && longitude !== null && latitude !== 0 && longitude !== 0;
-  const isOnline = tracker?.status === 'instalado' && tracker?.ultima_comunicacao;
+  const isOnline = posicao?.status_rastreador === 'online' || (tracker?.status === 'instalado' && !offline);
   const emMovimento = velocidade > 0;
 
   // Time since last update
@@ -146,7 +154,7 @@ export default function AppRastreamento() {
   
   useEffect(() => {
     const calcularTempo = () => {
-      const ultimaCom = posicao?.ultimaComunicacao || tracker?.ultima_comunicacao;
+      const ultimaCom = posicao?.data_hora || tracker?.ultima_comunicacao;
       if (!ultimaCom) {
         setTempoDesdeAtualizacao('--');
         return;
@@ -165,7 +173,7 @@ export default function AppRastreamento() {
     calcularTempo();
     const interval = setInterval(calcularTempo, 60000);
     return () => clearInterval(interval);
-  }, [posicao?.ultimaComunicacao, tracker?.ultima_comunicacao]);
+  }, [posicao?.data_hora, tracker?.ultima_comunicacao]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
