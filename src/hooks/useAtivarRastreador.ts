@@ -13,6 +13,8 @@ interface AtivarRastreadorResult {
   success: boolean;
   rastreadorId: string;
   isNew: boolean;
+  softruckDeviceId?: string;
+  softruckVehicleId?: string;
 }
 
 export function useAtivarRastreador() {
@@ -25,7 +27,7 @@ export function useAtivarRastreador() {
       // 1. Buscar rastreador pelo IMEI - deve existir no estoque
       const { data: rastreadorExistente } = await supabase
         .from('rastreadores')
-        .select('id, status')
+        .select('id, status, plataforma')
         .eq('imei', imei)
         .maybeSingle();
 
@@ -37,7 +39,33 @@ export function useAtivarRastreador() {
         throw new Error(`Rastreador com IMEI ${imei} não está disponível no estoque (status atual: ${rastreadorExistente.status}).`);
       }
 
-      // 2. Dar baixa no estoque - vincular ao veículo e mudar status para instalado
+      // 2. Se for Softruck, usar integração via edge function
+      if (rastreadorExistente.plataforma === 'softruck') {
+        console.log('[useAtivarRastreador] Plataforma Softruck detectada, chamando integração...');
+        
+        const { data, error } = await supabase.functions.invoke('softruck-ativar-dispositivo', {
+          body: { imei, veiculoId, associadoId, associadoEmail },
+        });
+
+        if (error) {
+          console.error('[useAtivarRastreador] Erro na integração Softruck:', error);
+          throw new Error(error.message || 'Erro na integração com Softruck');
+        }
+
+        if (!data?.success) {
+          throw new Error(data?.error || 'Erro ao ativar dispositivo na Softruck');
+        }
+
+        return {
+          success: true,
+          rastreadorId: data.rastreador_id,
+          isNew: false,
+          softruckDeviceId: data.softruck_device_id,
+          softruckVehicleId: data.softruck_vehicle_id,
+        };
+      }
+
+      // 3. Para outras plataformas: dar baixa no estoque localmente
       const { error } = await supabase
         .from('rastreadores')
         .update({
@@ -57,14 +85,19 @@ export function useAtivarRastreador() {
         isNew: false,
       };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['rastreadores'] });
       queryClient.invalidateQueries({ queryKey: ['rastreadores-metricas'] });
-      toast.success('Rastreador vinculado ao veículo com sucesso!');
+      
+      if (data.softruckDeviceId) {
+        toast.success('Rastreador ativado na Softruck com sucesso!');
+      } else {
+        toast.success('Rastreador vinculado ao veículo com sucesso!');
+      }
     },
     onError: (error) => {
       console.error('Erro ao ativar rastreador:', error);
-      toast.error('Erro ao ativar rastreador');
+      toast.error(error instanceof Error ? error.message : 'Erro ao ativar rastreador');
     },
   });
 }

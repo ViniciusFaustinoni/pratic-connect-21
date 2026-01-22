@@ -185,3 +185,9 @@ verify_jwt = false
 
 [functions.app-auth-token]
 verify_jwt = false
+
+[functions.softruck-api]
+verify_jwt = false
+
+[functions.softruck-ativar-dispositivo]
+verify_jwt = false
