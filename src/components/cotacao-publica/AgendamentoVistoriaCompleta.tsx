@@ -3,7 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Calendar, Clock, CheckCircle2, Loader2, MapPin, User, Search, Phone, Shield, AlertTriangle } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Calendar, Clock, CheckCircle2, Loader2, MapPin, User, Search, Phone, Shield, AlertTriangle, Puzzle } from 'lucide-react';
 import { useAgendarVistoriaCompleta } from '@/hooks/useCotacaoVistoria';
 import { HORARIOS_DISPONIVEIS } from '@/data/autovistoriaConfig';
 import { cn } from '@/lib/utils';
@@ -34,6 +35,9 @@ export function AgendamentoVistoriaCompleta({ cotacaoId, onConfirmar, tipoVistor
   // Estados para responsável
   const [euMesmo, setEuMesmo] = useState(true);
   const [responsavelNome, setResponsavelNome] = useState('');
+  
+  // Estado para encaixe
+  const [permiteEncaixe, setPermiteEncaixe] = useState(false);
   const [responsavelTelefone, setResponsavelTelefone] = useState('');
   
   const agendarMutation = useAgendarVistoriaCompleta();
@@ -99,6 +103,7 @@ export function AgendamentoVistoriaCompleta({ cotacaoId, onConfirmar, tipoVistor
           nome: euMesmo ? undefined : responsavelNome,
           telefone: euMesmo ? undefined : responsavelTelefone.replace(/\D/g, ''),
         },
+        permiteEncaixe,
       });
       
       onConfirmar();
@@ -430,6 +435,31 @@ export function AgendamentoVistoriaCompleta({ cotacaoId, onConfirmar, tipoVistor
               </p>
             </div>
           )}
+          
+          {/* Opção de Encaixe de Horários */}
+          <Card className="border-border/30 bg-muted/30">
+            <CardContent className="pt-4 pb-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Puzzle className="h-4 w-4 text-primary" />
+                    <span className="font-medium text-foreground">
+                      Permitir Encaixe de Horários
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Se um vistoriador estiver próximo da sua região antes do 
+                    horário agendado, ele poderá realizar a vistoria 
+                    antecipadamente. Você será notificado previamente.
+                  </p>
+                </div>
+                <Switch
+                  checked={permiteEncaixe}
+                  onCheckedChange={setPermiteEncaixe}
+                />
+              </div>
+            </CardContent>
+          </Card>
           
           {/* Botão confirmar */}
           <Button

@@ -4183,6 +4183,7 @@ export type Database = {
           vistoria_endereco_numero: string | null
           vistoria_horario_agendado: string | null
           vistoria_id: string | null
+          vistoria_permite_encaixe: boolean | null
           vistoria_responsavel_eu_mesmo: boolean | null
           vistoria_responsavel_nome: string | null
           vistoria_responsavel_telefone: string | null
@@ -4272,6 +4273,7 @@ export type Database = {
           vistoria_endereco_numero?: string | null
           vistoria_horario_agendado?: string | null
           vistoria_id?: string | null
+          vistoria_permite_encaixe?: boolean | null
           vistoria_responsavel_eu_mesmo?: boolean | null
           vistoria_responsavel_nome?: string | null
           vistoria_responsavel_telefone?: string | null
@@ -4361,6 +4363,7 @@ export type Database = {
           vistoria_endereco_numero?: string | null
           vistoria_horario_agendado?: string | null
           vistoria_id?: string | null
+          vistoria_permite_encaixe?: boolean | null
           vistoria_responsavel_eu_mesmo?: boolean | null
           vistoria_responsavel_nome?: string | null
           vistoria_responsavel_telefone?: string | null

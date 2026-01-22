@@ -185,13 +185,14 @@ export interface AgendarVistoriaCompletaParams {
   horarioAgendado: string;
   endereco: { cep: string; logradouro: string; numero: string; bairro: string; cidade: string; estado: string; };
   responsavel: { euMesmo: boolean; nome?: string; telefone?: string; };
+  permiteEncaixe?: boolean;
 }
 
 export function useAgendarVistoriaCompleta() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async ({ cotacaoId, dataAgendada, horarioAgendado, endereco, responsavel }: AgendarVistoriaCompletaParams) => {
+    mutationFn: async ({ cotacaoId, dataAgendada, horarioAgendado, endereco, responsavel, permiteEncaixe }: AgendarVistoriaCompletaParams) => {
       // Geocodificar endereço antes de enviar
       const coords = await geocodificarEndereco({
         logradouro: endereco.logradouro,
@@ -212,6 +213,7 @@ export function useAgendarVistoriaCompleta() {
           responsavel,
           latitude: coords.success ? coords.latitude : null,
           longitude: coords.success ? coords.longitude : null,
+          permiteEncaixe: permiteEncaixe || false,
         },
       });
       
