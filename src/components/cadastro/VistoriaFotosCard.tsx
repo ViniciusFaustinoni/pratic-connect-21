@@ -19,6 +19,7 @@ import {
   Gauge,
   Fingerprint,
   LayoutGrid,
+  PenTool,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -32,7 +33,10 @@ export interface VistoriaFotoInfo {
 }
 
 // Labels e ícones para tipos de foto da vistoria
-const TIPO_FOTO_CONFIG: Record<string, { label: string; categoria: string; icon: React.ComponentType<{ className?: string }> }> = {
+const TIPO_FOTO_CONFIG: Record<string, { label: string; categoria: string; icon: React.ComponentType<{ className?: string }>; highlight?: boolean }> = {
+  // Assinatura do Cliente (destaque especial)
+  assinatura_cliente: { label: 'Assinatura do Cliente', categoria: 'Identificação', icon: PenTool, highlight: true },
+  
   // Identificação
   vistoriador: { label: 'Vistoriador', categoria: 'Identificação', icon: Camera },
   chave: { label: 'Chave', categoria: 'Identificação', icon: Fingerprint },

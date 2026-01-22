@@ -48,6 +48,7 @@ import { SolicitarDocumentosDialog } from '@/components/cadastro/SolicitarDocume
 import { DocumentosAnexadosCard } from '@/components/cadastro/DocumentosAnexadosCard';
 import { DocumentosSolicitadosCard } from '@/components/cadastro/DocumentosSolicitadosCard';
 import { VistoriaFotosCard } from '@/components/cadastro/VistoriaFotosCard';
+import { AssinaturaClienteCard } from '@/components/cadastro/AssinaturaClienteCard';
 import { ReprovarPropostaDialog } from '@/components/cadastro/ReprovarPropostaDialog';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -390,7 +391,15 @@ export default function PropostaAnalise() {
             </Card>
           )}
 
-          {/* Dados do Contrato */}
+          {/* Assinatura do Cliente */}
+          {proposta.instalacao_info?.assinatura_cliente_url && (
+            <AssinaturaClienteCard 
+              assinaturaUrl={proposta.instalacao_info.assinatura_cliente_url}
+              dataColeta={proposta.instalacao_info.concluida_em}
+              instaladorNome={proposta.instalacao_info.instalador_nome}
+            />
+          )}
+
           <Card className="border-border bg-card">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-foreground">
