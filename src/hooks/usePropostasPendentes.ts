@@ -54,6 +54,7 @@ export interface InstalacaoInfo {
   rastreador_imei: string | null;
   rastreador_codigo: string | null;
   instalador_nome: string | null;
+  assinatura_cliente_url: string | null;
 }
 
 export interface PropostaPendente {
@@ -315,7 +316,8 @@ export function usePropostasPendentes() {
           status,
           concluida_em,
           rastreador_id,
-          instalador_id
+          instalador_id,
+          assinatura_cliente_url
         `)
         .eq('contrato_id', contrato.id)
         .eq('status', 'concluida')
@@ -359,6 +361,7 @@ export function usePropostasPendentes() {
           rastreador_imei: rastreadorImei,
           rastreador_codigo: rastreadorCodigo,
           instalador_nome: instaladorNome,
+          assinatura_cliente_url: instalacaoData.assinatura_cliente_url,
         };
       }
 
@@ -627,7 +630,8 @@ export function useProposta(contratoId: string | undefined) {
           status,
           concluida_em,
           rastreador_id,
-          instalador_id
+          instalador_id,
+          assinatura_cliente_url
         `)
         .eq('contrato_id', contrato.id)
         .eq('status', 'concluida')
@@ -671,6 +675,7 @@ export function useProposta(contratoId: string | undefined) {
           rastreador_imei: rastreadorImei,
           rastreador_codigo: rastreadorCodigo,
           instalador_nome: instaladorNome,
+          assinatura_cliente_url: instalacaoData.assinatura_cliente_url,
         };
       }
 
