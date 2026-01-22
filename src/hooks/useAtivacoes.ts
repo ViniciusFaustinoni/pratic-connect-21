@@ -79,11 +79,15 @@ export function useAtivacoes(filtro: FiltroAtivacao = 'todos') {
       const associadoIds = filteredContratos.map(c => c.associado_id).filter(Boolean) as string[];
       let vistoriasData: Array<{ id: string; status: string | null; modalidade: string | null; created_at: string; associado_id: string }> = [];
       if (associadoIds.length > 0) {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from('vistorias')
           .select('id, status, modalidade, created_at, associado_id')
           .in('associado_id', associadoIds)
-          .in('tipo', ['entrada', 'instalacao'] as any);
+          .eq('tipo', 'entrada');
+        
+        if (error) {
+          console.error('Erro ao buscar vistorias:', error);
+        }
         vistoriasData = (data || []) as unknown as typeof vistoriasData;
       }
 
