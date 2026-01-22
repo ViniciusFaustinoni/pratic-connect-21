@@ -23,6 +23,7 @@ serve(async (req) => {
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
   const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
 
   if (!supabaseUrl || !supabaseServiceKey) {
     return new Response(
@@ -123,8 +124,40 @@ serve(async (req) => {
         .maybeSingle();
 
       if (rastreadorVinculado) {
-        // RASTREADOR JÁ VINCULADO - Ativar automaticamente
-        console.log(`[processar-vistoria] Rastreador já vinculado: ${rastreadorVinculado.codigo}`);
+        // RASTREADOR JÁ VINCULADO - Ativar via API e depois localmente
+        console.log(`[processar-vistoria] Rastreador já vinculado: ${rastreadorVinculado.codigo} (${rastreadorVinculado.plataforma})`);
+        
+        // 4.1a NOVO: Chamar API da plataforma para ativar o dispositivo
+        if (rastreadorVinculado.plataforma === 'softruck') {
+          console.log('[processar-vistoria] Ativando via API Softruck...');
+          
+          try {
+            const softruckResponse = await fetch(`${supabaseUrl}/functions/v1/softruck-ativar-dispositivo`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${supabaseAnonKey}`,
+              },
+              body: JSON.stringify({
+                imei: rastreadorVinculado.imei,
+                veiculoId: vistoria.veiculo_id,
+                associadoId: vistoria.associado_id,
+              }),
+            });
+            
+            const softruckResult = await softruckResponse.json();
+            
+            if (!softruckResult.success) {
+              console.error('[processar-vistoria] Erro Softruck:', softruckResult.error);
+              // Não bloquear aprovação, apenas logar erro
+            } else {
+              console.log('[processar-vistoria] Dispositivo ativado na Softruck:', softruckResult.softruck_device_id);
+            }
+          } catch (apiError) {
+            console.error('[processar-vistoria] Erro ao chamar API Softruck:', apiError);
+            // Não bloquear aprovação
+          }
+        }
         
         // 4.2a Ativar veículo com cobertura total
         const { error: veicError } = await supabase
@@ -164,12 +197,13 @@ serve(async (req) => {
           await supabase.from('associados_historico').insert({
             associado_id: vistoria.associado_id,
             tipo: 'ativacao',
-            descricao: `Cliente ativado automaticamente. Rastreador ${rastreadorVinculado.codigo} vinculado na vistoria.`,
+            descricao: `Cliente ativado automaticamente. Rastreador ${rastreadorVinculado.codigo} vinculado na vistoria e ativado via ${rastreadorVinculado.plataforma}.`,
             dados_novos: { 
               vistoria_id, 
               decisao,
               rastreador_id: rastreadorVinculado.id,
               rastreador_codigo: rastreadorVinculado.codigo,
+              plataforma: rastreadorVinculado.plataforma,
               ativacao_automatica: true,
             },
             usuario_id: analista_id,

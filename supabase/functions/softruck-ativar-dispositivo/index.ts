@@ -85,9 +85,13 @@ serve(async (req) => {
       throw new Error(`Rastreador ${imei} não é da plataforma Softruck (plataforma: ${rastreador.plataforma})`);
     }
 
-    if (rastreador.status !== 'estoque') {
-      throw new Error(`Rastreador ${imei} não está disponível no estoque (status: ${rastreador.status})`);
+    // Aceitar status 'estoque' (novo) ou 'instalado' (já vinculado localmente pelo vistoriador)
+    if (rastreador.status !== 'estoque' && rastreador.status !== 'instalado') {
+      throw new Error(`Rastreador ${imei} não está disponível (status: ${rastreador.status})`);
     }
+    
+    const jaInstalado = rastreador.status === 'instalado';
+    console.log('[Softruck Ativar] Status do rastreador:', rastreador.status, jaInstalado ? '(já vinculado localmente)' : '');
 
     console.log('[Softruck Ativar] Rastreador encontrado:', rastreador.id);
 
@@ -241,20 +245,27 @@ serve(async (req) => {
       // Continuar mesmo com erro (pode já estar ativo)
     }
 
-    // ===== 7. Atualizar rastreador local =====
-    console.log('[Softruck Ativar] Atualizando rastreador local...');
+    // ===== 7. Atualizar rastreador local com IDs da plataforma =====
+    console.log('[Softruck Ativar] Atualizando rastreador local com IDs Softruck...');
+    
+    // Só atualizar campos de vínculo se não estiver já instalado
+    const updateData: Record<string, unknown> = {
+      plataforma_device_id: softruckDeviceId,
+      plataforma_veiculo_id: softruckVehicleId,
+      updated_at: new Date().toISOString(),
+    };
+    
+    // Se ainda não estava instalado, atualizar também vínculo
+    if (rastreador.status !== 'instalado') {
+      updateData.veiculo_id = veiculoId;
+      updateData.associado_id = associadoId;
+      updateData.associado_email = associadoEmail;
+      updateData.status = 'instalado';
+    }
     
     const { error: updateError } = await supabase
       .from('rastreadores')
-      .update({
-        veiculo_id: veiculoId,
-        associado_id: associadoId,
-        associado_email: associadoEmail,
-        status: 'instalado',
-        plataforma_device_id: softruckDeviceId,
-        plataforma_veiculo_id: softruckVehicleId,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updateData)
       .eq('id', rastreador.id);
 
     if (updateError) {
