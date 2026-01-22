@@ -7332,6 +7332,7 @@ export type Database = {
           endereco_longitude: number | null
           hora_agendada: string | null
           id: string
+          imei_rastreador: string | null
           iniciada_em: string | null
           instalador_id: string | null
           instalador_responsavel_id: string | null
@@ -7365,6 +7366,7 @@ export type Database = {
           endereco_longitude?: number | null
           hora_agendada?: string | null
           id?: string
+          imei_rastreador?: string | null
           iniciada_em?: string | null
           instalador_id?: string | null
           instalador_responsavel_id?: string | null
@@ -7398,6 +7400,7 @@ export type Database = {
           endereco_longitude?: number | null
           hora_agendada?: string | null
           id?: string
+          imei_rastreador?: string | null
           iniciada_em?: string | null
           instalador_id?: string | null
           instalador_responsavel_id?: string | null

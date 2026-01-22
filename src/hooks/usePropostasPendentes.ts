@@ -189,22 +189,28 @@ export function usePropostasPendentes() {
             }
           }
 
-          // Buscar dados extras da cotação para endereço e plano
+          // Buscar dados extras da cotação para endereço e plano (query separada para evitar erro 406)
           let enderecoCompleto: string | null = null;
           let planoNome: string | null = null;
           if (contrato.cotacao_id) {
             const { data: cotacao } = await supabase
               .from('cotacoes')
-              .select('cliente_logradouro, cliente_numero, cliente_bairro, cliente_cidade, cliente_uf, plano_escolhido_id, planos!cotacoes_plano_escolhido_id_fkey(nome)')
+              .select('cliente_logradouro, cliente_numero, cliente_bairro, cliente_cidade, cliente_uf, plano_escolhido_id')
               .eq('id', contrato.cotacao_id)
-              .single();
+              .maybeSingle();
             
             if (cotacao) {
               if (cotacao.cliente_logradouro) {
                 enderecoCompleto = `${cotacao.cliente_logradouro}, ${cotacao.cliente_numero || 'S/N'} - ${cotacao.cliente_bairro || ''}, ${cotacao.cliente_cidade || ''} - ${cotacao.cliente_uf || ''}`;
               }
-              if (cotacao.planos) {
-                planoNome = (cotacao.planos as any).nome;
+              // Buscar nome do plano separadamente
+              if (cotacao.plano_escolhido_id) {
+                const { data: plano } = await supabase
+                  .from('planos')
+                  .select('nome')
+                  .eq('id', cotacao.plano_escolhido_id)
+                  .maybeSingle();
+                planoNome = plano?.nome || null;
               }
             }
           }
@@ -479,22 +485,28 @@ export function useProposta(contratoId: string | undefined) {
         }
       }
 
-      // Buscar dados extras da cotação para endereço e plano
+      // Buscar dados extras da cotação para endereço e plano (query separada para evitar erro 406)
       let enderecoCompleto: string | null = null;
       let planoNome: string | null = null;
       if (contrato.cotacao_id) {
         const { data: cotacao } = await supabase
           .from('cotacoes')
-          .select('cliente_logradouro, cliente_numero, cliente_bairro, cliente_cidade, cliente_uf, plano_escolhido_id, planos!cotacoes_plano_escolhido_id_fkey(nome)')
+          .select('cliente_logradouro, cliente_numero, cliente_bairro, cliente_cidade, cliente_uf, plano_escolhido_id')
           .eq('id', contrato.cotacao_id)
-          .single();
+          .maybeSingle();
         
         if (cotacao) {
           if (cotacao.cliente_logradouro) {
             enderecoCompleto = `${cotacao.cliente_logradouro}, ${cotacao.cliente_numero || 'S/N'} - ${cotacao.cliente_bairro || ''}, ${cotacao.cliente_cidade || ''} - ${cotacao.cliente_uf || ''}`;
           }
-          if (cotacao.planos) {
-            planoNome = (cotacao.planos as any).nome;
+          // Buscar nome do plano separadamente
+          if (cotacao.plano_escolhido_id) {
+            const { data: plano } = await supabase
+              .from('planos')
+              .select('nome')
+              .eq('id', cotacao.plano_escolhido_id)
+              .maybeSingle();
+            planoNome = plano?.nome || null;
           }
         }
       }
