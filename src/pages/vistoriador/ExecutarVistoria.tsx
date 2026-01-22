@@ -130,6 +130,18 @@ export default function ExecutarVistoria() {
   const [finalizando, setFinalizando] = useState(false);
   const [showImeiDialog, setShowImeiDialog] = useState(false);
   const [imeiRastreador, setImeiRastreador] = useState('');
+  
+  // Estado do rastreador - 2 etapas (buscar -> confirmar)
+  const [etapaImei, setEtapaImei] = useState<'buscar' | 'confirmar'>('buscar');
+  const [buscandoRastreador, setBuscandoRastreador] = useState(false);
+  const [rastreadorEncontrado, setRastreadorEncontrado] = useState<{
+    id: string;
+    imei: string;
+    codigo: string;
+    numero_serie: string | null;
+    plataforma: string;
+    status: string;
+  } | null>(null);
 
   // Estado dos dados coletados
   const [state, setState] = useState<VistoriaState>({
@@ -273,16 +285,54 @@ export default function ExecutarVistoria() {
     });
   };
 
-  // Validação do IMEI (15-17 dígitos)
-  const isImeiValido = /^\d{15,17}$/.test(imeiRastreador);
+  // Validação do IMEI (15-17 dígitos ou código/série)
+  const isImeiValido = imeiRastreador.length >= 3;
 
   const handleAbrirImeiDialog = () => {
     if (!podeAvancar(5)) return;
     setShowImeiDialog(true);
+    setEtapaImei('buscar');
+    setRastreadorEncontrado(null);
+    setImeiRastreador('');
+  };
+
+  // Buscar rastreador no estoque
+  const handleBuscarRastreador = async () => {
+    if (!isImeiValido) return;
+    setBuscandoRastreador(true);
+    
+    try {
+      const { data, error } = await supabase
+        .from('rastreadores')
+        .select('id, imei, codigo, numero_serie, plataforma, status')
+        .or(`imei.eq.${imeiRastreador},codigo.ilike.%${imeiRastreador}%,numero_serie.ilike.%${imeiRastreador}%`)
+        .maybeSingle();
+      
+      if (error) throw error;
+      
+      if (!data) {
+        toast.error('Rastreador não encontrado no sistema');
+        return;
+      }
+      
+      if (data.status !== 'estoque') {
+        toast.error(`Rastreador não disponível no estoque (status atual: ${data.status})`);
+        return;
+      }
+      
+      setRastreadorEncontrado(data);
+      setEtapaImei('confirmar');
+      toast.success('Rastreador encontrado!');
+    } catch (error) {
+      console.error('Erro ao buscar rastreador:', error);
+      toast.error('Erro ao buscar rastreador');
+    } finally {
+      setBuscandoRastreador(false);
+    }
   };
 
   const handleFinalizarVistoria = async () => {
-    if (!id || !state.assinaturaBlob || !isImeiValido) return;
+    if (!id || !state.assinaturaBlob || !rastreadorEncontrado) return;
     setFinalizando(true);
     setShowImeiDialog(false);
 
@@ -299,7 +349,63 @@ export default function ExecutarVistoria() {
         .from('vistoria-fotos')
         .getPublicUrl(assinaturaFileName);
 
-      // 2. Preparar dados finais
+      // 2. VÍNCULO AUTOMÁTICO DO RASTREADOR
+      console.log('[ExecutarVistoria] Vinculando rastreador automaticamente...');
+      
+      // 2.1 Verificar se é Softruck para usar integração
+      if (rastreadorEncontrado.plataforma === 'softruck' && vistoria?.veiculo_id && vistoria?.associado_id) {
+        const associadoEmail = (associado as Record<string, unknown>)?.email as string || (vistoria?.associado as Record<string, unknown>)?.email as string || undefined;
+        
+        const { data: softruckResult, error: softruckError } = await supabase.functions.invoke('softruck-ativar-dispositivo', {
+          body: {
+            imei: rastreadorEncontrado.imei,
+            veiculoId: vistoria.veiculo_id,
+            associadoId: vistoria.associado_id,
+            associadoEmail,
+          },
+        });
+        
+        if (softruckError || !softruckResult?.success) {
+          console.error('[ExecutarVistoria] Erro Softruck:', softruckError || softruckResult?.error);
+          toast.error('Erro na integração Softruck. Contate o suporte.');
+          throw new Error(softruckResult?.error || softruckError?.message || 'Erro Softruck');
+        }
+        
+        console.log('[ExecutarVistoria] Rastreador ativado via Softruck');
+      } else {
+        // 2.2 Vínculo local para outras plataformas
+        const { error: vinculoError } = await supabase
+          .from('rastreadores')
+          .update({
+            veiculo_id: vistoria?.veiculo_id,
+            status: 'instalado',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', rastreadorEncontrado.id);
+
+        if (vinculoError) {
+          console.error('[ExecutarVistoria] Erro ao vincular rastreador:', vinculoError);
+          toast.error('Erro ao vincular rastreador. Tente novamente.');
+          throw vinculoError;
+        }
+        
+        console.log('[ExecutarVistoria] Rastreador vinculado localmente');
+      }
+
+      // 2.3 Registrar movimentação de estoque
+      await supabase.from('estoque_movimentacoes').insert({
+        rastreador_id: rastreadorEncontrado.id,
+        tipo: 'saida',
+        quantidade: 1,
+        status_anterior: 'estoque',
+        status_novo: 'instalado',
+        observacao: `Vinculado na vistoria - Veículo ${veiculo?.placa}`,
+        usuario_id: vistoria?.vistoriador_id,
+      }).then(res => {
+        if (res.error) console.warn('[ExecutarVistoria] Aviso ao registrar movimentação:', res.error);
+      });
+
+      // 3. Preparar dados finais
       const dadosFinais = {
         checklist: state.checklist,
         observacoesGerais: state.observacoesGerais,
@@ -308,16 +414,23 @@ export default function ExecutarVistoria() {
         cpfCliente: state.cpfCliente,
         finalizadoEm: new Date().toISOString(),
         conferencia: state.conferencia,
+        rastreador_vinculado: {
+          id: rastreadorEncontrado.id,
+          imei: rastreadorEncontrado.imei,
+          codigo: rastreadorEncontrado.codigo,
+          plataforma: rastreadorEncontrado.plataforma,
+        },
       };
 
-      // 3. Executar vistoria com IMEI
+      // 4. Executar vistoria com IMEI e rastreador_id
       await executarVistoria.mutateAsync({
         id,
         km_atual: parseInt(state.hodometro),
         avarias: JSON.stringify(state.avarias),
         observacoes: JSON.stringify(dadosFinais),
         status: 'em_analise',
-        imei_rastreador: imeiRastreador,
+        imei_rastreador: rastreadorEncontrado.imei,
+        rastreador_id: rastreadorEncontrado.id,
       });
 
       setShowConfirmacao(true);
@@ -816,62 +929,133 @@ export default function ExecutarVistoria() {
         </div>
       </footer>
 
-      {/* Modal para Informar IMEI */}
-      <Dialog open={showImeiDialog} onOpenChange={setShowImeiDialog}>
+      {/* Modal para Informar IMEI - 2 Etapas */}
+      <Dialog open={showImeiDialog} onOpenChange={(open) => {
+        if (!open) {
+          setShowImeiDialog(false);
+          setEtapaImei('buscar');
+          setRastreadorEncontrado(null);
+        }
+      }}>
         <DialogContent className="border-slate-700 bg-slate-800 text-white sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-xl flex items-center gap-2">
               <Radio className="h-5 w-5 text-blue-400" />
-              Informar IMEI do Rastreador
+              {etapaImei === 'buscar' ? 'Buscar Rastreador' : 'Confirmar Vínculo'}
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <p className="text-sm text-slate-400">
-              Digite o IMEI do rastreador que será instalado no veículo.
-            </p>
-            <div>
-              <Label htmlFor="imei" className="text-slate-300">IMEI do Rastreador *</Label>
-              <Input
-                id="imei"
-                type="text"
-                inputMode="numeric"
-                placeholder="Ex: 123456789012345"
-                value={imeiRastreador}
-                onChange={(e) => setImeiRastreador(e.target.value.replace(/\D/g, '').slice(0, 17))}
-                className="mt-2 border-slate-600 bg-slate-900 text-white font-mono text-lg tracking-wider"
-                maxLength={17}
-              />
-              <p className="mt-1 text-xs text-slate-500">
-                {imeiRastreador.length}/15-17 dígitos
+          
+          {/* ETAPA 1: BUSCAR */}
+          {etapaImei === 'buscar' && (
+            <div className="space-y-4 py-4">
+              <p className="text-sm text-slate-400">
+                Digite o IMEI, código ou número de série do rastreador.
               </p>
-              {imeiRastreador.length > 0 && !isImeiValido && (
-                <p className="mt-1 text-xs text-red-400">
-                  IMEI deve ter entre 15 e 17 dígitos numéricos
+              <div>
+                <Label htmlFor="imei" className="text-slate-300">IMEI / Código / Série *</Label>
+                <Input
+                  id="imei"
+                  type="text"
+                  placeholder="Ex: 123456789012345 ou RAT-0042"
+                  value={imeiRastreador}
+                  onChange={(e) => setImeiRastreador(e.target.value.trim())}
+                  className="mt-2 border-slate-600 bg-slate-900 text-white font-mono text-lg tracking-wider"
+                  onKeyDown={(e) => e.key === 'Enter' && isImeiValido && handleBuscarRastreador()}
+                />
+                <p className="mt-1 text-xs text-slate-500">
+                  Mínimo 3 caracteres
                 </p>
-              )}
+              </div>
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowImeiDialog(false)}
+                  className="flex-1 border-slate-600 text-slate-300"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={handleBuscarRastreador}
+                  disabled={!isImeiValido || buscandoRastreador}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700"
+                >
+                  {buscandoRastreador ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Radio className="mr-2 h-4 w-4" />
+                  )}
+                  Buscar
+                </Button>
+              </div>
             </div>
-          </div>
-          <div className="flex gap-3">
-            <Button
-              variant="outline"
-              onClick={() => setShowImeiDialog(false)}
-              className="flex-1 border-slate-600 text-slate-300"
-            >
-              Cancelar
-            </Button>
-            <Button
-              onClick={handleFinalizarVistoria}
-              disabled={!isImeiValido || finalizando}
-              className="flex-1 bg-green-600 hover:bg-green-700"
-            >
-              {finalizando ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Check className="mr-2 h-4 w-4" />
-              )}
-              Confirmar e Enviar
-            </Button>
-          </div>
+          )}
+          
+          {/* ETAPA 2: CONFIRMAR */}
+          {etapaImei === 'confirmar' && rastreadorEncontrado && (
+            <div className="space-y-4 py-4">
+              <div className="rounded-lg border border-green-500/50 bg-green-500/10 p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <CheckCircle2 className="h-5 w-5 text-green-500" />
+                  <span className="font-semibold text-green-400">Rastreador Encontrado</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <span className="text-slate-400">IMEI:</span>
+                    <p className="font-mono text-white">{rastreadorEncontrado.imei || '-'}</p>
+                  </div>
+                  <div>
+                    <span className="text-slate-400">Código:</span>
+                    <p className="font-semibold text-white">{rastreadorEncontrado.codigo}</p>
+                  </div>
+                  <div>
+                    <span className="text-slate-400">Série:</span>
+                    <p className="text-white">{rastreadorEncontrado.numero_serie || '-'}</p>
+                  </div>
+                  <div>
+                    <span className="text-slate-400">Plataforma:</span>
+                    <p className="text-white capitalize">{rastreadorEncontrado.plataforma}</p>
+                  </div>
+                </div>
+                <div className="mt-3 pt-3 border-t border-green-500/30">
+                  <span className="text-xs text-green-400 flex items-center gap-1">
+                    <Check className="h-3 w-3" />
+                    Disponível no estoque
+                  </span>
+                </div>
+              </div>
+              
+              <p className="text-sm text-slate-400 text-center">
+                Ao confirmar, o rastreador será <strong className="text-amber-400">vinculado automaticamente</strong> ao veículo e dará baixa no estoque.
+              </p>
+              
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setEtapaImei('buscar');
+                    setRastreadorEncontrado(null);
+                    setImeiRastreador('');
+                  }}
+                  className="flex-1 border-slate-600 text-slate-300"
+                >
+                  <ArrowLeft className="mr-2 h-4 w-4" />
+                  Voltar
+                </Button>
+                <Button
+                  onClick={handleFinalizarVistoria}
+                  disabled={finalizando}
+                  className="flex-1 bg-green-600 hover:bg-green-700"
+                >
+                  {finalizando ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Check className="mr-2 h-4 w-4" />
+                  )}
+                  Confirmar e Vincular
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
