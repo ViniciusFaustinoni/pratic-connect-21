@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Outlet, useLocation, Link } from 'react-router-dom';
-import { Home, ClipboardList, Map, User, Bell, LogOut, Wifi, WifiOff } from 'lucide-react';
+import { Home, ClipboardList, Map, User, Bell, LogOut, Puzzle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -17,8 +17,8 @@ import {
 const NAV_ITEMS = [
   { icon: Home, label: 'Início', path: '/vistoriador/home' },
   { icon: ClipboardList, label: 'Tarefas', path: '/vistoriador/tarefas' },
+  { icon: Puzzle, label: 'Encaixes', path: '/vistoriador/encaixes' },
   { icon: Map, label: 'Mapa', path: '/vistoriador/mapa' },
-  { icon: User, label: 'Perfil', path: '/vistoriador/perfil' },
 ];
 
 interface VistoriadorLayoutProps {
