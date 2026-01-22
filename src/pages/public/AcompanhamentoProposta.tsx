@@ -11,20 +11,22 @@ import {
   XCircle,
   FileCheck,
   Calendar,
-  MapPin,
   Wrench,
-  PartyPopper
+  PartyPopper,
+  KeyRound
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion } from 'framer-motion';
+import { CriarContaAssociadoForm } from '@/components/public/CriarContaAssociadoForm';
 
 interface AssociadoData {
   id: string;
   nome: string;
   status: string;
+  user_id: string | null;
   plano: { nome: string } | null;
   veiculos: {
     id: string;
@@ -73,6 +75,7 @@ function useAcompanhamentoProposta(token: string | undefined) {
           id,
           nome,
           status,
+          user_id,
           plano:planos (nome)
         `)
         .eq('id', contrato.associado_id)
@@ -124,10 +127,24 @@ function getStatusInfo(associado: AssociadoData) {
       title: 'Proposta Recusada',
       description: 'Sua proposta foi recusada. Entre em contato para mais informações.',
       showDetails: false,
+      showCriarConta: false,
     };
   }
 
-  // Verificar se está ativo com cobertura total
+  // ATIVO MAS SEM CONTA CRIADA → Mostrar formulário de criação
+  if (associado.status === 'ativo' && !associado.user_id) {
+    return {
+      status: 'criar_conta',
+      icon: KeyRound,
+      color: 'success',
+      title: 'Crie sua Conta!',
+      description: 'Seu cadastro foi aprovado! Crie seu login para acessar o app PRATIC.',
+      showDetails: true,
+      showCriarConta: true,
+    };
+  }
+
+  // Verificar se está ativo com cobertura total (já tem conta)
   if (associado.status === 'ativo' && veiculo?.cobertura_total) {
     return {
       status: 'ativo_total',
@@ -136,6 +153,7 @@ function getStatusInfo(associado: AssociadoData) {
       title: 'Cobertura Total Ativa!',
       description: 'Parabéns! Seu veículo está com cobertura total ativa.',
       showDetails: true,
+      showCriarConta: false,
     };
   }
 
@@ -149,6 +167,7 @@ function getStatusInfo(associado: AssociadoData) {
       description: 'Seu veículo já está protegido contra roubo e furto. Aguardando instalação do rastreador para cobertura total.',
       showDetails: true,
       showInstalacao: true,
+      showCriarConta: false,
     };
   }
 
@@ -162,6 +181,7 @@ function getStatusInfo(associado: AssociadoData) {
       description: 'Sua proposta foi aprovada! Aguardando agendamento da instalação do rastreador.',
       showDetails: true,
       showInstalacao: true,
+      showCriarConta: false,
     };
   }
 
@@ -174,6 +194,7 @@ function getStatusInfo(associado: AssociadoData) {
       title: 'Proposta em Análise',
       description: 'Seus documentos, contrato e imagens da vistoria estão sendo analisados pelo setor de cadastro.',
       showDetails: true,
+      showCriarConta: false,
     };
   }
 
@@ -185,6 +206,7 @@ function getStatusInfo(associado: AssociadoData) {
     title: 'Proposta Recebida',
     description: 'Aguardando processamento da sua proposta.',
     showDetails: true,
+    showCriarConta: false,
   };
 }
 
@@ -341,7 +363,19 @@ export default function AcompanhamentoProposta() {
             </CardContent>
           </Card>
 
-          {/* Detalhes do Veículo e Cobertura */}
+          {/* Formulário de Criação de Conta (quando ativo sem user_id) */}
+          {statusInfo.showCriarConta && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+            >
+              <CriarContaAssociadoForm 
+                associadoId={associado.id}
+                nomeAssociado={associado.nome}
+              />
+            </motion.div>
+          )}
           {statusInfo.showDetails && veiculo && (
             <Card className="bg-card/80 backdrop-blur-xl border-border/50">
               <CardContent className="py-6 space-y-4">
@@ -419,7 +453,7 @@ export default function AcompanhamentoProposta() {
                   </div>
                 ) : (
                   <div className="flex items-center gap-2">
-                    <Clock className="h-5 w-5 text-amber-400" />
+                    <Clock className="h-5 w-5 text-warning" />
                     <span className="text-muted-foreground">Aguardando agendamento</span>
                   </div>
                 )}

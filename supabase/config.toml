@@ -191,3 +191,6 @@ verify_jwt = false
 
 [functions.softruck-ativar-dispositivo]
 verify_jwt = false
+
+[functions.app-criar-conta-cliente]
+verify_jwt = false
