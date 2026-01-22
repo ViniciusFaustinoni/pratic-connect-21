@@ -7341,6 +7341,7 @@ export type Database = {
           numero: string | null
           observacoes: string | null
           periodo: Database["public"]["Enums"]["periodo_instalacao"]
+          permite_encaixe: boolean | null
           quilometragem: number | null
           rastreador_id: string | null
           rota_id: string | null
@@ -7375,6 +7376,7 @@ export type Database = {
           numero?: string | null
           observacoes?: string | null
           periodo?: Database["public"]["Enums"]["periodo_instalacao"]
+          permite_encaixe?: boolean | null
           quilometragem?: number | null
           rastreador_id?: string | null
           rota_id?: string | null
@@ -7409,6 +7411,7 @@ export type Database = {
           numero?: string | null
           observacoes?: string | null
           periodo?: Database["public"]["Enums"]["periodo_instalacao"]
+          permite_encaixe?: boolean | null
           quilometragem?: number | null
           rastreador_id?: string | null
           rota_id?: string | null
@@ -13442,6 +13445,7 @@ export type Database = {
           observacoes: string | null
           observacoes_analise: string | null
           origem: string | null
+          permite_encaixe: boolean | null
           protocolo: string | null
           ressalvas: string | null
           rota_id: string | null
@@ -13487,6 +13491,7 @@ export type Database = {
           observacoes?: string | null
           observacoes_analise?: string | null
           origem?: string | null
+          permite_encaixe?: boolean | null
           protocolo?: string | null
           ressalvas?: string | null
           rota_id?: string | null
@@ -13532,6 +13537,7 @@ export type Database = {
           observacoes?: string | null
           observacoes_analise?: string | null
           origem?: string | null
+          permite_encaixe?: boolean | null
           protocolo?: string | null
           ressalvas?: string | null
           rota_id?: string | null

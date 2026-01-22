@@ -14,6 +14,7 @@ import {
   AddInstalacaoDialog,
   InstalacaoMiniCard,
 } from '@/components/rotas';
+import { ConfiguracoesEncaixe } from '@/components/rotas/ConfiguracoesEncaixe';
 import { 
   useRotas, 
   useRotasMetricas, 
@@ -161,6 +162,7 @@ export default function Rotas() {
               </span>
             ) : null}
           </TabsTrigger>
+          <TabsTrigger value="configuracoes">Configurações</TabsTrigger>
         </TabsList>
 
         {/* Aba Calendário */}
@@ -246,6 +248,11 @@ export default function Rotas() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Aba Configurações */}
+        <TabsContent value="configuracoes">
+          <ConfiguracoesEncaixe />
         </TabsContent>
       </Tabs>
 
