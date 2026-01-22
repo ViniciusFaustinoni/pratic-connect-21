@@ -16,7 +16,9 @@ import {
   PartyPopper,
   KeyRound,
   Navigation,
-  MapPin
+  MapPin,
+  UserCheck,
+  Bell
 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -48,6 +50,10 @@ interface AssociadoData {
     id: string;
     status: string;
     data_agendada: string | null;
+    rota_id: string | null;
+    instalador_responsavel: {
+      nome: string;
+    } | null;
   }[];
 }
 
@@ -92,10 +98,16 @@ function useAcompanhamentoProposta(token: string | undefined) {
         .select('id, placa, modelo, marca, status, cobertura_roubo_furto, cobertura_total')
         .eq('associado_id', contrato.associado_id);
 
-      // Buscar instalações
+      // Buscar instalações COM dados do vistoriador
       const { data: instalacoes } = await supabase
         .from('instalacoes')
-        .select('id, status, data_agendada')
+        .select(`
+          id, 
+          status, 
+          data_agendada,
+          rota_id,
+          instalador_responsavel:profiles!instalador_responsavel_id(nome)
+        `)
         .eq('associado_id', contrato.associado_id)
         .order('created_at', { ascending: false })
         .limit(1);
@@ -154,6 +166,7 @@ function getStatusInfo(associado: AssociadoData) {
 
   // PRIORIDADE 2: Técnico a caminho (em_rota)
   if (instalacao?.status === 'em_rota') {
+    const nomeVistoriador = instalacao.instalador_responsavel?.nome || 'Técnico';
     return {
       status: 'em_rota',
       icon: Navigation,
@@ -165,6 +178,27 @@ function getStatusInfo(associado: AssociadoData) {
       showCriarConta: false,
       showEmRota: true,
       showEmAndamento: false,
+      showAtribuidaRota: false,
+      nomeVistoriador,
+    };
+  }
+
+  // PRIORIDADE 3: Instalação atribuída a uma rota (aguardando vistoriador iniciar)
+  if (instalacao?.rota_id && instalacao?.status === 'agendada') {
+    const nomeVistoriador = instalacao.instalador_responsavel?.nome || 'Técnico';
+    return {
+      status: 'atribuida_rota',
+      icon: UserCheck,
+      color: 'primary',
+      title: 'Instalação Agendada!',
+      description: `O vistoriador ${nomeVistoriador} foi designado para realizar sua instalação.`,
+      showDetails: true,
+      showInstalacao: true,
+      showCriarConta: false,
+      showEmRota: false,
+      showEmAndamento: false,
+      showAtribuidaRota: true,
+      nomeVistoriador,
     };
   }
 
@@ -180,6 +214,7 @@ function getStatusInfo(associado: AssociadoData) {
       showCriarConta: true,
       showEmRota: false,
       showEmAndamento: false,
+      showAtribuidaRota: false,
     };
   }
 
@@ -195,6 +230,7 @@ function getStatusInfo(associado: AssociadoData) {
       showCriarConta: false,
       showEmRota: false,
       showEmAndamento: false,
+      showAtribuidaRota: false,
     };
   }
 
@@ -211,6 +247,7 @@ function getStatusInfo(associado: AssociadoData) {
       showCriarConta: false,
       showEmRota: false,
       showEmAndamento: false,
+      showAtribuidaRota: false,
     };
   }
 
@@ -227,6 +264,7 @@ function getStatusInfo(associado: AssociadoData) {
       showCriarConta: false,
       showEmRota: false,
       showEmAndamento: false,
+      showAtribuidaRota: false,
     };
   }
 
@@ -242,6 +280,7 @@ function getStatusInfo(associado: AssociadoData) {
       showCriarConta: false,
       showEmRota: false,
       showEmAndamento: false,
+      showAtribuidaRota: false,
     };
   }
 
@@ -256,6 +295,7 @@ function getStatusInfo(associado: AssociadoData) {
     showCriarConta: false,
     showEmRota: false,
     showEmAndamento: false,
+    showAtribuidaRota: false,
   };
 }
 
@@ -496,6 +536,55 @@ export default function AcompanhamentoProposta() {
                       <li className="flex items-center gap-2">
                         <CheckCircle2 className="h-4 w-4 text-primary flex-shrink-0" />
                         Aguarde no local combinado
+                      </li>
+                    </ul>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+
+          {/* Card de Vistoriador Designado (Atribuído à Rota) */}
+          {statusInfo.showAtribuidaRota && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.3 }}
+            >
+              <Card className="bg-primary/5 border-primary/30 overflow-hidden">
+                <CardContent className="py-6">
+                  <div className="flex items-center gap-4">
+                    {/* Ícone do vistoriador */}
+                    <div className="relative flex-shrink-0">
+                      <div className="w-14 h-14 rounded-full bg-primary/20 flex items-center justify-center">
+                        <UserCheck className="h-7 w-7 text-primary" />
+                      </div>
+                    </div>
+                    
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-foreground">
+                        Vistoriador Designado
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        <span className="font-medium text-primary">{statusInfo.nomeVistoriador}</span> 
+                        {' '}irá realizar sua instalação
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {/* Informações adicionais */}
+                  <div className="mt-4 p-4 bg-muted/50 rounded-lg space-y-2">
+                    <p className="text-xs font-medium text-foreground">
+                      Próximos passos:
+                    </p>
+                    <ul className="text-sm text-muted-foreground space-y-2">
+                      <li className="flex items-center gap-2">
+                        <Clock className="h-4 w-4 text-primary flex-shrink-0" />
+                        Aguarde o vistoriador iniciar o deslocamento
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <Bell className="h-4 w-4 text-primary flex-shrink-0" />
+                        Você será notificado quando ele estiver a caminho
                       </li>
                     </ul>
                   </div>
