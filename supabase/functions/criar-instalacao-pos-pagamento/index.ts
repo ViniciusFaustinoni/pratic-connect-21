@@ -69,6 +69,7 @@ serve(async (req) => {
         vistoria_responsavel_eu_mesmo,
         vistoria_responsavel_nome,
         vistoria_responsavel_telefone,
+        vistoria_permite_encaixe,
         vistoria_completa_data_agendada,
         vistoria_completa_horario_agendado,
         vistoria_completa_endereco_cep,
@@ -251,6 +252,7 @@ serve(async (req) => {
       endereco_latitude: endereco.latitude || null,
       endereco_longitude: endereco.longitude || null,
       observacoes: obsResponsavel,
+      permite_encaixe: cotacao.vistoria_permite_encaixe || false,
     };
 
     console.log('[CriarInstalacaoPosPagamento] Criando instalação:', JSON.stringify(instalacaoData));

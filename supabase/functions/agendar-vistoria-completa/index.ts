@@ -25,6 +25,7 @@ interface AgendarVistoriaRequest {
   };
   latitude?: number | null;
   longitude?: number | null;
+  permiteEncaixe?: boolean;
 }
 
 serve(async (req) => {
@@ -43,9 +44,9 @@ serve(async (req) => {
     });
 
     const body: AgendarVistoriaRequest = await req.json();
-    const { cotacaoId, dataAgendada, horarioAgendado, endereco, responsavel, latitude, longitude } = body;
+    const { cotacaoId, dataAgendada, horarioAgendado, endereco, responsavel, latitude, longitude, permiteEncaixe } = body;
 
-    console.log('[AgendarVistoriaCompleta] Iniciando para cotação:', cotacaoId);
+    console.log('[AgendarVistoriaCompleta] Iniciando para cotação:', cotacaoId, 'permiteEncaixe:', permiteEncaixe);
 
     // 0. VERIFICAR SE JÁ EXISTE INSTALAÇÃO PARA EVITAR DUPLICATAS
     const { data: instalacaoExistente } = await supabase
@@ -121,6 +122,7 @@ serve(async (req) => {
       vistoria_completa_responsavel_eu_mesmo: responsavel.euMesmo,
       vistoria_completa_responsavel_nome: responsavel.nome || null,
       vistoria_completa_responsavel_telefone: responsavel.telefone || null,
+      vistoria_permite_encaixe: permiteEncaixe || false,
     };
 
     if (latitude && longitude) {
