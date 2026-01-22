@@ -124,93 +124,66 @@ serve(async (req) => {
         .maybeSingle();
 
       if (rastreadorVinculado) {
-        // RASTREADOR JÁ VINCULADO - Ativar via API e depois localmente
+        // RASTREADOR JÁ VINCULADO - Aprovar cobertura roubo/furto
+        // A ativação na plataforma Softruck será feita MANUALMENTE pelo analista
         console.log(`[processar-vistoria] Rastreador já vinculado: ${rastreadorVinculado.codigo} (${rastreadorVinculado.plataforma})`);
+        console.log('[processar-vistoria] Ativação Softruck será feita manualmente pelo analista');
         
-        // 4.1a NOVO: Chamar API da plataforma para ativar o dispositivo
-        if (rastreadorVinculado.plataforma === 'softruck') {
-          console.log('[processar-vistoria] Ativando via API Softruck...');
-          
-          try {
-            const softruckResponse = await fetch(`${supabaseUrl}/functions/v1/softruck-ativar-dispositivo`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${supabaseAnonKey}`,
-              },
-              body: JSON.stringify({
-                imei: rastreadorVinculado.imei,
-                veiculoId: vistoria.veiculo_id,
-                associadoId: vistoria.associado_id,
-              }),
-            });
-            
-            const softruckResult = await softruckResponse.json();
-            
-            if (!softruckResult.success) {
-              console.error('[processar-vistoria] Erro Softruck:', softruckResult.error);
-              // Não bloquear aprovação, apenas logar erro
-            } else {
-              console.log('[processar-vistoria] Dispositivo ativado na Softruck:', softruckResult.softruck_device_id);
-            }
-          } catch (apiError) {
-            console.error('[processar-vistoria] Erro ao chamar API Softruck:', apiError);
-            // Não bloquear aprovação
-          }
-        }
-        
-        // 4.2a Ativar veículo com cobertura total
+        // 4.2a Atualizar veículo - aprovar cobertura roubo/furto mas NÃO cobertura total
+        // A cobertura total só será liberada quando o analista clicar em "Ativar Rastreador"
         const { error: veicError } = await supabase
           .from('veiculos')
           .update({ 
-            status: 'ativo',
-            cobertura_total: true,
-            cobertura_roubo_furto: true,
+            status: 'em_analise',
+            cobertura_total: false,  // NÃO ativar cobertura total automaticamente
+            cobertura_roubo_furto: true,  // Aprovar cobertura roubo/furto
             updated_at: new Date().toISOString(),
           })
           .eq('id', vistoria.veiculo_id);
 
         if (veicError) {
-          console.error('[processar-vistoria] Erro ao ativar veículo:', veicError);
+          console.error('[processar-vistoria] Erro ao atualizar veículo:', veicError);
         } else {
-          console.log('[processar-vistoria] Veículo ativado com cobertura total');
+          console.log('[processar-vistoria] Veículo aprovado para cobertura roubo/furto - aguardando ativação do rastreador');
         }
 
-        // 4.3a Ativar associado
-        const { error: assocError } = await supabase
-          .from('associados')
-          .update({ 
-            status: 'ativo',
-            data_ativacao: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', vistoria.associado_id);
-
-        if (assocError) {
-          console.error('[processar-vistoria] Erro ao ativar associado:', assocError);
-        } else {
-          console.log('[processar-vistoria] Associado ativado');
-        }
+        // 4.3a NÃO ativar associado automaticamente - será ativado quando o rastreador for ativado
+        console.log('[processar-vistoria] Associado será ativado quando rastreador for ativado na plataforma');
 
         // 4.4a Registrar no histórico
         try {
           await supabase.from('associados_historico').insert({
             associado_id: vistoria.associado_id,
-            tipo: 'ativacao',
-            descricao: `Cliente ativado automaticamente. Rastreador ${rastreadorVinculado.codigo} vinculado na vistoria e ativado via ${rastreadorVinculado.plataforma}.`,
+            tipo: 'vistoria_aprovada',
+            descricao: `Vistoria aprovada. Cobertura roubo/furto liberada. Rastreador ${rastreadorVinculado.codigo} vinculado - aguardando ativação manual na plataforma ${rastreadorVinculado.plataforma}.`,
             dados_novos: { 
               vistoria_id, 
               decisao,
               rastreador_id: rastreadorVinculado.id,
               rastreador_codigo: rastreadorVinculado.codigo,
               plataforma: rastreadorVinculado.plataforma,
-              ativacao_automatica: true,
+              aguardando_ativacao: true,
             },
             usuario_id: analista_id,
           });
-          console.log('[processar-vistoria] Histórico de ativação registrado');
+          console.log('[processar-vistoria] Histórico registrado');
         } catch (histError) {
           console.error('[processar-vistoria] Erro ao registrar histórico:', histError);
+        }
+
+        // 4.5a Criar notificação para ativar rastreador manualmente
+        try {
+          await supabase.from('notificacoes_sistema').insert({
+            titulo: '🔧 Rastreador instalado - Ativar na plataforma',
+            mensagem: `${vistoria.associado?.nome} - ${vistoria.veiculo?.modelo} (${vistoria.veiculo?.placa}) - Rastreador ${rastreadorVinculado.codigo} aguardando ativação`,
+            tipo: 'info',
+            destino: 'perfil',
+            destino_role: 'analista_cadastro',
+            link: `/cadastro/instalacoes/${vistoria.instalacao_id || vistoria_id}/ativar`,
+          });
+          console.log('[processar-vistoria] Notificação de ativação pendente criada');
+        } catch (notifError) {
+          console.error('[processar-vistoria] Erro ao criar notificação:', notifError);
         }
 
       } else {

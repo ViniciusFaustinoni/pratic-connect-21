@@ -52,6 +52,7 @@ import AnaliseDocumento from "./pages/cadastro/AnaliseDocumento";
 import AnaliseVistoria from "./pages/cadastro/AnaliseVistoria";
 import PropostasPendentes from "./pages/cadastro/PropostasPendentes";
 import PropostaAnalise from "./pages/cadastro/PropostaAnalise";
+import VistoriaCompletaAnalise from "./pages/cadastro/VistoriaCompletaAnalise";
 import SinistrosList from "./pages/eventos/SinistrosList";
 import PlanosAdmin from "./pages/admin/PlanosAdmin";
 import SinistroDetalhe from "./pages/eventos/SinistroDetalhe";
@@ -343,6 +344,7 @@ const App = () => (
               <Route path="/cadastro/vistorias/:id/analise" element={<AnaliseVistoria />} />
               <Route path="/cadastro/propostas" element={<PropostasPendentes />} />
               <Route path="/cadastro/propostas/:id" element={<PropostaAnalise />} />
+              <Route path="/cadastro/instalacoes/:id/ativar" element={<VistoriaCompletaAnalise />} />
               
               {/* Eventos */}
               <Route path="/eventos/dashboard" element={<SinistrosDashboard />} />
