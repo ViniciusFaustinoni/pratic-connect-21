@@ -423,7 +423,9 @@ export function useProposta(contratoId: string | undefined) {
           associado_id,
           cotacao_id,
           plano_id,
-          vendedor_id
+          vendedor_id,
+          pdf_assinado_url,
+          updated_at
         `)
         .eq('id', contratoId)
         .single();
@@ -483,6 +485,21 @@ export function useProposta(contratoId: string | undefined) {
             .order('created_at', { ascending: false });
           documentos = (docsByUrl || []) as DocumentoAnexado[];
         }
+      }
+
+      // ============================================
+      // INJETAR CONTRATO ASSINADO COMO DOCUMENTO VIRTUAL
+      // O PDF assinado pela Autentique está em contratos.pdf_assinado_url
+      // ============================================
+      if (contrato.pdf_assinado_url) {
+        documentos.unshift({
+          id: `contrato-assinado-${contrato.id}`,
+          tipo: 'contrato_assinado',
+          arquivo_nome: `Contrato ${contrato.numero || ''} - Assinado.pdf`,
+          arquivo_url: contrato.pdf_assinado_url,
+          status: 'aprovado',
+          created_at: contrato.data_assinatura || contrato.updated_at || new Date().toISOString(),
+        });
       }
 
       // Buscar dados extras da cotação para endereço e plano (query separada para evitar erro 406)

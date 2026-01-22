@@ -26,7 +26,8 @@ import { ptBR } from 'date-fns/locale';
 import type { DocumentoAnexado } from '@/hooks/usePropostasPendentes';
 
 // Labels para tipos de documento
-const TIPO_DOC_CONFIG: Record<string, { label: string; icon: React.ComponentType<{ className?: string }> }> = {
+const TIPO_DOC_CONFIG: Record<string, { label: string; icon: React.ComponentType<{ className?: string }>; highlight?: boolean }> = {
+  contrato_assinado: { label: 'Contrato Assinado', icon: FileText, highlight: true },
   cnh: { label: 'CNH', icon: CreditCard },
   crlv: { label: 'CRLV', icon: Car },
   comprovante_residencia: { label: 'Comprovante de Residência', icon: Home },
@@ -101,18 +102,42 @@ export function DocumentosAnexadosCard({ documentos }: DocumentosAnexadosCardPro
             const DocIcon = docConfig.icon;
             const StatusIcon = statusConfig.icon;
 
+            const isContrato = doc.tipo === 'contrato_assinado';
+            
             return (
               <div
                 key={doc.id}
-                className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer group"
+                className={cn(
+                  "flex items-center justify-between p-3 rounded-lg border transition-colors cursor-pointer group",
+                  isContrato 
+                    ? "border-emerald-300 bg-emerald-50/50 dark:bg-emerald-950/20 ring-1 ring-emerald-500/30 hover:bg-emerald-100/50" 
+                    : "border-border bg-muted/30 hover:bg-muted/50"
+                )}
                 onClick={() => setSelectedDoc(doc)}
               >
                 <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-background">
-                    <DocIcon className="h-4 w-4 text-muted-foreground" />
+                  <div className={cn(
+                    "p-2 rounded-lg",
+                    isContrato 
+                      ? "bg-emerald-100 dark:bg-emerald-900/50" 
+                      : "bg-background"
+                  )}>
+                    <DocIcon className={cn(
+                      "h-4 w-4",
+                      isContrato 
+                        ? "text-emerald-700 dark:text-emerald-400" 
+                        : "text-muted-foreground"
+                    )} />
                   </div>
                   <div>
-                    <p className="font-medium text-foreground text-sm">{docConfig.label}</p>
+                    <p className={cn(
+                      "font-medium text-sm",
+                      isContrato 
+                        ? "text-emerald-800 dark:text-emerald-300" 
+                        : "text-foreground"
+                    )}>
+                      {docConfig.label}
+                    </p>
                     <p className="text-xs text-muted-foreground">
                       {format(new Date(doc.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                     </p>
