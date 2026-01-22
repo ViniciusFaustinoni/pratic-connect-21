@@ -349,50 +349,31 @@ export default function ExecutarVistoria() {
         .from('vistoria-fotos')
         .getPublicUrl(assinaturaFileName);
 
-      // 2. VÍNCULO AUTOMÁTICO DO RASTREADOR
-      console.log('[ExecutarVistoria] Vinculando rastreador automaticamente...');
+      // 2. VÍNCULO LOCAL DO RASTREADOR (ativação API ocorre após aprovação do analista)
+      console.log('[ExecutarVistoria] Vinculando rastreador localmente...');
       
-      // 2.1 Verificar se é Softruck para usar integração
-      if (rastreadorEncontrado.plataforma === 'softruck' && vistoria?.veiculo_id && vistoria?.associado_id) {
-        const associadoEmail = (associado as Record<string, unknown>)?.email as string || (vistoria?.associado as Record<string, unknown>)?.email as string || undefined;
-        
-        const { data: softruckResult, error: softruckError } = await supabase.functions.invoke('softruck-ativar-dispositivo', {
-          body: {
-            imei: rastreadorEncontrado.imei,
-            veiculoId: vistoria.veiculo_id,
-            associadoId: vistoria.associado_id,
-            associadoEmail,
-          },
-        });
-        
-        if (softruckError || !softruckResult?.success) {
-          console.error('[ExecutarVistoria] Erro Softruck:', softruckError || softruckResult?.error);
-          toast.error('Erro na integração Softruck. Contate o suporte.');
-          throw new Error(softruckResult?.error || softruckError?.message || 'Erro Softruck');
-        }
-        
-        console.log('[ExecutarVistoria] Rastreador ativado via Softruck');
-      } else {
-        // 2.2 Vínculo local para outras plataformas
-        const { error: vinculoError } = await supabase
-          .from('rastreadores')
-          .update({
-            veiculo_id: vistoria?.veiculo_id,
-            status: 'instalado',
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', rastreadorEncontrado.id);
+      // Vínculo LOCAL para TODAS as plataformas
+      // A ativação via API (Softruck, etc) ocorre na edge function processar-vistoria após aprovação
+      const { error: vinculoError } = await supabase
+        .from('rastreadores')
+        .update({
+          veiculo_id: vistoria?.veiculo_id,
+          associado_id: vistoria?.associado_id,
+          status: 'instalado',
+          data_instalacao: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', rastreadorEncontrado.id);
 
-        if (vinculoError) {
-          console.error('[ExecutarVistoria] Erro ao vincular rastreador:', vinculoError);
-          toast.error('Erro ao vincular rastreador. Tente novamente.');
-          throw vinculoError;
-        }
-        
-        console.log('[ExecutarVistoria] Rastreador vinculado localmente');
+      if (vinculoError) {
+        console.error('[ExecutarVistoria] Erro ao vincular rastreador:', vinculoError);
+        toast.error('Erro ao vincular rastreador. Tente novamente.');
+        throw vinculoError;
       }
+      
+      console.log('[ExecutarVistoria] Rastreador vinculado localmente e baixa de estoque realizada');
 
-      // 2.3 Registrar movimentação de estoque
+      // 2.2 Registrar movimentação de estoque
       await supabase.from('estoque_movimentacoes').insert({
         rastreador_id: rastreadorEncontrado.id,
         tipo: 'saida',
