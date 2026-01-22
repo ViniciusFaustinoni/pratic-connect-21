@@ -11450,6 +11450,7 @@ export type Database = {
           plataforma_device_id: string | null
           plataforma_user_id: string | null
           plataforma_veiculo_id: string | null
+          portador_id: string | null
           status: Database["public"]["Enums"]["status_rastreador"]
           ultima_comunicacao: string | null
           ultima_ignicao: boolean | null
@@ -11476,6 +11477,7 @@ export type Database = {
           plataforma_device_id?: string | null
           plataforma_user_id?: string | null
           plataforma_veiculo_id?: string | null
+          portador_id?: string | null
           status?: Database["public"]["Enums"]["status_rastreador"]
           ultima_comunicacao?: string | null
           ultima_ignicao?: boolean | null
@@ -11502,6 +11504,7 @@ export type Database = {
           plataforma_device_id?: string | null
           plataforma_user_id?: string | null
           plataforma_veiculo_id?: string | null
+          portador_id?: string | null
           status?: Database["public"]["Enums"]["status_rastreador"]
           ultima_comunicacao?: string | null
           ultima_ignicao?: boolean | null
@@ -11553,6 +11556,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "rastreadores_portador_id_fkey"
+            columns: ["portador_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rastreadores_portador_id_fkey"
+            columns: ["portador_id"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
           },
           {
             foreignKeyName: "rastreadores_veiculo_id_fkey"
