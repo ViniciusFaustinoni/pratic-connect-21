@@ -53,11 +53,14 @@ import {
   ChevronRight,
   Filter,
   X,
+  User,
+  UserPlus,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { usePlataformasOptions, usePlataformasLabels } from '@/hooks/usePlataformasCRUD';
-import { ConsultaRastreador } from './ConsultaRastreador';
+import { useProfissionaisEquipe } from '@/hooks/useEquipe';
+import { AtribuirPortadorDialog } from './AtribuirPortadorDialog';
 
 interface RastreadorListItem {
   id: string;
@@ -68,6 +71,11 @@ interface RastreadorListItem {
   status: 'estoque' | 'instalado' | 'manutencao' | 'baixado';
   created_at: string;
   ultima_comunicacao: string | null;
+  portador_id: string | null;
+  portador: {
+    id: string;
+    nome: string;
+  } | null;
   veiculos: {
     placa: string;
     modelo: string | null;
@@ -89,16 +97,24 @@ export function ListaRastreadores() {
   const queryClient = useQueryClient();
   const { data: plataformas } = usePlataformasOptions();
   const { data: plataformasLabels } = usePlataformasLabels();
+  const { data: profissionais } = useProfissionaisEquipe();
   
   const [busca, setBusca] = useState('');
   const [statusFiltro, setStatusFiltro] = useState<string>('todos');
   const [plataformaFiltro, setPlataformaFiltro] = useState<string>('todas');
+  const [portadorFiltro, setPortadorFiltro] = useState<string>('todos');
   const [pagina, setPagina] = useState(1);
   const [dialogDetalhes, setDialogDetalhes] = useState<string | null>(null);
   const [dialogMudarStatus, setDialogMudarStatus] = useState<{ id: string; novoStatus: StatusRastreador } | null>(null);
+  const [dialogAtribuirPortador, setDialogAtribuirPortador] = useState<{
+    id: string;
+    codigo: string;
+    portador_id: string | null;
+    portador_nome: string | null;
+  } | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['lista-rastreadores', busca, statusFiltro, plataformaFiltro, pagina],
+    queryKey: ['lista-rastreadores', busca, statusFiltro, plataformaFiltro, portadorFiltro, pagina],
     queryFn: async () => {
       let query = supabase
         .from('rastreadores')
@@ -111,6 +127,8 @@ export function ListaRastreadores() {
           status,
           created_at,
           ultima_comunicacao,
+          portador_id,
+          portador:profiles!rastreadores_portador_id_fkey(id, nome),
           veiculos (placa, modelo)
         `, { count: 'exact' })
         .order('created_at', { ascending: false })
@@ -126,6 +144,14 @@ export function ListaRastreadores() {
 
       if (plataformaFiltro && plataformaFiltro !== 'todas') {
         query = query.eq('plataforma', plataformaFiltro);
+      }
+
+      if (portadorFiltro && portadorFiltro !== 'todos') {
+        if (portadorFiltro === 'sem_portador') {
+          query = query.is('portador_id', null);
+        } else {
+          query = query.eq('portador_id', portadorFiltro);
+        }
       }
 
       const { data, error, count } = await query;
@@ -188,10 +214,11 @@ export function ListaRastreadores() {
     setBusca('');
     setStatusFiltro('todos');
     setPlataformaFiltro('todas');
+    setPortadorFiltro('todos');
     setPagina(1);
   };
 
-  const temFiltros = busca || statusFiltro !== 'todos' || plataformaFiltro !== 'todas';
+  const temFiltros = busca || statusFiltro !== 'todos' || plataformaFiltro !== 'todas' || portadorFiltro !== 'todos';
 
   const getAcoesDisponiveis = (status: StatusRastreador) => {
     switch (status) {
@@ -263,6 +290,20 @@ export function ListaRastreadores() {
                 </SelectContent>
               </Select>
 
+              <Select value={portadorFiltro} onValueChange={(v) => { setPortadorFiltro(v); setPagina(1); }}>
+                <SelectTrigger className="w-[160px]">
+                  <User className="h-4 w-4 mr-2" />
+                  <SelectValue placeholder="Portador" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos Portadores</SelectItem>
+                  <SelectItem value="sem_portador">Sem Portador</SelectItem>
+                  {profissionais?.filter(p => p.ativo).map((p) => (
+                    <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
               {temFiltros && (
                 <Button variant="ghost" size="icon" onClick={limparFiltros}>
                   <X className="h-4 w-4" />
@@ -296,6 +337,7 @@ export function ListaRastreadores() {
                   <TableHead>IMEI</TableHead>
                   <TableHead>Plataforma</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Portador</TableHead>
                   <TableHead>Veículo</TableHead>
                   <TableHead>Entrada</TableHead>
                   <TableHead className="w-12"></TableHead>
@@ -317,6 +359,16 @@ export function ListaRastreadores() {
                           <StatusIcon className="h-3 w-3 mr-1" />
                           {config.label}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {item.portador ? (
+                          <span className="flex items-center gap-1.5 text-sm">
+                            <User className="h-3.5 w-3.5 text-muted-foreground" />
+                            <span className="truncate max-w-[120px]">{item.portador.nome}</span>
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">-</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         {item.veiculos ? (
@@ -344,6 +396,19 @@ export function ListaRastreadores() {
                               Ver Detalhes
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
+                            {item.status === 'estoque' && (
+                              <DropdownMenuItem 
+                                onClick={() => setDialogAtribuirPortador({
+                                  id: item.id,
+                                  codigo: item.codigo,
+                                  portador_id: item.portador_id,
+                                  portador_nome: item.portador?.nome || null,
+                                })}
+                              >
+                                <UserPlus className="h-4 w-4 mr-2" />
+                                {item.portador_id ? 'Alterar Portador' : 'Atribuir Portador'}
+                              </DropdownMenuItem>
+                            )}
                             {getAcoesDisponiveis(item.status).map((acao) => (
                               <DropdownMenuItem
                                 key={acao.status}
@@ -418,6 +483,13 @@ export function ListaRastreadores() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Atribuir Portador Dialog */}
+      <AtribuirPortadorDialog
+        open={!!dialogAtribuirPortador}
+        onOpenChange={() => setDialogAtribuirPortador(null)}
+        rastreador={dialogAtribuirPortador}
+      />
     </div>
   );
 }

@@ -33,7 +33,9 @@ import {
   XCircle,
   Wrench,
   RotateCcw,
-  RefreshCw
+  RefreshCw,
+  UserPlus,
+  UserMinus
 } from "lucide-react";
 
 // Configuração de tipos de movimentação
@@ -78,6 +80,18 @@ const tipoConfig: Record<string, {
     icon: RotateCcw,
     bgColor: "bg-indigo-100", 
     textColor: "text-indigo-800" 
+  },
+  atribuicao_portador: { 
+    label: "Atribuição", 
+    icon: UserPlus,
+    bgColor: "bg-violet-100", 
+    textColor: "text-violet-800" 
+  },
+  remocao_portador: { 
+    label: "Rem. Portador", 
+    icon: UserMinus,
+    bgColor: "bg-orange-100", 
+    textColor: "text-orange-800" 
   },
 };
 
@@ -214,6 +228,8 @@ export function HistoricoMovimentacoes() {
               <SelectItem value="baixa">Baixa</SelectItem>
               <SelectItem value="manutencao">Manutenção</SelectItem>
               <SelectItem value="retorno_manutencao">Retorno Man.</SelectItem>
+              <SelectItem value="atribuicao_portador">Atribuição</SelectItem>
+              <SelectItem value="remocao_portador">Rem. Portador</SelectItem>
             </SelectContent>
           </Select>
 
