@@ -1,3 +1,4 @@
+// Componente de agendamento de vistoria completa - v2.0 com opção de encaixe
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
