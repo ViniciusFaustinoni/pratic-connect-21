@@ -723,6 +723,7 @@ export function useExecutarVistoria() {
       observacoes: string;
       status: 'em_analise' | 'aprovada' | 'reprovada';
       imei_rastreador?: string;
+      rastreador_id?: string;
     }) => {
       const updateData: Record<string, unknown> = {
         km_atual: data.km_atual,
@@ -737,6 +738,11 @@ export function useExecutarVistoria() {
         updateData.imei_rastreador = data.imei_rastreador;
       }
 
+      // Adicionar rastreador_id se fornecido (vínculo automático)
+      if (data.rastreador_id) {
+        updateData.rastreador_id = data.rastreador_id;
+      }
+
       const { error } = await supabase
         .from('vistorias')
         .update(updateData)
@@ -748,6 +754,8 @@ export function useExecutarVistoria() {
       queryClient.invalidateQueries({ queryKey: ['vistorias'] });
       queryClient.invalidateQueries({ queryKey: ['vistoria'] });
       queryClient.invalidateQueries({ queryKey: ['vistoria-completa'] });
+      queryClient.invalidateQueries({ queryKey: ['rastreadores'] });
+      queryClient.invalidateQueries({ queryKey: ['rastreadores-metricas'] });
       toast.success('Vistoria finalizada com sucesso!');
     },
     onError: (error) => {
