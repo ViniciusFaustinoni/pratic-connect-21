@@ -1,4 +1,5 @@
 import { useParams } from 'react-router-dom';
+import { useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
@@ -13,9 +14,11 @@ import {
   Calendar,
   Wrench,
   PartyPopper,
-  KeyRound
+  KeyRound,
+  Navigation,
+  MapPin
 } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -128,6 +131,40 @@ function getStatusInfo(associado: AssociadoData) {
       description: 'Sua proposta foi recusada. Entre em contato para mais informações.',
       showDetails: false,
       showCriarConta: false,
+      showEmRota: false,
+      showEmAndamento: false,
+    };
+  }
+
+  // PRIORIDADE 1: Instalação em andamento
+  if (instalacao?.status === 'em_andamento') {
+    return {
+      status: 'em_andamento',
+      icon: Wrench,
+      color: 'success',
+      title: 'Instalação em Andamento',
+      description: 'O técnico está realizando a instalação do rastreador no seu veículo.',
+      showDetails: true,
+      showInstalacao: true,
+      showCriarConta: false,
+      showEmRota: false,
+      showEmAndamento: true,
+    };
+  }
+
+  // PRIORIDADE 2: Técnico a caminho (em_rota)
+  if (instalacao?.status === 'em_rota') {
+    return {
+      status: 'em_rota',
+      icon: Navigation,
+      color: 'primary',
+      title: 'Técnico a Caminho!',
+      description: 'O técnico já iniciou o deslocamento até você. Prepare-se para recebê-lo!',
+      showDetails: true,
+      showInstalacao: true,
+      showCriarConta: false,
+      showEmRota: true,
+      showEmAndamento: false,
     };
   }
 
@@ -141,6 +178,8 @@ function getStatusInfo(associado: AssociadoData) {
       description: 'Seu cadastro foi aprovado! Crie seu login para acessar o app PRATIC.',
       showDetails: true,
       showCriarConta: true,
+      showEmRota: false,
+      showEmAndamento: false,
     };
   }
 
@@ -154,6 +193,8 @@ function getStatusInfo(associado: AssociadoData) {
       description: 'Parabéns! Seu veículo está com cobertura total ativa.',
       showDetails: true,
       showCriarConta: false,
+      showEmRota: false,
+      showEmAndamento: false,
     };
   }
 
@@ -168,6 +209,8 @@ function getStatusInfo(associado: AssociadoData) {
       showDetails: true,
       showInstalacao: true,
       showCriarConta: false,
+      showEmRota: false,
+      showEmAndamento: false,
     };
   }
 
@@ -182,6 +225,8 @@ function getStatusInfo(associado: AssociadoData) {
       showDetails: true,
       showInstalacao: true,
       showCriarConta: false,
+      showEmRota: false,
+      showEmAndamento: false,
     };
   }
 
@@ -195,6 +240,8 @@ function getStatusInfo(associado: AssociadoData) {
       description: 'Seus documentos, contrato e imagens da vistoria estão sendo analisados pelo setor de cadastro.',
       showDetails: true,
       showCriarConta: false,
+      showEmRota: false,
+      showEmAndamento: false,
     };
   }
 
@@ -207,12 +254,41 @@ function getStatusInfo(associado: AssociadoData) {
     description: 'Aguardando processamento da sua proposta.',
     showDetails: true,
     showCriarConta: false,
+    showEmRota: false,
+    showEmAndamento: false,
   };
 }
 
 export default function AcompanhamentoProposta() {
   const { token } = useParams<{ token: string }>();
+  const queryClient = useQueryClient();
   const { data: associado, isLoading, error } = useAcompanhamentoProposta(token);
+
+  // Realtime subscription para atualização instantânea quando vistoriador iniciar rota
+  useEffect(() => {
+    if (!associado?.id) return;
+
+    const channel = supabase
+      .channel(`instalacao-cliente-${associado.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'instalacoes',
+          filter: `associado_id=eq.${associado.id}`,
+        },
+        () => {
+          // Invalidar query para refetch imediato
+          queryClient.invalidateQueries({ queryKey: ['acompanhamento-proposta', token] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [associado?.id, token, queryClient]);
 
   if (isLoading) {
     return (
@@ -376,6 +452,93 @@ export default function AcompanhamentoProposta() {
               />
             </motion.div>
           )}
+          {/* Card de Técnico a Caminho */}
+          {statusInfo.showEmRota && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.3 }}
+            >
+              <Card className="bg-primary/5 border-primary/30 overflow-hidden">
+                <CardContent className="py-6">
+                  <div className="flex items-center gap-4">
+                    {/* Ícone pulsante */}
+                    <div className="relative flex-shrink-0">
+                      <div className="absolute inset-0 bg-primary/30 rounded-full animate-ping" />
+                      <div className="relative w-14 h-14 rounded-full bg-primary/20 flex items-center justify-center">
+                        <Navigation className="h-7 w-7 text-primary animate-pulse" />
+                      </div>
+                    </div>
+                    
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-foreground flex items-center gap-2">
+                        <MapPin className="h-4 w-4 text-primary" />
+                        Técnico a Caminho
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        O profissional está se deslocando até o endereço agendado
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {/* Dicas para o cliente */}
+                  <div className="mt-4 p-4 bg-muted/50 rounded-lg space-y-2">
+                    <p className="text-xs font-medium text-foreground">Prepare-se para a chegada:</p>
+                    <ul className="text-sm text-muted-foreground space-y-2">
+                      <li className="flex items-center gap-2">
+                        <CheckCircle2 className="h-4 w-4 text-primary flex-shrink-0" />
+                        Tenha o veículo acessível e estacionado
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <CheckCircle2 className="h-4 w-4 text-primary flex-shrink-0" />
+                        Tenha os documentos do veículo em mãos
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <CheckCircle2 className="h-4 w-4 text-primary flex-shrink-0" />
+                        Aguarde no local combinado
+                      </li>
+                    </ul>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+
+          {/* Card de Instalação em Andamento */}
+          {statusInfo.showEmAndamento && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.3 }}
+            >
+              <Card className="bg-success/5 border-success/30">
+                <CardContent className="py-6">
+                  <div className="flex items-center gap-4">
+                    <div className="relative flex-shrink-0">
+                      <div className="absolute inset-0 bg-success/20 rounded-full animate-pulse" />
+                      <div className="relative w-14 h-14 rounded-full bg-success/20 flex items-center justify-center">
+                        <Wrench className="h-7 w-7 text-success" />
+                      </div>
+                    </div>
+                    
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-foreground">Instalação em Andamento</h3>
+                      <p className="text-sm text-muted-foreground">
+                        O técnico está instalando o rastreador no seu veículo. Aguarde a conclusão.
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="mt-4 p-3 bg-success/10 rounded-lg">
+                    <p className="text-sm text-success text-center font-medium">
+                      ⏱️ Tempo estimado: 30-60 minutos
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+
           {statusInfo.showDetails && veiculo && (
             <Card className="bg-card/80 backdrop-blur-xl border-border/50">
               <CardContent className="py-6 space-y-4">
