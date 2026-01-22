@@ -40,6 +40,15 @@ import { getRotaColor, SEM_ROTA_COLOR, createColoredMarkerSvg, svgToDataUrl } fr
 import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
 
+// Status que indicam que o serviço foi finalizado
+const STATUS_FINALIZADOS = ['concluida', 'cancelada', 'aprovada', 'reprovada', 'em_analise'];
+
+// Status que indicam tarefa pendente (ainda não iniciada ou em rota)
+const STATUS_PENDENTES = ['pendente', 'agendada', 'em_rota'];
+
+// Status que indicam tarefa em andamento
+const STATUS_EM_ANDAMENTO = ['em_andamento'];
+
 // Cache de ícones por cor
 const iconCache = new Map<string, L.Icon>();
 
@@ -54,6 +63,42 @@ function getColoredIcon(color: string): L.Icon {
     iconSize: [32, 40],
     iconAnchor: [16, 40],
     popupAnchor: [0, -40],
+  });
+  
+  iconCache.set(cacheKey, icon);
+  return icon;
+}
+
+// Ícone destacado para próxima tarefa (maior e com efeito glow)
+function getProximaTarefaIcon(color: string): L.Icon {
+  const cacheKey = `proxima-${color}`;
+  if (iconCache.has(cacheKey)) {
+    return iconCache.get(cacheKey)!;
+  }
+  
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 48" width="44" height="60">
+      <defs>
+        <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+          <feMerge>
+            <feMergeNode in="coloredBlur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+      </defs>
+      <path filter="url(#glow)" fill="${color}" stroke="#fff" stroke-width="2.5" 
+        d="M16 0C7.2 0 0 7.2 0 16c0 12 16 32 16 32s16-20 16-32C32 7.2 24.8 0 16 0z"/>
+      <circle fill="#fff" cx="16" cy="16" r="9"/>
+      <circle fill="${color}" cx="16" cy="16" r="5"/>
+    </svg>
+  `;
+  
+  const icon = new L.Icon({
+    iconUrl: svgToDataUrl(svg),
+    iconSize: [44, 60],
+    iconAnchor: [22, 60],
+    popupAnchor: [0, -60],
   });
   
   iconCache.set(cacheKey, icon);
@@ -143,74 +188,116 @@ export function MapaMobileContent() {
     return ids;
   }, [vistorias]);
 
-  // Status que indicam que o serviço foi finalizado (não é atrasado)
-  const statusFinalizados = ['concluida', 'cancelada', 'aprovada', 'reprovada', 'em_analise'];
+  // Verificar se uma vistoria é atrasada (compara com HOJE, não com o filtro)
+  const isAtrasada = (v: VistoriaMapa) => {
+    if (!v.data_agendada) return false;
+    if (STATUS_FINALIZADOS.includes(v.status)) return false;
+    
+    const dataAgendadaStr = v.data_agendada.slice(0, 10);
+    const dataVistoria = new Date(dataAgendadaStr + 'T00:00:00');
+    const hoje = getHojeBrasilia();
+    
+    return dataVistoria < hoje;
+  };
 
-  // Filtrar vistorias por data e busca
-  const vistoriasFiltradas = useMemo(() => {
-    if (!vistorias) return [];
-
-    // Data do filtro selecionado (normalizada para meia-noite)
+  // Verificar se o filtro é hoje ou futuro
+  const isHojeOuFuturo = useMemo(() => {
     const filtroNormalizado = new Date(filtroData);
     filtroNormalizado.setHours(0, 0, 0, 0);
+    const hoje = getHojeBrasilia();
+    return filtroNormalizado >= hoje;
+  }, [filtroData]);
 
-    // Data de HOJE no timezone de Brasília (normalizada para meia-noite)
+  // Filtrar vistorias e identificar próxima tarefa
+  const { vistoriasFiltradas, proximaTarefa } = useMemo(() => {
+    if (!vistorias) return { vistoriasFiltradas: [], proximaTarefa: null as VistoriaMapa | null };
+
+    const filtroNormalizado = new Date(filtroData);
+    filtroNormalizado.setHours(0, 0, 0, 0);
     const hoje = getHojeBrasilia();
 
-    return vistorias.filter((v) => {
-      // Sem data agendada = não mostrar
+    // Filtrar tarefas do dia selecionado
+    const tarefasDoFiltro = vistorias.filter((v) => {
       if (!v.data_agendada) return false;
-      
-      // Normalizar data da vistoria para meia-noite local
       const dataAgendadaStr = v.data_agendada.slice(0, 10);
       const dataVistoria = new Date(dataAgendadaStr + 'T00:00:00');
-      
-      // Serviço da data selecionada = MOSTRAR
-      if (isSameDay(dataVistoria, filtroNormalizado)) {
-        return true;
-      }
-      
-      // Serviço de data anterior a HOJE (não ao filtro!)
-      // Só é atrasado se a data agendada já passou em relação a HOJE
-      if (dataVistoria < hoje) {
-        // Se status é finalizado = NÃO MOSTRAR
-        if (statusFinalizados.includes(v.status)) {
-          return false;
-        }
-        // Se está atrasado, só mostra se o filtro é de HOJE ou futuro
-        if (filtroNormalizado >= hoje) {
-          return true;
-        }
-      }
-      
-      // Caso contrário = NÃO MOSTRAR
-      return false;
+      return isSameDay(dataVistoria, filtroNormalizado);
+    });
 
-      // Filtro por busca
+    // Se for dia anterior, mostrar apenas tarefas daquele dia (finalizadas ou não)
+    if (filtroNormalizado < hoje) {
+      // Aplicar filtro de busca
+      let resultado = tarefasDoFiltro;
       if (filtroBusca) {
         const termo = filtroBusca.toLowerCase();
+        resultado = resultado.filter(v => {
+          const placa = v.veiculo_placa?.toLowerCase() || "";
+          const associado = v.associado_nome?.toLowerCase() || "";
+          const bairro = v.endereco_bairro?.toLowerCase() || "";
+          return placa.includes(termo) || associado.includes(termo) || bairro.includes(termo);
+        });
+      }
+      return { vistoriasFiltradas: resultado, proximaTarefa: null as VistoriaMapa | null };
+    }
+
+    // Para HOJE ou futuro: incluir atrasadas de dias anteriores
+    const tarefasAtrasadas = vistorias.filter((v) => {
+      if (!v.data_agendada) return false;
+      const dataAgendadaStr = v.data_agendada.slice(0, 10);
+      const dataVistoria = new Date(dataAgendadaStr + 'T00:00:00');
+      return dataVistoria < hoje && !STATUS_FINALIZADOS.includes(v.status);
+    });
+
+    // Combinar e ordenar: atrasadas primeiro, depois por horário
+    const todasTarefas = [...tarefasAtrasadas, ...tarefasDoFiltro].sort((a, b) => {
+      const aAtrasada = isAtrasada(a);
+      const bAtrasada = isAtrasada(b);
+      if (aAtrasada && !bAtrasada) return -1;
+      if (!aAtrasada && bAtrasada) return 1;
+      return (a.horario_agendado || '').localeCompare(b.horario_agendado || '');
+    });
+
+    // Aplicar filtro de busca
+    let tarefasFiltradas = todasTarefas;
+    if (filtroBusca) {
+      const termo = filtroBusca.toLowerCase();
+      tarefasFiltradas = tarefasFiltradas.filter(v => {
         const placa = v.veiculo_placa?.toLowerCase() || "";
         const associado = v.associado_nome?.toLowerCase() || "";
         const bairro = v.endereco_bairro?.toLowerCase() || "";
+        return placa.includes(termo) || associado.includes(termo) || bairro.includes(termo);
+      });
+    }
 
-        if (!placa.includes(termo) && !associado.includes(termo) && !bairro.includes(termo)) {
-          return false;
-        }
-      }
+    // Identificar a próxima tarefa pendente (não finalizada)
+    const proxima = todasTarefas.find(v => 
+      STATUS_PENDENTES.includes(v.status) || STATUS_EM_ANDAMENTO.includes(v.status)
+    ) || null;
 
-      return true;
-    });
+    return { 
+      vistoriasFiltradas: tarefasFiltradas, 
+      proximaTarefa: proxima 
+    };
   }, [vistorias, filtroData, filtroBusca]);
 
-  // Vistorias com coordenadas
-  const vistoriasComCoordenadas = useMemo(() => {
-    return vistoriasFiltradas.filter((v) => v.latitude && v.longitude);
-  }, [vistoriasFiltradas]);
+  // Determinar quais vistorias mostrar no mapa
+  const vistoriasParaMapa = useMemo(() => {
+    if (isHojeOuFuturo) {
+      // HOJE ou FUTURO: Mostrar APENAS a próxima tarefa
+      return proximaTarefa && proximaTarefa.latitude && proximaTarefa.longitude 
+        ? [proximaTarefa] 
+        : [];
+    } else {
+      // DIA ANTERIOR: Mostrar todas com coordenadas
+      return vistoriasFiltradas.filter(v => v.latitude && v.longitude);
+    }
+  }, [isHojeOuFuturo, proximaTarefa, vistoriasFiltradas]);
 
-  // Agrupar por rota para polylines
+  // Agrupar por rota para polylines (apenas para dias anteriores)
   const rotasAgrupadas = useMemo(() => {
-    return agruparPorRota(vistoriasComCoordenadas);
-  }, [vistoriasComCoordenadas]);
+    if (isHojeOuFuturo) return []; // Sem polylines para hoje/futuro
+    return agruparPorRota(vistoriasParaMapa);
+  }, [isHojeOuFuturo, vistoriasParaMapa]);
 
   // Identificar se é vistoria ou instalação
   const getTipoServico = (v: VistoriaMapa) => {
@@ -253,19 +340,12 @@ export function MapaMobileContent() {
     window.open(`https://www.google.com/maps?q=${lat},${lng}`, "_blank");
   };
 
-  // Verificar se é atrasada (compara com HOJE, não com o filtro)
-  const isAtrasada = (v: VistoriaMapa) => {
-    if (!v.data_agendada) return false;
-    if (statusFinalizados.includes(v.status)) return false;
-    
-    const dataAgendadaStr = v.data_agendada.slice(0, 10);
-    const dataVistoria = new Date(dataAgendadaStr + 'T00:00:00');
-    
-    // Comparar com HOJE no timezone de Brasília
-    const hoje = getHojeBrasilia();
-    
-    return dataVistoria < hoje;
-  };
+  // Contadores para UI
+  const tarefasPendentes = vistoriasFiltradas.filter(v => 
+    STATUS_PENDENTES.includes(v.status) || STATUS_EM_ANDAMENTO.includes(v.status)
+  ).length;
+  
+  const tarefasAtrasadas = vistoriasFiltradas.filter(v => isAtrasada(v)).length;
 
   const centroInicial: [number, number] = [-22.9068, -43.1729]; // Rio de Janeiro
 
@@ -299,7 +379,7 @@ export function MapaMobileContent() {
         <FlyToPosition position={posicaoSelecionada} />
         <UserLocationButton />
 
-        {/* Polylines conectando pontos de cada rota */}
+        {/* Polylines conectando pontos de cada rota (apenas para dias anteriores) */}
         {rotasAgrupadas.map((rota) => {
           if (!rota.rota_id) return null;
           
@@ -324,22 +404,28 @@ export function MapaMobileContent() {
         })}
 
         {/* Marcadores */}
-        {vistoriasComCoordenadas.map((v) => {
+        {vistoriasParaMapa.map((v) => {
           const markerColor = v.rota_cor || SEM_ROTA_COLOR;
           const tipoServico = getTipoServico(v);
           const atrasada = isAtrasada(v);
+          const isProxima = isHojeOuFuturo && proximaTarefa?.id === v.id;
           
           return (
             <Marker
               key={`marker-${v.id}`}
               position={[v.latitude!, v.longitude!]}
-              icon={getColoredIcon(markerColor)}
+              icon={isProxima ? getProximaTarefaIcon(markerColor) : getColoredIcon(markerColor)}
             >
               <Popup>
                 <div className="min-w-[220px]">
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="font-bold text-sm">{v.veiculo_placa || "Sem placa"}</h3>
                     <div className="flex gap-1">
+                      {isProxima && (
+                        <span className="text-xs px-2 py-0.5 rounded bg-primary text-primary-foreground">
+                          Próxima
+                        </span>
+                      )}
                       {atrasada && (
                         <span className="text-xs px-2 py-0.5 rounded bg-orange-500 text-white">
                           Atrasada
@@ -456,11 +542,30 @@ export function MapaMobileContent() {
             size="lg"
           >
             <List className="h-4 w-4 mr-2" />
-            {vistoriasFiltradas.length} serviços
-            {vistoriasFiltradas.filter(v => isAtrasada(v)).length > 0 && (
-              <Badge variant="destructive" className="ml-2">
-                {vistoriasFiltradas.filter(v => isAtrasada(v)).length} atrasados
-              </Badge>
+            {isHojeOuFuturo ? (
+              <>
+                {proximaTarefa ? (
+                  <>
+                    1 tarefa pendente
+                    {tarefasPendentes > 1 && (
+                      <span className="ml-1 opacity-80">
+                        (+{tarefasPendentes - 1} na fila)
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  "Sem tarefas pendentes"
+                )}
+                {tarefasAtrasadas > 0 && (
+                  <Badge variant="destructive" className="ml-2">
+                    {tarefasAtrasadas} atrasadas
+                  </Badge>
+                )}
+              </>
+            ) : (
+              <>
+                {vistoriasFiltradas.length} serviços
+              </>
             )}
           </Button>
         </DrawerTrigger>
@@ -507,16 +612,26 @@ export function MapaMobileContent() {
                   const tipoServico = getTipoServico(v);
                   const color = v.rota_cor || SEM_ROTA_COLOR;
                   const atrasada = isAtrasada(v);
+                  const isProxima = isHojeOuFuturo && proximaTarefa?.id === v.id;
 
                   return (
                     <div
                       key={v.id}
                       className={cn(
                         "p-3 rounded-lg border bg-card transition-colors cursor-pointer hover:bg-accent",
-                        atrasada && "border-orange-500/50 bg-orange-500/5"
+                        atrasada && "border-orange-500/50 bg-orange-500/5",
+                        isProxima && "border-primary ring-2 ring-primary/30 bg-primary/5"
                       )}
                       onClick={() => selecionarVistoria(v)}
                     >
+                      {/* Badge de Próxima Tarefa */}
+                      {isProxima && (
+                        <Badge className="mb-2 bg-primary text-primary-foreground">
+                          <Play className="h-3 w-3 mr-1" />
+                          Próxima Tarefa
+                        </Badge>
+                      )}
+                      
                       <div className="flex items-start gap-3">
                         {/* Ícone com cor da rota */}
                         <div 
