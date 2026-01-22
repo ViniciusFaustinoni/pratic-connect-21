@@ -11449,6 +11449,7 @@ export type Database = {
           plataforma: string
           plataforma_device_id: string | null
           plataforma_user_id: string | null
+          plataforma_veiculo_id: string | null
           status: Database["public"]["Enums"]["status_rastreador"]
           ultima_comunicacao: string | null
           ultima_ignicao: boolean | null
@@ -11474,6 +11475,7 @@ export type Database = {
           plataforma?: string
           plataforma_device_id?: string | null
           plataforma_user_id?: string | null
+          plataforma_veiculo_id?: string | null
           status?: Database["public"]["Enums"]["status_rastreador"]
           ultima_comunicacao?: string | null
           ultima_ignicao?: boolean | null
@@ -11499,6 +11501,7 @@ export type Database = {
           plataforma?: string
           plataforma_device_id?: string | null
           plataforma_user_id?: string | null
+          plataforma_veiculo_id?: string | null
           status?: Database["public"]["Enums"]["status_rastreador"]
           ultima_comunicacao?: string | null
           ultima_ignicao?: boolean | null
@@ -13173,6 +13176,7 @@ export type Database = {
           recusado_em: string | null
           recusado_por: string | null
           renavam: string | null
+          softruck_vehicle_id: string | null
           status: Database["public"]["Enums"]["status_veiculo"] | null
           updated_at: string
           uso_aplicativo: boolean | null
@@ -13199,6 +13203,7 @@ export type Database = {
           recusado_em?: string | null
           recusado_por?: string | null
           renavam?: string | null
+          softruck_vehicle_id?: string | null
           status?: Database["public"]["Enums"]["status_veiculo"] | null
           updated_at?: string
           uso_aplicativo?: boolean | null
@@ -13225,6 +13230,7 @@ export type Database = {
           recusado_em?: string | null
           recusado_por?: string | null
           renavam?: string | null
+          softruck_vehicle_id?: string | null
           status?: Database["public"]["Enums"]["status_veiculo"] | null
           updated_at?: string
           uso_aplicativo?: boolean | null
