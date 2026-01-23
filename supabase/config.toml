@@ -200,3 +200,6 @@ verify_jwt = false
 
 [functions.processar-encaixes-automaticos]
 verify_jwt = false
+
+[functions.cron-atribuir-tarefas]
+verify_jwt = false
