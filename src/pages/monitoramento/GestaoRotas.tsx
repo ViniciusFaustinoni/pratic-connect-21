@@ -162,10 +162,7 @@ export default function GestaoRotas() {
             </PopoverContent>
           </Popover>
           
-          <Button onClick={() => setFormRotaOpen(true)} className="gap-2">
-            <Plus className="h-4 w-4" />
-            Nova Rota
-          </Button>
+          {/* Botão de nova rota removido - rotas são criadas automaticamente */}
         </div>
       </div>
 
@@ -400,12 +397,8 @@ export default function GestaoRotas() {
             <Route className="h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="text-lg font-semibold">Nenhuma rota para esta data</h3>
             <p className="text-muted-foreground mt-1">
-              Crie uma nova rota ou selecione outra data
+              As rotas são criadas automaticamente quando os profissionais iniciam o serviço
             </p>
-            <Button className="mt-4 gap-2" onClick={() => setFormRotaOpen(true)}>
-              <Plus className="h-4 w-4" />
-              Nova Rota
-            </Button>
           </CardContent>
         </Card>
       )}
