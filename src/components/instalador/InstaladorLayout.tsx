@@ -1,10 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Outlet, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Home, ClipboardList, Map, User, LogOut, Wrench } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -14,6 +13,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { InstaladorGuard } from './InstaladorGuard';
+import { TelaLocalizacaoBloqueada } from '@/components/vistoriador/TelaLocalizacaoBloqueada';
+import { useIniciarServico } from '@/hooks/useIniciarServico';
+import { useTarefaAtual } from '@/hooks/useTarefaAtual';
+import { toast } from 'sonner';
 
 const NAV_ITEMS = [
   { icon: Home, label: 'Início', path: '/instalador' },
@@ -27,6 +30,45 @@ export function InstaladorLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [isRetrying, setIsRetrying] = useState(false);
+
+  // Hooks para verificar localização e tarefa ativa
+  const { geoState } = useIniciarServico();
+  const { data: tarefaAtual } = useTarefaAtual();
+
+  // Condição: bloquear se localização negada/indisponível E tem tarefa ativa
+  const deveBloqueiarPorLocalizacao = 
+    (geoState.status === 'denied' || geoState.status === 'unavailable') &&
+    tarefaAtual !== null;
+
+  // Função para tentar novamente obter localização
+  const tentarNovamente = useCallback(async () => {
+    if (!navigator.geolocation) {
+      toast.error('Geolocalização não disponível neste dispositivo');
+      return;
+    }
+
+    setIsRetrying(true);
+
+    try {
+      await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0
+        });
+      });
+      toast.success('Localização ativada!');
+    } catch (error: any) {
+      if (error.code === 1) {
+        toast.error('Permissão de localização negada. Ative nas configurações do dispositivo.');
+      } else {
+        toast.error('Não foi possível obter sua localização. Verifique se o GPS está ativo.');
+      }
+    } finally {
+      setIsRetrying(false);
+    }
+  }, []);
 
   // Detectar status online/offline
   useEffect(() => {
@@ -70,7 +112,15 @@ export function InstaladorLayout() {
 
   return (
     <InstaladorGuard>
-      <div className="min-h-screen bg-muted/30">
+      {/* Tela de Bloqueio por Localização */}
+      {deveBloqueiarPorLocalizacao && (
+        <TelaLocalizacaoBloqueada 
+          onRetry={tentarNovamente} 
+          isRetrying={isRetrying} 
+        />
+      )}
+
+      <div className={cn("min-h-screen bg-muted/30", deveBloqueiarPorLocalizacao && "hidden")}>
         {/* Container mobile-first */}
         <div className="max-w-md mx-auto border-x border-border min-h-screen bg-background flex flex-col relative">
           {/* Header */}
