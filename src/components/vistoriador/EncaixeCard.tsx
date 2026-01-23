@@ -21,6 +21,10 @@ const PERIODO_LABELS: Record<string, string> = {
 export function EncaixeCard({ encaixe }: EncaixeCardProps) {
   const [assumindo, setAssumindo] = useState(false);
   const puxarEncaixe = usePuxarEncaixe();
+  
+  // Verificar se a tarefa é para hoje
+  const hoje = new Date().toISOString().split('T')[0];
+  const isHoje = encaixe.data_agendada === hoje;
 
   const handleAssumir = async () => {
     setAssumindo(true);
@@ -162,12 +166,12 @@ export function EncaixeCard({ encaixe }: EncaixeCardProps) {
             {assumindo ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {encaixe.isAdiantamento ? 'Adiantando...' : 'Assumindo...'}
+                {encaixe.isAdiantamento ? (isHoje ? 'Iniciando...' : 'Adiantando...') : 'Assumindo...'}
               </>
             ) : encaixe.isAdiantamento ? (
               <>
                 <FastForward className="mr-2 h-4 w-4" />
-                Adiantar para Hoje
+                {isHoje ? 'Executar Agora' : 'Adiantar para Hoje'}
               </>
             ) : (
               'Assumir'

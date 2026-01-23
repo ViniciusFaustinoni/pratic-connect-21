@@ -1,7 +1,7 @@
 import { useParams } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertTriangle, Car, CheckCircle2, CalendarCheck, Calendar, Clock, MapPin, PartyPopper, Shield, Loader2 } from 'lucide-react';
+import { AlertTriangle, Car, CheckCircle2, CalendarCheck, Calendar, Clock, MapPin, PartyPopper, Shield, Loader2, Puzzle } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useCotacaoContratacao } from '@/hooks/useCotacaoContratacao';
@@ -630,6 +630,23 @@ export default function CotacaoContratacao() {
                                   </div>
                                 </div>
                               )}
+                            </div>
+                          )}
+
+                          {/* Encaixe de horários ativado */}
+                          {cotacao?.vistoria_permite_encaixe && (
+                            <div className="flex items-start gap-3 bg-primary/10 border border-primary/30 rounded-lg p-4 max-w-md mx-auto">
+                              <div className="p-2 rounded-full bg-primary/20 flex-shrink-0">
+                                <Puzzle className="h-5 w-5 text-primary" />
+                              </div>
+                              <div className="text-left">
+                                <span className="font-semibold text-primary">Encaixe de Horários Ativado</span>
+                                <p className="text-sm text-muted-foreground mt-1">
+                                  Se um instalador estiver próximo antes do horário agendado, 
+                                  ele poderá realizar a instalação antecipadamente. 
+                                  Você será notificado previamente.
+                                </p>
+                              </div>
                             </div>
                           )}
 
