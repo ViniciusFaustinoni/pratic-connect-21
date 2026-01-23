@@ -39,6 +39,7 @@ import { TIPO_VISTORIA_LABELS } from "@/types/servicos-rota";
 import { getRotaColor, SEM_ROTA_COLOR, createColoredMarkerSvg, svgToDataUrl } from "@/lib/rota-colors";
 import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
+import { useIniciarServico } from "@/hooks/useIniciarServico";
 
 // Status que indicam que o serviço foi finalizado
 const STATUS_FINALIZADOS = ['concluida', 'cancelada', 'aprovada', 'reprovada', 'em_analise'];
@@ -116,6 +117,30 @@ function FlyToPosition({ position, zoom = 15 }: { position: [number, number] | n
   return null;
 }
 
+// Componente para ajustar bounds mostrando posição atual e próxima tarefa
+function FitToBounds({ 
+  posicaoAtual, 
+  posicaoTarefa 
+}: { 
+  posicaoAtual: [number, number] | null; 
+  posicaoTarefa: [number, number] | null 
+}) {
+  const map = useMap();
+  
+  useEffect(() => {
+    if (posicaoAtual && posicaoTarefa) {
+      const bounds = L.latLngBounds([posicaoAtual, posicaoTarefa]);
+      map.fitBounds(bounds, { padding: [60, 60], maxZoom: 16 });
+    } else if (posicaoAtual) {
+      map.flyTo(posicaoAtual, 15, { duration: 1 });
+    } else if (posicaoTarefa) {
+      map.flyTo(posicaoTarefa, 15, { duration: 1 });
+    }
+  }, [posicaoAtual, posicaoTarefa, map]);
+  
+  return null;
+}
+
 // Componente para garantir que o mapa recalcule suas dimensões após montar
 function MapResizer() {
   const map = useMap();
@@ -137,6 +162,42 @@ function MapResizer() {
   }, [map]);
   
   return null;
+}
+
+// Ícone de localização atual do profissional (pulsante azul)
+function getMinhaLocalizacaoIcon(): L.DivIcon {
+  const html = `
+    <div class="minha-localizacao-marker-container">
+      <div class="pulse-ring"></div>
+      <div class="marker-dot"></div>
+    </div>
+  `;
+  
+  return L.divIcon({
+    html,
+    className: 'minha-localizacao-marker',
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+  });
+}
+
+// Função para calcular distância Haversine entre dois pontos
+function calcularDistanciaKm(
+  lat1: number, 
+  lon1: number, 
+  lat2: number, 
+  lon2: number
+): number {
+  const R = 6371; // Raio da Terra em km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * 
+    Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
 }
 
 // Componente para localização do usuário
@@ -176,10 +237,19 @@ export function MapaMobileContent() {
   const navigate = useNavigate();
   // Filtrar apenas serviços do usuário logado (vistoriador/instalador)
   const { data: vistorias, isLoading } = useVistoriasMapa({ filtrarPorUsuario: true });
+  const { geoState, emServico } = useIniciarServico();
   const [filtroData, setFiltroData] = useState<Date>(() => getHojeBrasilia());
   const [filtroBusca, setFiltroBusca] = useState("");
   const [posicaoSelecionada, setPosicaoSelecionada] = useState<[number, number] | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+
+  // Posição atual do profissional (se disponível)
+  const posicaoAtual = useMemo(() => {
+    if (geoState.status === 'granted' && geoState.latitude && geoState.longitude) {
+      return [geoState.latitude, geoState.longitude] as [number, number];
+    }
+    return null;
+  }, [geoState]);
 
   // Obter lista de IDs de rotas únicas
   const rotasIds = useMemo(() => {
@@ -340,6 +410,27 @@ export function MapaMobileContent() {
     window.open(`https://www.google.com/maps?q=${lat},${lng}`, "_blank");
   };
 
+  // Calcular distância para próxima tarefa
+  const distanciaParaProximaTarefa = useMemo(() => {
+    if (!posicaoAtual || !proximaTarefa?.latitude || !proximaTarefa?.longitude) {
+      return null;
+    }
+    return calcularDistanciaKm(
+      posicaoAtual[0],
+      posicaoAtual[1],
+      proximaTarefa.latitude,
+      proximaTarefa.longitude
+    );
+  }, [posicaoAtual, proximaTarefa]);
+
+  // Posição da tarefa para FitBounds
+  const posicaoTarefa = useMemo((): [number, number] | null => {
+    if (proximaTarefa?.latitude && proximaTarefa?.longitude) {
+      return [proximaTarefa.latitude, proximaTarefa.longitude];
+    }
+    return null;
+  }, [proximaTarefa]);
+
   // Contadores para UI
   const tarefasPendentes = vistoriasFiltradas.filter(v => 
     STATUS_PENDENTES.includes(v.status) || STATUS_EM_ANDAMENTO.includes(v.status)
@@ -370,14 +461,58 @@ export function MapaMobileContent() {
         style={{ height: "100%", width: "100%" }}
         zoomControl={false}
       >
+        {/* Camada satélite (Esri World Imagery) - Estilo Google Earth */}
         <TileLayer
-          attribution='&copy; <a href="https://carto.com/attributions">CARTO</a>'
-          url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+          attribution='Tiles &copy; Esri'
+          url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+        />
+        {/* Camada de labels para nomes de ruas */}
+        <TileLayer
+          url="https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png"
+          attribution=""
         />
 
         <MapResizer />
         <FlyToPosition position={posicaoSelecionada} />
         <UserLocationButton />
+        
+        {/* Auto-ajuste de bounds para mostrar posição atual e próxima tarefa */}
+        {isHojeOuFuturo && !posicaoSelecionada && (
+          <FitToBounds posicaoAtual={posicaoAtual} posicaoTarefa={posicaoTarefa} />
+        )}
+
+        {/* Linha de rota entre minha posição e próxima tarefa */}
+        {isHojeOuFuturo && posicaoAtual && posicaoTarefa && (
+          <Polyline
+            positions={[posicaoAtual, posicaoTarefa]}
+            pathOptions={{
+              color: '#3B82F6',
+              weight: 4,
+              opacity: 0.8,
+              dashArray: '12, 8',
+            }}
+          />
+        )}
+
+        {/* Marcador da minha posição atual */}
+        {posicaoAtual && (
+          <Marker
+            position={posicaoAtual}
+            icon={getMinhaLocalizacaoIcon()}
+            zIndexOffset={1000}
+          >
+            <Popup>
+              <div className="text-center">
+                <p className="font-semibold text-sm">Minha Posição</p>
+                {geoState.accuracy && (
+                  <p className="text-xs text-muted-foreground">
+                    Precisão: {geoState.accuracy.toFixed(0)}m
+                  </p>
+                )}
+              </div>
+            </Popup>
+          </Marker>
+        )}
 
         {/* Polylines conectando pontos de cada rota (apenas para dias anteriores) */}
         {rotasAgrupadas.map((rota) => {
@@ -546,10 +681,18 @@ export function MapaMobileContent() {
               <>
                 {proximaTarefa ? (
                   <>
-                    1 tarefa pendente
+                    Próxima tarefa
+                    {distanciaParaProximaTarefa !== null && (
+                      <Badge variant="secondary" className="ml-2">
+                        {distanciaParaProximaTarefa < 1 
+                          ? `${(distanciaParaProximaTarefa * 1000).toFixed(0)}m`
+                          : `${distanciaParaProximaTarefa.toFixed(1)}km`
+                        }
+                      </Badge>
+                    )}
                     {tarefasPendentes > 1 && (
-                      <span className="ml-1 opacity-80">
-                        (+{tarefasPendentes - 1} na fila)
+                      <span className="ml-1 opacity-80 text-xs">
+                        (+{tarefasPendentes - 1})
                       </span>
                     )}
                   </>
