@@ -214,7 +214,7 @@ export function useIniciarServico() {
           reject,
           {
             enableHighAccuracy: true,
-            timeout: 30000,
+            timeout: 45000, // Aumentado de 30s para 45s para conexões mais lentas
             maximumAge: 0
           }
         );

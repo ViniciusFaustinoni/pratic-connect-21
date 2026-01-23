@@ -173,21 +173,22 @@ serve(async (req) => {
     }
 
     // Buscar vistorias disponíveis (apenas local_vistoria = 'cliente' ou NULL)
+    // NOTA: Usando nomes corretos das colunas da tabela vistorias
     const { data: vistorias, error: vistError } = await supabase
       .from('vistorias')
       .select(`
         id,
         data_agendada,
-        hora_agendada,
+        horario_agendado,
         endereco_latitude,
         endereco_longitude,
         permite_encaixe,
         status,
-        logradouro,
-        numero,
-        bairro,
-        cidade,
-        uf,
+        endereco_logradouro,
+        endereco_numero,
+        endereco_bairro,
+        endereco_cidade,
+        endereco_estado,
         associado_id,
         veiculo_id,
         local_vistoria,
@@ -241,11 +242,12 @@ serve(async (req) => {
       for (const vist of vistorias) {
         const associado = vist.associado as any;
         const veiculo = vist.veiculo as any;
+        // Mapeando nomes corretos das colunas da tabela vistorias
         tarefasDisponiveis.push({
           id: vist.id,
           tipo: 'vistoria',
           data_agendada: vist.data_agendada,
-          hora_agendada: vist.hora_agendada,
+          hora_agendada: vist.horario_agendado,         // CORREÇÃO
           endereco_latitude: vist.endereco_latitude,
           endereco_longitude: vist.endereco_longitude,
           permite_encaixe: vist.permite_encaixe || false,
@@ -257,11 +259,11 @@ serve(async (req) => {
           veiculo_placa: veiculo?.placa || '',
           veiculo_marca: veiculo?.marca || '',
           veiculo_modelo: veiculo?.modelo || '',
-          logradouro: vist.logradouro,
-          numero: vist.numero,
-          bairro: vist.bairro,
-          cidade: vist.cidade,
-          uf: vist.uf,
+          logradouro: vist.endereco_logradouro,         // CORREÇÃO
+          numero: vist.endereco_numero,                  // CORREÇÃO
+          bairro: vist.endereco_bairro,                  // CORREÇÃO
+          cidade: vist.endereco_cidade,                  // CORREÇÃO
+          uf: vist.endereco_estado,                      // CORREÇÃO
         });
       }
     }

@@ -4,12 +4,13 @@ import { publicSupabase } from '@/integrations/supabase/publicClient';
 interface AgendamentoExistenteResult {
   hasVistoriaAgendada: boolean;
   hasInstalacaoAgendada: boolean;
+  hasAgendamentoBase: boolean;
   isLoading: boolean;
 }
 
 /**
- * Hook para verificar se já existe vistoria ou instalação agendada para uma cotação.
- * Consulta diretamente as tabelas operacionais (vistorias, instalacoes) como fonte da verdade,
+ * Hook para verificar se já existe vistoria, instalação ou agendamento na base para uma cotação.
+ * Consulta diretamente as tabelas operacionais como fonte da verdade,
  * evitando que o fallback de agendamento seja exibido quando já existe registro.
  */
 export function useAgendamentoExistente(cotacaoId: string | undefined): AgendamentoExistenteResult {
@@ -23,7 +24,7 @@ export function useAgendamentoExistente(cotacaoId: string | undefined): Agendame
         .from('vistorias')
         .select('id, status, modalidade')
         .eq('cotacao_id', cotacaoId)
-        .in('status', ['agendada', 'pendente', 'aprovada', 'em_analise'])
+        .in('status', ['agendada', 'pendente', 'aprovada', 'em_analise', 'em_rota', 'em_andamento'])
         .limit(1)
         .maybeSingle();
       
@@ -35,7 +36,7 @@ export function useAgendamentoExistente(cotacaoId: string | undefined): Agendame
       return data;
     },
     enabled: !!cotacaoId,
-    staleTime: 30000, // 30 segundos
+    staleTime: 30000,
   });
 
   // Verificar se existe instalação agendada
@@ -60,12 +61,38 @@ export function useAgendamentoExistente(cotacaoId: string | undefined): Agendame
       return data;
     },
     enabled: !!cotacaoId,
-    staleTime: 30000, // 30 segundos
+    staleTime: 30000,
+  });
+
+  // Verificar se existe agendamento na base
+  const { data: agendamentoBaseData, isLoading: isLoadingAgendamentoBase } = useQuery({
+    queryKey: ['agendamento-base-existente', cotacaoId],
+    queryFn: async () => {
+      if (!cotacaoId) return null;
+      
+      const { data, error } = await publicSupabase
+        .from('agendamentos_base')
+        .select('id, status')
+        .eq('cotacao_id', cotacaoId)
+        .in('status', ['agendado', 'confirmado', 'realizado'])
+        .limit(1)
+        .maybeSingle();
+      
+      if (error) {
+        console.error('[useAgendamentoExistente] Erro ao buscar agendamento base:', error);
+        return null;
+      }
+      
+      return data;
+    },
+    enabled: !!cotacaoId,
+    staleTime: 30000,
   });
 
   return {
     hasVistoriaAgendada: !!vistoriaData,
     hasInstalacaoAgendada: !!instalacaoData,
-    isLoading: isLoadingVistoria || isLoadingInstalacao,
+    hasAgendamentoBase: !!agendamentoBaseData,
+    isLoading: isLoadingVistoria || isLoadingInstalacao || isLoadingAgendamentoBase,
   };
 }
