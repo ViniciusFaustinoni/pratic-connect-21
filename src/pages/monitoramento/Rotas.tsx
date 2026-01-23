@@ -23,8 +23,10 @@ import {
   type Rota 
 } from '@/hooks/useRotas';
 import { useRotasRealtime } from '@/hooks/useRotasRealtime';
+import { usePermissions } from '@/hooks/usePermissions';
 
 export default function Rotas() {
+  const { canEditRotas } = usePermissions();
   // Ativar atualizações em tempo real
   useRotasRealtime();
   const [drawerRotaId, setDrawerRotaId] = useState<string | null>(null);
@@ -144,15 +146,19 @@ export default function Rotas() {
         <TabsList>
           <TabsTrigger value="calendario">Calendário</TabsTrigger>
           <TabsTrigger value="lista">Lista</TabsTrigger>
-          <TabsTrigger value="pendentes">
-            Instalações Pendentes
-            {instalacoesPendentes?.length ? (
-              <span className="ml-2 rounded-full bg-primary px-2 py-0.5 text-xs text-primary-foreground">
-                {instalacoesPendentes.length}
-              </span>
-            ) : null}
-          </TabsTrigger>
-          <TabsTrigger value="configuracoes">Configurações</TabsTrigger>
+          {canEditRotas && (
+            <TabsTrigger value="pendentes">
+              Instalações Pendentes
+              {instalacoesPendentes?.length ? (
+                <span className="ml-2 rounded-full bg-primary px-2 py-0.5 text-xs text-primary-foreground">
+                  {instalacoesPendentes.length}
+                </span>
+              ) : null}
+            </TabsTrigger>
+          )}
+          {canEditRotas && (
+            <TabsTrigger value="configuracoes">Configurações</TabsTrigger>
+          )}
         </TabsList>
 
         {/* Aba Calendário */}
@@ -195,46 +201,50 @@ export default function Rotas() {
           )}
         </TabsContent>
 
-        {/* Aba Instalações Pendentes */}
-        <TabsContent value="pendentes">
-          <Card>
-            <CardHeader>
-              <CardTitle>Instalações sem Rota</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {loadingPendentes ? (
-                <div className="flex h-32 items-center justify-center">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                </div>
-              ) : instalacoesPendentes?.length ? (
-                <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                  {instalacoesPendentes.map((instalacao) => (
-                    <div key={instalacao.id} className="relative">
-                      <InstalacaoMiniCard 
-                        instalacao={instalacao as any}
-                      />
-                      <div className="absolute right-2 top-2 text-xs text-muted-foreground">
-                        {format(new Date(instalacao.data_agendada), "dd/MM", { locale: ptBR })}
+        {/* Aba Instalações Pendentes - apenas para quem pode editar */}
+        {canEditRotas && (
+          <TabsContent value="pendentes">
+            <Card>
+              <CardHeader>
+                <CardTitle>Instalações sem Rota</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {loadingPendentes ? (
+                  <div className="flex h-32 items-center justify-center">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : instalacoesPendentes?.length ? (
+                  <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                    {instalacoesPendentes.map((instalacao) => (
+                      <div key={instalacao.id} className="relative">
+                        <InstalacaoMiniCard 
+                          instalacao={instalacao as any}
+                        />
+                        <div className="absolute right-2 top-2 text-xs text-muted-foreground">
+                          {format(new Date(instalacao.data_agendada), "dd/MM", { locale: ptBR })}
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="flex h-32 flex-col items-center justify-center text-center">
-                  <Route className="h-8 w-8 text-muted-foreground/50" />
-                  <p className="mt-2 text-muted-foreground">
-                    Todas as instalações estão atribuídas a rotas
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex h-32 flex-col items-center justify-center text-center">
+                    <Route className="h-8 w-8 text-muted-foreground/50" />
+                    <p className="mt-2 text-muted-foreground">
+                      Todas as instalações estão atribuídas a rotas
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
 
-        {/* Aba Configurações */}
-        <TabsContent value="configuracoes">
-          <ConfiguracoesEncaixe />
-        </TabsContent>
+        {/* Aba Configurações - apenas para quem pode editar */}
+        {canEditRotas && (
+          <TabsContent value="configuracoes">
+            <ConfiguracoesEncaixe />
+          </TabsContent>
+        )}
       </Tabs>
 
       {/* Dialogs */}
