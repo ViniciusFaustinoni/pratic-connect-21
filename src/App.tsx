@@ -244,14 +244,8 @@ import InstaladorLogin from "./pages/instalador/InstaladorLogin";
 import InstaladorHome from "./pages/instalador/InstaladorHome";
 import InstaladorChecklist from "./pages/instalador/InstaladorChecklist";
 
-// Vistoriador App Pages
-import VistoriadorHome from "./pages/vistoriador/Home";
-import VistoriadorTarefas from "./pages/vistoriador/Tarefas";
-import VistoriadorEncaixes from "./pages/vistoriador/Encaixes";
-import ExecutarVistoria from "./pages/vistoriador/ExecutarVistoria";
-import ExecutarVistoriaCompleta from "./pages/vistoriador/ExecutarVistoriaCompleta";
-import VistoriadorMapa from "./pages/vistoriador/VistoriadorMapa";
-import { VistoriadorLayout } from "./layouts/VistoriadorLayout";
+// Vistoria Completa (unified in instalador)
+import ExecutarVistoriaCompleta from "./pages/instalador/ExecutarVistoriaCompleta";
 
 // Public Pages
 import CotacaoPublicaPage from "./pages/public/CotacaoPublica";
@@ -557,16 +551,8 @@ const App = () => (
               <Route path="/instalador/perfil" element={<InstaladorPerfil />} />
             </Route>
             
-            {/* Vistoriador App Routes */}
-            <Route element={<VistoriadorLayout />}>
-              <Route path="/vistoriador/home" element={<VistoriadorHome />} />
-              <Route path="/vistoriador/tarefas" element={<VistoriadorTarefas />} />
-              <Route path="/vistoriador/encaixes" element={<VistoriadorEncaixes />} />
-              <Route path="/vistoriador/vistoria/:id" element={<ExecutarVistoria />} />
-              <Route path="/vistoriador/vistoria-completa/:id" element={<ExecutarVistoriaCompleta />} />
-              <Route path="/vistoriador/mapa" element={<VistoriadorMapa />} />
-              <Route path="/vistoriador/perfil" element={<div>Perfil</div>} />
-            </Route>
+            {/* Vistoriador redirects to Instalador (unified app) */}
+            <Route path="/vistoriador/*" element={<Navigate to="/instalador" replace />} />
             
             {/* Acesso Negado */}
             <Route path="/acesso-negado" element={<AcessoNegado />} />
