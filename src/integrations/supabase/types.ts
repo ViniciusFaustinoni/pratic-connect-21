@@ -15125,6 +15125,7 @@ export type Database = {
           id: string
           imei_rastreador: string
           iniciada_em: string
+          instalacao_origem_id: string
           latitude: number
           local_vistoria: string
           logradouro: string
@@ -15142,6 +15143,7 @@ export type Database = {
           veiculo_marca: string
           veiculo_modelo: string
           veiculo_placa: string
+          vistoria_origem_id: string
         }[]
       }
       buscar_tarefa_atual_vistoriador: {
