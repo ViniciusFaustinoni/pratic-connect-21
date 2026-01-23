@@ -764,3 +764,147 @@ export function useExecutarVistoria() {
     },
   });
 }
+
+/**
+ * Hook para buscar ou criar vistoria a partir de um serviço unificado
+ * Usado pelo InstaladorChecklist que agora recebe servico_id ao invés de instalacao_id
+ */
+export function useVistoriaCompletaPorServico(servicoId: string | null) {
+  return useQuery({
+    queryKey: ['vistoria-completa-servico', servicoId],
+    queryFn: async () => {
+      if (!servicoId) return null;
+
+      // 1. Buscar dados do serviço para obter relacionamentos
+      const { data: servico, error: servicoError } = await supabase
+        .from('servicos')
+        .select('associado_id, veiculo_id, profissional_id, contrato_id, cotacao_id, rota_id, vistoria_origem_id, instalacao_origem_id')
+        .eq('id', servicoId)
+        .single();
+
+      if (servicoError) throw servicoError;
+
+      // 2. Se o serviço já tem vistoria_origem_id, buscar essa vistoria
+      if (servico?.vistoria_origem_id) {
+        const { data: vistoriaExistente } = await supabase
+          .from('vistorias')
+          .select(`
+            *,
+            veiculo:veiculos(
+              id, placa, chassi, marca, modelo, 
+              ano_fabricacao, ano_modelo, cor,
+              associado:associados(id, nome, cpf, telefone)
+            ),
+            associado:associados!vistorias_associado_id_fkey(id, nome, cpf, telefone),
+            vistoriador:profiles!vistorias_vistoriador_id_fkey(id, nome),
+            fotos:vistoria_fotos(*)
+          `)
+          .eq('id', servico.vistoria_origem_id)
+          .maybeSingle();
+
+        if (vistoriaExistente) {
+          return vistoriaExistente;
+        }
+      }
+
+      // 3. Se tem instalacao_origem_id, buscar vistoria vinculada a essa instalação
+      if (servico?.instalacao_origem_id) {
+        const { data: vistoriaInstalacao } = await supabase
+          .from('vistorias')
+          .select(`
+            *,
+            veiculo:veiculos(
+              id, placa, chassi, marca, modelo, 
+              ano_fabricacao, ano_modelo, cor,
+              associado:associados(id, nome, cpf, telefone)
+            ),
+            associado:associados!vistorias_associado_id_fkey(id, nome, cpf, telefone),
+            vistoriador:profiles!vistorias_vistoriador_id_fkey(id, nome),
+            fotos:vistoria_fotos(*)
+          `)
+          .eq('instalacao_id', servico.instalacao_origem_id)
+          .maybeSingle();
+
+        if (vistoriaInstalacao) {
+          // Atualizar serviço com vistoria_origem_id
+          await supabase
+            .from('servicos')
+            .update({ vistoria_origem_id: vistoriaInstalacao.id })
+            .eq('id', servicoId);
+          return vistoriaInstalacao;
+        }
+      }
+
+      // 4. Se não encontrou, buscar por cotacao_id
+      if (servico?.cotacao_id) {
+        const { data: vistoriaCotacao } = await supabase
+          .from('vistorias')
+          .select(`
+            *,
+            veiculo:veiculos(
+              id, placa, chassi, marca, modelo, 
+              ano_fabricacao, ano_modelo, cor,
+              associado:associados(id, nome, cpf, telefone)
+            ),
+            associado:associados!vistorias_associado_id_fkey(id, nome, cpf, telefone),
+            vistoriador:profiles!vistorias_vistoriador_id_fkey(id, nome),
+            fotos:vistoria_fotos(*)
+          `)
+          .eq('cotacao_id', servico.cotacao_id)
+          .maybeSingle();
+
+        if (vistoriaCotacao) {
+          // Atualizar serviço com vistoria_origem_id
+          await supabase
+            .from('servicos')
+            .update({ vistoria_origem_id: vistoriaCotacao.id })
+            .eq('id', servicoId);
+          return vistoriaCotacao;
+        }
+      }
+
+      // 5. Se ainda não existir, criar nova vistoria vinculada ao serviço
+      if (servico) {
+        const { data: novaVistoria, error: insertError } = await supabase
+          .from('vistorias')
+          .insert({
+            associado_id: servico.associado_id,
+            veiculo_id: servico.veiculo_id,
+            vistoriador_id: servico.profissional_id,
+            contrato_id: servico.contrato_id,
+            cotacao_id: servico.cotacao_id,
+            tipo: 'entrada',
+            status: 'em_analise',
+          })
+          .select(`
+            *,
+            veiculo:veiculos(
+              id, placa, chassi, marca, modelo, 
+              ano_fabricacao, ano_modelo, cor,
+              associado:associados(id, nome, cpf, telefone)
+            ),
+            associado:associados!vistorias_associado_id_fkey(id, nome, cpf, telefone),
+            vistoriador:profiles!vistorias_vistoriador_id_fkey(id, nome),
+            fotos:vistoria_fotos(*)
+          `)
+          .single();
+
+        if (insertError) {
+          console.error('[useVistoriaCompletaPorServico] Erro ao criar vistoria:', insertError);
+          throw insertError;
+        }
+
+        // Atualizar serviço com vistoria_origem_id
+        await supabase
+          .from('servicos')
+          .update({ vistoria_origem_id: novaVistoria.id })
+          .eq('id', servicoId);
+
+        return novaVistoria;
+      }
+
+      return null;
+    },
+    enabled: !!servicoId,
+  });
+}
