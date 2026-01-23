@@ -6,6 +6,7 @@ import {
   ClipboardList, Loader2, CheckCircle2, Car, Clock, ChevronRight 
 } from 'lucide-react';
 import { useTarefaAtual, useTarefasHistorico } from '@/hooks/useTarefaAtual';
+import { TipoServico, TIPO_SERVICO_LABELS, isInstalacao } from '@/hooks/useServicos';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -109,7 +110,7 @@ export default function InstaladorTarefas() {
                   key={tarefa.id} 
                   tarefa={tarefa} 
                   onClick={() => {
-                    const rota = tarefa.tipo === 'instalacao' 
+                    const rota = isInstalacao(tarefa.tipo)
                       ? `/instalador/instalacao/${tarefa.id}`
                       : `/instalador/vistoria/${tarefa.id}`;
                     navigate(rota);
@@ -137,7 +138,7 @@ export default function InstaladorTarefas() {
                   key={tarefa.id} 
                   tarefa={tarefa} 
                   onClick={() => {
-                    const rota = tarefa.tipo === 'instalacao' 
+                    const rota = isInstalacao(tarefa.tipo)
                       ? `/instalador/instalacao/${tarefa.id}`
                       : `/instalador/vistoria/${tarefa.id}`;
                     navigate(rota);
@@ -172,7 +173,7 @@ interface TarefaHistorico {
   veiculo: { placa: string; marca: string; modelo: string } | null;
   bairro: string | null;
   cidade: string | null;
-  tipo: 'instalacao' | 'vistoria';
+  tipo: TipoServico;
 }
 
 interface TarefaHistoricoCardProps {
@@ -209,12 +210,12 @@ function TarefaHistoricoCard({ tarefa, onClick }: TarefaHistoricoCardProps) {
               <Badge 
                 variant="outline" 
                 className={`text-xs shrink-0 ${
-                  tarefa.tipo === 'instalacao' 
+                  isInstalacao(tarefa.tipo)
                     ? 'border-blue-500 text-blue-400' 
                     : 'border-purple-500 text-purple-400'
                 }`}
               >
-                {tarefa.tipo === 'instalacao' ? 'Instalação' : 'Vistoria'}
+                {TIPO_SERVICO_LABELS[tarefa.tipo] || tarefa.tipo}
               </Badge>
             </div>
             <div className="flex items-center gap-1 text-slate-400 text-xs mt-0.5">

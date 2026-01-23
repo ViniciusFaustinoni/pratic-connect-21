@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { TarefaAtual, useIniciarTarefa } from '@/hooks/useTarefaAtual';
 import { useIniciarServico } from '@/hooks/useIniciarServico';
+import { TIPO_SERVICO_LABELS, isInstalacao } from '@/hooks/useServicos';
 import { cn } from '@/lib/utils';
 
 interface TarefaAtualCardProps {
@@ -53,11 +54,11 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
   };
 
   const handleIniciarTarefa = () => {
-    iniciarTarefa({ tarefaId: tarefa.id, tipo: tarefa.tipo });
+    iniciarTarefa({ tarefaId: tarefa.id });
   };
 
   const handleExecutar = () => {
-    const rota = tarefa.tipo === 'instalacao' 
+    const rota = isInstalacao(tarefa.tipo)
       ? `/instalador/executar/${tarefa.id}`
       : `/vistoriador/executar/${tarefa.id}`;
     navigate(rota);
@@ -72,8 +73,8 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Badge variant={tarefa.tipo === 'instalacao' ? 'default' : 'secondary'}>
-                {tarefa.tipo === 'instalacao' ? 'Instalação' : 'Vistoria'}
+              <Badge variant={isInstalacao(tarefa.tipo) ? 'default' : 'secondary'}>
+                {TIPO_SERVICO_LABELS[tarefa.tipo] || tarefa.tipo}
               </Badge>
               <Badge 
                 variant="outline"
@@ -195,7 +196,7 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
                 className="col-span-2 gap-2"
               >
                 <ChevronRight className="h-4 w-4" />
-                Executar {tarefa.tipo === 'instalacao' ? 'Instalação' : 'Vistoria'}
+                Executar {TIPO_SERVICO_LABELS[tarefa.tipo] || tarefa.tipo}
               </Button>
             )}
           </div>

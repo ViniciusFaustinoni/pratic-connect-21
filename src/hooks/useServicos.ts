@@ -1,0 +1,746 @@
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
+import { useRef, useEffect } from 'react';
+
+// ============================================
+// TIPOS PARA TABELA UNIFICADA SERVICOS
+// ============================================
+
+export type TipoServico = 
+  | 'instalacao' 
+  | 'vistoria_entrada' 
+  | 'vistoria_saida' 
+  | 'vistoria_sinistro'
+  | 'vistoria_periodica'
+  | 'vistoria_manutencao';
+
+export type StatusServico = 
+  | 'pendente' 
+  | 'agendada' 
+  | 'em_rota' 
+  | 'em_andamento'
+  | 'concluida' 
+  | 'aprovada' 
+  | 'reprovada'
+  | 'aprovada_ressalvas'
+  | 'em_analise'
+  | 'reagendada' 
+  | 'cancelada';
+
+export type PeriodoServico = 'manha' | 'tarde' | 'noite';
+
+export interface Servico {
+  id: string;
+  tipo: TipoServico;
+  status: StatusServico;
+  data_agendada: string;
+  hora_agendada: string | null;
+  periodo: PeriodoServico;
+  permite_encaixe: boolean;
+  local_vistoria: string | null;
+  
+  // Endereço
+  cep: string | null;
+  logradouro: string | null;
+  numero: string | null;
+  complemento: string | null;
+  bairro: string | null;
+  cidade: string | null;
+  uf: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  
+  // Relacionamentos
+  associado_id: string | null;
+  veiculo_id: string | null;
+  contrato_id: string | null;
+  cotacao_id: string | null;
+  lead_id: string | null;
+  sinistro_id: string | null;
+  profissional_id: string | null;
+  rota_id: string | null;
+  
+  // Timestamps de workflow
+  em_rota_em: string | null;
+  iniciada_em: string | null;
+  concluida_em: string | null;
+  
+  // Campos de instalação
+  rastreador_id: string | null;
+  imei_rastreador: string | null;
+  checklist_data: Record<string, unknown>;
+  quilometragem: number | null;
+  assinatura_cliente_url: string | null;
+  
+  // Campos de vistoria
+  km_atual: number | null;
+  avarias: string | null;
+  video_360_url: string | null;
+  fotos_recusa: string[] | null;
+  modalidade: string | null;
+  protocolo: string | null;
+  
+  // Análise
+  analisado_por: string | null;
+  analisado_em: string | null;
+  observacoes_analise: string | null;
+  ressalvas: string | null;
+  motivo_reprovacao: string | null;
+  
+  // Assinatura digital
+  assinatura_autentique_id: string | null;
+  assinatura_status: string | null;
+  assinatura_enviada_em: string | null;
+  assinatura_concluida_em: string | null;
+  assinatura_documento_url: string | null;
+  
+  // Outros
+  observacoes: string | null;
+  origem: string | null;
+  created_at: string;
+  updated_at: string;
+  
+  // Joins opcionais
+  associado?: {
+    id: string;
+    nome: string;
+    telefone: string;
+    whatsapp: string | null;
+    cpf: string;
+    email: string;
+  } | null;
+  veiculo?: {
+    id: string;
+    placa: string;
+    marca: string;
+    modelo: string;
+    cor: string | null;
+    ano_fabricacao: number | null;
+    ano_modelo: number | null;
+  } | null;
+  profissional?: {
+    id: string;
+    nome: string;
+    telefone: string | null;
+  } | null;
+  cotacao?: {
+    id: string;
+    numero: string | null;
+  } | null;
+  contrato?: {
+    id: string;
+    numero: string | null;
+  } | null;
+}
+
+// Interface para a tarefa atual (usada pelo instalador/vistoriador)
+export interface TarefaAtual {
+  id: string;
+  tipo: TipoServico;
+  status: StatusServico;
+  data_agendada: string;
+  hora_agendada: string | null;
+  periodo: PeriodoServico;
+  cliente: {
+    id: string;
+    nome: string;
+    telefone: string;
+    whatsapp: string | null;
+  };
+  veiculo: {
+    id: string;
+    placa: string;
+    marca: string;
+    modelo: string;
+    cor: string | null;
+  };
+  endereco: {
+    logradouro: string | null;
+    numero: string | null;
+    bairro: string | null;
+    cidade: string | null;
+    uf: string | null;
+    cep: string | null;
+    latitude: number | null;
+    longitude: number | null;
+  };
+  cotacao_id: string | null;
+  contrato_id: string | null;
+  rastreador_id: string | null;
+  imei_rastreador: string | null;
+  local_vistoria: string | null;
+  observacoes: string | null;
+  distancia_km?: number;
+  rota_id: string | null;
+  iniciada_em: string | null;
+  em_rota_em: string | null;
+}
+
+// Filtros para listagem de serviços
+export interface ServicoFilters {
+  tipo?: TipoServico | TipoServico[];
+  status?: StatusServico | StatusServico[];
+  profissional_id?: string;
+  data_inicio?: string;
+  data_fim?: string;
+  associado_id?: string;
+  veiculo_id?: string;
+  rota_id?: string;
+}
+
+// ============================================
+// LABELS E CORES
+// ============================================
+
+export const TIPO_SERVICO_LABELS: Record<TipoServico, string> = {
+  instalacao: 'Instalação',
+  vistoria_entrada: 'Vistoria de Entrada',
+  vistoria_saida: 'Vistoria de Saída',
+  vistoria_sinistro: 'Vistoria de Sinistro',
+  vistoria_periodica: 'Vistoria Periódica',
+  vistoria_manutencao: 'Vistoria de Manutenção',
+};
+
+export const STATUS_SERVICO_LABELS: Record<StatusServico, string> = {
+  pendente: 'Pendente',
+  agendada: 'Agendada',
+  em_rota: 'Em Rota',
+  em_andamento: 'Em Andamento',
+  concluida: 'Concluída',
+  aprovada: 'Aprovada',
+  reprovada: 'Reprovada',
+  aprovada_ressalvas: 'Aprovada c/ Ressalvas',
+  em_analise: 'Em Análise',
+  reagendada: 'Reagendada',
+  cancelada: 'Cancelada',
+};
+
+export const STATUS_SERVICO_COLORS: Record<StatusServico, string> = {
+  pendente: 'bg-gray-100 text-gray-800',
+  agendada: 'bg-blue-100 text-blue-800',
+  em_rota: 'bg-purple-100 text-purple-800',
+  em_andamento: 'bg-yellow-100 text-yellow-800',
+  concluida: 'bg-green-100 text-green-800',
+  aprovada: 'bg-green-100 text-green-800',
+  reprovada: 'bg-red-100 text-red-800',
+  aprovada_ressalvas: 'bg-orange-100 text-orange-800',
+  em_analise: 'bg-cyan-100 text-cyan-800',
+  reagendada: 'bg-indigo-100 text-indigo-800',
+  cancelada: 'bg-gray-100 text-gray-600',
+};
+
+export const PERIODO_LABELS: Record<PeriodoServico, string> = {
+  manha: 'Manhã',
+  tarde: 'Tarde',
+  noite: 'Noite',
+};
+
+// ============================================
+// HOOKS
+// ============================================
+
+/**
+ * Hook para listar serviços com filtros opcionais
+ */
+export function useServicos(filters?: ServicoFilters) {
+  return useQuery({
+    queryKey: ['servicos', filters],
+    queryFn: async () => {
+      let query = supabase
+        .from('servicos')
+        .select(`
+          *,
+          associado:associados(id, nome, telefone, whatsapp, cpf, email),
+          veiculo:veiculos(id, placa, marca, modelo, cor, ano_fabricacao, ano_modelo),
+          profissional:profiles!servicos_profissional_id_fkey(id, nome, telefone),
+          cotacao:cotacoes(id, numero),
+          contrato:contratos(id, numero)
+        `)
+        .order('data_agendada', { ascending: true })
+        .order('hora_agendada', { ascending: true });
+
+      // Aplicar filtros
+      if (filters?.tipo) {
+        if (Array.isArray(filters.tipo)) {
+          query = query.in('tipo', filters.tipo);
+        } else {
+          query = query.eq('tipo', filters.tipo);
+        }
+      }
+
+      if (filters?.status) {
+        if (Array.isArray(filters.status)) {
+          query = query.in('status', filters.status);
+        } else {
+          query = query.eq('status', filters.status);
+        }
+      }
+
+      if (filters?.profissional_id) {
+        query = query.eq('profissional_id', filters.profissional_id);
+      }
+
+      if (filters?.data_inicio) {
+        query = query.gte('data_agendada', filters.data_inicio);
+      }
+
+      if (filters?.data_fim) {
+        query = query.lte('data_agendada', filters.data_fim);
+      }
+
+      if (filters?.associado_id) {
+        query = query.eq('associado_id', filters.associado_id);
+      }
+
+      if (filters?.veiculo_id) {
+        query = query.eq('veiculo_id', filters.veiculo_id);
+      }
+
+      if (filters?.rota_id) {
+        query = query.eq('rota_id', filters.rota_id);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+      return (data || []) as Servico[];
+    },
+  });
+}
+
+/**
+ * Hook para buscar um serviço específico
+ */
+export function useServico(id: string | undefined) {
+  return useQuery({
+    queryKey: ['servico', id],
+    queryFn: async () => {
+      if (!id) return null;
+
+      const { data, error } = await supabase
+        .from('servicos')
+        .select(`
+          *,
+          associado:associados(id, nome, telefone, whatsapp, cpf, email),
+          veiculo:veiculos(id, placa, marca, modelo, cor, ano_fabricacao, ano_modelo),
+          profissional:profiles!servicos_profissional_id_fkey(id, nome, telefone),
+          cotacao:cotacoes(id, numero),
+          contrato:contratos(id, numero)
+        `)
+        .eq('id', id)
+        .single();
+
+      if (error) throw error;
+      return data as Servico;
+    },
+    enabled: !!id,
+  });
+}
+
+/**
+ * Hook para buscar a tarefa atual do profissional logado (usa a nova RPC)
+ */
+export function useTarefaAtualServico() {
+  const { profile } = useAuth();
+  const profissionalId = profile?.id;
+  const previousTaskIdRef = useRef<string | null>(null);
+  const hasShownAutoAssignToast = useRef(false);
+
+  const query = useQuery({
+    queryKey: ['tarefa-atual-servico', profissionalId],
+    queryFn: async (): Promise<TarefaAtual | null> => {
+      if (!profissionalId) return null;
+
+      const { data, error } = await supabase.rpc('buscar_tarefa_atual_profissional', {
+        p_profissional_id: profissionalId
+      });
+
+      if (error) {
+        console.error('Erro ao buscar tarefa atual:', error);
+        throw error;
+      }
+
+      if (!data || data.length === 0) {
+        return null;
+      }
+
+      const tarefa = data[0];
+      return {
+        id: tarefa.id,
+        tipo: tarefa.tipo as TipoServico,
+        status: tarefa.status as StatusServico,
+        data_agendada: tarefa.data_agendada,
+        hora_agendada: tarefa.hora_agendada,
+        periodo: (tarefa.periodo || 'manha') as PeriodoServico,
+        cliente: {
+          id: tarefa.associado_id || '',
+          nome: tarefa.associado_nome || 'Cliente',
+          telefone: tarefa.associado_telefone || '',
+          whatsapp: tarefa.associado_whatsapp,
+        },
+        veiculo: {
+          id: tarefa.veiculo_id || '',
+          placa: tarefa.veiculo_placa || '',
+          marca: tarefa.veiculo_marca || '',
+          modelo: tarefa.veiculo_modelo || '',
+          cor: tarefa.veiculo_cor,
+        },
+        endereco: {
+          logradouro: tarefa.logradouro,
+          numero: tarefa.numero,
+          bairro: tarefa.bairro,
+          cidade: tarefa.cidade,
+          uf: tarefa.uf,
+          cep: tarefa.cep,
+          latitude: tarefa.latitude,
+          longitude: tarefa.longitude,
+        },
+        cotacao_id: tarefa.cotacao_id,
+        contrato_id: tarefa.contrato_id,
+        rastreador_id: tarefa.rastreador_id,
+        imei_rastreador: tarefa.imei_rastreador,
+        local_vistoria: tarefa.local_vistoria,
+        observacoes: tarefa.observacoes,
+        rota_id: tarefa.rota_id,
+        iniciada_em: tarefa.iniciada_em,
+        em_rota_em: tarefa.em_rota_em,
+      };
+    },
+    enabled: !!profissionalId,
+    refetchInterval: 30000,
+    staleTime: 10000,
+  });
+
+  // Detectar quando uma nova tarefa é atribuída automaticamente
+  useEffect(() => {
+    const currentTaskId = query.data?.id || null;
+    
+    if (
+      currentTaskId && 
+      currentTaskId !== previousTaskIdRef.current &&
+      previousTaskIdRef.current !== null &&
+      !hasShownAutoAssignToast.current
+    ) {
+      const tipoLabel = TIPO_SERVICO_LABELS[query.data?.tipo || 'instalacao'];
+      toast.success(`Nova tarefa atribuída automaticamente!`, {
+        description: `${tipoLabel} para ${query.data?.cliente.nome || 'cliente'} em ${query.data?.endereco.bairro || query.data?.endereco.cidade || 'endereço'}`,
+        duration: 8000,
+      });
+      hasShownAutoAssignToast.current = true;
+      
+      setTimeout(() => {
+        hasShownAutoAssignToast.current = false;
+      }, 5000);
+    }
+    
+    previousTaskIdRef.current = currentTaskId;
+  }, [query.data?.id, query.data?.tipo, query.data?.cliente.nome, query.data?.endereco.bairro, query.data?.endereco.cidade]);
+
+  return query;
+}
+
+/**
+ * Hook para iniciar um serviço (mudar status para em_andamento)
+ */
+export function useIniciarServicoMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (servicoId: string) => {
+      const { error } = await supabase
+        .from('servicos')
+        .update({ 
+          status: 'em_andamento',
+          iniciada_em: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', servicoId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tarefa-atual-servico'] });
+      queryClient.invalidateQueries({ queryKey: ['servicos'] });
+      toast.success('Serviço iniciado!');
+    },
+    onError: (error) => {
+      console.error('Erro ao iniciar serviço:', error);
+      toast.error('Erro ao iniciar serviço');
+    }
+  });
+}
+
+/**
+ * Hook para concluir um serviço
+ */
+export function useConcluirServicoMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (servicoId: string) => {
+      const { error } = await supabase
+        .from('servicos')
+        .update({ 
+          status: 'concluida',
+          concluida_em: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', servicoId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tarefa-atual-servico'] });
+      queryClient.invalidateQueries({ queryKey: ['servicos'] });
+      queryClient.invalidateQueries({ queryKey: ['servicos-historico'] });
+      toast.success('Serviço concluído!');
+    },
+    onError: (error) => {
+      console.error('Erro ao concluir serviço:', error);
+      toast.error('Erro ao concluir serviço');
+    }
+  });
+}
+
+/**
+ * Hook para atribuir um profissional a um serviço
+ */
+export function useAtribuirProfissionalMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ servicoId, profissionalId }: { servicoId: string; profissionalId: string }) => {
+      const { error } = await supabase
+        .from('servicos')
+        .update({ 
+          profissional_id: profissionalId,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', servicoId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['servicos'] });
+      toast.success('Profissional atribuído!');
+    },
+    onError: (error) => {
+      console.error('Erro ao atribuir profissional:', error);
+      toast.error('Erro ao atribuir profissional');
+    }
+  });
+}
+
+/**
+ * Hook para mudar status de um serviço
+ */
+export function useAtualizarStatusServicoMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ servicoId, status, dados }: { 
+      servicoId: string; 
+      status: StatusServico;
+      dados?: Partial<Servico>;
+    }) => {
+      const updateData: Record<string, unknown> = {
+        status,
+        updated_at: new Date().toISOString(),
+        ...dados,
+      };
+
+      // Definir timestamps automáticos baseados no status
+      if (status === 'em_rota') {
+        updateData.em_rota_em = new Date().toISOString();
+      } else if (status === 'em_andamento') {
+        updateData.iniciada_em = new Date().toISOString();
+      } else if (status === 'concluida' || status === 'aprovada' || status === 'reprovada') {
+        updateData.concluida_em = new Date().toISOString();
+      }
+
+      const { error } = await supabase
+        .from('servicos')
+        .update(updateData)
+        .eq('id', servicoId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['servicos'] });
+      queryClient.invalidateQueries({ queryKey: ['tarefa-atual-servico'] });
+      toast.success('Status atualizado!');
+    },
+    onError: (error) => {
+      console.error('Erro ao atualizar status:', error);
+      toast.error('Erro ao atualizar status');
+    }
+  });
+}
+
+/**
+ * Hook para criar um novo serviço
+ */
+export function useCriarServicoMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (dados: Partial<Servico>) => {
+      const { data, error } = await supabase
+        .from('servicos')
+        .insert({
+          tipo: dados.tipo,
+          status: dados.status || 'agendada',
+          data_agendada: dados.data_agendada,
+          hora_agendada: dados.hora_agendada,
+          periodo: dados.periodo || 'manha',
+          cep: dados.cep,
+          logradouro: dados.logradouro,
+          numero: dados.numero,
+          complemento: dados.complemento,
+          bairro: dados.bairro,
+          cidade: dados.cidade,
+          uf: dados.uf,
+          latitude: dados.latitude,
+          longitude: dados.longitude,
+          associado_id: dados.associado_id,
+          veiculo_id: dados.veiculo_id,
+          contrato_id: dados.contrato_id,
+          cotacao_id: dados.cotacao_id,
+          lead_id: dados.lead_id,
+          sinistro_id: dados.sinistro_id,
+          profissional_id: dados.profissional_id,
+          local_vistoria: dados.local_vistoria,
+          permite_encaixe: dados.permite_encaixe,
+          observacoes: dados.observacoes,
+          origem: dados.origem,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['servicos'] });
+      toast.success('Serviço criado!');
+    },
+    onError: (error) => {
+      console.error('Erro ao criar serviço:', error);
+      toast.error('Erro ao criar serviço');
+    }
+  });
+}
+
+/**
+ * Hook para histórico de serviços concluídos do profissional
+ */
+export function useServicosHistorico(dias: number = 7) {
+  const { profile } = useAuth();
+  const profissionalId = profile?.id;
+
+  return useQuery({
+    queryKey: ['servicos-historico', profissionalId, dias],
+    queryFn: async () => {
+      if (!profissionalId) return [];
+
+      const dataLimite = new Date();
+      dataLimite.setDate(dataLimite.getDate() - dias);
+
+      const { data, error } = await supabase
+        .from('servicos')
+        .select(`
+          id, tipo, status, data_agendada, concluida_em,
+          associado:associados(nome),
+          veiculo:veiculos(placa, marca, modelo),
+          bairro, cidade
+        `)
+        .eq('profissional_id', profissionalId)
+        .in('status', ['concluida', 'aprovada', 'reprovada'])
+        .gte('concluida_em', dataLimite.toISOString())
+        .order('concluida_em', { ascending: false });
+
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!profissionalId,
+  });
+}
+
+/**
+ * Hook para buscar fotos de um serviço
+ */
+export function useServicoFotos(servicoId: string | undefined) {
+  return useQuery({
+    queryKey: ['servico-fotos', servicoId],
+    queryFn: async () => {
+      if (!servicoId) return [];
+
+      const { data, error } = await supabase
+        .from('servico_fotos')
+        .select('*')
+        .eq('servico_id', servicoId)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!servicoId,
+  });
+}
+
+/**
+ * Hook para adicionar foto a um serviço
+ */
+export function useAdicionarFotoServicoMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ servicoId, tipo, arquivoUrl }: { 
+      servicoId: string; 
+      tipo: string; 
+      arquivoUrl: string;
+    }) => {
+      const { error } = await supabase
+        .from('servico_fotos')
+        .insert({
+          servico_id: servicoId,
+          tipo,
+          arquivo_url: arquivoUrl,
+        });
+
+      if (error) throw error;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['servico-fotos', variables.servicoId] });
+    },
+    onError: (error) => {
+      console.error('Erro ao adicionar foto:', error);
+      toast.error('Erro ao adicionar foto');
+    }
+  });
+}
+
+// Helper para verificar se é uma instalação
+export function isInstalacao(tipo: TipoServico): boolean {
+  return tipo === 'instalacao';
+}
+
+// Helper para verificar se é uma vistoria
+export function isVistoria(tipo: TipoServico): boolean {
+  return tipo.startsWith('vistoria_');
+}
+
+// Helper para obter label amigável
+export function getTipoServicoLabel(tipo: TipoServico): string {
+  return TIPO_SERVICO_LABELS[tipo] || tipo;
+}
+
+export function getStatusServicoLabel(status: StatusServico): string {
+  return STATUS_SERVICO_LABELS[status] || status;
+}
+
+export function getStatusServicoColor(status: StatusServico): string {
+  return STATUS_SERVICO_COLORS[status] || 'bg-gray-100 text-gray-800';
+}
