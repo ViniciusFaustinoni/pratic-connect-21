@@ -5,44 +5,91 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     
     <!-- Primary Meta Tags -->
-    <title>PRATIC Profissional</title>
-    <meta name="title" content="PRATIC Profissional - App para Instaladores e Vistoriadores" />
-    <meta name="description" content="App para instaladores e vistoriadores PRATIC. Gerencie suas tarefas, rotas e instalações." />
+    <title>PRATIC</title>
+    <meta name="title" content="PRATIC - Proteção Veicular" />
+    <meta name="description" content="Sistema de proteção veicular PRATIC. Gerencie veículos, boletos, assistência e muito mais." />
     <meta name="author" content="PRATIC" />
     
     <!-- Favicon -->
-    <link rel="icon" type="image/png" sizes="32x32" href="/pwa-instalador-192x192.png" />
-    <link rel="icon" type="image/png" sizes="16x16" href="/pwa-instalador-192x192.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/pratic-logo.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/pratic-logo.png" />
     
     <!-- Apple Touch Icons -->
-    <link rel="apple-touch-icon" href="/pwa-instalador-192x192.png" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/pwa-instalador-192x192.png" />
-    <link rel="apple-touch-icon" sizes="152x152" href="/pwa-instalador-192x192.png" />
-    <link rel="apple-touch-icon" sizes="120x120" href="/pwa-instalador-192x192.png" />
+    <link rel="apple-touch-icon" href="/pwa-192x192.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/pwa-192x192.png" />
+    <link rel="apple-touch-icon" sizes="152x152" href="/pwa-192x192.png" />
+    <link rel="apple-touch-icon" sizes="120x120" href="/pwa-192x192.png" />
+    
+    <!-- PWA Manifest - Dinâmico baseado na rota -->
+    <link rel="manifest" id="pwa-manifest" href="/manifest-associado.json" />
     
     <!-- PWA iOS Meta Tags -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="PRATIC Pro" />
+    <meta name="apple-mobile-web-app-title" content="PRATIC" />
     <meta name="mobile-web-app-capable" content="yes" />
     
     <!-- PWA Theme Colors -->
-    <meta name="theme-color" content="#1e293b" />
-    <meta name="msapplication-TileColor" content="#1e293b" />
-    <meta name="msapplication-TileImage" content="/pwa-instalador-192x192.png" />
+    <meta name="theme-color" content="#16a34a" />
+    <meta name="msapplication-TileColor" content="#16a34a" />
+    <meta name="msapplication-TileImage" content="/pwa-192x192.png" />
     
     <!-- Prevent telephone number detection -->
     <meta name="format-detection" content="telephone=no" />
 
     <!-- Open Graph -->
-    <meta property="og:title" content="PRATIC Profissional - App para Instaladores" />
-    <meta property="og:description" content="App para instaladores e vistoriadores PRATIC" />
+    <meta property="og:title" content="PRATIC - Proteção Veicular" />
+    <meta property="og:description" content="Sistema de proteção veicular PRATIC" />
     <meta property="og:type" content="website" />
     <meta property="og:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
 
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@PRATIC" />
     <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+
+    <!-- Script para definir manifest e meta tags baseado na rota -->
+    <script>
+      (function() {
+        var path = window.location.pathname;
+        var isInstalador = path.startsWith('/instalador');
+        
+        // Atualizar manifest
+        var manifestLink = document.getElementById('pwa-manifest');
+        if (manifestLink) {
+          manifestLink.href = isInstalador 
+            ? '/manifest-profissional.json' 
+            : '/manifest-associado.json';
+        }
+        
+        // Atualizar título
+        document.title = isInstalador 
+          ? 'PRATIC Profissional' 
+          : 'PRATIC';
+        
+        // Atualizar theme-color
+        var themeColor = isInstalador ? '#1e293b' : '#16a34a';
+        var themeColorMeta = document.querySelector('meta[name="theme-color"]');
+        if (themeColorMeta) themeColorMeta.content = themeColor;
+        
+        var tileColorMeta = document.querySelector('meta[name="msapplication-TileColor"]');
+        if (tileColorMeta) tileColorMeta.content = themeColor;
+        
+        // Atualizar apple-mobile-web-app-title
+        var appTitleMeta = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+        if (appTitleMeta) appTitleMeta.content = isInstalador ? 'PRATIC Pro' : 'PRATIC';
+        
+        // Atualizar ícones para instalador
+        if (isInstalador) {
+          var appleTouchIcons = document.querySelectorAll('link[rel="apple-touch-icon"]');
+          appleTouchIcons.forEach(function(icon) {
+            icon.href = icon.href.replace('pwa-192x192.png', 'pwa-instalador-192x192.png');
+          });
+          
+          var tileImageMeta = document.querySelector('meta[name="msapplication-TileImage"]');
+          if (tileImageMeta) tileImageMeta.content = '/pwa-instalador-192x192.png';
+        }
+      })();
+    </script>
   </head>
 
   <body>
