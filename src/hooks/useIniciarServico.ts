@@ -110,11 +110,27 @@ export function useIniciarServico() {
           status: 'granted',
           latitude,
           longitude,
-          accuracy
+          accuracy,
+          error: undefined
         }));
       },
       (error) => {
         console.warn('[useIniciarServico] Erro no watchPosition:', error.message);
+        
+        // Atualizar estado para refletir perda de permissão/GPS
+        if (error.code === 1) { // PERMISSION_DENIED
+          setGeoState({
+            status: 'denied',
+            error: 'Permissão de localização revogada. Ative a localização nas configurações.'
+          });
+        } else if (error.code === 2) { // POSITION_UNAVAILABLE
+          setGeoState({
+            status: 'unavailable',
+            error: 'GPS desativado ou indisponível. Verifique se o GPS está ativo.'
+          });
+        } else if (error.code === 3) { // TIMEOUT
+          console.warn('[useIniciarServico] Timeout no watchPosition, continuando...');
+        }
       },
       {
         enableHighAccuracy: true,
