@@ -235,19 +235,71 @@ export function useIniciarServico() {
   useEffect(() => {
     if (!profile?.id || !emServico) return;
 
+    console.log('[useIniciarServico] Polling iniciado - profissional em serviço');
+
+    // Função auxiliar para obter localização atual
+    const obterLocalizacaoAtual = async (): Promise<{ lat: number; lng: number } | null> => {
+      // Primeiro tentar usar do state
+      if (geoState.latitude && geoState.longitude) {
+        return { lat: geoState.latitude, lng: geoState.longitude };
+      }
+
+      // Se não tem no state, tentar obter agora
+      if (!navigator.geolocation) return null;
+
+      try {
+        const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 60000
+          });
+        });
+        return { lat: position.coords.latitude, lng: position.coords.longitude };
+      } catch (e) {
+        console.warn('[useIniciarServico] Não foi possível obter localização para polling:', e);
+        return null;
+      }
+    };
+
     // Verificar se já tem tarefa e tentar atribuir nova
     const checkAndAssignTask = async () => {
+      console.log('[useIniciarServico] Polling: Verificando tarefas...');
+      
       // Verificar se há tarefa atual
-      const { data: tarefaAtual } = await supabase
+      const { data: tarefaAtual, error } = await supabase
         .rpc('buscar_tarefa_atual_profissional', { p_profissional_id: profile.id });
 
+      if (error) {
+        console.error('[useIniciarServico] Erro ao buscar tarefa atual:', error);
+        return;
+      }
+
+      // CORREÇÃO: Verificar array vazio corretamente
+      // [] é truthy em JavaScript, então ![] é false
+      const temTarefa = Array.isArray(tarefaAtual) 
+        ? tarefaAtual.length > 0 
+        : !!tarefaAtual;
+
+      console.log('[useIniciarServico] Polling: temTarefa =', temTarefa, 'tarefaAtual =', tarefaAtual);
+
       // Se não tem tarefa e está em serviço, tentar atribuir
-      if (!tarefaAtual && geoState.latitude && geoState.longitude) {
-        console.log('[useIniciarServico] Polling: Buscando nova tarefa...');
+      if (!temTarefa) {
+        const coords = await obterLocalizacaoAtual();
+        
+        if (!coords) {
+          console.warn('[useIniciarServico] Polling: Sem localização disponível');
+          return;
+        }
+
+        console.log('[useIniciarServico] Polling: Buscando nova tarefa com coords:', coords);
+        
         try {
           const response = await supabase.functions.invoke('atribuir-proxima-tarefa', {
-            body: { latitude: geoState.latitude, longitude: geoState.longitude, acao: 'polling' },
+            body: { latitude: coords.lat, longitude: coords.lng, acao: 'polling' },
           });
+
+          console.log('[useIniciarServico] Polling: Resposta:', response.data);
 
           if (response.data?.resultado === 'atribuida') {
             console.log('[useIniciarServico] Polling: Nova tarefa atribuída!');
@@ -261,17 +313,16 @@ export function useIniciarServico() {
       }
     };
 
+    // Executar imediatamente
+    checkAndAssignTask();
+
     // Polling a cada 2 minutos
     const pollingInterval = setInterval(checkAndAssignTask, TASK_POLLING_INTERVAL);
 
-    // Também executar imediatamente na primeira vez (após 5s para dar tempo de carregar)
-    const initialCheckTimer = setTimeout(checkAndAssignTask, 5000);
-
     return () => {
       clearInterval(pollingInterval);
-      clearTimeout(initialCheckTimer);
     };
-  }, [profile?.id, emServico, geoState.latitude, geoState.longitude, queryClient]);
+  }, [profile?.id, emServico, queryClient]);
 
   // Função para solicitar localização e iniciar serviço
   const iniciarServico = useCallback(async () => {
