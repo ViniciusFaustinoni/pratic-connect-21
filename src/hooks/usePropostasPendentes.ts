@@ -535,7 +535,12 @@ export function useProposta(contratoId: string | undefined) {
       if (contrato.cotacao_id) {
         const { data: cotacao } = await supabase
           .from('cotacoes')
-          .select('cliente_logradouro, cliente_numero, cliente_bairro, cliente_cidade, cliente_uf, plano_escolhido_id, vistoria_permite_encaixe, vistoria_data_agendada, vistoria_horario_agendado')
+          .select(`
+            cliente_logradouro, cliente_numero, cliente_bairro, cliente_cidade, cliente_uf, 
+            plano_escolhido_id, vistoria_permite_encaixe, 
+            vistoria_data_agendada, vistoria_horario_agendado,
+            vistoria_completa_data_agendada, vistoria_completa_horario_agendado
+          `)
           .eq('id', contrato.cotacao_id)
           .maybeSingle();
         
@@ -553,11 +558,14 @@ export function useProposta(contratoId: string | undefined) {
             planoNome = plano?.nome || null;
           }
           
-          // Dados de instalação agendada (encaixe)
-          if (cotacao.vistoria_data_agendada) {
+          // Dados de instalação agendada (encaixe) - priorizar vistoria_completa_* (autovistoria)
+          const dataAgendadaEfetiva = cotacao.vistoria_completa_data_agendada || cotacao.vistoria_data_agendada;
+          const horarioEfetivo = cotacao.vistoria_completa_horario_agendado || cotacao.vistoria_horario_agendado;
+          
+          if (dataAgendadaEfetiva) {
             instalacaoAgendada = {
-              data: cotacao.vistoria_data_agendada,
-              horario: cotacao.vistoria_horario_agendado || '---',
+              data: dataAgendadaEfetiva,
+              horario: horarioEfetivo || '---',
               permite_encaixe: cotacao.vistoria_permite_encaixe || false,
             };
           }
