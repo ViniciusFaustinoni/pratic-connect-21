@@ -15330,6 +15330,10 @@ export type Database = {
         }
         Returns: string
       }
+      map_vistoria_tipo_to_servico: {
+        Args: { p_tipo: string }
+        Returns: Database["public"]["Enums"]["tipo_servico"]
+      }
       processar_template: {
         Args: { p_template_id: string; p_variaveis: Json }
         Returns: string
