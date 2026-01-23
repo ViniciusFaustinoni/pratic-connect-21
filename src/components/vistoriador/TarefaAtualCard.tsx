@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   MapPin, Phone, Car, Clock, Navigation, Play, 
-  CheckCircle2, User, ChevronRight, Loader2, Route 
+  CheckCircle2, User, ChevronRight, Loader2, Route, Zap 
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -21,6 +21,8 @@ import { TarefaAtual, useIniciarTarefa, useIniciarRota } from '@/hooks/useTarefa
 import { useIniciarServico } from '@/hooks/useIniciarServico';
 import { TIPO_SERVICO_LABELS, isInstalacao } from '@/hooks/useServicos';
 import { cn } from '@/lib/utils';
+import { format, parseISO } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 interface TarefaAtualCardProps {
   tarefa: TarefaAtual;
@@ -72,12 +74,19 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
   const isEmRota = tarefa.status === 'em_rota';
   const isEmAndamento = tarefa.status === 'em_andamento';
 
+  // Verificar se é um encaixe (tarefa foi antecipada)
+  const isEncaixe = (tarefa as any).encaixe_executado === true;
+  const dataOriginal = (tarefa as any).data_agendada_original;
+
   return (
     <>
-      <Card className="border-primary/50 shadow-lg">
+      <Card className={cn(
+        "border-primary/50 shadow-lg",
+        isEncaixe && "border-amber-500/50 bg-amber-50/30 dark:bg-amber-950/20"
+      )}>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Badge variant={isInstalacao(tarefa.tipo) ? 'default' : 'secondary'}>
                 {TIPO_SERVICO_LABELS[tarefa.tipo] || tarefa.tipo}
               </Badge>
@@ -91,6 +100,16 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
               >
                 {isEmAndamento ? 'Em Andamento' : isEmRota ? 'Em Rota' : 'Agendada'}
               </Badge>
+              {/* Badge de Encaixe */}
+              {isEncaixe && (
+                <Badge 
+                  variant="outline"
+                  className="bg-amber-500/20 text-amber-700 border-amber-500/50 dark:text-amber-400 gap-1"
+                >
+                  <Zap className="h-3 w-3" />
+                  Encaixe
+                </Badge>
+              )}
             </div>
             {tarefa.distancia_km !== undefined && (
               <span className="text-sm text-muted-foreground">
@@ -98,9 +117,17 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
               </span>
             )}
           </div>
-          <CardTitle className="text-lg mt-2">
-            Tarefa Atual
-          </CardTitle>
+          <div className="flex items-center justify-between mt-2">
+            <CardTitle className="text-lg">
+              Tarefa Atual
+            </CardTitle>
+            {/* Mostrar data original se foi encaixe */}
+            {isEncaixe && dataOriginal && (
+              <span className="text-xs text-amber-600 dark:text-amber-400">
+                Antecipado de {format(parseISO(dataOriginal), "dd/MM", { locale: ptBR })}
+              </span>
+            )}
+          </div>
         </CardHeader>
         
         <CardContent className="space-y-4">

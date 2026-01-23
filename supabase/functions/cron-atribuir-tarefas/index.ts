@@ -36,6 +36,24 @@ interface ProfissionalDisponivel {
   updated_at: string;
 }
 
+interface ServicoComDistancia {
+  id: string;
+  tipo: string;
+  data_agendada: string;
+  hora_agendada: string | null;
+  latitude: number;
+  longitude: number;
+  permite_encaixe: boolean;
+  instalacao_origem_id: string | null;
+  vistoria_origem_id: string | null;
+  associado_nome: string;
+  veiculo_placa: string;
+  distancia_km: number;
+  is_encaixe: boolean;
+  is_hoje: boolean;
+  is_amanha: boolean;
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
@@ -53,6 +71,16 @@ serve(async (req) => {
     const hoje = new Date().toISOString().split('T')[0];
     const amanha = new Date(Date.now() + 86400000).toISOString().split('T')[0];
     const trintaMinutosAtras = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+
+    // Buscar configuração de raio máximo para encaixes
+    const { data: configRaio } = await supabase
+      .from('configuracoes')
+      .select('valor')
+      .eq('chave', 'operacional_encaixe_raio_km')
+      .single();
+
+    const raioMaximoEncaixeKm = configRaio?.valor ? parseFloat(configRaio.valor) : 10;
+    console.log(`[cron-atribuir-tarefas] Raio máximo para encaixe: ${raioMaximoEncaixeKm} km`);
 
     // 1. Buscar profissionais em serviço com localização recente
     const { data: profissionais, error: profError } = await supabase
@@ -78,7 +106,7 @@ serve(async (req) => {
 
     console.log(`[cron-atribuir-tarefas] ${profissionais.length} profissional(is) em serviço`);
 
-    const atribuicoes: { profissional_id: string; servico_id: string; distancia_km: number }[] = [];
+    const atribuicoes: { profissional_id: string; servico_id: string; distancia_km: number; tipo_atribuicao: string }[] = [];
 
     // 2. Para cada profissional, verificar se já tem tarefa e tentar atribuir
     for (const prof of profissionais as ProfissionalDisponivel[]) {
@@ -92,8 +120,8 @@ serve(async (req) => {
         continue;
       }
 
-      // 3. Buscar serviços disponíveis da tabela UNIFICADA servicos (LEFT JOIN para incluir serviços sem cliente/veículo)
-      const { data: servicos, error: servicosError } = await supabase
+      // ========== BUSCA 1: Serviços NORMAIS (hoje/amanhã) ==========
+      const { data: servicosNormais, error: servicosNormaisError } = await supabase
         .from('servicos')
         .select(`
           id,
@@ -117,60 +145,148 @@ serve(async (req) => {
         .not('latitude', 'is', null)
         .not('longitude', 'is', null);
 
-      if (servicosError) {
-        console.error('[cron-atribuir-tarefas] Erro ao buscar serviços:', servicosError);
+      if (servicosNormaisError) {
+        console.error('[cron-atribuir-tarefas] Erro ao buscar serviços normais:', servicosNormaisError);
         continue;
       }
 
-      if (!servicos || servicos.length === 0) {
+      // ========== BUSCA 2: Serviços FUTUROS com ENCAIXE ==========
+      // Esta é a NOVA busca que pega serviços de datas futuras que aceitam encaixe
+      const { data: servicosEncaixe, error: servicosEncaixeError } = await supabase
+        .from('servicos')
+        .select(`
+          id,
+          tipo,
+          data_agendada,
+          hora_agendada,
+          latitude,
+          longitude,
+          permite_encaixe,
+          local_vistoria,
+          instalacao_origem_id,
+          vistoria_origem_id,
+          associado:associados(nome),
+          veiculo:veiculos(placa)
+        `)
+        .is('profissional_id', null)
+        .in('status', ['pendente', 'agendada'])
+        .or('local_vistoria.is.null,local_vistoria.eq.cliente')
+        .gt('data_agendada', amanha) // ✅ DATAS FUTURAS (> amanhã)
+        .eq('permite_encaixe', true)  // ✅ APENAS os que aceitam encaixe
+        .not('latitude', 'is', null)
+        .not('longitude', 'is', null);
+
+      if (servicosEncaixeError) {
+        console.error('[cron-atribuir-tarefas] Erro ao buscar serviços encaixe:', servicosEncaixeError);
+        // Continua só com os normais
+      }
+
+      // Combinar as duas listas
+      const todosServicos = [
+        ...(servicosNormais || []),
+        ...(servicosEncaixe || [])
+      ];
+
+      if (todosServicos.length === 0) {
         console.log(`[cron-atribuir-tarefas] Nenhum serviço disponível para profissional ${prof.vistoriador_id}`);
         continue;
       }
 
-      // 4. Mapear e calcular distâncias (SEM LIMITE DE RAIO)
-      const servicosComDistancia = servicos
-        .map((s: any) => ({
-          id: s.id,
-          tipo: s.tipo,
-          data_agendada: s.data_agendada,
-          hora_agendada: s.hora_agendada,
-          latitude: s.latitude,
-          longitude: s.longitude,
-          permite_encaixe: s.permite_encaixe || false,
-          instalacao_origem_id: s.instalacao_origem_id,
-          vistoria_origem_id: s.vistoria_origem_id,
-          associado_nome: s.associado?.nome || 'Cliente não vinculado',
-          veiculo_placa: s.veiculo?.placa || 'Placa pendente',
-          distancia_km: calcularDistanciaKm(
+      // 4. Mapear, calcular distâncias e aplicar NOVA LÓGICA DE ORDENAÇÃO
+      const servicosComDistancia: ServicoComDistancia[] = todosServicos
+        .map((s: any) => {
+          const distancia = calcularDistanciaKm(
             prof.latitude, prof.longitude,
             s.latitude, s.longitude
-          )
-        }))
-        .sort((a: any, b: any) => {
-          // Prioridade 1: Encaixe (permite_encaixe = true e hoje)
-          if (a.permite_encaixe && a.data_agendada === hoje && !b.permite_encaixe) return -1;
-          if (b.permite_encaixe && b.data_agendada === hoje && !a.permite_encaixe) return 1;
-          // Prioridade 2: Proximidade (sem limite de raio)
+          );
+          const isHoje = s.data_agendada === hoje;
+          const isAmanha = s.data_agendada === amanha;
+          const isEncaixe = s.data_agendada > amanha && s.permite_encaixe;
+
+          return {
+            id: s.id,
+            tipo: s.tipo,
+            data_agendada: s.data_agendada,
+            hora_agendada: s.hora_agendada,
+            latitude: s.latitude,
+            longitude: s.longitude,
+            permite_encaixe: s.permite_encaixe || false,
+            instalacao_origem_id: s.instalacao_origem_id,
+            vistoria_origem_id: s.vistoria_origem_id,
+            associado_nome: s.associado?.nome || 'Cliente não vinculado',
+            veiculo_placa: s.veiculo?.placa || 'Placa pendente',
+            distancia_km: distancia,
+            is_encaixe: isEncaixe,
+            is_hoje: isHoje,
+            is_amanha: isAmanha
+          };
+        })
+        .filter((s: ServicoComDistancia) => {
+          // Encaixes FUTUROS só entram se estiverem DENTRO do raio configurado
+          if (s.is_encaixe) {
+            const dentroDoRaio = s.distancia_km <= raioMaximoEncaixeKm;
+            if (!dentroDoRaio) {
+              console.log(`[cron-atribuir-tarefas] Encaixe ${s.id} fora do raio (${s.distancia_km.toFixed(2)} km > ${raioMaximoEncaixeKm} km)`);
+            }
+            return dentroDoRaio;
+          }
+          // Serviços de hoje/amanhã: sem limite de raio
+          return true;
+        })
+        .sort((a: ServicoComDistancia, b: ServicoComDistancia) => {
+          // ========== NOVA ORDENAÇÃO DE PRIORIDADES ==========
+          
+          // PRIORIDADE 1: Serviços de HOJE (mais próximos primeiro)
+          if (a.is_hoje && !b.is_hoje) return -1;
+          if (!a.is_hoje && b.is_hoje) return 1;
+          
+          // PRIORIDADE 2: Encaixes FUTUROS próximos (dentro do raio)
+          if (a.is_encaixe && !b.is_encaixe && !b.is_hoje) return -1;
+          if (!a.is_encaixe && b.is_encaixe && !a.is_hoje) return 1;
+          
+          // PRIORIDADE 3: Serviços de AMANHÃ
+          if (a.is_amanha && !b.is_amanha && !b.is_hoje && !b.is_encaixe) return -1;
+          if (!a.is_amanha && b.is_amanha && !a.is_hoje && !a.is_encaixe) return 1;
+          
+          // Dentro de cada grupo, ordenar por proximidade
           return a.distancia_km - b.distancia_km;
         });
 
       console.log(`[cron-atribuir-tarefas] ${servicosComDistancia.length} serviços disponíveis para profissional ${prof.vistoriador_id}`);
+      
+      // Log detalhado para debug
+      const hojeCount = servicosComDistancia.filter(s => s.is_hoje).length;
+      const amanhaCount = servicosComDistancia.filter(s => s.is_amanha).length;
+      const encaixeCount = servicosComDistancia.filter(s => s.is_encaixe).length;
+      console.log(`[cron-atribuir-tarefas] Distribuição: ${hojeCount} hoje, ${amanhaCount} amanhã, ${encaixeCount} encaixes futuros`);
 
-      // 5. Tentar atribuir o mais próximo (sem limite de raio)
+      // 5. Tentar atribuir o de maior prioridade
       for (const servico of servicosComDistancia) {
-        console.log(`[cron-atribuir-tarefas] Tentando atribuir ${servico.tipo} ${servico.id} (${servico.distancia_km.toFixed(2)} km)`);
+        const tipoAtribuicao = servico.is_encaixe ? 'encaixe' : (servico.is_hoje ? 'hoje' : 'amanha');
+        console.log(`[cron-atribuir-tarefas] Tentando atribuir ${servico.tipo} ${servico.id} (${servico.distancia_km.toFixed(2)} km, tipo: ${tipoAtribuicao})`);
 
         const agora = new Date().toISOString();
+
+        // Preparar dados de atualização
+        const updateData: any = {
+          profissional_id: prof.vistoriador_id,
+          status: 'em_rota',
+          em_rota_em: agora,
+          updated_at: agora
+        };
+
+        // SE É UM ENCAIXE: puxar para HOJE e marcar como encaixe executado
+        if (servico.is_encaixe) {
+          updateData.data_agendada_original = servico.data_agendada; // Salvar data original
+          updateData.data_agendada = hoje; // Puxar para HOJE
+          updateData.encaixe_executado = true; // Marcar como encaixe
+          console.log(`[cron-atribuir-tarefas] ⚡ ENCAIXE: Puxando serviço de ${servico.data_agendada} para ${hoje}`);
+        }
 
         // Atribuir na tabela SERVICOS
         const { data: atualizado, error: updateError } = await supabase
           .from('servicos')
-          .update({
-            profissional_id: prof.vistoriador_id,
-            status: 'em_rota',
-            em_rota_em: agora,
-            updated_at: agora
-          })
+          .update(updateData)
           .eq('id', servico.id)
           .is('profissional_id', null)
           .select()
@@ -195,29 +311,38 @@ serve(async (req) => {
               .eq('id', servico.instalacao_origem_id)
               .single();
             
-            // Atualizar status na instalação de origem
+            // Preparar dados para instalação
+            const instUpdateData: any = {
+              instalador_responsavel_id: prof.vistoriador_id,
+              status: 'em_rota'
+            };
+            
+            // Se é encaixe, atualizar data também na tabela de origem
+            if (servico.is_encaixe) {
+              instUpdateData.data_agendada_original = servico.data_agendada;
+              instUpdateData.data_agendada = hoje;
+              instUpdateData.encaixe_executado = true;
+            }
+            
             await supabase
               .from('instalacoes')
-              .update({
-                instalador_responsavel_id: prof.vistoriador_id,
-                status: 'em_rota'
-              })
+              .update(instUpdateData)
               .eq('id', servico.instalacao_origem_id);
             
             // Copiar associado_id e veiculo_id para o servico se não tiver
             if (instalacaoOrigem) {
-              const updateData: any = {};
+              const copyData: any = {};
               if (instalacaoOrigem.associado_id) {
-                updateData.associado_id = instalacaoOrigem.associado_id;
+                copyData.associado_id = instalacaoOrigem.associado_id;
               }
               if (instalacaoOrigem.veiculo_id) {
-                updateData.veiculo_id = instalacaoOrigem.veiculo_id;
+                copyData.veiculo_id = instalacaoOrigem.veiculo_id;
               }
-              if (Object.keys(updateData).length > 0) {
+              if (Object.keys(copyData).length > 0) {
                 console.log(`[cron-atribuir-tarefas] Copiando dados cliente/veículo da instalação de origem`);
                 await supabase
                   .from('servicos')
-                  .update(updateData)
+                  .update(copyData)
                   .eq('id', servico.id);
               }
             }
@@ -225,12 +350,23 @@ serve(async (req) => {
           
           if (servico.vistoria_origem_id) {
             console.log(`[cron-atribuir-tarefas] Sincronizando com vistorias ${servico.vistoria_origem_id}`);
+            
+            // Preparar dados para vistoria
+            const vistUpdateData: any = {
+              vistoriador_id: prof.vistoriador_id,
+              status: 'em_rota'
+            };
+            
+            // Se é encaixe, atualizar data também na tabela de origem
+            if (servico.is_encaixe) {
+              vistUpdateData.data_agendada_original = servico.data_agendada;
+              vistUpdateData.data_agendada = hoje;
+              vistUpdateData.encaixe_executado = true;
+            }
+            
             await supabase
               .from('vistorias')
-              .update({
-                vistoriador_id: prof.vistoriador_id,
-                status: 'em_rota'
-              })
+              .update(vistUpdateData)
               .eq('id', servico.vistoria_origem_id);
           }
 
@@ -282,7 +418,8 @@ serve(async (req) => {
           atribuicoes.push({
             profissional_id: prof.vistoriador_id,
             servico_id: servico.id,
-            distancia_km: servico.distancia_km
+            distancia_km: servico.distancia_km,
+            tipo_atribuicao: tipoAtribuicao
           });
 
           break; // Próximo profissional
@@ -291,13 +428,24 @@ serve(async (req) => {
     }
 
     console.log(`[cron-atribuir-tarefas] Concluído: ${atribuicoes.length} atribuição(ões) realizadas`);
+    
+    // Log resumo por tipo
+    const hojeAtrib = atribuicoes.filter(a => a.tipo_atribuicao === 'hoje').length;
+    const amanhaAtrib = atribuicoes.filter(a => a.tipo_atribuicao === 'amanha').length;
+    const encaixeAtrib = atribuicoes.filter(a => a.tipo_atribuicao === 'encaixe').length;
+    console.log(`[cron-atribuir-tarefas] Resumo: ${hojeAtrib} hoje, ${amanhaAtrib} amanhã, ${encaixeAtrib} encaixes`);
 
     return new Response(
       JSON.stringify({
         resultado: 'sucesso',
         atribuicoes,
         total_profissionais: profissionais.length,
-        total_atribuicoes: atribuicoes.length
+        total_atribuicoes: atribuicoes.length,
+        resumo: {
+          hoje: hojeAtrib,
+          amanha: amanhaAtrib,
+          encaixes: encaixeAtrib
+        }
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

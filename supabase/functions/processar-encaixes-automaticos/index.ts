@@ -29,7 +29,7 @@ function calcularDistanciaKm(
   return R * c;
 }
 
-interface EncaixePendente {
+interface EncaixeFuturo {
   id: string;
   tipo: 'instalacao' | 'vistoria';
   data_agendada: string;
@@ -61,7 +61,7 @@ serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    console.log("[processar-encaixes-automaticos] Iniciando processamento...");
+    console.log("[processar-encaixes-automaticos] Iniciando processamento de encaixes FUTUROS...");
 
     // 1. Buscar configuração de raio máximo
     const { data: configRaio } = await supabase
@@ -73,16 +73,19 @@ serve(async (req) => {
     const raioMaximoKm = configRaio?.valor ? parseFloat(configRaio.valor) : 10;
     console.log(`[processar-encaixes-automaticos] Raio máximo configurado: ${raioMaximoKm} km`);
 
-    // 2. Buscar encaixes pendentes (permite_encaixe = true, sem responsável, data de hoje)
     const hoje = new Date().toISOString().split('T')[0];
 
-    // Instalações com encaixe pendente
+    // ========== CORREÇÃO PRINCIPAL ==========
+    // Buscar encaixes de datas FUTURAS (> hoje), não de hoje!
+    // Conceito: encaixe = serviço que PODE SER ANTECIPADO para hoje
+
+    // Instalações FUTURAS com encaixe habilitado
     const { data: instalacoesEncaixe, error: instError } = await supabase
       .from('instalacoes')
       .select('id, data_agendada, hora_agendada, endereco_latitude, endereco_longitude, associado_id, veiculo_id, bairro, cidade')
       .eq('permite_encaixe', true)
       .is('instalador_responsavel_id', null)
-      .eq('data_agendada', hoje)
+      .gt('data_agendada', hoje) // ✅ CORRIGIDO: > hoje (datas FUTURAS)
       .in('status', ['agendada'])
       .not('endereco_latitude', 'is', null)
       .not('endereco_longitude', 'is', null);
@@ -91,13 +94,13 @@ serve(async (req) => {
       console.error('[processar-encaixes-automaticos] Erro ao buscar instalações:', instError);
     }
 
-    // Vistorias com encaixe pendente
+    // Vistorias FUTURAS com encaixe habilitado
     const { data: vistoriasEncaixe, error: vistError } = await supabase
       .from('vistorias')
       .select('id, data_agendada, hora_agendada, endereco_latitude, endereco_longitude, associado_id, veiculo_id, bairro, cidade')
       .eq('permite_encaixe', true)
       .is('vistoriador_id', null)
-      .eq('data_agendada', hoje)
+      .gt('data_agendada', hoje) // ✅ CORRIGIDO: > hoje (datas FUTURAS)
       .in('status', ['pendente', 'agendada'])
       .not('endereco_latitude', 'is', null)
       .not('endereco_longitude', 'is', null);
@@ -107,7 +110,7 @@ serve(async (req) => {
     }
 
     // Mapear para formato comum
-    const encaixes: EncaixePendente[] = [];
+    const encaixes: EncaixeFuturo[] = [];
 
     if (instalacoesEncaixe) {
       for (const inst of instalacoesEncaixe) {
@@ -143,13 +146,13 @@ serve(async (req) => {
       }
     }
 
-    console.log(`[processar-encaixes-automaticos] ${encaixes.length} encaixes pendentes encontrados`);
+    console.log(`[processar-encaixes-automaticos] ${encaixes.length} encaixes FUTUROS encontrados`);
 
     if (encaixes.length === 0) {
       return new Response(
         JSON.stringify({ 
           sucesso: true, 
-          mensagem: 'Nenhum encaixe pendente',
+          mensagem: 'Nenhum encaixe futuro pendente',
           processados: 0 
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -162,6 +165,7 @@ serve(async (req) => {
     const { data: localizacoes, error: locError } = await supabase
       .from('vistoriadores_localizacao')
       .select('vistoriador_id, latitude, longitude, updated_at')
+      .eq('em_servico', true) // ✅ Adicionado: só profissionais em serviço
       .gte('updated_at', limite30Min);
 
     if (locError) {
@@ -186,8 +190,8 @@ serve(async (req) => {
     const profissionaisDisponiveis: ProfissionalDisponivel[] = [];
 
     for (const loc of localizacoes) {
-      const { data: tarefaAtual } = await supabase.rpc('buscar_tarefa_atual_vistoriador', {
-        p_vistoriador_id: loc.vistoriador_id
+      const { data: tarefaAtual } = await supabase.rpc('buscar_tarefa_atual_profissional', {
+        p_profissional_id: loc.vistoriador_id
       });
 
       // Se não tem tarefa ativa, está disponível
@@ -196,7 +200,7 @@ serve(async (req) => {
       }
     }
 
-    console.log(`[processar-encaixes-automaticos] ${profissionaisDisponiveis.length} profissionais disponíveis`);
+    console.log(`[processar-encaixes-automaticos] ${profissionaisDisponiveis.length} profissionais disponíveis (sem tarefa ativa)`);
 
     if (profissionaisDisponiveis.length === 0) {
       return new Response(
@@ -209,9 +213,16 @@ serve(async (req) => {
       );
     }
 
-    // 5. Para cada encaixe, encontrar o profissional mais próximo e atribuir
+    // 5. Para cada encaixe, encontrar profissional disponível próximo e PUXAR para hoje
     let processados = 0;
-    const atribuicoes: Array<{ encaixe_id: string; tipo: string; profissional_id: string; distancia_km: number }> = [];
+    const atribuicoes: Array<{ 
+      encaixe_id: string; 
+      tipo: string; 
+      profissional_id: string; 
+      distancia_km: number;
+      data_original: string;
+      data_nova: string;
+    }> = [];
 
     // Manter lista mutável de profissionais livres
     let profissionaisLivres = [...profissionaisDisponiveis];
@@ -233,18 +244,19 @@ serve(async (req) => {
             encaixe.endereco_longitude
           )
         }))
-        .filter(c => c.distancia_km <= raioMaximoKm)
-        .sort((a, b) => a.distancia_km - b.distancia_km);
+        .filter(c => c.distancia_km <= raioMaximoKm) // Filtrar por raio
+        .sort((a, b) => a.distancia_km - b.distancia_km); // Mais próximo primeiro
 
       if (candidatos.length === 0) {
-        console.log(`[processar-encaixes-automaticos] Nenhum profissional dentro do raio para encaixe ${encaixe.id}`);
+        console.log(`[processar-encaixes-automaticos] Nenhum profissional dentro do raio (${raioMaximoKm}km) para encaixe ${encaixe.id}`);
         continue;
       }
 
       const maisProximo = candidatos[0];
-      console.log(`[processar-encaixes-automaticos] Atribuindo ${encaixe.tipo} ${encaixe.id} ao profissional ${maisProximo.vistoriador_id} (${maisProximo.distancia_km.toFixed(2)} km)`);
+      console.log(`[processar-encaixes-automaticos] ⚡ ENCAIXE: Puxando ${encaixe.tipo} ${encaixe.id} de ${encaixe.data_agendada} para ${hoje}`);
+      console.log(`[processar-encaixes-automaticos] Atribuindo ao profissional ${maisProximo.vistoriador_id} (${maisProximo.distancia_km.toFixed(2)} km)`);
 
-      // Atribuir tarefa
+      // Atribuir tarefa e PUXAR PARA HOJE
       const tabela = encaixe.tipo === 'instalacao' ? 'instalacoes' : 'vistorias';
       const campoResponsavel = encaixe.tipo === 'instalacao' ? 'instalador_responsavel_id' : 'vistoriador_id';
 
@@ -253,6 +265,9 @@ serve(async (req) => {
         .update({
           [campoResponsavel]: maisProximo.vistoriador_id,
           status: 'em_rota',
+          data_agendada_original: encaixe.data_agendada, // ✅ Salvar data original
+          data_agendada: hoje,                           // ✅ PUXAR para hoje
+          encaixe_executado: true,                       // ✅ Marcar como encaixe executado
           updated_at: new Date().toISOString()
         })
         .eq('id', encaixe.id)
@@ -264,6 +279,21 @@ serve(async (req) => {
         console.log(`[processar-encaixes-automaticos] Encaixe ${encaixe.id} já foi atribuído por outro processo`);
         continue;
       }
+
+      // Sincronizar com tabela servicos (se existir registro correspondente)
+      const servicoField = encaixe.tipo === 'instalacao' ? 'instalacao_origem_id' : 'vistoria_origem_id';
+      await supabase
+        .from('servicos')
+        .update({
+          profissional_id: maisProximo.vistoriador_id,
+          status: 'em_rota',
+          data_agendada_original: encaixe.data_agendada,
+          data_agendada: hoje,
+          encaixe_executado: true,
+          em_rota_em: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq(servicoField, encaixe.id);
 
       // Criar ou atualizar rota do dia
       const { data: rotaExistente } = await supabase
@@ -295,6 +325,11 @@ serve(async (req) => {
           .from(tabela)
           .update({ rota_id: rotaId })
           .eq('id', encaixe.id);
+          
+        await supabase
+          .from('servicos')
+          .update({ rota_id: rotaId })
+          .eq(servicoField, encaixe.id);
       }
 
       // Registrar atribuição
@@ -302,7 +337,9 @@ serve(async (req) => {
         encaixe_id: encaixe.id,
         tipo: encaixe.tipo,
         profissional_id: maisProximo.vistoriador_id,
-        distancia_km: maisProximo.distancia_km
+        distancia_km: maisProximo.distancia_km,
+        data_original: encaixe.data_agendada,
+        data_nova: hoje
       });
 
       // Remover profissional da lista (agora está ocupado)
@@ -311,15 +348,15 @@ serve(async (req) => {
       );
 
       processados++;
-      console.log(`[processar-encaixes-automaticos] ✓ Encaixe ${encaixe.id} atribuído com sucesso`);
+      console.log(`[processar-encaixes-automaticos] ✓ Encaixe ${encaixe.id} executado com sucesso (${encaixe.data_agendada} → ${hoje})`);
     }
 
-    console.log(`[processar-encaixes-automaticos] Processamento concluído: ${processados} encaixes atribuídos`);
+    console.log(`[processar-encaixes-automaticos] Processamento concluído: ${processados} encaixes executados`);
 
     return new Response(
       JSON.stringify({
         sucesso: true,
-        mensagem: `${processados} encaixe(s) atribuído(s) automaticamente`,
+        mensagem: `${processados} encaixe(s) executado(s) - serviços puxados para hoje`,
         processados,
         atribuicoes
       }),

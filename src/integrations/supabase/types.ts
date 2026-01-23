@@ -7431,7 +7431,9 @@ export type Database = {
           cotacao_id: string | null
           created_at: string
           data_agendada: string
+          data_agendada_original: string | null
           em_rota_em: string | null
+          encaixe_executado: boolean | null
           endereco_latitude: number | null
           endereco_longitude: number | null
           hora_agendada: string | null
@@ -7468,7 +7470,9 @@ export type Database = {
           cotacao_id?: string | null
           created_at?: string
           data_agendada: string
+          data_agendada_original?: string | null
           em_rota_em?: string | null
+          encaixe_executado?: boolean | null
           endereco_latitude?: number | null
           endereco_longitude?: number | null
           hora_agendada?: string | null
@@ -7505,7 +7509,9 @@ export type Database = {
           cotacao_id?: string | null
           created_at?: string
           data_agendada?: string
+          data_agendada_original?: string | null
           em_rota_em?: string | null
+          encaixe_executado?: boolean | null
           endereco_latitude?: number | null
           endereco_longitude?: number | null
           hora_agendada?: string | null
@@ -12542,7 +12548,9 @@ export type Database = {
           cotacao_id: string | null
           created_at: string
           data_agendada: string
+          data_agendada_original: string | null
           em_rota_em: string | null
+          encaixe_executado: boolean | null
           fotos_recusa: string[] | null
           hora_agendada: string | null
           id: string
@@ -12599,7 +12607,9 @@ export type Database = {
           cotacao_id?: string | null
           created_at?: string
           data_agendada: string
+          data_agendada_original?: string | null
           em_rota_em?: string | null
+          encaixe_executado?: boolean | null
           fotos_recusa?: string[] | null
           hora_agendada?: string | null
           id?: string
@@ -12656,7 +12666,9 @@ export type Database = {
           cotacao_id?: string | null
           created_at?: string
           data_agendada?: string
+          data_agendada_original?: string | null
           em_rota_em?: string | null
+          encaixe_executado?: boolean | null
           fotos_recusa?: string[] | null
           hora_agendada?: string | null
           id?: string
@@ -13944,7 +13956,9 @@ export type Database = {
           cotacao_id: string | null
           created_at: string
           data_agendada: string | null
+          data_agendada_original: string | null
           em_rota_em: string | null
+          encaixe_executado: boolean | null
           endereco_bairro: string | null
           endereco_cep: string | null
           endereco_cidade: string | null
@@ -13994,7 +14008,9 @@ export type Database = {
           cotacao_id?: string | null
           created_at?: string
           data_agendada?: string | null
+          data_agendada_original?: string | null
           em_rota_em?: string | null
+          encaixe_executado?: boolean | null
           endereco_bairro?: string | null
           endereco_cep?: string | null
           endereco_cidade?: string | null
@@ -14044,7 +14060,9 @@ export type Database = {
           cotacao_id?: string | null
           created_at?: string
           data_agendada?: string | null
+          data_agendada_original?: string | null
           em_rota_em?: string | null
+          encaixe_executado?: boolean | null
           endereco_bairro?: string | null
           endereco_cep?: string | null
           endereco_cidade?: string | null
