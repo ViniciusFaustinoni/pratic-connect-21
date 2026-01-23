@@ -45,3 +45,19 @@ export function createColoredMarkerSvg(color: string): string {
 export function svgToDataUrl(svg: string): string {
   return `data:image/svg+xml;base64,${btoa(svg)}`;
 }
+
+// Cor para vistoriadores em campo
+export const COR_VISTORIADOR = '#3B82F6'; // Azul
+
+/**
+ * Gera um ícone SVG de pessoa para representar vistoriador no mapa
+ */
+export function createVistoriadorMarkerSvg(color: string): string {
+  return `
+    <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="18" cy="18" r="15" fill="${color}" stroke="white" stroke-width="3"/>
+      <circle cx="18" cy="12" r="4" fill="white"/>
+      <ellipse cx="18" cy="23" rx="7" ry="5" fill="white"/>
+    </svg>
+  `;
+}
