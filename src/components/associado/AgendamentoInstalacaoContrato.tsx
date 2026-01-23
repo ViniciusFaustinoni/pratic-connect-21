@@ -5,16 +5,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Calendar, Clock, CheckCircle2, Loader2, MapPin, User, Search, Phone, Shield, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { format, addDays, isWeekend } from 'date-fns';
+import { format, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { buscarCep } from '@/lib/cep';
 import { Badge } from '@/components/ui/badge';
 import { useAgendarInstalacaoContrato } from '@/hooks/useContratoLink';
-
-const HORARIOS_DISPONIVEIS = [
-  '08:00', '09:00', '10:00', '11:00',
-  '13:00', '14:00', '15:00', '16:00'
-];
+import { isDomingo, getHorariosParaDia } from '@/data/autovistoriaConfig';
 
 interface AgendamentoInstalacaoContratoProps {
   contratoId: string;
@@ -41,17 +37,22 @@ export function AgendamentoInstalacaoContrato({ contratoId, onConfirmar }: Agend
   
   const agendarMutation = useAgendarInstalacaoContrato();
   
-  // Gerar próximos 7 dias úteis
+  // Gerar próximos 7 dias úteis (incluindo sábados)
   const hoje = new Date();
   const datasDisponiveis: Date[] = [];
   let dia = addDays(hoje, 1);
   
   while (datasDisponiveis.length < 7) {
-    if (!isWeekend(dia)) {
+    if (!isDomingo(dia)) { // Só bloqueia domingo
       datasDisponiveis.push(dia);
     }
     dia = addDays(dia, 1);
   }
+  
+  // Obter horários baseado na data selecionada
+  const horariosDisponiveis = dataSelecionada 
+    ? getHorariosParaDia(dataSelecionada)
+    : getHorariosParaDia(new Date());
   
   const handleCepChange = async (value: string) => {
     const cepLimpo = value.replace(/\D/g, '');
@@ -211,7 +212,7 @@ export function AgendamentoInstalacaoContrato({ contratoId, onConfirmar }: Agend
               Horário
             </label>
             <div className="grid grid-cols-4 gap-2">
-              {HORARIOS_DISPONIVEIS.map((horario) => {
+              {horariosDisponiveis.map((horario) => {
                 const selecionado = horarioSelecionado === horario;
                 
                 return (

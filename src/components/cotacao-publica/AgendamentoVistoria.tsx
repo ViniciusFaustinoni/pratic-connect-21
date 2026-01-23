@@ -7,17 +7,13 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Switch } from '@/components/ui/switch';
 import { Calendar, Clock, MapPin, User, Phone, CheckCircle2, Loader2, Shield, AlertTriangle, Puzzle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { format, addDays, isWeekend } from 'date-fns';
+import { format, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { maskCEP, maskTelefone } from '@/lib/validations';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useFinalizarVistoriaCotacao, useAgendarVistoriaCompleta } from '@/hooks/useCotacaoVistoria';
-
-// Horários disponíveis
-const HORARIOS_DISPONIVEIS = [
-  '08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00'
-];
+import { isDomingo, getHorariosParaDia, HORARIOS_DISPONIVEIS } from '@/data/autovistoriaConfig';
 
 interface EnderecoForm {
   cep: string;
@@ -79,14 +75,17 @@ export function AgendamentoVistoria({
     const agora = new Date();
     const isHoje = format(data, 'yyyy-MM-dd') === format(agora, 'yyyy-MM-dd');
     
+    // Pegar horários baseado no dia (sábado tem horário reduzido)
+    const horariosBase = getHorariosParaDia(data);
+    
     if (!isHoje) {
-      return HORARIOS_DISPONIVEIS;
+      return horariosBase;
     }
     
     // Para hoje, filtrar horários que são >= 2 horas após agora
     const horaMinima = agora.getHours() + 2;
     
-    return HORARIOS_DISPONIVEIS.filter(horario => {
+    return horariosBase.filter(horario => {
       const hora = parseInt(horario.split(':')[0], 10);
       return hora > horaMinima;
     });
@@ -95,7 +94,7 @@ export function AgendamentoVistoria({
   // Verificar se hoje tem horários disponíveis
   const hojeTemHorarios = () => {
     const hoje = new Date();
-    if (isWeekend(hoje)) return false;
+    if (isDomingo(hoje)) return false; // Só bloqueia domingo
     return getHorariosDisponiveis(hoje).length > 0;
   };
 
@@ -108,10 +107,10 @@ export function AgendamentoVistoria({
     datasDisponiveis.push(hoje);
   }
   
-  // Continuar com dias futuros até ter 7 datas
+  // Continuar com dias futuros até ter 7 datas (incluindo sábados)
   let dia = addDays(hoje, 1);
   while (datasDisponiveis.length < 7) {
-    if (!isWeekend(dia)) {
+    if (!isDomingo(dia)) { // Só bloqueia domingo
       datasDisponiveis.push(new Date(dia));
     }
     dia = addDays(dia, 1);

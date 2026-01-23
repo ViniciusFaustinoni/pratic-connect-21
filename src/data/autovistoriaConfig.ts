@@ -461,7 +461,7 @@ export function getFotosAutovistoria(tipo: TipoVeiculo): FotoAutovistoria[] {
   return tipo === 'moto' ? FOTOS_AUTOVISTORIA_MOTO : FOTOS_AUTOVISTORIA_CARRO;
 }
 
-// Horários disponíveis para agendamento de vistoria
+// Horários disponíveis para agendamento de vistoria (segunda a sexta)
 export const HORARIOS_DISPONIVEIS = [
   '08:00',
   '09:00',
@@ -472,3 +472,31 @@ export const HORARIOS_DISPONIVEIS = [
   '16:00',
   '17:00',
 ];
+
+// Horários disponíveis para sábado (08:00 às 13:00)
+export const HORARIOS_SABADO = [
+  '08:00',
+  '09:00',
+  '10:00',
+  '11:00',
+  '12:00',
+  '13:00',
+];
+
+// Função helper para verificar se é domingo (não sábado)
+export const isDomingo = (date: Date): boolean => {
+  return date.getDay() === 0; // 0 = domingo
+};
+
+// Função helper para verificar se é sábado
+export const isSabado = (date: Date): boolean => {
+  return date.getDay() === 6; // 6 = sábado
+};
+
+// Função para obter horários disponíveis baseado no dia da semana
+export const getHorariosParaDia = (date: Date): string[] => {
+  if (isSabado(date)) {
+    return HORARIOS_SABADO;
+  }
+  return HORARIOS_DISPONIVEIS;
+};
