@@ -59,8 +59,8 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
 
   const handleExecutar = () => {
     const rota = isInstalacao(tarefa.tipo)
-      ? `/instalador/executar/${tarefa.id}`
-      : `/vistoriador/executar/${tarefa.id}`;
+      ? `/instalador/instalacao/${tarefa.id}`
+      : `/instalador/vistoria/${tarefa.id}`;
     navigate(rota);
   };
 
