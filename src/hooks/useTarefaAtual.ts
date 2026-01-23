@@ -124,6 +124,38 @@ export function useTarefaAtual() {
 }
 
 /**
+ * Hook para iniciar a rota (mudar status de 'agendada' para 'em_rota')
+ * Usado quando o profissional aceita uma tarefa atribuída manualmente
+ */
+export function useIniciarRota() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ tarefaId }: { tarefaId: string }) => {
+      const { error } = await supabase
+        .from('servicos')
+        .update({ 
+          status: 'em_rota',
+          em_rota_em: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', tarefaId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
+      queryClient.invalidateQueries({ queryKey: ['servicos'] });
+      toast.success('Rota iniciada! Siga para o local.');
+    },
+    onError: (error) => {
+      console.error('Erro ao iniciar rota:', error);
+      toast.error('Erro ao iniciar rota');
+    }
+  });
+}
+
+/**
  * Hook para iniciar uma tarefa (mudar status para em_andamento)
  * Agora usa a tabela servicos unificada
  */
