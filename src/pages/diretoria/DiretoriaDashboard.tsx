@@ -16,6 +16,8 @@ import {
   Phone,
   ShieldCheck,
   ArrowRight,
+  Navigation,
+  Timer,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -33,6 +35,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
+import { useMetricasTempo } from '@/hooks/useMetricasTempo';
 import {
   LineChart,
   Line,
@@ -60,6 +63,9 @@ const CORES_PIE = ['#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6
 export default function DiretoriaDashboard() {
   const navigate = useNavigate();
   const [periodo, setPeriodo] = useState<Periodo>('mes');
+  
+  // Hook de métricas de tempo
+  const { data: metricasTempo, isLoading: loadingMetricasTempo } = useMetricasTempo();
 
   // Calcular datas baseado no período
   const getDataInicio = () => {
@@ -473,7 +479,7 @@ export default function DiretoriaDashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <div className="rounded-lg border p-4">
                   <div className="flex items-center gap-3">
                     <div className="rounded-lg bg-info/10 p-2">
@@ -538,6 +544,44 @@ export default function DiretoriaDashboard() {
                         <Skeleton className="mt-1 h-6 w-12" />
                       ) : (
                         <p className="text-xl font-semibold">{operacionais?.assistencias}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tempo Médio em Trânsito */}
+                <div className="rounded-lg border p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-lg bg-blue-500/10 p-2">
+                      <Navigation className="h-4 w-4 text-blue-500" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Tempo Médio Trânsito</p>
+                      {loadingMetricasTempo ? (
+                        <Skeleton className="mt-1 h-6 w-16" />
+                      ) : (
+                        <p className="text-xl font-semibold">
+                          {metricasTempo?.tempoMedioTransitoFormatado || '0 min'}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tempo Médio de Execução */}
+                <div className="rounded-lg border p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-lg bg-green-500/10 p-2">
+                      <Timer className="h-4 w-4 text-green-500" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Tempo Médio Execução</p>
+                      {loadingMetricasTempo ? (
+                        <Skeleton className="mt-1 h-6 w-16" />
+                      ) : (
+                        <p className="text-xl font-semibold">
+                          {metricasTempo?.tempoMedioExecucaoFormatado || '0 min'}
+                        </p>
                       )}
                     </div>
                   </div>
