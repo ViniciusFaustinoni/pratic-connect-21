@@ -754,6 +754,23 @@ export default function CotacaoContratacao() {
                             )}
                           </div>
 
+                          {/* Encaixe de horários ativado - Vistoria Presencial */}
+                          {cotacao?.vistoria_permite_encaixe && (
+                            <div className="flex items-start gap-3 bg-primary/10 border border-primary/30 rounded-lg p-4 max-w-md mx-auto">
+                              <div className="p-2 rounded-full bg-primary/20 flex-shrink-0">
+                                <Puzzle className="h-5 w-5 text-primary" />
+                              </div>
+                              <div className="text-left">
+                                <span className="font-semibold text-primary">Encaixe de Horários Ativado</span>
+                                <p className="text-sm text-muted-foreground mt-1">
+                                  Se um vistoriador estiver próximo antes do horário agendado, 
+                                  ele poderá realizar a vistoria antecipadamente. 
+                                  Você será notificado previamente.
+                                </p>
+                              </div>
+                            </div>
+                          )}
+
                           {/* Aviso importante */}
                           <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 max-w-md mx-auto">
                             <AlertTriangle className="h-5 w-5 text-amber-500 mt-0.5 flex-shrink-0" />
