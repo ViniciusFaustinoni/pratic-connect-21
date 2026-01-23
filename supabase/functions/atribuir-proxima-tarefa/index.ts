@@ -56,7 +56,13 @@ interface ServicoDisponivel {
 
 interface ServicoComDistancia extends ServicoDisponivel {
   distancia_km: number;
+  is_hoje: boolean;
+  is_amanha: boolean;
+  is_encaixe_futuro: boolean;
 }
+
+// Raio máximo para considerar encaixes futuros (em km)
+const RAIO_MAXIMO_ENCAIXE_KM = 10;
 
 serve(async (req) => {
   // Handle CORS preflight
@@ -168,7 +174,8 @@ serve(async (req) => {
     const hoje = new Date().toISOString().split('T')[0];
     const amanha = new Date(Date.now() + 86400000).toISOString().split('T')[0];
 
-    const { data: servicos, error: servicosError } = await supabase
+    // BUSCA 1: Serviços NORMAIS (hoje/amanhã)
+    const { data: servicosNormais, error: servicosNormaisError } = await supabase
       .from('servicos')
       .select(`
         id,
@@ -197,13 +204,57 @@ serve(async (req) => {
       .lte('data_agendada', amanha)
       .order('data_agendada', { ascending: true });
 
-    if (servicosError) {
-      console.error('[atribuir-proxima-tarefa] Erro ao buscar serviços:', servicosError);
-      throw servicosError;
+    if (servicosNormaisError) {
+      console.error('[atribuir-proxima-tarefa] Erro ao buscar serviços normais:', servicosNormaisError);
+      throw servicosNormaisError;
     }
 
+    // BUSCA 2: Serviços FUTUROS com ENCAIXE habilitado (NOVA!)
+    const { data: servicosEncaixe, error: servicosEncaixeError } = await supabase
+      .from('servicos')
+      .select(`
+        id,
+        tipo,
+        data_agendada,
+        hora_agendada,
+        latitude,
+        longitude,
+        permite_encaixe,
+        status,
+        logradouro,
+        numero,
+        bairro,
+        cidade,
+        uf,
+        associado_id,
+        veiculo_id,
+        local_vistoria,
+        associado:associados(nome, telefone, whatsapp),
+        veiculo:veiculos(placa, marca, modelo, cor)
+      `)
+      .is('profissional_id', null)
+      .in('status', ['pendente', 'agendada'])
+      .or('local_vistoria.is.null,local_vistoria.eq.cliente')
+      .gt('data_agendada', amanha)     // DATAS FUTURAS (> amanhã)
+      .eq('permite_encaixe', true)      // APENAS os que aceitam encaixe
+      .not('latitude', 'is', null)
+      .not('longitude', 'is', null);
+
+    if (servicosEncaixeError) {
+      console.error('[atribuir-proxima-tarefa] Erro ao buscar serviços encaixe:', servicosEncaixeError);
+      // Continua só com os normais (não lança erro)
+    }
+
+    // Combinar as duas listas
+    const todosServicos = [
+      ...(servicosNormais || []),
+      ...(servicosEncaixe || [])
+    ];
+
+    console.log(`[atribuir-proxima-tarefa] Serviços encontrados: ${(servicosNormais || []).length} normais + ${(servicosEncaixe || []).length} encaixes futuros`);
+
     // 3. Mapear para formato comum
-    const servicosDisponiveis: ServicoDisponivel[] = (servicos || []).map((s: any) => ({
+    const servicosDisponiveis: ServicoDisponivel[] = todosServicos.map((s: any) => ({
       id: s.id,
       tipo: s.tipo,
       data_agendada: s.data_agendada,
@@ -228,7 +279,7 @@ serve(async (req) => {
       uf: s.uf,
     }));
 
-    console.log(`[atribuir-proxima-tarefa] ${servicosDisponiveis.length} serviços disponíveis encontrados`);
+    console.log(`[atribuir-proxima-tarefa] ${servicosDisponiveis.length} serviços disponíveis no total`);
 
     if (servicosDisponiveis.length === 0) {
       // Marcar profissional como em serviço mesmo sem tarefas
@@ -251,24 +302,53 @@ serve(async (req) => {
       );
     }
 
-    // 4. Calcular distâncias e ordenar
+    // 4. Calcular distâncias e ordenar com nova lógica de prioridades
     const servicosComDistancia: ServicoComDistancia[] = servicosDisponiveis
       .filter(s => s.latitude && s.longitude)
-      .map(s => ({
-        ...s,
-        distancia_km: calcularDistanciaKm(
-          latitude, longitude,
-          s.latitude!, s.longitude!
-        )
-      }))
-      .sort((a, b) => {
-        // Prioridade 1: Encaixe (permite_encaixe = true e hoje)
-        if (a.permite_encaixe && a.data_agendada === hoje && !b.permite_encaixe) return -1;
-        if (b.permite_encaixe && b.data_agendada === hoje && !a.permite_encaixe) return 1;
+      .map(s => {
+        const distancia_km = calcularDistanciaKm(latitude, longitude, s.latitude!, s.longitude!);
+        const is_hoje = s.data_agendada === hoje;
+        const is_amanha_flag = s.data_agendada === amanha;
+        const is_encaixe_futuro = s.data_agendada > amanha && s.permite_encaixe;
         
-        // Prioridade 2: Proximidade
+        return {
+          ...s,
+          distancia_km,
+          is_hoje,
+          is_amanha: is_amanha_flag,
+          is_encaixe_futuro
+        };
+      })
+      .filter(s => {
+        // Encaixes futuros SÓ entram se estiverem dentro do raio máximo
+        if (s.is_encaixe_futuro) {
+          const dentroDoRaio = s.distancia_km <= RAIO_MAXIMO_ENCAIXE_KM;
+          if (!dentroDoRaio) {
+            console.log(`[atribuir-proxima-tarefa] Encaixe ${s.id} descartado: ${s.distancia_km.toFixed(2)}km > ${RAIO_MAXIMO_ENCAIXE_KM}km`);
+          }
+          return dentroDoRaio;
+        }
+        // Serviços de hoje/amanhã: sem limite de raio
+        return true;
+      })
+      .sort((a, b) => {
+        // PRIORIDADE 1: Serviços de HOJE (por proximidade)
+        if (a.is_hoje && !b.is_hoje) return -1;
+        if (!a.is_hoje && b.is_hoje) return 1;
+        
+        // PRIORIDADE 2: Encaixes futuros próximos (já filtrados por raio)
+        if (a.is_encaixe_futuro && !b.is_encaixe_futuro && !b.is_hoje) return -1;
+        if (!a.is_encaixe_futuro && b.is_encaixe_futuro && !a.is_hoje) return 1;
+        
+        // PRIORIDADE 3: Serviços de AMANHÃ
+        if (a.is_amanha && !b.is_amanha && !b.is_hoje && !b.is_encaixe_futuro) return -1;
+        if (!a.is_amanha && b.is_amanha && !a.is_hoje && !a.is_encaixe_futuro) return 1;
+        
+        // PRIORIDADE 4: Por distância (dentro da mesma categoria)
         return a.distancia_km - b.distancia_km;
       });
+    
+    console.log(`[atribuir-proxima-tarefa] ${servicosComDistancia.length} serviços após filtro de raio (encaixes <= ${RAIO_MAXIMO_ENCAIXE_KM}km)`);
 
     if (servicosComDistancia.length === 0) {
       return new Response(
@@ -286,15 +366,26 @@ serve(async (req) => {
       
       const agora = new Date().toISOString();
       
+      // Preparar dados de atualização
+      const updateData: Record<string, any> = {
+        profissional_id: profissionalId,
+        status: 'em_rota',
+        em_rota_em: agora,
+        updated_at: agora
+      };
+
+      // Se for ENCAIXE FUTURO, puxar para HOJE e marcar como encaixe executado
+      if (servico.is_encaixe_futuro) {
+        updateData.data_agendada_original = servico.data_agendada;
+        updateData.data_agendada = hoje;
+        updateData.encaixe_executado = true;
+        console.log(`[atribuir-proxima-tarefa] ⚡ ENCAIXE EXECUTADO: Serviço ${servico.id} antecipado de ${servico.data_agendada} para ${hoje}`);
+      }
+
       // Atualizar na tabela SERVICOS
       const { data: atualizado, error: updateError } = await supabase
         .from('servicos')
-        .update({
-          profissional_id: profissionalId,
-          status: 'em_rota',
-          em_rota_em: agora,
-          updated_at: agora
-        })
+        .update(updateData)
         .eq('id', servico.id)
         .is('profissional_id', null) // Só atualiza se ainda não tiver responsável
         .select('*, instalacao_origem_id, vistoria_origem_id')
@@ -320,12 +411,21 @@ serve(async (req) => {
             .single();
           
           // Atualizar status na instalação de origem
+          const instalacaoUpdate: Record<string, any> = {
+            instalador_responsavel_id: profissionalId,
+            status: 'em_rota'
+          };
+          
+          // Se for encaixe, sincronizar data também na tabela de origem
+          if (servico.is_encaixe_futuro) {
+            instalacaoUpdate.data_agendada_original = servico.data_agendada;
+            instalacaoUpdate.data_agendada = hoje;
+            instalacaoUpdate.encaixe_executado = true;
+          }
+          
           await supabase
             .from('instalacoes')
-            .update({
-              instalador_responsavel_id: profissionalId,
-              status: 'em_rota'
-            })
+            .update(instalacaoUpdate)
             .eq('id', atualizado.instalacao_origem_id);
           
           // Copiar associado_id e veiculo_id para o servico se não tiver
@@ -349,12 +449,22 @@ serve(async (req) => {
         
         if (atualizado.vistoria_origem_id) {
           console.log(`[atribuir-proxima-tarefa] Sincronizando com vistorias ${atualizado.vistoria_origem_id}`);
+          
+          const vistoriaUpdate: Record<string, any> = {
+            vistoriador_id: profissionalId,
+            status: 'em_rota'
+          };
+          
+          // Se for encaixe, sincronizar data também na tabela de origem
+          if (servico.is_encaixe_futuro) {
+            vistoriaUpdate.data_agendada_original = servico.data_agendada;
+            vistoriaUpdate.data_agendada = hoje;
+            vistoriaUpdate.encaixe_executado = true;
+          }
+          
           await supabase
             .from('vistorias')
-            .update({
-              vistoriador_id: profissionalId,
-              status: 'em_rota'
-            })
+            .update(vistoriaUpdate)
             .eq('id', atualizado.vistoria_origem_id);
         }
         
