@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import ReactDOM from "react-dom";
 import { getHojeBrasilia } from "@/lib/date-utils";
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from "react-leaflet";
 import L from "leaflet";
@@ -200,12 +201,34 @@ function calcularDistanciaKm(
   return R * c;
 }
 
-// Componente para localização do usuário
+// Componente para localização do usuário - usa portal para evitar conflitos com eventos do mapa
 function UserLocationButton() {
   const map = useMap();
   const [isLocating, setIsLocating] = useState(false);
+  const [container, setContainer] = useState<HTMLElement | null>(null);
 
-  const handleLocate = () => {
+  useEffect(() => {
+    // Encontrar o container do mapa e criar o portal fora da área de eventos
+    const mapContainer = map.getContainer();
+    const existingBtn = mapContainer.querySelector('.user-location-btn-container');
+    if (existingBtn) {
+      existingBtn.remove();
+    }
+    
+    const btnContainer = document.createElement('div');
+    btnContainer.className = 'user-location-btn-container';
+    btnContainer.style.cssText = 'position: absolute; top: 16px; right: 16px; z-index: 1000;';
+    mapContainer.appendChild(btnContainer);
+    setContainer(btnContainer);
+    
+    return () => {
+      btnContainer.remove();
+    };
+  }, [map]);
+
+  const handleLocate = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
     setIsLocating(true);
     map.locate({ setView: true, maxZoom: 16 });
     
@@ -220,16 +243,20 @@ function UserLocationButton() {
     });
   };
 
-  return (
-    <Button
-      size="icon"
-      variant="secondary"
-      className="absolute top-4 right-4 z-40 h-10 w-10 rounded-full shadow-lg"
+  if (!container) return null;
+
+  // Usar ReactDOM.createPortal seria ideal, mas para simplificar usamos renderização direta
+  return ReactDOM.createPortal(
+    <button
+      type="button"
+      className="h-10 w-10 rounded-full shadow-lg bg-secondary hover:bg-secondary/80 flex items-center justify-center"
       onClick={handleLocate}
       disabled={isLocating}
+      style={{ touchAction: 'manipulation' }}
     >
       <Navigation className={cn("h-5 w-5", isLocating && "animate-pulse")} />
-    </Button>
+    </button>,
+    container
   );
 }
 

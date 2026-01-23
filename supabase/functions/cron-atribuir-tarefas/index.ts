@@ -104,6 +104,8 @@ serve(async (req) => {
           longitude,
           permite_encaixe,
           local_vistoria,
+          instalacao_origem_id,
+          vistoria_origem_id,
           associado:associados(nome),
           veiculo:veiculos(placa)
         `)
@@ -135,6 +137,8 @@ serve(async (req) => {
           latitude: s.latitude,
           longitude: s.longitude,
           permite_encaixe: s.permite_encaixe || false,
+          instalacao_origem_id: s.instalacao_origem_id,
+          vistoria_origem_id: s.vistoria_origem_id,
           associado_nome: s.associado?.nome || 'Cliente não vinculado',
           veiculo_placa: s.veiculo?.placa || 'Placa pendente',
           distancia_km: calcularDistanciaKm(
@@ -180,6 +184,29 @@ serve(async (req) => {
         if (atualizado) {
           console.log(`[cron-atribuir-tarefas] ✓ Serviço ${servico.id} atribuído ao profissional ${prof.vistoriador_id}`);
 
+          // SINCRONIZAR COM TABELA DE ORIGEM (instalacoes ou vistorias)
+          if (servico.instalacao_origem_id) {
+            console.log(`[cron-atribuir-tarefas] Sincronizando com instalacoes ${servico.instalacao_origem_id}`);
+            await supabase
+              .from('instalacoes')
+              .update({
+                instalador_responsavel_id: prof.vistoriador_id,
+                status: 'em_rota'
+              })
+              .eq('id', servico.instalacao_origem_id);
+          }
+          
+          if (servico.vistoria_origem_id) {
+            console.log(`[cron-atribuir-tarefas] Sincronizando com vistorias ${servico.vistoria_origem_id}`);
+            await supabase
+              .from('vistorias')
+              .update({
+                vistoriador_id: prof.vistoriador_id,
+                status: 'em_rota'
+              })
+              .eq('id', servico.vistoria_origem_id);
+          }
+
           // 6. Criar ou atualizar rota do dia
           const { data: rotaExistente } = await supabase
             .from('rotas')
@@ -215,6 +242,14 @@ serve(async (req) => {
               .from('servicos')
               .update({ rota_id: rotaId })
               .eq('id', servico.id);
+              
+            // Também vincular instalacao/vistoria de origem à rota
+            if (servico.instalacao_origem_id) {
+              await supabase
+                .from('instalacoes')
+                .update({ rota_id: rotaId })
+                .eq('id', servico.instalacao_origem_id);
+            }
           }
 
           atribuicoes.push({
