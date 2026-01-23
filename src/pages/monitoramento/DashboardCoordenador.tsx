@@ -259,15 +259,10 @@ export default function DashboardCoordenador() {
             <Card className="border-border bg-card">
               <CardContent className="p-8 text-center">
                 <Users className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-                <p className="text-muted-foreground">Nenhum profissional em rota hoje</p>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="mt-4"
-                  onClick={() => navigate('/monitoramento/rotas')}
-                >
-                  Criar Rota
-                </Button>
+                <p className="text-muted-foreground">Nenhum profissional em rota ainda</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Rotas são criadas automaticamente quando profissionais iniciam o serviço
+                </p>
               </CardContent>
             </Card>
           )}

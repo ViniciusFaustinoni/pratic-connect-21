@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Plus, Route, MapPin, Users, Calendar, Loader2 } from 'lucide-react';
+import { Route, MapPin, Users, Calendar, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -27,9 +27,9 @@ import { useRotasRealtime } from '@/hooks/useRotasRealtime';
 export default function Rotas() {
   // Ativar atualizações em tempo real
   useRotasRealtime();
-  const [formOpen, setFormOpen] = useState(false);
   const [drawerRotaId, setDrawerRotaId] = useState<string | null>(null);
   const [editRota, setEditRota] = useState<Rota | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
   const [addInstalacaoOpen, setAddInstalacaoOpen] = useState(false);
   const [filters, setFilters] = useState<RotaFiltersType>({});
   const [dataSelecionada, setDataSelecionada] = useState<Date | null>(null);
@@ -56,12 +56,6 @@ export default function Rotas() {
     }
   };
 
-  const handleNewRota = () => {
-    setDataSelecionada(null);
-    setEditRota(null);
-    setFormOpen(true);
-  };
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -69,13 +63,9 @@ export default function Rotas() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Rotas</h1>
           <p className="text-muted-foreground">
-            Organize as rotas de instalação por região e data
+            Acompanhe as rotas automáticas dos profissionais em campo
           </p>
         </div>
-        <Button onClick={handleNewRota}>
-          <Plus className="mr-2 h-4 w-4" />
-          Nova Rota
-        </Button>
       </div>
 
       {/* Métricas */}
@@ -169,11 +159,6 @@ export default function Rotas() {
         <TabsContent value="calendario">
           <RotaCalendario 
             onRotaClick={handleOpenRota}
-            onDayClick={(data) => {
-              setDataSelecionada(data);
-              setEditRota(null);
-              setFormOpen(true);
-            }}
           />
         </TabsContent>
 
@@ -203,12 +188,8 @@ export default function Rotas() {
                 <p className="mt-2 text-sm text-muted-foreground">
                   {Object.keys(filters).length > 0 
                     ? 'Tente ajustar os filtros' 
-                    : 'Crie rotas para organizar as instalações'}
+                    : 'As rotas são criadas automaticamente quando os profissionais iniciam o serviço'}
                 </p>
-                <Button className="mt-4" onClick={handleNewRota}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Nova Rota
-                </Button>
               </CardContent>
             </Card>
           )}
