@@ -330,6 +330,7 @@ export function useUploadVideo360() {
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['vistoria-completa'] });
+      queryClient.invalidateQueries({ queryKey: ['vistoria-completa-servico'] });
       toast.success('Vídeo 360° enviado com sucesso!');
     },
     onError: (error) => {
@@ -402,6 +403,7 @@ export function useUploadFotoVistoriaCompleta() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['vistoria-completa'] });
+      queryClient.invalidateQueries({ queryKey: ['vistoria-completa-servico'] });
     },
     onError: (error) => {
       console.error('Erro ao fazer upload:', error);
