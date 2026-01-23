@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
-import { format, isSameDay, addDays } from "date-fns";
+import { format, isSameDay, addDays, formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -34,11 +34,13 @@ import {
   ChevronRight,
   X,
   CheckCircle2,
+  User,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useVistoriasMapa, VistoriaMapa } from "@/hooks/useVistoriasMapa";
+import { useVistoriadoresRealtime } from "@/hooks/useVistoriadoresRealtime";
 import { TIPO_VISTORIA_LABELS } from "@/types/servicos-rota";
-import { createColoredMarkerSvg, svgToDataUrl } from "@/lib/rota-colors";
+import { createColoredMarkerSvg, svgToDataUrl, createVistoriadorMarkerSvg, COR_VISTORIADOR } from "@/lib/rota-colors";
 import { cn } from "@/lib/utils";
 
 // Cores para o mapa do coordenador - por status de conclusão
@@ -78,6 +80,26 @@ function getColoredIcon(color: string): L.Icon {
   return icon;
 }
 
+// Cache de ícones de vistoriador
+const vistoriadorIconCache = new Map<string, L.Icon>();
+
+function getVistoriadorIcon(color: string = COR_VISTORIADOR): L.Icon {
+  const cacheKey = `vistoriador-${color}`;
+  if (vistoriadorIconCache.has(cacheKey)) {
+    return vistoriadorIconCache.get(cacheKey)!;
+  }
+  
+  const icon = new L.Icon({
+    iconUrl: svgToDataUrl(createVistoriadorMarkerSvg(color)),
+    iconSize: [36, 36],
+    iconAnchor: [18, 18],
+    popupAnchor: [0, -18],
+  });
+  
+  vistoriadorIconCache.set(cacheKey, icon);
+  return icon;
+}
+
 // Componente para centralizar mapa
 function FlyToPosition({ position, zoom = 15 }: { position: [number, number] | null; zoom?: number }) {
   const map = useMap();
@@ -91,6 +113,7 @@ function FlyToPosition({ position, zoom = 15 }: { position: [number, number] | n
 
 export function MapaVistoriasContent() {
   const { data: vistorias, isLoading } = useVistoriasMapa();
+  const { data: vistoriadores, isLoading: isLoadingVistoriadores } = useVistoriadoresRealtime();
   const [filtroTipo, setFiltroTipo] = useState("todos");
   const [filtroStatus, setFiltroStatus] = useState("todos");
   const [filtroBusca, setFiltroBusca] = useState("");
@@ -98,6 +121,10 @@ export function MapaVistoriasContent() {
   const [posicaoSelecionada, setPosicaoSelecionada] = useState<[number, number] | null>(null);
   const [vistoriaSelecionada, setVistoriaSelecionada] = useState<string | null>(null);
 
+  // Vistoriadores em serviço
+  const vistoriadoresEmServico = useMemo(() => {
+    return vistoriadores?.filter(v => v.em_servico && v.latitude && v.longitude) || [];
+  }, [vistoriadores]);
   // Filtrar vistorias
   const vistoriasFiltradas = useMemo(() => {
     if (!vistorias) return [];
@@ -513,9 +540,48 @@ export function MapaVistoriasContent() {
                 </Marker>
               );
             })}
+
+            {/* Marcadores dos Vistoriadores em Campo */}
+            {vistoriadoresEmServico.map((vistoriador) => (
+              <Marker
+                key={`vistoriador-${vistoriador.vistoriador_id}`}
+                position={[vistoriador.latitude, vistoriador.longitude]}
+                icon={getVistoriadorIcon()}
+              >
+                <Popup>
+                  <div className="min-w-[180px]">
+                    <div className="flex items-center gap-2 mb-2">
+                      <User className="h-4 w-4 text-blue-600" />
+                      <h3 className="font-bold text-sm">{vistoriador.vistoriador_nome}</h3>
+                    </div>
+                    <div className="text-xs space-y-1 mb-2">
+                      <p className="flex items-center gap-1 text-green-600">
+                        <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                        Em serviço
+                      </p>
+                      <p className="text-muted-foreground">
+                        Atualizado: {formatDistanceToNow(new Date(vistoriador.updated_at), { 
+                          addSuffix: true, 
+                          locale: ptBR 
+                        })}
+                      </p>
+                    </div>
+                    {vistoriador.telefone && (
+                      <button
+                        onClick={() => abrirWhatsApp(vistoriador.telefone)}
+                        className="flex items-center justify-center gap-1 w-full px-3 py-1.5 bg-green-600 text-white rounded text-xs hover:bg-green-700"
+                      >
+                        <Phone className="h-3 w-3" />
+                        Contatar
+                      </button>
+                    )}
+                  </div>
+                </Popup>
+              </Marker>
+            ))}
           </MapContainer>
 
-          {/* Legenda de Status - Realizadas/A Realizar */}
+          {/* Legenda de Status - Realizadas/A Realizar/Vistoriadores */}
           <div className="absolute top-4 right-4 z-40 bg-background/95 backdrop-blur-sm rounded-lg shadow-lg border p-3">
             <h4 className="font-semibold text-sm mb-3">Legenda</h4>
             <div className="space-y-2">
@@ -541,6 +607,25 @@ export function MapaVistoriasContent() {
                 <span className="flex-1 text-left">A Realizar</span>
                 <Badge variant="secondary" className="text-xs">{contadores.aRealizar}</Badge>
               </button>
+              
+              {/* Separador */}
+              <div className="border-t my-2" />
+              
+              {/* Vistoriadores em campo */}
+              <div className="flex items-center gap-2 text-sm p-2 rounded-md bg-muted/50">
+                <span 
+                  className="w-4 h-4 rounded-full flex-shrink-0 flex items-center justify-center" 
+                  style={{ backgroundColor: COR_VISTORIADOR }}
+                >
+                  <User className="h-2.5 w-2.5 text-white" />
+                </span>
+                <span className="flex-1 text-left">Profissionais</span>
+                <Badge variant="secondary" className="text-xs gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                  {vistoriadoresEmServico.length}
+                </Badge>
+              </div>
+              
               {filtroStatus !== "todos" && (
                 <button
                   onClick={() => setFiltroStatus("todos")}
