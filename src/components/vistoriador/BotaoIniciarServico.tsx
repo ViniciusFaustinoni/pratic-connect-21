@@ -75,6 +75,11 @@ export function BotaoIniciarServico({ className }: BotaoIniciarServicoProps) {
             Sua localização está sendo atualizada automaticamente. Novas tarefas serão atribuídas com base na sua proximidade.
           </p>
           
+          {/* Aviso para manter app aberto */}
+          <p className="text-xs text-amber-600 mt-3 font-medium max-w-xs">
+            ⚠️ Mantenha o app aberto para receber novas tarefas automaticamente
+          </p>
+          
           {/* Nota sobre encerrar turno */}
           <p className="text-xs text-muted-foreground/70 mt-2">
             Para encerrar o turno, acesse seu Perfil.
