@@ -50,7 +50,8 @@ export type PermissionKey =
   | 'canCreateRoles'
   | 'canManageConsultores'
   | 'canManageEquipeEstoque'
-  | 'canViewReports';
+  | 'canViewReports'
+  | 'canEditRotas';
 
 export type CotacaoViewScope = 'own' | 'team' | 'all';
 
@@ -225,6 +226,8 @@ export function usePermissions() {
     canManageOuvidoria: isDiretor || hasRole('gerente_comercial') || hasRole('analista_cadastro') || isFuncionario() || isDesenvolvedor,
     canManageConsultores: isGerencia() || isDiretor || isDesenvolvedor || isAdminMaster,
     canViewReports: (isGerencia() || isDiretor || isDesenvolvedor || isAdminMaster || isAnalistaCadastro) && !isVendedorCotacao,
+    // Permissão para editar rotas (coordenador só pode visualizar)
+    canEditRotas: isGerencia() || isDiretor || isDesenvolvedor || isAdminMaster,
   };
 
   return {

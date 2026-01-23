@@ -68,8 +68,8 @@ export function RotaDetailDrawer({
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [updatingInstalacao, setUpdatingInstalacao] = useState<string | null>(null);
   
-  // Verificar se é coordenador de monitoramento (não pode concluir rotas)
-  const { isCoordenadorMonitoramentoOnly } = usePermissions();
+  // Verificar permissões de edição de rotas
+  const { canEditRotas } = usePermissions();
 
   // Ativar atualizações em tempo real para esta rota específica
   useRotaRealtime(open ? rotaId : null);
@@ -266,57 +266,59 @@ export function RotaDetailDrawer({
                   </div>
                 </div>
 
-                {/* Ações rápidas */}
-                <div className="flex flex-wrap gap-2">
-                  {rota.status === 'pendente' && (
-                    <Button 
-                      onClick={() => handleUpdateStatus('em_andamento')}
-                      disabled={updateStatus.isPending}
-                    >
-                      <Play className="mr-2 h-4 w-4" />
-                      Iniciar Rota
-                    </Button>
-                  )}
-                  {rota.status === 'em_andamento' && !isCoordenadorMonitoramentoOnly && (
-                    <Button 
-                      onClick={() => handleUpdateStatus('concluida')}
-                      disabled={updateStatus.isPending}
-                    >
-                      <CheckCircle className="mr-2 h-4 w-4" />
-                      Concluir Rota
-                    </Button>
-                  )}
-                  {rota.status !== 'concluida' && rota.status !== 'cancelada' && (
-                    <>
-                      <Button variant="outline" onClick={onAddServicos}>
-                        <Plus className="mr-2 h-4 w-4" />
-                        Adicionar Serviços
+                {/* Ações rápidas - apenas para quem pode editar rotas */}
+                {canEditRotas && (
+                  <div className="flex flex-wrap gap-2">
+                    {rota.status === 'pendente' && (
+                      <Button 
+                        onClick={() => handleUpdateStatus('em_andamento')}
+                        disabled={updateStatus.isPending}
+                      >
+                        <Play className="mr-2 h-4 w-4" />
+                        Iniciar Rota
                       </Button>
-                      <Button variant="outline" onClick={onEdit}>
-                        Editar
+                    )}
+                    {rota.status === 'em_andamento' && (
+                      <Button 
+                        onClick={() => handleUpdateStatus('concluida')}
+                        disabled={updateStatus.isPending}
+                      >
+                        <CheckCircle className="mr-2 h-4 w-4" />
+                        Concluir Rota
                       </Button>
-                    </>
-                  )}
-                  {rota.status === 'pendente' && (
+                    )}
+                    {rota.status !== 'concluida' && rota.status !== 'cancelada' && (
+                      <>
+                        <Button variant="outline" onClick={onAddServicos}>
+                          <Plus className="mr-2 h-4 w-4" />
+                          Adicionar Serviços
+                        </Button>
+                        <Button variant="outline" onClick={onEdit}>
+                          Editar
+                        </Button>
+                      </>
+                    )}
+                    {rota.status === 'pendente' && (
+                      <Button 
+                        variant="destructive" 
+                        onClick={() => handleUpdateStatus('cancelada')}
+                        disabled={updateStatus.isPending}
+                      >
+                        <X className="mr-2 h-4 w-4" />
+                        Cancelar
+                      </Button>
+                    )}
+                    {/* Botão Excluir - disponível para qualquer status */}
                     <Button 
-                      variant="destructive" 
-                      onClick={() => handleUpdateStatus('cancelada')}
-                      disabled={updateStatus.isPending}
+                      variant="ghost" 
+                      onClick={() => setShowDeleteDialog(true)}
+                      className="text-destructive hover:text-destructive hover:bg-destructive/10"
                     >
-                      <X className="mr-2 h-4 w-4" />
-                      Cancelar
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Excluir
                     </Button>
-                  )}
-                  {/* Botão Excluir - disponível para qualquer status */}
-                  <Button 
-                    variant="ghost" 
-                    onClick={() => setShowDeleteDialog(true)}
-                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                  >
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    Excluir
-                  </Button>
-                </div>
+                  </div>
+                )}
 
                 <Separator />
 
@@ -349,9 +351,9 @@ export function RotaDetailDrawer({
                                       <InstalacaoMiniCard 
                                         instalacao={instalacao}
                                         rotaId={rota.id}
-                                        showRemove={rota.status === 'pendente'}
+                                        showRemove={rota.status === 'pendente' && canEditRotas}
                                       />
-                                      {rota.status === 'pendente' && (
+                                      {rota.status === 'pendente' && canEditRotas && (
                                         <div className="mt-1 flex items-center gap-2 text-xs">
                                           <ArrowRight className="h-3 w-3 text-muted-foreground" />
                                           <Select
@@ -400,9 +402,9 @@ export function RotaDetailDrawer({
                                   <InstalacaoMiniCard 
                                     instalacao={instalacao}
                                     rotaId={rota.id}
-                                    showRemove={rota.status === 'pendente'}
+                                    showRemove={rota.status === 'pendente' && canEditRotas}
                                   />
-                                  {rota.status === 'pendente' && (
+                                  {rota.status === 'pendente' && canEditRotas && (
                                     <div className="mt-1 flex items-center gap-2 text-xs">
                                       <ArrowRight className="h-3 w-3 text-muted-foreground" />
                                       <Select
@@ -437,7 +439,7 @@ export function RotaDetailDrawer({
                             key={instalacao.id} 
                             instalacao={instalacao}
                             rotaId={rota.id}
-                            showRemove={rota.status === 'pendente'}
+                            showRemove={rota.status === 'pendente' && canEditRotas}
                           />
                         ))}
                       </div>
@@ -448,15 +450,17 @@ export function RotaDetailDrawer({
                       <p className="mt-2 text-sm text-muted-foreground">
                         Nenhuma instalação vinculada
                       </p>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="mt-3"
-                        onClick={onAddServicos}
-                      >
-                        <Plus className="mr-2 h-4 w-4" />
-                        Adicionar
-                      </Button>
+                      {canEditRotas && (
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="mt-3"
+                          onClick={onAddServicos}
+                        >
+                          <Plus className="mr-2 h-4 w-4" />
+                          Adicionar
+                        </Button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -476,7 +480,7 @@ export function RotaDetailDrawer({
                             key={vistoria.id} 
                             vistoria={vistoria}
                             rotaId={rota.id}
-                            showRemove={rota.status === 'pendente'}
+                            showRemove={rota.status === 'pendente' && canEditRotas}
                           />
                         ))}
                       </div>
