@@ -263,13 +263,42 @@
     background: hsl(var(--muted-foreground) / 0.5);
   }
 
-  /* Safe area for iPhones with notch */
+  /* Safe area for iPhones with notch - PWA support */
   .pb-safe {
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 
+  .pt-safe {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  .px-safe {
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+
   .h-safe-area-inset-bottom {
     height: env(safe-area-inset-bottom, 0px);
+  }
+
+  .h-safe-area-inset-top {
+    height: env(safe-area-inset-top, 0px);
+  }
+
+  /* Bottom navigation with safe area for PWA */
+  .bottom-nav-safe {
+    padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Standalone PWA detection - add padding when running as installed app */
+  @media (display-mode: standalone) {
+    .standalone-pt-safe {
+      padding-top: env(safe-area-inset-top, 20px);
+    }
+    
+    .standalone-pb-safe {
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
   }
 
   /* Glow effects */

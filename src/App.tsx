@@ -243,6 +243,7 @@ import NovaManifestacao from "./pages/ouvidoria/NovaManifestacao";
 import InstaladorLogin from "./pages/instalador/InstaladorLogin";
 import InstaladorHome from "./pages/instalador/InstaladorHome";
 import InstaladorChecklist from "./pages/instalador/InstaladorChecklist";
+import InstaladorInstalar from "./pages/instalador/InstaladorInstalar";
 
 // Vistoria Completa (unified in instalador)
 import ExecutarVistoriaCompleta from "./pages/instalador/ExecutarVistoriaCompleta";
@@ -542,6 +543,7 @@ const App = () => (
             
             {/* Installer App Routes */}
             <Route path="/instalador/login" element={<InstaladorLogin />} />
+            <Route path="/instalador/instalar" element={<InstaladorInstalar />} />
             <Route element={<InstaladorLayout />}>
               <Route path="/instalador" element={<InstaladorHome />} />
               <Route path="/instalador/tarefas" element={<InstaladorTarefas />} />
