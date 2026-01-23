@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { MapPin, Navigation, Clock, Car, User, Wrench, ClipboardCheck, Loader2 } from 'lucide-react';
+import { MapPin, Navigation, Clock, Car, User, Wrench, ClipboardCheck, Loader2, FastForward } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -25,7 +25,11 @@ export function EncaixeCard({ encaixe }: EncaixeCardProps) {
   const handleAssumir = async () => {
     setAssumindo(true);
     try {
-      await puxarEncaixe.mutateAsync({ id: encaixe.id, tipo: encaixe.tipo });
+      await puxarEncaixe.mutateAsync({ 
+        id: encaixe.id, 
+        tipo: encaixe.tipo,
+        isAdiantamento: encaixe.isAdiantamento,
+      });
     } finally {
       setAssumindo(false);
     }
@@ -73,15 +77,15 @@ export function EncaixeCard({ encaixe }: EncaixeCardProps) {
   return (
     <Card className="overflow-hidden">
       <CardContent className="p-4 space-y-4">
-        {/* Header com distância e tipo */}
+        {/* Header com distância/adiantamento e tipo */}
         <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2">
-          {encaixe.tipo === 'instalacao' ? (
-            <Wrench className="h-5 w-5 text-primary" />
-          ) : (
-            <ClipboardCheck className="h-5 w-5 text-primary" />
-          )}
-          <div>
+          <div className="flex items-center gap-2">
+            {encaixe.tipo === 'instalacao' ? (
+              <Wrench className="h-5 w-5 text-primary" />
+            ) : (
+              <ClipboardCheck className="h-5 w-5 text-primary" />
+            )}
+            <div>
               <p className="font-medium text-sm">{getTipoLabel()}</p>
               <p className="text-xs text-muted-foreground">
                 {format(new Date(encaixe.data_agendada), "dd/MM", { locale: ptBR })}
@@ -89,9 +93,18 @@ export function EncaixeCard({ encaixe }: EncaixeCardProps) {
               </p>
             </div>
           </div>
-          <Badge variant="secondary" className="bg-primary/10 text-primary font-semibold">
-            {encaixe.distancia_km} km
-          </Badge>
+          
+          {/* Badge diferenciado para adiantamento */}
+          {encaixe.isAdiantamento ? (
+            <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 font-semibold">
+              <FastForward className="h-3 w-3 mr-1" />
+              Adiantamento
+            </Badge>
+          ) : (
+            <Badge variant="secondary" className="bg-primary/10 text-primary font-semibold">
+              {encaixe.distancia_km} km
+            </Badge>
+          )}
         </div>
 
         {/* Cliente */}
@@ -149,7 +162,12 @@ export function EncaixeCard({ encaixe }: EncaixeCardProps) {
             {assumindo ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Assumindo...
+                {encaixe.isAdiantamento ? 'Adiantando...' : 'Assumindo...'}
+              </>
+            ) : encaixe.isAdiantamento ? (
+              <>
+                <FastForward className="mr-2 h-4 w-4" />
+                Adiantar para Hoje
               </>
             ) : (
               'Assumir'
