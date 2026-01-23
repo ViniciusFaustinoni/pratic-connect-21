@@ -106,13 +106,14 @@ export interface FinalizarVistoriaParams {
   horarioAgendado?: string;
   endereco?: { cep: string; logradouro: string; numero: string; bairro: string; cidade: string; estado: string; };
   responsavel?: { euMesmo: boolean; nome?: string; telefone?: string; };
+  permiteEncaixe?: boolean;
 }
 
 export function useFinalizarVistoriaCotacao() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async ({ cotacaoId, tipoVistoria, dataAgendada, horarioAgendado, endereco, responsavel }: FinalizarVistoriaParams) => {
+    mutationFn: async ({ cotacaoId, tipoVistoria, dataAgendada, horarioAgendado, endereco, responsavel, permiteEncaixe }: FinalizarVistoriaParams) => {
       // FLUXO AGENDADA (sem autovistoria) - usar edge function para criar vistoria E instalacao
       if (tipoVistoria === 'agendada' && endereco && responsavel) {
         // Geocodificar endereço antes de enviar
@@ -135,6 +136,7 @@ export function useFinalizarVistoriaCotacao() {
             responsavel,
             latitude: coords.success ? coords.latitude : null,
             longitude: coords.success ? coords.longitude : null,
+            permiteEncaixe: permiteEncaixe || false,
           },
         });
         
