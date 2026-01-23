@@ -941,8 +941,8 @@ export function useAprovarProposta() {
         throw new Error(`Não foi possível aprovar o contrato. Status atual: ${contratoRefetch?.status || 'desconhecido'}`);
       }
 
-      // 3. Verificar se já existe instalação CONCLUÍDA para este contrato
-      // (fluxo: instalação é feita ANTES da análise cadastral)
+      // 3. Verificar se já existe instalação para este contrato OU para este veículo
+      // Primeiro: Verificar instalação CONCLUÍDA para este contrato
       const { data: instalacaoConcluida } = await supabase
         .from('instalacoes')
         .select('id, status, rastreador_id')
@@ -951,10 +951,39 @@ export function useAprovarProposta() {
         .maybeSingle();
       
       const jaTemInstalacaoConcluida = !!instalacaoConcluida;
+
+      // 4. Buscar veículo do associado ANTES de verificar instalação ativa
+      const { data: veiculos } = await supabase
+        .from('veiculos')
+        .select('id, placa, modelo')
+        .eq('associado_id', associadoId)
+        .limit(1);
+
+      // Segundo: Verificar se já existe instalação ATIVA para o mesmo veículo
+      // (isso cobre casos de contratos duplicados ou reprocessamento)
+      const veiculoIdDoContrato = (contrato as any).veiculo_id || (veiculos && veiculos[0]?.id);
+      let jaTemInstalacaoAtiva = false;
+
+      if (veiculoIdDoContrato) {
+        const { data: instalacaoAtiva } = await supabase
+          .from('instalacoes')
+          .select('id, status, contrato_id')
+          .eq('veiculo_id', veiculoIdDoContrato)
+          .in('status', ['agendada', 'em_rota', 'em_andamento'])
+          .maybeSingle();
+        
+        jaTemInstalacaoAtiva = !!instalacaoAtiva;
+        
+        // Se a instalação ativa é de outro contrato, logar para debugging
+        if (instalacaoAtiva && instalacaoAtiva.contrato_id !== contratoId) {
+          console.warn(`Veículo ${veiculoIdDoContrato} já tem instalação ativa do contrato ${instalacaoAtiva.contrato_id}. Usando instalação existente.`);
+        }
+      }
       
-      // 4. Definir status do associado baseado na instalação
+      // 5. Definir status do associado baseado na instalação
       // Se instalação JÁ concluída: 'em_analise' (aguardando ativação do rastreador)
-      // Se instalação NÃO concluída: 'aguardando_instalacao'
+      // Se instalação ativa existe (agendada/em_rota/em_andamento): 'aguardando_instalacao'
+      // Se NÃO existe instalação: 'aguardando_instalacao' (será criada)
       const statusAssociado = jaTemInstalacaoConcluida 
         ? 'em_analise' 
         : 'aguardando_instalacao';
@@ -982,13 +1011,6 @@ export function useAprovarProposta() {
         throw new Error('Sem permissão para atualizar associado (RLS) ou associado não encontrado');
       }
 
-      // 5. Buscar veículo do associado para ativar cobertura roubo/furto
-      const { data: veiculos } = await supabase
-        .from('veiculos')
-        .select('id, placa, modelo')
-        .eq('associado_id', associadoId)
-        .limit(1);
-
       // 6. Atualizar VEÍCULO e criar instalação SE NECESSÁRIO
       if (veiculos && veiculos.length > 0) {
         const veiculoId = veiculos[0].id;
@@ -1009,8 +1031,10 @@ export function useAprovarProposta() {
           console.error('Erro ao atualizar veículo:', veiculoError);
         }
 
-        // Criar INSTALAÇÃO APENAS se NÃO existir instalação concluída
-        if (!jaTemInstalacaoConcluida) {
+        // Criar INSTALAÇÃO APENAS se:
+        // - NÃO existir instalação concluída para este contrato
+        // - NÃO existir instalação ativa para este veículo (evita duplicatas)
+        if (!jaTemInstalacaoConcluida && !jaTemInstalacaoAtiva) {
           const associadoData = contrato.associado as any;
           const dataAgendada = new Date().toISOString().split('T')[0];
           const { error: instalacaoError } = await supabase
@@ -1034,6 +1058,8 @@ export function useAprovarProposta() {
             console.error('Erro ao criar instalação:', instalacaoError);
             throw new Error(`Falha ao criar instalação: ${instalacaoError.message}`);
           }
+        } else if (jaTemInstalacaoAtiva) {
+          console.log(`Instalação já existe para o veículo ${veiculoId}. Aprovação prossegue sem criar nova instalação.`);
         }
       }
 
