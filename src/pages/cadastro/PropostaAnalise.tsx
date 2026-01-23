@@ -37,6 +37,8 @@ import {
   Wifi,
   Hash,
   Puzzle,
+  ShieldCheck,
+  ShieldOff,
 } from 'lucide-react';
 import {
   useProposta,
@@ -538,15 +540,30 @@ export default function PropostaAnalise() {
             <CardContent className="space-y-3">
               {proposta.status === 'assinado' && !proposta.tem_documento_pendente ? (
                 <>
-                  <Button
-                    className="w-full bg-success hover:bg-success/90 text-white"
-                    size="lg"
-                    onClick={handleAprovar}
-                    disabled={aprovarMutation.isPending}
-                  >
-                    <CheckCircle className="mr-2 h-5 w-5" />
-                    {aprovarMutation.isPending ? 'Aprovando...' : 'Aprovar Proposta'}
-                  </Button>
+                  {(() => {
+                    // Autovistoria = tem fotos de vistoria mas ainda não tem instalação concluída
+                    const isAutovistoria = proposta.vistoria?.fotos?.length > 0 && !proposta.instalacao_info;
+                    return (
+                      <Button
+                        className="w-full bg-success hover:bg-success/90 text-white"
+                        size="lg"
+                        onClick={handleAprovar}
+                        disabled={aprovarMutation.isPending}
+                      >
+                        {isAutovistoria ? (
+                          <ShieldCheck className="mr-2 h-5 w-5" />
+                        ) : (
+                          <CheckCircle className="mr-2 h-5 w-5" />
+                        )}
+                        {aprovarMutation.isPending 
+                          ? 'Aprovando...' 
+                          : isAutovistoria 
+                            ? 'Aprovar Cobertura de Roubo e Furto' 
+                            : 'Aprovar Proposta'
+                        }
+                      </Button>
+                    );
+                  })()}
 
                   <Button
                     variant="outline"
@@ -636,66 +653,118 @@ export default function PropostaAnalise() {
       />
 
       {/* Dialog de confirmação de aprovação */}
-      <AlertDialog open={showConfirmAprovar} onOpenChange={setShowConfirmAprovar}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <CheckCircle className="h-5 w-5 text-success" />
-              Confirmar Aprovação
-            </AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="space-y-3">
-                <p>Ao aprovar esta proposta, o sistema irá:</p>
-                
-                <div className="bg-muted rounded-lg p-3 space-y-2">
-                  <div className="flex items-center gap-2 text-sm">
-                    <div className="w-6 h-6 rounded-full bg-success/20 flex items-center justify-center">
-                      <User className="h-3 w-3 text-success" />
+      {(() => {
+        // Autovistoria = tem fotos de vistoria mas ainda não tem instalação concluída
+        const isAutovistoria = proposta.vistoria?.fotos?.length > 0 && !proposta.instalacao_info;
+        
+        return (
+          <AlertDialog open={showConfirmAprovar} onOpenChange={setShowConfirmAprovar}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle className="flex items-center gap-2">
+                  {isAutovistoria ? (
+                    <ShieldCheck className="h-5 w-5 text-success" />
+                  ) : (
+                    <CheckCircle className="h-5 w-5 text-success" />
+                  )}
+                  {isAutovistoria 
+                    ? 'Confirmar Liberação de Cobertura'
+                    : 'Confirmar Aprovação'
+                  }
+                </AlertDialogTitle>
+                <AlertDialogDescription asChild>
+                  {isAutovistoria ? (
+                    <div className="space-y-3">
+                      <p>Ao aprovar, o sistema irá <strong>liberar apenas a cobertura de roubo e furto</strong>:</p>
+                      
+                      <div className="bg-success/10 border border-success/30 rounded-lg p-3 space-y-2">
+                        <div className="flex items-center gap-2 text-sm">
+                          <div className="w-6 h-6 rounded-full bg-success/20 flex items-center justify-center">
+                            <ShieldCheck className="h-3 w-3 text-success" />
+                          </div>
+                          <span>Ativar cobertura de <strong>Roubo e Furto</strong></span>
+                        </div>
+                      </div>
+                      
+                      <div className="bg-muted rounded-lg p-3 space-y-2">
+                        <p className="text-sm font-medium text-muted-foreground">
+                          Pendente (após instalação do rastreador):
+                        </p>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <ShieldOff className="h-3 w-3" />
+                          <span>Cobertura Total</span>
+                        </div>
+                      </div>
+                      
+                      <p className="text-sm text-muted-foreground">
+                        A cobertura total será ativada automaticamente após a instalação e ativação do rastreador.
+                      </p>
                     </div>
-                    <span>Ativar o associado no sistema</span>
-                  </div>
-                  
-                  <div className="flex items-center gap-2 text-sm">
-                    <div className="w-6 h-6 rounded-full bg-info/20 flex items-center justify-center">
-                      <Wrench className="h-3 w-3 text-info" />
+                  ) : (
+                    <div className="space-y-3">
+                      <p>Ao aprovar esta proposta, o sistema irá:</p>
+                      
+                      <div className="bg-muted rounded-lg p-3 space-y-2">
+                        <div className="flex items-center gap-2 text-sm">
+                          <div className="w-6 h-6 rounded-full bg-success/20 flex items-center justify-center">
+                            <User className="h-3 w-3 text-success" />
+                          </div>
+                          <span>Ativar o associado no sistema</span>
+                        </div>
+                        
+                        <div className="flex items-center gap-2 text-sm">
+                          <div className="w-6 h-6 rounded-full bg-info/20 flex items-center justify-center">
+                            <Wrench className="h-3 w-3 text-info" />
+                          </div>
+                          <span>Criar instalação pendente (rastreador)</span>
+                        </div>
+                        
+                        <div className="flex items-center gap-2 text-sm">
+                          <div className="w-6 h-6 rounded-full bg-warning/20 flex items-center justify-center">
+                            <CreditCard className="h-3 w-3 text-warning" />
+                          </div>
+                          <span>Gerar primeira cobrança</span>
+                        </div>
+                        
+                        <div className="flex items-center gap-2 text-sm">
+                          <div className="w-6 h-6 rounded-full bg-purple-500/20 flex items-center justify-center">
+                            <Smartphone className="h-3 w-3 text-purple-500" />
+                          </div>
+                          <span>Liberar acesso ao App do Associado</span>
+                        </div>
+                      </div>
+                      
+                      <p className="text-sm text-muted-foreground">
+                        O cliente receberá uma notificação sobre a aprovação.
+                      </p>
                     </div>
-                    <span>Criar instalação pendente (rastreador)</span>
-                  </div>
-                  
-                  <div className="flex items-center gap-2 text-sm">
-                    <div className="w-6 h-6 rounded-full bg-warning/20 flex items-center justify-center">
-                      <CreditCard className="h-3 w-3 text-warning" />
-                    </div>
-                    <span>Gerar primeira cobrança</span>
-                  </div>
-                  
-                  <div className="flex items-center gap-2 text-sm">
-                    <div className="w-6 h-6 rounded-full bg-purple-500/20 flex items-center justify-center">
-                      <Smartphone className="h-3 w-3 text-purple-500" />
-                    </div>
-                    <span>Liberar acesso ao App do Associado</span>
-                  </div>
-                </div>
-                
-                <p className="text-sm text-muted-foreground">
-                  O cliente receberá uma notificação sobre a aprovação.
-                </p>
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleConfirmarAprovacao}
-              className="bg-success hover:bg-success/90 text-white"
-              disabled={aprovarMutation.isPending}
-            >
-              <CheckCircle className="h-4 w-4 mr-2" />
-              {aprovarMutation.isPending ? 'Aprovando...' : 'Confirmar Aprovação'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+                  )}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleConfirmarAprovacao}
+                  className="bg-success hover:bg-success/90 text-white"
+                  disabled={aprovarMutation.isPending}
+                >
+                  {isAutovistoria ? (
+                    <ShieldCheck className="h-4 w-4 mr-2" />
+                  ) : (
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                  )}
+                  {aprovarMutation.isPending 
+                    ? 'Aprovando...' 
+                    : isAutovistoria
+                      ? 'Liberar Cobertura de Roubo e Furto'
+                      : 'Confirmar Aprovação'
+                  }
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        );
+      })()}
     </div>
   );
 }
