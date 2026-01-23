@@ -45,6 +45,7 @@ import {
   useRotasHojeMetricas 
 } from '@/hooks/useDashboardCoordenador';
 import { useMetricasTempo } from '@/hooks/useMetricasTempo';
+import { AgendamentosBase } from '@/components/monitoramento/AgendamentosBase';
 import { cn } from '@/lib/utils';
 
 const acoesRapidas = [
@@ -303,6 +304,9 @@ export default function DashboardCoordenador() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Agendamentos na Base */}
+      <AgendamentosBase />
 
       {/* Grid: Equipe + Alertas */}
       <div className="grid lg:grid-cols-3 gap-6">

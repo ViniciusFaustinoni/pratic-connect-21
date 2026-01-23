@@ -363,6 +363,106 @@ export type Database = {
           },
         ]
       }
+      agendamentos_base: {
+        Row: {
+          atendido_por: string | null
+          cliente_email: string | null
+          cliente_nome: string
+          cliente_telefone: string | null
+          cotacao_id: string | null
+          created_at: string | null
+          data_agendada: string
+          horario: string
+          id: string
+          instalacao_id: string | null
+          observacoes: string | null
+          status: string | null
+          updated_at: string | null
+          veiculo_descricao: string | null
+          veiculo_placa: string | null
+          vistoria_id: string | null
+        }
+        Insert: {
+          atendido_por?: string | null
+          cliente_email?: string | null
+          cliente_nome: string
+          cliente_telefone?: string | null
+          cotacao_id?: string | null
+          created_at?: string | null
+          data_agendada: string
+          horario: string
+          id?: string
+          instalacao_id?: string | null
+          observacoes?: string | null
+          status?: string | null
+          updated_at?: string | null
+          veiculo_descricao?: string | null
+          veiculo_placa?: string | null
+          vistoria_id?: string | null
+        }
+        Update: {
+          atendido_por?: string | null
+          cliente_email?: string | null
+          cliente_nome?: string
+          cliente_telefone?: string | null
+          cotacao_id?: string | null
+          created_at?: string | null
+          data_agendada?: string
+          horario?: string
+          id?: string
+          instalacao_id?: string | null
+          observacoes?: string | null
+          status?: string | null
+          updated_at?: string | null
+          veiculo_descricao?: string | null
+          veiculo_placa?: string | null
+          vistoria_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agendamentos_base_atendido_por_fkey"
+            columns: ["atendido_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agendamentos_base_atendido_por_fkey"
+            columns: ["atendido_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "agendamentos_base_cotacao_id_fkey"
+            columns: ["cotacao_id"]
+            isOneToOne: false
+            referencedRelation: "cotacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agendamentos_base_instalacao_id_fkey"
+            columns: ["instalacao_id"]
+            isOneToOne: false
+            referencedRelation: "instalacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agendamentos_base_instalacao_id_fkey"
+            columns: ["instalacao_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["instalacao_id"]
+          },
+          {
+            foreignKeyName: "agendamentos_base_vistoria_id_fkey"
+            columns: ["vistoria_id"]
+            isOneToOne: false
+            referencedRelation: "vistorias"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       api_keys: {
         Row: {
           ativa: boolean | null
@@ -7341,6 +7441,7 @@ export type Database = {
           instalador_id: string | null
           instalador_responsavel_id: string | null
           lead_id: string | null
+          local_vistoria: string | null
           logradouro: string | null
           numero: string | null
           observacoes: string | null
@@ -7377,6 +7478,7 @@ export type Database = {
           instalador_id?: string | null
           instalador_responsavel_id?: string | null
           lead_id?: string | null
+          local_vistoria?: string | null
           logradouro?: string | null
           numero?: string | null
           observacoes?: string | null
@@ -7413,6 +7515,7 @@ export type Database = {
           instalador_id?: string | null
           instalador_responsavel_id?: string | null
           lead_id?: string | null
+          local_vistoria?: string | null
           logradouro?: string | null
           numero?: string | null
           observacoes?: string | null
@@ -11063,6 +11166,7 @@ export type Database = {
           ativo: boolean
           avatar_url: string | null
           bloqueado: boolean | null
+          categoria_profissional: string | null
           cpf: string | null
           created_at: string
           created_by: string | null
@@ -11085,6 +11189,7 @@ export type Database = {
           ativo?: boolean
           avatar_url?: string | null
           bloqueado?: boolean | null
+          categoria_profissional?: string | null
           cpf?: string | null
           created_at?: string
           created_by?: string | null
@@ -11107,6 +11212,7 @@ export type Database = {
           ativo?: boolean
           avatar_url?: string | null
           bloqueado?: boolean | null
+          categoria_profissional?: string | null
           cpf?: string | null
           created_at?: string
           created_by?: string | null
@@ -13494,6 +13600,7 @@ export type Database = {
           instalacao_id: string | null
           km_atual: number | null
           lead_id: string | null
+          local_vistoria: string | null
           modalidade: string | null
           motivo_reprovacao: string | null
           observacoes: string | null
@@ -13543,6 +13650,7 @@ export type Database = {
           instalacao_id?: string | null
           km_atual?: number | null
           lead_id?: string | null
+          local_vistoria?: string | null
           modalidade?: string | null
           motivo_reprovacao?: string | null
           observacoes?: string | null
@@ -13592,6 +13700,7 @@ export type Database = {
           instalacao_id?: string | null
           km_atual?: number | null
           lead_id?: string | null
+          local_vistoria?: string | null
           modalidade?: string | null
           motivo_reprovacao?: string | null
           observacoes?: string | null

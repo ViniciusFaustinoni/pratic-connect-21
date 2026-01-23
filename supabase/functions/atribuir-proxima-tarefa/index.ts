@@ -139,7 +139,7 @@ serve(async (req) => {
     const hoje = new Date().toISOString().split('T')[0];
     const amanha = new Date(Date.now() + 86400000).toISOString().split('T')[0];
 
-    // Buscar instalações disponíveis
+    // Buscar instalações disponíveis (apenas local_vistoria = 'cliente' ou NULL)
     const { data: instalacoes, error: instError } = await supabase
       .from('instalacoes')
       .select(`
@@ -157,11 +157,13 @@ serve(async (req) => {
         uf,
         associado_id,
         veiculo_id,
+        local_vistoria,
         associado:associados!inner(nome, telefone),
         veiculo:veiculos!inner(placa, marca, modelo)
       `)
       .is('instalador_responsavel_id', null)
       .in('status', ['agendada'])
+      .or('local_vistoria.is.null,local_vistoria.eq.cliente')
       .gte('data_agendada', hoje)
       .lte('data_agendada', amanha)
       .order('data_agendada', { ascending: true });
@@ -170,7 +172,7 @@ serve(async (req) => {
       console.error('[atribuir-proxima-tarefa] Erro ao buscar instalações:', instError);
     }
 
-    // Buscar vistorias disponíveis
+    // Buscar vistorias disponíveis (apenas local_vistoria = 'cliente' ou NULL)
     const { data: vistorias, error: vistError } = await supabase
       .from('vistorias')
       .select(`
@@ -188,11 +190,13 @@ serve(async (req) => {
         uf,
         associado_id,
         veiculo_id,
+        local_vistoria,
         associado:associados!inner(nome, telefone),
         veiculo:veiculos!inner(placa, marca, modelo)
       `)
       .is('vistoriador_id', null)
       .in('status', ['pendente', 'agendada'])
+      .or('local_vistoria.is.null,local_vistoria.eq.cliente')
       .gte('data_agendada', hoje)
       .lte('data_agendada', amanha)
       .order('data_agendada', { ascending: true });
