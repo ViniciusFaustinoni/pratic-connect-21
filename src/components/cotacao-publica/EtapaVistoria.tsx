@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Camera, Calendar, Smartphone, CheckCircle2, ArrowLeft, Car, Bike } from 'lucide-react';
+import { Camera, Calendar, Smartphone, CheckCircle2, ArrowLeft, Car, Bike, Building2 } from 'lucide-react';
 import { AutovistoriaCotacao } from './AutovistoriaCotacao';
 import { AgendamentoCotacao } from './AgendamentoCotacao';
+import { EscolhaLocalVistoria } from './EscolhaLocalVistoria';
+import { AgendamentoBase } from './AgendamentoBase';
 import type { TipoVeiculo } from '@/data/autovistoriaConfig';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
@@ -11,15 +13,32 @@ import { cn } from '@/lib/utils';
 interface EtapaVistoriaProps {
   cotacaoId: string;
   tipoVeiculo: TipoVeiculo;
+  clienteNome?: string;
+  clienteTelefone?: string;
+  clienteEmail?: string;
+  veiculoPlaca?: string;
+  veiculoDescricao?: string;
   onComplete: () => void;
   onAgendar?: (data: string, horario: string) => void;
   readOnly?: boolean;
-  tipoVistoriaRealizada?: 'autovistoria' | 'agendada';
+  tipoVistoriaRealizada?: 'autovistoria' | 'agendada' | 'agendada_base';
 }
 
-type ModoVistoria = 'escolha' | 'selecao-veiculo' | 'autovistoria' | 'agendada';
+type ModoVistoria = 'escolha' | 'escolha-local' | 'selecao-veiculo' | 'autovistoria' | 'agendada' | 'agendada-base';
 
-export function EtapaVistoria({ cotacaoId, tipoVeiculo, onComplete, onAgendar, readOnly = false, tipoVistoriaRealizada }: EtapaVistoriaProps) {
+export function EtapaVistoria({ 
+  cotacaoId, 
+  tipoVeiculo, 
+  clienteNome = '',
+  clienteTelefone,
+  clienteEmail,
+  veiculoPlaca,
+  veiculoDescricao,
+  onComplete, 
+  onAgendar, 
+  readOnly = false, 
+  tipoVistoriaRealizada 
+}: EtapaVistoriaProps) {
   const [modo, setModo] = useState<ModoVistoria>('escolha');
   const [tipoSelecionado, setTipoSelecionado] = useState<TipoVeiculo | null>(null);
 
@@ -125,7 +144,7 @@ export function EtapaVistoria({ cotacaoId, tipoVeiculo, onComplete, onAgendar, r
 
               {/* Opção Agendar */}
               <button
-                onClick={() => setModo('agendada')}
+                onClick={() => setModo('escolha-local')}
                 className="w-full p-4 rounded-xl border border-border/50 bg-card/50 hover:bg-accent/10 hover:border-primary/50 transition-all group text-left"
               >
                 <div className="flex items-start gap-4">
@@ -135,12 +154,12 @@ export function EtapaVistoria({ cotacaoId, tipoVeiculo, onComplete, onAgendar, r
                   <div className="flex-1 min-w-0">
                     <h3 className="font-semibold text-foreground mb-1">Agendar Vistoria Presencial</h3>
                     <p className="text-sm text-muted-foreground">
-                      Agende uma data e horário para um vistoriador ir até você
+                      Agende uma data e horário para realizar a vistoria
                     </p>
                     <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1">
                         <Calendar className="h-3 w-3" />
-                        Em até 48h
+                        Horários flexíveis
                       </span>
                     </div>
                   </div>
@@ -148,6 +167,60 @@ export function EtapaVistoria({ cotacaoId, tipoVeiculo, onComplete, onAgendar, r
               </button>
             </CardContent>
           </Card>
+        </motion.div>
+      )}
+
+      {/* NOVA TELA: Escolha do local da vistoria */}
+      {modo === 'escolha-local' && (
+        <motion.div
+          key="escolha-local"
+          initial={{ opacity: 0, x: 50 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -50 }}
+          transition={{ duration: 0.3 }}
+        >
+          <div className="mb-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setModo('escolha')}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Voltar
+            </Button>
+          </div>
+          <EscolhaLocalVistoria 
+            onEscolher={(local) => {
+              if (local === 'cliente') {
+                setModo('agendada');
+              } else {
+                setModo('agendada-base');
+              }
+            }}
+          />
+        </motion.div>
+      )}
+
+      {/* NOVA TELA: Agendamento na base */}
+      {modo === 'agendada-base' && (
+        <motion.div
+          key="agendada-base"
+          initial={{ opacity: 0, x: 50 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -50 }}
+          transition={{ duration: 0.3 }}
+        >
+          <AgendamentoBase
+            cotacaoId={cotacaoId}
+            clienteNome={clienteNome}
+            clienteTelefone={clienteTelefone}
+            clienteEmail={clienteEmail}
+            veiculoPlaca={veiculoPlaca}
+            veiculoDescricao={veiculoDescricao}
+            onAgendado={onComplete}
+            onVoltar={() => setModo('escolha-local')}
+          />
         </motion.div>
       )}
 
