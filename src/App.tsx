@@ -11,7 +11,7 @@ import { AssociadoProvider } from "@/contexts/AssociadoContext";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { AppLayout as AssociadoAppLayout } from "@/components/app/AppLayout";
 import { InstaladorLayout } from "@/components/instalador/InstaladorLayout";
-import InstaladorFila from "./pages/instalador/InstaladorFila";
+import InstaladorTarefas from "./pages/instalador/InstaladorTarefas";
 import InstaladorMapa from "./pages/instalador/InstaladorMapa";
 import InstaladorPerfil from "./pages/instalador/InstaladorPerfil";
 import { AppErrorBoundary } from "@/components/app/AppErrorBoundary";
@@ -550,8 +550,7 @@ const App = () => (
             <Route path="/instalador/login" element={<InstaladorLogin />} />
             <Route element={<InstaladorLayout />}>
               <Route path="/instalador" element={<InstaladorHome />} />
-              <Route path="/instalador/fila" element={<InstaladorFila />} />
-              <Route path="/instalador/encaixes" element={<VistoriadorEncaixes />} />
+              <Route path="/instalador/tarefas" element={<InstaladorTarefas />} />
               <Route path="/instalador/instalacao/:id" element={<InstaladorChecklist />} />
               <Route path="/instalador/vistoria/:id" element={<ExecutarVistoriaCompleta />} />
               <Route path="/instalador/mapa" element={<InstaladorMapa />} />
