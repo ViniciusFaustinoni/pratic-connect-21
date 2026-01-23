@@ -194,3 +194,9 @@ verify_jwt = false
 
 [functions.app-criar-conta-cliente]
 verify_jwt = false
+
+[functions.atribuir-proxima-tarefa]
+verify_jwt = false
+
+[functions.processar-encaixes-automaticos]
+verify_jwt = false
