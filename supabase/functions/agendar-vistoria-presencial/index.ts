@@ -25,6 +25,7 @@ interface AgendarVistoriaPresencialRequest {
   };
   latitude?: number | null;
   longitude?: number | null;
+  permiteEncaixe?: boolean;
 }
 
 serve(async (req) => {
@@ -43,7 +44,7 @@ serve(async (req) => {
     });
 
     const body: AgendarVistoriaPresencialRequest = await req.json();
-    const { cotacaoId, dataAgendada, horarioAgendado, endereco, responsavel, latitude, longitude } = body;
+    const { cotacaoId, dataAgendada, horarioAgendado, endereco, responsavel, latitude, longitude, permiteEncaixe } = body;
 
     console.log('[AgendarVistoriaPresencial] Iniciando para cotação:', cotacaoId);
 
@@ -124,6 +125,7 @@ serve(async (req) => {
       vistoria_responsavel_eu_mesmo: responsavel.euMesmo,
       vistoria_responsavel_nome: responsavel.nome || null,
       vistoria_responsavel_telefone: responsavel.telefone || null,
+      vistoria_permite_encaixe: permiteEncaixe ?? false,
     };
 
     if (latitude && longitude) {
