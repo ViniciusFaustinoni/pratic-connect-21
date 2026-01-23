@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline } from "react-leaflet";
 import L from "leaflet";
 import { format, isSameDay, addDays, formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -180,6 +180,43 @@ export function MapaVistoriasContent() {
     const aRealizar = vistoriasComCoordenadas.length - realizadas;
     return { realizadas, aRealizar };
   }, [vistoriasComCoordenadas]);
+
+  // Calcular linhas de rota entre profissionais e suas próximas tarefas
+  const linhasDeRota = useMemo(() => {
+    if (!vistoriadoresEmServico.length || !vistoriasComCoordenadas.length) return [];
+    
+    return vistoriadoresEmServico.map(profissional => {
+      // Buscar próxima tarefa pendente deste profissional
+      const tarefasPendentes = vistoriasComCoordenadas.filter(v => 
+        v.vistoriador_id === profissional.vistoriador_id &&
+        !STATUS_REALIZADOS.includes(v.status)
+      ).sort((a, b) => {
+        // Ordenar por data + horário
+        const dataA = new Date(`${a.data_agendada}T${a.horario_agendado || '00:00'}`);
+        const dataB = new Date(`${b.data_agendada}T${b.horario_agendado || '00:00'}`);
+        return dataA.getTime() - dataB.getTime();
+      });
+      
+      const proximaTarefa = tarefasPendentes[0];
+      if (!proximaTarefa) return null;
+      
+      return {
+        profissionalId: profissional.vistoriador_id,
+        profissionalNome: profissional.vistoriador_nome,
+        posicaoOrigem: [profissional.latitude, profissional.longitude] as [number, number],
+        posicaoDestino: [proximaTarefa.latitude!, proximaTarefa.longitude!] as [number, number],
+        tarefaId: proximaTarefa.id,
+        tarefaPlaca: proximaTarefa.veiculo_placa,
+      };
+    }).filter(Boolean) as {
+      profissionalId: string;
+      profissionalNome: string;
+      posicaoOrigem: [number, number];
+      posicaoDestino: [number, number];
+      tarefaId: string;
+      tarefaPlaca: string | null;
+    }[];
+  }, [vistoriadoresEmServico, vistoriasComCoordenadas]);
 
   // Selecionar vistoria
   const selecionarVistoria = (vistoria: VistoriaMapa) => {
@@ -480,6 +517,27 @@ export function MapaVistoriasContent() {
 
             <FlyToPosition position={posicaoSelecionada} />
 
+            {/* Linhas de Rota - Profissional → Próxima Tarefa */}
+            {linhasDeRota.map((linha) => (
+              <Polyline
+                key={`rota-${linha.profissionalId}`}
+                positions={[linha.posicaoOrigem, linha.posicaoDestino]}
+                pathOptions={{
+                  color: COR_VISTORIADOR,
+                  weight: 3,
+                  opacity: 0.6,
+                  dashArray: '10, 10',
+                }}
+              >
+                <Popup>
+                  <div className="text-xs">
+                    <p className="font-semibold">{linha.profissionalNome}</p>
+                    <p className="text-muted-foreground">→ {linha.tarefaPlaca || 'Próxima tarefa'}</p>
+                  </div>
+                </Popup>
+              </Polyline>
+            ))}
+
             {/* Marcadores - Pinos coloridos por status (realizada/a realizar) */}
             {vistoriasComCoordenadas.map((v) => {
               const markerColor = getCorPorStatus(v.status);
@@ -512,8 +570,10 @@ export function MapaVistoriasContent() {
                         )}
                         <p><strong>Local:</strong> {v.endereco_bairro}, {v.endereco_cidade}</p>
                         <p><strong>Status:</strong> {v.status}</p>
-                        {v.vistoriador_nome && (
+                        {v.vistoriador_nome ? (
                           <p><strong>Vistoriador:</strong> {v.vistoriador_nome}</p>
+                        ) : (
+                          <p className="text-orange-600"><strong>Vistoriador:</strong> Não atribuído</p>
                         )}
                       </div>
 
@@ -625,6 +685,23 @@ export function MapaVistoriasContent() {
                   {vistoriadoresEmServico.length}
                 </Badge>
               </div>
+              
+              {/* Linhas de rota */}
+              {linhasDeRota.length > 0 && (
+                <div className="flex items-center gap-2 text-sm p-2 rounded-md">
+                  <div 
+                    className="w-4 h-0.5 flex-shrink-0" 
+                    style={{ 
+                      backgroundColor: COR_VISTORIADOR,
+                      borderStyle: 'dashed',
+                      borderWidth: '1px',
+                      borderColor: COR_VISTORIADOR,
+                    }} 
+                  />
+                  <span className="flex-1 text-left text-muted-foreground">Rotas ativas</span>
+                  <Badge variant="outline" className="text-xs">{linhasDeRota.length}</Badge>
+                </div>
+              )}
               
               {filtroStatus !== "todos" && (
                 <button
