@@ -57,6 +57,13 @@ export interface InstalacaoInfo {
   assinatura_cliente_url: string | null;
 }
 
+// Informações da instalação agendada (antes da execução)
+export interface InstalacaoAgendadaInfo {
+  data: string;
+  horario: string;
+  permite_encaixe: boolean;
+}
+
 export interface PropostaPendente {
   id: string;
   numero: string | null;
@@ -85,7 +92,8 @@ export interface PropostaPendente {
   associado_status: string | null;
   vistoria: VistoriaInfo | null;
   documentos_solicitados_enviados: DocumentoSolicitadoEnviado[];
-  instalacao_info: InstalacaoInfo | null; // NOVO: Dados da instalação concluída
+  instalacao_info: InstalacaoInfo | null; // Dados da instalação concluída
+  instalacao_agendada: InstalacaoAgendadaInfo | null; // NOVO: Dados do agendamento (pré-instalação)
 }
 
 export interface PropostaStats {
@@ -190,13 +198,15 @@ export function usePropostasPendentes() {
             }
           }
 
-          // Buscar dados extras da cotação para endereço e plano (query separada para evitar erro 406)
+          // Buscar dados extras da cotação para endereço, plano E dados de encaixe
           let enderecoCompleto: string | null = null;
           let planoNome: string | null = null;
+          let instalacaoAgendada: InstalacaoAgendadaInfo | null = null;
+          
           if (contrato.cotacao_id) {
             const { data: cotacao } = await supabase
               .from('cotacoes')
-              .select('cliente_logradouro, cliente_numero, cliente_bairro, cliente_cidade, cliente_uf, plano_escolhido_id')
+              .select('cliente_logradouro, cliente_numero, cliente_bairro, cliente_cidade, cliente_uf, plano_escolhido_id, vistoria_permite_encaixe, vistoria_data_agendada, vistoria_horario_agendado')
               .eq('id', contrato.cotacao_id)
               .maybeSingle();
             
@@ -212,6 +222,15 @@ export function usePropostasPendentes() {
                   .eq('id', cotacao.plano_escolhido_id)
                   .maybeSingle();
                 planoNome = plano?.nome || null;
+              }
+              
+              // Dados de instalação agendada (encaixe)
+              if (cotacao.vistoria_data_agendada) {
+                instalacaoAgendada = {
+                  data: cotacao.vistoria_data_agendada,
+                  horario: cotacao.vistoria_horario_agendado || '---',
+                  permite_encaixe: cotacao.vistoria_permite_encaixe || false,
+                };
               }
             }
           }
@@ -365,9 +384,11 @@ export function usePropostasPendentes() {
         };
       }
 
-      // REGRA: Só incluir propostas que já tenham instalação concluída
-      // Se não tem instalação concluída, retornar null (será filtrado)
-      if (!instalacaoInfo) {
+      // REGRA ATUALIZADA: Incluir propostas que tenham:
+      // - Instalação concluída (fluxo normal)
+      // - OU Autovistoria concluída com fotos (aguardando aprovação para roubo/furto)
+      const temAutovistoria = vistoria && vistoria.fotos && vistoria.fotos.length > 0;
+      if (!instalacaoInfo && !temAutovistoria) {
         return null;
       }
 
@@ -384,11 +405,12 @@ export function usePropostasPendentes() {
             vistoria,
             documentos_solicitados_enviados: documentosSolicitadosEnviados,
             instalacao_info: instalacaoInfo,
+            instalacao_agendada: instalacaoAgendada,
           } as PropostaPendente;
         })
       );
 
-      // Filtrar propostas nulas (sem instalação concluída)
+      // Filtrar propostas nulas (sem instalação concluída nem autovistoria)
       return propostasComRelacoes.filter((p): p is PropostaPendente => p !== null);
     },
     staleTime: 30000,
@@ -505,13 +527,15 @@ export function useProposta(contratoId: string | undefined) {
         });
       }
 
-      // Buscar dados extras da cotação para endereço e plano (query separada para evitar erro 406)
+      // Buscar dados extras da cotação para endereço, plano E dados de encaixe
       let enderecoCompleto: string | null = null;
       let planoNome: string | null = null;
+      let instalacaoAgendada: InstalacaoAgendadaInfo | null = null;
+      
       if (contrato.cotacao_id) {
         const { data: cotacao } = await supabase
           .from('cotacoes')
-          .select('cliente_logradouro, cliente_numero, cliente_bairro, cliente_cidade, cliente_uf, plano_escolhido_id')
+          .select('cliente_logradouro, cliente_numero, cliente_bairro, cliente_cidade, cliente_uf, plano_escolhido_id, vistoria_permite_encaixe, vistoria_data_agendada, vistoria_horario_agendado')
           .eq('id', contrato.cotacao_id)
           .maybeSingle();
         
@@ -527,6 +551,15 @@ export function useProposta(contratoId: string | undefined) {
               .eq('id', cotacao.plano_escolhido_id)
               .maybeSingle();
             planoNome = plano?.nome || null;
+          }
+          
+          // Dados de instalação agendada (encaixe)
+          if (cotacao.vistoria_data_agendada) {
+            instalacaoAgendada = {
+              data: cotacao.vistoria_data_agendada,
+              horario: cotacao.vistoria_horario_agendado || '---',
+              permite_encaixe: cotacao.vistoria_permite_encaixe || false,
+            };
           }
         }
       }
@@ -679,7 +712,7 @@ export function useProposta(contratoId: string | undefined) {
         };
       }
 
-      return {
+      const result: PropostaPendente = {
         ...contrato,
         associado,
         plano,
@@ -692,7 +725,9 @@ export function useProposta(contratoId: string | undefined) {
         vistoria,
         documentos_solicitados_enviados: documentosSolicitadosEnviados,
         instalacao_info: instalacaoInfo,
-      } as PropostaPendente;
+        instalacao_agendada: instalacaoAgendada,
+      };
+      return result;
     },
     enabled: !!contratoId,
   });

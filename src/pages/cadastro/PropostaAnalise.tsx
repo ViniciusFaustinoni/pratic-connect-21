@@ -36,6 +36,7 @@ import {
   Smartphone,
   Wifi,
   Hash,
+  Puzzle,
 } from 'lucide-react';
 import {
   useProposta,
@@ -348,6 +349,51 @@ export default function PropostaAnalise() {
               />
             </CardContent>
           </Card>
+
+          {/* Instalação Agendada (pré-instalação - com badge de encaixe) */}
+          {proposta.instalacao_agendada && !proposta.instalacao_info && (
+            <Card className="border-border bg-card border-2 border-info/30">
+              <CardHeader className="bg-info/10">
+                <CardTitle className="flex items-center gap-2 text-foreground">
+                  <Calendar className="h-5 w-5 text-info" />
+                  Instalação Agendada
+                </CardTitle>
+                <CardDescription>
+                  Agendamento realizado pelo cliente após pagamento da adesão
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="pt-4 space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <InfoItem
+                    icon={Calendar}
+                    label="Data Agendada"
+                    value={format(new Date(proposta.instalacao_agendada.data), "dd/MM/yyyy", { locale: ptBR })}
+                    highlight
+                  />
+                  <InfoItem
+                    icon={Clock}
+                    label="Horário"
+                    value={proposta.instalacao_agendada.horario}
+                  />
+                </div>
+                
+                {/* Badge de Encaixe Permitido */}
+                {proposta.instalacao_agendada.permite_encaixe && (
+                  <div className="flex items-center gap-3 p-4 rounded-lg bg-primary/10 border border-primary/30">
+                    <div className="p-2 rounded-full bg-primary/20">
+                      <Puzzle className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <span className="font-semibold text-primary">Encaixe Permitido</span>
+                      <p className="text-sm text-muted-foreground">
+                        Cliente autorizou atendimento antecipado se houver vistoriador próximo
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Dados da Instalação e Rastreador */}
           {proposta.instalacao_info && (
