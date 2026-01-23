@@ -311,6 +311,15 @@ serve(async (req) => {
         // 6. SINCRONIZAR COM TABELA DE ORIGEM (instalacoes ou vistorias)
         if (atualizado.instalacao_origem_id) {
           console.log(`[atribuir-proxima-tarefa] Sincronizando com instalacoes ${atualizado.instalacao_origem_id}`);
+          
+          // Buscar dados do cliente/veículo da instalação de origem
+          const { data: instalacaoOrigem } = await supabase
+            .from('instalacoes')
+            .select('associado_id, veiculo_id')
+            .eq('id', atualizado.instalacao_origem_id)
+            .single();
+          
+          // Atualizar status na instalação de origem
           await supabase
             .from('instalacoes')
             .update({
@@ -318,6 +327,24 @@ serve(async (req) => {
               status: 'em_rota'
             })
             .eq('id', atualizado.instalacao_origem_id);
+          
+          // Copiar associado_id e veiculo_id para o servico se não tiver
+          if (instalacaoOrigem && (!servico.associado_id || !servico.veiculo_id)) {
+            const updateData: any = {};
+            if (!servico.associado_id && instalacaoOrigem.associado_id) {
+              updateData.associado_id = instalacaoOrigem.associado_id;
+            }
+            if (!servico.veiculo_id && instalacaoOrigem.veiculo_id) {
+              updateData.veiculo_id = instalacaoOrigem.veiculo_id;
+            }
+            if (Object.keys(updateData).length > 0) {
+              console.log(`[atribuir-proxima-tarefa] Copiando dados cliente/veículo da instalação de origem`);
+              await supabase
+                .from('servicos')
+                .update(updateData)
+                .eq('id', servico.id);
+            }
+          }
         }
         
         if (atualizado.vistoria_origem_id) {
