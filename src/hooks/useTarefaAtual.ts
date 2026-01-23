@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { useRef, useEffect } from 'react';
 
 export interface TarefaAtual {
   id: string;
@@ -35,12 +36,15 @@ export interface TarefaAtual {
 
 /**
  * Hook para buscar a tarefa atual do vistoriador logado
+ * Também detecta quando uma nova tarefa é atribuída automaticamente (encaixe)
  */
 export function useTarefaAtual() {
   const { profile } = useAuth();
   const vistoriadorId = profile?.id;
+  const previousTaskIdRef = useRef<string | null>(null);
+  const hasShownAutoAssignToast = useRef(false);
 
-  return useQuery({
+  const query = useQuery({
     queryKey: ['tarefa-atual', vistoriadorId],
     queryFn: async (): Promise<TarefaAtual | null> => {
       if (!vistoriadorId) return null;
@@ -92,6 +96,36 @@ export function useTarefaAtual() {
     refetchInterval: 30000, // Refetch a cada 30 segundos
     staleTime: 10000,
   });
+
+  // Detectar quando uma nova tarefa é atribuída automaticamente
+  useEffect(() => {
+    const currentTaskId = query.data?.id || null;
+    
+    // Se uma tarefa nova apareceu (diferente da anterior) e não foi iniciada pelo usuário
+    if (
+      currentTaskId && 
+      currentTaskId !== previousTaskIdRef.current &&
+      previousTaskIdRef.current !== null && // Não notificar no primeiro load
+      !hasShownAutoAssignToast.current
+    ) {
+      // Nova tarefa atribuída automaticamente!
+      const tipoLabel = query.data?.tipo === 'instalacao' ? 'Instalação' : 'Vistoria';
+      toast.success(`Nova tarefa atribuída automaticamente!`, {
+        description: `${tipoLabel} para ${query.data?.cliente.nome || 'cliente'} em ${query.data?.endereco.bairro || query.data?.endereco.cidade || 'endereço'}`,
+        duration: 8000,
+      });
+      hasShownAutoAssignToast.current = true;
+      
+      // Reset flag após 5 segundos para permitir próximas notificações
+      setTimeout(() => {
+        hasShownAutoAssignToast.current = false;
+      }, 5000);
+    }
+    
+    previousTaskIdRef.current = currentTaskId;
+  }, [query.data?.id, query.data?.tipo, query.data?.cliente.nome, query.data?.endereco.bairro, query.data?.endereco.cidade]);
+
+  return query;
 }
 
 /**
