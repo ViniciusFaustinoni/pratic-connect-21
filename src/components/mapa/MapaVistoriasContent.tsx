@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import { format, isSameDay, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -30,18 +30,33 @@ import {
   Locate,
   Calendar as CalendarIcon,
   MapPin,
-  Route,
   ChevronLeft,
   ChevronRight,
   X,
+  CheckCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useVistoriasMapa, VistoriaMapa, agruparPorRota } from "@/hooks/useVistoriasMapa";
-import { useRotasBairros } from "@/hooks/useRotasBairros";
+import { useVistoriasMapa, VistoriaMapa } from "@/hooks/useVistoriasMapa";
 import { TIPO_VISTORIA_LABELS } from "@/types/servicos-rota";
-import { getRotaColor, SEM_ROTA_COLOR, createColoredMarkerSvg, svgToDataUrl } from "@/lib/rota-colors";
-import { MapaRotasLegenda } from "./MapaRotasLegenda";
+import { createColoredMarkerSvg, svgToDataUrl } from "@/lib/rota-colors";
 import { cn } from "@/lib/utils";
+
+// Cores para o mapa do coordenador - por status de conclusão
+const COR_REALIZADA = '#10B981';   // Verde
+const COR_A_REALIZAR = '#EF4444'; // Vermelho
+
+// Status que indicam vistoria realizada
+const STATUS_REALIZADOS = ['concluida', 'aprovada', 'reprovada', 'em_analise'];
+
+/**
+ * Retorna a cor baseada no status de conclusão
+ */
+function getCorPorStatus(status: string): string {
+  if (STATUS_REALIZADOS.includes(status)) {
+    return COR_REALIZADA;
+  }
+  return COR_A_REALIZAR;
+}
 
 // Cache de ícones por cor
 const iconCache = new Map<string, L.Icon>();
@@ -77,21 +92,11 @@ function FlyToPosition({ position, zoom = 15 }: { position: [number, number] | n
 export function MapaVistoriasContent() {
   const { data: vistorias, isLoading } = useVistoriasMapa();
   const [filtroTipo, setFiltroTipo] = useState("todos");
-  const [filtroRota, setFiltroRota] = useState<string | null>(null);
+  const [filtroStatus, setFiltroStatus] = useState("todos");
   const [filtroBusca, setFiltroBusca] = useState("");
   const [filtroData, setFiltroData] = useState<Date | undefined>(new Date());
   const [posicaoSelecionada, setPosicaoSelecionada] = useState<[number, number] | null>(null);
   const [vistoriaSelecionada, setVistoriaSelecionada] = useState<string | null>(null);
-  
-  // Hook para buscar bairros das rotas - após filtroData ser declarado
-  const { data: rotasBairros } = useRotasBairros(filtroData);
-
-  // Obter lista de IDs de rotas únicas
-  const rotasIds = useMemo(() => {
-    if (!vistorias) return [];
-    const ids = [...new Set(vistorias.map(v => v.rota_id).filter(Boolean))] as string[];
-    return ids;
-  }, [vistorias]);
 
   // Filtrar vistorias
   const vistoriasFiltradas = useMemo(() => {
@@ -115,13 +120,11 @@ export function MapaVistoriasContent() {
 
       if (filtroTipo !== "todos" && v.tipo_vistoria !== filtroTipo) return false;
 
-      // Filtro por rota
-      if (filtroRota !== null) {
-        if (filtroRota === 'sem_rota') {
-          if (v.rota_id !== null) return false;
-        } else {
-          if (v.rota_id !== filtroRota) return false;
-        }
+      // Filtro por status (realizadas/a realizar)
+      if (filtroStatus !== "todos") {
+        const isRealizada = STATUS_REALIZADOS.includes(v.status);
+        if (filtroStatus === "realizadas" && !isRealizada) return false;
+        if (filtroStatus === "a_realizar" && isRealizada) return false;
       }
 
       if (filtroBusca) {
@@ -137,57 +140,19 @@ export function MapaVistoriasContent() {
 
       return true;
     });
-  }, [vistorias, filtroTipo, filtroRota, filtroData, filtroBusca]);
+  }, [vistorias, filtroTipo, filtroStatus, filtroData, filtroBusca]);
 
   // Vistorias com coordenadas
   const vistoriasComCoordenadas = useMemo(() => {
     return vistoriasFiltradas.filter((v) => v.latitude && v.longitude);
   }, [vistoriasFiltradas]);
 
-  // Agrupar por rota para legenda e polylines
-  const rotasAgrupadas = useMemo(() => {
-    return agruparPorRota(vistoriasComCoordenadas);
+  // Contadores de status para exibição
+  const contadores = useMemo(() => {
+    const realizadas = vistoriasComCoordenadas.filter(v => STATUS_REALIZADOS.includes(v.status)).length;
+    const aRealizar = vistoriasComCoordenadas.length - realizadas;
+    return { realizadas, aRealizar };
   }, [vistoriasComCoordenadas]);
-
-  // Criar legenda baseada nas ROTAS DA DATA SELECIONADA (não rotas de vistorias atrasadas)
-  const rotasParaLegenda = useMemo(() => {
-    // IDs das rotas válidas para a data selecionada
-    const rotasIdsDodia = new Set(rotasBairros?.map(r => r.rota_id) || []);
-    
-    // Separar vistorias: aquelas com rota do dia vs as demais (atrasadas/sem rota)
-    const vistoriasComRotaDoDia = vistoriasComCoordenadas.filter(
-      v => v.rota_id && rotasIdsDodia.has(v.rota_id)
-    );
-    const vistoriasSemRotaDoDia = vistoriasComCoordenadas.filter(
-      v => !v.rota_id || !rotasIdsDodia.has(v.rota_id)
-    );
-    
-    // Construir legenda apenas com rotas da data selecionada
-    const rotasDoDb: typeof rotasAgrupadas = (rotasBairros || []).map(rota => ({
-      rota_id: rota.rota_id,
-      rota_codigo: rota.codigo,
-      rota_cor: rota.cor,
-      rota_regiao: rota.bairros.slice(0, 3).join(', '),
-      vistoriador_nome: null,
-      vistorias: vistoriasComRotaDoDia.filter(v => v.rota_id === rota.rota_id),
-    }));
-    
-    // Adicionar grupo "sem rota" para:
-    // - Vistorias realmente sem rota
-    // - Vistorias atrasadas com rotas de outras datas
-    if (vistoriasSemRotaDoDia.length > 0) {
-      rotasDoDb.push({
-        rota_id: null,
-        rota_codigo: null,
-        rota_cor: null,
-        rota_regiao: null,
-        vistoriador_nome: null,
-        vistorias: vistoriasSemRotaDoDia,
-      });
-    }
-    
-    return rotasDoDb;
-  }, [rotasBairros, vistoriasComCoordenadas]);
 
   // Selecionar vistoria
   const selecionarVistoria = (vistoria: VistoriaMapa) => {
@@ -359,9 +324,7 @@ export function MapaVistoriasContent() {
             ) : (
               <div className="space-y-2">
               {vistoriasFiltradas.map((v) => {
-                  const color = v.rota_cor || (v.rota_id 
-                    ? getRotaColor(v.rota_id, rotasIds)
-                    : SEM_ROTA_COLOR);
+                  const color = getCorPorStatus(v.status);
                   
                   // Verificar se está atrasada - normalizar datas para evitar bugs de timezone
                   const isAtrasada = (() => {
@@ -423,12 +386,11 @@ export function MapaVistoriasContent() {
                             </p>
                           )}
 
-                          {/* Info da rota */}
-                          {v.rota_id && (
-                            <p className="text-xs mt-1 flex items-center gap-1" style={{ color }}>
-                              <Route className="h-3 w-3" />
-                              {v.rota_codigo || 'Rota atribuída'}
-                              {v.vistoriador_nome && ` • ${v.vistoriador_nome}`}
+                          {/* Status indicator */}
+                          {STATUS_REALIZADOS.includes(v.status) && (
+                            <p className="text-xs mt-1 flex items-center gap-1 text-green-600">
+                              <CheckCircle2 className="h-3 w-3" />
+                              Realizada
                             </p>
                           )}
 
@@ -491,35 +453,10 @@ export function MapaVistoriasContent() {
 
             <FlyToPosition position={posicaoSelecionada} />
 
-
-            {/* Polylines conectando pontos de cada rota */}
-            {rotasAgrupadas.map((rota) => {
-              if (!rota.rota_id) return null; // Não desenhar linha para sem rota
-              
-              const vistoriasComGps = rota.vistorias.filter(v => v.latitude && v.longitude);
-              if (vistoriasComGps.length < 2) return null; // Precisa de pelo menos 2 pontos
-              
-              const positions = vistoriasComGps.map(v => [v.latitude!, v.longitude!] as [number, number]);
-              const color = rota.rota_cor || getRotaColor(rota.rota_id, rotasIds);
-              
-              return (
-                <Polyline
-                  key={`line-${rota.rota_id}`}
-                  positions={positions}
-                  pathOptions={{
-                    color,
-                    weight: 3,
-                    opacity: 0.6,
-                    dashArray: '8, 8',
-                  }}
-                />
-              );
-            })}
-
-            {/* Marcadores - Pinos coloridos pela cor da rota */}
+            {/* Marcadores - Pinos coloridos por status (realizada/a realizar) */}
             {vistoriasComCoordenadas.map((v) => {
-              // Usar cor da rota se atribuída, ou cinza se sem rota
-              const markerColor = v.rota_cor || SEM_ROTA_COLOR;
+              const markerColor = getCorPorStatus(v.status);
+              const isRealizada = STATUS_REALIZADOS.includes(v.status);
               
               return (
                 <Marker
@@ -535,30 +472,19 @@ export function MapaVistoriasContent() {
                           className="text-xs px-2 py-0.5 rounded text-white"
                           style={{ backgroundColor: markerColor }}
                         >
-                          {TIPO_VISTORIA_LABELS[v.tipo_vistoria as keyof typeof TIPO_VISTORIA_LABELS] || v.tipo_vistoria}
+                          {isRealizada ? "Realizada" : "A Realizar"}
                         </span>
                       </div>
 
                       <div className="text-xs space-y-1 mb-2">
+                        <p><strong>Tipo:</strong> {TIPO_VISTORIA_LABELS[v.tipo_vistoria as keyof typeof TIPO_VISTORIA_LABELS] || v.tipo_vistoria}</p>
                         <p><strong>Associado:</strong> {v.associado_nome || "-"}</p>
                         <p><strong>Veículo:</strong> {v.veiculo_marca} {v.veiculo_modelo}</p>
                         {v.data_agendada && (
                           <p><strong>Agendada:</strong> {format(new Date(v.data_agendada), "dd/MM/yyyy", { locale: ptBR })}</p>
                         )}
                         <p><strong>Local:</strong> {v.endereco_bairro}, {v.endereco_cidade}</p>
-                        
-                        {/* Info da rota no popup */}
-                        {v.rota_id && (
-                          <p className="mt-1 pt-1 border-t">
-                            <strong>Rota:</strong>{" "}
-                            <span 
-                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-white text-xs"
-                              style={{ backgroundColor: v.rota_cor || "#3B82F6" }}
-                            >
-                              {v.rota_codigo || 'Atribuída'}
-                            </span>
-                          </p>
-                        )}
+                        <p><strong>Status:</strong> {v.status}</p>
                         {v.vistoriador_nome && (
                           <p><strong>Vistoriador:</strong> {v.vistoriador_nome}</p>
                         )}
@@ -589,18 +515,41 @@ export function MapaVistoriasContent() {
             })}
           </MapContainer>
 
-          {/* Legenda de Rotas - baseada nas rotas do banco */}
-          <MapaRotasLegenda
-            rotas={rotasParaLegenda}
-            rotasIds={rotasBairros?.map(r => r.rota_id) || rotasIds}
-            rotaSelecionada={filtroRota}
-            onRotaClick={setFiltroRota}
-            dataSelecionada={filtroData}
-          />
-
-          <div className="absolute bottom-4 left-4 bg-background/90 backdrop-blur-sm px-3 py-1.5 rounded-full text-xs text-muted-foreground border shadow-sm flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-            {vistoriasComCoordenadas.length} vistorias no mapa
+          {/* Legenda de Status - Realizadas/A Realizar */}
+          <div className="absolute top-4 right-4 z-40 bg-background/95 backdrop-blur-sm rounded-lg shadow-lg border p-3">
+            <h4 className="font-semibold text-sm mb-3">Legenda</h4>
+            <div className="space-y-2">
+              <button
+                onClick={() => setFiltroStatus(filtroStatus === "realizadas" ? "todos" : "realizadas")}
+                className={cn(
+                  "w-full flex items-center gap-2 text-sm p-2 rounded-md transition-colors hover:bg-muted",
+                  filtroStatus === "realizadas" && "bg-primary/10 border border-primary/30"
+                )}
+              >
+                <span className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: COR_REALIZADA }} />
+                <span className="flex-1 text-left">Realizadas</span>
+                <Badge variant="secondary" className="text-xs">{contadores.realizadas}</Badge>
+              </button>
+              <button
+                onClick={() => setFiltroStatus(filtroStatus === "a_realizar" ? "todos" : "a_realizar")}
+                className={cn(
+                  "w-full flex items-center gap-2 text-sm p-2 rounded-md transition-colors hover:bg-muted",
+                  filtroStatus === "a_realizar" && "bg-primary/10 border border-primary/30"
+                )}
+              >
+                <span className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: COR_A_REALIZAR }} />
+                <span className="flex-1 text-left">A Realizar</span>
+                <Badge variant="secondary" className="text-xs">{contadores.aRealizar}</Badge>
+              </button>
+              {filtroStatus !== "todos" && (
+                <button
+                  onClick={() => setFiltroStatus("todos")}
+                  className="w-full text-xs text-muted-foreground hover:text-foreground transition-colors p-1"
+                >
+                  Mostrar todas
+                </button>
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>
