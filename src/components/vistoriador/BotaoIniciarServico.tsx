@@ -70,20 +70,14 @@ export function BotaoIniciarServico({ className }: BotaoIniciarServicoProps) {
             </Alert>
           )}
 
-          {/* Botão de encerrar turno */}
-          <Button
-            size="lg"
-            variant="outline"
-            onClick={encerrarServico}
-            className="h-14 px-8 text-lg font-semibold gap-3 border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"
-          >
-            <Power className="h-5 w-5" />
-            Encerrar Turno
-          </Button>
-
           {/* Nota sobre como funciona */}
           <p className="text-xs text-muted-foreground mt-4 max-w-xs">
             Sua localização está sendo atualizada automaticamente. Novas tarefas serão atribuídas com base na sua proximidade.
+          </p>
+          
+          {/* Nota sobre encerrar turno */}
+          <p className="text-xs text-muted-foreground/70 mt-2">
+            Para encerrar o turno, acesse seu Perfil.
           </p>
         </CardContent>
       </Card>
