@@ -43,6 +43,7 @@ import { useCreateInstalacao, useUpdateInstalacao, useInstalacao, useRastreadore
 import { useInstaladores } from '@/hooks/useRotas';
 import { buscarCep } from '@/lib/cep';
 import { PERIODO_LABELS } from '@/types/database';
+import { supabase } from '@/integrations/supabase/client';
 
 const instalacaoSchema = z.object({
   associado_id: z.string().min(1, 'Selecione um associado'),
@@ -191,6 +192,30 @@ export function InstalacaoFormDialog({ open, onOpenChange, instalacaoId }: Insta
 
   const onSubmit = async (data: InstalacaoFormData) => {
     try {
+      // Verificar se já existe instalação ativa para este veículo (apenas para novas instalações)
+      if (!instalacaoId) {
+        const { data: instalacaoExistente } = await supabase
+          .from('instalacoes')
+          .select('id, status')
+          .eq('veiculo_id', data.veiculo_id)
+          .in('status', ['agendada', 'em_rota', 'em_andamento'])
+          .maybeSingle();
+
+        if (instalacaoExistente) {
+          const statusLabel = instalacaoExistente.status === 'agendada' 
+            ? 'agendada' 
+            : instalacaoExistente.status === 'em_rota' 
+              ? 'em rota' 
+              : 'em andamento';
+          toast({
+            title: 'Instalação já existente',
+            description: `Já existe uma instalação ${statusLabel} para este veículo.`,
+            variant: 'destructive',
+          });
+          return;
+        }
+      }
+
       const payload = {
         associado_id: data.associado_id,
         veiculo_id: data.veiculo_id,
