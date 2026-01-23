@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
   ClipboardList, 
@@ -11,7 +12,9 @@ import {
   Route,
   CheckCircle2,
   TrendingUp,
-  Users
+  Users,
+  Navigation,
+  Timer
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -27,6 +30,13 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useVistoriasMetricas } from '@/hooks/useVistorias';
 import { useInstalacoesContagem } from '@/hooks/useInstalacoes';
 import { 
@@ -34,6 +44,7 @@ import {
   useAlertasCoordenador, 
   useRotasHojeMetricas 
 } from '@/hooks/useDashboardCoordenador';
+import { useMetricasTempo } from '@/hooks/useMetricasTempo';
 import { cn } from '@/lib/utils';
 
 const acoesRapidas = [
@@ -45,11 +56,16 @@ const acoesRapidas = [
 
 export default function DashboardCoordenador() {
   const navigate = useNavigate();
+  const [filtroProfissional, setFiltroProfissional] = useState<string>('todos');
+  
   const { data: vistoriasMetricas, isLoading: loadingVistorias } = useVistoriasMetricas();
   const { data: instalacoesContagem, isLoading: loadingInstalacoes } = useInstalacoesContagem();
   const { data: equipeHoje, isLoading: loadingEquipe } = useEquipeHoje();
   const { data: alertas, isLoading: loadingAlertas } = useAlertasCoordenador();
   const { data: rotasMetricas, isLoading: loadingRotas } = useRotasHojeMetricas();
+  const { data: metricasTempo, isLoading: loadingMetricasTempo } = useMetricasTempo({
+    profissionalId: filtroProfissional !== 'todos' ? filtroProfissional : undefined,
+  });
 
   const isLoading = loadingVistorias || loadingInstalacoes || loadingRotas;
 
@@ -182,6 +198,110 @@ export default function DashboardCoordenador() {
             </CardContent>
           </Card>
         ))}
+      </div>
+
+      {/* Métricas de Tempo */}
+      <div className="grid lg:grid-cols-2 gap-6">
+        {/* Tempo Médio em Trânsito */}
+        <Card className="border-border bg-card">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Navigation className="h-5 w-5 text-blue-500" />
+                Tempo Médio em Trânsito
+              </CardTitle>
+              <Select value={filtroProfissional} onValueChange={setFiltroProfissional}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Filtrar por profissional" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos profissionais</SelectItem>
+                  {metricasTempo?.porProfissional.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {loadingMetricasTempo ? (
+              <div className="space-y-3">
+                <Skeleton className="h-10 w-24" />
+                <Skeleton className="h-4 w-32" />
+              </div>
+            ) : (
+              <>
+                <p className="text-3xl font-bold text-foreground">
+                  {metricasTempo?.tempoMedioTransitoFormatado || '0 min'}
+                </p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Tempo médio para chegar ao local
+                </p>
+                
+                {filtroProfissional === 'todos' && metricasTempo?.porProfissional && metricasTempo.porProfissional.length > 0 && (
+                  <div className="mt-4 space-y-2 max-h-[160px] overflow-y-auto">
+                    {metricasTempo.porProfissional.slice(0, 5).map((p) => (
+                      <div key={p.id} className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground truncate flex-1">{p.nome}</span>
+                        <Badge variant="outline" className="ml-2">
+                          {Math.round(p.tempoMedioTransitoMin)} min
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                <p className="text-xs text-muted-foreground mt-3">
+                  Base: {metricasTempo?.totalTarefasAnalisadas || 0} tarefas
+                </p>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Tempo Médio de Execução (Vistoria/Instalação) */}
+        <Card className="border-border bg-card">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Timer className="h-5 w-5 text-green-500" />
+              Tempo Médio de Execução
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {loadingMetricasTempo ? (
+              <div className="space-y-3">
+                <Skeleton className="h-10 w-24" />
+                <Skeleton className="h-4 w-32" />
+              </div>
+            ) : (
+              <>
+                <p className="text-3xl font-bold text-foreground">
+                  {metricasTempo?.tempoMedioExecucaoFormatado || '0 min'}
+                </p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Tempo médio de realização da tarefa
+                </p>
+                
+                {filtroProfissional === 'todos' && metricasTempo?.porProfissional && metricasTempo.porProfissional.length > 0 && (
+                  <div className="mt-4 space-y-2 max-h-[160px] overflow-y-auto">
+                    {metricasTempo.porProfissional.slice(0, 5).map((p) => (
+                      <div key={p.id} className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground truncate flex-1">{p.nome}</span>
+                        <Badge variant="outline" className="ml-2 bg-green-500/10 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800">
+                          {Math.round(p.tempoMedioExecucaoMin)} min
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                <p className="text-xs text-muted-foreground mt-3">
+                  Base: {metricasTempo?.totalTarefasAnalisadas || 0} tarefas
+                </p>
+              </>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {/* Grid: Equipe + Alertas */}

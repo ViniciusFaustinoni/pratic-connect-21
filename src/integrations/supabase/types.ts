@@ -7331,6 +7331,7 @@ export type Database = {
           cotacao_id: string | null
           created_at: string
           data_agendada: string
+          em_rota_em: string | null
           endereco_latitude: number | null
           endereco_longitude: number | null
           hora_agendada: string | null
@@ -7366,6 +7367,7 @@ export type Database = {
           cotacao_id?: string | null
           created_at?: string
           data_agendada: string
+          em_rota_em?: string | null
           endereco_latitude?: number | null
           endereco_longitude?: number | null
           hora_agendada?: string | null
@@ -7401,6 +7403,7 @@ export type Database = {
           cotacao_id?: string | null
           created_at?: string
           data_agendada?: string
+          em_rota_em?: string | null
           endereco_latitude?: number | null
           endereco_longitude?: number | null
           hora_agendada?: string | null
@@ -13469,10 +13472,12 @@ export type Database = {
           assinatura_status: string | null
           associado_id: string | null
           avarias: string | null
+          concluida_em: string | null
           contrato_id: string | null
           cotacao_id: string | null
           created_at: string
           data_agendada: string | null
+          em_rota_em: string | null
           endereco_bairro: string | null
           endereco_cep: string | null
           endereco_cidade: string | null
@@ -13485,6 +13490,7 @@ export type Database = {
           horario_agendado: string | null
           id: string
           imei_rastreador: string | null
+          iniciada_em: string | null
           instalacao_id: string | null
           km_atual: number | null
           lead_id: string | null
@@ -13515,10 +13521,12 @@ export type Database = {
           assinatura_status?: string | null
           associado_id?: string | null
           avarias?: string | null
+          concluida_em?: string | null
           contrato_id?: string | null
           cotacao_id?: string | null
           created_at?: string
           data_agendada?: string | null
+          em_rota_em?: string | null
           endereco_bairro?: string | null
           endereco_cep?: string | null
           endereco_cidade?: string | null
@@ -13531,6 +13539,7 @@ export type Database = {
           horario_agendado?: string | null
           id?: string
           imei_rastreador?: string | null
+          iniciada_em?: string | null
           instalacao_id?: string | null
           km_atual?: number | null
           lead_id?: string | null
@@ -13561,10 +13570,12 @@ export type Database = {
           assinatura_status?: string | null
           associado_id?: string | null
           avarias?: string | null
+          concluida_em?: string | null
           contrato_id?: string | null
           cotacao_id?: string | null
           created_at?: string
           data_agendada?: string | null
+          em_rota_em?: string | null
           endereco_bairro?: string | null
           endereco_cep?: string | null
           endereco_cidade?: string | null
@@ -13577,6 +13588,7 @@ export type Database = {
           horario_agendado?: string | null
           id?: string
           imei_rastreador?: string | null
+          iniciada_em?: string | null
           instalacao_id?: string | null
           km_atual?: number | null
           lead_id?: string | null

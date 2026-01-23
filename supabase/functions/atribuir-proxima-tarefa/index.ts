@@ -311,12 +311,14 @@ serve(async (req) => {
       const campoResponsavel = tarefa.tipo === 'instalacao' ? 'instalador_responsavel_id' : 'vistoriador_id';
       
       // Tentar atribuir usando update condicional (atomicidade garantida pelo banco)
+      const agora = new Date().toISOString();
       const { data: atualizado, error: updateError } = await supabase
         .from(tabela)
         .update({
           [campoResponsavel]: vistoriadorId,
           status: 'em_rota',
-          updated_at: new Date().toISOString()
+          em_rota_em: agora, // Registrar timestamp para métricas de tempo
+          updated_at: agora
         })
         .eq('id', tarefa.id)
         .is(campoResponsavel, null) // Só atualiza se ainda não tiver responsável
