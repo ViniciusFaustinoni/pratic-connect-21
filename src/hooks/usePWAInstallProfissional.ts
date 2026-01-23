@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -22,9 +23,13 @@ const PWA_DISMISSED_KEY = 'pwa-install-dismissed-profissional';
 const PWA_DISMISSED_UNTIL_KEY = 'pwa-install-dismissed-until-profissional';
 
 export function usePWAInstallProfissional(): PWAInstallState {
+  const { user, hasRole } = useAuth();
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState(false);
   const [showIOSInstructions, setShowIOSInstructions] = useState(false);
+  
+  // Verificar se está autenticado como profissional
+  const isAuthenticated = !!user && hasRole('instalador_vistoriador');
 
   // Detectar dispositivo
   const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';
@@ -106,6 +111,9 @@ export function usePWAInstallProfissional(): PWAInstallState {
 
   // Verificar se pode mostrar (não foi dispensado recentemente)
   const isInstallable = (() => {
+    // Primeiro: verificar se está autenticado como profissional
+    if (!isAuthenticated) return false;
+    
     if (isInstalled) return false;
     
     const dismissedUntil = localStorage.getItem(PWA_DISMISSED_UNTIL_KEY);
