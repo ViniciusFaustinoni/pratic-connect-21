@@ -22,6 +22,9 @@ interface GeolocationState {
 // Intervalo de atualização de localização (5 minutos)
 const LOCATION_UPDATE_INTERVAL = 5 * 60 * 1000;
 
+// Intervalo de polling para buscar novas tarefas (2 minutos)
+const TASK_POLLING_INTERVAL = 2 * 60 * 1000;
+
 /**
  * Hook para gerenciar o fluxo de iniciar serviço com geolocalização
  * Também mantém localização atualizada em background para sistema de encaixe automático
@@ -227,6 +230,48 @@ export function useIniciarServico() {
       };
     }
   }, [profile?.id, emServico, iniciarTrackingLocalizacao, pararTrackingLocalizacao]);
+
+  // Polling automático para buscar novas tarefas quando em serviço sem tarefa
+  useEffect(() => {
+    if (!profile?.id || !emServico) return;
+
+    // Verificar se já tem tarefa e tentar atribuir nova
+    const checkAndAssignTask = async () => {
+      // Verificar se há tarefa atual
+      const { data: tarefaAtual } = await supabase
+        .rpc('buscar_tarefa_atual_profissional', { p_profissional_id: profile.id });
+
+      // Se não tem tarefa e está em serviço, tentar atribuir
+      if (!tarefaAtual && geoState.latitude && geoState.longitude) {
+        console.log('[useIniciarServico] Polling: Buscando nova tarefa...');
+        try {
+          const response = await supabase.functions.invoke('atribuir-proxima-tarefa', {
+            body: { latitude: geoState.latitude, longitude: geoState.longitude, acao: 'polling' },
+          });
+
+          if (response.data?.resultado === 'atribuida') {
+            console.log('[useIniciarServico] Polling: Nova tarefa atribuída!');
+            queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
+            queryClient.invalidateQueries({ queryKey: ['servicos'] });
+            toast.success('Nova tarefa atribuída!');
+          }
+        } catch (error) {
+          console.warn('[useIniciarServico] Erro no polling:', error);
+        }
+      }
+    };
+
+    // Polling a cada 2 minutos
+    const pollingInterval = setInterval(checkAndAssignTask, TASK_POLLING_INTERVAL);
+
+    // Também executar imediatamente na primeira vez (após 5s para dar tempo de carregar)
+    const initialCheckTimer = setTimeout(checkAndAssignTask, 5000);
+
+    return () => {
+      clearInterval(pollingInterval);
+      clearTimeout(initialCheckTimer);
+    };
+  }, [profile?.id, emServico, geoState.latitude, geoState.longitude, queryClient]);
 
   // Função para solicitar localização e iniciar serviço
   const iniciarServico = useCallback(async () => {
