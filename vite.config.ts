@@ -16,35 +16,43 @@ export default defineConfig(({ mode }) => ({
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
-      includeAssets: ['favicon.ico', 'robots.txt', 'pratic-logo.png', 'pwa-192x192.png', 'pwa-512x512.png'],
+      includeAssets: [
+        'favicon.ico', 
+        'robots.txt', 
+        'pratic-logo.png', 
+        'pwa-192x192.png', 
+        'pwa-512x512.png',
+        'pwa-instalador-192x192.png',
+        'pwa-instalador-512x512.png'
+      ],
       manifest: {
-        name: 'PRATIC - Proteção Veicular',
-        short_name: 'PRATIC',
-        description: 'Seu aplicativo de proteção veicular. Acesse boletos, rastreamento, assistência 24h e muito mais.',
-        start_url: '/app/home',
+        name: 'PRATIC Profissional',
+        short_name: 'PRATIC Pro',
+        description: 'App para instaladores e vistoriadores PRATIC. Gerencie suas tarefas, rotas e instalações.',
+        start_url: '/instalador',
         scope: '/',
         display: 'standalone',
         orientation: 'portrait',
-        background_color: '#ffffff',
-        theme_color: '#1a56db',
-        categories: ['finance', 'utilities', 'lifestyle'],
+        background_color: '#1e293b',
+        theme_color: '#1e293b',
+        categories: ['business', 'productivity'],
         lang: 'pt-BR',
         dir: 'ltr',
         icons: [
           {
-            src: '/pwa-192x192.png',
+            src: '/pwa-instalador-192x192.png',
             sizes: '192x192',
             type: 'image/png',
             purpose: 'any'
           },
           {
-            src: '/pwa-512x512.png',
+            src: '/pwa-instalador-512x512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any'
           },
           {
-            src: '/pwa-512x512.png',
+            src: '/pwa-instalador-512x512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'maskable'
@@ -52,28 +60,30 @@ export default defineConfig(({ mode }) => ({
         ],
         shortcuts: [
           {
-            name: 'Ver Boletos',
-            short_name: 'Boletos',
-            url: '/app/boletos',
-            icons: [{ src: '/pwa-192x192.png', sizes: '192x192' }]
+            name: 'Minhas Tarefas',
+            short_name: 'Tarefas',
+            url: '/instalador/tarefas',
+            icons: [{ src: '/pwa-instalador-192x192.png', sizes: '192x192' }]
           },
           {
-            name: 'Solicitar Assistência',
-            short_name: 'Assistência',
-            url: '/app/assistencia/nova',
-            icons: [{ src: '/pwa-192x192.png', sizes: '192x192' }]
+            name: 'Ver no Mapa',
+            short_name: 'Mapa',
+            url: '/instalador/mapa',
+            icons: [{ src: '/pwa-instalador-192x192.png', sizes: '192x192' }]
           },
           {
-            name: 'Rastreamento',
-            short_name: 'Rastrear',
-            url: '/app/rastreamento',
-            icons: [{ src: '/pwa-192x192.png', sizes: '192x192' }]
+            name: 'Meu Perfil',
+            short_name: 'Perfil',
+            url: '/instalador/perfil',
+            icons: [{ src: '/pwa-instalador-192x192.png', sizes: '192x192' }]
           }
         ]
       },
       workbox: {
         maximumFileSizeToCacheInBytes: 7 * 1024 * 1024,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+        navigateFallback: '/index.html',
+        navigateFallbackAllowlist: [/^\/instalador/, /^\/app/],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
@@ -83,6 +93,20 @@ export default defineConfig(({ mode }) => ({
               expiration: {
                 maxEntries: 50,
                 maxAgeSeconds: 60 * 60 // 1 hora
+              },
+              cacheableResponse: {
+                statuses: [0, 200]
+              }
+            }
+          },
+          {
+            urlPattern: /\/rest\/v1\/(servicos|profiles|rotas)/,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'profissional-api-cache',
+              expiration: {
+                maxEntries: 30,
+                maxAgeSeconds: 60 * 30 // 30 minutos
               },
               cacheableResponse: {
                 statuses: [0, 200]

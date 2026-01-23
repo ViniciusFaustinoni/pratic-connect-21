@@ -17,6 +17,7 @@ import { TelaLocalizacaoBloqueada } from '@/components/vistoriador/TelaLocalizac
 import { useIniciarServico } from '@/hooks/useIniciarServico';
 import { useTarefaAtual } from '@/hooks/useTarefaAtual';
 import { toast } from 'sonner';
+import { PWAInstallPromptProfissional } from '@/components/pwa/PWAInstallPromptProfissional';
 
 const NAV_ITEMS = [
   { icon: Home, label: 'Início', path: '/instalador' },
@@ -194,8 +195,8 @@ export function InstaladorLayout() {
           </main>
 
           {/* Bottom Navigation */}
-          <nav className="fixed bottom-0 left-0 right-0 z-50 bg-slate-800 border-t border-slate-700 max-w-md mx-auto">
-            <div className="flex items-center justify-around py-2">
+          <nav className="fixed bottom-0 left-0 right-0 z-50 bg-slate-800 border-t border-slate-700 max-w-md mx-auto bottom-nav-safe">
+            <div className="flex items-center justify-around py-2 pb-safe">
               {NAV_ITEMS.map((item) => {
                 const Icon = item.icon;
                 const active = isActive(item.path);
@@ -223,6 +224,9 @@ export function InstaladorLayout() {
               })}
             </div>
           </nav>
+
+          {/* PWA Install Prompt */}
+          <PWAInstallPromptProfissional />
         </div>
       </div>
     </InstaladorGuard>
