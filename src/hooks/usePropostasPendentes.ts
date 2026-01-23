@@ -754,11 +754,56 @@ export function usePropostaStats() {
       hoje.setHours(0, 0, 0, 0);
       const hojeISO = hoje.toISOString();
 
-      // Buscar contratos assinados (aguardando)
-      const { count: aguardando } = await supabase
+      // ========================================
+      // AGUARDANDO: Usar mesma lógica da lista
+      // Só conta propostas PRONTAS para análise:
+      // - Com autovistoria (fotos enviadas) OU
+      // - Com instalação/vistoria concluída
+      // ========================================
+      const { data: contratosAssinados } = await supabase
         .from('contratos')
-        .select('*', { count: 'exact', head: true })
+        .select('id, cotacao_id')
         .eq('status', 'assinado');
+
+      let aguardando = 0;
+
+      if (contratosAssinados && contratosAssinados.length > 0) {
+        // Buscar instalações concluídas para todos os contratos
+        const contratoIds = contratosAssinados.map(c => c.id);
+        const { data: instalacoesConcluidas } = await supabase
+          .from('instalacoes')
+          .select('contrato_id')
+          .in('contrato_id', contratoIds)
+          .eq('status', 'concluida');
+
+        const contratosComInstalacao = new Set(
+          instalacoesConcluidas?.map(i => i.contrato_id) || []
+        );
+
+        // Buscar cotações com fotos de autovistoria
+        const cotacaoIds = contratosAssinados
+          .map(c => c.cotacao_id)
+          .filter(Boolean) as string[];
+
+        let cotacoesComFotos = new Set<string>();
+        if (cotacaoIds.length > 0) {
+          const { data: fotosData } = await supabase
+            .from('cotacoes_vistoria_fotos')
+            .select('cotacao_id')
+            .in('cotacao_id', cotacaoIds);
+
+          cotacoesComFotos = new Set(fotosData?.map(f => f.cotacao_id) || []);
+        }
+
+        // Contar apenas propostas prontas para análise
+        aguardando = contratosAssinados.filter(contrato => {
+          // Tem instalação concluída?
+          if (contratosComInstalacao.has(contrato.id)) return true;
+          // Tem autovistoria com fotos?
+          if (contrato.cotacao_id && cotacoesComFotos.has(contrato.cotacao_id)) return true;
+          return false;
+        }).length;
+      }
 
       // Buscar contratos em análise (pendente é usado para em análise)
       const { count: emAnalise } = await supabase
@@ -781,7 +826,7 @@ export function usePropostaStats() {
         .gte('updated_at', hojeISO);
 
       return {
-        aguardando: aguardando || 0,
+        aguardando,
         emAnalise: emAnalise || 0,
         aprovadosHoje: aprovadosHoje || 0,
         reprovadosHoje: reprovadosHoje || 0,
