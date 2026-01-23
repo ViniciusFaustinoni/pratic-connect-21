@@ -38,13 +38,15 @@ interface ServicoDisponivel {
   longitude: number | null;
   permite_encaixe: boolean;
   status: string;
-  associado_id: string;
+  associado_id: string | null;
   associado_nome: string;
   associado_telefone: string;
-  veiculo_id: string;
+  associado_whatsapp: string;
+  veiculo_id: string | null;
   veiculo_placa: string;
   veiculo_marca: string;
   veiculo_modelo: string;
+  veiculo_cor: string;
   logradouro: string | null;
   numero: string | null;
   bairro: string | null;
@@ -185,8 +187,8 @@ serve(async (req) => {
         associado_id,
         veiculo_id,
         local_vistoria,
-        associado:associados!inner(nome, telefone),
-        veiculo:veiculos!inner(placa, marca, modelo)
+        associado:associados(nome, telefone, whatsapp),
+        veiculo:veiculos(placa, marca, modelo, cor)
       `)
       .is('profissional_id', null)
       .in('status', ['pendente', 'agendada'])
@@ -211,12 +213,14 @@ serve(async (req) => {
       permite_encaixe: s.permite_encaixe || false,
       status: s.status,
       associado_id: s.associado_id,
-      associado_nome: s.associado?.nome || 'Cliente',
+      associado_nome: s.associado?.nome || 'Cliente não vinculado',
       associado_telefone: s.associado?.telefone || '',
+      associado_whatsapp: s.associado?.whatsapp || '',
       veiculo_id: s.veiculo_id,
-      veiculo_placa: s.veiculo?.placa || '',
+      veiculo_placa: s.veiculo?.placa || 'Placa pendente',
       veiculo_marca: s.veiculo?.marca || '',
       veiculo_modelo: s.veiculo?.modelo || '',
+      veiculo_cor: s.veiculo?.cor || '',
       logradouro: s.logradouro,
       numero: s.numero,
       bairro: s.bairro,
