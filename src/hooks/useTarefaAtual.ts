@@ -83,6 +83,8 @@ export function useTarefaAtual() {
         rota_id: tarefa.rota_id,
         iniciada_em: tarefa.iniciada_em,
         em_rota_em: tarefa.em_rota_em,
+        instalacao_origem_id: tarefa.instalacao_origem_id,
+        vistoria_origem_id: tarefa.vistoria_origem_id,
       };
     },
     enabled: !!profissionalId,

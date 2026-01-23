@@ -58,10 +58,15 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
   };
 
   const handleExecutar = () => {
-    const rota = isInstalacao(tarefa.tipo)
-      ? `/instalador/instalacao/${tarefa.id}`
-      : `/instalador/vistoria/${tarefa.id}`;
-    navigate(rota);
+    if (isInstalacao(tarefa.tipo)) {
+      // Usar instalacao_origem_id se existir, senão usar o id do serviço
+      const instalacaoId = tarefa.instalacao_origem_id || tarefa.id;
+      navigate(`/instalador/instalacao/${instalacaoId}`);
+    } else {
+      // Usar vistoria_origem_id se existir, senão usar o id do serviço
+      const vistoriaId = tarefa.vistoria_origem_id || tarefa.id;
+      navigate(`/instalador/vistoria/${vistoriaId}`);
+    }
   };
 
   const isEmRota = tarefa.status === 'em_rota';
