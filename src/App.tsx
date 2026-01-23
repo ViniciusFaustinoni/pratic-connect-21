@@ -60,6 +60,7 @@ import SinistrosDashboard from "./pages/eventos/SinistrosDashboard";
 import InstalacoesList from "./pages/monitoramento/InstalacoesList";
 import InstalacaoDetalhe from "./pages/monitoramento/InstalacaoDetalhe";
 import Rotas from "./pages/monitoramento/Rotas";
+import MonitoramentoEncaixes from "./pages/monitoramento/Encaixes";
 import Estoque from "./pages/monitoramento/Estoque";
 import Rastreadores from "./pages/monitoramento/Rastreadores";
 import ConfigPlataformas from "./pages/monitoramento/ConfigPlataformas";
@@ -423,6 +424,7 @@ const App = () => (
               <Route path="/monitoramento/instalacoes" element={<InstalacoesList />} />
               <Route path="/monitoramento/instalacoes/:id" element={<InstalacaoDetalhe />} />
               <Route path="/monitoramento/rotas" element={<Rotas />} />
+              <Route path="/monitoramento/encaixes" element={<MonitoramentoEncaixes />} />
               <Route path="/monitoramento/gestao-rotas" element={<GestaoRotas />} />
               <Route path="/monitoramento/estoque" element={<Estoque />} />
               <Route path="/monitoramento/mapa" element={<Mapa />} />
@@ -549,6 +551,7 @@ const App = () => (
             <Route element={<InstaladorLayout />}>
               <Route path="/instalador" element={<InstaladorHome />} />
               <Route path="/instalador/fila" element={<InstaladorFila />} />
+              <Route path="/instalador/encaixes" element={<VistoriadorEncaixes />} />
               <Route path="/instalador/instalacao/:id" element={<InstaladorChecklist />} />
               <Route path="/instalador/vistoria/:id" element={<ExecutarVistoriaCompleta />} />
               <Route path="/instalador/mapa" element={<InstaladorMapa />} />

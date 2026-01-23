@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { Home, ClipboardList, Map, User, Bell, LogOut, Wrench } from 'lucide-react';
+import { Home, ClipboardList, Map, User, Bell, LogOut, Wrench, Puzzle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -18,6 +18,7 @@ import { InstaladorGuard } from './InstaladorGuard';
 const NAV_ITEMS = [
   { icon: Home, label: 'Início', path: '/instalador' },
   { icon: ClipboardList, label: 'Fila', path: '/instalador/fila' },
+  { icon: Puzzle, label: 'Encaixes', path: '/instalador/encaixes' },
   { icon: Map, label: 'Mapa', path: '/instalador/mapa' },
   { icon: User, label: 'Perfil', path: '/instalador/perfil' },
 ];

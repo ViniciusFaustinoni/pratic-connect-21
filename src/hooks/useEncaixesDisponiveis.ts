@@ -343,7 +343,116 @@ export function useEncaixesDisponiveis() {
   };
 }
 
-// Hook para assumir um encaixe
+// Hook para buscar TODOS os encaixes (para coordenador - sem filtro de distância)
+export function useTodosEncaixes() {
+  return useQuery({
+    queryKey: ['todos-encaixes'],
+    queryFn: async (): Promise<EncaixeDisponivel[]> => {
+      const encaixes: EncaixeDisponivel[] = [];
+      const hoje = new Date().toISOString().split('T')[0];
+
+      // Buscar instalações com permite_encaixe e sem profissional
+      const { data: instalacoes } = await supabase
+        .from('instalacoes')
+        .select(`
+          id,
+          data_agendada,
+          periodo,
+          endereco_logradouro,
+          endereco_numero,
+          endereco_bairro,
+          endereco_cidade,
+          endereco_cep,
+          endereco_latitude,
+          endereco_longitude,
+          associado:associados(nome, telefone),
+          veiculo:veiculos(placa, marca, modelo)
+        `)
+        .eq('permite_encaixe', true)
+        .is('instalador_responsavel_id', null)
+        .gte('data_agendada', hoje)
+        .eq('status', 'agendada')
+        .order('data_agendada', { ascending: true });
+
+      instalacoes?.forEach((inst: any) => {
+        encaixes.push({
+          id: inst.id,
+          tipo: 'instalacao',
+          cliente_nome: inst.associado?.nome || 'Não informado',
+          cliente_telefone: inst.associado?.telefone,
+          endereco_logradouro: inst.endereco_logradouro,
+          endereco_numero: inst.endereco_numero,
+          endereco_bairro: inst.endereco_bairro,
+          endereco_cidade: inst.endereco_cidade,
+          endereco_cep: inst.endereco_cep,
+          data_agendada: inst.data_agendada,
+          periodo: inst.periodo,
+          placa: inst.veiculo?.placa,
+          marca: inst.veiculo?.marca,
+          modelo: inst.veiculo?.modelo,
+          distancia_km: 0, // Não relevante para coordenador
+          latitude: inst.endereco_latitude,
+          longitude: inst.endereco_longitude,
+        });
+      });
+
+      // Buscar vistorias com permite_encaixe e sem profissional
+      const { data: vistorias } = await supabase
+        .from('vistorias')
+        .select(`
+          id,
+          tipo,
+          data_agendada,
+          periodo,
+          endereco_logradouro,
+          endereco_numero,
+          endereco_bairro,
+          endereco_cidade,
+          endereco_cep,
+          endereco_latitude,
+          endereco_longitude,
+          associado:associados(nome, telefone),
+          veiculo:veiculos(placa, marca, modelo)
+        `)
+        .eq('permite_encaixe', true)
+        .is('vistoriador_id', null)
+        .gte('data_agendada', hoje)
+        .eq('status', 'agendada')
+        .order('data_agendada', { ascending: true });
+
+      vistorias?.forEach((vist: any) => {
+        encaixes.push({
+          id: vist.id,
+          tipo: 'vistoria',
+          tipo_vistoria: vist.tipo,
+          cliente_nome: vist.associado?.nome || 'Não informado',
+          cliente_telefone: vist.associado?.telefone,
+          endereco_logradouro: vist.endereco_logradouro,
+          endereco_numero: vist.endereco_numero,
+          endereco_bairro: vist.endereco_bairro,
+          endereco_cidade: vist.endereco_cidade,
+          endereco_cep: vist.endereco_cep,
+          data_agendada: vist.data_agendada,
+          periodo: vist.periodo,
+          placa: vist.veiculo?.placa,
+          marca: vist.veiculo?.marca,
+          modelo: vist.veiculo?.modelo,
+          distancia_km: 0,
+          latitude: vist.endereco_latitude,
+          longitude: vist.endereco_longitude,
+        });
+      });
+
+      // Ordenar por data
+      return encaixes.sort((a, b) => 
+        new Date(a.data_agendada).getTime() - new Date(b.data_agendada).getTime()
+      );
+    },
+    staleTime: 1000 * 60 * 2,
+  });
+}
+
+// Hook para assumir um encaixe (para o próprio profissional)
 export function usePuxarEncaixe() {
   const queryClient = useQueryClient();
   const { profile } = useAuth();
@@ -386,6 +495,58 @@ export function usePuxarEncaixe() {
     onError: (error) => {
       console.error('[usePuxarEncaixe] Erro:', error);
       toast.error('Erro ao assumir o serviço');
+    },
+  });
+}
+
+// Hook para atribuir encaixe a qualquer profissional (para coordenador)
+export function useAtribuirEncaixe() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ 
+      id, 
+      tipo, 
+      profissionalId 
+    }: { 
+      id: string; 
+      tipo: 'instalacao' | 'vistoria';
+      profissionalId: string;
+    }) => {
+      if (tipo === 'instalacao') {
+        const { error } = await supabase
+          .from('instalacoes')
+          .update({
+            instalador_responsavel_id: profissionalId,
+            permite_encaixe: false,
+          })
+          .eq('id', id);
+
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('vistorias')
+          .update({
+            vistoriador_id: profissionalId,
+            permite_encaixe: false,
+          })
+          .eq('id', id);
+
+        if (error) throw error;
+      }
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['todos-encaixes'] });
+      queryClient.invalidateQueries({ queryKey: ['encaixes-disponiveis'] });
+      toast.success(
+        variables.tipo === 'instalacao'
+          ? 'Instalação atribuída com sucesso!'
+          : 'Vistoria atribuída com sucesso!'
+      );
+    },
+    onError: (error) => {
+      console.error('[useAtribuirEncaixe] Erro:', error);
+      toast.error('Erro ao atribuir o serviço');
     },
   });
 }

@@ -53,6 +53,7 @@ import {
   History,
   FileCode,
   User,
+  Puzzle,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
@@ -174,6 +175,7 @@ const menuConfig: {
         { title: 'Equipe', url: '/monitoramento/equipe', icon: Users, permission: 'canManageEquipeEstoque' },
         { title: 'Instalações', url: '/monitoramento/instalacoes', icon: Wrench },
         { title: 'Vistorias', url: '/monitoramento/vistorias', icon: ClipboardCheck },
+        { title: 'Encaixes', url: '/monitoramento/encaixes', icon: Puzzle },
         { title: 'Rotas', url: '/monitoramento/rotas', icon: MapPin },
         { title: 'Calendário', url: '/monitoramento/calendario', icon: Calendar },
         { title: 'Estoque', url: '/monitoramento/estoque', icon: Package, permission: 'canManageEquipeEstoque' },
