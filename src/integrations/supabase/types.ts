@@ -12264,6 +12264,7 @@ export type Database = {
           instalador_id: string | null
           regiao: string | null
           status: Database["public"]["Enums"]["status_rota"]
+          tipo: string | null
           total_concluidos: number
           total_servicos: number
           updated_at: string
@@ -12279,6 +12280,7 @@ export type Database = {
           instalador_id?: string | null
           regiao?: string | null
           status?: Database["public"]["Enums"]["status_rota"]
+          tipo?: string | null
           total_concluidos?: number
           total_servicos?: number
           updated_at?: string
@@ -12294,6 +12296,7 @@ export type Database = {
           instalador_id?: string | null
           regiao?: string | null
           status?: Database["public"]["Enums"]["status_rota"]
+          tipo?: string | null
           total_concluidos?: number
           total_servicos?: number
           updated_at?: string
@@ -13410,6 +13413,48 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "vistorias"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      vistoriadores_localizacao: {
+        Row: {
+          em_servico: boolean | null
+          latitude: number
+          longitude: number
+          precisao_metros: number | null
+          updated_at: string | null
+          vistoriador_id: string
+        }
+        Insert: {
+          em_servico?: boolean | null
+          latitude: number
+          longitude: number
+          precisao_metros?: number | null
+          updated_at?: string | null
+          vistoriador_id: string
+        }
+        Update: {
+          em_servico?: boolean | null
+          latitude?: number
+          longitude?: number
+          precisao_metros?: number | null
+          updated_at?: string | null
+          vistoriador_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vistoriadores_localizacao_vistoriador_id_fkey"
+            columns: ["vistoriador_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vistoriadores_localizacao_vistoriador_id_fkey"
+            columns: ["vistoriador_id"]
+            isOneToOne: true
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
           },
         ]
       }
@@ -14580,6 +14625,31 @@ export type Database = {
       atualizar_cobrancas_vencidas: { Args: never; Returns: number }
       atualizar_parcelas_vencidas: { Args: never; Returns: number }
       atualizar_valor_os: { Args: { os_id: string }; Returns: undefined }
+      buscar_tarefa_atual_vistoriador: {
+        Args: { p_vistoriador_id: string }
+        Returns: {
+          associado_id: string
+          associado_nome: string
+          associado_telefone: string
+          bairro: string
+          cidade: string
+          data_agendada: string
+          endereco_latitude: number
+          endereco_longitude: number
+          hora_agendada: string
+          id: string
+          logradouro: string
+          numero: string
+          rota_id: string
+          status: string
+          tipo: string
+          uf: string
+          veiculo_id: string
+          veiculo_marca: string
+          veiculo_modelo: string
+          veiculo_placa: string
+        }[]
+      }
       calcular_sinistralidade: {
         Args: { p_ano: number; p_mes: number }
         Returns: {
