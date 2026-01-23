@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { TarefaAtual } from './useTarefaAtual';
@@ -33,6 +33,31 @@ export function useIniciarServico() {
   const locationIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const watchIdRef = useRef<number | null>(null);
 
+  // Query para verificar se o vistoriador está em serviço
+  const { data: statusEmServico, refetch: refetchStatus } = useQuery({
+    queryKey: ['vistoriador-em-servico', profile?.id],
+    queryFn: async () => {
+      if (!profile?.id) return false;
+      
+      const { data, error } = await supabase
+        .from('vistoriadores_localizacao')
+        .select('em_servico')
+        .eq('vistoriador_id', profile.id)
+        .maybeSingle();
+      
+      if (error) {
+        console.error('[useIniciarServico] Erro ao verificar status:', error);
+        return false;
+      }
+      
+      return data?.em_servico || false;
+    },
+    enabled: !!profile?.id,
+    staleTime: 30000,
+  });
+
+  const emServico = statusEmServico || false;
+
   // Mutation para chamar a edge function
   const atribuirTarefaMutation = useMutation({
     mutationFn: async ({ latitude, longitude }: { latitude: number; longitude: number }): Promise<IniciarServicoResult> => {
@@ -54,13 +79,14 @@ export function useIniciarServico() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
+      refetchStatus();
       
       if (data.resultado === 'atribuida') {
         toast.success('Nova tarefa atribuída!');
       } else if (data.resultado === 'ja_tem_tarefa') {
         toast.info('Você já tem uma tarefa em andamento');
       } else if (data.resultado === 'sem_tarefas') {
-        toast.info(data.mensagem || 'Não há tarefas disponíveis no momento');
+        toast.success(data.mensagem || 'Você está ativo para receber serviços');
       }
     },
     onError: (error) => {
@@ -70,7 +96,11 @@ export function useIniciarServico() {
   });
 
   // Função para enviar localização para o banco (silenciosa, sem toasts)
-  const enviarLocalizacao = useCallback(async (latitude: number, longitude: number) => {
+  const enviarLocalizacao = useCallback(async (
+    latitude: number, 
+    longitude: number,
+    marcarEmServico: boolean = true
+  ) => {
     if (!profile?.id) return;
 
     try {
@@ -80,10 +110,11 @@ export function useIniciarServico() {
           vistoriador_id: profile.id,
           latitude,
           longitude,
+          em_servico: marcarEmServico,
           updated_at: new Date().toISOString()
         }, { onConflict: 'vistoriador_id' });
 
-      console.log(`[useIniciarServico] Localização atualizada: (${latitude.toFixed(5)}, ${longitude.toFixed(5)})`);
+      console.log(`[useIniciarServico] Localização atualizada: (${latitude.toFixed(5)}, ${longitude.toFixed(5)}) em_servico: ${marcarEmServico}`);
     } catch (error) {
       console.error('[useIniciarServico] Erro ao enviar localização:', error);
     }
@@ -150,7 +181,7 @@ export function useIniciarServico() {
           });
         });
         
-        await enviarLocalizacao(position.coords.latitude, position.coords.longitude);
+        await enviarLocalizacao(position.coords.latitude, position.coords.longitude, true);
       } catch (error) {
         console.warn('[useIniciarServico] Erro ao atualizar localização periódica:', error);
       }
@@ -159,7 +190,7 @@ export function useIniciarServico() {
     // Enviar localização inicial imediatamente
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        enviarLocalizacao(position.coords.latitude, position.coords.longitude);
+        enviarLocalizacao(position.coords.latitude, position.coords.longitude, true);
       },
       () => {},
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
@@ -181,9 +212,9 @@ export function useIniciarServico() {
     console.log('[useIniciarServico] Tracking de localização parado');
   }, []);
 
-  // Iniciar tracking quando o hook é montado e o usuário está logado
+  // Iniciar tracking quando o hook é montado e o usuário está logado E em serviço
   useEffect(() => {
-    if (profile?.id) {
+    if (profile?.id && emServico) {
       // Delay para não bloquear a renderização inicial
       const timer = setTimeout(() => {
         iniciarTrackingLocalizacao();
@@ -194,7 +225,7 @@ export function useIniciarServico() {
         pararTrackingLocalizacao();
       };
     }
-  }, [profile?.id, iniciarTrackingLocalizacao, pararTrackingLocalizacao]);
+  }, [profile?.id, emServico, iniciarTrackingLocalizacao, pararTrackingLocalizacao]);
 
   // Função para solicitar localização e iniciar serviço
   const iniciarServico = useCallback(async () => {
@@ -214,7 +245,7 @@ export function useIniciarServico() {
           reject,
           {
             enableHighAccuracy: true,
-            timeout: 45000, // Aumentado de 30s para 45s para conexões mais lentas
+            timeout: 45000, // 45 segundos para conexões mais lentas
             maximumAge: 0
           }
         );
@@ -234,6 +265,9 @@ export function useIniciarServico() {
       // Chamar a edge function para atribuir tarefa
       await atribuirTarefaMutation.mutateAsync({ latitude, longitude });
 
+      // Iniciar tracking após sucesso
+      iniciarTrackingLocalizacao();
+
     } catch (error: any) {
       console.error('[useIniciarServico] Erro de geolocalização:', error);
       
@@ -252,9 +286,9 @@ export function useIniciarServico() {
       } else if (error.code === 3) { // TIMEOUT
         setGeoState({ 
           status: 'unavailable', 
-          error: 'Tempo esgotado ao obter localização. Tente novamente.' 
+          error: 'Tempo esgotado ao obter localização. Verifique sua conexão e tente novamente.' 
         });
-        toast.error('Tempo esgotado. Tente novamente.');
+        toast.error('Tempo esgotado. Verifique sua conexão e tente novamente.');
       } else {
         setGeoState({ 
           status: 'unavailable', 
@@ -263,7 +297,34 @@ export function useIniciarServico() {
         toast.error('Erro ao obter localização');
       }
     }
-  }, [atribuirTarefaMutation]);
+  }, [atribuirTarefaMutation, iniciarTrackingLocalizacao]);
+
+  // Função para encerrar o turno
+  const encerrarServico = useCallback(async () => {
+    if (!profile?.id) return;
+
+    try {
+      await supabase
+        .from('vistoriadores_localizacao')
+        .update({ 
+          em_servico: false,
+          updated_at: new Date().toISOString()
+        })
+        .eq('vistoriador_id', profile.id);
+
+      // Parar tracking de localização
+      pararTrackingLocalizacao();
+      
+      // Atualizar estado
+      refetchStatus();
+      queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
+      
+      toast.success('Turno encerrado com sucesso');
+    } catch (error) {
+      console.error('[useIniciarServico] Erro ao encerrar serviço:', error);
+      toast.error('Erro ao encerrar turno');
+    }
+  }, [profile?.id, pararTrackingLocalizacao, queryClient, refetchStatus]);
 
   // Função para atualizar localização (usada após concluir tarefa)
   const atualizarLocalizacao = useCallback(async () => {
@@ -278,9 +339,9 @@ export function useIniciarServico() {
         });
       });
 
-      // Também enviar para o banco
+      // Também enviar para o banco mantendo em_servico = true
       if (profile?.id) {
-        await enviarLocalizacao(position.coords.latitude, position.coords.longitude);
+        await enviarLocalizacao(position.coords.latitude, position.coords.longitude, true);
       }
 
       return {
@@ -305,9 +366,11 @@ export function useIniciarServico() {
 
   return {
     iniciarServico,
+    encerrarServico,
     buscarProximaTarefa,
     atualizarLocalizacao,
     geoState,
+    emServico,
     isLoading: atribuirTarefaMutation.isPending || geoState.status === 'requesting',
     resultado: atribuirTarefaMutation.data,
     error: atribuirTarefaMutation.error,

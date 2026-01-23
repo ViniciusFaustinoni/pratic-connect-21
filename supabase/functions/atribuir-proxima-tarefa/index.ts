@@ -377,13 +377,14 @@ serve(async (req) => {
             .eq('id', tarefa.id);
         }
 
-        // Salvar localização atual do vistoriador
+        // Salvar localização atual do vistoriador e marcar como em serviço
         await supabase
           .from('vistoriadores_localizacao')
           .upsert({
             vistoriador_id: vistoriadorId,
             latitude,
             longitude,
+            em_servico: true,
             updated_at: new Date().toISOString()
           }, { onConflict: 'vistoriador_id' });
 
@@ -423,11 +424,21 @@ serve(async (req) => {
       }
     }
 
-    // Se chegou aqui, todas as tarefas foram atribuídas a outros
+    // Se chegou aqui, nenhuma tarefa disponível - mas marcar vistoriador como ativo
+    await supabase
+      .from('vistoriadores_localizacao')
+      .upsert({
+        vistoriador_id: vistoriadorId,
+        latitude,
+        longitude,
+        em_servico: true,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'vistoriador_id' });
+
     return new Response(
       JSON.stringify({
         resultado: 'sem_tarefas',
-        mensagem: 'Todas as tarefas próximas já foram atribuídas a outros vistoriadores.'
+        mensagem: 'Você está ativo para receber serviços. Aguarde novas tarefas próximas de você.'
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

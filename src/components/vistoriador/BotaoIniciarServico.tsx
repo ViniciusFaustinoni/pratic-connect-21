@@ -1,4 +1,4 @@
-import { Play, MapPin, Loader2, AlertTriangle } from 'lucide-react';
+import { Play, MapPin, Loader2, AlertTriangle, Power, CheckCircle2, Radio } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -10,7 +10,7 @@ interface BotaoIniciarServicoProps {
 }
 
 export function BotaoIniciarServico({ className }: BotaoIniciarServicoProps) {
-  const { iniciarServico, isLoading, geoState } = useIniciarServico();
+  const { iniciarServico, encerrarServico, isLoading, geoState, emServico } = useIniciarServico();
 
   const getStatusMessage = () => {
     switch (geoState.status) {
@@ -27,6 +27,70 @@ export function BotaoIniciarServico({ className }: BotaoIniciarServicoProps) {
 
   const statusMessage = getStatusMessage();
 
+  // Estado: Em serviço, aguardando tarefas
+  if (emServico) {
+    return (
+      <Card className={cn("border-2 border-primary bg-primary/5", className)}>
+        <CardContent className="flex flex-col items-center justify-center py-12 px-6 text-center">
+          {/* Ícone de ativo */}
+          <div className="relative mb-6">
+            <div className="w-24 h-24 rounded-full bg-primary/20 flex items-center justify-center animate-pulse">
+              <CheckCircle2 className="h-12 w-12 text-primary" />
+            </div>
+            <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-primary flex items-center justify-center">
+              <Radio className="h-4 w-4 text-primary-foreground animate-pulse" />
+            </div>
+          </div>
+
+          {/* Título */}
+          <h2 className="text-2xl font-bold text-foreground mb-2">
+            Você está ativo
+          </h2>
+
+          {/* Descrição */}
+          <p className="text-muted-foreground mb-2 max-w-sm">
+            Aguardando tarefas próximas de você. Quando houver uma nova tarefa disponível, você será notificado.
+          </p>
+
+          {/* Status da localização */}
+          {geoState.status === 'granted' && geoState.accuracy && (
+            <div className="flex items-center gap-2 text-sm text-primary mb-6">
+              <MapPin className="h-4 w-4" />
+              <span>Localização ativa (precisão: {Math.round(geoState.accuracy)}m)</span>
+            </div>
+          )}
+
+          {/* Mensagem de status da geolocalização se houver erro */}
+          {statusMessage && (
+            <Alert variant={geoState.status === 'denied' ? 'destructive' : 'default'} className="mb-4 max-w-sm">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                {geoState.error || statusMessage}
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Botão de encerrar turno */}
+          <Button
+            size="lg"
+            variant="outline"
+            onClick={encerrarServico}
+            className="h-14 px-8 text-lg font-semibold gap-3 border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"
+          >
+            <Power className="h-5 w-5" />
+            Encerrar Turno
+          </Button>
+
+          {/* Nota sobre como funciona */}
+          <p className="text-xs text-muted-foreground mt-4 max-w-xs">
+            Sua localização está sendo atualizada automaticamente. Novas tarefas serão atribuídas com base na sua proximidade.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Estado: Não está em serviço, botão para iniciar
   return (
     <Card className={cn("border-2 border-dashed border-primary/30 bg-primary/5", className)}>
       <CardContent className="flex flex-col items-center justify-center py-12 px-6 text-center">
@@ -48,14 +112,14 @@ export function BotaoIniciarServico({ className }: BotaoIniciarServicoProps) {
 
         {/* Título */}
         <h2 className="text-2xl font-bold text-foreground mb-2">
-          {isLoading ? 'Buscando tarefa...' : 'Pronto para começar?'}
+          {isLoading ? 'Iniciando serviço...' : 'Pronto para começar?'}
         </h2>
 
         {/* Descrição */}
         <p className="text-muted-foreground mb-6 max-w-sm">
           {isLoading 
-            ? 'Estamos encontrando a tarefa mais próxima de você'
-            : 'Clique no botão abaixo para receber sua próxima tarefa automaticamente baseada na sua localização.'
+            ? 'Estamos preparando tudo para você começar a receber tarefas'
+            : 'Clique no botão abaixo para iniciar seu turno e começar a receber tarefas automaticamente.'
           }
         </p>
 
@@ -79,7 +143,7 @@ export function BotaoIniciarServico({ className }: BotaoIniciarServicoProps) {
           {isLoading ? (
             <>
               <Loader2 className="h-5 w-5 animate-spin" />
-              Buscando...
+              Aguarde...
             </>
           ) : (
             <>
