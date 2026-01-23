@@ -366,7 +366,7 @@ export function useEncaixesDisponiveis() {
         `)
         .eq('permite_encaixe', true)
         .eq('instalador_responsavel_id', profile.id)
-        .gt('data_agendada', hoje) // Apenas FUTURAS (não de hoje)
+        .gte('data_agendada', hoje) // HOJE ou futuras
         .eq('status', 'agendada');
 
       instalacoesProprias?.forEach((inst: any) => {
@@ -412,7 +412,7 @@ export function useEncaixesDisponiveis() {
         `)
         .eq('permite_encaixe', true)
         .eq('vistoriador_id', profile.id)
-        .gt('data_agendada', hoje) // Apenas FUTURAS
+        .gte('data_agendada', hoje) // HOJE ou futuras
         .eq('status', 'agendada');
 
       vistoriasProprias?.forEach((vist: any) => {
