@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { format, addDays, isWeekend, isBefore, startOfDay } from 'date-fns';
+import { format, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { MapPin, Clock, Calendar, Check, ChevronLeft, ChevronRight, Building2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useConfiguracaoBase, useHorariosDisponiveis, useCriarAgendamentoBase } from '@/hooks/useAgendamentoBase';
 import { cn } from '@/lib/utils';
+import { isDomingo, isSabado } from '@/data/autovistoriaConfig';
 
 interface AgendamentoBaseProps {
   cotacaoId: string;
@@ -40,13 +41,13 @@ export function AgendamentoBase({
   );
   const criarAgendamento = useCriarAgendamentoBase();
 
-  // Gerar próximos 7 dias úteis a partir do offset
+  // Gerar próximos 7 dias úteis a partir do offset (incluindo sábados)
   const diasDisponiveis = useMemo(() => {
     const dias: Date[] = [];
     let currentDate = addDays(new Date(), 1 + weekOffset * 7); // Começa amanhã
     
     while (dias.length < 7) {
-      if (!isWeekend(currentDate)) {
+      if (!isDomingo(currentDate)) { // Só bloqueia domingo
         dias.push(currentDate);
       }
       currentDate = addDays(currentDate, 1);
@@ -55,7 +56,7 @@ export function AgendamentoBase({
     return dias;
   }, [weekOffset]);
 
-  // Gerar slots de horário
+  // Gerar slots de horário (considerando horário reduzido no sábado)
   const slotsHorario = useMemo(() => {
     if (!configBase?.base_horario_inicio || !configBase?.base_horario_fim) {
       return [];
@@ -63,12 +64,17 @@ export function AgendamentoBase({
 
     const slots: string[] = [];
     const [horaInicio, minInicio] = configBase.base_horario_inicio.split(':').map(Number);
-    const [horaFim, minFim] = configBase.base_horario_fim.split(':').map(Number);
+    const [horaFim] = configBase.base_horario_fim.split(':').map(Number);
+    
+    // Se for sábado, limitar até 13:00
+    const horaFimEfetiva = dataSelecionada && isSabado(dataSelecionada) 
+      ? Math.min(horaFim, 13) 
+      : horaFim;
     
     let hora = horaInicio;
     let minuto = minInicio;
 
-    while (hora < horaFim || (hora === horaFim && minuto <= minFim)) {
+    while (hora < horaFimEfetiva || (hora === horaFimEfetiva && minuto === 0)) {
       slots.push(`${String(hora).padStart(2, '0')}:${String(minuto).padStart(2, '0')}`);
       minuto += 30;
       if (minuto >= 60) {
@@ -78,7 +84,7 @@ export function AgendamentoBase({
     }
 
     return slots;
-  }, [configBase]);
+  }, [configBase, dataSelecionada]);
 
   // Verificar disponibilidade de cada slot
   const getDisponibilidade = (horario: string) => {

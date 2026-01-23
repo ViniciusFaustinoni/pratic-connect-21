@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { format, addDays, isWeekend, isBefore, startOfDay } from 'date-fns';
+import { format, addDays, isBefore, startOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Calendar as CalendarIcon, Clock, ArrowLeft, Loader2, Lock } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { HORARIOS_DISPONIVEIS } from '@/data/autovistoriaConfig';
+import { isDomingo, getHorariosParaDia } from '@/data/autovistoriaConfig';
 import { useCriarVistoriaAgendada } from '@/hooks/useContratoLink';
 
 interface AgendarVistoriaProps {
@@ -23,12 +23,17 @@ export function AgendarVistoria({ contratoId, associadoId, veiculoId, readOnly, 
   const [horarioSelecionado, setHorarioSelecionado] = useState<string | null>(null);
   const criarVistoria = useCriarVistoriaAgendada();
 
-  // Desabilitar datas passadas e fins de semana
+  // Desabilitar datas passadas e domingos (sábados são permitidos)
   const isDateDisabled = (date: Date) => {
     const today = startOfDay(new Date());
     const minDate = addDays(today, 1); // Mínimo: amanhã
-    return isBefore(date, minDate) || isWeekend(date);
+    return isBefore(date, minDate) || isDomingo(date); // Só bloqueia domingo
   };
+  
+  // Obter horários baseado na data selecionada
+  const horariosDisponiveis = dataSelecionada 
+    ? getHorariosParaDia(dataSelecionada) 
+    : [];
 
   const handleConfirmar = async () => {
     if (!dataSelecionada || !horarioSelecionado) return;
@@ -95,7 +100,7 @@ export function AgendarVistoria({ contratoId, associadoId, veiculoId, readOnly, 
               Selecione um horário para {format(dataSelecionada, "dd 'de' MMMM", { locale: ptBR })}
             </h4>
             <div className="grid grid-cols-4 gap-2">
-              {HORARIOS_DISPONIVEIS.map((horario) => (
+              {horariosDisponiveis.map((horario) => (
                 <Button
                   key={horario}
                   variant={horarioSelecionado === horario ? 'default' : 'outline'}
