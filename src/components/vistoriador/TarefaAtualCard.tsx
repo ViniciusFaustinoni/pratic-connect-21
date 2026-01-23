@@ -58,15 +58,9 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
   };
 
   const handleExecutar = () => {
-    if (isInstalacao(tarefa.tipo)) {
-      // Usar instalacao_origem_id se existir, senão usar o id do serviço
-      const instalacaoId = tarefa.instalacao_origem_id || tarefa.id;
-      navigate(`/instalador/instalacao/${instalacaoId}`);
-    } else {
-      // Usar vistoria_origem_id se existir, senão usar o id do serviço
-      const vistoriaId = tarefa.vistoria_origem_id || tarefa.id;
-      navigate(`/instalador/vistoria/${vistoriaId}`);
-    }
+    // Sempre usar o ID do serviço (tabela unificada)
+    const path = isInstalacao(tarefa.tipo) ? 'instalacao' : 'vistoria';
+    navigate(`/instalador/${path}/${tarefa.id}`);
   };
 
   const isEmRota = tarefa.status === 'em_rota';

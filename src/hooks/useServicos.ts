@@ -726,6 +726,280 @@ export function useAdicionarFotoServicoMutation() {
   });
 }
 
+/**
+ * Hook para buscar detalhes completos de um serviço para execução
+ * (substitui useInstalacaoDetalhes e useVistoriaDetalhes)
+ */
+export function useServicoDetalhes(id: string | undefined) {
+  return useQuery({
+    queryKey: ['servico-detalhes', id],
+    queryFn: async () => {
+      if (!id) throw new Error('ID não fornecido');
+
+      // Buscar primeiro em servicos
+      const { data: servico, error: servicoError } = await supabase
+        .from('servicos')
+        .select(`
+          *,
+          associados:associado_id (
+            id, nome, telefone, email, whatsapp, cpf, rg,
+            logradouro, numero, bairro, cidade, uf, cep, complemento
+          ),
+          veiculos:veiculo_id (
+            id, marca, modelo, placa, ano_modelo, ano_fabricacao, cor, chassi, renavam
+          ),
+          rastreadores:rastreador_id (
+            id, codigo, numero_serie, imei, plataforma, status
+          )
+        `)
+        .eq('id', id)
+        .maybeSingle();
+
+      if (servicoError) throw servicoError;
+
+      // Se encontrou no servicos, retorna diretamente
+      if (servico) {
+        return servico as any;
+      }
+
+      // Fallback: tentar buscar na tabela legacy instalacoes
+      const { data: instalacao, error: instalacaoError } = await supabase
+        .from('instalacoes')
+        .select(`
+          *,
+          associados (id, nome, telefone, email, whatsapp, cpf, rg, logradouro, numero, bairro, cidade, uf, cep, complemento),
+          veiculos (id, marca, modelo, placa, ano_modelo, ano_fabricacao, cor, chassi, renavam),
+          rastreadores (id, codigo, numero_serie, imei, plataforma, status)
+        `)
+        .eq('id', id)
+        .maybeSingle();
+
+      if (instalacaoError) throw instalacaoError;
+
+      if (instalacao) {
+        // Normalizar para o mesmo formato de servico
+        return {
+          ...instalacao,
+          tipo: 'instalacao' as TipoServico,
+          fonte_dados: 'legacy_instalacoes',
+        } as any;
+      }
+
+      // Se não encontrou em nenhuma tabela, lançar erro
+      throw new Error('Serviço não encontrado');
+    },
+    enabled: !!id,
+    retry: 1,
+  });
+}
+
+/**
+ * Hook para salvar checklist de um serviço
+ */
+export function useSalvarChecklistServico() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, checklist_data, quilometragem }: {
+      id: string;
+      checklist_data: Record<string, unknown>;
+      quilometragem?: number;
+    }) => {
+      const updateData: Record<string, unknown> = {
+        checklist_data,
+        updated_at: new Date().toISOString(),
+      };
+      if (quilometragem !== undefined) {
+        updateData.quilometragem = quilometragem;
+      }
+
+      const { error } = await supabase
+        .from('servicos')
+        .update(updateData)
+        .eq('id', id);
+
+      if (error) throw error;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['servico-detalhes', variables.id] });
+    },
+    onError: (error) => {
+      console.error('Erro ao salvar checklist:', error);
+      toast.error('Erro ao salvar checklist');
+    }
+  });
+}
+
+/**
+ * Hook para aprovar veículo em um serviço (instalação/vistoria)
+ */
+export function useAprovarVeiculoServico() {
+  const queryClient = useQueryClient();
+  const { profile } = useAuth();
+
+  return useMutation({
+    mutationFn: async (data: {
+      servicoId: string;
+      veiculoId: string;
+      associadoId: string;
+      imeiRastreador: string;
+    }) => {
+      const agora = new Date().toISOString();
+
+      // 1. Buscar e validar rastreador
+      const { data: rastreador, error: rastreadorError } = await supabase
+        .from('rastreadores')
+        .select('id, status')
+        .eq('imei', data.imeiRastreador)
+        .single();
+
+      if (rastreadorError || !rastreador) {
+        throw new Error('Rastreador não encontrado');
+      }
+
+      if (rastreador.status !== 'estoque') {
+        throw new Error('Rastreador não está disponível');
+      }
+
+      // 2. Atualizar serviço
+      const { error: servicoError } = await supabase
+        .from('servicos')
+        .update({
+          status: 'concluida',
+          concluida_em: agora,
+          rastreador_id: rastreador.id,
+          imei_rastreador: data.imeiRastreador,
+          updated_at: agora,
+        })
+        .eq('id', data.servicoId);
+
+      if (servicoError) throw servicoError;
+
+      // 3. Vincular rastreador ao veículo
+      const { error: rastreadorUpdateError } = await supabase
+        .from('rastreadores')
+        .update({
+          status: 'instalado',
+          veiculo_id: data.veiculoId,
+          data_instalacao: agora,
+          instalado_por: profile?.id,
+        })
+        .eq('id', rastreador.id);
+
+      if (rastreadorUpdateError) throw rastreadorUpdateError;
+
+      // 4. Atualizar veículo
+      const { error: veiculoError } = await supabase
+        .from('veiculos')
+        .update({
+          rastreador_id: rastreador.id,
+          status: 'ativo',
+          updated_at: agora,
+        })
+        .eq('id', data.veiculoId);
+
+      if (veiculoError) throw veiculoError;
+
+      // 5. Registrar histórico
+      await supabase.from('associados_historico').insert({
+        associado_id: data.associadoId,
+        tipo: 'instalacao_concluida',
+        descricao: `Instalação concluída pelo técnico - Rastreador ${data.imeiRastreador} instalado`,
+        dados_novos: {
+          servico_id: data.servicoId,
+          veiculo_id: data.veiculoId,
+          rastreador_id: rastreador.id,
+          imei: data.imeiRastreador,
+        },
+        usuario_id: profile?.id,
+      });
+
+      return { sucesso: true };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['servico-detalhes'] });
+      queryClient.invalidateQueries({ queryKey: ['servicos'] });
+      queryClient.invalidateQueries({ queryKey: ['tarefa-atual-servico'] });
+      toast.success('Instalação concluída! Aguardando análise cadastral.');
+    },
+    onError: (error) => {
+      console.error('Erro ao aprovar veículo:', error);
+      toast.error(error instanceof Error ? error.message : 'Erro ao aprovar veículo');
+    },
+  });
+}
+
+/**
+ * Hook para recusar veículo em um serviço
+ */
+export function useRecusarVeiculoServico() {
+  const queryClient = useQueryClient();
+  const { profile } = useAuth();
+
+  return useMutation({
+    mutationFn: async (data: {
+      servicoId: string;
+      veiculoId: string;
+      associadoId: string;
+      motivo: string;
+    }) => {
+      const agora = new Date().toISOString();
+
+      // 1. Atualizar serviço como cancelado
+      const { error: servicoError } = await supabase
+        .from('servicos')
+        .update({
+          status: 'cancelada',
+          observacoes: `Veículo recusado: ${data.motivo}`,
+          concluida_em: agora,
+          updated_at: agora,
+        })
+        .eq('id', data.servicoId);
+
+      if (servicoError) throw servicoError;
+
+      // 2. Atualizar veículo como suspenso
+      const { error: veiculoError } = await supabase
+        .from('veiculos')
+        .update({
+          status: 'suspenso',
+          motivo_recusa_veiculo: data.motivo,
+          recusado_por: profile?.id,
+          recusado_em: agora,
+          updated_at: agora,
+        })
+        .eq('id', data.veiculoId);
+
+      if (veiculoError) throw veiculoError;
+
+      // 3. Registrar histórico
+      await supabase.from('associados_historico').insert({
+        associado_id: data.associadoId,
+        tipo: 'veiculo_recusado',
+        descricao: `Veículo recusado pelo técnico: ${data.motivo}`,
+        dados_novos: {
+          servico_id: data.servicoId,
+          veiculo_id: data.veiculoId,
+          motivo: data.motivo,
+        },
+        usuario_id: profile?.id,
+      });
+
+      return { sucesso: true };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['servico-detalhes'] });
+      queryClient.invalidateQueries({ queryKey: ['servicos'] });
+      queryClient.invalidateQueries({ queryKey: ['tarefa-atual-servico'] });
+      toast.success('Veículo recusado. Associado será notificado.');
+    },
+    onError: (error) => {
+      console.error('Erro ao recusar veículo:', error);
+      toast.error('Erro ao recusar veículo');
+    },
+  });
+}
+
 // Helper para verificar se é uma instalação
 export function isInstalacao(tipo: TipoServico): boolean {
   return tipo === 'instalacao';

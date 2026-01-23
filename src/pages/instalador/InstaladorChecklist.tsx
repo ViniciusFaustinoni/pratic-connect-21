@@ -36,13 +36,12 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { 
-  useInstalacaoDetalhes, 
-  useConcluirInstalacao, 
-  useSalvarChecklistInstalacao,
-  useAprovarVeiculo,
-  useRecusarVeiculo
-} from '@/hooks/useInstaladorInstalacoes';
-import { useVistoriaCompleta } from '@/hooks/useVistorias';
+  useServicoDetalhes, 
+  useSalvarChecklistServico,
+  useAprovarVeiculoServico,
+  useRecusarVeiculoServico
+} from '@/hooks/useServicos';
+import { useVistoriaCompletaPorServico } from '@/hooks/useVistorias';
 import { useUploadFotoVistoriaCompleta, useUploadVideo360 } from '@/hooks/useVistoriaCompleta';
 import { 
   agruparFotosPorCategoriaCompleta, 
@@ -100,15 +99,14 @@ export default function InstaladorChecklist() {
   const [imeiStatus, setImeiStatus] = useState<'idle' | 'validando' | 'disponivel' | 'nao_encontrado' | 'indisponivel'>('idle');
   const [imeiInfo, setImeiInfo] = useState<{ codigo?: string; plataforma?: string; status?: string } | null>(null);
 
-  const { data: instalacao, isLoading, error } = useInstalacaoDetalhes(id);
-  const { data: vistoriaCompleta, isLoading: isLoadingVistoria } = useVistoriaCompleta(id ?? null);
+  const { data: servico, isLoading, error } = useServicoDetalhes(id);
+  const { data: vistoriaCompleta, isLoading: isLoadingVistoria } = useVistoriaCompletaPorServico(id ?? null);
   const uploadFotoMutation = useUploadFotoVistoriaCompleta();
   const uploadVideoMutation = useUploadVideo360();
   const saveAssinaturaMutation = useSaveAssinatura();
-  const concluirMutation = useConcluirInstalacao();
-  const salvarChecklistMutation = useSalvarChecklistInstalacao();
-  const aprovarVeiculoMutation = useAprovarVeiculo();
-  const recusarVeiculoMutation = useRecusarVeiculo();
+  const salvarChecklistMutation = useSalvarChecklistServico();
+  const aprovarVeiculoMutation = useAprovarVeiculoServico();
+  const recusarVeiculoMutation = useRecusarVeiculoServico();
 
   const progresso = (etapaAtual / ETAPAS.length) * 100;
 
@@ -119,9 +117,9 @@ export default function InstaladorChecklist() {
 
   // Detectar tipo de veículo (moto ou automóvel)
   const tipoVeiculo: TipoVeiculo = useMemo(() => {
-    const veiculoData = instalacao?.veiculos as { tipo_veiculo?: string } | undefined;
+    const veiculoData = servico?.veiculos as { tipo_veiculo?: string } | undefined;
     return detectarTipoVeiculo(veiculoData?.tipo_veiculo);
-  }, [instalacao?.veiculos]);
+  }, [servico?.veiculos]);
 
   // Configuração dinâmica baseada no tipo de veículo
   const fotosConfig = useMemo(() => getFotosByTipoVeiculo(tipoVeiculo), [tipoVeiculo]);
@@ -130,19 +128,19 @@ export default function InstaladorChecklist() {
 
   // Carregar checklist e quilometragem salvos
   useEffect(() => {
-    if (instalacao) {
+    if (servico) {
       // Restaurar checklist do banco se existir
-      const savedChecklist = (instalacao as any).checklist_data;
+      const savedChecklist = (servico as any).checklist_data;
       if (savedChecklist && typeof savedChecklist === 'object' && Object.keys(savedChecklist).length > 0) {
         setChecklist(savedChecklist);
       }
       // Restaurar quilometragem
-      const savedKm = (instalacao as any).quilometragem;
+      const savedKm = (servico as any).quilometragem;
       if (savedKm) {
         setQuilometragem(String(savedKm));
       }
     }
-  }, [instalacao]);
+  }, [servico]);
 
   // Abrir primeira categoria incompleta ao carregar
   useEffect(() => {
@@ -314,7 +312,7 @@ export default function InstaladorChecklist() {
   }, [imeiRastreador, isImeiValido]);
 
   const handleConcluirInstalacao = async () => {
-    if (!id || !instalacao?.veiculos?.id || !instalacao?.associados?.id) {
+    if (!id || !servico?.veiculos?.id || !servico?.associados?.id) {
       toast.error('Dados incompletos');
       return;
     }
@@ -325,12 +323,11 @@ export default function InstaladorChecklist() {
     
     try {
       await aprovarVeiculoMutation.mutateAsync({
-        instalacaoId: id,
-        veiculoId: instalacao.veiculos.id,
-        associadoId: instalacao.associados.id,
+        servicoId: id,
+        veiculoId: servico.veiculos.id,
+        associadoId: servico.associados.id,
         imeiRastreador,
       });
-      toast.success('Instalação concluída! Aguardando análise cadastral.');
       navigate('/instalador');
     } catch (err) {
       toast.error('Erro ao concluir instalação');
@@ -338,15 +335,14 @@ export default function InstaladorChecklist() {
   };
 
   const handleRecusarVeiculo = async (motivoCodigo: string, motivoCompleto: string) => {
-    if (!id || !instalacao?.veiculos?.id || !instalacao?.associados?.id) return;
+    if (!id || !servico?.veiculos?.id || !servico?.associados?.id) return;
     try {
       await recusarVeiculoMutation.mutateAsync({
-        instalacaoId: id,
-        veiculoId: instalacao.veiculos.id,
-        associadoId: instalacao.associados.id,
+        servicoId: id,
+        veiculoId: servico.veiculos.id,
+        associadoId: servico.associados.id,
         motivo: motivoCompleto,
       });
-      toast.success('Veículo recusado. Associado será notificado.');
       setShowModalRecusa(false);
       navigate('/instalador');
     } catch (err) {
@@ -359,7 +355,7 @@ export default function InstaladorChecklist() {
       case 1: return true;
       case 2: return checklistCompleto;
       case 3: return fotosObrigatoriasCompletas && video360Enviado;
-      case 4: return !!assinaturaUrl || !!instalacao?.assinatura_cliente_url;
+      case 4: return !!assinaturaUrl || !!servico?.assinatura_cliente_url;
       default: return true;
     }
   };
@@ -399,11 +395,11 @@ export default function InstaladorChecklist() {
     );
   }
 
-  if (error || !instalacao) {
+  if (error || !servico) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-slate-900 p-4">
         <AlertCircle className="h-12 w-12 text-red-500" />
-        <p className="mt-4 text-white">Instalação não encontrada</p>
+        <p className="mt-4 text-white">Serviço não encontrado</p>
         <Button onClick={() => navigate('/instalador')} className="mt-4">
           Voltar
         </Button>
@@ -411,15 +407,15 @@ export default function InstaladorChecklist() {
     );
   }
 
-  // Verificar se a instalação já foi finalizada (bloqueio de edição)
-  const instalacaoFinalizada = ['concluida', 'cancelada'].includes(instalacao?.status || '');
+  // Verificar se o serviço já foi finalizado (bloqueio de edição)
+  const servicoFinalizado = ['concluida', 'cancelada'].includes(servico?.status || '');
   
-  if (instalacaoFinalizada) {
-    const foiConcluida = instalacao.status === 'concluida';
+  if (servicoFinalizado) {
+    const foiConcluido = servico.status === 'concluida';
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-slate-900 p-6">
-        <div className={`rounded-full p-6 ${foiConcluida ? 'bg-green-500/20' : 'bg-red-500/20'}`}>
-          {foiConcluida ? (
+        <div className={`rounded-full p-6 ${foiConcluido ? 'bg-green-500/20' : 'bg-red-500/20'}`}>
+          {foiConcluido ? (
             <ShieldCheck className="h-16 w-16 text-green-500" />
           ) : (
             <ShieldX className="h-16 w-16 text-red-500" />
@@ -427,10 +423,10 @@ export default function InstaladorChecklist() {
         </div>
         
         <div className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-sm font-medium ${
-          foiConcluida ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+          foiConcluido ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
         }`}>
           <Lock className="h-3 w-3" />
-          Instalação {foiConcluida ? 'Concluída' : 'Cancelada'}
+          Instalação {foiConcluido ? 'Concluída' : 'Cancelada'}
         </div>
         
         <div className="text-center space-y-2">
@@ -438,7 +434,7 @@ export default function InstaladorChecklist() {
             Instalação Finalizada
           </h2>
           <p className="text-slate-400 max-w-sm">
-            Esta instalação já foi {foiConcluida ? 'concluída' : 'cancelada'} e não pode mais ser editada.
+            Esta instalação já foi {foiConcluido ? 'concluída' : 'cancelada'} e não pode mais ser editada.
           </p>
         </div>
 
@@ -446,17 +442,17 @@ export default function InstaladorChecklist() {
           <CardContent className="py-4 space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-slate-400">Veículo:</span>
-              <span className="text-white font-medium">{instalacao.veiculos?.placa}</span>
+              <span className="text-white font-medium">{servico.veiculos?.placa}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400">Associado:</span>
-              <span className="text-white">{instalacao.associados?.nome}</span>
+              <span className="text-white">{servico.associados?.nome}</span>
             </div>
-            {instalacao.updated_at && (
+            {servico.updated_at && (
               <div className="flex justify-between">
                 <span className="text-slate-400">Concluída em:</span>
                 <span className="text-white">
-                  {new Date(instalacao.updated_at).toLocaleDateString('pt-BR')}
+                  {new Date(servico.updated_at).toLocaleDateString('pt-BR')}
                 </span>
               </div>
             )}
@@ -512,10 +508,10 @@ export default function InstaladorChecklist() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
-                <p className="font-medium text-white">{instalacao.associados?.nome}</p>
+                <p className="font-medium text-white">{(servico as any).associados?.nome}</p>
                 <div className="flex items-center gap-2 text-slate-400">
                   <Phone className="h-4 w-4" />
-                  <span>{instalacao.associados?.telefone}</span>
+                  <span>{(servico as any).associados?.telefone}</span>
                 </div>
               </CardContent>
             </Card>
@@ -529,12 +525,12 @@ export default function InstaladorChecklist() {
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
                 <p className="font-medium text-white">
-                  {instalacao.veiculos?.marca} {instalacao.veiculos?.modelo}
+                  {(servico as any).veiculos?.marca} {(servico as any).veiculos?.modelo}
                 </p>
-                <p className="text-slate-400">Placa: {instalacao.veiculos?.placa}</p>
-                <p className="text-slate-400">Ano: {instalacao.veiculos?.ano_modelo}</p>
-                {instalacao.veiculos?.cor && (
-                  <p className="text-slate-400">Cor: {instalacao.veiculos.cor}</p>
+                <p className="text-slate-400">Placa: {(servico as any).veiculos?.placa}</p>
+                <p className="text-slate-400">Ano: {(servico as any).veiculos?.ano_modelo}</p>
+                {(servico as any).veiculos?.cor && (
+                  <p className="text-slate-400">Cor: {(servico as any).veiculos.cor}</p>
                 )}
                 {/* Badge indicando tipo de checklist */}
                 <div className="pt-2">
@@ -562,24 +558,24 @@ export default function InstaladorChecklist() {
               </CardHeader>
               <CardContent className="text-sm text-slate-400">
                 <p>
-                  {[instalacao.logradouro, instalacao.numero].filter(Boolean).join(', ')}
+                  {[(servico as any).logradouro, (servico as any).numero].filter(Boolean).join(', ')}
                 </p>
                 <p>
-                  {[instalacao.bairro, instalacao.cidade, instalacao.uf].filter(Boolean).join(' - ')}
+                  {[(servico as any).bairro, (servico as any).cidade, (servico as any).uf].filter(Boolean).join(' - ')}
                 </p>
-                {instalacao.cep && <p>CEP: {instalacao.cep}</p>}
+                {(servico as any).cep && <p>CEP: {(servico as any).cep}</p>}
               </CardContent>
             </Card>
 
-            {instalacao.rastreadores && (
+            {(servico as any).rastreadores && (
               <Card className="border-slate-700 bg-slate-800">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base text-white">Rastreador</CardTitle>
                 </CardHeader>
                 <CardContent className="text-sm text-slate-400">
-                  <p>Código: {instalacao.rastreadores.codigo}</p>
-                  {instalacao.rastreadores.numero_serie && (
-                    <p>Série: {instalacao.rastreadores.numero_serie}</p>
+                  <p>Código: {(servico as any).rastreadores.codigo}</p>
+                  {(servico as any).rastreadores.numero_serie && (
+                    <p>Série: {(servico as any).rastreadores.numero_serie}</p>
                   )}
                 </CardContent>
               </Card>
@@ -826,11 +822,11 @@ export default function InstaladorChecklist() {
                   Assinatura do Associado
                 </CardTitle>
                 <p className="text-sm text-slate-400">
-                  {instalacao.associados?.nome}
+                  {(servico as any).associados?.nome}
                 </p>
               </CardHeader>
               <CardContent>
-                {assinaturaUrl || instalacao.assinatura_cliente_url ? (
+                {assinaturaUrl || (servico as any).assinatura_cliente_url ? (
                   <div className="space-y-3">
                     <div className="rounded-lg border border-green-500/50 bg-green-500/10 p-4">
                       <div className="flex items-center gap-2 text-green-400">
@@ -838,7 +834,7 @@ export default function InstaladorChecklist() {
                         <span className="font-medium">Assinatura coletada</span>
                       </div>
                       <img
-                        src={assinaturaUrl || instalacao.assinatura_cliente_url || ''}
+                        src={assinaturaUrl || (servico as any).assinatura_cliente_url || ''}
                         alt="Assinatura"
                         className="mt-3 rounded-lg bg-white"
                       />
@@ -1002,11 +998,11 @@ export default function InstaladorChecklist() {
             <div className="space-y-2 text-sm">
               <div className="flex justify-between rounded-lg bg-slate-800 p-3">
                 <span className="text-slate-400">Associado</span>
-                <span className="text-white">{instalacao.associados?.nome}</span>
+                <span className="text-white">{(servico as any).associados?.nome}</span>
               </div>
               <div className="flex justify-between rounded-lg bg-slate-800 p-3">
                 <span className="text-slate-400">Veículo</span>
-                <span className="text-white">{instalacao.veiculos?.placa}</span>
+                <span className="text-white">{(servico as any).veiculos?.placa}</span>
               </div>
               {quilometragem && (
                 <div className="flex justify-between rounded-lg bg-slate-800 p-3">
@@ -1068,8 +1064,8 @@ export default function InstaladorChecklist() {
               onConfirm={handleRecusarVeiculo}
               isPending={recusarVeiculoMutation.isPending}
               veiculoInfo={{
-                placa: instalacao.veiculos?.placa,
-                modelo: instalacao.veiculos?.modelo,
+                placa: (servico as any).veiculos?.placa,
+                modelo: (servico as any).veiculos?.modelo,
               }}
             />
           </div>
