@@ -12488,6 +12488,367 @@ export type Database = {
           },
         ]
       }
+      servico_fotos: {
+        Row: {
+          arquivo_url: string
+          created_at: string
+          id: string
+          servico_id: string
+          tipo: string
+        }
+        Insert: {
+          arquivo_url: string
+          created_at?: string
+          id?: string
+          servico_id: string
+          tipo: string
+        }
+        Update: {
+          arquivo_url?: string
+          created_at?: string
+          id?: string
+          servico_id?: string
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "servico_fotos_servico_id_fkey"
+            columns: ["servico_id"]
+            isOneToOne: false
+            referencedRelation: "servicos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      servicos: {
+        Row: {
+          analisado_em: string | null
+          analisado_por: string | null
+          assinatura_autentique_id: string | null
+          assinatura_cliente_url: string | null
+          assinatura_concluida_em: string | null
+          assinatura_documento_url: string | null
+          assinatura_enviada_em: string | null
+          assinatura_status: string | null
+          associado_id: string | null
+          avarias: string | null
+          bairro: string | null
+          cep: string | null
+          checklist_data: Json | null
+          cidade: string | null
+          complemento: string | null
+          concluida_em: string | null
+          contrato_id: string | null
+          cotacao_id: string | null
+          created_at: string
+          data_agendada: string
+          em_rota_em: string | null
+          fotos_recusa: string[] | null
+          hora_agendada: string | null
+          id: string
+          imei_rastreador: string | null
+          iniciada_em: string | null
+          instalacao_origem_id: string | null
+          km_atual: number | null
+          latitude: number | null
+          lead_id: string | null
+          local_vistoria: string | null
+          logradouro: string | null
+          longitude: number | null
+          modalidade: string | null
+          motivo_reprovacao: string | null
+          numero: string | null
+          observacoes: string | null
+          observacoes_analise: string | null
+          origem: string | null
+          periodo: Database["public"]["Enums"]["periodo_servico"]
+          permite_encaixe: boolean | null
+          profissional_id: string | null
+          protocolo: string | null
+          quilometragem: number | null
+          rastreador_id: string | null
+          ressalvas: string | null
+          rota_id: string | null
+          sinistro_id: string | null
+          status: Database["public"]["Enums"]["status_servico"]
+          tipo: Database["public"]["Enums"]["tipo_servico"]
+          uf: string | null
+          updated_at: string
+          veiculo_id: string | null
+          video_360_url: string | null
+          vistoria_origem_id: string | null
+        }
+        Insert: {
+          analisado_em?: string | null
+          analisado_por?: string | null
+          assinatura_autentique_id?: string | null
+          assinatura_cliente_url?: string | null
+          assinatura_concluida_em?: string | null
+          assinatura_documento_url?: string | null
+          assinatura_enviada_em?: string | null
+          assinatura_status?: string | null
+          associado_id?: string | null
+          avarias?: string | null
+          bairro?: string | null
+          cep?: string | null
+          checklist_data?: Json | null
+          cidade?: string | null
+          complemento?: string | null
+          concluida_em?: string | null
+          contrato_id?: string | null
+          cotacao_id?: string | null
+          created_at?: string
+          data_agendada: string
+          em_rota_em?: string | null
+          fotos_recusa?: string[] | null
+          hora_agendada?: string | null
+          id?: string
+          imei_rastreador?: string | null
+          iniciada_em?: string | null
+          instalacao_origem_id?: string | null
+          km_atual?: number | null
+          latitude?: number | null
+          lead_id?: string | null
+          local_vistoria?: string | null
+          logradouro?: string | null
+          longitude?: number | null
+          modalidade?: string | null
+          motivo_reprovacao?: string | null
+          numero?: string | null
+          observacoes?: string | null
+          observacoes_analise?: string | null
+          origem?: string | null
+          periodo?: Database["public"]["Enums"]["periodo_servico"]
+          permite_encaixe?: boolean | null
+          profissional_id?: string | null
+          protocolo?: string | null
+          quilometragem?: number | null
+          rastreador_id?: string | null
+          ressalvas?: string | null
+          rota_id?: string | null
+          sinistro_id?: string | null
+          status?: Database["public"]["Enums"]["status_servico"]
+          tipo: Database["public"]["Enums"]["tipo_servico"]
+          uf?: string | null
+          updated_at?: string
+          veiculo_id?: string | null
+          video_360_url?: string | null
+          vistoria_origem_id?: string | null
+        }
+        Update: {
+          analisado_em?: string | null
+          analisado_por?: string | null
+          assinatura_autentique_id?: string | null
+          assinatura_cliente_url?: string | null
+          assinatura_concluida_em?: string | null
+          assinatura_documento_url?: string | null
+          assinatura_enviada_em?: string | null
+          assinatura_status?: string | null
+          associado_id?: string | null
+          avarias?: string | null
+          bairro?: string | null
+          cep?: string | null
+          checklist_data?: Json | null
+          cidade?: string | null
+          complemento?: string | null
+          concluida_em?: string | null
+          contrato_id?: string | null
+          cotacao_id?: string | null
+          created_at?: string
+          data_agendada?: string
+          em_rota_em?: string | null
+          fotos_recusa?: string[] | null
+          hora_agendada?: string | null
+          id?: string
+          imei_rastreador?: string | null
+          iniciada_em?: string | null
+          instalacao_origem_id?: string | null
+          km_atual?: number | null
+          latitude?: number | null
+          lead_id?: string | null
+          local_vistoria?: string | null
+          logradouro?: string | null
+          longitude?: number | null
+          modalidade?: string | null
+          motivo_reprovacao?: string | null
+          numero?: string | null
+          observacoes?: string | null
+          observacoes_analise?: string | null
+          origem?: string | null
+          periodo?: Database["public"]["Enums"]["periodo_servico"]
+          permite_encaixe?: boolean | null
+          profissional_id?: string | null
+          protocolo?: string | null
+          quilometragem?: number | null
+          rastreador_id?: string | null
+          ressalvas?: string | null
+          rota_id?: string | null
+          sinistro_id?: string | null
+          status?: Database["public"]["Enums"]["status_servico"]
+          tipo?: Database["public"]["Enums"]["tipo_servico"]
+          uf?: string | null
+          updated_at?: string
+          veiculo_id?: string | null
+          video_360_url?: string | null
+          vistoria_origem_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "servicos_analisado_por_fkey"
+            columns: ["analisado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "servicos_analisado_por_fkey"
+            columns: ["analisado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "servicos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "servicos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "servicos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "servicos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "servicos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "servicos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "servicos_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "contratos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "servicos_cotacao_id_fkey"
+            columns: ["cotacao_id"]
+            isOneToOne: false
+            referencedRelation: "cotacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "servicos_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "servicos_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["lead_id"]
+          },
+          {
+            foreignKeyName: "servicos_profissional_id_fkey"
+            columns: ["profissional_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "servicos_profissional_id_fkey"
+            columns: ["profissional_id"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "servicos_rastreador_id_fkey"
+            columns: ["rastreador_id"]
+            isOneToOne: false
+            referencedRelation: "rastreadores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "servicos_rastreador_id_fkey"
+            columns: ["rastreador_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["rastreador_id"]
+          },
+          {
+            foreignKeyName: "servicos_rota_id_fkey"
+            columns: ["rota_id"]
+            isOneToOne: false
+            referencedRelation: "rotas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "servicos_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "sinistros"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "servicos_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "veiculos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "servicos_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "servicos_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "servicos_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["veiculo_id"]
+          },
+        ]
+      }
       sinistro_documentos: {
         Row: {
           arquivo_url: string
@@ -14746,6 +15107,43 @@ export type Database = {
       atualizar_cobrancas_vencidas: { Args: never; Returns: number }
       atualizar_parcelas_vencidas: { Args: never; Returns: number }
       atualizar_valor_os: { Args: { os_id: string }; Returns: undefined }
+      buscar_tarefa_atual_profissional: {
+        Args: { p_profissional_id: string }
+        Returns: {
+          associado_id: string
+          associado_nome: string
+          associado_telefone: string
+          associado_whatsapp: string
+          bairro: string
+          cep: string
+          cidade: string
+          contrato_id: string
+          cotacao_id: string
+          data_agendada: string
+          em_rota_em: string
+          hora_agendada: string
+          id: string
+          imei_rastreador: string
+          iniciada_em: string
+          latitude: number
+          local_vistoria: string
+          logradouro: string
+          longitude: number
+          numero: string
+          observacoes: string
+          periodo: string
+          rastreador_id: string
+          rota_id: string
+          status: string
+          tipo: string
+          uf: string
+          veiculo_cor: string
+          veiculo_id: string
+          veiculo_marca: string
+          veiculo_modelo: string
+          veiculo_placa: string
+        }[]
+      }
       buscar_tarefa_atual_vistoriador: {
         Args: { p_vistoriador_id: string }
         Returns: {
@@ -14994,6 +15392,7 @@ export type Database = {
         | "whatsapp"
         | "cotador"
       periodo_instalacao: "manha" | "tarde" | "noite"
+      periodo_servico: "manha" | "tarde" | "noite"
       status_associado:
         | "em_analise"
         | "aprovado"
@@ -15065,6 +15464,18 @@ export type Database = {
         | "cancelado"
       status_rastreador: "estoque" | "instalado" | "manutencao" | "baixado"
       status_rota: "pendente" | "em_andamento" | "concluida" | "cancelada"
+      status_servico:
+        | "pendente"
+        | "agendada"
+        | "em_rota"
+        | "em_andamento"
+        | "concluida"
+        | "aprovada"
+        | "reprovada"
+        | "aprovada_ressalvas"
+        | "em_analise"
+        | "reagendada"
+        | "cancelada"
       status_sinistro:
         | "em_analise"
         | "aprovado"
@@ -15127,6 +15538,13 @@ export type Database = {
       tipo_foto_os: "entrada" | "execucao" | "conclusao"
       tipo_item_os: "peca" | "mao_de_obra" | "servico_terceiro"
       tipo_pix: "cpf" | "cnpj" | "email" | "telefone" | "aleatoria"
+      tipo_servico:
+        | "instalacao"
+        | "vistoria_entrada"
+        | "vistoria_saida"
+        | "vistoria_sinistro"
+        | "vistoria_periodica"
+        | "vistoria_manutencao"
       tipo_sinistro:
         | "roubo"
         | "furto"
@@ -15324,6 +15742,7 @@ export const Constants = {
         "cotador",
       ],
       periodo_instalacao: ["manha", "tarde", "noite"],
+      periodo_servico: ["manha", "tarde", "noite"],
       status_associado: [
         "em_analise",
         "aprovado",
@@ -15397,6 +15816,19 @@ export const Constants = {
       ],
       status_rastreador: ["estoque", "instalado", "manutencao", "baixado"],
       status_rota: ["pendente", "em_andamento", "concluida", "cancelada"],
+      status_servico: [
+        "pendente",
+        "agendada",
+        "em_rota",
+        "em_andamento",
+        "concluida",
+        "aprovada",
+        "reprovada",
+        "aprovada_ressalvas",
+        "em_analise",
+        "reagendada",
+        "cancelada",
+      ],
       status_sinistro: [
         "em_analise",
         "aprovado",
@@ -15463,6 +15895,14 @@ export const Constants = {
       tipo_foto_os: ["entrada", "execucao", "conclusao"],
       tipo_item_os: ["peca", "mao_de_obra", "servico_terceiro"],
       tipo_pix: ["cpf", "cnpj", "email", "telefone", "aleatoria"],
+      tipo_servico: [
+        "instalacao",
+        "vistoria_entrada",
+        "vistoria_saida",
+        "vistoria_sinistro",
+        "vistoria_periodica",
+        "vistoria_manutencao",
+      ],
       tipo_sinistro: [
         "roubo",
         "furto",

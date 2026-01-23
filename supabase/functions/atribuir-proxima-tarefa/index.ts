@@ -29,25 +29,22 @@ function calcularDistanciaKm(
   return R * c;
 }
 
-interface TarefaDisponivel {
+interface ServicoDisponivel {
   id: string;
-  tipo: 'instalacao' | 'vistoria';
+  tipo: string;
   data_agendada: string;
   hora_agendada: string | null;
-  endereco_latitude: number | null;
-  endereco_longitude: number | null;
+  latitude: number | null;
+  longitude: number | null;
   permite_encaixe: boolean;
   status: string;
-  // Dados do cliente
   associado_id: string;
   associado_nome: string;
   associado_telefone: string;
-  // Dados do veículo
   veiculo_id: string;
   veiculo_placa: string;
   veiculo_marca: string;
   veiculo_modelo: string;
-  // Endereço
   logradouro: string | null;
   numero: string | null;
   bairro: string | null;
@@ -55,7 +52,7 @@ interface TarefaDisponivel {
   uf: string | null;
 }
 
-interface TarefaComDistancia extends TarefaDisponivel {
+interface ServicoComDistancia extends ServicoDisponivel {
   distancia_km: number;
 }
 
@@ -102,24 +99,24 @@ serve(async (req) => {
       );
     }
 
-    const vistoriadorId = user.id;
-    console.log(`[atribuir-proxima-tarefa] Vistoriador ${vistoriadorId} em (${latitude}, ${longitude}), ação: ${acao || 'iniciar'}`);
+    const profissionalId = user.id;
+    console.log(`[atribuir-proxima-tarefa] Profissional ${profissionalId} em (${latitude}, ${longitude}), ação: ${acao || 'iniciar'}`);
 
-    // 1. Verificar se vistoriador já tem tarefa em andamento
-    const { data: tarefaAtual } = await supabase.rpc('buscar_tarefa_atual_vistoriador', {
-      p_vistoriador_id: vistoriadorId
+    // 1. Verificar se profissional já tem tarefa em andamento (usando nova RPC da tabela servicos)
+    const { data: tarefaAtual } = await supabase.rpc('buscar_tarefa_atual_profissional', {
+      p_profissional_id: profissionalId
     });
 
     if (tarefaAtual && tarefaAtual.length > 0) {
       const tarefa = tarefaAtual[0];
-      console.log(`[atribuir-proxima-tarefa] Vistoriador já tem tarefa: ${tarefa.tipo} ${tarefa.id}`);
+      console.log(`[atribuir-proxima-tarefa] Profissional já tem tarefa: ${tarefa.tipo} ${tarefa.id}`);
       
       // Calcular distância até a tarefa atual
       let distancia_km = null;
-      if (tarefa.endereco_latitude && tarefa.endereco_longitude) {
+      if (tarefa.latitude && tarefa.longitude) {
         distancia_km = calcularDistanciaKm(
           latitude, longitude,
-          tarefa.endereco_latitude, tarefa.endereco_longitude
+          tarefa.latitude, tarefa.longitude
         );
       }
 
@@ -127,27 +124,57 @@ serve(async (req) => {
         JSON.stringify({
           resultado: 'ja_tem_tarefa',
           tarefa: {
-            ...tarefa,
-            distancia_km
+            id: tarefa.id,
+            tipo: tarefa.tipo,
+            status: tarefa.status,
+            data_agendada: tarefa.data_agendada,
+            hora_agendada: tarefa.hora_agendada,
+            cliente: {
+              id: tarefa.associado_id,
+              nome: tarefa.associado_nome,
+              telefone: tarefa.associado_telefone,
+              whatsapp: tarefa.associado_whatsapp
+            },
+            veiculo: {
+              id: tarefa.veiculo_id,
+              placa: tarefa.veiculo_placa,
+              marca: tarefa.veiculo_marca,
+              modelo: tarefa.veiculo_modelo,
+              cor: tarefa.veiculo_cor
+            },
+            endereco: {
+              logradouro: tarefa.logradouro,
+              numero: tarefa.numero,
+              bairro: tarefa.bairro,
+              cidade: tarefa.cidade,
+              uf: tarefa.uf,
+              cep: tarefa.cep,
+              latitude: tarefa.latitude,
+              longitude: tarefa.longitude
+            },
+            local_vistoria: tarefa.local_vistoria,
+            observacoes: tarefa.observacoes,
+            distancia_km,
+            rota_id: tarefa.rota_id
           }
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // 2. Buscar tarefas disponíveis (sem atribuição)
+    // 2. Buscar serviços disponíveis (sem atribuição) da tabela UNIFICADA servicos
     const hoje = new Date().toISOString().split('T')[0];
     const amanha = new Date(Date.now() + 86400000).toISOString().split('T')[0];
 
-    // Buscar instalações disponíveis (apenas local_vistoria = 'cliente' ou NULL)
-    const { data: instalacoes, error: instError } = await supabase
-      .from('instalacoes')
+    const { data: servicos, error: servicosError } = await supabase
+      .from('servicos')
       .select(`
         id,
+        tipo,
         data_agendada,
         hora_agendada,
-        endereco_latitude,
-        endereco_longitude,
+        latitude,
+        longitude,
         permite_encaixe,
         status,
         logradouro,
@@ -161,133 +188,73 @@ serve(async (req) => {
         associado:associados!inner(nome, telefone),
         veiculo:veiculos!inner(placa, marca, modelo)
       `)
-      .is('instalador_responsavel_id', null)
-      .in('status', ['agendada'])
-      .or('local_vistoria.is.null,local_vistoria.eq.cliente')
-      .gte('data_agendada', hoje)
-      .lte('data_agendada', amanha)
-      .order('data_agendada', { ascending: true });
-
-    if (instError) {
-      console.error('[atribuir-proxima-tarefa] Erro ao buscar instalações:', instError);
-    }
-
-    // Buscar vistorias disponíveis (apenas local_vistoria = 'cliente' ou NULL)
-    // NOTA: Usando nomes corretos das colunas da tabela vistorias
-    const { data: vistorias, error: vistError } = await supabase
-      .from('vistorias')
-      .select(`
-        id,
-        data_agendada,
-        horario_agendado,
-        endereco_latitude,
-        endereco_longitude,
-        permite_encaixe,
-        status,
-        endereco_logradouro,
-        endereco_numero,
-        endereco_bairro,
-        endereco_cidade,
-        endereco_estado,
-        associado_id,
-        veiculo_id,
-        local_vistoria,
-        associado:associados!inner(nome, telefone),
-        veiculo:veiculos!inner(placa, marca, modelo)
-      `)
-      .is('vistoriador_id', null)
+      .is('profissional_id', null)
       .in('status', ['pendente', 'agendada'])
       .or('local_vistoria.is.null,local_vistoria.eq.cliente')
       .gte('data_agendada', hoje)
       .lte('data_agendada', amanha)
       .order('data_agendada', { ascending: true });
 
-    if (vistError) {
-      console.error('[atribuir-proxima-tarefa] Erro ao buscar vistorias:', vistError);
+    if (servicosError) {
+      console.error('[atribuir-proxima-tarefa] Erro ao buscar serviços:', servicosError);
+      throw servicosError;
     }
 
     // 3. Mapear para formato comum
-    const tarefasDisponiveis: TarefaDisponivel[] = [];
+    const servicosDisponiveis: ServicoDisponivel[] = (servicos || []).map((s: any) => ({
+      id: s.id,
+      tipo: s.tipo,
+      data_agendada: s.data_agendada,
+      hora_agendada: s.hora_agendada,
+      latitude: s.latitude,
+      longitude: s.longitude,
+      permite_encaixe: s.permite_encaixe || false,
+      status: s.status,
+      associado_id: s.associado_id,
+      associado_nome: s.associado?.nome || 'Cliente',
+      associado_telefone: s.associado?.telefone || '',
+      veiculo_id: s.veiculo_id,
+      veiculo_placa: s.veiculo?.placa || '',
+      veiculo_marca: s.veiculo?.marca || '',
+      veiculo_modelo: s.veiculo?.modelo || '',
+      logradouro: s.logradouro,
+      numero: s.numero,
+      bairro: s.bairro,
+      cidade: s.cidade,
+      uf: s.uf,
+    }));
 
-    if (instalacoes) {
-      for (const inst of instalacoes) {
-        const associado = inst.associado as any;
-        const veiculo = inst.veiculo as any;
-        tarefasDisponiveis.push({
-          id: inst.id,
-          tipo: 'instalacao',
-          data_agendada: inst.data_agendada,
-          hora_agendada: inst.hora_agendada,
-          endereco_latitude: inst.endereco_latitude,
-          endereco_longitude: inst.endereco_longitude,
-          permite_encaixe: inst.permite_encaixe || false,
-          status: inst.status,
-          associado_id: inst.associado_id,
-          associado_nome: associado?.nome || 'Cliente',
-          associado_telefone: associado?.telefone || '',
-          veiculo_id: inst.veiculo_id,
-          veiculo_placa: veiculo?.placa || '',
-          veiculo_marca: veiculo?.marca || '',
-          veiculo_modelo: veiculo?.modelo || '',
-          logradouro: inst.logradouro,
-          numero: inst.numero,
-          bairro: inst.bairro,
-          cidade: inst.cidade,
-          uf: inst.uf,
-        });
-      }
-    }
+    console.log(`[atribuir-proxima-tarefa] ${servicosDisponiveis.length} serviços disponíveis encontrados`);
 
-    if (vistorias) {
-      for (const vist of vistorias) {
-        const associado = vist.associado as any;
-        const veiculo = vist.veiculo as any;
-        // Mapeando nomes corretos das colunas da tabela vistorias
-        tarefasDisponiveis.push({
-          id: vist.id,
-          tipo: 'vistoria',
-          data_agendada: vist.data_agendada,
-          hora_agendada: vist.horario_agendado,         // CORREÇÃO
-          endereco_latitude: vist.endereco_latitude,
-          endereco_longitude: vist.endereco_longitude,
-          permite_encaixe: vist.permite_encaixe || false,
-          status: vist.status,
-          associado_id: vist.associado_id,
-          associado_nome: associado?.nome || 'Cliente',
-          associado_telefone: associado?.telefone || '',
-          veiculo_id: vist.veiculo_id,
-          veiculo_placa: veiculo?.placa || '',
-          veiculo_marca: veiculo?.marca || '',
-          veiculo_modelo: veiculo?.modelo || '',
-          logradouro: vist.endereco_logradouro,         // CORREÇÃO
-          numero: vist.endereco_numero,                  // CORREÇÃO
-          bairro: vist.endereco_bairro,                  // CORREÇÃO
-          cidade: vist.endereco_cidade,                  // CORREÇÃO
-          uf: vist.endereco_estado,                      // CORREÇÃO
-        });
-      }
-    }
+    if (servicosDisponiveis.length === 0) {
+      // Marcar profissional como em serviço mesmo sem tarefas
+      await supabase
+        .from('vistoriadores_localizacao')
+        .upsert({
+          vistoriador_id: profissionalId,
+          latitude,
+          longitude,
+          em_servico: true,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'vistoriador_id' });
 
-    console.log(`[atribuir-proxima-tarefa] ${tarefasDisponiveis.length} tarefas disponíveis encontradas`);
-
-    if (tarefasDisponiveis.length === 0) {
       return new Response(
         JSON.stringify({
           resultado: 'sem_tarefas',
-          mensagem: 'Não há tarefas disponíveis no momento.'
+          mensagem: 'Você está ativo para receber serviços. Aguarde novas tarefas próximas de você.'
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     // 4. Calcular distâncias e ordenar
-    const tarefasComDistancia: TarefaComDistancia[] = tarefasDisponiveis
-      .filter(t => t.endereco_latitude && t.endereco_longitude)
-      .map(t => ({
-        ...t,
+    const servicosComDistancia: ServicoComDistancia[] = servicosDisponiveis
+      .filter(s => s.latitude && s.longitude)
+      .map(s => ({
+        ...s,
         distancia_km: calcularDistanciaKm(
           latitude, longitude,
-          t.endereco_latitude!, t.endereco_longitude!
+          s.latitude!, s.longitude!
         )
       }))
       .sort((a, b) => {
@@ -299,62 +266,59 @@ serve(async (req) => {
         return a.distancia_km - b.distancia_km;
       });
 
-    if (tarefasComDistancia.length === 0) {
+    if (servicosComDistancia.length === 0) {
       return new Response(
         JSON.stringify({
           resultado: 'sem_tarefas',
-          mensagem: 'Nenhuma tarefa com coordenadas disponível.'
+          mensagem: 'Nenhum serviço com coordenadas disponível.'
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // 5. Tentar atribuir a tarefa mais próxima (com transação para evitar race condition)
-    for (const tarefa of tarefasComDistancia) {
-      console.log(`[atribuir-proxima-tarefa] Tentando atribuir ${tarefa.tipo} ${tarefa.id} (${tarefa.distancia_km.toFixed(2)} km)`);
+    // 5. Tentar atribuir o serviço mais próximo
+    for (const servico of servicosComDistancia) {
+      console.log(`[atribuir-proxima-tarefa] Tentando atribuir ${servico.tipo} ${servico.id} (${servico.distancia_km.toFixed(2)} km)`);
       
-      const tabela = tarefa.tipo === 'instalacao' ? 'instalacoes' : 'vistorias';
-      const campoResponsavel = tarefa.tipo === 'instalacao' ? 'instalador_responsavel_id' : 'vistoriador_id';
-      
-      // Tentar atribuir usando update condicional (atomicidade garantida pelo banco)
       const agora = new Date().toISOString();
+      
+      // Atualizar na tabela SERVICOS
       const { data: atualizado, error: updateError } = await supabase
-        .from(tabela)
+        .from('servicos')
         .update({
-          [campoResponsavel]: vistoriadorId,
+          profissional_id: profissionalId,
           status: 'em_rota',
-          em_rota_em: agora, // Registrar timestamp para métricas de tempo
+          em_rota_em: agora,
           updated_at: agora
         })
-        .eq('id', tarefa.id)
-        .is(campoResponsavel, null) // Só atualiza se ainda não tiver responsável
+        .eq('id', servico.id)
+        .is('profissional_id', null) // Só atualiza se ainda não tiver responsável
         .select()
         .single();
 
       if (updateError) {
-        console.log(`[atribuir-proxima-tarefa] Tarefa ${tarefa.id} já foi atribuída a outro vistoriador`);
-        continue; // Tentar próxima tarefa
+        console.log(`[atribuir-proxima-tarefa] Serviço ${servico.id} já foi atribuído a outro profissional`);
+        continue;
       }
 
       if (atualizado) {
-        console.log(`[atribuir-proxima-tarefa] ✓ Tarefa ${tarefa.id} atribuída ao vistoriador ${vistoriadorId}`);
+        console.log(`[atribuir-proxima-tarefa] ✓ Serviço ${servico.id} atribuído ao profissional ${profissionalId}`);
         
         // 6. Criar ou atualizar rota do dia
         const { data: rotaExistente } = await supabase
           .from('rotas')
           .select('id')
-          .eq('instalador_id', vistoriadorId)
+          .eq('instalador_id', profissionalId)
           .eq('data', hoje)
           .maybeSingle();
 
         let rotaId = rotaExistente?.id;
 
         if (!rotaId) {
-          // Criar nova rota
           const { data: novaRota, error: rotaError } = await supabase
             .from('rotas')
             .insert({
-              instalador_id: vistoriadorId,
+              instalador_id: profissionalId,
               data: hoje,
               status: 'em_andamento',
               tipo: 'automatica'
@@ -369,19 +333,19 @@ serve(async (req) => {
           }
         }
 
-        // Vincular tarefa à rota
+        // Vincular serviço à rota
         if (rotaId) {
           await supabase
-            .from(tabela)
+            .from('servicos')
             .update({ rota_id: rotaId })
-            .eq('id', tarefa.id);
+            .eq('id', servico.id);
         }
 
-        // Salvar localização atual do vistoriador e marcar como em serviço
+        // Salvar localização atual do profissional
         await supabase
           .from('vistoriadores_localizacao')
           .upsert({
-            vistoriador_id: vistoriadorId,
+            vistoriador_id: profissionalId,
             latitude,
             longitude,
             em_servico: true,
@@ -392,30 +356,32 @@ serve(async (req) => {
           JSON.stringify({
             resultado: 'atribuida',
             tarefa: {
-              id: tarefa.id,
-              tipo: tarefa.tipo,
+              id: servico.id,
+              tipo: servico.tipo,
               status: 'em_rota',
-              data_agendada: tarefa.data_agendada,
-              hora_agendada: tarefa.hora_agendada,
+              data_agendada: servico.data_agendada,
+              hora_agendada: servico.hora_agendada,
               cliente: {
-                nome: tarefa.associado_nome,
-                telefone: tarefa.associado_telefone
+                id: servico.associado_id,
+                nome: servico.associado_nome,
+                telefone: servico.associado_telefone
               },
               veiculo: {
-                placa: tarefa.veiculo_placa,
-                marca: tarefa.veiculo_marca,
-                modelo: tarefa.veiculo_modelo
+                id: servico.veiculo_id,
+                placa: servico.veiculo_placa,
+                marca: servico.veiculo_marca,
+                modelo: servico.veiculo_modelo
               },
               endereco: {
-                logradouro: tarefa.logradouro,
-                numero: tarefa.numero,
-                bairro: tarefa.bairro,
-                cidade: tarefa.cidade,
-                uf: tarefa.uf,
-                latitude: tarefa.endereco_latitude,
-                longitude: tarefa.endereco_longitude
+                logradouro: servico.logradouro,
+                numero: servico.numero,
+                bairro: servico.bairro,
+                cidade: servico.cidade,
+                uf: servico.uf,
+                latitude: servico.latitude,
+                longitude: servico.longitude
               },
-              distancia_km: tarefa.distancia_km,
+              distancia_km: servico.distancia_km,
               rota_id: rotaId
             }
           }),
@@ -424,11 +390,11 @@ serve(async (req) => {
       }
     }
 
-    // Se chegou aqui, nenhuma tarefa disponível - mas marcar vistoriador como ativo
+    // Se chegou aqui, nenhum serviço disponível
     await supabase
       .from('vistoriadores_localizacao')
       .upsert({
-        vistoriador_id: vistoriadorId,
+        vistoriador_id: profissionalId,
         latitude,
         longitude,
         em_servico: true,

@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import type { TarefaAtual } from './useTarefaAtual';
+import type { TarefaAtual } from './useServicos';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface IniciarServicoResult {
@@ -25,6 +25,8 @@ const LOCATION_UPDATE_INTERVAL = 5 * 60 * 1000;
 /**
  * Hook para gerenciar o fluxo de iniciar serviço com geolocalização
  * Também mantém localização atualizada em background para sistema de encaixe automático
+ * 
+ * ATUALIZADO: Agora usa a tabela servicos unificada
  */
 export function useIniciarServico() {
   const queryClient = useQueryClient();
@@ -33,9 +35,9 @@ export function useIniciarServico() {
   const locationIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const watchIdRef = useRef<number | null>(null);
 
-  // Query para verificar se o vistoriador está em serviço
+  // Query para verificar se o profissional está em serviço
   const { data: statusEmServico, refetch: refetchStatus } = useQuery({
-    queryKey: ['vistoriador-em-servico', profile?.id],
+    queryKey: ['profissional-em-servico', profile?.id],
     queryFn: async () => {
       if (!profile?.id) return false;
       
@@ -58,7 +60,7 @@ export function useIniciarServico() {
 
   const emServico = statusEmServico || false;
 
-  // Mutation para chamar a edge function
+  // Mutation para chamar a edge function (que agora usa tabela servicos)
   const atribuirTarefaMutation = useMutation({
     mutationFn: async ({ latitude, longitude }: { latitude: number; longitude: number }): Promise<IniciarServicoResult> => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -79,6 +81,7 @@ export function useIniciarServico() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
+      queryClient.invalidateQueries({ queryKey: ['servicos'] });
       refetchStatus();
       
       if (data.resultado === 'atribuida') {
@@ -148,7 +151,6 @@ export function useIniciarServico() {
       (error) => {
         console.warn('[useIniciarServico] Erro no watchPosition:', error.message);
         
-        // Atualizar estado para refletir perda de permissão/GPS
         if (error.code === 1) { // PERMISSION_DENIED
           setGeoState({
             status: 'denied',
@@ -166,7 +168,7 @@ export function useIniciarServico() {
       {
         enableHighAccuracy: true,
         timeout: 30000,
-        maximumAge: 60000 // Cache de 1 minuto
+        maximumAge: 60000
       }
     );
 
@@ -215,7 +217,6 @@ export function useIniciarServico() {
   // Iniciar tracking quando o hook é montado e o usuário está logado E em serviço
   useEffect(() => {
     if (profile?.id && emServico) {
-      // Delay para não bloquear a renderização inicial
       const timer = setTimeout(() => {
         iniciarTrackingLocalizacao();
       }, 2000);
@@ -229,7 +230,6 @@ export function useIniciarServico() {
 
   // Função para solicitar localização e iniciar serviço
   const iniciarServico = useCallback(async () => {
-    // Verificar se geolocalização está disponível
     if (!navigator.geolocation) {
       setGeoState({ status: 'unavailable', error: 'Geolocalização não disponível neste dispositivo' });
       toast.error('Geolocalização não disponível');
@@ -245,7 +245,7 @@ export function useIniciarServico() {
           reject,
           {
             enableHighAccuracy: true,
-            timeout: 45000, // 45 segundos para conexões mais lentas
+            timeout: 45000,
             maximumAge: 0
           }
         );
@@ -271,19 +271,19 @@ export function useIniciarServico() {
     } catch (error: any) {
       console.error('[useIniciarServico] Erro de geolocalização:', error);
       
-      if (error.code === 1) { // PERMISSION_DENIED
+      if (error.code === 1) {
         setGeoState({ 
           status: 'denied', 
           error: 'Permissão de localização negada. Ative a localização nas configurações do seu navegador.' 
         });
         toast.error('Permissão de localização negada. Ative a localização para continuar.');
-      } else if (error.code === 2) { // POSITION_UNAVAILABLE
+      } else if (error.code === 2) {
         setGeoState({ 
           status: 'unavailable', 
           error: 'Não foi possível obter sua localização. Verifique se o GPS está ativo.' 
         });
         toast.error('Não foi possível obter sua localização');
-      } else if (error.code === 3) { // TIMEOUT
+      } else if (error.code === 3) {
         setGeoState({ 
           status: 'unavailable', 
           error: 'Tempo esgotado ao obter localização. Verifique sua conexão e tente novamente.' 
@@ -312,10 +312,7 @@ export function useIniciarServico() {
         })
         .eq('vistoriador_id', profile.id);
 
-      // Parar tracking de localização
       pararTrackingLocalizacao();
-      
-      // Atualizar estado
       refetchStatus();
       queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
       
@@ -339,7 +336,6 @@ export function useIniciarServico() {
         });
       });
 
-      // Também enviar para o banco mantendo em_servico = true
       if (profile?.id) {
         await enviarLocalizacao(position.coords.latitude, position.coords.longitude, true);
       }

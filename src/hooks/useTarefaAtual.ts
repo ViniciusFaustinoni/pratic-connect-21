@@ -3,54 +3,35 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { useRef, useEffect } from 'react';
+import { 
+  TarefaAtual, 
+  TipoServico, 
+  StatusServico, 
+  PeriodoServico,
+  TIPO_SERVICO_LABELS 
+} from './useServicos';
 
-export interface TarefaAtual {
-  id: string;
-  tipo: 'instalacao' | 'vistoria';
-  status: string;
-  data_agendada: string;
-  hora_agendada: string | null;
-  cliente: {
-    id: string;
-    nome: string;
-    telefone: string;
-  };
-  veiculo: {
-    id: string;
-    placa: string;
-    marca: string;
-    modelo: string;
-  };
-  endereco: {
-    logradouro: string | null;
-    numero: string | null;
-    bairro: string | null;
-    cidade: string | null;
-    uf: string | null;
-    latitude: number | null;
-    longitude: number | null;
-  };
-  distancia_km?: number;
-  rota_id?: string;
-}
+// Re-exportar o tipo TarefaAtual para compatibilidade
+export type { TarefaAtual };
 
 /**
- * Hook para buscar a tarefa atual do vistoriador logado
- * Também detecta quando uma nova tarefa é atribuída automaticamente (encaixe)
+ * Hook para buscar a tarefa atual do profissional logado
+ * Usa a nova RPC buscar_tarefa_atual_profissional que consulta a tabela servicos
  */
 export function useTarefaAtual() {
   const { profile } = useAuth();
-  const vistoriadorId = profile?.id;
+  const profissionalId = profile?.id;
   const previousTaskIdRef = useRef<string | null>(null);
   const hasShownAutoAssignToast = useRef(false);
 
   const query = useQuery({
-    queryKey: ['tarefa-atual', vistoriadorId],
+    queryKey: ['tarefa-atual', profissionalId],
     queryFn: async (): Promise<TarefaAtual | null> => {
-      if (!vistoriadorId) return null;
+      if (!profissionalId) return null;
 
-      const { data, error } = await supabase.rpc('buscar_tarefa_atual_vistoriador', {
-        p_vistoriador_id: vistoriadorId
+      // Usar a nova RPC que consulta a tabela servicos
+      const { data, error } = await supabase.rpc('buscar_tarefa_atual_profissional', {
+        p_profissional_id: profissionalId
       });
 
       if (error) {
@@ -65,20 +46,23 @@ export function useTarefaAtual() {
       const tarefa = data[0];
       return {
         id: tarefa.id,
-        tipo: tarefa.tipo as 'instalacao' | 'vistoria',
-        status: tarefa.status,
+        tipo: tarefa.tipo as TipoServico,
+        status: tarefa.status as StatusServico,
         data_agendada: tarefa.data_agendada,
         hora_agendada: tarefa.hora_agendada,
+        periodo: (tarefa.periodo || 'manha') as PeriodoServico,
         cliente: {
-          id: tarefa.associado_id,
+          id: tarefa.associado_id || '',
           nome: tarefa.associado_nome || 'Cliente',
           telefone: tarefa.associado_telefone || '',
+          whatsapp: tarefa.associado_whatsapp,
         },
         veiculo: {
-          id: tarefa.veiculo_id,
+          id: tarefa.veiculo_id || '',
           placa: tarefa.veiculo_placa || '',
           marca: tarefa.veiculo_marca || '',
           modelo: tarefa.veiculo_modelo || '',
+          cor: tarefa.veiculo_cor,
         },
         endereco: {
           logradouro: tarefa.logradouro,
@@ -86,13 +70,22 @@ export function useTarefaAtual() {
           bairro: tarefa.bairro,
           cidade: tarefa.cidade,
           uf: tarefa.uf,
-          latitude: tarefa.endereco_latitude,
-          longitude: tarefa.endereco_longitude,
+          cep: tarefa.cep,
+          latitude: tarefa.latitude,
+          longitude: tarefa.longitude,
         },
+        cotacao_id: tarefa.cotacao_id,
+        contrato_id: tarefa.contrato_id,
+        rastreador_id: tarefa.rastreador_id,
+        imei_rastreador: tarefa.imei_rastreador,
+        local_vistoria: tarefa.local_vistoria,
+        observacoes: tarefa.observacoes,
         rota_id: tarefa.rota_id,
+        iniciada_em: tarefa.iniciada_em,
+        em_rota_em: tarefa.em_rota_em,
       };
     },
-    enabled: !!vistoriadorId,
+    enabled: !!profissionalId,
     refetchInterval: 30000, // Refetch a cada 30 segundos
     staleTime: 10000,
   });
@@ -109,7 +102,7 @@ export function useTarefaAtual() {
       !hasShownAutoAssignToast.current
     ) {
       // Nova tarefa atribuída automaticamente!
-      const tipoLabel = query.data?.tipo === 'instalacao' ? 'Instalação' : 'Vistoria';
+      const tipoLabel = TIPO_SERVICO_LABELS[query.data?.tipo || 'instalacao'];
       toast.success(`Nova tarefa atribuída automaticamente!`, {
         description: `${tipoLabel} para ${query.data?.cliente.nome || 'cliente'} em ${query.data?.endereco.bairro || query.data?.endereco.cidade || 'endereço'}`,
         duration: 8000,
@@ -130,16 +123,16 @@ export function useTarefaAtual() {
 
 /**
  * Hook para iniciar uma tarefa (mudar status para em_andamento)
+ * Agora usa a tabela servicos unificada
  */
 export function useIniciarTarefa() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ tarefaId, tipo }: { tarefaId: string; tipo: 'instalacao' | 'vistoria' }) => {
-      const tabela = tipo === 'instalacao' ? 'instalacoes' : 'vistorias';
-      
+    mutationFn: async ({ tarefaId }: { tarefaId: string; tipo?: string }) => {
+      // Agora só precisa atualizar uma tabela: servicos
       const { error } = await supabase
-        .from(tabela)
+        .from('servicos')
         .update({ 
           status: 'em_andamento',
           iniciada_em: new Date().toISOString(),
@@ -151,6 +144,7 @@ export function useIniciarTarefa() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
+      queryClient.invalidateQueries({ queryKey: ['servicos'] });
       toast.success('Tarefa iniciada!');
     },
     onError: (error) => {
@@ -162,16 +156,15 @@ export function useIniciarTarefa() {
 
 /**
  * Hook para concluir uma tarefa
+ * Agora usa a tabela servicos unificada
  */
 export function useConcluirTarefa() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ tarefaId, tipo }: { tarefaId: string; tipo: 'instalacao' | 'vistoria' }) => {
-      const tabela = tipo === 'instalacao' ? 'instalacoes' : 'vistorias';
-      
+    mutationFn: async ({ tarefaId }: { tarefaId: string; tipo?: string }) => {
       const { error } = await supabase
-        .from(tabela)
+        .from('servicos')
         .update({ 
           status: 'concluida',
           concluida_em: new Date().toISOString(),
@@ -183,7 +176,8 @@ export function useConcluirTarefa() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
-      queryClient.invalidateQueries({ queryKey: ['tarefas-historico'] });
+      queryClient.invalidateQueries({ queryKey: ['servicos'] });
+      queryClient.invalidateQueries({ queryKey: ['servicos-historico'] });
       toast.success('Tarefa concluída!');
     },
     onError: (error) => {
@@ -195,24 +189,26 @@ export function useConcluirTarefa() {
 
 /**
  * Hook para buscar histórico de tarefas concluídas
+ * Agora usa a tabela servicos unificada
  */
 export function useTarefasHistorico(dias: number = 7) {
   const { profile } = useAuth();
-  const vistoriadorId = profile?.id;
+  const profissionalId = profile?.id;
 
   return useQuery({
-    queryKey: ['tarefas-historico', vistoriadorId, dias],
+    queryKey: ['servicos-historico', profissionalId, dias],
     queryFn: async () => {
-      if (!vistoriadorId) return [];
+      if (!profissionalId) return [];
 
       const dataLimite = new Date();
       dataLimite.setDate(dataLimite.getDate() - dias);
 
-      // Buscar instalações concluídas
-      const { data: instalacoes } = await supabase
-        .from('instalacoes')
+      // Uma única query na tabela servicos
+      const { data, error } = await supabase
+        .from('servicos')
         .select(`
           id,
+          tipo,
           status,
           data_agendada,
           concluida_em,
@@ -221,71 +217,18 @@ export function useTarefasHistorico(dias: number = 7) {
           bairro,
           cidade
         `)
-        .eq('instalador_responsavel_id', vistoriadorId)
-        .eq('status', 'concluida')
+        .eq('profissional_id', profissionalId)
+        .in('status', ['concluida', 'aprovada', 'reprovada'])
         .gte('concluida_em', dataLimite.toISOString())
         .order('concluida_em', { ascending: false });
 
-      // Buscar vistorias concluídas
-      const { data: vistorias } = await supabase
-        .from('vistorias')
-        .select(`
-          id,
-          status,
-          data_agendada,
-          updated_at,
-          associado:associados(nome),
-          veiculo:veiculos(placa, marca, modelo)
-        `)
-        .eq('vistoriador_id', vistoriadorId)
-        .eq('status', 'aprovada')
-        .gte('updated_at', dataLimite.toISOString())
-        .order('updated_at', { ascending: false });
+      if (error) {
+        console.error('Erro ao buscar histórico:', error);
+        return [];
+      }
 
-      type TarefaHistorico = {
-        id: string;
-        status: string;
-        data_agendada: string;
-        concluida_em: string | null;
-        associado: { nome: string } | null;
-        veiculo: { placa: string; marca: string; modelo: string } | null;
-        bairro: string | null;
-        cidade: string | null;
-        tipo: 'instalacao' | 'vistoria';
-      };
-
-      const instalacoesMapped: TarefaHistorico[] = (instalacoes || []).map(i => ({
-        id: i.id,
-        status: i.status,
-        data_agendada: i.data_agendada,
-        concluida_em: i.concluida_em,
-        associado: i.associado as { nome: string } | null,
-        veiculo: i.veiculo as { placa: string; marca: string; modelo: string } | null,
-        bairro: i.bairro,
-        cidade: i.cidade,
-        tipo: 'instalacao' as const
-      }));
-
-      const vistoriasMapped: TarefaHistorico[] = (vistorias || []).map(v => ({
-        id: v.id,
-        status: v.status,
-        data_agendada: v.data_agendada,
-        concluida_em: v.updated_at,
-        associado: v.associado as { nome: string } | null,
-        veiculo: v.veiculo as { placa: string; marca: string; modelo: string } | null,
-        bairro: null, // Vistorias não têm bairro diretamente
-        cidade: null, // Vistorias não têm cidade diretamente
-        tipo: 'vistoria' as const
-      }));
-      
-      const tarefas = [...instalacoesMapped, ...vistoriasMapped].sort((a, b) => {
-        const dateA = new Date(a.concluida_em || 0);
-        const dateB = new Date(b.concluida_em || 0);
-        return dateB.getTime() - dateA.getTime();
-      });
-
-      return tarefas;
+      return data || [];
     },
-    enabled: !!vistoriadorId,
+    enabled: !!profissionalId,
   });
 }
