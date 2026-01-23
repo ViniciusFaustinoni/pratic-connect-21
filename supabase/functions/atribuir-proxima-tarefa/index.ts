@@ -297,7 +297,7 @@ serve(async (req) => {
         })
         .eq('id', servico.id)
         .is('profissional_id', null) // Só atualiza se ainda não tiver responsável
-        .select()
+        .select('*, instalacao_origem_id, vistoria_origem_id')
         .single();
 
       if (updateError) {
@@ -308,7 +308,30 @@ serve(async (req) => {
       if (atualizado) {
         console.log(`[atribuir-proxima-tarefa] ✓ Serviço ${servico.id} atribuído ao profissional ${profissionalId}`);
         
-        // 6. Criar ou atualizar rota do dia
+        // 6. SINCRONIZAR COM TABELA DE ORIGEM (instalacoes ou vistorias)
+        if (atualizado.instalacao_origem_id) {
+          console.log(`[atribuir-proxima-tarefa] Sincronizando com instalacoes ${atualizado.instalacao_origem_id}`);
+          await supabase
+            .from('instalacoes')
+            .update({
+              instalador_responsavel_id: profissionalId,
+              status: 'em_rota'
+            })
+            .eq('id', atualizado.instalacao_origem_id);
+        }
+        
+        if (atualizado.vistoria_origem_id) {
+          console.log(`[atribuir-proxima-tarefa] Sincronizando com vistorias ${atualizado.vistoria_origem_id}`);
+          await supabase
+            .from('vistorias')
+            .update({
+              vistoriador_id: profissionalId,
+              status: 'em_rota'
+            })
+            .eq('id', atualizado.vistoria_origem_id);
+        }
+        
+        // 7. Criar ou atualizar rota do dia
         const { data: rotaExistente } = await supabase
           .from('rotas')
           .select('id')
@@ -343,6 +366,14 @@ serve(async (req) => {
             .from('servicos')
             .update({ rota_id: rotaId })
             .eq('id', servico.id);
+            
+          // Também vincular instalacao/vistoria de origem à rota
+          if (atualizado.instalacao_origem_id) {
+            await supabase
+              .from('instalacoes')
+              .update({ rota_id: rotaId })
+              .eq('id', atualizado.instalacao_origem_id);
+          }
         }
 
         // Salvar localização atual do profissional
