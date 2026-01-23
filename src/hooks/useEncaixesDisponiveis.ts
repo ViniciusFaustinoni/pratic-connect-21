@@ -22,6 +22,10 @@ export interface EncaixeDisponivel {
   distancia_km: number;
   latitude: number | null;
   longitude: number | null;
+  // Novos campos para profissional atribuído
+  profissional_atribuido_id?: string | null;
+  profissional_atribuido_nome?: string | null;
+  isAdiantamento?: boolean; // true se é tarefa do próprio usuário (para adiantamento)
 }
 
 interface UltimaLocalizacao {
@@ -197,16 +201,15 @@ export function useUltimaLocalizacao(vistoriadorId: string | undefined) {
   });
 }
 
-// Hook principal para buscar encaixes disponíveis
+// Hook principal para buscar encaixes disponíveis (para profissional)
 export function useEncaixesDisponiveis() {
   const { profile } = useAuth();
   const { data: config } = useConfiguracoesEncaixe();
   const { data: temTarefas, isLoading: loadingTarefas } = useTemTarefasProximas(profile?.id, config?.janelaHoras);
   const { data: ultimaLocalizacao, isLoading: loadingLocalizacao } = useUltimaLocalizacao(profile?.id);
 
-  const queryEnabled = !loadingTarefas && !loadingLocalizacao && !temTarefas && !!ultimaLocalizacao;
-
-  const encaixesQuery = useQuery({
+  // Encaixes disponíveis (sem atribuição) - precisa de localização e estar livre
+  const encaixesDisponiveisQuery = useQuery({
     queryKey: ['encaixes-disponiveis', profile?.id, config?.raioKm, ultimaLocalizacao],
     queryFn: async (): Promise<EncaixeDisponivel[]> => {
       if (!ultimaLocalizacao || !config) return [];
@@ -214,7 +217,7 @@ export function useEncaixesDisponiveis() {
       const encaixes: EncaixeDisponivel[] = [];
       const hoje = new Date().toISOString().split('T')[0];
 
-      // Buscar instalações com permite_encaixe e sem vistoriador
+      // Buscar instalações com permite_encaixe e SEM profissional
       const { data: instalacoes } = await supabase
         .from('instalacoes')
         .select(`
@@ -264,12 +267,13 @@ export function useEncaixesDisponiveis() {
               distancia_km: Math.round(distancia * 10) / 10,
               latitude: inst.endereco_latitude,
               longitude: inst.endereco_longitude,
+              isAdiantamento: false,
             });
           }
         }
       });
 
-      // Buscar vistorias com permite_encaixe e sem vistoriador
+      // Buscar vistorias com permite_encaixe e SEM profissional
       const { data: vistorias } = await supabase
         .from('vistorias')
         .select(`
@@ -321,6 +325,7 @@ export function useEncaixesDisponiveis() {
               distancia_km: Math.round(distancia * 10) / 10,
               latitude: vist.endereco_latitude,
               longitude: vist.endereco_longitude,
+              isAdiantamento: false,
             });
           }
         }
@@ -329,30 +334,21 @@ export function useEncaixesDisponiveis() {
       // Ordenar por distância
       return encaixes.sort((a, b) => a.distancia_km - b.distancia_km);
     },
-    enabled: queryEnabled,
+    enabled: !loadingTarefas && !loadingLocalizacao && !temTarefas && !!ultimaLocalizacao,
     staleTime: 1000 * 60 * 2,
   });
 
-  return {
-    encaixes: encaixesQuery.data || [],
-    isLoading: loadingTarefas || loadingLocalizacao || encaixesQuery.isLoading,
-    temTarefasProximas: temTarefas,
-    ultimaLocalizacao,
-    config,
-    podeVerEncaixes: !temTarefas && !!ultimaLocalizacao,
-  };
-}
-
-// Hook para buscar TODOS os encaixes (para coordenador - sem filtro de distância)
-export function useTodosEncaixes() {
-  return useQuery({
-    queryKey: ['todos-encaixes'],
+  // Tarefas PRÓPRIAS com permite_encaixe (para adiantamento) - sempre buscar
+  const adiantamentosQuery = useQuery({
+    queryKey: ['adiantamentos-proprios', profile?.id],
     queryFn: async (): Promise<EncaixeDisponivel[]> => {
-      const encaixes: EncaixeDisponivel[] = [];
+      if (!profile?.id) return [];
+
+      const adiantamentos: EncaixeDisponivel[] = [];
       const hoje = new Date().toISOString().split('T')[0];
 
-      // Buscar instalações com permite_encaixe e sem profissional
-      const { data: instalacoes } = await supabase
+      // Buscar instalações PRÓPRIAS com permite_encaixe (futuras)
+      const { data: instalacoesProprias } = await supabase
         .from('instalacoes')
         .select(`
           id,
@@ -369,7 +365,129 @@ export function useTodosEncaixes() {
           veiculo:veiculos(placa, marca, modelo)
         `)
         .eq('permite_encaixe', true)
-        .is('instalador_responsavel_id', null)
+        .eq('instalador_responsavel_id', profile.id)
+        .gt('data_agendada', hoje) // Apenas FUTURAS (não de hoje)
+        .eq('status', 'agendada');
+
+      instalacoesProprias?.forEach((inst: any) => {
+        adiantamentos.push({
+          id: inst.id,
+          tipo: 'instalacao',
+          cliente_nome: inst.associado?.nome || 'Não informado',
+          cliente_telefone: inst.associado?.telefone,
+          endereco_logradouro: inst.endereco_logradouro,
+          endereco_numero: inst.endereco_numero,
+          endereco_bairro: inst.endereco_bairro,
+          endereco_cidade: inst.endereco_cidade,
+          endereco_cep: inst.endereco_cep,
+          data_agendada: inst.data_agendada,
+          periodo: inst.periodo,
+          placa: inst.veiculo?.placa,
+          marca: inst.veiculo?.marca,
+          modelo: inst.veiculo?.modelo,
+          distancia_km: 0,
+          latitude: inst.endereco_latitude,
+          longitude: inst.endereco_longitude,
+          isAdiantamento: true,
+        });
+      });
+
+      // Buscar vistorias PRÓPRIAS com permite_encaixe (futuras)
+      const { data: vistoriasProprias } = await supabase
+        .from('vistorias')
+        .select(`
+          id,
+          tipo,
+          data_agendada,
+          periodo,
+          endereco_logradouro,
+          endereco_numero,
+          endereco_bairro,
+          endereco_cidade,
+          endereco_cep,
+          endereco_latitude,
+          endereco_longitude,
+          associado:associados(nome, telefone),
+          veiculo:veiculos(placa, marca, modelo)
+        `)
+        .eq('permite_encaixe', true)
+        .eq('vistoriador_id', profile.id)
+        .gt('data_agendada', hoje) // Apenas FUTURAS
+        .eq('status', 'agendada');
+
+      vistoriasProprias?.forEach((vist: any) => {
+        adiantamentos.push({
+          id: vist.id,
+          tipo: 'vistoria',
+          tipo_vistoria: vist.tipo,
+          cliente_nome: vist.associado?.nome || 'Não informado',
+          cliente_telefone: vist.associado?.telefone,
+          endereco_logradouro: vist.endereco_logradouro,
+          endereco_numero: vist.endereco_numero,
+          endereco_bairro: vist.endereco_bairro,
+          endereco_cidade: vist.endereco_cidade,
+          endereco_cep: vist.endereco_cep,
+          data_agendada: vist.data_agendada,
+          periodo: vist.periodo,
+          placa: vist.veiculo?.placa,
+          marca: vist.veiculo?.marca,
+          modelo: vist.veiculo?.modelo,
+          distancia_km: 0,
+          latitude: vist.endereco_latitude,
+          longitude: vist.endereco_longitude,
+          isAdiantamento: true,
+        });
+      });
+
+      // Ordenar por data
+      return adiantamentos.sort((a, b) => 
+        new Date(a.data_agendada).getTime() - new Date(b.data_agendada).getTime()
+      );
+    },
+    enabled: !!profile?.id,
+    staleTime: 1000 * 60 * 2,
+  });
+
+  return {
+    encaixes: encaixesDisponiveisQuery.data || [],
+    adiantamentos: adiantamentosQuery.data || [],
+    isLoading: loadingTarefas || loadingLocalizacao || encaixesDisponiveisQuery.isLoading || adiantamentosQuery.isLoading,
+    temTarefasProximas: temTarefas,
+    ultimaLocalizacao,
+    config,
+    podeVerEncaixes: !temTarefas && !!ultimaLocalizacao,
+  };
+}
+
+// Hook para buscar TODOS os encaixes (para coordenador - sem filtro de distância)
+// Inclui encaixes COM ou SEM profissional atribuído
+export function useTodosEncaixes() {
+  return useQuery({
+    queryKey: ['todos-encaixes'],
+    queryFn: async (): Promise<EncaixeDisponivel[]> => {
+      const encaixes: EncaixeDisponivel[] = [];
+      const hoje = new Date().toISOString().split('T')[0];
+
+      // Buscar instalações com permite_encaixe (COM ou SEM profissional)
+      const { data: instalacoes } = await supabase
+        .from('instalacoes')
+        .select(`
+          id,
+          data_agendada,
+          periodo,
+          endereco_logradouro,
+          endereco_numero,
+          endereco_bairro,
+          endereco_cidade,
+          endereco_cep,
+          endereco_latitude,
+          endereco_longitude,
+          instalador_responsavel_id,
+          associado:associados(nome, telefone),
+          veiculo:veiculos(placa, marca, modelo),
+          profissional:profiles!instalador_responsavel_id(id, nome)
+        `)
+        .eq('permite_encaixe', true)
         .gte('data_agendada', hoje)
         .eq('status', 'agendada')
         .order('data_agendada', { ascending: true });
@@ -390,13 +508,15 @@ export function useTodosEncaixes() {
           placa: inst.veiculo?.placa,
           marca: inst.veiculo?.marca,
           modelo: inst.veiculo?.modelo,
-          distancia_km: 0, // Não relevante para coordenador
+          distancia_km: 0,
           latitude: inst.endereco_latitude,
           longitude: inst.endereco_longitude,
+          profissional_atribuido_id: inst.instalador_responsavel_id,
+          profissional_atribuido_nome: inst.profissional?.nome || null,
         });
       });
 
-      // Buscar vistorias com permite_encaixe e sem profissional
+      // Buscar vistorias com permite_encaixe (COM ou SEM profissional)
       const { data: vistorias } = await supabase
         .from('vistorias')
         .select(`
@@ -411,11 +531,12 @@ export function useTodosEncaixes() {
           endereco_cep,
           endereco_latitude,
           endereco_longitude,
+          vistoriador_id,
           associado:associados(nome, telefone),
-          veiculo:veiculos(placa, marca, modelo)
+          veiculo:veiculos(placa, marca, modelo),
+          profissional:profiles!vistoriador_id(id, nome)
         `)
         .eq('permite_encaixe', true)
-        .is('vistoriador_id', null)
         .gte('data_agendada', hoje)
         .eq('status', 'agendada')
         .order('data_agendada', { ascending: true });
@@ -440,6 +561,8 @@ export function useTodosEncaixes() {
           distancia_km: 0,
           latitude: vist.endereco_latitude,
           longitude: vist.endereco_longitude,
+          profissional_atribuido_id: vist.vistoriador_id,
+          profissional_atribuido_nome: vist.profissional?.nome || null,
         });
       });
 
@@ -458,43 +581,85 @@ export function usePuxarEncaixe() {
   const { profile } = useAuth();
 
   return useMutation({
-    mutationFn: async ({ id, tipo }: { id: string; tipo: 'instalacao' | 'vistoria' }) => {
+    mutationFn: async ({ 
+      id, 
+      tipo,
+      isAdiantamento 
+    }: { 
+      id: string; 
+      tipo: 'instalacao' | 'vistoria';
+      isAdiantamento?: boolean;
+    }) => {
       if (!profile?.id) throw new Error('Usuário não autenticado');
 
-      if (tipo === 'instalacao') {
-        const { error } = await supabase
-          .from('instalacoes')
-          .update({
-            instalador_responsavel_id: profile.id,
-            permite_encaixe: false,
-          })
-          .eq('id', id);
+      const hoje = new Date().toISOString().split('T')[0];
 
-        if (error) throw error;
+      if (isAdiantamento) {
+        // Para adiantamento: apenas atualiza a data para hoje e desativa encaixe
+        if (tipo === 'instalacao') {
+          const { error } = await supabase
+            .from('instalacoes')
+            .update({
+              data_agendada: hoje,
+              permite_encaixe: false,
+            })
+            .eq('id', id);
+
+          if (error) throw error;
+        } else {
+          const { error } = await supabase
+            .from('vistorias')
+            .update({
+              data_agendada: hoje,
+              permite_encaixe: false,
+            })
+            .eq('id', id);
+
+          if (error) throw error;
+        }
       } else {
-        const { error } = await supabase
-          .from('vistorias')
-          .update({
-            vistoriador_id: profile.id,
-            permite_encaixe: false,
-          })
-          .eq('id', id);
+        // Para encaixe normal: atribui ao profissional
+        if (tipo === 'instalacao') {
+          const { error } = await supabase
+            .from('instalacoes')
+            .update({
+              instalador_responsavel_id: profile.id,
+              permite_encaixe: false,
+            })
+            .eq('id', id);
 
-        if (error) throw error;
+          if (error) throw error;
+        } else {
+          const { error } = await supabase
+            .from('vistorias')
+            .update({
+              vistoriador_id: profile.id,
+              permite_encaixe: false,
+            })
+            .eq('id', id);
+
+          if (error) throw error;
+        }
       }
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['encaixes-disponiveis'] });
+      queryClient.invalidateQueries({ queryKey: ['adiantamentos-proprios'] });
       queryClient.invalidateQueries({ queryKey: ['tarefas-proximas'] });
-      toast.success(
-        variables.tipo === 'instalacao'
-          ? 'Instalação assumida com sucesso!'
-          : 'Vistoria assumida com sucesso!'
-      );
+      
+      if (variables.isAdiantamento) {
+        toast.success('Tarefa adiantada para hoje!');
+      } else {
+        toast.success(
+          variables.tipo === 'instalacao'
+            ? 'Instalação assumida com sucesso!'
+            : 'Vistoria assumida com sucesso!'
+        );
+      }
     },
     onError: (error) => {
       console.error('[usePuxarEncaixe] Erro:', error);
-      toast.error('Erro ao assumir o serviço');
+      toast.error('Erro ao processar o serviço');
     },
   });
 }
@@ -538,6 +703,7 @@ export function useAtribuirEncaixe() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['todos-encaixes'] });
       queryClient.invalidateQueries({ queryKey: ['encaixes-disponiveis'] });
+      queryClient.invalidateQueries({ queryKey: ['adiantamentos-proprios'] });
       toast.success(
         variables.tipo === 'instalacao'
           ? 'Instalação atribuída com sucesso!'

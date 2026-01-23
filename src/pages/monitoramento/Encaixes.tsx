@@ -15,7 +15,8 @@ import {
   Phone,
   Navigation,
   UserPlus,
-  AlertCircle
+  AlertCircle,
+  UserCheck
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -97,6 +98,8 @@ function EncaixeCardCoordenador({ encaixe }: { encaixe: EncaixeDisponivel }) {
   const dataFormatada = format(new Date(encaixe.data_agendada + 'T12:00:00'), "dd/MM", { locale: ptBR });
   const diaSemana = format(new Date(encaixe.data_agendada + 'T12:00:00'), "EEEE", { locale: ptBR });
 
+  const jaTemProfissional = !!encaixe.profissional_atribuido_id;
+
   return (
     <Card className="overflow-hidden">
       <CardContent className="p-4 space-y-4">
@@ -104,12 +107,12 @@ function EncaixeCardCoordenador({ encaixe }: { encaixe: EncaixeDisponivel }) {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             {encaixe.tipo === 'instalacao' ? (
-              <div className="p-1.5 rounded-md bg-blue-500/10">
-                <Wrench className="h-4 w-4 text-blue-500" />
+              <div className="p-1.5 rounded-md bg-primary/10">
+                <Wrench className="h-4 w-4 text-primary" />
               </div>
             ) : (
-              <div className="p-1.5 rounded-md bg-green-500/10">
-                <ClipboardCheck className="h-4 w-4 text-green-500" />
+              <div className="p-1.5 rounded-md bg-secondary">
+                <ClipboardCheck className="h-4 w-4 text-secondary-foreground" />
               </div>
             )}
             <Badge variant={encaixe.tipo === 'instalacao' ? 'default' : 'secondary'}>
@@ -127,6 +130,16 @@ function EncaixeCardCoordenador({ encaixe }: { encaixe: EncaixeDisponivel }) {
             )}
           </div>
         </div>
+
+        {/* Badge de profissional atribuído */}
+        {jaTemProfissional && (
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800">
+              <UserCheck className="h-3 w-3 mr-1" />
+              Atribuído: {encaixe.profissional_atribuido_nome}
+            </Badge>
+          </div>
+        )}
 
         {/* Cliente */}
         <div className="flex items-start gap-3">
@@ -173,7 +186,7 @@ function EncaixeCardCoordenador({ encaixe }: { encaixe: EncaixeDisponivel }) {
               disabled={loadingInstaladores}
             >
               <SelectTrigger className="flex-1">
-                <SelectValue placeholder="Selecionar profissional..." />
+                <SelectValue placeholder={jaTemProfissional ? "Selecionar novo profissional..." : "Selecionar profissional..."} />
               </SelectTrigger>
               <SelectContent>
                 {instaladores?.map((instalador) => (
@@ -206,7 +219,7 @@ function EncaixeCardCoordenador({ encaixe }: { encaixe: EncaixeDisponivel }) {
               ) : (
                 <UserPlus className="h-4 w-4 mr-2" />
               )}
-              Atribuir
+              {jaTemProfissional ? 'Reatribuir' : 'Atribuir'}
             </Button>
           </div>
         </div>
@@ -322,6 +335,8 @@ export default function MonitoramentoEncaixes() {
 
   const instalacoes = encaixes?.filter(e => e.tipo === 'instalacao') || [];
   const vistorias = encaixes?.filter(e => e.tipo === 'vistoria') || [];
+  const comAtribuicao = encaixes?.filter(e => e.profissional_atribuido_id) || [];
+  const semAtribuicao = encaixes?.filter(e => !e.profissional_atribuido_id) || [];
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -348,12 +363,12 @@ export default function MonitoramentoEncaixes() {
       <ConfiguracoesEncaixeSection />
 
       {/* Estatísticas */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Total de Encaixes</p>
+                <p className="text-sm text-muted-foreground">Total</p>
                 <p className="text-2xl font-bold">{encaixes?.length || 0}</p>
               </div>
               <Puzzle className="h-8 w-8 text-muted-foreground/30" />
@@ -365,10 +380,22 @@ export default function MonitoramentoEncaixes() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Instalações</p>
-                <p className="text-2xl font-bold text-blue-600">{instalacoes.length}</p>
+                <p className="text-sm text-muted-foreground">Sem Atribuição</p>
+                <p className="text-2xl font-bold text-destructive">{semAtribuicao.length}</p>
               </div>
-              <Wrench className="h-8 w-8 text-blue-600/30" />
+              <AlertCircle className="h-8 w-8 text-destructive/30" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Instalações</p>
+                <p className="text-2xl font-bold">{instalacoes.length}</p>
+              </div>
+              <Wrench className="h-8 w-8 text-muted-foreground/30" />
             </div>
           </CardContent>
         </Card>
@@ -378,9 +405,9 @@ export default function MonitoramentoEncaixes() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Vistorias</p>
-                <p className="text-2xl font-bold text-green-600">{vistorias.length}</p>
+                <p className="text-2xl font-bold">{vistorias.length}</p>
               </div>
-              <ClipboardCheck className="h-8 w-8 text-green-600/30" />
+              <ClipboardCheck className="h-8 w-8 text-muted-foreground/30" />
             </div>
           </CardContent>
         </Card>
@@ -394,10 +421,39 @@ export default function MonitoramentoEncaixes() {
           ))}
         </div>
       ) : encaixes && encaixes.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {encaixes.map((encaixe) => (
-            <EncaixeCardCoordenador key={encaixe.id} encaixe={encaixe} />
-          ))}
+        <div className="space-y-6">
+          {/* Encaixes SEM atribuição primeiro */}
+          {semAtribuicao.length > 0 && (
+            <div className="space-y-4">
+              <h2 className="font-semibold flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 text-destructive" />
+                Sem Profissional Atribuído ({semAtribuicao.length})
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {semAtribuicao.map((encaixe) => (
+                  <EncaixeCardCoordenador key={encaixe.id} encaixe={encaixe} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Encaixes COM atribuição (para reatribuição) */}
+          {comAtribuicao.length > 0 && (
+            <div className="space-y-4">
+              <h2 className="font-semibold flex items-center gap-2">
+                <UserCheck className="h-5 w-5 text-amber-600" />
+                Com Profissional Atribuído ({comAtribuicao.length})
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Estes encaixes já possuem profissional, mas você pode reatribuí-los se necessário.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {comAtribuicao.map((encaixe) => (
+                  <EncaixeCardCoordenador key={encaixe.id} encaixe={encaixe} />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <Alert>
@@ -405,7 +461,7 @@ export default function MonitoramentoEncaixes() {
           <AlertTitle>Nenhum encaixe disponível</AlertTitle>
           <AlertDescription>
             Não há serviços marcados para encaixe no momento. Os serviços aparecem aqui 
-            quando são marcados com "Permite Encaixe" e não possuem profissional atribuído.
+            quando são marcados com "Permite Encaixe".
           </AlertDescription>
         </Alert>
       )}
