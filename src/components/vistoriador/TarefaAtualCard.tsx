@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   MapPin, Phone, Car, Clock, Navigation, Play, 
-  CheckCircle2, User, ChevronRight, Loader2 
+  CheckCircle2, User, ChevronRight, Loader2, Route 
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,7 +17,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { TarefaAtual, useIniciarTarefa } from '@/hooks/useTarefaAtual';
+import { TarefaAtual, useIniciarTarefa, useIniciarRota } from '@/hooks/useTarefaAtual';
 import { useIniciarServico } from '@/hooks/useIniciarServico';
 import { TIPO_SERVICO_LABELS, isInstalacao } from '@/hooks/useServicos';
 import { cn } from '@/lib/utils';
@@ -30,6 +30,7 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
   const navigate = useNavigate();
   const [showConcluirDialog, setShowConcluirDialog] = useState(false);
   const { mutate: iniciarTarefa, isPending: isIniciando } = useIniciarTarefa();
+  const { mutate: iniciarRota, isPending: isIniciandoRota } = useIniciarRota();
   const { buscarProximaTarefa, isLoading: isBuscandoProxima } = useIniciarServico();
 
   const enderecoCompleto = [
@@ -53,6 +54,10 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
     }
   };
 
+  const handleIniciarRota = () => {
+    iniciarRota({ tarefaId: tarefa.id });
+  };
+
   const handleIniciarTarefa = () => {
     iniciarTarefa({ tarefaId: tarefa.id });
   };
@@ -63,6 +68,7 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
     navigate(`/instalador/${path}/${tarefa.id}`);
   };
 
+  const isAgendada = tarefa.status === 'agendada';
   const isEmRota = tarefa.status === 'em_rota';
   const isEmAndamento = tarefa.status === 'em_andamento';
 
@@ -79,10 +85,11 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
                 variant="outline"
                 className={cn(
                   isEmAndamento && "bg-warning/20 text-warning-foreground border-warning/30",
-                  isEmRota && "bg-primary/20 text-primary border-primary/30"
+                  isEmRota && "bg-primary/20 text-primary border-primary/30",
+                  isAgendada && "bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-700"
                 )}
               >
-                {isEmAndamento ? 'Em Andamento' : 'Em Rota'}
+                {isEmAndamento ? 'Em Andamento' : isEmRota ? 'Em Rota' : 'Agendada'}
               </Badge>
             </div>
             {tarefa.distancia_km !== undefined && (
@@ -165,7 +172,21 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
 
           {/* Ações */}
           <div className="grid grid-cols-2 gap-3 pt-2">
-            {isEmRota ? (
+            {isAgendada ? (
+              // Tarefa atribuída manualmente - mostrar botão para iniciar rota
+              <Button
+                onClick={handleIniciarRota}
+                disabled={isIniciandoRota}
+                className="col-span-2 gap-2"
+              >
+                {isIniciandoRota ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Route className="h-4 w-4" />
+                )}
+                Iniciar Rota
+              </Button>
+            ) : isEmRota ? (
               <>
                 <Button
                   variant="outline"
