@@ -519,11 +519,12 @@ export default function PropostaAnalise() {
           {/* Documentos Anexados */}
           <DocumentosAnexadosCard documentos={proposta.documentos || []} />
 
-          {/* Fotos da Auto Vistoria */}
+          {/* Fotos da Vistoria */}
           {proposta.vistoria && (
             <VistoriaFotosCard 
               fotos={proposta.vistoria.fotos || []} 
               vistoriaStatus={proposta.vistoria.status}
+              modalidade={proposta.vistoria.modalidade}
             />
           )}
 

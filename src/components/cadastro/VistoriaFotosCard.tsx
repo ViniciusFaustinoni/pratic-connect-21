@@ -32,12 +32,12 @@ export interface VistoriaFotoInfo {
   created_at: string;
 }
 
-// Labels e ícones para tipos de foto da vistoria
+// Labels e ícones para tipos de foto da vistoria - MAPA COMPLETO
 const TIPO_FOTO_CONFIG: Record<string, { label: string; categoria: string; icon: React.ComponentType<{ className?: string }>; highlight?: boolean }> = {
-  // Assinatura do Cliente (destaque especial)
+  // Identificação (destaque especial)
   assinatura_cliente: { label: 'Assinatura do Cliente', categoria: 'Identificação', icon: PenTool, highlight: true },
-  
-  // Identificação
+  selfie_veiculo: { label: 'Selfie com Veículo', categoria: 'Identificação', icon: Camera, highlight: true },
+  selfie: { label: 'Selfie com Veículo', categoria: 'Identificação', icon: Camera, highlight: true },
   vistoriador: { label: 'Vistoriador', categoria: 'Identificação', icon: Camera },
   chave: { label: 'Chave', categoria: 'Identificação', icon: Fingerprint },
   chassi: { label: 'Chassi', categoria: 'Identificação', icon: Fingerprint },
@@ -48,23 +48,42 @@ const TIPO_FOTO_CONFIG: Record<string, { label: string; categoria: string; icon:
   motor: { label: 'Motor', categoria: 'Motor', icon: Gauge },
   bateria: { label: 'Bateria', categoria: 'Motor', icon: Gauge },
   
-  // Exterior
+  // Exterior - Ângulos básicos
   frente: { label: 'Frente', categoria: 'Exterior', icon: Car },
   traseira: { label: 'Traseira', categoria: 'Exterior', icon: Car },
   lateral_esquerda: { label: 'Lateral Esquerda', categoria: 'Exterior', icon: Car },
   lateral_direita: { label: 'Lateral Direita', categoria: 'Exterior', icon: Car },
-  diagonal_frontal_esquerda: { label: 'Diagonal Frontal Esq.', categoria: 'Exterior', icon: Car },
-  diagonal_frontal_direita: { label: 'Diagonal Frontal Dir.', categoria: 'Exterior', icon: Car },
-  diagonal_traseira_esquerda: { label: 'Diagonal Traseira Esq.', categoria: 'Exterior', icon: Car },
-  diagonal_traseira_direita: { label: 'Diagonal Traseira Dir.', categoria: 'Exterior', icon: Car },
+  
+  // Exterior - Diagonais
+  diagonal_frontal_esquerda: { label: 'Diagonal Frontal Esquerda', categoria: 'Exterior', icon: Car },
+  diagonal_frontal_direita: { label: 'Diagonal Frontal Direita', categoria: 'Exterior', icon: Car },
+  diagonal_traseira_esquerda: { label: 'Diagonal Traseira Esquerda', categoria: 'Exterior', icon: Car },
+  diagonal_traseira_direita: { label: 'Diagonal Traseira Direita', categoria: 'Exterior', icon: Car },
+  frente_lateral_esquerda: { label: 'Frente Lateral Esquerda', categoria: 'Exterior', icon: Car },
+  frente_lateral_direita: { label: 'Frente Lateral Direita', categoria: 'Exterior', icon: Car },
+  traseira_lateral_esquerda: { label: 'Traseira Lateral Esquerda', categoria: 'Exterior', icon: Car },
+  traseira_lateral_direita: { label: 'Traseira Lateral Direita', categoria: 'Exterior', icon: Car },
+  
+  // Exterior - Detalhes
   teto: { label: 'Teto', categoria: 'Exterior', icon: Car },
+  parabrisa: { label: 'Para-brisa', categoria: 'Exterior', icon: Car },
+  
+  // Pneus
+  pneu_dianteiro_esquerdo: { label: 'Pneu Dianteiro Esquerdo', categoria: 'Pneus', icon: Gauge },
+  pneu_dianteiro_direito: { label: 'Pneu Dianteiro Direito', categoria: 'Pneus', icon: Gauge },
+  pneu_traseiro_esquerdo: { label: 'Pneu Traseiro Esquerdo', categoria: 'Pneus', icon: Gauge },
+  pneu_traseiro_direito: { label: 'Pneu Traseiro Direito', categoria: 'Pneus', icon: Gauge },
+  estepe: { label: 'Estepe', categoria: 'Pneus', icon: Gauge },
   
   // Interior
   painel: { label: 'Painel', categoria: 'Interior', icon: LayoutGrid },
   hodometro: { label: 'Hodômetro', categoria: 'Interior', icon: Gauge },
+  odometro: { label: 'Hodômetro', categoria: 'Interior', icon: Gauge },
   banco_dianteiro: { label: 'Banco Dianteiro', categoria: 'Interior', icon: LayoutGrid },
   banco_traseiro: { label: 'Banco Traseiro', categoria: 'Interior', icon: LayoutGrid },
   porta_malas: { label: 'Porta-malas', categoria: 'Interior', icon: Car },
+  volante: { label: 'Volante', categoria: 'Interior', icon: LayoutGrid },
+  console_central: { label: 'Console Central', categoria: 'Interior', icon: LayoutGrid },
 };
 
 const STATUS_CONFIG: Record<string, { label: string; icon: React.ComponentType<{ className?: string }>; className: string }> = {
@@ -77,20 +96,28 @@ const STATUS_CONFIG: Record<string, { label: string; icon: React.ComponentType<{
 interface VistoriaFotosCardProps {
   fotos: VistoriaFotoInfo[];
   vistoriaStatus?: string;
+  modalidade?: string; // 'autovistoria' | 'presencial' | 'ponto_fixo'
 }
 
-export function VistoriaFotosCard({ fotos, vistoriaStatus }: VistoriaFotosCardProps) {
+export function VistoriaFotosCard({ fotos, vistoriaStatus, modalidade }: VistoriaFotosCardProps) {
   const [selectedFoto, setSelectedFoto] = useState<VistoriaFotoInfo | null>(null);
+
+  // Determinar se é auto-vistoria baseado na modalidade
+  const isAutovistoria = modalidade === 'autovistoria' || modalidade === 'auto_vistoria';
+  const tituloCard = isAutovistoria ? 'Auto Vistoria' : 'Fotos da Vistoria';
+  const descricaoCard = isAutovistoria 
+    ? 'Fotos enviadas pelo associado' 
+    : 'Fotos registradas pelo vistoriador';
 
   if (!fotos || fotos.length === 0) {
     return (
       <Card className="border-border bg-card">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-foreground">
-            <Camera className="h-5 w-5 text-purple-500" />
-            Auto Vistoria
+            <Camera className="h-5 w-5 text-primary" />
+            {tituloCard}
           </CardTitle>
-          <CardDescription>Fotos enviadas pelo associado</CardDescription>
+          <CardDescription>{descricaoCard}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="text-center py-6 text-muted-foreground">
@@ -123,15 +150,15 @@ export function VistoriaFotosCard({ fotos, vistoriaStatus }: VistoriaFotosCardPr
     return acc;
   }, {} as Record<string, VistoriaFotoInfo[]>);
 
-  const categoriaOrder = ['Identificação', 'Motor', 'Exterior', 'Interior', 'Outros'];
+  const categoriaOrder = ['Identificação', 'Motor', 'Exterior', 'Pneus', 'Interior', 'Outros'];
 
   return (
     <>
       <Card className="border-border bg-card">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-foreground">
-            <Camera className="h-5 w-5 text-purple-500" />
-            Auto Vistoria
+            <Camera className="h-5 w-5 text-primary" />
+            {tituloCard}
             <Badge variant="secondary" className="ml-2">
               {fotos.length} foto{fotos.length !== 1 ? 's' : ''}
             </Badge>
@@ -140,7 +167,7 @@ export function VistoriaFotosCard({ fotos, vistoriaStatus }: VistoriaFotosCardPr
               {statusConfig.label}
             </Badge>
           </CardTitle>
-          <CardDescription>Clique para visualizar cada foto</CardDescription>
+          <CardDescription>{descricaoCard}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {categoriaOrder.map((categoria) => {

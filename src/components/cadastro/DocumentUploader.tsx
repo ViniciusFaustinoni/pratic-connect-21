@@ -202,6 +202,13 @@ export const TIPOS_DOCUMENTO_CONFIG: Record<TipoDocumento, TipoDocumentoConfig> 
     icone: Camera,
     descricao: 'Pneu traseiro esquerdo',
   },
+  laudo_vistoria: {
+    label: 'Laudo da Vistoria',
+    obrigatorio: false,
+    categoria: 'veiculo',
+    icone: FileText,
+    descricao: 'PDF do laudo da vistoria',
+  },
 };
 
 interface DocumentUploaderProps {
