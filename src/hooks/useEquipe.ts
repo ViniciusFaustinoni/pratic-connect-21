@@ -1,8 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { format } from 'date-fns';
+import { format, subMinutes } from 'date-fns';
 
 export type StatusProfissional = 'disponivel' | 'indisponivel' | 'ferias' | 'afastado';
+export type StatusOperacional = 'em_andamento' | 'em_rota' | 'disponivel_operacional' | 'offline';
 export type FuncaoProfissional = 'vistoriador' | 'instalador';
 
 export interface ProfissionalEquipe {
@@ -23,9 +24,15 @@ export interface ProfissionalEquipe {
   funcoes: FuncaoProfissional[];
   capacidade_diaria: number;
   status: StatusProfissional;
+  status_operacional: StatusOperacional;
   ativo: boolean;
   tarefas_hoje: number;
   ultima_atividade: string | null;
+  tarefa_atual?: {
+    id: string;
+    tipo: 'vistoria' | 'instalacao';
+    status: string;
+  };
 }
 
 // Buscar profissionais da equipe (instaladores/vistoriadores)
@@ -54,11 +61,13 @@ export function useProfissionaisEquipe() {
       if (profilesError) throw profilesError;
       if (!profiles?.length) return [];
 
+      const profileIds = profiles.map(p => p.id);
+
       // 3. Buscar contagem de tarefas hoje para cada profissional
       const hoje = format(new Date(), 'yyyy-MM-dd');
       const { data: instalacoes } = await supabase
         .from('instalacoes')
-        .select('instalador_id, instalador_responsavel_id')
+        .select('instalador_id, instalador_responsavel_id, status')
         .eq('data_agendada', hoje)
         .in('status', ['agendada', 'em_rota', 'em_andamento', 'concluida']);
 
@@ -72,7 +81,6 @@ export function useProfissionaisEquipe() {
       });
 
       // 4. Buscar última atividade (última instalação concluída)
-      const profileIds = profiles.map(p => p.id);
       const { data: ultimasAtividades } = await supabase
         .from('instalacoes')
         .select('instalador_responsavel_id, updated_at')
@@ -88,30 +96,88 @@ export function useProfissionaisEquipe() {
         }
       });
 
-      // 5. Mapear para o formato esperado
-      return profiles.map(profile => ({
-        id: profile.id,
-        user_id: profile.user_id,
-        nome: profile.nome || 'Sem nome',
-        email: profile.email || '',
-        telefone: profile.telefone,
-        whatsapp: null, // Campo não existe em profiles
-        cpf: profile.cpf,
-        cep: null, // Campo não existe em profiles
-        logradouro: null,
-        numero: null,
-        bairro: null,
-        cidade: null,
-        uf: null,
-        regioes_atendimento: (profile as any).regioes_atendimento || [],
-        funcoes: ['vistoriador', 'instalador'] as FuncaoProfissional[], // Role única para ambas funções
-        capacidade_diaria: (profile as any).capacidade_diaria || 5,
-        status: (profile.ativo ? 'disponivel' : 'indisponivel') as StatusProfissional,
-        ativo: profile.ativo ?? true,
-        tarefas_hoje: tarefasPorProfissional[profile.id] || 0,
-        ultima_atividade: ultimaAtividadePorProfissional[profile.id] || null,
-      })) as ProfissionalEquipe[];
+      // 5. Buscar localização em tempo real (últimos 60 minutos)
+      const cutoffTime = subMinutes(new Date(), 60).toISOString();
+      const { data: localizacoes } = await supabase
+        .from('vistoriadores_localizacao')
+        .select('vistoriador_id, em_servico, updated_at')
+        .in('vistoriador_id', profileIds)
+        .gte('updated_at', cutoffTime);
+
+      const localizacaoPorProfissional: Record<string, { em_servico: boolean; updated_at: string }> = {};
+      localizacoes?.forEach(loc => {
+        localizacaoPorProfissional[loc.vistoriador_id] = {
+          em_servico: loc.em_servico,
+          updated_at: loc.updated_at,
+        };
+      });
+
+      // 6. Buscar tarefas ativas (em_rota ou em_andamento) para determinar status operacional
+      const { data: tarefasAtivas } = await supabase
+        .from('instalacoes')
+        .select('id, instalador_responsavel_id, status')
+        .in('instalador_responsavel_id', profileIds)
+        .in('status', ['em_rota', 'em_andamento']);
+
+      const tarefaAtivaPorProfissional: Record<string, { id: string; tipo: 'instalacao'; status: string }> = {};
+      tarefasAtivas?.forEach(tarefa => {
+        if (tarefa.instalador_responsavel_id) {
+          // Priorizar em_andamento sobre em_rota
+          const existente = tarefaAtivaPorProfissional[tarefa.instalador_responsavel_id];
+          if (!existente || (tarefa.status === 'em_andamento' && existente.status === 'em_rota')) {
+            tarefaAtivaPorProfissional[tarefa.instalador_responsavel_id] = {
+              id: tarefa.id,
+              tipo: 'instalacao',
+              status: tarefa.status,
+            };
+          }
+        }
+      });
+
+      // 7. Mapear para o formato esperado
+      return profiles.map(profile => {
+        const localizacao = localizacaoPorProfissional[profile.id];
+        const tarefaAtiva = tarefaAtivaPorProfissional[profile.id];
+        
+        // Determinar status operacional
+        let status_operacional: StatusOperacional = 'offline';
+        if (localizacao?.em_servico) {
+          if (tarefaAtiva?.status === 'em_andamento') {
+            status_operacional = 'em_andamento';
+          } else if (tarefaAtiva?.status === 'em_rota') {
+            status_operacional = 'em_rota';
+          } else {
+            status_operacional = 'disponivel_operacional';
+          }
+        }
+
+        return {
+          id: profile.id,
+          user_id: profile.user_id,
+          nome: profile.nome || 'Sem nome',
+          email: profile.email || '',
+          telefone: profile.telefone,
+          whatsapp: null,
+          cpf: profile.cpf,
+          cep: null,
+          logradouro: null,
+          numero: null,
+          bairro: null,
+          cidade: null,
+          uf: null,
+          regioes_atendimento: (profile as any).regioes_atendimento || [],
+          funcoes: ['vistoriador', 'instalador'] as FuncaoProfissional[],
+          capacidade_diaria: (profile as any).capacidade_diaria || 5,
+          status: (profile.ativo ? 'disponivel' : 'indisponivel') as StatusProfissional,
+          status_operacional,
+          ativo: profile.ativo ?? true,
+          tarefas_hoje: tarefasPorProfissional[profile.id] || 0,
+          ultima_atividade: ultimaAtividadePorProfissional[profile.id] || null,
+          tarefa_atual: tarefaAtiva,
+        };
+      }) as ProfissionalEquipe[];
     },
+    refetchInterval: 30000, // Atualizar a cada 30 segundos
   });
 }
 
