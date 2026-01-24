@@ -865,7 +865,18 @@ export function useVistoriaCompletaPorServico(servicoId: string | null) {
 
       // 5. Se ainda não existir, criar nova vistoria vinculada ao serviço
       if (servico) {
-        const { data: novaVistoria, error: insertError } = await supabase
+        console.log('[useVistoriaCompletaPorServico] Criando nova vistoria para serviço:', {
+          servicoId,
+          associado_id: servico.associado_id,
+          veiculo_id: servico.veiculo_id,
+          profissional_id: servico.profissional_id,
+        });
+
+        // Tentar criar com vistoriador_id primeiro
+        let novaVistoria = null;
+        let insertError = null;
+
+        const { data: vistoriaComVistoriador, error: errorComVistoriador } = await supabase
           .from('vistorias')
           .insert({
             associado_id: servico.associado_id,
@@ -889,9 +900,46 @@ export function useVistoriaCompletaPorServico(servicoId: string | null) {
           `)
           .single();
 
-        if (insertError) {
-          console.error('[useVistoriaCompletaPorServico] Erro ao criar vistoria:', insertError);
-          throw insertError;
+        if (errorComVistoriador) {
+          console.warn('[useVistoriaCompletaPorServico] Falha ao criar com vistoriador, tentando sem:', errorComVistoriador);
+          
+          // Fallback: criar sem vistoriador_id (RLS permite)
+          const { data: vistoriaSemVistoriador, error: errorSemVistoriador } = await supabase
+            .from('vistorias')
+            .insert({
+              associado_id: servico.associado_id,
+              veiculo_id: servico.veiculo_id,
+              vistoriador_id: null, // Sem vistoriador - RLS permite
+              contrato_id: servico.contrato_id,
+              cotacao_id: servico.cotacao_id,
+              tipo: 'entrada',
+              status: 'em_analise',
+            })
+            .select(`
+              *,
+              veiculo:veiculos(
+                id, placa, chassi, marca, modelo, 
+                ano_fabricacao, ano_modelo, cor,
+                associado:associados(id, nome, cpf, telefone)
+              ),
+              associado:associados!vistorias_associado_id_fkey(id, nome, cpf, telefone),
+              vistoriador:profiles!vistorias_vistoriador_id_fkey(id, nome),
+              fotos:vistoria_fotos(*)
+            `)
+            .single();
+
+          if (errorSemVistoriador) {
+            console.error('[useVistoriaCompletaPorServico] Erro ao criar vistoria (fallback também falhou):', {
+              errorOriginal: errorComVistoriador,
+              errorFallback: errorSemVistoriador,
+              servicoId,
+            });
+            throw errorSemVistoriador;
+          }
+
+          novaVistoria = vistoriaSemVistoriador;
+        } else {
+          novaVistoria = vistoriaComVistoriador;
         }
 
         // Atualizar serviço com vistoria_origem_id
@@ -900,6 +948,7 @@ export function useVistoriaCompletaPorServico(servicoId: string | null) {
           .update({ vistoria_origem_id: novaVistoria.id })
           .eq('id', servicoId);
 
+        console.log('[useVistoriaCompletaPorServico] Vistoria criada com sucesso:', novaVistoria.id);
         return novaVistoria;
       }
 
