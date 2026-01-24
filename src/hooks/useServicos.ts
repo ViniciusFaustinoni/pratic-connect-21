@@ -900,15 +900,14 @@ export function useAprovarVeiculoServico() {
         usuario_id: profile?.id,
       });
 
-      // 4. Atualizar veículo
-      const { error: veiculoError } = await supabase
-        .from('veiculos')
-        .update({
-          rastreador_id: rastreador.id,
-          status: 'ativo',
-          updated_at: agora,
-        })
-        .eq('id', data.veiculoId);
+    // 4. Atualizar veículo para status ativo
+    const { error: veiculoError } = await supabase
+      .from('veiculos')
+      .update({
+        status: 'ativo',
+        updated_at: agora,
+      })
+      .eq('id', data.veiculoId);
 
       if (veiculoError) throw veiculoError;
 
