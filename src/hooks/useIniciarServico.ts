@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { TarefaAtual } from './useServicos';
 import { useAuth } from '@/contexts/AuthContext';
+import { backgroundLocationService } from '@/services/backgroundLocationService';
 
 interface IniciarServicoResult {
   resultado: 'atribuida' | 'ja_tem_tarefa' | 'sem_tarefas';
@@ -361,8 +362,23 @@ export function useIniciarServico() {
       // Chamar a edge function para atribuir tarefa
       await atribuirTarefaMutation.mutateAsync({ latitude, longitude });
 
-      // Iniciar tracking após sucesso
-      iniciarTrackingLocalizacao();
+      // Verificar se está em plataforma nativa para usar background location
+      if (backgroundLocationService.isNativePlatform() && profile?.id) {
+        console.log('[useIniciarServico] Plataforma nativa detectada - iniciando background location');
+        const backgroundStarted = await backgroundLocationService.iniciar(profile.id);
+        
+        if (backgroundStarted) {
+          console.log('[useIniciarServico] Background location ativado com sucesso');
+          toast.success('Rastreamento em segundo plano ativado');
+        } else {
+          console.warn('[useIniciarServico] Falha ao iniciar background location, usando fallback web');
+          iniciarTrackingLocalizacao();
+        }
+      } else {
+        // PWA: usar watchPosition (funciona apenas com app aberto)
+        console.log('[useIniciarServico] Usando geolocation web (PWA)');
+        iniciarTrackingLocalizacao();
+      }
 
     } catch (error: any) {
       console.error('[useIniciarServico] Erro de geolocalização:', error);
@@ -393,13 +409,21 @@ export function useIniciarServico() {
         toast.error('Erro ao obter localização');
       }
     }
-  }, [atribuirTarefaMutation, iniciarTrackingLocalizacao]);
+  }, [atribuirTarefaMutation, iniciarTrackingLocalizacao, profile?.id]);
 
   // Função para encerrar o turno
   const encerrarServico = useCallback(async () => {
     if (!profile?.id) return;
 
     try {
+      // Parar rastreamento (nativo ou web)
+      if (backgroundLocationService.isNativePlatform()) {
+        console.log('[useIniciarServico] Parando background location nativo');
+        await backgroundLocationService.parar();
+      } else {
+        pararTrackingLocalizacao();
+      }
+
       await supabase
         .from('vistoriadores_localizacao')
         .update({ 
@@ -408,7 +432,6 @@ export function useIniciarServico() {
         })
         .eq('vistoriador_id', profile.id);
 
-      pararTrackingLocalizacao();
       refetchStatus();
       queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
       
