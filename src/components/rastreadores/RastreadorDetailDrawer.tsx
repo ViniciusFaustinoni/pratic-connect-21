@@ -49,6 +49,7 @@ import {
 import { MapaRastreador } from './MapaRastreador';
 import { MapaHistorico } from './MapaHistorico';
 import { BotaoRedefinirSenha } from './BotaoRedefinirSenha';
+import { HistoricoMovimentacoesRastreador } from './HistoricoMovimentacoesRastreador';
 
 interface RastreadorDetailDrawerProps {
   rastreadorId: string | null;
@@ -175,13 +176,16 @@ export function RastreadorDetailDrawer({
             </SheetHeader>
 
             <Tabs defaultValue="info" className="mt-6">
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="info">Informações</TabsTrigger>
                 <TabsTrigger value="mapa" disabled={!isInstalled}>
                   Rastreamento
                 </TabsTrigger>
                 <TabsTrigger value="historico" disabled={!isInstalled}>
-                  Histórico
+                  Trajeto
+                </TabsTrigger>
+                <TabsTrigger value="movimentacoes">
+                  Movimentações
                 </TabsTrigger>
               </TabsList>
 
@@ -414,6 +418,12 @@ export function RastreadorDetailDrawer({
                     rastreadorId={rastreadorId} 
                     altura="300px"
                   />
+                )}
+              </TabsContent>
+
+              <TabsContent value="movimentacoes" className="mt-4">
+                {rastreadorId && (
+                  <HistoricoMovimentacoesRastreador rastreadorId={rastreadorId} />
                 )}
               </TabsContent>
             </Tabs>

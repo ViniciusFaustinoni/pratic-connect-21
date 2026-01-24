@@ -265,6 +265,7 @@ function RastreadoresContent({
                   <TableHead>IMEI</TableHead>
                   <TableHead>Plataforma</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Portador</TableHead>
                   <TableHead>Comunicação</TableHead>
                   <TableHead>Veículo</TableHead>
                   <TableHead>Email Associado</TableHead>
@@ -294,6 +295,13 @@ function RastreadoresContent({
                         <Badge className={STATUS_RASTREADOR_COLORS[rastreador.status]}>
                           {STATUS_RASTREADOR_LABELS[rastreador.status]}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {rastreador.portador?.nome ? (
+                          <span className="text-sm font-medium">{rastreador.portador.nome}</span>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         {isInstalled ? (
