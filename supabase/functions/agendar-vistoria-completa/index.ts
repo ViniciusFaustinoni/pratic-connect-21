@@ -110,6 +110,15 @@ serve(async (req) => {
     }
 
     // 3. Atualizar cotação com dados da vistoria completa (SEM criar instalação ainda)
+    
+    // IMPORTANTE: Garantir que coordenadas são salvas para atribuição automática
+    let finalLatitude = latitude;
+    let finalLongitude = longitude;
+    
+    if (!finalLatitude || !finalLongitude) {
+      console.warn('[AgendarVistoriaCompleta] Coordenadas não fornecidas - atribuição por proximidade pode falhar');
+    }
+    
     const updateData: Record<string, unknown> = {
       vistoria_completa_data_agendada: dataAgendada,
       vistoria_completa_horario_agendado: horarioAgendado,
@@ -122,13 +131,11 @@ serve(async (req) => {
       vistoria_completa_responsavel_eu_mesmo: responsavel.euMesmo,
       vistoria_completa_responsavel_nome: responsavel.nome || null,
       vistoria_completa_responsavel_telefone: responsavel.telefone || null,
-      vistoria_permite_encaixe: permiteEncaixe || false,
+      vistoria_permite_encaixe: permiteEncaixe ?? false,
+      // SEMPRE salvar coordenadas para vistoria completa também
+      vistoria_endereco_latitude: finalLatitude || null,
+      vistoria_endereco_longitude: finalLongitude || null,
     };
-
-    if (latitude && longitude) {
-      updateData.vistoria_endereco_latitude = latitude;
-      updateData.vistoria_endereco_longitude = longitude;
-    }
 
     const { error: updateCotacaoError } = await supabase
       .from('cotacoes')
@@ -140,7 +147,14 @@ serve(async (req) => {
       throw updateCotacaoError;
     }
 
-    console.log('[AgendarVistoriaCompleta] Agendamento salvo na cotação. Instalação será criada após pagamento.');
+    console.log('[AgendarVistoriaCompleta] Agendamento salvo na cotação:', {
+      data: dataAgendada,
+      horario: horarioAgendado,
+      permiteEncaixe: permiteEncaixe ?? false,
+      temCoordenadas: !!(finalLatitude && finalLongitude),
+      latitude: finalLatitude,
+      longitude: finalLongitude
+    });
 
     // NÃO criar vistoria nem instalação aqui
     // A instalação será criada em criar-instalacao-pos-pagamento após o pagamento ser confirmado
