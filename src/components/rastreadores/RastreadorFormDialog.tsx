@@ -34,6 +34,7 @@ import {
   type StatusRastreador,
 } from '@/hooks/useRastreadores';
 import { usePlataformasOptions } from '@/hooks/usePlataformasCRUD';
+import { useProfissionaisEquipe } from '@/hooks/useEquipe';
 import { STATUS_RASTREADOR_LABELS } from '@/types/database';
 
 const rastreadorSchema = z.object({
@@ -48,6 +49,7 @@ const rastreadorSchema = z.object({
   id_plataforma: z.string().max(100).optional().nullable(),
   status: z.enum(['estoque', 'instalado', 'manutencao', 'baixado'] as const),
   veiculo_id: z.string().uuid().optional().nullable(),
+  portador_id: z.string().uuid().optional().nullable(),
 }).refine(
   (data) => {
     if (data.status === 'instalado' && !data.veiculo_id) {
@@ -79,6 +81,7 @@ export function RastreadorFormDialog({
   );
   const { data: veiculos } = useVeiculosSemRastreador();
   const { data: plataformas, isLoading: loadingPlataformas } = usePlataformasOptions();
+  const { data: profissionais, isLoading: loadingProfissionais } = useProfissionaisEquipe();
   const createRastreador = useCreateRastreador();
   const updateRastreador = useUpdateRastreador();
 
@@ -97,6 +100,7 @@ export function RastreadorFormDialog({
       id_plataforma: '',
       status: 'estoque',
       veiculo_id: null,
+      portador_id: null,
     },
   });
 
@@ -115,6 +119,7 @@ export function RastreadorFormDialog({
           id_plataforma: rastreador.id_plataforma || '',
           status: rastreador.status,
           veiculo_id: rastreador.veiculo_id,
+          portador_id: rastreador.portador_id || null,
         });
       } else {
         form.reset({
@@ -126,6 +131,7 @@ export function RastreadorFormDialog({
           id_plataforma: '',
           status: 'estoque',
           veiculo_id: null,
+          portador_id: null,
         });
       }
     }
@@ -135,6 +141,13 @@ export function RastreadorFormDialog({
   useEffect(() => {
     if (watchStatus !== 'instalado') {
       form.setValue('veiculo_id', null);
+    }
+  }, [watchStatus, form]);
+
+  // Clear portador_id when status changes from 'estoque' to something else
+  useEffect(() => {
+    if (watchStatus !== 'estoque') {
+      form.setValue('portador_id', null);
     }
   }, [watchStatus, form]);
 
@@ -149,6 +162,7 @@ export function RastreadorFormDialog({
         chip_iccid: data.chip_iccid || null,
         id_plataforma: data.id_plataforma || null,
         veiculo_id: data.status === 'instalado' ? data.veiculo_id : null,
+        portador_id: data.status === 'estoque' ? (data.portador_id || null) : null,
       };
 
       if (isEditing && rastreadorId) {
@@ -373,6 +387,41 @@ export function RastreadorFormDialog({
                               {'associados' in veiculo && veiculo.associados && ` (${(veiculo.associados as { nome: string }).nome})`}
                             </SelectItem>
                           ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
+              {watchStatus === 'estoque' && (
+                <FormField
+                  control={form.control}
+                  name="portador_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Portador (Profissional Responsável)</FormLabel>
+                      <Select
+                        onValueChange={(val) => field.onChange(val === 'none' ? null : val)}
+                        value={field.value || 'none'}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Nenhum portador atribuído" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="none">Nenhum portador</SelectItem>
+                          {loadingProfissionais ? (
+                            <SelectItem value="loading" disabled>Carregando...</SelectItem>
+                          ) : (
+                            profissionais?.filter(p => p.ativo).map((prof) => (
+                              <SelectItem key={prof.id} value={prof.id}>
+                                {prof.nome}
+                              </SelectItem>
+                            ))
+                          )}
                         </SelectContent>
                       </Select>
                       <FormMessage />
