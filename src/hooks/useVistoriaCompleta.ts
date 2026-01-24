@@ -399,7 +399,28 @@ export function useUploadFotoVistoriaCompleta() {
         .single();
 
       if (error) throw error;
-      return result;
+
+      // Se for foto do odômetro, chamar OCR para identificar quilometragem
+      let ocrResult = null;
+      if (data.tipo === 'odometro') {
+        try {
+          const { data: ocrData, error: ocrError } = await supabase.functions.invoke('odometro-ocr', {
+            body: { 
+              url: publicUrl.publicUrl, 
+              vistoriaId: data.vistoriaId
+            }
+          });
+          
+          if (!ocrError && ocrData) {
+            ocrResult = ocrData;
+            console.log('OCR do odômetro:', ocrData);
+          }
+        } catch (e) {
+          console.warn('OCR do odômetro falhou (não crítico):', e);
+        }
+      }
+
+      return { ...result, ocrResult };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['vistoria-completa'] });

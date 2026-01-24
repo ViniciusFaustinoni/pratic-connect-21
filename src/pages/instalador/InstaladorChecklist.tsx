@@ -98,6 +98,8 @@ export default function InstaladorChecklist() {
   const [imeiError, setImeiError] = useState('');
   const [modoManualImei, setModoManualImei] = useState(false);
   const [rastreadorSelecionadoId, setRastreadorSelecionadoId] = useState<string | null>(null);
+  const [kmIdentificado, setKmIdentificado] = useState<number | null>(null);
+  const [processandoOCR, setProcessandoOCR] = useState(false);
   
   // Estados para validação em tempo real do IMEI
   const [imeiValidando, setImeiValidando] = useState(false);
@@ -147,6 +149,16 @@ export default function InstaladorChecklist() {
       }
     }
   }, [servico]);
+
+  // Carregar KM identificado por OCR se já existir na vistoria
+  useEffect(() => {
+    if (vistoriaCompleta?.km_atual && !kmIdentificado) {
+      setKmIdentificado(vistoriaCompleta.km_atual);
+      if (!quilometragem) {
+        setQuilometragem(String(vistoriaCompleta.km_atual));
+      }
+    }
+  }, [vistoriaCompleta?.km_atual, kmIdentificado, quilometragem]);
 
   // Abrir primeira categoria incompleta ao carregar
   useEffect(() => {
@@ -223,20 +235,48 @@ export default function InstaladorChecklist() {
     
     const fotoConfig = fotosConfig.find(f => f.id === fotoId);
     const visivelCliente = fotoConfig?.visivelCliente ?? true;
+    const isOdometro = fotoId === 'odometro';
     
     setUploadingFoto(fotoId);
+    if (isOdometro) setProcessandoOCR(true);
+    
     try {
-      await uploadFotoMutation.mutateAsync({ 
+      const result = await uploadFotoMutation.mutateAsync({ 
         vistoriaId, 
         tipo: fotoId, 
         file,
         visivelCliente 
       });
-      toast.success('Foto enviada!');
+      
+      // Se for odômetro e OCR identificou KM com boa confiança
+      if (isOdometro && result.ocrResult) {
+        const { km, confianca, observacao } = result.ocrResult;
+        if (km && confianca >= 0.7) {
+          setKmIdentificado(km);
+          setQuilometragem(String(km));
+          toast.success(`Quilometragem identificada: ${km.toLocaleString('pt-BR')} km`, {
+            description: observacao || 'Valor detectado automaticamente pela IA',
+            duration: 5000,
+          });
+        } else if (km && confianca < 0.7) {
+          toast.warning('Quilometragem identificada com baixa confiança', {
+            description: `Valor sugerido: ${km.toLocaleString('pt-BR')} km. Verifique e corrija se necessário.`,
+          });
+          setKmIdentificado(km);
+          setQuilometragem(String(km));
+        } else {
+          toast.info('Não foi possível identificar a quilometragem automaticamente', {
+            description: observacao || 'Informe o valor manualmente.',
+          });
+        }
+      } else {
+        toast.success('Foto enviada!');
+      }
     } catch (err) {
       toast.error('Erro ao enviar foto');
     } finally {
       setUploadingFoto(null);
+      if (isOdometro) setProcessandoOCR(false);
     }
   };
 
@@ -750,6 +790,45 @@ export default function InstaladorChecklist() {
                     </Collapsible>
                   );
                 })}
+
+                {/* Card de KM identificado pela IA */}
+                {(kmIdentificado || processandoOCR) && (
+                  <Card className={cn(
+                    "border transition-all",
+                    processandoOCR 
+                      ? "bg-blue-950/20 border-blue-800/50 animate-pulse"
+                      : "bg-blue-950/30 border-blue-800"
+                  )}>
+                    <CardContent className="py-4">
+                      <div className="flex items-center gap-3">
+                        <div className={cn(
+                          "p-2 rounded-full",
+                          processandoOCR ? "bg-blue-500/20" : "bg-blue-500/30"
+                        )}>
+                          <Gauge className="h-6 w-6 text-blue-400" />
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-xs text-slate-400">
+                            {processandoOCR ? 'Analisando odômetro...' : 'Quilometragem Identificada (IA)'}
+                          </p>
+                          {processandoOCR ? (
+                            <div className="flex items-center gap-2 mt-1">
+                              <Loader2 className="h-4 w-4 animate-spin text-blue-400" />
+                              <span className="text-sm text-slate-300">Processando imagem...</span>
+                            </div>
+                          ) : (
+                            <p className="font-bold text-blue-400 text-lg">
+                              {kmIdentificado?.toLocaleString('pt-BR')} km
+                            </p>
+                          )}
+                        </div>
+                        {!processandoOCR && (
+                          <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
 
                 {/* Vídeo 360 Obrigatório */}
                 <Card className={cn(
