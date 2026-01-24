@@ -315,9 +315,11 @@ export function MapaMobileContent() {
     filtroNormalizado.setHours(0, 0, 0, 0);
     const hoje = getHojeBrasilia();
 
-    // Filtrar tarefas do dia selecionado
+    // Filtrar tarefas do dia selecionado (excluindo finalizadas)
     const tarefasDoFiltro = vistorias.filter((v) => {
       if (!v.data_agendada) return false;
+      // Excluir tarefas já finalizadas
+      if (STATUS_FINALIZADOS.includes(v.status)) return false;
       const dataAgendadaStr = v.data_agendada.slice(0, 10);
       const dataVistoria = new Date(dataAgendadaStr + 'T00:00:00');
       return isSameDay(dataVistoria, filtroNormalizado);

@@ -934,6 +934,7 @@ export function useAprovarVeiculoServico() {
       queryClient.invalidateQueries({ queryKey: ['rastreadores'] });
       queryClient.invalidateQueries({ queryKey: ['rastreadores-meu-porte'] });
       queryClient.invalidateQueries({ queryKey: ['rastreadores-metricas'] });
+      queryClient.invalidateQueries({ queryKey: ['vistorias-mapa'] });
       toast.success('Instalação concluída! Aguardando análise cadastral.');
     },
     onError: (error) => {
