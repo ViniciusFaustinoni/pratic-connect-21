@@ -6,6 +6,8 @@ import { Car, Receipt, MapPin, Phone, AlertTriangle, FileText, Loader2 } from 'l
 import { useAssociado } from '@/contexts/AssociadoContext';
 import { useResumoApp } from '@/hooks/useAppAssociado';
 import { RevistoriaBanner } from '@/components/app/RevistoriaBanner';
+import { AlertaCotacaoCancelada } from '@/components/app/AlertaCotacaoCancelada';
+import { useCotacaoCanceladaPorPagamento } from '@/hooks/useCotacaoCancelada';
 
 // ============================================
 // HELPERS
@@ -61,6 +63,9 @@ export default function AppHome() {
   const { revistoria } = useAssociado();
   const { associado, veiculos, boletoPendente, isLoading } = useResumoApp();
   
+  // Verificar se há cotação cancelada por falta de pagamento
+  const { data: cotacaoCancelada } = useCotacaoCanceladaPorPagamento(associado?.id);
+  
   // Dados do associado
   const nomeAssociado = associado?.nome || 'Associado';
   const primeiroNome = nomeAssociado.split(' ')[0];
@@ -86,6 +91,15 @@ export default function AppHome() {
 
   return (
     <div className="p-4 space-y-4 pb-24">
+      {/* ALERTA DE COTAÇÃO CANCELADA POR FALTA DE PAGAMENTO */}
+      {cotacaoCancelada && (
+        <AlertaCotacaoCancelada
+          motivo={cotacaoCancelada.motivo_cancelamento || undefined}
+          data={cotacaoCancelada.cancelada_em || undefined}
+          variante="banner"
+        />
+      )}
+
       {/* SAUDAÇÃO */}
       <div>
         <h1 className="text-xl font-semibold text-gray-900">

@@ -42,6 +42,7 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 interface CobrancaAdesaoRequest {
   contratoId: string;
   valor: number;
+  formaPagamento?: 'PIX' | 'BOLETO' | 'CREDIT_CARD' | 'UNDEFINED'; // Suporta múltiplas formas
   cliente: {
     nome: string;
     email: string;
@@ -79,9 +80,12 @@ serve(async (req) => {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
   try {
-    let { contratoId, valor, cliente }: CobrancaAdesaoRequest = await req.json();
+    let { contratoId, valor, formaPagamento, cliente }: CobrancaAdesaoRequest = await req.json();
 
-    console.log(`[asaas-cobranca-adesao] Iniciando para contrato ${contratoId}, valor recebido: R$ ${valor}`);
+    console.log(`[asaas-cobranca-adesao] Iniciando para contrato ${contratoId}, valor recebido: R$ ${valor}, forma: ${formaPagamento || 'PIX'}`);
+
+    // Definir billingType - usar PIX como padrão
+    const billingType = formaPagamento || 'PIX';
 
     // VALIDAÇÃO DE VALOR MÍNIMO - Asaas não aceita cobranças abaixo de R$ 5,00
     const VALOR_MINIMO_ASAAS = 5;
@@ -207,25 +211,32 @@ serve(async (req) => {
     const vencimento = new Date();
     vencimento.setDate(vencimento.getDate() + 3); // 3 dias para pagar
 
+    // Criar cobrança com forma de pagamento selecionada
+    // Se for UNDEFINED, permite múltiplas formas no link de pagamento
     const cobrancaData = await asaasRequest('/payments', 'POST', {
       customer: asaasClienteId,
-      billingType: 'PIX', // Apenas PIX (sem boleto)
+      billingType: billingType,
       value: valor,
       dueDate: vencimento.toISOString().split('T')[0],
       description: `Adesão - Contrato ${contrato.numero || contratoId.slice(0, 8)}`,
       externalReference: contratoId,
     });
 
-    console.log(`[asaas-cobranca-adesao] Cobrança criada: ${cobrancaData.id}`);
+    console.log(`[asaas-cobranca-adesao] Cobrança criada: ${cobrancaData.id} com billingType: ${billingType}`);
 
-    // Buscar dados do PIX
+    // Buscar dados do PIX (se aplicável)
     let pixData = null;
-    try {
-      pixData = await asaasRequest(`/payments/${cobrancaData.id}/pixQrCode`, 'GET');
-      console.log('[asaas-cobranca-adesao] Dados PIX obtidos');
-    } catch (pixError) {
-      console.warn('[asaas-cobranca-adesao] Não foi possível obter PIX:', pixError);
+    if (billingType === 'PIX' || billingType === 'UNDEFINED') {
+      try {
+        pixData = await asaasRequest(`/payments/${cobrancaData.id}/pixQrCode`, 'GET');
+        console.log('[asaas-cobranca-adesao] Dados PIX obtidos');
+      } catch (pixError) {
+        console.warn('[asaas-cobranca-adesao] Não foi possível obter PIX:', pixError);
+      }
     }
+
+    // Gerar link de pagamento para cartão de crédito
+    const linkPagamento = `https://www.asaas.com/c/${cobrancaData.id}`;
 
     // Salvar cobrança no banco de dados
     // Usar associado_id se existir, ou criar um placeholder para lead
@@ -249,6 +260,7 @@ serve(async (req) => {
         pix_qrcode: pixData?.encodedImage,
         pix_expiracao: pixData?.expirationDate,
         referencia: `adesao-${contratoId}`,
+        forma_pagamento: billingType,
       })
       .select()
       .single();
@@ -334,8 +346,11 @@ serve(async (req) => {
         pix_qrcode: pixData?.encodedImage,
         boleto_url: cobrancaData.bankSlipUrl,
         linha_digitavel: cobrancaData.nossoNumero,
+        link_pagamento: linkPagamento, // Link para pagamento com cartão
+        invoice_url: cobrancaData.invoiceUrl, // Link da fatura
         valor: valor,
         vencimento: vencimento.toISOString(),
+        billing_type: billingType,
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -569,6 +569,65 @@ serve(async (req) => {
                 }
               });
             }
+
+            // NOVO: Se for cobrança de adesão vencida, cancelar cotação
+            if (cobranca.tipo === 'adesao' && cobranca.contrato_id) {
+              console.log(`[asaas-webhook] Cobrança de adesão vencida - cancelando cotação do contrato ${cobranca.contrato_id}`);
+              
+              // Buscar cotação vinculada ao contrato
+              const { data: contratoComCotacao } = await supabase
+                .from('contratos')
+                .select('cotacao_id')
+                .eq('id', cobranca.contrato_id)
+                .maybeSingle();
+
+              if (contratoComCotacao?.cotacao_id) {
+                // Atualizar cotação para expirada com motivo
+                const { error: updateCotacaoError } = await supabase
+                  .from('cotacoes')
+                  .update({
+                    status: 'expirada',
+                    motivo_cancelamento: 'Pagamento de adesão não realizado dentro do prazo',
+                    cancelada_em: new Date().toISOString(),
+                  })
+                  .eq('id', contratoComCotacao.cotacao_id)
+                  .not('status', 'eq', 'expirada'); // Só atualiza se ainda não estiver expirada
+
+                if (updateCotacaoError) {
+                  console.error('[asaas-webhook] Erro ao cancelar cotação:', updateCotacaoError);
+                } else {
+                  console.log(`[asaas-webhook] Cotação ${contratoComCotacao.cotacao_id} cancelada por falta de pagamento de adesão`);
+                  
+                  // Registrar no histórico do contrato
+                  await supabase.from('contratos_historico').insert({
+                    contrato_id: cobranca.contrato_id,
+                    evento: 'cotacao_cancelada',
+                    descricao: 'Cotação cancelada automaticamente por falta de pagamento de adesão',
+                    dados: {
+                      cotacao_id: contratoComCotacao.cotacao_id,
+                      cobranca_id: cobranca.id,
+                      motivo: 'PAYMENT_OVERDUE',
+                    },
+                  });
+
+                  // Notificar cliente sobre cancelamento
+                  if (associadoOverdue?.user_id) {
+                    await supabase.functions.invoke('disparar-notificacao', {
+                      body: {
+                        user_id: associadoOverdue.user_id,
+                        associado_id: cobranca.associado_id,
+                        tipo: 'sistema',
+                        subtipo: 'alerta',
+                        dados: { 
+                          mensagem: 'Sua contratação foi cancelada por falta de pagamento. Entre em contato para regularizar.'
+                        },
+                        forcar_envio: true
+                      }
+                    });
+                  }
+                }
+              }
+            }
           }
           break;
 
