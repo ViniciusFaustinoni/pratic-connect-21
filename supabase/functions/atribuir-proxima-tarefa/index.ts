@@ -254,29 +254,10 @@ serve(async (req) => {
       );
     }
 
-    // Buscar configurações de encaixe
-    const { data: configRaio } = await supabase
-      .from('configuracoes')
-      .select('valor')
-      .eq('chave', 'operacional_encaixe_raio_km')
-      .single();
-
-    const raioMaximoEncaixeKm = configRaio?.valor ? parseFloat(configRaio.valor) : 10;
-    console.log(`[atribuir-proxima-tarefa] Raio máximo para encaixe: ${raioMaximoEncaixeKm} km`);
-
-    // Buscar configuração de janela de horas
-    const { data: configJanela } = await supabase
-      .from('configuracoes')
-      .select('valor')
-      .eq('chave', 'operacional_encaixe_janela_horas')
-      .single();
-
-    const janelaHoras = configJanela?.valor ? parseInt(configJanela.valor) : 2;
-    console.log(`[atribuir-proxima-tarefa] Janela de horas livre: ${janelaHoras}h`);
-
-    // ✅ NOVA VERIFICAÇÃO: Verificar se profissional tem tarefas nas próximas X horas
-    const temTarefasProximas = await temTarefasNaJanela(supabase, profissionalId, janelaHoras);
-    console.log(`[atribuir-proxima-tarefa] Profissional tem tarefas nas próximas ${janelaHoras}h: ${temTarefasProximas}`);
+    // ✅ NOVA LÓGICA SIMPLIFICADA: Sem restrição de raio e janela
+    // Prioridade é sempre o agendamento do dia
+    // Se não houver agendamento próximo, buscar encaixe (vistoriador mais próximo disponível)
+    console.log(`[atribuir-proxima-tarefa] Lógica simplificada: sem limite de raio e janela`);
 
     // 2. Buscar serviços disponíveis (sem atribuição) da tabela UNIFICADA servicos
     const hoje = new Date().toISOString().split('T')[0];
@@ -318,47 +299,43 @@ serve(async (req) => {
     }
 
     // BUSCA 2: Serviços FUTUROS com ENCAIXE habilitado
-    // Só busca encaixes se o profissional NÃO tem tarefas nas próximas X horas
+    // ✅ NOVA LÓGICA: Sempre busca encaixes (sem verificar janela de horas)
     let servicosEncaixe: any[] = [];
     
-    if (!temTarefasProximas) {
-      const { data: encaixes, error: servicosEncaixeError } = await supabase
-        .from('servicos')
-        .select(`
-          id,
-          tipo,
-          data_agendada,
-          hora_agendada,
-          latitude,
-          longitude,
-          permite_encaixe,
-          status,
-          logradouro,
-          numero,
-          bairro,
-          cidade,
-          uf,
-          associado_id,
-          veiculo_id,
-          local_vistoria,
-          associado:associados(nome, telefone, whatsapp),
-          veiculo:veiculos(placa, marca, modelo, cor)
-        `)
-        .is('profissional_id', null)
-        .in('status', ['pendente', 'agendada'])
-        .or('local_vistoria.is.null,local_vistoria.eq.cliente')
-        .gt('data_agendada', amanha)     // DATAS FUTURAS (> amanhã)
-        .eq('permite_encaixe', true)      // APENAS os que aceitam encaixe
-        .not('latitude', 'is', null)
-        .not('longitude', 'is', null);
+    const { data: encaixes, error: servicosEncaixeError } = await supabase
+      .from('servicos')
+      .select(`
+        id,
+        tipo,
+        data_agendada,
+        hora_agendada,
+        latitude,
+        longitude,
+        permite_encaixe,
+        status,
+        logradouro,
+        numero,
+        bairro,
+        cidade,
+        uf,
+        associado_id,
+        veiculo_id,
+        local_vistoria,
+        associado:associados(nome, telefone, whatsapp),
+        veiculo:veiculos(placa, marca, modelo, cor)
+      `)
+      .is('profissional_id', null)
+      .in('status', ['pendente', 'agendada'])
+      .or('local_vistoria.is.null,local_vistoria.eq.cliente')
+      .gt('data_agendada', amanha)     // DATAS FUTURAS (> amanhã)
+      .eq('permite_encaixe', true)      // APENAS os que aceitam encaixe
+      .not('latitude', 'is', null)
+      .not('longitude', 'is', null);
 
-      if (servicosEncaixeError) {
-        console.error('[atribuir-proxima-tarefa] Erro ao buscar serviços encaixe:', servicosEncaixeError);
-      } else {
-        servicosEncaixe = encaixes || [];
-      }
+    if (servicosEncaixeError) {
+      console.error('[atribuir-proxima-tarefa] Erro ao buscar serviços encaixe:', servicosEncaixeError);
     } else {
-      console.log(`[atribuir-proxima-tarefa] Profissional tem tarefas nas próximas ${janelaHoras}h - NÃO elegível para encaixes`);
+      servicosEncaixe = encaixes || [];
     }
 
     // Combinar as duas listas
@@ -491,36 +468,18 @@ serve(async (req) => {
           is_encaixe_futuro
         };
       })
-      .filter(s => {
-        // Encaixes futuros SÓ entram se estiverem dentro do raio máximo
-        if (s.is_encaixe_futuro) {
-          const dentroDoRaio = s.distancia_km <= raioMaximoEncaixeKm;
-          if (!dentroDoRaio) {
-            console.log(`[atribuir-proxima-tarefa] Encaixe ${s.id} descartado: ${s.distancia_km.toFixed(2)}km > ${raioMaximoEncaixeKm}km`);
-          }
-          return dentroDoRaio;
-        }
-        // Serviços de hoje/amanhã: sem limite de raio
-        return true;
-      })
+      // ✅ NOVA LÓGICA SIMPLIFICADA: Sem filtro de raio para encaixes
+      // Ordenação: HOJE > mais próximos (qualquer distância)
       .sort((a, b) => {
         // PRIORIDADE 1: Serviços de HOJE (por proximidade)
         if (a.is_hoje && !b.is_hoje) return -1;
         if (!a.is_hoje && b.is_hoje) return 1;
         
-        // PRIORIDADE 2: Encaixes futuros próximos (já filtrados por raio)
-        if (a.is_encaixe_futuro && !b.is_encaixe_futuro && !b.is_hoje) return -1;
-        if (!a.is_encaixe_futuro && b.is_encaixe_futuro && !a.is_hoje) return 1;
-        
-        // PRIORIDADE 3: Serviços de AMANHÃ
-        if (a.is_amanha && !b.is_amanha && !b.is_hoje && !b.is_encaixe_futuro) return -1;
-        if (!a.is_amanha && b.is_amanha && !a.is_hoje && !a.is_encaixe_futuro) return 1;
-        
-        // PRIORIDADE 4: Por distância (dentro da mesma categoria)
+        // PRIORIDADE 2: Por distância (mais próximo primeiro, sem limite de raio)
         return a.distancia_km - b.distancia_km;
       });
     
-    console.log(`[atribuir-proxima-tarefa] ${servicosComDistancia.length} serviços após filtro de raio (encaixes <= ${raioMaximoEncaixeKm}km)`);
+    console.log(`[atribuir-proxima-tarefa] ${servicosComDistancia.length} serviços após ordenação por proximidade`);
 
     if (servicosComDistancia.length === 0) {
       return new Response(
