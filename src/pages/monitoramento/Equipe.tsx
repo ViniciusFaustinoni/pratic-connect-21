@@ -18,6 +18,9 @@ import {
   Umbrella,
   Loader2,
   Users,
+  Navigation,
+  Signal,
+  SignalZero,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -48,7 +51,7 @@ import {
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
 import { ProfissionalModal, Profissional as ProfissionalModalData, ProfissionalFormData } from '@/components/monitoramento/ProfissionalModal';
-import { useProfissionaisEquipe, useSaveProfissional, useToggleProfissionalStatus, ProfissionalEquipe, StatusProfissional, FuncaoProfissional } from '@/hooks/useEquipe';
+import { useProfissionaisEquipe, useSaveProfissional, useToggleProfissionalStatus, ProfissionalEquipe, StatusProfissional, StatusOperacional, FuncaoProfissional } from '@/hooks/useEquipe';
 import { toast } from 'sonner';
 import { REGIOES_ATENDIMENTO } from '@/types/monitoramento';
 
@@ -71,9 +74,33 @@ const STATUS_CONFIG: Record<StatusProfissional, { label: string; className: stri
   },
 };
 
+const STATUS_OPERACIONAL_CONFIG: Record<StatusOperacional, { label: string; className: string; icon: React.ReactNode }> = {
+  em_andamento: {
+    label: 'Em Andamento',
+    className: 'bg-blue-100 text-blue-800 border-blue-200',
+    icon: <Wrench className="h-3 w-3" />,
+  },
+  em_rota: {
+    label: 'Em Rota',
+    className: 'bg-purple-100 text-purple-800 border-purple-200',
+    icon: <Navigation className="h-3 w-3" />,
+  },
+  disponivel_operacional: {
+    label: 'Online',
+    className: 'bg-emerald-100 text-emerald-800 border-emerald-200 animate-pulse',
+    icon: <Signal className="h-3 w-3" />,
+  },
+  offline: {
+    label: 'Offline',
+    className: 'bg-gray-100 text-gray-500 border-gray-200',
+    icon: <SignalZero className="h-3 w-3" />,
+  },
+};
+
 export default function Equipe() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('todos');
+  const [statusOperacionalFilter, setStatusOperacionalFilter] = useState<string>('todos');
   const [regiaoFilter, setRegiaoFilter] = useState<string>('todas');
   const [funcaoFilter, setFuncaoFilter] = useState<string>('todos');
   
@@ -147,14 +174,15 @@ export default function Equipe() {
     return profissionais.filter((prof) => {
       const matchSearch = prof.nome.toLowerCase().includes(searchTerm.toLowerCase());
       const matchStatus = statusFilter === 'todos' || prof.status === statusFilter;
+      const matchStatusOperacional = statusOperacionalFilter === 'todos' || prof.status_operacional === statusOperacionalFilter;
       const matchRegiao = regiaoFilter === 'todas' || prof.regioes_atendimento.includes(regiaoFilter);
       const matchFuncao =
         funcaoFilter === 'todos' ||
         (funcaoFilter === 'ambos' && prof.funcoes.length === 2) ||
         prof.funcoes.includes(funcaoFilter as FuncaoProfissional);
-      return matchSearch && matchStatus && matchRegiao && matchFuncao;
+      return matchSearch && matchStatus && matchStatusOperacional && matchRegiao && matchFuncao;
     });
-  }, [profissionais, searchTerm, statusFilter, regiaoFilter, funcaoFilter]);
+  }, [profissionais, searchTerm, statusFilter, statusOperacionalFilter, regiaoFilter, funcaoFilter]);
 
   const getInitials = (nome: string) =>
     nome
@@ -236,8 +264,8 @@ export default function Equipe() {
       />
 
       {/* Filtros */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="relative flex-1">
+      <div className="flex flex-col sm:flex-row gap-4 flex-wrap">
+        <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Buscar por nome..."
@@ -251,11 +279,43 @@ export default function Equipe() {
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="todos">Todos</SelectItem>
+            <SelectItem value="todos">Todos Status</SelectItem>
             <SelectItem value="disponivel">Disponível</SelectItem>
             <SelectItem value="indisponivel">Indisponível</SelectItem>
             <SelectItem value="ferias">Férias</SelectItem>
             <SelectItem value="afastado">Afastado</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={statusOperacionalFilter} onValueChange={setStatusOperacionalFilter}>
+          <SelectTrigger className="w-full sm:w-[180px]">
+            <SelectValue placeholder="Status Operacional" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos Operacionais</SelectItem>
+            <SelectItem value="em_andamento">
+              <span className="flex items-center gap-2">
+                <Wrench className="h-3 w-3 text-blue-600" />
+                Em Andamento
+              </span>
+            </SelectItem>
+            <SelectItem value="em_rota">
+              <span className="flex items-center gap-2">
+                <Navigation className="h-3 w-3 text-purple-600" />
+                Em Rota
+              </span>
+            </SelectItem>
+            <SelectItem value="disponivel_operacional">
+              <span className="flex items-center gap-2">
+                <Signal className="h-3 w-3 text-emerald-600" />
+                Online
+              </span>
+            </SelectItem>
+            <SelectItem value="offline">
+              <span className="flex items-center gap-2">
+                <SignalZero className="h-3 w-3 text-gray-500" />
+                Offline
+              </span>
+            </SelectItem>
           </SelectContent>
         </Select>
         <Select value={regiaoFilter} onValueChange={setRegiaoFilter}>
@@ -263,7 +323,7 @@ export default function Equipe() {
             <SelectValue placeholder="Região" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="todas">Todas</SelectItem>
+            <SelectItem value="todas">Todas Regiões</SelectItem>
             {REGIOES_ATENDIMENTO.map((regiao) => (
               <SelectItem key={regiao.value} value={regiao.value}>
                 {regiao.label}
@@ -276,7 +336,7 @@ export default function Equipe() {
             <SelectValue placeholder="Função" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="todos">Todos</SelectItem>
+            <SelectItem value="todos">Todas Funções</SelectItem>
             <SelectItem value="vistoriador">Vistoriador</SelectItem>
             <SelectItem value="instalador">Instalador</SelectItem>
             <SelectItem value="ambos">Ambos</SelectItem>
@@ -317,12 +377,21 @@ export default function Equipe() {
                       </Avatar>
                       <div>
                         <p className="font-semibold text-foreground">{profissional.nome}</p>
-                        <Badge
-                          variant="outline"
-                          className={STATUS_CONFIG[profissional.status].className}
-                        >
-                          {STATUS_CONFIG[profissional.status].label}
-                        </Badge>
+                        <div className="flex items-center gap-1 flex-wrap">
+                          <Badge
+                            variant="outline"
+                            className={STATUS_CONFIG[profissional.status].className}
+                          >
+                            {STATUS_CONFIG[profissional.status].label}
+                          </Badge>
+                          <Badge
+                            variant="outline"
+                            className={`flex items-center gap-1 ${STATUS_OPERACIONAL_CONFIG[profissional.status_operacional].className}`}
+                          >
+                            {STATUS_OPERACIONAL_CONFIG[profissional.status_operacional].icon}
+                            {STATUS_OPERACIONAL_CONFIG[profissional.status_operacional].label}
+                          </Badge>
+                        </div>
                       </div>
                     </div>
                     <DropdownMenu>
