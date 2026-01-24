@@ -234,13 +234,26 @@ serve(async (req) => {
       });
     }
 
+    // 5.1 VALIDAÇÃO CRÍTICA: Verificar coordenadas para atribuição automática
+    if (!endereco.latitude || !endereco.longitude) {
+      console.warn('[CriarInstalacaoPosPagamento] ⚠️ ALERTA: Coordenadas ausentes! Atribuição automática pode falhar.');
+      console.warn('[CriarInstalacaoPosPagamento] Endereço:', JSON.stringify(endereco));
+      // Não bloqueamos, mas logamos para debug - idealmente deveria geocodificar aqui
+    } else {
+      console.log(`[CriarInstalacaoPosPagamento] ✓ Coordenadas válidas: ${endereco.latitude}, ${endereco.longitude}`);
+    }
+
+    // 5.2 Log do permite_encaixe
+    const permiteEncaixe = cotacao.vistoria_permite_encaixe || false;
+    console.log(`[CriarInstalacaoPosPagamento] permite_encaixe: ${permiteEncaixe} (origem: cotacao.vistoria_permite_encaixe = ${cotacao.vistoria_permite_encaixe})`);
+
     // 6. CRIAR INSTALAÇÃO (única, tipo instalacao, não entrada)
     const instalacaoData = {
       contrato_id: contrato.id,
       cotacao_id: cotacaoId,
       associado_id: contrato.associado_id,
       veiculo_id: veiculoIdFinal, // CORREÇÃO: Usar veiculoIdFinal que foi validado/recuperado
-      status: 'agendada',
+      status: 'agendada', // ✅ Status correto para atribuição automática
       data_agendada: dataAgendada,
       hora_agendada: horarioAgendado,
       cep: endereco.cep,
@@ -252,7 +265,9 @@ serve(async (req) => {
       endereco_latitude: endereco.latitude || null,
       endereco_longitude: endereco.longitude || null,
       observacoes: obsResponsavel,
-      permite_encaixe: cotacao.vistoria_permite_encaixe || false,
+      permite_encaixe: permiteEncaixe, // ✅ Usando variável já logada
+      local_vistoria: 'cliente', // ✅ CRÍTICO: Define que é atendimento no cliente (não na base)
+      instalador_responsavel_id: null, // ✅ CRÍTICO: NULL para ser elegível à atribuição automática
     };
 
     console.log('[CriarInstalacaoPosPagamento] Criando instalação:', JSON.stringify(instalacaoData));
