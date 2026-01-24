@@ -29,6 +29,63 @@ function calcularDistanciaKm(
   return R * c;
 }
 
+/**
+ * Verifica se o profissional tem tarefas agendadas dentro da janela de horas configurada
+ */
+async function temTarefasNaJanela(
+  supabase: any,
+  profissionalId: string,
+  janelaHoras: number
+): Promise<boolean> {
+  const agora = new Date();
+  const limiteJanela = new Date(agora.getTime() + janelaHoras * 60 * 60 * 1000);
+  const hojeStr = agora.toISOString().split('T')[0];
+  const limiteJanelaStr = limiteJanela.toISOString().split('T')[0];
+  const horaAtual = agora.toTimeString().slice(0, 5); // "HH:MM"
+  const horaLimite = limiteJanela.toTimeString().slice(0, 5);
+
+  // Buscar instalações agendadas nas próximas X horas
+  const { data: instAgendadas } = await supabase
+    .from('instalacoes')
+    .select('id, data_agendada, hora_agendada')
+    .eq('instalador_responsavel_id', profissionalId)
+    .eq('status', 'agendada')
+    .gte('data_agendada', hojeStr)
+    .lte('data_agendada', limiteJanelaStr);
+
+  // Buscar vistorias agendadas nas próximas X horas
+  const { data: vistAgendadas } = await supabase
+    .from('vistorias')
+    .select('id, data_agendada, hora_agendada')
+    .eq('vistoriador_id', profissionalId)
+    .in('status', ['pendente', 'agendada'])
+    .gte('data_agendada', hojeStr)
+    .lte('data_agendada', limiteJanelaStr);
+
+  // Filtrar apenas tarefas DENTRO da janela de tempo
+  const todasTarefas = [...(instAgendadas || []), ...(vistAgendadas || [])];
+  
+  const tarefasNaJanela = todasTarefas.filter(tarefa => {
+    // Se é de um dia futuro (dentro do limite), conta
+    if (tarefa.data_agendada > hojeStr && tarefa.data_agendada <= limiteJanelaStr) {
+      return true;
+    }
+    
+    // Se é de hoje, verificar se está dentro da janela de horas
+    if (tarefa.data_agendada === hojeStr) {
+      // Se não tem hora específica, considera que está na janela
+      if (!tarefa.hora_agendada) return true;
+      
+      // Verificar se a hora está entre agora e o limite
+      return tarefa.hora_agendada >= horaAtual && tarefa.hora_agendada <= horaLimite;
+    }
+    
+    return false;
+  });
+
+  return tarefasNaJanela.length > 0;
+}
+
 interface EncaixeFuturo {
   id: string;
   tipo: 'instalacao' | 'vistoria';
@@ -73,10 +130,19 @@ serve(async (req) => {
     const raioMaximoKm = configRaio?.valor ? parseFloat(configRaio.valor) : 10;
     console.log(`[processar-encaixes-automaticos] Raio máximo configurado: ${raioMaximoKm} km`);
 
+    // 2. Buscar configuração de janela de horas
+    const { data: configJanela } = await supabase
+      .from('configuracoes')
+      .select('valor')
+      .eq('chave', 'operacional_encaixe_janela_horas')
+      .single();
+
+    const janelaHoras = configJanela?.valor ? parseInt(configJanela.valor) : 2;
+    console.log(`[processar-encaixes-automaticos] Janela de horas: ${janelaHoras}h`);
+
     const hoje = new Date().toISOString().split('T')[0];
 
-    // ========== CORREÇÃO PRINCIPAL ==========
-    // Buscar encaixes de datas FUTURAS (> hoje), não de hoje!
+    // ========== Buscar encaixes de datas FUTURAS (> hoje) ==========
     // Conceito: encaixe = serviço que PODE SER ANTECIPADO para hoje
 
     // Instalações FUTURAS com encaixe habilitado
@@ -85,7 +151,7 @@ serve(async (req) => {
       .select('id, data_agendada, hora_agendada, endereco_latitude, endereco_longitude, associado_id, veiculo_id, bairro, cidade')
       .eq('permite_encaixe', true)
       .is('instalador_responsavel_id', null)
-      .gt('data_agendada', hoje) // ✅ CORRIGIDO: > hoje (datas FUTURAS)
+      .gt('data_agendada', hoje) // > hoje (datas FUTURAS)
       .in('status', ['agendada'])
       .not('endereco_latitude', 'is', null)
       .not('endereco_longitude', 'is', null);
@@ -100,7 +166,7 @@ serve(async (req) => {
       .select('id, data_agendada, hora_agendada, endereco_latitude, endereco_longitude, associado_id, veiculo_id, bairro, cidade')
       .eq('permite_encaixe', true)
       .is('vistoriador_id', null)
-      .gt('data_agendada', hoje) // ✅ CORRIGIDO: > hoje (datas FUTURAS)
+      .gt('data_agendada', hoje) // > hoje (datas FUTURAS)
       .in('status', ['pendente', 'agendada'])
       .not('endereco_latitude', 'is', null)
       .not('endereco_longitude', 'is', null);
@@ -165,7 +231,7 @@ serve(async (req) => {
     const { data: localizacoes, error: locError } = await supabase
       .from('vistoriadores_localizacao')
       .select('vistoriador_id, latitude, longitude, updated_at')
-      .eq('em_servico', true) // ✅ Adicionado: só profissionais em serviço
+      .eq('em_servico', true) // Só profissionais em serviço
       .gte('updated_at', limite30Min);
 
     if (locError) {
@@ -186,27 +252,39 @@ serve(async (req) => {
       );
     }
 
-    // 4. Filtrar profissionais que NÃO têm tarefa ativa (em_rota ou em_andamento)
+    // 4. Filtrar profissionais REALMENTE disponíveis (sem tarefa ativa E sem tarefas nas próximas X horas)
     const profissionaisDisponiveis: ProfissionalDisponivel[] = [];
 
     for (const loc of localizacoes) {
+      // Verificar se tem tarefa ATIVA (em_rota ou em_andamento)
       const { data: tarefaAtual } = await supabase.rpc('buscar_tarefa_atual_profissional', {
         p_profissional_id: loc.vistoriador_id
       });
 
-      // Se não tem tarefa ativa, está disponível
-      if (!tarefaAtual || tarefaAtual.length === 0) {
-        profissionaisDisponiveis.push(loc as ProfissionalDisponivel);
+      if (tarefaAtual && tarefaAtual.length > 0) {
+        console.log(`[processar-encaixes-automaticos] Profissional ${loc.vistoriador_id} tem tarefa ativa - ignorando`);
+        continue;
       }
+
+      // ✅ NOVA VERIFICAÇÃO: Verificar se tem tarefas nas próximas X horas
+      const temTarefasProximas = await temTarefasNaJanela(supabase, loc.vistoriador_id, janelaHoras);
+      
+      if (temTarefasProximas) {
+        console.log(`[processar-encaixes-automaticos] Profissional ${loc.vistoriador_id} tem tarefas nas próximas ${janelaHoras}h - ignorando`);
+        continue;
+      }
+
+      // Disponível para encaixe!
+      profissionaisDisponiveis.push(loc as ProfissionalDisponivel);
     }
 
-    console.log(`[processar-encaixes-automaticos] ${profissionaisDisponiveis.length} profissionais disponíveis (sem tarefa ativa)`);
+    console.log(`[processar-encaixes-automaticos] ${profissionaisDisponiveis.length} profissional(is) disponível(is) (sem tarefa ativa E sem tarefas nas próximas ${janelaHoras}h)`);
 
     if (profissionaisDisponiveis.length === 0) {
       return new Response(
         JSON.stringify({ 
           sucesso: true, 
-          mensagem: 'Todos os profissionais estão ocupados',
+          mensagem: `Todos os profissionais estão ocupados ou têm tarefas nas próximas ${janelaHoras}h`,
           processados: 0 
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -265,9 +343,9 @@ serve(async (req) => {
         .update({
           [campoResponsavel]: maisProximo.vistoriador_id,
           status: 'em_rota',
-          data_agendada_original: encaixe.data_agendada, // ✅ Salvar data original
-          data_agendada: hoje,                           // ✅ PUXAR para hoje
-          encaixe_executado: true,                       // ✅ Marcar como encaixe executado
+          data_agendada_original: encaixe.data_agendada, // Salvar data original
+          data_agendada: hoje,                           // PUXAR para hoje
+          encaixe_executado: true,                       // Marcar como encaixe executado
           updated_at: new Date().toISOString()
         })
         .eq('id', encaixe.id)
@@ -358,7 +436,11 @@ serve(async (req) => {
         sucesso: true,
         mensagem: `${processados} encaixe(s) executado(s) - serviços puxados para hoje`,
         processados,
-        atribuicoes
+        atribuicoes,
+        configuracoes: {
+          raio_km: raioMaximoKm,
+          janela_horas: janelaHoras
+        }
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
