@@ -298,7 +298,12 @@ export default function InstaladorChecklist() {
   const handleAssinaturaSave = async (signatureBlob: Blob) => {
     if (!id) return;
     try {
-      const url = await saveAssinaturaMutation.mutateAsync({ instalacaoId: id, signatureBlob });
+      // Usar tipo 'servico' para salvar na tabela correta e também em vistoria_fotos
+      const url = await saveAssinaturaMutation.mutateAsync({ 
+        id, 
+        signatureBlob,
+        tipo: 'servico' 
+      });
       setAssinaturaUrl(url);
       toast.success('Assinatura salva com sucesso!');
     } catch (err) {

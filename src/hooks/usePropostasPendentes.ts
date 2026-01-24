@@ -375,6 +375,41 @@ export function usePropostasPendentes() {
           instaladorNome = instalador?.nome || null;
         }
         
+        // Buscar assinatura: priorizar vistoria_fotos > servicos > instalacoes
+        let assinaturaUrl = instalacaoData.assinatura_cliente_url;
+        
+        // Se vistoria existe, verificar se há assinatura em vistoria_fotos
+        if (vistoria?.id && !assinaturaUrl) {
+          const { data: fotoAssinatura } = await supabase
+            .from('vistoria_fotos')
+            .select('arquivo_url')
+            .eq('vistoria_id', vistoria.id)
+            .eq('tipo', 'assinatura_cliente')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          
+          if (fotoAssinatura?.arquivo_url) {
+            assinaturaUrl = fotoAssinatura.arquivo_url;
+          }
+        }
+        
+        // Fallback: buscar em servicos
+        if (!assinaturaUrl) {
+          const { data: servicoData } = await supabase
+            .from('servicos')
+            .select('assinatura_cliente_url')
+            .eq('contrato_id', contrato.id)
+            .not('assinatura_cliente_url', 'is', null)
+            .order('concluida_em', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          
+          if (servicoData?.assinatura_cliente_url) {
+            assinaturaUrl = servicoData.assinatura_cliente_url;
+          }
+        }
+        
         instalacaoInfo = {
           id: instalacaoData.id,
           status: instalacaoData.status,
@@ -382,7 +417,7 @@ export function usePropostasPendentes() {
           rastreador_imei: rastreadorImei,
           rastreador_codigo: rastreadorCodigo,
           instalador_nome: instaladorNome,
-          assinatura_cliente_url: instalacaoData.assinatura_cliente_url,
+          assinatura_cliente_url: assinaturaUrl,
         };
       }
 
@@ -713,6 +748,41 @@ export function useProposta(contratoId: string | undefined) {
           instaladorNome = instalador?.nome || null;
         }
         
+        // Buscar assinatura: priorizar vistoria_fotos > servicos > instalacoes
+        let assinaturaUrl = instalacaoData.assinatura_cliente_url;
+        
+        // Se vistoria existe, verificar se há assinatura em vistoria_fotos
+        if (vistoria?.id && !assinaturaUrl) {
+          const { data: fotoAssinatura } = await supabase
+            .from('vistoria_fotos')
+            .select('arquivo_url')
+            .eq('vistoria_id', vistoria.id)
+            .eq('tipo', 'assinatura_cliente')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          
+          if (fotoAssinatura?.arquivo_url) {
+            assinaturaUrl = fotoAssinatura.arquivo_url;
+          }
+        }
+        
+        // Fallback: buscar em servicos
+        if (!assinaturaUrl) {
+          const { data: servicoData } = await supabase
+            .from('servicos')
+            .select('assinatura_cliente_url')
+            .eq('contrato_id', contrato.id)
+            .not('assinatura_cliente_url', 'is', null)
+            .order('concluida_em', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          
+          if (servicoData?.assinatura_cliente_url) {
+            assinaturaUrl = servicoData.assinatura_cliente_url;
+          }
+        }
+        
         instalacaoInfo = {
           id: instalacaoData.id,
           status: instalacaoData.status,
@@ -720,7 +790,7 @@ export function useProposta(contratoId: string | undefined) {
           rastreador_imei: rastreadorImei,
           rastreador_codigo: rastreadorCodigo,
           instalador_nome: instaladorNome,
-          assinatura_cliente_url: instalacaoData.assinatura_cliente_url,
+          assinatura_cliente_url: assinaturaUrl,
         };
       }
 
