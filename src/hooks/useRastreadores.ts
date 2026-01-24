@@ -12,6 +12,7 @@ export interface RastreadorWithRelations extends Rastreador {
   veiculos?: (Tables<'veiculos'> & {
     associados?: (Tables<'associados'> & { email?: string }) | null;
   }) | null;
+  portador?: { id: string; nome: string } | null;
 }
 
 export interface RastreadorFilters {
@@ -52,7 +53,8 @@ export function useRastreadores(filters?: RastreadorFilters) {
           veiculos (
             *,
             associados (id, nome, email, telefone, cpf)
-          )
+          ),
+          portador:profiles!rastreadores_portador_id_fkey(id, nome)
         `)
         .order('created_at', { ascending: false });
 

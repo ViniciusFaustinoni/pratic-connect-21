@@ -849,7 +849,7 @@ export function useAprovarVeiculoServico() {
       // 1. Buscar e validar rastreador
       const { data: rastreador, error: rastreadorError } = await supabase
         .from('rastreadores')
-        .select('id, status')
+        .select('id, status, portador_id, codigo')
         .eq('imei', data.imeiRastreador)
         .single();
 
@@ -875,18 +875,31 @@ export function useAprovarVeiculoServico() {
 
       if (servicoError) throw servicoError;
 
-      // 3. Vincular rastreador ao veículo
+      // 3. Vincular rastreador ao veículo e remover do porte
       const { error: rastreadorUpdateError } = await supabase
         .from('rastreadores')
         .update({
           status: 'instalado',
           veiculo_id: data.veiculoId,
+          portador_id: null, // Remove do porte do instalador
           data_instalacao: agora,
           instalado_por: profile?.id,
         })
         .eq('id', rastreador.id);
 
       if (rastreadorUpdateError) throw rastreadorUpdateError;
+
+      // 4. Registrar movimentação de estoque
+      await supabase.from('estoque_movimentacoes').insert({
+        rastreador_id: rastreador.id,
+        tipo: 'instalacao',
+        quantidade: 1,
+        status_anterior: 'estoque',
+        status_novo: 'instalado',
+        veiculo_id: data.veiculoId,
+        observacoes: `Instalado pelo profissional no veículo`,
+        usuario_id: profile?.id,
+      });
 
       // 4. Atualizar veículo
       const { error: veiculoError } = await supabase
@@ -920,6 +933,9 @@ export function useAprovarVeiculoServico() {
       queryClient.invalidateQueries({ queryKey: ['servico-detalhes'] });
       queryClient.invalidateQueries({ queryKey: ['servicos'] });
       queryClient.invalidateQueries({ queryKey: ['tarefa-atual-servico'] });
+      queryClient.invalidateQueries({ queryKey: ['rastreadores'] });
+      queryClient.invalidateQueries({ queryKey: ['rastreadores-meu-porte'] });
+      queryClient.invalidateQueries({ queryKey: ['rastreadores-metricas'] });
       toast.success('Instalação concluída! Aguardando análise cadastral.');
     },
     onError: (error) => {
