@@ -2,9 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
   ClipboardList, 
-  Calendar, 
   Clock, 
-  Search, 
   Wrench, 
   AlertTriangle, 
   MapPin, 
@@ -14,7 +12,8 @@ import {
   TrendingUp,
   Users,
   Navigation,
-  Timer
+  Timer,
+  Radio
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -45,6 +44,7 @@ import {
   useRotasHojeMetricas 
 } from '@/hooks/useDashboardCoordenador';
 import { useMetricasTempo } from '@/hooks/useMetricasTempo';
+import { useRastreadoresPorPortador } from '@/hooks/useRastreadoresPorPortador';
 import { AgendamentosBase } from '@/components/monitoramento/AgendamentosBase';
 import { cn } from '@/lib/utils';
 
@@ -67,6 +67,7 @@ export default function DashboardCoordenador() {
   const { data: metricasTempo, isLoading: loadingMetricasTempo } = useMetricasTempo({
     profissionalId: filtroProfissional !== 'todos' ? filtroProfissional : undefined,
   });
+  const { data: rastreadoresPortador, isLoading: loadingRastreadoresPortador } = useRastreadoresPorPortador();
 
   const isLoading = loadingVistorias || loadingInstalacoes || loadingRotas;
 
@@ -201,8 +202,8 @@ export default function DashboardCoordenador() {
         ))}
       </div>
 
-      {/* Métricas de Tempo */}
-      <div className="grid lg:grid-cols-2 gap-6">
+      {/* Métricas de Tempo e Rastreadores */}
+      <div className="grid lg:grid-cols-3 gap-6">
         {/* Tempo Médio em Trânsito */}
         <Card className="border-border bg-card">
           <CardHeader className="pb-3">
@@ -299,6 +300,61 @@ export default function DashboardCoordenador() {
                 <p className="text-xs text-muted-foreground mt-3">
                   Base: {metricasTempo?.totalTarefasAnalisadas || 0} tarefas
                 </p>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Rastreadores por Portador */}
+        <Card className="border-border bg-card">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Radio className="h-5 w-5 text-orange-500" />
+                Rastreadores em Porte
+              </CardTitle>
+              <Button variant="ghost" size="sm" onClick={() => navigate('/monitoramento/rastreadores')}>
+                Ver todos
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {loadingRastreadoresPortador ? (
+              <div className="space-y-3">
+                <Skeleton className="h-10 w-24" />
+                <Skeleton className="h-4 w-32" />
+              </div>
+            ) : (
+              <>
+                <div className="flex items-baseline gap-2">
+                  <p className="text-3xl font-bold text-foreground">
+                    {rastreadoresPortador?.totalEmPorte ?? 0}
+                  </p>
+                  <span className="text-sm text-muted-foreground">equipamentos</span>
+                </div>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Distribuídos entre {rastreadoresPortador?.porPortador.length ?? 0} profissionais
+                </p>
+                
+                {rastreadoresPortador?.porPortador && rastreadoresPortador.porPortador.length > 0 && (
+                  <div className="mt-4 space-y-2 max-h-[160px] overflow-y-auto">
+                    {rastreadoresPortador.porPortador.slice(0, 5).map((p) => (
+                      <div key={p.id} className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground truncate flex-1">{p.nome}</span>
+                        <Badge variant="outline" className="ml-2 bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-200 dark:border-orange-800">
+                          {p.quantidade} {p.quantidade === 1 ? 'unid.' : 'unid.'}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {(rastreadoresPortador?.semPortador ?? 0) > 0 && (
+                  <p className="text-xs text-muted-foreground mt-3">
+                    + {rastreadoresPortador?.semPortador} sem portador atribuído
+                  </p>
+                )}
               </>
             )}
           </CardContent>
