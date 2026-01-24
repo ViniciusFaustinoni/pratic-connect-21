@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -11,14 +12,16 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Radio, Plus, Wifi, WifiOff, AlertTriangle, Loader2, MoreHorizontal, Eye, Pencil, Package, Server, UserPlus } from 'lucide-react';
+import { Radio, Plus, Wifi, WifiOff, AlertTriangle, Loader2, MoreHorizontal, Eye, Pencil, Package, Server, UserPlus, X } from 'lucide-react';
 import { AtribuirPortadorDialog } from '@/components/monitoramento/estoque/AtribuirPortadorDialog';
+import { AtribuirPortadorLoteDialog } from '@/components/monitoramento/estoque/AtribuirPortadorLoteDialog';
 import {
   useRastreadores,
   useRastreadoresMetricas,
@@ -184,13 +187,42 @@ function RastreadoresContent({
   onNewRastreador,
   getPlataformaLabel,
 }: RastreadoresContentProps) {
+  const queryClient = useQueryClient();
   const [portadorDialogOpen, setPortadorDialogOpen] = useState(false);
+  const [loteDialogOpen, setLoteDialogOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [rastreadorParaPortador, setRastreadorParaPortador] = useState<{
     id: string;
     codigo: string;
     portador_id: string | null;
     portador_nome: string | null;
   } | null>(null);
+
+  // Rastreadores elegíveis para seleção (apenas status = 'estoque')
+  const rastreadoresEstoque = rastreadores?.filter(r => r.status === 'estoque') || [];
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedIds(new Set(rastreadoresEstoque.map(r => r.id)));
+    } else {
+      setSelectedIds(new Set());
+    }
+  };
+
+  const handleSelectOne = (id: string, checked: boolean) => {
+    const newSet = new Set(selectedIds);
+    if (checked) {
+      newSet.add(id);
+    } else {
+      newSet.delete(id);
+    }
+    setSelectedIds(newSet);
+  };
+
+  const handleLoteSuccess = () => {
+    setSelectedIds(new Set());
+    queryClient.invalidateQueries({ queryKey: ['lista-rastreadores'] });
+  };
 
   const handleOpenPortadorDialog = (rastreador: NonNullable<typeof rastreadores>[number]) => {
     setRastreadorParaPortador({
@@ -278,6 +310,14 @@ function RastreadoresContent({
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-[50px]">
+                    <Checkbox
+                      checked={rastreadoresEstoque.length > 0 && selectedIds.size === rastreadoresEstoque.length}
+                      onCheckedChange={(checked) => handleSelectAll(!!checked)}
+                      aria-label="Selecionar todos"
+                      disabled={rastreadoresEstoque.length === 0}
+                    />
+                  </TableHead>
                   <TableHead>Código</TableHead>
                   <TableHead>Nº Série</TableHead>
                   <TableHead>IMEI</TableHead>
@@ -294,9 +334,22 @@ function RastreadoresContent({
                 {rastreadores.map((rastreador) => {
                   const isInstalled = rastreador.status === 'instalado';
                   const online = isRastreadorOnline(rastreador.ultima_comunicacao);
+                  const isEstoque = rastreador.status === 'estoque';
 
                   return (
-                    <TableRow key={rastreador.id}>
+                    <TableRow key={rastreador.id} className={selectedIds.has(rastreador.id) ? 'bg-muted/50' : ''}>
+                      <TableCell>
+                        {isEstoque ? (
+                          <Checkbox
+                            checked={selectedIds.has(rastreador.id)}
+                            onCheckedChange={(checked) => handleSelectOne(rastreador.id, !!checked)}
+                            aria-label={`Selecionar ${rastreador.codigo}`}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        ) : (
+                          <div className="w-4" />
+                        )}
+                      </TableCell>
                       <TableCell className="font-medium">{rastreador.codigo}</TableCell>
                       <TableCell>
                         {rastreador.numero_serie || '-'}
@@ -437,10 +490,45 @@ function RastreadoresContent({
         </CardContent>
       </Card>
 
+      {/* Barra de ações em lote */}
+      {selectedIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50">
+          <Card className="shadow-lg border-primary/20 bg-background">
+            <CardContent className="flex items-center gap-4 py-3 px-4">
+              <Badge variant="secondary" className="text-sm">
+                {selectedIds.size} selecionado(s)
+              </Badge>
+              <Button
+                size="sm"
+                onClick={() => setLoteDialogOpen(true)}
+              >
+                <UserPlus className="h-4 w-4 mr-1" />
+                Atribuir Portador
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setSelectedIds(new Set())}
+              >
+                <X className="h-4 w-4 mr-1" />
+                Limpar
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       <AtribuirPortadorDialog
         open={portadorDialogOpen}
         onOpenChange={setPortadorDialogOpen}
         rastreador={rastreadorParaPortador}
+      />
+
+      <AtribuirPortadorLoteDialog
+        open={loteDialogOpen}
+        onOpenChange={setLoteDialogOpen}
+        rastreadorIds={Array.from(selectedIds)}
+        onSuccess={handleLoteSuccess}
       />
     </>
   );
