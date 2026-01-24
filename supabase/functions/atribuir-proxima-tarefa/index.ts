@@ -468,20 +468,28 @@ serve(async (req) => {
           is_encaixe_futuro
         };
       })
-      // ✅ NOVA LÓGICA SIMPLIFICADA: Sem filtro de raio para encaixes
-      // Ordenação: HOJE > mais próximos (qualquer distância)
-      .sort((a, b) => {
-        // PRIORIDADE 1: Serviços de HOJE (por proximidade)
-        if (a.is_hoje && !b.is_hoje) return -1;
-        if (!a.is_hoje && b.is_hoje) return 1;
-        
-        // PRIORIDADE 2: Por distância (mais próximo primeiro, sem limite de raio)
-        return a.distancia_km - b.distancia_km;
-      });
+      .sort((a, b) => a.distancia_km - b.distancia_km); // Ordenar por proximidade primeiro
     
-    console.log(`[atribuir-proxima-tarefa] ${servicosComDistancia.length} serviços após ordenação por proximidade`);
+    // ✅ LÓGICA CORRETA DE ENCAIXE:
+    // Encaixe SÓ acontece se NÃO há mais serviços de HOJE disponíveis
+    const servicosHoje = servicosComDistancia.filter(s => s.is_hoje);
+    const temServicoHoje = servicosHoje.length > 0;
+    
+    let servicosParaAtribuir: typeof servicosComDistancia;
+    
+    if (temServicoHoje) {
+      // Há serviços de HOJE - BLOQUEAR encaixes, só considerar serviços de hoje
+      servicosParaAtribuir = servicosHoje.sort((a, b) => a.distancia_km - b.distancia_km);
+      console.log(`[atribuir-proxima-tarefa] 📅 ${servicosHoje.length} serviços de HOJE disponíveis - encaixe BLOQUEADO`);
+    } else {
+      // NÃO há serviços de hoje - permitir encaixe do mais próximo
+      servicosParaAtribuir = servicosComDistancia.sort((a, b) => a.distancia_km - b.distancia_km);
+      console.log(`[atribuir-proxima-tarefa] ⚡ Nenhum serviço de HOJE - encaixe PERMITIDO`);
+    }
+    
+    console.log(`[atribuir-proxima-tarefa] ${servicosParaAtribuir.length} serviços após filtragem`);
 
-    if (servicosComDistancia.length === 0) {
+    if (servicosParaAtribuir.length === 0) {
       return new Response(
         JSON.stringify({
           resultado: 'sem_tarefas',
@@ -492,7 +500,7 @@ serve(async (req) => {
     }
 
     // 5. Tentar atribuir o serviço mais próximo
-    for (const servico of servicosComDistancia) {
+    for (const servico of servicosParaAtribuir) {
       console.log(`[atribuir-proxima-tarefa] Tentando atribuir ${servico.tipo} ${servico.id} (${servico.distancia_km.toFixed(2)} km)`);
       
       const agora = new Date().toISOString();

@@ -219,27 +219,35 @@ serve(async (req) => {
             is_amanha: isAmanha
           };
         })
-        // ✅ NOVA LÓGICA SIMPLIFICADA: Sem filtro de raio para encaixes
-        // Ordenação: HOJE > mais próximos (qualquer distância)
-        .sort((a: ServicoComDistancia, b: ServicoComDistancia) => {
-          // PRIORIDADE 1: Serviços de HOJE (mais próximos primeiro)
-          if (a.is_hoje && !b.is_hoje) return -1;
-          if (!a.is_hoje && b.is_hoje) return 1;
-          
-          // PRIORIDADE 2: Por distância (mais próximo primeiro, sem limite de raio)
-          return a.distancia_km - b.distancia_km;
-        });
+        .sort((a: ServicoComDistancia, b: ServicoComDistancia) => a.distancia_km - b.distancia_km); // Ordenar por proximidade
 
-      console.log(`[cron-atribuir-tarefas] ${servicosComDistancia.length} serviços disponíveis para profissional ${prof.vistoriador_id}`);
+      // ✅ LÓGICA CORRETA DE ENCAIXE:
+      // Encaixe SÓ acontece se NÃO há mais serviços de HOJE disponíveis
+      const servicosHoje = servicosComDistancia.filter(s => s.is_hoje);
+      const temServicoHoje = servicosHoje.length > 0;
+      
+      let servicosParaAtribuir: ServicoComDistancia[];
+      
+      if (temServicoHoje) {
+        // Há serviços de HOJE - BLOQUEAR encaixes, só considerar serviços de hoje
+        servicosParaAtribuir = servicosHoje.sort((a, b) => a.distancia_km - b.distancia_km);
+        console.log(`[cron-atribuir-tarefas] 📅 ${servicosHoje.length} serviços de HOJE para ${prof.vistoriador_id} - encaixe BLOQUEADO`);
+      } else {
+        // NÃO há serviços de hoje - permitir encaixe do mais próximo
+        servicosParaAtribuir = servicosComDistancia.sort((a, b) => a.distancia_km - b.distancia_km);
+        console.log(`[cron-atribuir-tarefas] ⚡ Nenhum serviço de HOJE para ${prof.vistoriador_id} - encaixe PERMITIDO`);
+      }
+      
+      console.log(`[cron-atribuir-tarefas] ${servicosParaAtribuir.length} serviços disponíveis para profissional ${prof.vistoriador_id}`);
       
       // Log detalhado para debug
-      const hojeCount = servicosComDistancia.filter(s => s.is_hoje).length;
+      const hojeCount = servicosHoje.length;
       const amanhaCount = servicosComDistancia.filter(s => s.is_amanha).length;
       const encaixeCount = servicosComDistancia.filter(s => s.is_encaixe).length;
       console.log(`[cron-atribuir-tarefas] Distribuição: ${hojeCount} hoje, ${amanhaCount} amanhã, ${encaixeCount} encaixes futuros`);
 
       // 5. Tentar atribuir o de maior prioridade
-      for (const servico of servicosComDistancia) {
+      for (const servico of servicosParaAtribuir) {
         const tipoAtribuicao = servico.is_encaixe ? 'encaixe' : (servico.is_hoje ? 'hoje' : 'amanha');
         console.log(`[cron-atribuir-tarefas] Tentando atribuir ${servico.tipo} ${servico.id} (${servico.distancia_km.toFixed(2)} km, tipo: ${tipoAtribuicao})`);
 
