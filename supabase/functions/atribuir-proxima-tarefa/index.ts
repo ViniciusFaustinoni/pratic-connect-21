@@ -610,6 +610,33 @@ serve(async (req) => {
             updated_at: new Date().toISOString()
           }, { onConflict: 'vistoriador_id' });
 
+        // 8. Enviar notificação push para o profissional
+        try {
+          const tipoLabel = servico.tipo === 'instalacao' ? 'Instalação' : 'Vistoria';
+          const localLabel = servico.bairro || servico.cidade || 'Local não informado';
+          const clienteLabel = servico.associado_nome || 'Cliente';
+          
+          await supabase.functions.invoke('send-push-profissional', {
+            body: {
+              profissional_id: profissionalId,
+              notification: {
+                title: `Nova Tarefa: ${tipoLabel}`,
+                body: `${clienteLabel} - ${localLabel}`,
+                tag: `tarefa-${servico.id}`,
+                data: {
+                  url: '/instalador',
+                  tarefa_id: servico.id,
+                  tipo: servico.tipo
+                }
+              }
+            }
+          });
+          console.log(`[atribuir-proxima-tarefa] ✓ Push notification enviada para profissional ${profissionalId}`);
+        } catch (pushError) {
+          console.error('[atribuir-proxima-tarefa] Erro ao enviar push notification:', pushError);
+          // Não bloqueia o fluxo principal
+        }
+
         return new Response(
           JSON.stringify({
             resultado: 'atribuida',

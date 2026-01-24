@@ -18,6 +18,7 @@ import { useIniciarServico } from '@/hooks/useIniciarServico';
 import { useTarefaAtual } from '@/hooks/useTarefaAtual';
 import { toast } from 'sonner';
 import { PWAInstallPromptProfissional } from '@/components/pwa/PWAInstallPromptProfissional';
+import { PushNotificationBanner } from './PushNotificationBanner';
 
 const NAV_ITEMS = [
   { icon: Home, label: 'Início', path: '/instalador' },
@@ -189,6 +190,12 @@ export function InstaladorLayout() {
               </div>
             ) : (
               <div className="h-full overflow-y-auto">
+                {/* Banner de Push Notifications - apenas na home */}
+                {location.pathname === '/instalador' && (
+                  <div className="pt-4">
+                    <PushNotificationBanner />
+                  </div>
+                )}
                 <Outlet />
               </div>
             )}
