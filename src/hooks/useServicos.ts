@@ -925,6 +925,51 @@ export function useAprovarVeiculoServico() {
         usuario_id: profile?.id,
       });
 
+      // 6. Buscar dados para gerar laudo de vistoria (async, não bloqueia)
+      const { data: servicoCompleto } = await supabase
+        .from('servicos')
+        .select('contrato_id')
+        .eq('id', data.servicoId)
+        .single();
+
+      const { data: veiculoData } = await supabase
+        .from('veiculos')
+        .select('placa')
+        .eq('id', data.veiculoId)
+        .single();
+
+      // 7. Gerar laudo de vistoria em PDF (não crítico, não bloqueia em background)
+      // Busca a vistoria associada ao serviço e gera o laudo
+      (async () => {
+        try {
+          // Buscar vistoria vinculada ao contrato do serviço
+          if (!servicoCompleto?.contrato_id) return;
+          
+          const vistoriaQuery = await supabase
+            .from('vistorias')
+            .select('id')
+            .eq('contrato_id', servicoCompleto.contrato_id)
+            .order('created_at', { ascending: false })
+            .limit(1);
+          
+          const vistoriaId = (vistoriaQuery.data as { id: string }[] | null)?.[0]?.id;
+          
+          if (vistoriaId && veiculoData?.placa) {
+            await supabase.functions.invoke('gerar-laudo-vistoria', {
+              body: {
+                vistoriaId: vistoriaId,
+                associadoId: data.associadoId,
+                veiculoId: data.veiculoId,
+                contratoId: servicoCompleto.contrato_id,
+                placa: veiculoData.placa,
+              }
+            });
+          }
+        } catch (err) {
+          console.warn('Erro ao gerar laudo (não crítico):', err);
+        }
+      })();
+
       return { sucesso: true };
     },
     onSuccess: () => {

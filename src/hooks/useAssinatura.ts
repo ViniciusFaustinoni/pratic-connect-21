@@ -1,19 +1,30 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
+export type AssinaturaTipo = 'instalacao' | 'vistoria' | 'servico';
+
 export function useSaveAssinatura() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async ({
-      instalacaoId,
+      id,
       signatureBlob,
+      tipo = 'instalacao', // default para retrocompatibilidade
+      // Parâmetro legado - mantido por compatibilidade
+      instalacaoId,
     }: {
-      instalacaoId: string;
+      id?: string;
       signatureBlob: Blob;
+      tipo?: AssinaturaTipo;
+      instalacaoId?: string; // legado
     }) => {
+      // Suporte a parâmetro legado
+      const entityId = id || instalacaoId;
+      if (!entityId) throw new Error('ID obrigatório');
+
       // 1. Upload para storage bucket 'assinaturas'
-      const fileName = `${instalacaoId}/assinatura_${Date.now()}.png`;
+      const fileName = `${entityId}/assinatura_${Date.now()}.png`;
       const { error: uploadError } = await supabase.storage
         .from('assinaturas')
         .upload(fileName, signatureBlob, {
@@ -28,19 +39,61 @@ export function useSaveAssinatura() {
         .from('assinaturas')
         .getPublicUrl(fileName);
 
-      // 3. Atualizar instalação com URL da assinatura
-      const { error } = await supabase
-        .from('instalacoes')
-        .update({ assinatura_cliente_url: urlData.publicUrl })
-        .eq('id', instalacaoId);
+      const publicUrl = urlData.publicUrl;
 
-      if (error) throw error;
+      // 3. Salvar na tabela correta baseado no tipo
+      if (tipo === 'vistoria') {
+        // Para vistorias: salvar como foto na tabela vistoria_fotos
+        const { error } = await supabase
+          .from('vistoria_fotos')
+          .insert({
+            vistoria_id: entityId,
+            tipo: 'assinatura_cliente',
+            arquivo_url: publicUrl,
+            visivel_cliente: true,
+          });
+        if (error) throw error;
+      } else if (tipo === 'servico') {
+        // Para serviços unificados: salvar na tabela servicos
+        const { error } = await supabase
+          .from('servicos')
+          .update({ assinatura_cliente_url: publicUrl })
+          .eq('id', entityId);
+        if (error) throw error;
+        
+        // Também salvar na vistoria_fotos se houver vistoria vinculada
+        const { data: servicoData } = await supabase
+          .from('vistorias')
+          .select('id')
+          .eq('servico_id', entityId)
+          .maybeSingle();
+        
+        if (servicoData?.id) {
+          await supabase.from('vistoria_fotos').insert({
+            vistoria_id: servicoData.id,
+            tipo: 'assinatura_cliente',
+            arquivo_url: publicUrl,
+            visivel_cliente: true,
+          });
+        }
+      } else {
+        // Instalação (legado): salvar na tabela instalacoes
+        const { error } = await supabase
+          .from('instalacoes')
+          .update({ assinatura_cliente_url: publicUrl })
+          .eq('id', entityId);
+        if (error) throw error;
+      }
 
-      return urlData.publicUrl;
+      return publicUrl;
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['instalacao-detalhes', variables.instalacaoId] });
+      const entityId = variables.id || variables.instalacaoId;
+      queryClient.invalidateQueries({ queryKey: ['instalacao-detalhes', entityId] });
       queryClient.invalidateQueries({ queryKey: ['instalador-instalacoes'] });
+      queryClient.invalidateQueries({ queryKey: ['servico-detalhes', entityId] });
+      queryClient.invalidateQueries({ queryKey: ['vistoria-completa', entityId] });
+      queryClient.invalidateQueries({ queryKey: ['propostas-pendentes'] });
     },
   });
 }
