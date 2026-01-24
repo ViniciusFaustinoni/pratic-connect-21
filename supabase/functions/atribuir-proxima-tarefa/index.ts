@@ -146,6 +146,41 @@ serve(async (req) => {
       );
     }
 
+    const profissionalId = user.id;
+
+    // ✅ NOVA VALIDAÇÃO: Verificar se o perfil do profissional existe
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, nome, ativo')
+      .eq('id', profissionalId)
+      .single();
+
+    if (profileError || !profile) {
+      console.error(`[atribuir-proxima-tarefa] ERRO: Profissional ${profissionalId} (${user.email}) não tem perfil no sistema!`);
+      console.error(`[atribuir-proxima-tarefa] Erro detalhado:`, JSON.stringify(profileError));
+      return new Response(
+        JSON.stringify({ 
+          error: "Perfil não encontrado no sistema. Contate o suporte.",
+          codigo: "PERFIL_INEXISTENTE",
+          detalhes: `O usuário ${user.email} não possui cadastro completo.`
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (!profile.ativo) {
+      console.warn(`[atribuir-proxima-tarefa] Profissional ${profissionalId} está INATIVO`);
+      return new Response(
+        JSON.stringify({ 
+          error: "Seu perfil está inativo. Contate o suporte.",
+          codigo: "PERFIL_INATIVO"
+        }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log(`[atribuir-proxima-tarefa] Perfil verificado: ${profile.nome} (${profissionalId})`);
+
     // Get request body
     const { latitude, longitude, acao } = await req.json();
 
@@ -157,7 +192,6 @@ serve(async (req) => {
       );
     }
 
-    const profissionalId = user.id;
     console.log(`[atribuir-proxima-tarefa] Profissional ${profissionalId} em (${latitude}, ${longitude}), ação: ${acao || 'iniciar'}`);
 
     // 1. Verificar se profissional já tem tarefa em andamento (usando nova RPC da tabela servicos)
