@@ -656,6 +656,25 @@ export default function InstaladorChecklist() {
               </div>
             )}
 
+            {/* Erro ao criar/carregar vistoria */}
+            {!isLoadingVistoria && !vistoriaId && (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <AlertCircle className="h-8 w-8 text-amber-500 mb-3" />
+                <p className="text-white font-medium">Não foi possível carregar a vistoria</p>
+                <p className="text-sm text-slate-400 mb-4">
+                  Ocorreu um erro ao criar o registro de vistoria. Tente novamente.
+                </p>
+                <Button 
+                  variant="outline"
+                  onClick={() => window.location.reload()}
+                  className="gap-2"
+                >
+                  <Loader2 className="h-4 w-4" />
+                  Tentar novamente
+                </Button>
+              </div>
+            )}
+
             {/* Categorias de Fotos */}
             {!isLoadingVistoria && vistoriaId && (
               <div className="space-y-3">
