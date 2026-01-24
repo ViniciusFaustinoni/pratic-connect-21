@@ -111,6 +111,16 @@ serve(async (req) => {
 
     // 3. Atualizar cotação com dados do agendamento (SEM criar vistoria/instalação ainda)
     // A instalação será criada apenas após o pagamento
+    
+    // IMPORTANTE: Garantir que coordenadas são salvas para atribuição automática
+    let finalLatitude = latitude;
+    let finalLongitude = longitude;
+    
+    // Se não tiver coordenadas, logar aviso (geocodificação deve ser feita no frontend)
+    if (!finalLatitude || !finalLongitude) {
+      console.warn('[AgendarVistoriaPresencial] Coordenadas não fornecidas - atribuição por proximidade pode falhar');
+    }
+    
     const updateData: Record<string, unknown> = {
       tipo_vistoria: 'agendada',
       status_contratacao: 'vistoria_ok',
@@ -126,12 +136,10 @@ serve(async (req) => {
       vistoria_responsavel_nome: responsavel.nome || null,
       vistoria_responsavel_telefone: responsavel.telefone || null,
       vistoria_permite_encaixe: permiteEncaixe ?? false,
+      // SEMPRE salvar coordenadas (mesmo se null) para garantir consistência
+      vistoria_endereco_latitude: finalLatitude || null,
+      vistoria_endereco_longitude: finalLongitude || null,
     };
-
-    if (latitude && longitude) {
-      updateData.vistoria_endereco_latitude = latitude;
-      updateData.vistoria_endereco_longitude = longitude;
-    }
 
     const { error: updateCotacaoError } = await supabase
       .from('cotacoes')
@@ -143,7 +151,14 @@ serve(async (req) => {
       throw updateCotacaoError;
     }
 
-    console.log('[AgendarVistoriaPresencial] Agendamento salvo na cotação. Instalação será criada após pagamento.');
+    console.log('[AgendarVistoriaPresencial] Agendamento salvo na cotação:', {
+      data: dataAgendada,
+      horario: horarioAgendado,
+      permiteEncaixe: permiteEncaixe ?? false,
+      temCoordenadas: !!(finalLatitude && finalLongitude),
+      latitude: finalLatitude,
+      longitude: finalLongitude
+    });
 
     // NÃO criar vistoria nem instalação aqui
     // A instalação será criada em criar-instalacao-pos-pagamento após o pagamento ser confirmado

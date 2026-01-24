@@ -105,7 +105,15 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 2. Delete Asaas related to contract
+    // 2. PRIMEIRO: Excluir serviços vinculados (ANTES de excluir instalações/vistorias)
+    console.log("[delete-ativacao] Excluindo serviços vinculados...");
+    await supabaseAdmin.from("servicos").delete().eq("contrato_id", contratoId);
+    if (contrato.cotacao_id) {
+      await supabaseAdmin.from("servicos").delete().eq("cotacao_id", contrato.cotacao_id);
+    }
+    console.log("[delete-ativacao] Serviços excluídos");
+
+    // 3. Delete Asaas related to contract
     await supabaseAdmin.from("asaas_cobrancas").delete().eq("contrato_id", contratoId);
     console.log("[delete-ativacao] Cobranças Asaas excluídas");
 
