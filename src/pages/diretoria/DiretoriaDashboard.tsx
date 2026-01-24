@@ -18,6 +18,7 @@ import {
   ArrowRight,
   Navigation,
   Timer,
+  Radio,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -36,6 +37,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { useMetricasTempo } from '@/hooks/useMetricasTempo';
+import { useRastreadoresPorPortador } from '@/hooks/useRastreadoresPorPortador';
 import {
   LineChart,
   Line,
@@ -66,6 +68,9 @@ export default function DiretoriaDashboard() {
   
   // Hook de métricas de tempo
   const { data: metricasTempo, isLoading: loadingMetricasTempo } = useMetricasTempo();
+  
+  // Hook de rastreadores por portador
+  const { data: rastreadoresPortador, isLoading: loadingRastreadoresPortador } = useRastreadoresPorPortador();
 
   // Calcular datas baseado no período
   const getDataInicio = () => {
@@ -585,6 +590,42 @@ export default function DiretoriaDashboard() {
                       )}
                     </div>
                   </div>
+                </div>
+
+                {/* Rastreadores em Porte */}
+                <div className="rounded-lg border p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-lg bg-orange-500/10 p-2">
+                      <Radio className="h-4 w-4 text-orange-500" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm text-muted-foreground">Rastreadores em Porte</p>
+                      {loadingRastreadoresPortador ? (
+                        <Skeleton className="mt-1 h-6 w-20" />
+                      ) : (
+                        <p className="text-xl font-semibold">
+                          {rastreadoresPortador?.totalEmPorte ?? 0}
+                          <span className="text-sm text-muted-foreground ml-1">
+                            ({rastreadoresPortador?.porPortador.length ?? 0} portadores)
+                          </span>
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Lista resumida dos top 3 portadores */}
+                  {!loadingRastreadoresPortador && rastreadoresPortador?.porPortador && rastreadoresPortador.porPortador.length > 0 && (
+                    <div className="mt-3 pt-3 border-t space-y-1.5">
+                      {rastreadoresPortador.porPortador.slice(0, 3).map((p) => (
+                        <div key={p.id} className="flex justify-between text-xs">
+                          <span className="text-muted-foreground truncate">{p.nome}</span>
+                          <Badge variant="outline" className="text-xs">
+                            {p.quantidade}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </CardContent>
