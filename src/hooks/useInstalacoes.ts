@@ -493,39 +493,67 @@ export function useInstalacaoActions() {
     onError: () => toast.error('Erro ao atribuir instalador'),
   });
 
-  // Iniciar rota
+  // Iniciar rota - com validação de instalador atribuído
   const iniciarRota = useMutation({
     mutationFn: async (instalacaoId: string) => {
+      // Verificar se tem instalador atribuído antes de mudar status
+      const { data: instalacao, error: fetchError } = await supabase
+        .from('instalacoes')
+        .select('instalador_responsavel_id')
+        .eq('id', instalacaoId)
+        .single();
+      
+      if (fetchError) throw fetchError;
+      
+      if (!instalacao?.instalador_responsavel_id) {
+        throw new Error('Instalação não tem instalador atribuído');
+      }
+
       const { error } = await supabase
         .from('instalacoes')
         .update({ status: 'em_rota' })
-        .eq('id', instalacaoId);
+        .eq('id', instalacaoId)
+        .not('instalador_responsavel_id', 'is', null); // Garantia adicional
       if (error) throw error;
     },
     onSuccess: () => {
       invalidateAll();
       toast.success('Instalador a caminho!');
     },
-    onError: () => toast.error('Erro ao iniciar rota'),
+    onError: (error: Error) => toast.error(error.message || 'Erro ao iniciar rota'),
   });
 
-  // Iniciar instalação (com timestamp)
+  // Iniciar instalação (com timestamp) - com validação
   const iniciarInstalacao = useMutation({
     mutationFn: async (instalacaoId: string) => {
+      // Verificar se tem instalador atribuído
+      const { data: instalacao, error: fetchError } = await supabase
+        .from('instalacoes')
+        .select('instalador_responsavel_id')
+        .eq('id', instalacaoId)
+        .single();
+      
+      if (fetchError) throw fetchError;
+      
+      if (!instalacao?.instalador_responsavel_id) {
+        throw new Error('Instalação não tem instalador atribuído');
+      }
+
       const { error } = await supabase
         .from('instalacoes')
         .update({ 
           status: 'em_andamento',
           iniciada_em: new Date().toISOString()
         })
-        .eq('id', instalacaoId);
+        .eq('id', instalacaoId)
+        .not('instalador_responsavel_id', 'is', null);
       if (error) throw error;
     },
     onSuccess: () => {
       invalidateAll();
       toast.success('Instalação iniciada!');
     },
-    onError: () => toast.error('Erro ao iniciar instalação'),
+    onError: (error: Error) => toast.error(error.message || 'Erro ao iniciar instalação'),
   });
 
   // Concluir instalação (com timestamp)

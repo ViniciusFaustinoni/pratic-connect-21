@@ -128,10 +128,29 @@ export function useTarefaAtual() {
  * Usado quando o profissional aceita uma tarefa atribuída manualmente
  */
 export function useIniciarRota() {
+  const { profile } = useAuth();
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async ({ tarefaId }: { tarefaId: string }) => {
+      // Primeiro verificar se o serviço está atribuído a este profissional
+      const { data: servico, error: fetchError } = await supabase
+        .from('servicos')
+        .select('profissional_id')
+        .eq('id', tarefaId)
+        .single();
+      
+      if (fetchError) throw fetchError;
+      
+      if (!servico?.profissional_id) {
+        throw new Error('Serviço não atribuído a nenhum profissional');
+      }
+      
+      if (servico.profissional_id !== profile?.id) {
+        throw new Error('Este serviço não está atribuído a você');
+      }
+
+      // Só então atualizar status
       const { error } = await supabase
         .from('servicos')
         .update({ 
@@ -139,7 +158,8 @@ export function useIniciarRota() {
           em_rota_em: new Date().toISOString(),
           updated_at: new Date().toISOString()
         })
-        .eq('id', tarefaId);
+        .eq('id', tarefaId)
+        .eq('profissional_id', profile.id); // Garantia adicional
 
       if (error) throw error;
     },
