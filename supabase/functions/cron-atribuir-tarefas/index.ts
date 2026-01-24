@@ -29,59 +29,6 @@ function calcularDistanciaKm(
   return R * c;
 }
 
-/**
- * Verifica se o profissional tem tarefas agendadas dentro da janela de horas configurada
- * CORRIGIDO: Usa APENAS a tabela SERVICOS como fonte única de verdade
- */
-async function temTarefasNaJanela(
-  supabase: any,
-  profissionalId: string,
-  janelaHoras: number
-): Promise<boolean> {
-  const agora = new Date();
-  const limiteJanela = new Date(agora.getTime() + janelaHoras * 60 * 60 * 1000);
-  const hojeStr = agora.toISOString().split('T')[0];
-  const limiteJanelaStr = limiteJanela.toISOString().split('T')[0];
-  const horaAtual = agora.toTimeString().slice(0, 5); // "HH:MM"
-  const horaLimite = limiteJanela.toTimeString().slice(0, 5);
-
-  // ✅ CORRIGIDO: Buscar tarefas APENAS da tabela SERVICOS (fonte única de verdade)
-  const { data: tarefasAtribuidas, error } = await supabase
-    .from('servicos')
-    .select('id, data_agendada, hora_agendada, tipo, status')
-    .eq('profissional_id', profissionalId)
-    .in('status', ['agendada', 'em_rota', 'em_andamento'])
-    .gte('data_agendada', hojeStr)
-    .lte('data_agendada', limiteJanelaStr);
-
-  if (error) {
-    console.error('[temTarefasNaJanela] Erro ao buscar tarefas do profissional:', error);
-    return false;
-  }
-
-  // Filtrar apenas tarefas DENTRO da janela de tempo
-  const tarefasNaJanela = (tarefasAtribuidas || []).filter((tarefa: any) => {
-    // Se é de um dia futuro (dentro do limite), conta
-    if (tarefa.data_agendada > hojeStr && tarefa.data_agendada <= limiteJanelaStr) {
-      return true;
-    }
-    
-    // Se é de hoje, verificar se está dentro da janela de horas
-    if (tarefa.data_agendada === hojeStr) {
-      // Se não tem hora específica, considera que está na janela
-      if (!tarefa.hora_agendada) return true;
-      
-      // Verificar se a hora está entre agora e o limite
-      return tarefa.hora_agendada >= horaAtual && tarefa.hora_agendada <= horaLimite;
-    }
-    
-    return false;
-  });
-
-  console.log(`[temTarefasNaJanela] Profissional ${profissionalId}: ${tarefasNaJanela.length} tarefas nas próximas ${janelaHoras}h`);
-  return tarefasNaJanela.length > 0;
-}
-
 interface ProfissionalDisponivel {
   vistoriador_id: string;
   latitude: number;
@@ -125,25 +72,10 @@ serve(async (req) => {
     const amanha = new Date(Date.now() + 86400000).toISOString().split('T')[0];
     const trintaMinutosAtras = new Date(Date.now() - 30 * 60 * 1000).toISOString();
 
-    // Buscar configuração de raio máximo para encaixes
-    const { data: configRaio } = await supabase
-      .from('configuracoes')
-      .select('valor')
-      .eq('chave', 'operacional_encaixe_raio_km')
-      .single();
-
-    const raioMaximoEncaixeKm = configRaio?.valor ? parseFloat(configRaio.valor) : 10;
-    console.log(`[cron-atribuir-tarefas] Raio máximo para encaixe: ${raioMaximoEncaixeKm} km`);
-
-    // ✅ NOVO: Buscar configuração de janela de horas
-    const { data: configJanela } = await supabase
-      .from('configuracoes')
-      .select('valor')
-      .eq('chave', 'operacional_encaixe_janela_horas')
-      .single();
-
-    const janelaHoras = configJanela?.valor ? parseInt(configJanela.valor) : 2;
-    console.log(`[cron-atribuir-tarefas] Janela de horas livre: ${janelaHoras}h`);
+    // ✅ NOVA LÓGICA SIMPLIFICADA: Sem restrição de raio e janela
+    // Prioridade é sempre o agendamento do dia
+    // Se não houver agendamento próximo, buscar encaixe (vistoriador mais próximo disponível)
+    console.log(`[cron-atribuir-tarefas] Lógica simplificada: sem limite de raio e janela`);
 
     // 1. Buscar profissionais em serviço com localização recente
     const { data: profissionais, error: profError } = await supabase
@@ -183,9 +115,6 @@ serve(async (req) => {
         continue;
       }
 
-      // ✅ NOVA VERIFICAÇÃO: Para ENCAIXES, verificar se tem tarefas nas próximas X horas
-      const temTarefasProximas = await temTarefasNaJanela(supabase, prof.vistoriador_id, janelaHoras);
-
       // ========== BUSCA 1: Serviços NORMAIS (hoje/amanhã) ==========
       const { data: servicosNormais, error: servicosNormaisError } = await supabase
         .from('servicos')
@@ -217,41 +146,37 @@ serve(async (req) => {
       }
 
       // ========== BUSCA 2: Serviços FUTUROS com ENCAIXE ==========
-      // Só busca encaixes se o profissional NÃO tem tarefas nas próximas X horas
+      // ✅ NOVA LÓGICA: Sempre busca encaixes (sem verificar janela de horas)
       let servicosEncaixe: any[] = [];
       
-      if (!temTarefasProximas) {
-        const { data: encaixes, error: servicosEncaixeError } = await supabase
-          .from('servicos')
-          .select(`
-            id,
-            tipo,
-            data_agendada,
-            hora_agendada,
-            latitude,
-            longitude,
-            permite_encaixe,
-            local_vistoria,
-            instalacao_origem_id,
-            vistoria_origem_id,
-            associado:associados(nome),
-            veiculo:veiculos(placa)
-          `)
-          .is('profissional_id', null)
-          .in('status', ['pendente', 'agendada'])
-          .or('local_vistoria.is.null,local_vistoria.eq.cliente')
-          .gt('data_agendada', amanha) // DATAS FUTURAS (> amanhã)
-          .eq('permite_encaixe', true)  // APENAS os que aceitam encaixe
-          .not('latitude', 'is', null)
-          .not('longitude', 'is', null);
+      const { data: encaixes, error: servicosEncaixeError } = await supabase
+        .from('servicos')
+        .select(`
+          id,
+          tipo,
+          data_agendada,
+          hora_agendada,
+          latitude,
+          longitude,
+          permite_encaixe,
+          local_vistoria,
+          instalacao_origem_id,
+          vistoria_origem_id,
+          associado:associados(nome),
+          veiculo:veiculos(placa)
+        `)
+        .is('profissional_id', null)
+        .in('status', ['pendente', 'agendada'])
+        .or('local_vistoria.is.null,local_vistoria.eq.cliente')
+        .gt('data_agendada', amanha) // DATAS FUTURAS (> amanhã)
+        .eq('permite_encaixe', true)  // APENAS os que aceitam encaixe
+        .not('latitude', 'is', null)
+        .not('longitude', 'is', null);
 
-        if (servicosEncaixeError) {
-          console.error('[cron-atribuir-tarefas] Erro ao buscar serviços encaixe:', servicosEncaixeError);
-        } else {
-          servicosEncaixe = encaixes || [];
-        }
+      if (servicosEncaixeError) {
+        console.error('[cron-atribuir-tarefas] Erro ao buscar serviços encaixe:', servicosEncaixeError);
       } else {
-        console.log(`[cron-atribuir-tarefas] Profissional ${prof.vistoriador_id} tem tarefas nas próximas ${janelaHoras}h - NÃO elegível para encaixes`);
+        servicosEncaixe = encaixes || [];
       }
 
       // Combinar as duas listas
@@ -294,34 +219,14 @@ serve(async (req) => {
             is_amanha: isAmanha
           };
         })
-        .filter((s: ServicoComDistancia) => {
-          // Encaixes FUTUROS só entram se estiverem DENTRO do raio configurado
-          if (s.is_encaixe) {
-            const dentroDoRaio = s.distancia_km <= raioMaximoEncaixeKm;
-            if (!dentroDoRaio) {
-              console.log(`[cron-atribuir-tarefas] Encaixe ${s.id} fora do raio (${s.distancia_km.toFixed(2)} km > ${raioMaximoEncaixeKm} km)`);
-            }
-            return dentroDoRaio;
-          }
-          // Serviços de hoje/amanhã: sem limite de raio
-          return true;
-        })
+        // ✅ NOVA LÓGICA SIMPLIFICADA: Sem filtro de raio para encaixes
+        // Ordenação: HOJE > mais próximos (qualquer distância)
         .sort((a: ServicoComDistancia, b: ServicoComDistancia) => {
-          // ========== ORDENAÇÃO DE PRIORIDADES ==========
-          
           // PRIORIDADE 1: Serviços de HOJE (mais próximos primeiro)
           if (a.is_hoje && !b.is_hoje) return -1;
           if (!a.is_hoje && b.is_hoje) return 1;
           
-          // PRIORIDADE 2: Encaixes FUTUROS próximos (dentro do raio)
-          if (a.is_encaixe && !b.is_encaixe && !b.is_hoje) return -1;
-          if (!a.is_encaixe && b.is_encaixe && !a.is_hoje) return 1;
-          
-          // PRIORIDADE 3: Serviços de AMANHÃ
-          if (a.is_amanha && !b.is_amanha && !b.is_hoje && !b.is_encaixe) return -1;
-          if (!a.is_amanha && b.is_amanha && !a.is_hoje && !a.is_encaixe) return 1;
-          
-          // Dentro de cada grupo, ordenar por proximidade
+          // PRIORIDADE 2: Por distância (mais próximo primeiro, sem limite de raio)
           return a.distancia_km - b.distancia_km;
         });
 
@@ -519,10 +424,7 @@ serve(async (req) => {
           amanha: amanhaAtrib,
           encaixes: encaixeAtrib
         },
-        configuracoes: {
-          raio_km: raioMaximoEncaixeKm,
-          janela_horas: janelaHoras
-        }
+        logica: 'simplificada - sem limite de raio e janela de horas'
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
