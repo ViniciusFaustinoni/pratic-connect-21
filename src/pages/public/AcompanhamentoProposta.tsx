@@ -30,6 +30,7 @@ import { CriarContaAssociadoForm } from '@/components/public/CriarContaAssociado
 interface AssociadoData {
   id: string;
   nome: string;
+  email: string;
   status: string;
   user_id: string | null;
   plano: { nome: string } | null;
@@ -77,12 +78,13 @@ function useAcompanhamentoProposta(token: string | undefined) {
 
       if (!contrato?.associado_id) return null;
 
-      // Buscar dados do associado
+      // Buscar dados do associado incluindo email
       const { data: associado, error: assocError } = await supabase
         .from('associados')
         .select(`
           id,
           nome,
+          email,
           status,
           user_id,
           plano:planos (nome)
@@ -489,6 +491,7 @@ export default function AcompanhamentoProposta() {
               <CriarContaAssociadoForm 
                 associadoId={associado.id}
                 nomeAssociado={associado.nome}
+                emailCadastrado={associado.email}
               />
             </motion.div>
           )}
