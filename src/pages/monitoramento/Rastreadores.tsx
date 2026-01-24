@@ -17,7 +17,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Radio, Plus, Wifi, WifiOff, AlertTriangle, Loader2, MoreHorizontal, Eye, Pencil, Package, Server } from 'lucide-react';
+import { Radio, Plus, Wifi, WifiOff, AlertTriangle, Loader2, MoreHorizontal, Eye, Pencil, Package, Server, UserPlus } from 'lucide-react';
+import { AtribuirPortadorDialog } from '@/components/monitoramento/estoque/AtribuirPortadorDialog';
 import {
   useRastreadores,
   useRastreadoresMetricas,
@@ -183,6 +184,23 @@ function RastreadoresContent({
   onNewRastreador,
   getPlataformaLabel,
 }: RastreadoresContentProps) {
+  const [portadorDialogOpen, setPortadorDialogOpen] = useState(false);
+  const [rastreadorParaPortador, setRastreadorParaPortador] = useState<{
+    id: string;
+    codigo: string;
+    portador_id: string | null;
+    portador_nome: string | null;
+  } | null>(null);
+
+  const handleOpenPortadorDialog = (rastreador: NonNullable<typeof rastreadores>[number]) => {
+    setRastreadorParaPortador({
+      id: rastreador.id,
+      codigo: rastreador.codigo,
+      portador_id: rastreador.portador_id,
+      portador_nome: rastreador.portador?.nome || null,
+    });
+    setPortadorDialogOpen(true);
+  };
   return (
     <>
       <div className="grid gap-4 md:grid-cols-4">
@@ -297,11 +315,42 @@ function RastreadoresContent({
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        {rastreador.portador?.nome ? (
-                          <span className="text-sm font-medium">{rastreador.portador.nome}</span>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
+                        <div className="flex items-center gap-1">
+                          {rastreador.portador?.nome ? (
+                            <>
+                              <span className="text-sm font-medium">{rastreador.portador.nome}</span>
+                              {rastreador.status === 'estoque' && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOpenPortadorDialog(rastreador);
+                                  }}
+                                  title="Alterar portador"
+                                >
+                                  <UserPlus className="h-3.5 w-3.5 text-muted-foreground" />
+                                </Button>
+                              )}
+                            </>
+                          ) : rastreador.status === 'estoque' ? (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs text-muted-foreground hover:text-foreground -ml-2"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenPortadorDialog(rastreador);
+                              }}
+                            >
+                              <UserPlus className="h-3.5 w-3.5 mr-1" />
+                              Atribuir
+                            </Button>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>
                         {isInstalled ? (
@@ -387,6 +436,12 @@ function RastreadoresContent({
           )}
         </CardContent>
       </Card>
+
+      <AtribuirPortadorDialog
+        open={portadorDialogOpen}
+        onOpenChange={setPortadorDialogOpen}
+        rastreador={rastreadorParaPortador}
+      />
     </>
   );
 }
