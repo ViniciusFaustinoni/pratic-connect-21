@@ -28,6 +28,7 @@ export interface ProfissionalEquipe {
   ativo: boolean;
   tarefas_hoje: number;
   ultima_atividade: string | null;
+  rastreadores_atribuidos: number;
   tarefa_atual?: {
     id: string;
     tipo: 'vistoria' | 'instalacao';
@@ -134,7 +135,21 @@ export function useProfissionaisEquipe() {
         }
       });
 
-      // 7. Mapear para o formato esperado
+      // 7. Buscar contagem de rastreadores atribuídos a cada profissional (status = estoque)
+      const { data: rastreadoresPortador } = await supabase
+        .from('rastreadores')
+        .select('portador_id')
+        .in('portador_id', profileIds)
+        .eq('status', 'estoque');
+
+      const rastreadoresPorProfissional: Record<string, number> = {};
+      rastreadoresPortador?.forEach(r => {
+        if (r.portador_id) {
+          rastreadoresPorProfissional[r.portador_id] = (rastreadoresPorProfissional[r.portador_id] || 0) + 1;
+        }
+      });
+
+      // 8. Mapear para o formato esperado
       return profiles.map(profile => {
         const localizacao = localizacaoPorProfissional[profile.id];
         const tarefaAtiva = tarefaAtivaPorProfissional[profile.id];
@@ -173,6 +188,7 @@ export function useProfissionaisEquipe() {
           ativo: profile.ativo ?? true,
           tarefas_hoje: tarefasPorProfissional[profile.id] || 0,
           ultima_atividade: ultimaAtividadePorProfissional[profile.id] || null,
+          rastreadores_atribuidos: rastreadoresPorProfissional[profile.id] || 0,
           tarefa_atual: tarefaAtiva,
         };
       }) as ProfissionalEquipe[];

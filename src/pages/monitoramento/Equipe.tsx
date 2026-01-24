@@ -21,6 +21,7 @@ import {
   Navigation,
   Signal,
   SignalZero,
+  Radio,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -391,6 +392,16 @@ export default function Equipe() {
                             {STATUS_OPERACIONAL_CONFIG[profissional.status_operacional].icon}
                             {STATUS_OPERACIONAL_CONFIG[profissional.status_operacional].label}
                           </Badge>
+                          {profissional.rastreadores_atribuidos > 0 && (
+                            <Badge
+                              variant="outline"
+                              className="flex items-center gap-1 bg-orange-100 text-orange-800 border-orange-200"
+                              title={`${profissional.rastreadores_atribuidos} rastreador(es) em posse`}
+                            >
+                              <Radio className="h-3 w-3" />
+                              {profissional.rastreadores_atribuidos}
+                            </Badge>
+                          )}
                         </div>
                       </div>
                     </div>
