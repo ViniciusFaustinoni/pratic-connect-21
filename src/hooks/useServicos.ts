@@ -882,8 +882,7 @@ export function useAprovarVeiculoServico() {
           status: 'instalado',
           veiculo_id: data.veiculoId,
           portador_id: null, // Remove do porte do instalador
-          data_instalacao: agora,
-          instalado_por: profile?.id,
+          updated_at: agora,
         })
         .eq('id', rastreador.id);
 
