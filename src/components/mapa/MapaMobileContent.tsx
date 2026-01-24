@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo } from "react";
 import ReactDOM from "react-dom";
 import { getHojeBrasilia } from "@/lib/date-utils";
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from "react-leaflet";
+import { RotaPolyline } from "@/components/mapa/RotaPolyline";
+import { useRotaReal } from "@/hooks/useRotaReal";
 import L from "leaflet";
 import { format, isSameDay, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -437,8 +439,22 @@ export function MapaMobileContent() {
     window.open(`https://www.google.com/maps?q=${lat},${lng}`, "_blank");
   };
 
-  // Calcular distância para próxima tarefa
+  // Posição da tarefa para FitBounds e rota
+  const posicaoTarefa = useMemo((): [number, number] | null => {
+    if (proximaTarefa?.latitude && proximaTarefa?.longitude) {
+      return [proximaTarefa.latitude, proximaTarefa.longitude];
+    }
+    return null;
+  }, [proximaTarefa]);
+
+  // Buscar rota real para próxima tarefa (distância e tempo estimado)
+  const rotaReal = useRotaReal(posicaoAtual, posicaoTarefa);
+  
+  // Distância para próxima tarefa (usa rota real se disponível, senão Haversine)
   const distanciaParaProximaTarefa = useMemo(() => {
+    if (rotaReal.distanciaKm > 0) {
+      return rotaReal.distanciaKm;
+    }
     if (!posicaoAtual || !proximaTarefa?.latitude || !proximaTarefa?.longitude) {
       return null;
     }
@@ -448,15 +464,7 @@ export function MapaMobileContent() {
       proximaTarefa.latitude,
       proximaTarefa.longitude
     );
-  }, [posicaoAtual, proximaTarefa]);
-
-  // Posição da tarefa para FitBounds
-  const posicaoTarefa = useMemo((): [number, number] | null => {
-    if (proximaTarefa?.latitude && proximaTarefa?.longitude) {
-      return [proximaTarefa.latitude, proximaTarefa.longitude];
-    }
-    return null;
-  }, [proximaTarefa]);
+  }, [posicaoAtual, proximaTarefa, rotaReal.distanciaKm]);
 
   // Contadores para UI
   const tarefasPendentes = vistoriasFiltradas.filter(v => 
@@ -508,16 +516,14 @@ export function MapaMobileContent() {
           <FitToBounds posicaoAtual={posicaoAtual} posicaoTarefa={posicaoTarefa} />
         )}
 
-        {/* Linha de rota entre minha posição e próxima tarefa */}
+        {/* Rota real (seguindo ruas) entre minha posição e próxima tarefa */}
         {isHojeOuFuturo && posicaoAtual && posicaoTarefa && (
-          <Polyline
-            positions={[posicaoAtual, posicaoTarefa]}
-            pathOptions={{
-              color: '#3B82F6',
-              weight: 4,
-              opacity: 0.8,
-              dashArray: '12, 8',
-            }}
+          <RotaPolyline
+            origem={posicaoAtual}
+            destino={posicaoTarefa}
+            cor="#3B82F6"
+            peso={5}
+            opacidade={0.85}
           />
         )}
 
@@ -794,12 +800,26 @@ export function MapaMobileContent() {
                       )}
                       onClick={() => selecionarVistoria(v)}
                     >
-                      {/* Badge de Próxima Tarefa */}
+                      {/* Badge de Próxima Tarefa com distância e tempo */}
                       {isProxima && (
-                        <Badge className="mb-2 bg-primary text-primary-foreground">
-                          <Play className="h-3 w-3 mr-1" />
-                          Próxima Tarefa
-                        </Badge>
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                          <Badge className="bg-primary text-primary-foreground">
+                            <Play className="h-3 w-3 mr-1" />
+                            Próxima Tarefa
+                          </Badge>
+                          {distanciaParaProximaTarefa && (
+                            <Badge variant="outline" className="gap-1">
+                              <Route className="h-3 w-3" />
+                              {distanciaParaProximaTarefa.toFixed(1)} km
+                            </Badge>
+                          )}
+                          {rotaReal.tempoMinutos > 0 && (
+                            <Badge variant="outline" className="gap-1">
+                              <Clock className="h-3 w-3" />
+                              ~{rotaReal.tempoMinutos} min
+                            </Badge>
+                          )}
+                        </div>
                       )}
                       
                       <div className="flex items-start gap-3">

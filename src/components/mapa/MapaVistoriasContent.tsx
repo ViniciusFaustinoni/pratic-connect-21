@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
-import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
+import { RotaPolyline } from "@/components/mapa/RotaPolyline";
 import L from "leaflet";
 import { format, isSameDay, addDays, formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -517,25 +518,23 @@ export function MapaVistoriasContent() {
 
             <FlyToPosition position={posicaoSelecionada} />
 
-            {/* Linhas de Rota - Profissional → Próxima Tarefa */}
+            {/* Rotas reais (seguindo ruas) - Profissional → Próxima Tarefa */}
             {linhasDeRota.map((linha) => (
-              <Polyline
+              <RotaPolyline
                 key={`rota-${linha.profissionalId}`}
-                positions={[linha.posicaoOrigem, linha.posicaoDestino]}
-                pathOptions={{
-                  color: COR_VISTORIADOR,
-                  weight: 3,
-                  opacity: 0.6,
-                  dashArray: '10, 10',
-                }}
-              >
-                <Popup>
+                origem={linha.posicaoOrigem}
+                destino={linha.posicaoDestino}
+                cor={COR_VISTORIADOR}
+                peso={4}
+                opacidade={0.7}
+                mostrarPopup
+                popupContent={
                   <div className="text-xs">
                     <p className="font-semibold">{linha.profissionalNome}</p>
                     <p className="text-muted-foreground">→ {linha.tarefaPlaca || 'Próxima tarefa'}</p>
                   </div>
-                </Popup>
-              </Polyline>
+                }
+              />
             ))}
 
             {/* Marcadores - Pinos coloridos por status (realizada/a realizar) */}
