@@ -471,9 +471,9 @@ export default function InstaladorChecklist() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-900">
+    <div className="flex flex-col bg-slate-900">
       {/* Progress Bar */}
-      <div className="sticky top-14 z-40 border-b border-slate-700 bg-slate-800 px-4 py-3">
+      <div className="sticky top-0 z-40 border-b border-slate-700 bg-slate-800 px-4 py-3">
         <div className="mb-2 flex justify-between">
           {ETAPAS.map((etapa) => {
             const Icon = etapa.icon;
