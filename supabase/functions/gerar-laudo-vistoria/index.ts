@@ -1,0 +1,729 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { PDFDocument, rgb, StandardFonts } from "https://esm.sh/pdf-lib@1.17.1";
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+// Layout constants
+const PAGE_WIDTH = 595.28;
+const PAGE_HEIGHT = 841.89;
+const MARGIN = 40;
+const CONTENT_WIDTH = PAGE_WIDTH - (MARGIN * 2);
+
+const PRIMARY_COLOR = rgb(0.2, 0.4, 0.6);
+const TEXT_COLOR = rgb(0.2, 0.2, 0.2);
+const MUTED_COLOR = rgb(0.5, 0.5, 0.5);
+const SUCCESS_COLOR = rgb(0.1, 0.6, 0.3);
+const SECTION_BG = rgb(0.95, 0.95, 0.97);
+
+// Image grid settings
+const IMG_WIDTH = 165;
+const IMG_HEIGHT = 110;
+const IMG_GAP = 10;
+const COLS = 3;
+
+// Category configuration for inspection photos
+const CATEGORIAS = [
+  { id: 'identificacao', nome: 'Identificação e Motor', tipos: ['motor', 'odometro', 'chassi', 'etiqueta_motor', 'placa'] },
+  { id: 'exterior', nome: 'Exterior 360°', tipos: ['frente', 'traseira', 'lateral_esquerda', 'lateral_direita', 'diagonal_dianteira_esquerda', 'diagonal_dianteira_direita', 'diagonal_traseira_esquerda', 'diagonal_traseira_direita'] },
+  { id: 'interior', nome: 'Interior', tipos: ['painel', 'bancos_frente', 'bancos_traseiro', 'porta_malas'] },
+  { id: 'detalhes', nome: 'Detalhes e Acessórios', tipos: ['pneus', 'rodas', 'retrovisores', 'farol_dianteiro', 'farol_traseiro', 'vidros', 'acessorios'] },
+];
+
+// Photo type labels for display
+const TIPO_FOTO_LABELS: Record<string, string> = {
+  motor: 'Motor',
+  odometro: 'Hodômetro',
+  chassi: 'Chassi',
+  etiqueta_motor: 'Etiqueta do Motor',
+  placa: 'Placa',
+  frente: 'Frente',
+  traseira: 'Traseira',
+  lateral_esquerda: 'Lateral Esquerda',
+  lateral_direita: 'Lateral Direita',
+  diagonal_dianteira_esquerda: 'Diagonal Dianteira Esq.',
+  diagonal_dianteira_direita: 'Diagonal Dianteira Dir.',
+  diagonal_traseira_esquerda: 'Diagonal Traseira Esq.',
+  diagonal_traseira_direita: 'Diagonal Traseira Dir.',
+  painel: 'Painel',
+  bancos_frente: 'Bancos Dianteiros',
+  bancos_traseiro: 'Banco Traseiro',
+  porta_malas: 'Porta-Malas',
+  pneus: 'Pneus',
+  rodas: 'Rodas',
+  retrovisores: 'Retrovisores',
+  farol_dianteiro: 'Farol Dianteiro',
+  farol_traseiro: 'Farol Traseiro',
+  vidros: 'Vidros',
+  acessorios: 'Acessórios',
+};
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const { vistoriaId, associadoId, veiculoId, contratoId, placa } = await req.json();
+
+    if (!vistoriaId || !associadoId || !veiculoId) {
+      return new Response(
+        JSON.stringify({ error: 'vistoriaId, associadoId e veiculoId são obrigatórios' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log(`Gerando laudo de vistoria: ${vistoriaId}`);
+
+    // Initialize Supabase client
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // Fetch vistoria with related data
+    const { data: vistoria, error: vistoriaError } = await supabase
+      .from('vistorias')
+      .select(`
+        id,
+        protocolo,
+        created_at,
+        km_atual,
+        observacoes,
+        status,
+        endereco_logradouro,
+        endereco_numero,
+        endereco_bairro,
+        endereco_cidade,
+        endereco_estado,
+        associados:associado_id (
+          id, nome, cpf, logradouro, numero, bairro, cidade, uf
+        ),
+        veiculos:veiculo_id (
+          id, marca, modelo, ano_fabricacao, ano_modelo, cor, placa, chassi
+        ),
+        vistoriador:vistoriador_id (
+          id, name
+        )
+      `)
+      .eq('id', vistoriaId)
+      .single();
+
+    if (vistoriaError || !vistoria) {
+      console.error('Erro ao buscar vistoria:', vistoriaError);
+      return new Response(
+        JSON.stringify({ error: 'Vistoria não encontrada' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Fetch photos
+    const { data: fotos } = await supabase
+      .from('vistoria_fotos')
+      .select('tipo, arquivo_url, visivel_cliente')
+      .eq('vistoria_id', vistoriaId)
+      .neq('visivel_cliente', false); // Exclude hidden photos (tracker location)
+
+    const associado = vistoria.associados as any;
+    const veiculo = vistoria.veiculos as any;
+    const vistoriador = vistoria.vistoriador as any;
+
+    // Format address
+    const enderecoVistoria = [
+      vistoria.endereco_logradouro,
+      vistoria.endereco_numero,
+      vistoria.endereco_bairro,
+      vistoria.endereco_cidade,
+      vistoria.endereco_estado
+    ].filter(Boolean).join(', ') || 'Não informado';
+
+    const enderecoAssociado = associado ? [
+      associado.logradouro,
+      associado.numero,
+      associado.bairro,
+      associado.cidade,
+      associado.uf
+    ].filter(Boolean).join(', ') : 'Não informado';
+
+    // Create PDF
+    const pdfDoc = await PDFDocument.create();
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+    // Helper function to add a new page with header
+    const addPage = () => {
+      const page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+      return page;
+    };
+
+    // Helper function to draw text with wrapping
+    const drawWrappedText = (page: any, text: string, x: number, y: number, maxWidth: number, fontSize: number, lineHeight: number, fontToUse: any = font) => {
+      const words = text.split(' ');
+      let currentLine = '';
+      let currentY = y;
+
+      for (const word of words) {
+        const testLine = currentLine ? `${currentLine} ${word}` : word;
+        const textWidth = fontToUse.widthOfTextAtSize(testLine, fontSize);
+
+        if (textWidth > maxWidth && currentLine) {
+          page.drawText(currentLine, { x, y: currentY, size: fontSize, font: fontToUse, color: TEXT_COLOR });
+          currentY -= lineHeight;
+          currentLine = word;
+        } else {
+          currentLine = testLine;
+        }
+      }
+
+      if (currentLine) {
+        page.drawText(currentLine, { x, y: currentY, size: fontSize, font: fontToUse, color: TEXT_COLOR });
+        currentY -= lineHeight;
+      }
+
+      return currentY;
+    };
+
+    // First page
+    let page = addPage();
+    let y = PAGE_HEIGHT - MARGIN;
+
+    // Header
+    page.drawText('LAUDO DE VISTORIA VEICULAR', {
+      x: MARGIN,
+      y: y - 20,
+      size: 18,
+      font: fontBold,
+      color: PRIMARY_COLOR,
+    });
+
+    page.drawText('PRATICCAR Proteção Veicular', {
+      x: PAGE_WIDTH - MARGIN - 150,
+      y: y - 20,
+      size: 10,
+      font: font,
+      color: MUTED_COLOR,
+    });
+
+    y -= 50;
+
+    // Protocol and date info
+    const protocolo = vistoria.protocolo || `VIST-${vistoriaId.slice(0, 8).toUpperCase()}`;
+    const dataVistoria = new Date(vistoria.created_at);
+    const dataFormatada = dataVistoria.toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    page.drawRectangle({
+      x: MARGIN,
+      y: y - 30,
+      width: CONTENT_WIDTH,
+      height: 30,
+      color: SECTION_BG,
+    });
+
+    page.drawText(`Protocolo: ${protocolo}`, {
+      x: MARGIN + 10,
+      y: y - 20,
+      size: 10,
+      font: fontBold,
+      color: TEXT_COLOR,
+    });
+
+    page.drawText(`Data: ${dataFormatada}`, {
+      x: PAGE_WIDTH - MARGIN - 150,
+      y: y - 20,
+      size: 10,
+      font: font,
+      color: TEXT_COLOR,
+    });
+
+    y -= 50;
+
+    // Associated data section
+    page.drawText('DADOS DO ASSOCIADO', {
+      x: MARGIN,
+      y,
+      size: 12,
+      font: fontBold,
+      color: PRIMARY_COLOR,
+    });
+
+    y -= 20;
+
+    page.drawText(`Nome: ${associado?.nome || 'Não informado'}`, {
+      x: MARGIN,
+      y,
+      size: 10,
+      font,
+      color: TEXT_COLOR,
+    });
+
+    const cpfFormatado = associado?.cpf
+      ? associado.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
+      : '';
+
+    page.drawText(`CPF: ${cpfFormatado}`, {
+      x: PAGE_WIDTH - MARGIN - 150,
+      y,
+      size: 10,
+      font,
+      color: TEXT_COLOR,
+    });
+
+    y -= 18;
+
+    page.drawText(`Endereço: ${enderecoAssociado}`, {
+      x: MARGIN,
+      y,
+      size: 9,
+      font,
+      color: MUTED_COLOR,
+    });
+
+    y -= 30;
+
+    // Vehicle data section
+    page.drawText('DADOS DO VEÍCULO', {
+      x: MARGIN,
+      y,
+      size: 12,
+      font: fontBold,
+      color: PRIMARY_COLOR,
+    });
+
+    y -= 20;
+
+    const marcaModelo = [veiculo?.marca, veiculo?.modelo].filter(Boolean).join(' ') || 'Não informado';
+    const ano = veiculo?.ano_fabricacao && veiculo?.ano_modelo
+      ? `${veiculo.ano_fabricacao}/${veiculo.ano_modelo}`
+      : veiculo?.ano_modelo || '';
+
+    page.drawText(`Marca/Modelo: ${marcaModelo}`, { x: MARGIN, y, size: 10, font, color: TEXT_COLOR });
+    page.drawText(`Ano: ${ano}`, { x: MARGIN + 250, y, size: 10, font, color: TEXT_COLOR });
+    page.drawText(`Cor: ${veiculo?.cor || ''}`, { x: MARGIN + 380, y, size: 10, font, color: TEXT_COLOR });
+
+    y -= 18;
+
+    page.drawText(`Placa: ${veiculo?.placa || placa || ''}`, { x: MARGIN, y, size: 10, font, color: TEXT_COLOR });
+    page.drawText(`Chassi: ${veiculo?.chassi || ''}`, { x: MARGIN + 150, y, size: 10, font, color: TEXT_COLOR });
+
+    y -= 18;
+
+    const hodometro = vistoria.km_atual ? `${vistoria.km_atual.toLocaleString('pt-BR')} km` : 'Não informado';
+    page.drawText(`Hodômetro: ${hodometro}`, { x: MARGIN, y, size: 10, font, color: TEXT_COLOR });
+
+    y -= 30;
+
+    // Vistoria info section
+    page.drawText('INFORMAÇÕES DA VISTORIA', {
+      x: MARGIN,
+      y,
+      size: 12,
+      font: fontBold,
+      color: PRIMARY_COLOR,
+    });
+
+    y -= 20;
+
+    page.drawText(`Vistoriador: ${vistoriador?.name || 'Não informado'}`, { x: MARGIN, y, size: 10, font, color: TEXT_COLOR });
+
+    y -= 18;
+
+    page.drawText(`Local: ${enderecoVistoria}`, { x: MARGIN, y, size: 9, font, color: MUTED_COLOR });
+
+    y -= 25;
+
+    // Status badge
+    const status = vistoria.status || 'aprovada';
+    const statusText = status === 'aprovada' ? 'APROVADO' : status.toUpperCase();
+    const badgeColor = status === 'aprovada' ? SUCCESS_COLOR : rgb(0.8, 0.5, 0.1);
+    const badgeWidth = fontBold.widthOfTextAtSize(statusText, 14) + 30;
+
+    page.drawRectangle({
+      x: MARGIN,
+      y: y - 5,
+      width: badgeWidth,
+      height: 25,
+      color: badgeColor,
+    });
+
+    page.drawText(statusText, {
+      x: MARGIN + 15,
+      y: y + 3,
+      size: 14,
+      font: fontBold,
+      color: rgb(1, 1, 1),
+    });
+
+    y -= 50;
+
+    // Observations section (if any)
+    if (vistoria.observacoes) {
+      page.drawText('OBSERVAÇÕES', {
+        x: MARGIN,
+        y,
+        size: 12,
+        font: fontBold,
+        color: PRIMARY_COLOR,
+      });
+
+      y -= 18;
+      y = drawWrappedText(page, vistoria.observacoes, MARGIN, y, CONTENT_WIDTH, 9, 12);
+      y -= 20;
+    }
+
+    // Photos section
+    const fotosValidas = (fotos || []).filter(f => f.arquivo_url);
+
+    if (fotosValidas.length > 0) {
+      // Group photos by category
+      for (const categoria of CATEGORIAS) {
+        const fotosDaCategoria = fotosValidas.filter(f => 
+          categoria.tipos.some(t => f.tipo?.toLowerCase().includes(t))
+        );
+
+        if (fotosDaCategoria.length === 0) continue;
+
+        // Check if we need a new page
+        if (y < 200) {
+          page = addPage();
+          y = PAGE_HEIGHT - MARGIN - 30;
+        }
+
+        // Category header
+        page.drawText(categoria.nome.toUpperCase(), {
+          x: MARGIN,
+          y,
+          size: 11,
+          font: fontBold,
+          color: PRIMARY_COLOR,
+        });
+
+        page.drawText(`(${fotosDaCategoria.length} fotos)`, {
+          x: MARGIN + fontBold.widthOfTextAtSize(categoria.nome.toUpperCase(), 11) + 10,
+          y,
+          size: 9,
+          font,
+          color: MUTED_COLOR,
+        });
+
+        y -= 20;
+
+        // Draw photos in grid
+        let col = 0;
+        let rowY = y;
+
+        for (const foto of fotosDaCategoria) {
+          // Check if we need a new page
+          if (rowY - IMG_HEIGHT - 20 < MARGIN) {
+            page = addPage();
+            rowY = PAGE_HEIGHT - MARGIN - 30;
+            y = rowY;
+            col = 0;
+          }
+
+          const x = MARGIN + col * (IMG_WIDTH + IMG_GAP);
+
+          try {
+            // Fetch and embed image
+            const response = await fetch(foto.arquivo_url);
+            if (response.ok) {
+              const arrayBuffer = await response.arrayBuffer();
+              const bytes = new Uint8Array(arrayBuffer);
+
+              let image;
+              try {
+                image = await pdfDoc.embedJpg(bytes);
+              } catch {
+                try {
+                  image = await pdfDoc.embedPng(bytes);
+                } catch {
+                  console.warn('Could not embed image:', foto.arquivo_url);
+                  image = null;
+                }
+              }
+
+              if (image) {
+                // Calculate aspect ratio
+                const aspectRatio = image.width / image.height;
+                let drawWidth = IMG_WIDTH;
+                let drawHeight = IMG_WIDTH / aspectRatio;
+
+                if (drawHeight > IMG_HEIGHT) {
+                  drawHeight = IMG_HEIGHT;
+                  drawWidth = IMG_HEIGHT * aspectRatio;
+                }
+
+                // Draw image placeholder background
+                page.drawRectangle({
+                  x,
+                  y: rowY - IMG_HEIGHT,
+                  width: IMG_WIDTH,
+                  height: IMG_HEIGHT,
+                  color: rgb(0.97, 0.97, 0.97),
+                  borderColor: rgb(0.9, 0.9, 0.9),
+                  borderWidth: 1,
+                });
+
+                // Center image in placeholder
+                const offsetX = (IMG_WIDTH - drawWidth) / 2;
+                const offsetY = (IMG_HEIGHT - drawHeight) / 2;
+
+                page.drawImage(image, {
+                  x: x + offsetX,
+                  y: rowY - IMG_HEIGHT + offsetY,
+                  width: drawWidth,
+                  height: drawHeight,
+                });
+              }
+            }
+          } catch (err) {
+            console.warn('Error loading image:', foto.arquivo_url, err);
+          }
+
+          // Draw label
+          const label = TIPO_FOTO_LABELS[foto.tipo] || foto.tipo || 'Foto';
+          page.drawText(label, {
+            x,
+            y: rowY - IMG_HEIGHT - 12,
+            size: 8,
+            font,
+            color: MUTED_COLOR,
+          });
+
+          col++;
+          if (col >= COLS) {
+            col = 0;
+            rowY -= IMG_HEIGHT + 30;
+          }
+        }
+
+        // Move to next row if not at start of row
+        if (col > 0) {
+          rowY -= IMG_HEIGHT + 30;
+        }
+
+        y = rowY - 20;
+      }
+
+      // Handle uncategorized photos
+      const categoriaTipos = CATEGORIAS.flatMap(c => c.tipos);
+      const fotosOutras = fotosValidas.filter(f => 
+        !categoriaTipos.some(t => f.tipo?.toLowerCase().includes(t))
+      );
+
+      if (fotosOutras.length > 0) {
+        if (y < 200) {
+          page = addPage();
+          y = PAGE_HEIGHT - MARGIN - 30;
+        }
+
+        page.drawText('OUTRAS FOTOS', {
+          x: MARGIN,
+          y,
+          size: 11,
+          font: fontBold,
+          color: PRIMARY_COLOR,
+        });
+
+        y -= 20;
+
+        let col = 0;
+        let rowY = y;
+
+        for (const foto of fotosOutras) {
+          if (rowY - IMG_HEIGHT - 20 < MARGIN) {
+            page = addPage();
+            rowY = PAGE_HEIGHT - MARGIN - 30;
+            y = rowY;
+            col = 0;
+          }
+
+          const x = MARGIN + col * (IMG_WIDTH + IMG_GAP);
+
+          try {
+            const response = await fetch(foto.arquivo_url);
+            if (response.ok) {
+              const arrayBuffer = await response.arrayBuffer();
+              const bytes = new Uint8Array(arrayBuffer);
+
+              let image;
+              try {
+                image = await pdfDoc.embedJpg(bytes);
+              } catch {
+                try {
+                  image = await pdfDoc.embedPng(bytes);
+                } catch {
+                  image = null;
+                }
+              }
+
+              if (image) {
+                const aspectRatio = image.width / image.height;
+                let drawWidth = IMG_WIDTH;
+                let drawHeight = IMG_WIDTH / aspectRatio;
+
+                if (drawHeight > IMG_HEIGHT) {
+                  drawHeight = IMG_HEIGHT;
+                  drawWidth = IMG_HEIGHT * aspectRatio;
+                }
+
+                page.drawRectangle({
+                  x,
+                  y: rowY - IMG_HEIGHT,
+                  width: IMG_WIDTH,
+                  height: IMG_HEIGHT,
+                  color: rgb(0.97, 0.97, 0.97),
+                  borderColor: rgb(0.9, 0.9, 0.9),
+                  borderWidth: 1,
+                });
+
+                const offsetX = (IMG_WIDTH - drawWidth) / 2;
+                const offsetY = (IMG_HEIGHT - drawHeight) / 2;
+
+                page.drawImage(image, {
+                  x: x + offsetX,
+                  y: rowY - IMG_HEIGHT + offsetY,
+                  width: drawWidth,
+                  height: drawHeight,
+                });
+              }
+            }
+          } catch (err) {
+            console.warn('Error loading image:', foto.arquivo_url, err);
+          }
+
+          const label = TIPO_FOTO_LABELS[foto.tipo] || foto.tipo || 'Foto';
+          page.drawText(label, {
+            x,
+            y: rowY - IMG_HEIGHT - 12,
+            size: 8,
+            font,
+            color: MUTED_COLOR,
+          });
+
+          col++;
+          if (col >= COLS) {
+            col = 0;
+            rowY -= IMG_HEIGHT + 30;
+          }
+        }
+      }
+    }
+
+    // Add footer to all pages
+    const pages = pdfDoc.getPages();
+    const totalPages = pages.length;
+    const dataGeracao = new Date().toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    for (let i = 0; i < totalPages; i++) {
+      const p = pages[i];
+      p.drawText(`Documento gerado em ${dataGeracao}`, {
+        x: MARGIN,
+        y: 20,
+        size: 8,
+        font,
+        color: MUTED_COLOR,
+      });
+      p.drawText(`Página ${i + 1} de ${totalPages}`, {
+        x: PAGE_WIDTH - MARGIN - 60,
+        y: 20,
+        size: 8,
+        font,
+        color: MUTED_COLOR,
+      });
+    }
+
+    // Save PDF
+    const pdfBytes = await pdfDoc.save();
+    const placaFormatada = (veiculo?.placa || placa || 'SEMPLACA').replace(/[^A-Z0-9]/gi, '').toUpperCase();
+    const nomeArquivo = `Laudo_Vistoria_${placaFormatada}_${Date.now()}.pdf`;
+
+    // Upload to storage
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('documentos')
+      .upload(`laudos/${associadoId}/${nomeArquivo}`, pdfBytes, {
+        contentType: 'application/pdf',
+        upsert: true,
+      });
+
+    if (uploadError) {
+      console.error('Erro ao fazer upload do PDF:', uploadError);
+      return new Response(
+        JSON.stringify({ error: 'Erro ao salvar o PDF' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Get public URL
+    const { data: publicUrlData } = supabase.storage
+      .from('documentos')
+      .getPublicUrl(`laudos/${associadoId}/${nomeArquivo}`);
+
+    const arquivoUrl = publicUrlData.publicUrl;
+
+    console.log('PDF gerado e salvo:', arquivoUrl);
+
+    // Insert into documentos table (for cadastro analyst view)
+    const { error: docError } = await supabase
+      .from('documentos')
+      .insert({
+        associado_id: associadoId,
+        veiculo_id: veiculoId,
+        tipo: 'laudo_vistoria',
+        arquivo_url: arquivoUrl,
+        nome_arquivo: nomeArquivo,
+        status: 'aprovado',
+      });
+
+    if (docError) {
+      console.error('Erro ao inserir documento:', docError);
+    }
+
+    // Also insert into contratos_documentos if contratoId provided (compatibility)
+    if (contratoId) {
+      const { error: contratoDocError } = await supabase
+        .from('contratos_documentos')
+        .insert({
+          contrato_id: contratoId,
+          tipo: 'laudo_vistoria',
+          arquivo_url: arquivoUrl,
+          nome_arquivo: nomeArquivo,
+          status: 'aprovado',
+        });
+
+      if (contratoDocError) {
+        console.warn('Erro ao inserir documento do contrato (não crítico):', contratoDocError);
+      }
+    }
+
+    return new Response(
+      JSON.stringify({ 
+        success: true, 
+        url: arquivoUrl,
+        nomeArquivo,
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+
+  } catch (error: unknown) {
+    const errMessage = error instanceof Error ? error.message : 'Erro interno ao gerar laudo';
+    console.error('Erro ao gerar laudo:', error);
+    return new Response(
+      JSON.stringify({ error: errMessage }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+});

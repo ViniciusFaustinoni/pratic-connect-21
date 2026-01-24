@@ -125,18 +125,17 @@ export function useAprovarVeiculoVistoria() {
 
       // 7. Gerar laudo de vistoria em PDF (async, não bloqueia aprovação)
       const veiculoData = vistoriaData?.veiculos as any;
-      if (vistoriaData?.contrato_id && veiculoData?.placa) {
-        // Importar dinamicamente para evitar dependência circular
-        import('./useGerarLaudoVistoria').then(({ useGerarLaudoVistoria }) => {
-          // Chamar edge function para gerar PDF em background
-          supabase.functions.invoke('gerar-laudo-vistoria', {
-            body: {
-              vistoriaId: data.vistoriaId,
-              contratoId: vistoriaData.contrato_id,
-              placa: veiculoData.placa,
-            }
-          }).catch(err => console.warn('Erro ao gerar laudo (não crítico):', err));
-        }).catch(err => console.warn('Erro ao importar hook:', err));
+      if (veiculoData?.placa) {
+        // Chamar edge function para gerar PDF em background
+        supabase.functions.invoke('gerar-laudo-vistoria', {
+          body: {
+            vistoriaId: data.vistoriaId,
+            associadoId: data.associadoId,
+            veiculoId: data.veiculoId,
+            contratoId: vistoriaData?.contrato_id,
+            placa: veiculoData.placa,
+          }
+        }).catch(err => console.warn('Erro ao gerar laudo (não crítico):', err));
       }
 
       // 8. Notificar cliente sobre cobertura total ativada
