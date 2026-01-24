@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { CreditCard, QrCode, Loader2, Check, Copy, FileText, AlertCircle, RefreshCw, Calendar, Clock, MapPin, Wrench } from 'lucide-react';
+import { CreditCard, QrCode, Loader2, Check, Copy, FileText, AlertCircle, RefreshCw, Calendar, Clock, MapPin, Wrench, ExternalLink, Shield } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
@@ -38,8 +39,12 @@ interface CobrancaData {
   pixQrCode?: string;
   boletoUrl?: string;
   linhaDigitavel?: string;
+  linkPagamento?: string; // Link para pagamento com cartão
+  invoiceUrl?: string; // Link da fatura Asaas
   status: string;
 }
+
+type FormaPagamento = 'PIX' | 'CREDIT_CARD';
 
 type EtapaInterna = 'gerando_contrato' | 'criando_cobranca' | 'aguardando_pagamento' | 'pago' | 'erro';
 
@@ -60,6 +65,7 @@ export function EtapaPagamentoCotacao({
   const [erro, setErro] = useState<string | null>(null);
   const [verificando, setVerificando] = useState(false);
   const [copiado, setCopiado] = useState(false);
+  const [formaPagamento, setFormaPagamento] = useState<FormaPagamento>('PIX');
 
   // 1. Gerar contrato ao montar
   const gerarContrato = useCallback(async () => {
@@ -138,18 +144,20 @@ export function EtapaPagamentoCotacao({
           pixQrCode: cobrancaExistente.pix_qrcode,
           boletoUrl: cobrancaExistente.boleto_url,
           linhaDigitavel: cobrancaExistente.linha_digitavel,
+          linkPagamento: `https://www.asaas.com/c/${cobrancaExistente.asaas_id}`,
           status: cobrancaExistente.status,
         });
         setEtapaInterna('aguardando_pagamento');
         return;
       }
 
-      // Criar nova cobrança via edge function
+      // Criar nova cobrança via edge function (usar UNDEFINED para permitir múltiplas formas)
       console.log('[EtapaPagamento] Criando nova cobrança...');
       const { data, error } = await publicSupabase.functions.invoke('asaas-cobranca-adesao', {
         body: {
           contratoId: idContrato,
           valor: valorAdesao,
+          formaPagamento: 'UNDEFINED', // Permite PIX e Cartão no mesmo link
           cliente: {
             nome: clienteNome,
             email: clienteEmail,
@@ -168,6 +176,8 @@ export function EtapaPagamentoCotacao({
         pixQrCode: data.pix_qrcode,
         boletoUrl: data.boleto_url,
         linhaDigitavel: data.linha_digitavel,
+        linkPagamento: data.link_pagamento || data.invoice_url,
+        invoiceUrl: data.invoice_url,
         status: 'PENDING',
       });
       setEtapaInterna('aguardando_pagamento');
@@ -532,56 +542,122 @@ export function EtapaPagamentoCotacao({
         </CardHeader>
 
         <CardContent className="pt-6 space-y-6">
-          {/* QR Code PIX */}
-          {cobranca?.pixQrCode && (
-            <motion.div 
-              className="text-center space-y-4"
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ delay: 0.1 }}
-            >
-              <div className="bg-white p-4 rounded-xl inline-block shadow-lg">
-                <img
-                  src={`data:image/png;base64,${cobranca.pixQrCode}`}
-                  alt="QR Code PIX"
-                  className="w-52 h-52 mx-auto"
-                />
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Escaneie o QR Code com o app do seu banco
-              </p>
-            </motion.div>
-          )}
+          {/* Abas de Forma de Pagamento */}
+          <Tabs value={formaPagamento} onValueChange={(v) => setFormaPagamento(v as FormaPagamento)} className="w-full">
+            <TabsList className="grid w-full grid-cols-2 mb-4">
+              <TabsTrigger value="PIX" className="gap-2">
+                <QrCode className="h-4 w-4" />
+                PIX
+              </TabsTrigger>
+              <TabsTrigger value="CREDIT_CARD" className="gap-2">
+                <CreditCard className="h-4 w-4" />
+                Cartão
+              </TabsTrigger>
+            </TabsList>
 
-          {/* PIX Copia e Cola */}
-          {cobranca?.pixCopiaECola && (
-            <motion.div 
-              className="space-y-2"
-              initial={{ y: 10, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 0.2 }}
-            >
-              <label className="text-sm font-medium text-muted-foreground">PIX Copia e Cola</label>
-              <div className="flex gap-2">
-                <input
-                  readOnly
-                  value={cobranca.pixCopiaECola}
-                  className="flex-1 px-4 py-3 rounded-lg border border-border/50 bg-muted/30 text-xs font-mono truncate"
-                />
-                <Button 
-                  variant="outline" 
-                  size="icon" 
-                  onClick={handleCopiarPix}
-                  className={cn(
-                    "shrink-0 transition-all",
-                    copiado && "bg-success/10 border-success/30 text-success"
-                  )}
+            {/* Conteúdo PIX */}
+            <TabsContent value="PIX" className="space-y-4 mt-0">
+              {/* QR Code PIX */}
+              {cobranca?.pixQrCode && (
+                <motion.div 
+                  className="text-center space-y-4"
+                  initial={{ scale: 0.9, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ delay: 0.1 }}
                 >
-                  {copiado ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                  <div className="bg-white p-4 rounded-xl inline-block shadow-lg">
+                    <img
+                      src={`data:image/png;base64,${cobranca.pixQrCode}`}
+                      alt="QR Code PIX"
+                      className="w-48 h-48 mx-auto"
+                    />
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Escaneie o QR Code com o app do seu banco
+                  </p>
+                </motion.div>
+              )}
+
+              {/* PIX Copia e Cola */}
+              {cobranca?.pixCopiaECola && (
+                <motion.div 
+                  className="space-y-2"
+                  initial={{ y: 10, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={{ delay: 0.2 }}
+                >
+                  <label className="text-sm font-medium text-muted-foreground">PIX Copia e Cola</label>
+                  <div className="flex gap-2">
+                    <input
+                      readOnly
+                      value={cobranca.pixCopiaECola}
+                      className="flex-1 px-4 py-3 rounded-lg border border-border/50 bg-muted/30 text-xs font-mono truncate"
+                    />
+                    <Button 
+                      variant="outline" 
+                      size="icon" 
+                      onClick={handleCopiarPix}
+                      className={cn(
+                        "shrink-0 transition-all",
+                        copiado && "bg-success/10 border-success/30 text-success"
+                      )}
+                    >
+                      {copiado ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </motion.div>
+              )}
+            </TabsContent>
+
+            {/* Conteúdo Cartão de Crédito */}
+            <TabsContent value="CREDIT_CARD" className="space-y-4 mt-0">
+              <motion.div 
+                className="text-center space-y-4"
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ delay: 0.1 }}
+              >
+                {/* Ícone decorativo */}
+                <div className="w-20 h-20 mx-auto rounded-full bg-primary/10 flex items-center justify-center">
+                  <CreditCard className="h-10 w-10 text-primary" />
+                </div>
+
+                <div className="space-y-2">
+                  <h4 className="font-semibold text-foreground">Pague com Cartão de Crédito</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Você será redirecionado para o ambiente seguro do Asaas para completar o pagamento.
+                  </p>
+                </div>
+
+                {/* Badge de segurança */}
+                <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+                  <Shield className="h-4 w-4 text-success" />
+                  <span>Ambiente seguro PCI-DSS</span>
+                </div>
+
+                {/* Botão de pagamento com cartão */}
+                <Button
+                  className="w-full gap-2"
+                  size="lg"
+                  onClick={() => {
+                    if (cobranca?.linkPagamento) {
+                      window.open(cobranca.linkPagamento, '_blank');
+                      toast.info('Página de pagamento aberta. Complete o pagamento e volte aqui.');
+                    }
+                  }}
+                  disabled={!cobranca?.linkPagamento}
+                >
+                  <CreditCard className="h-5 w-5" />
+                  Pagar com Cartão
+                  <ExternalLink className="h-4 w-4" />
                 </Button>
-              </div>
-            </motion.div>
-          )}
+
+                <p className="text-xs text-muted-foreground">
+                  Após o pagamento, a confirmação é automática
+                </p>
+              </motion.div>
+            </TabsContent>
+          </Tabs>
 
           {/* Status de aguardando */}
           <motion.div 
@@ -598,7 +674,7 @@ export function EtapaPagamentoCotacao({
                 </>
               ) : (
                 <>
-                  <QrCode className="h-4 w-4" />
+                  <Clock className="h-4 w-4" />
                   Aguardando pagamento...
                 </>
               )}

@@ -10,6 +10,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { useMyBoletos, type ResumoFinanceiro } from '@/hooks/useMyData';
 import { CardBoleto, CardBoletoSkeleton, formatarValor, type BoletoData } from '@/components/app';
+import { AlertaCotacaoCancelada } from '@/components/app/AlertaCotacaoCancelada';
+import { useCotacaoCanceladaPorPagamento, useCobrancaAdesaoVencida } from '@/hooks/useCotacaoCancelada';
+import { useAssociado } from '@/contexts/AssociadoContext';
 
 const FILTROS = [
   { value: 'todos', label: 'Todos' },
@@ -21,6 +24,11 @@ const FILTROS = [
 export default function AppBoletos() {
   const navigate = useNavigate();
   const { data: boletos = [], isLoading } = useMyBoletos();
+  const { associado } = useAssociado();
+  
+  // Verificar cotação cancelada por falta de pagamento
+  const { data: cotacaoCancelada } = useCotacaoCanceladaPorPagamento(associado?.id);
+  const { data: cobrancaAdesaoVencida } = useCobrancaAdesaoVencida(associado?.id);
   
   const [filtroStatus, setFiltroStatus] = useState<string>('todos');
 
@@ -78,6 +86,15 @@ export default function AppBoletos() {
 
   return (
     <div className="space-y-4 p-4 pb-24">
+      {/* ALERTA DE COTAÇÃO CANCELADA POR FALTA DE PAGAMENTO */}
+      {(cotacaoCancelada || cobrancaAdesaoVencida) && (
+        <AlertaCotacaoCancelada
+          motivo={cotacaoCancelada?.motivo_cancelamento || 'Taxa de adesão vencida. Sua contratação está pendente.'}
+          data={cotacaoCancelada?.cancelada_em || undefined}
+          variante="card"
+        />
+      )}
+
       {/* Header */}
       <div>
         <h1 className="text-xl font-bold text-foreground">Meus Boletos</h1>

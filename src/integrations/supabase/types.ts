@@ -4202,6 +4202,7 @@ export type Database = {
       cotacoes: {
         Row: {
           adicionais_selecionados: Json | null
+          cancelada_em: string | null
           categoria: string | null
           cidade: string | null
           cliente_bairro: string | null
@@ -4229,6 +4230,7 @@ export type Database = {
           email_solicitante: string | null
           id: string
           lead_id: string | null
+          motivo_cancelamento: string | null
           nome_solicitante: string | null
           numero: string
           plano_escolhido_id: string | null
@@ -4292,6 +4294,7 @@ export type Database = {
         }
         Insert: {
           adicionais_selecionados?: Json | null
+          cancelada_em?: string | null
           categoria?: string | null
           cidade?: string | null
           cliente_bairro?: string | null
@@ -4319,6 +4322,7 @@ export type Database = {
           email_solicitante?: string | null
           id?: string
           lead_id?: string | null
+          motivo_cancelamento?: string | null
           nome_solicitante?: string | null
           numero: string
           plano_escolhido_id?: string | null
@@ -4382,6 +4386,7 @@ export type Database = {
         }
         Update: {
           adicionais_selecionados?: Json | null
+          cancelada_em?: string | null
           categoria?: string | null
           cidade?: string | null
           cliente_bairro?: string | null
@@ -4409,6 +4414,7 @@ export type Database = {
           email_solicitante?: string | null
           id?: string
           lead_id?: string | null
+          motivo_cancelamento?: string | null
           nome_solicitante?: string | null
           numero?: string
           plano_escolhido_id?: string | null
