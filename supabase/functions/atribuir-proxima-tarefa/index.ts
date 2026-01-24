@@ -31,6 +31,7 @@ function calcularDistanciaKm(
 
 /**
  * Verifica se o profissional tem tarefas agendadas dentro da janela de horas configurada
+ * CORRIGIDO: Usa APENAS a tabela SERVICOS como fonte única de verdade
  */
 async function temTarefasNaJanela(
   supabase: any,
@@ -44,28 +45,22 @@ async function temTarefasNaJanela(
   const horaAtual = agora.toTimeString().slice(0, 5); // "HH:MM"
   const horaLimite = limiteJanela.toTimeString().slice(0, 5);
 
-  // Buscar instalações agendadas nas próximas X horas
-  const { data: instAgendadas } = await supabase
-    .from('instalacoes')
-    .select('id, data_agendada, hora_agendada')
-    .eq('instalador_responsavel_id', profissionalId)
-    .eq('status', 'agendada')
+  // ✅ CORRIGIDO: Buscar tarefas APENAS da tabela SERVICOS (fonte única de verdade)
+  const { data: tarefasAtribuidas, error } = await supabase
+    .from('servicos')
+    .select('id, data_agendada, hora_agendada, tipo, status')
+    .eq('profissional_id', profissionalId)
+    .in('status', ['agendada', 'em_rota', 'em_andamento'])
     .gte('data_agendada', hojeStr)
     .lte('data_agendada', limiteJanelaStr);
 
-  // Buscar vistorias agendadas nas próximas X horas
-  const { data: vistAgendadas } = await supabase
-    .from('vistorias')
-    .select('id, data_agendada, hora_agendada')
-    .eq('vistoriador_id', profissionalId)
-    .in('status', ['pendente', 'agendada'])
-    .gte('data_agendada', hojeStr)
-    .lte('data_agendada', limiteJanelaStr);
+  if (error) {
+    console.error('[temTarefasNaJanela] Erro ao buscar tarefas do profissional:', error);
+    return false;
+  }
 
   // Filtrar apenas tarefas DENTRO da janela de tempo
-  const todasTarefas = [...(instAgendadas || []), ...(vistAgendadas || [])];
-  
-  const tarefasNaJanela = todasTarefas.filter(tarefa => {
+  const tarefasNaJanela = (tarefasAtribuidas || []).filter((tarefa: any) => {
     // Se é de um dia futuro (dentro do limite), conta
     if (tarefa.data_agendada > hojeStr && tarefa.data_agendada <= limiteJanelaStr) {
       return true;
@@ -83,6 +78,7 @@ async function temTarefasNaJanela(
     return false;
   });
 
+  console.log(`[temTarefasNaJanela] Profissional ${profissionalId}: ${tarefasNaJanela.length} tarefas nas próximas ${janelaHoras}h`);
   return tarefasNaJanela.length > 0;
 }
 
@@ -368,6 +364,62 @@ serve(async (req) => {
     console.log(`[atribuir-proxima-tarefa] ${servicosDisponiveis.length} serviços disponíveis no total`);
 
     if (servicosDisponiveis.length === 0) {
+      // ========== DEBUG: Por que não encontrou serviços? ==========
+      console.log(`[atribuir-proxima-tarefa] DEBUG: Nenhum serviço disponível. Investigando motivo...`);
+      
+      // Buscar TODOS os serviços para entender o estado atual
+      const { data: todosServicosDebug } = await supabase
+        .from('servicos')
+        .select('id, tipo, status, profissional_id, data_agendada, latitude, longitude, permite_encaixe, local_vistoria')
+        .in('status', ['pendente', 'agendada', 'em_rota', 'em_andamento'])
+        .limit(20);
+      
+      if (todosServicosDebug && todosServicosDebug.length > 0) {
+        const resumo = todosServicosDebug.map((s: any) => ({
+          id: s.id?.slice(0, 8) + '...',
+          tipo: s.tipo,
+          status: s.status,
+          tem_profissional: !!s.profissional_id,
+          data: s.data_agendada,
+          tem_coords: !!(s.latitude && s.longitude),
+          permite_encaixe: s.permite_encaixe,
+          local: s.local_vistoria
+        }));
+        console.log(`[atribuir-proxima-tarefa] DEBUG: Serviços no sistema:`, JSON.stringify(resumo));
+        
+        // Identificar motivos de exclusão
+        const jaAtribuidos = todosServicosDebug.filter((s: any) => s.profissional_id).length;
+        const semCoords = todosServicosDebug.filter((s: any) => !s.latitude || !s.longitude).length;
+        const naBase = todosServicosDebug.filter((s: any) => s.local_vistoria === 'base').length;
+        const datasFuturas = todosServicosDebug.filter((s: any) => s.data_agendada > amanha && !s.permite_encaixe).length;
+        
+        console.log(`[atribuir-proxima-tarefa] DEBUG: Motivos de exclusão:`);
+        console.log(`  - Já atribuídos: ${jaAtribuidos}`);
+        console.log(`  - Sem coordenadas: ${semCoords}`);
+        console.log(`  - Na base (não campo): ${naBase}`);
+        console.log(`  - Datas futuras sem encaixe: ${datasFuturas}`);
+      } else {
+        console.log(`[atribuir-proxima-tarefa] DEBUG: NENHUM serviço encontrado no sistema com status pendente/agendada`);
+        
+        // Verificar se existem instalações não sincronizadas
+        const { data: instalacoesPendentes } = await supabase
+          .from('instalacoes')
+          .select('id, status, data_agendada, instalador_responsavel_id')
+          .in('status', ['agendada', 'pendente'])
+          .limit(5);
+          
+        if (instalacoesPendentes && instalacoesPendentes.length > 0) {
+          console.log(`[atribuir-proxima-tarefa] ALERTA: ${instalacoesPendentes.length} instalações não sincronizadas com tabela servicos!`);
+          console.log(`[atribuir-proxima-tarefa] Instalações:`, JSON.stringify(instalacoesPendentes.map((i: any) => ({
+            id: i.id?.slice(0, 8) + '...',
+            status: i.status,
+            data: i.data_agendada,
+            tem_instalador: !!i.instalador_responsavel_id
+          }))));
+        }
+      }
+      // ========== FIM DEBUG ==========
+
       // Marcar profissional como em serviço mesmo sem tarefas
       await supabase
         .from('vistoriadores_localizacao')

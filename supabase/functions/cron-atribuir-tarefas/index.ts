@@ -31,6 +31,7 @@ function calcularDistanciaKm(
 
 /**
  * Verifica se o profissional tem tarefas agendadas dentro da janela de horas configurada
+ * CORRIGIDO: Usa APENAS a tabela SERVICOS como fonte única de verdade
  */
 async function temTarefasNaJanela(
   supabase: any,
@@ -44,28 +45,22 @@ async function temTarefasNaJanela(
   const horaAtual = agora.toTimeString().slice(0, 5); // "HH:MM"
   const horaLimite = limiteJanela.toTimeString().slice(0, 5);
 
-  // Buscar instalações agendadas nas próximas X horas
-  const { data: instAgendadas } = await supabase
-    .from('instalacoes')
-    .select('id, data_agendada, hora_agendada')
-    .eq('instalador_responsavel_id', profissionalId)
-    .eq('status', 'agendada')
+  // ✅ CORRIGIDO: Buscar tarefas APENAS da tabela SERVICOS (fonte única de verdade)
+  const { data: tarefasAtribuidas, error } = await supabase
+    .from('servicos')
+    .select('id, data_agendada, hora_agendada, tipo, status')
+    .eq('profissional_id', profissionalId)
+    .in('status', ['agendada', 'em_rota', 'em_andamento'])
     .gte('data_agendada', hojeStr)
     .lte('data_agendada', limiteJanelaStr);
 
-  // Buscar vistorias agendadas nas próximas X horas
-  const { data: vistAgendadas } = await supabase
-    .from('vistorias')
-    .select('id, data_agendada, hora_agendada')
-    .eq('vistoriador_id', profissionalId)
-    .in('status', ['pendente', 'agendada'])
-    .gte('data_agendada', hojeStr)
-    .lte('data_agendada', limiteJanelaStr);
+  if (error) {
+    console.error('[temTarefasNaJanela] Erro ao buscar tarefas do profissional:', error);
+    return false;
+  }
 
   // Filtrar apenas tarefas DENTRO da janela de tempo
-  const todasTarefas = [...(instAgendadas || []), ...(vistAgendadas || [])];
-  
-  const tarefasNaJanela = todasTarefas.filter(tarefa => {
+  const tarefasNaJanela = (tarefasAtribuidas || []).filter((tarefa: any) => {
     // Se é de um dia futuro (dentro do limite), conta
     if (tarefa.data_agendada > hojeStr && tarefa.data_agendada <= limiteJanelaStr) {
       return true;
@@ -83,6 +78,7 @@ async function temTarefasNaJanela(
     return false;
   });
 
+  console.log(`[temTarefasNaJanela] Profissional ${profissionalId}: ${tarefasNaJanela.length} tarefas nas próximas ${janelaHoras}h`);
   return tarefasNaJanela.length > 0;
 }
 
