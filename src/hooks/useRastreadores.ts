@@ -103,7 +103,8 @@ export function useRastreador(id: string | undefined) {
           veiculos (
             *,
             associados (*)
-          )
+          ),
+          portador:profiles!rastreadores_portador_id_fkey(id, nome)
         `)
         .eq('id', id)
         .maybeSingle();
