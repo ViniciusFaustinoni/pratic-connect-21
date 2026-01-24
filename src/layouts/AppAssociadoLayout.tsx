@@ -8,6 +8,8 @@ import { useNotificacoesPreferencias } from '@/hooks/useNotificacoesPreferencias
 import { useAppAssociadoRealtime } from '@/hooks/useAppAssociadoRealtime';
 import { useNotificacoesNaoLidas } from '@/hooks/useAppAssociado';
 import { NotificacoesOnboarding } from '@/components/app/NotificacoesOnboarding';
+import { PWAInstallModal } from '@/components/app/PWAInstallModal';
+import { usePWAInstall } from '@/hooks/usePWAInstall';
 
 const NAV_ITEMS = [
   { icon: Home, label: 'Início', path: '/app' },
@@ -17,11 +19,16 @@ const NAV_ITEMS = [
   { icon: User, label: 'Perfil', path: '/app/perfil' },
 ];
 
+const PWA_FIRST_VISIT_KEY = 'pratic_pwa_first_visit_shown';
+
 export function AppAssociadoLayout({ children }: { children?: React.ReactNode }) {
   const location = useLocation();
   const { data: preferencias } = useNotificacoesPreferencias();
   const { data: notificacoesNaoLidas = 0 } = useNotificacoesNaoLidas();
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showPWAModal, setShowPWAModal] = useState(false);
+  
+  const { isInstallable, isInstalled } = usePWAInstall();
 
   // Ativar realtime para notificações (sem som para associados por padrão)
   useNotificacoesRealtime({ enableSound: false });
@@ -37,6 +44,20 @@ export function AppAssociadoLayout({ children }: { children?: React.ReactNode })
       return () => clearTimeout(timer);
     }
   }, [preferencias]);
+
+  // Mostrar modal PWA na primeira visita (após o onboarding ou se já completou)
+  useEffect(() => {
+    const alreadyShown = localStorage.getItem(PWA_FIRST_VISIT_KEY);
+    
+    // Só mostrar se: não foi mostrado antes, pode instalar, não está instalado, e onboarding já foi fechado ou completado
+    if (!alreadyShown && isInstallable && !isInstalled && !showOnboarding) {
+      const timer = setTimeout(() => {
+        setShowPWAModal(true);
+        localStorage.setItem(PWA_FIRST_VISIT_KEY, 'true');
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [isInstallable, isInstalled, showOnboarding]);
 
   const isActive = (path: string) => {
     if (path === '/app') {
@@ -114,6 +135,12 @@ export function AppAssociadoLayout({ children }: { children?: React.ReactNode })
       <NotificacoesOnboarding 
         open={showOnboarding} 
         onOpenChange={setShowOnboarding} 
+      />
+
+      {/* PWA Install Modal - Primeira visita */}
+      <PWAInstallModal 
+        open={showPWAModal} 
+        onOpenChange={setShowPWAModal} 
       />
     </div>
   );
