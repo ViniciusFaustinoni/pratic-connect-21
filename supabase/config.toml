@@ -203,3 +203,6 @@ verify_jwt = false
 
 [functions.cron-atribuir-tarefas]
 verify_jwt = false
+
+[functions.send-push-profissional]
+verify_jwt = false

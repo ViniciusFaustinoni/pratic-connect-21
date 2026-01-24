@@ -34,6 +34,8 @@ export default defineConfig(({ mode }) => ({
         clientsClaim: true,
         navigateFallback: '/index.html',
         navigateFallbackAllowlist: [/^\/instalador/, /^\/app/],
+        // Importar handler de push notifications
+        importScripts: ['/sw-push.js'],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
