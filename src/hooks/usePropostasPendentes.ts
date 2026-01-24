@@ -28,6 +28,7 @@ export interface VistoriaInfo {
   id: string;
   status: string;
   tipo: string;
+  modalidade?: string; // 'autovistoria' | 'presencial' | 'ponto_fixo'
   fotos: VistoriaFotoInfo[];
 }
 
@@ -272,6 +273,7 @@ export function usePropostasPendentes() {
             id: vistoriaData.id,
             status: vistoriaData.status || 'pendente',
             tipo: vistoriaData.modalidade === 'autovistoria' ? 'autovistoria' : 'agendada',
+            modalidade: vistoriaData.modalidade || undefined,
             fotos: fotosVistoria as VistoriaFotoInfo[],
           };
         }
@@ -609,6 +611,7 @@ export function useProposta(contratoId: string | undefined) {
             id: vistoriaData.id,
             status: vistoriaData.status || 'pendente',
             tipo: vistoriaData.modalidade === 'autovistoria' ? 'autovistoria' : 'agendada',
+            modalidade: vistoriaData.modalidade || undefined,
             fotos: fotosVistoria as VistoriaFotoInfo[],
           };
         }
@@ -627,6 +630,7 @@ export function useProposta(contratoId: string | undefined) {
             id: contrato.cotacao_id,
             status: 'pendente',
             tipo: 'autovistoria',
+            modalidade: 'autovistoria', // Legado sempre é autovistoria
             fotos: fotosLegado as VistoriaFotoInfo[],
           };
         }
