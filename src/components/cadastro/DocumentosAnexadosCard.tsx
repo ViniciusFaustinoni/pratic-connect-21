@@ -19,6 +19,7 @@ import {
   Clock,
   XCircle,
   AlertCircle,
+  ClipboardCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -28,6 +29,7 @@ import type { DocumentoAnexado } from '@/hooks/usePropostasPendentes';
 // Labels para tipos de documento
 const TIPO_DOC_CONFIG: Record<string, { label: string; icon: React.ComponentType<{ className?: string }>; highlight?: boolean }> = {
   contrato_assinado: { label: 'Contrato Assinado', icon: FileText, highlight: true },
+  laudo_vistoria: { label: 'Laudo de Vistoria', icon: ClipboardCheck, highlight: true },
   cnh: { label: 'CNH', icon: CreditCard },
   crlv: { label: 'CRLV', icon: Car },
   comprovante_residencia: { label: 'Comprovante de Residência', icon: Home },
@@ -103,6 +105,8 @@ export function DocumentosAnexadosCard({ documentos }: DocumentosAnexadosCardPro
             const StatusIcon = statusConfig.icon;
 
             const isContrato = doc.tipo === 'contrato_assinado';
+            const isLaudo = doc.tipo === 'laudo_vistoria';
+            const isHighlight = isContrato || isLaudo;
             
             return (
               <div
@@ -110,7 +114,9 @@ export function DocumentosAnexadosCard({ documentos }: DocumentosAnexadosCardPro
                 className={cn(
                   "flex items-center justify-between p-3 rounded-lg border transition-colors cursor-pointer group",
                   isContrato 
-                    ? "border-emerald-300 bg-emerald-50/50 dark:bg-emerald-950/20 ring-1 ring-emerald-500/30 hover:bg-emerald-100/50" 
+                    ? "border-success/50 bg-success/5 ring-1 ring-success/30 hover:bg-success/10" 
+                    : isLaudo
+                    ? "border-info/50 bg-info/5 ring-1 ring-info/30 hover:bg-info/10"
                     : "border-border bg-muted/30 hover:bg-muted/50"
                 )}
                 onClick={() => setSelectedDoc(doc)}
@@ -119,21 +125,25 @@ export function DocumentosAnexadosCard({ documentos }: DocumentosAnexadosCardPro
                   <div className={cn(
                     "p-2 rounded-lg",
                     isContrato 
-                      ? "bg-emerald-100 dark:bg-emerald-900/50" 
+                      ? "bg-success/10" 
+                      : isLaudo
+                      ? "bg-info/10"
                       : "bg-background"
                   )}>
                     <DocIcon className={cn(
                       "h-4 w-4",
                       isContrato 
-                        ? "text-emerald-700 dark:text-emerald-400" 
+                        ? "text-success" 
+                        : isLaudo
+                        ? "text-info"
                         : "text-muted-foreground"
                     )} />
                   </div>
                   <div>
                     <p className={cn(
                       "font-medium text-sm",
-                      isContrato 
-                        ? "text-emerald-800 dark:text-emerald-300" 
+                      isHighlight 
+                        ? "text-foreground" 
                         : "text-foreground"
                     )}>
                       {docConfig.label}

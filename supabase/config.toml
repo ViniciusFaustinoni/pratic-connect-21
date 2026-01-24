@@ -206,3 +206,6 @@ verify_jwt = false
 
 [functions.send-push-profissional]
 verify_jwt = false
+
+[functions.gerar-laudo-vistoria]
+verify_jwt = false
