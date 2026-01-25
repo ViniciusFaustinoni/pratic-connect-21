@@ -5,7 +5,7 @@ import {
   FileCheck, FileText, Clock, Edit, AlertTriangle, Loader2,
   Receipt, MoreHorizontal, CheckCircle, XCircle, Pause, Play, Plus,
   CreditCard, Shield, Eye, ExternalLink, Wifi, WifiOff, Send, History,
-  TrendingUp, DollarSign, Camera, Image
+  TrendingUp, DollarSign, Camera, Image, Radio
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -60,6 +60,7 @@ import { useContratoDoAssociado, useDocumentosCotacao, useResumoFinanceiroAssoci
 import { useFotosAutovistoriaCotacao, agruparFotosPorCategoria, formatarTipoFoto } from '@/hooks/useFotosAutovistoria';
 import { useAssociadoHistoricoCompleto } from '@/hooks/useAssociadoHistoricoCompleto';
 import { VeiculoDetalhesModal } from '@/components/cadastro/VeiculoDetalhesModal';
+import { useAtivarRastreadorPlataforma } from '@/hooks/useVistoriaCompletaAnalise';
 import { cn } from '@/lib/utils';
 
 // ============================================
@@ -255,6 +256,9 @@ export default function AssociadoDetalhe() {
     isReativando, 
     isCancelando 
   } = useAssociadoActions();
+  
+  // Ativação de rastreador na plataforma
+  const ativarRastreadorMutation = useAtivarRastreadorPlataforma();
 
   // Handlers
   const handleWhatsApp = () => {
@@ -814,6 +818,33 @@ export default function AssociadoDetalhe() {
                         {!v.rastreador && (
                           <Button size="sm" variant="outline">
                             <Calendar className="mr-2 h-4 w-4" /> Agendar Instalação
+                          </Button>
+                        )}
+                        {/* Botão Ativar Rastreador - só exibe se:
+                            1. Tem rastreador vinculado
+                            2. Plataforma é softruck
+                            3. plataforma_device_id ainda é null (não ativado) */}
+                        {v.rastreador && 
+                         v.rastreador.plataforma === 'softruck' && 
+                         !v.rastreador.plataforma_device_id && (
+                          <Button 
+                            size="sm" 
+                            className="bg-green-600 hover:bg-green-700 text-white"
+                            onClick={() => ativarRastreadorMutation.mutateAsync({
+                              instalacaoId: '', // Opcional neste contexto
+                              veiculoId: v.id,
+                              associadoId: id!,
+                              rastreadorId: v.rastreador!.id,
+                              imei: v.rastreador!.imei!,
+                            })}
+                            disabled={ativarRastreadorMutation.isPending}
+                          >
+                            {ativarRastreadorMutation.isPending ? (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                              <Radio className="mr-2 h-4 w-4" />
+                            )}
+                            Ativar Rastreador
                           </Button>
                         )}
                       </div>

@@ -45,6 +45,10 @@ export interface VeiculoComRelacoes extends Tables<'veiculos'> {
     id: string;
     codigo: string;
     numero_serie: string | null;
+    imei: string | null;
+    plataforma: string | null;
+    plataforma_device_id: string | null;
+    status: string | null;
   } | null;
 }
 
@@ -305,7 +309,7 @@ export function useVeiculosDoAssociado(associadoId: string | undefined) {
         .from('veiculos')
         .select(`
           *,
-          rastreador:rastreadores(id, codigo, numero_serie)
+          rastreador:rastreadores(id, codigo, numero_serie, imei, plataforma, plataforma_device_id, status)
         `)
         .eq('associado_id', associadoId)
         .order('created_at', { ascending: false });
