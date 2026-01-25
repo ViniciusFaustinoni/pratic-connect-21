@@ -67,7 +67,7 @@ serve(async (req) => {
   }
 
   try {
-    const { vistoriaId, associadoId, veiculoId, contratoId, placa } = await req.json();
+    const { vistoriaId, associadoId, veiculoId, contratoId, cotacaoId: inputCotacaoId, placa } = await req.json();
 
     if (!vistoriaId || !associadoId || !veiculoId) {
       return new Response(
@@ -82,6 +82,18 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // Buscar cotacao_id do contrato se não foi fornecido
+    let cotacaoId = inputCotacaoId || null;
+    if (!cotacaoId && contratoId) {
+      const { data: contratoData } = await supabase
+        .from('contratos')
+        .select('cotacao_id')
+        .eq('id', contratoId)
+        .single();
+      cotacaoId = contratoData?.cotacao_id || null;
+      console.log(`CotacaoId recuperado do contrato: ${cotacaoId}`);
+    }
 
     // Fetch vistoria with related data
     const { data: vistoria, error: vistoriaError } = await supabase
@@ -692,20 +704,23 @@ serve(async (req) => {
       console.error('Erro ao inserir documento:', docError);
     }
 
-    // Also insert into contratos_documentos if contratoId provided (compatibility)
-    if (contratoId) {
+    // Also insert into contratos_documentos if contratoId or cotacaoId provided (compatibility)
+    if (contratoId || cotacaoId) {
       const { error: contratoDocError } = await supabase
         .from('contratos_documentos')
         .insert({
-          contrato_id: contratoId,
+          contrato_id: contratoId || null,
+          cotacao_id: cotacaoId || null,
           tipo: 'laudo_vistoria',
           arquivo_url: arquivoUrl,
-          nome_arquivo: nomeArquivo,
-          status: 'aprovado',
+          arquivo_nome: nomeArquivo,
+          status: 'pendente',
         });
 
       if (contratoDocError) {
         console.warn('Erro ao inserir documento do contrato (não crítico):', contratoDocError);
+      } else {
+        console.log(`Laudo inserido em contratos_documentos: contrato=${contratoId}, cotacao=${cotacaoId}`);
       }
     }
 

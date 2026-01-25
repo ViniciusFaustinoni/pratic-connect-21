@@ -65,10 +65,17 @@ export function useSaveAssinatura() {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const servicoInfoResult = await (supabase as any)
           .from('servicos')
-          .select('contrato_id, veiculo_id')
+          .select('contrato_id, veiculo_id, contratos:contrato_id(cotacao_id)')
           .eq('id', entityId)
           .single();
-        const servicoInfo = servicoInfoResult?.data as { contrato_id: string | null; veiculo_id: string | null } | null;
+        const servicoInfo = servicoInfoResult?.data as { 
+          contrato_id: string | null; 
+          veiculo_id: string | null;
+          contratos: { cotacao_id: string | null } | null;
+        } | null;
+        
+        // Extrair cotacao_id do join
+        const cotacaoId = servicoInfo?.contratos?.cotacao_id || null;
         
         if (servicoInfo?.contrato_id) {
           // Buscar vistoria vinculada ao mesmo contrato
@@ -111,6 +118,7 @@ export function useSaveAssinatura() {
                     associadoId: veiculoData.associado_id,
                     veiculoId: servicoInfo.veiculo_id,
                     contratoId: servicoInfo.contrato_id,
+                    cotacaoId: cotacaoId,
                     placa: veiculoData.placa,
                   }
                 }).then(res => {

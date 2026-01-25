@@ -70,6 +70,12 @@ const tipoConfig: Record<TipoDocumentoContrato, {
     icon: Home,
     obrigatorio: true,
   },
+  laudo_vistoria: { 
+    label: 'Laudo de Vistoria', 
+    descricao: 'Relatório gerado automaticamente pela vistoria',
+    icon: FileText,
+    obrigatorio: false,
+  },
 };
 
 export function DocumentUploader({
