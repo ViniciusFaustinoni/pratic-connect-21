@@ -5,6 +5,38 @@ import type { Database } from './types';
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
+// Criar storage isolado para evitar conflitos de sessão no preview do Lovable
+const createIsolatedStorage = () => {
+  const isLovablePreview = typeof window !== 'undefined' && 
+    window.location.hostname.includes('lovable');
+  
+  // Se está no preview do Lovable, usar sessionStorage para ID único da aba
+  const getSessionPrefix = (): string => {
+    if (!isLovablePreview) return '';
+    
+    let sessionId = sessionStorage.getItem('lovable_tab_session_id');
+    if (!sessionId) {
+      sessionId = crypto.randomUUID().substring(0, 8);
+      sessionStorage.setItem('lovable_tab_session_id', sessionId);
+    }
+    return `lovable_${sessionId}_`;
+  };
+
+  const prefix = getSessionPrefix();
+
+  return {
+    getItem: (key: string): string | null => {
+      return localStorage.getItem(prefix + key);
+    },
+    setItem: (key: string, value: string): void => {
+      localStorage.setItem(prefix + key, value);
+    },
+    removeItem: (key: string): void => {
+      localStorage.removeItem(prefix + key);
+    },
+  };
+};
+
 // Singleton pattern para evitar múltiplas instâncias durante HMR
 const getSupabaseClient = (): SupabaseClient<Database> => {
   const globalKey = '__SUPABASE_CLIENT__' as keyof typeof globalThis;
@@ -15,7 +47,7 @@ const getSupabaseClient = (): SupabaseClient<Database> => {
   
   const client = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     auth: {
-      storage: localStorage,
+      storage: createIsolatedStorage(),
       persistSession: true,
       autoRefreshToken: true,
     }

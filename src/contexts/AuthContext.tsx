@@ -162,9 +162,35 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
     };
 
+    // Armazenar ID do usuário atual para detectar trocas indevidas
+    let currentUserId: string | null = null;
+
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, currentSession) => {
+        const newUserId = currentSession?.user?.id ?? null;
+        
+        // Log detalhado para debug
+        console.log('[AuthContext] Auth state changed:', {
+          event,
+          newUserId: newUserId?.substring(0, 8),
+          newEmail: currentSession?.user?.email,
+          currentUserId: currentUserId?.substring(0, 8),
+          expiresAt: currentSession?.expires_at
+        });
+
+        // PROTEÇÃO: Se já temos um usuário e a sessão mudou para OUTRO usuário
+        // (não apenas refresh do mesmo), ignorar e logar warning
+        if (currentUserId && newUserId && currentUserId !== newUserId) {
+          console.warn('[AuthContext] ⚠️ BLOQUEADO: Tentativa de troca de usuário detectada!');
+          console.warn(`[AuthContext] Usuário atual: ${currentUserId.substring(0, 8)}, Novo: ${newUserId.substring(0, 8)}`);
+          console.warn('[AuthContext] Ignorando evento. Faça logout explícito para trocar de usuário.');
+          return; // BLOQUEAR a troca silenciosa
+        }
+
+        // Atualizar ID do usuário atual
+        currentUserId = newUserId;
+
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
 
@@ -176,6 +202,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           }, 0);
         } else {
           hasLoadedData = false; // Reset flag ao deslogar
+          currentUserId = null; // Reset ao deslogar
           setProfile(null);
           setPerfis([]);
           setLoading(false);
