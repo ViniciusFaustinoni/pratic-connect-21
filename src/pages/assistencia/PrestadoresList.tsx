@@ -17,6 +17,7 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
+import { NovoPrestadorModal } from '@/components/assistencia/NovoPrestadorModal';
 
 interface Prestador {
   id: string;
@@ -78,6 +79,7 @@ const formatCPF = (cpf: string) => {
 
 export default function PrestadoresList() {
   const navigate = useNavigate();
+  const [modalOpen, setModalOpen] = useState(false);
   const [filters, setFilters] = useState({
     status: 'todos',
     tipo: 'todos',
@@ -147,7 +149,7 @@ export default function PrestadoresList() {
           <h1 className="text-2xl font-bold">Prestadores de Serviço</h1>
           <p className="text-muted-foreground">Gerencie os prestadores de assistência 24h</p>
         </div>
-        <Button onClick={() => navigate('/assistencia/prestadores/novo')}>
+        <Button onClick={() => setModalOpen(true)}>
           <Plus className="mr-2 h-4 w-4" />
           Novo Prestador
         </Button>
@@ -380,6 +382,12 @@ export default function PrestadoresList() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Modal de Novo Prestador */}
+      <NovoPrestadorModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+      />
     </div>
   );
 }
