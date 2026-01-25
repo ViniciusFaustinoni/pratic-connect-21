@@ -171,6 +171,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   // Estados para confirmação de valor de adesão
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [pendingFormData, setPendingFormData] = useState<CotacaoFormData | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Estados para seleção FIPE manual
   const [marcas, setMarcas] = useState<FipeMarca[]>([]);
@@ -760,9 +761,9 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
 
   // Handler quando confirmar no popup
   const handleConfirmSubmit = async () => {
-    if (!pendingFormData) return;
+    if (!pendingFormData || isSubmitting) return;
     
-    setShowConfirmDialog(false);
+    setIsSubmitting(true);
     
     try {
       // Extrair ano numérico do texto (ex: "2022 Gasolina" -> 2022)
@@ -872,11 +873,14 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       setRegiaoSelecionada('');
       setDiaVencimento(null);
       
-      // Fechar modal
+      // Fechar modais após sucesso
+      setShowConfirmDialog(false);
       onOpenChange(false);
     } catch (error) {
       toast.error(isEditando ? 'Erro ao atualizar cotação' : 'Erro ao criar cotação');
       console.error(error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -1805,11 +1809,18 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setPendingFormData(null)}>
+            <AlertDialogCancel onClick={() => setPendingFormData(null)} disabled={isSubmitting}>
               Revisar Valor
             </AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmSubmit}>
-              Confirmar e Criar
+            <AlertDialogAction onClick={handleConfirmSubmit} disabled={isSubmitting}>
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                  Criando...
+                </>
+              ) : (
+                'Confirmar e Criar'
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
