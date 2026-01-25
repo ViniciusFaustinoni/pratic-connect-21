@@ -20,10 +20,10 @@ const SUCCESS_COLOR = rgb(0.1, 0.6, 0.3);
 const SECTION_BG = rgb(0.95, 0.95, 0.97);
 
 // Image grid settings
-const IMG_WIDTH = 165;
-const IMG_HEIGHT = 110;
-const IMG_GAP = 10;
-const COLS = 3;
+const IMG_WIDTH = 400;
+const IMG_HEIGHT = 280;
+const IMG_GAP = 15;
+const COLS = 1;
 
 // Category configuration for inspection photos
 const CATEGORIAS = [
@@ -351,27 +351,28 @@ serve(async (req) => {
 
     y -= 25;
 
-    // Status badge
+    // Status badge - só exibe se aprovado
     const status = vistoria.status || 'aprovada';
-    const statusText = status === 'aprovada' ? 'APROVADO' : status.toUpperCase();
-    const badgeColor = status === 'aprovada' ? SUCCESS_COLOR : rgb(0.8, 0.5, 0.1);
-    const badgeWidth = fontBold.widthOfTextAtSize(statusText, 14) + 30;
+    if (status === 'aprovada' || status === 'aprovada_com_ressalvas') {
+      const statusText = status === 'aprovada' ? 'APROVADO' : 'APROVADO COM RESSALVAS';
+      const badgeWidth = fontBold.widthOfTextAtSize(statusText, 14) + 30;
 
-    page.drawRectangle({
-      x: MARGIN,
-      y: y - 5,
-      width: badgeWidth,
-      height: 25,
-      color: badgeColor,
-    });
+      page.drawRectangle({
+        x: MARGIN,
+        y: y - 5,
+        width: badgeWidth,
+        height: 25,
+        color: SUCCESS_COLOR,
+      });
 
-    page.drawText(statusText, {
-      x: MARGIN + 15,
-      y: y + 3,
-      size: 14,
-      font: fontBold,
-      color: rgb(1, 1, 1),
-    });
+      page.drawText(statusText, {
+        x: MARGIN + 15,
+        y: y + 3,
+        size: 14,
+        font: fontBold,
+        color: rgb(1, 1, 1),
+      });
+    }
 
     y -= 50;
 
@@ -392,11 +393,123 @@ serve(async (req) => {
 
     // Photos section
     const fotosValidas = (fotos || []).filter(f => f.arquivo_url);
+    
+    // Separar assinatura das outras fotos
+    const fotosAssinatura = fotosValidas.filter(f => 
+      f.tipo === 'assinatura_cliente' || f.tipo?.toLowerCase().includes('assinatura')
+    );
+    const fotosOutrasSemAssinatura = fotosValidas.filter(f => 
+      f.tipo !== 'assinatura_cliente' && !f.tipo?.toLowerCase().includes('assinatura')
+    );
 
-    if (fotosValidas.length > 0) {
+    // Desenhar assinatura primeiro se existir
+    if (fotosAssinatura.length > 0) {
+      if (y < 350) {
+        page = addPage();
+        y = PAGE_HEIGHT - MARGIN - 30;
+      }
+
+      page.drawText('ASSINATURA DO CLIENTE', {
+        x: MARGIN,
+        y,
+        size: 11,
+        font: fontBold,
+        color: PRIMARY_COLOR,
+      });
+
+      y -= 20;
+
+      let col = 0;
+      let rowY = y;
+
+      for (const foto of fotosAssinatura) {
+        if (rowY - IMG_HEIGHT - 20 < MARGIN) {
+          page = addPage();
+          rowY = PAGE_HEIGHT - MARGIN - 30;
+          y = rowY;
+          col = 0;
+        }
+
+        const x = MARGIN + col * (IMG_WIDTH + IMG_GAP);
+
+        try {
+          const response = await fetch(foto.arquivo_url);
+          if (response.ok) {
+            const arrayBuffer = await response.arrayBuffer();
+            const bytes = new Uint8Array(arrayBuffer);
+
+            let image;
+            try {
+              image = await pdfDoc.embedJpg(bytes);
+            } catch {
+              try {
+                image = await pdfDoc.embedPng(bytes);
+              } catch {
+                image = null;
+              }
+            }
+
+            if (image) {
+              const aspectRatio = image.width / image.height;
+              let drawWidth = IMG_WIDTH;
+              let drawHeight = IMG_WIDTH / aspectRatio;
+
+              if (drawHeight > IMG_HEIGHT) {
+                drawHeight = IMG_HEIGHT;
+                drawWidth = IMG_HEIGHT * aspectRatio;
+              }
+
+              page.drawRectangle({
+                x,
+                y: rowY - IMG_HEIGHT,
+                width: IMG_WIDTH,
+                height: IMG_HEIGHT,
+                color: rgb(0.97, 0.97, 0.97),
+                borderColor: rgb(0.9, 0.9, 0.9),
+                borderWidth: 1,
+              });
+
+              const offsetX = (IMG_WIDTH - drawWidth) / 2;
+              const offsetY = (IMG_HEIGHT - drawHeight) / 2;
+
+              page.drawImage(image, {
+                x: x + offsetX,
+                y: rowY - IMG_HEIGHT + offsetY,
+                width: drawWidth,
+                height: drawHeight,
+              });
+            }
+          }
+        } catch (err) {
+          console.warn('Error loading signature image:', foto.arquivo_url, err);
+        }
+
+        page.drawText('Assinatura do Cliente', {
+          x,
+          y: rowY - IMG_HEIGHT - 12,
+          size: 8,
+          font,
+          color: MUTED_COLOR,
+        });
+
+        col++;
+        if (col >= COLS) {
+          col = 0;
+          rowY -= IMG_HEIGHT + 30;
+        }
+      }
+
+      if (col > 0) {
+        rowY -= IMG_HEIGHT + 30;
+      }
+
+      y = rowY - 20;
+    }
+
+    if (fotosOutrasSemAssinatura.length > 0) {
       // Group photos by category
       for (const categoria of CATEGORIAS) {
-        const fotosDaCategoria = fotosValidas.filter(f => 
+        const fotosDaCategoria = fotosOutrasSemAssinatura.filter(f => 
           categoria.tipos.some(t => f.tipo?.toLowerCase().includes(t))
         );
 
@@ -524,9 +637,9 @@ serve(async (req) => {
         y = rowY - 20;
       }
 
-      // Handle uncategorized photos
+      // Handle uncategorized photos (excluindo assinatura já exibida)
       const categoriaTipos = CATEGORIAS.flatMap(c => c.tipos);
-      const fotosOutras = fotosValidas.filter(f => 
+      const fotosOutras = fotosOutrasSemAssinatura.filter(f => 
         !categoriaTipos.some(t => f.tipo?.toLowerCase().includes(t))
       );
 
