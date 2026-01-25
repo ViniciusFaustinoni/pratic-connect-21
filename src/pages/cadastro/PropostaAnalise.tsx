@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -39,6 +40,8 @@ import {
   Puzzle,
   ShieldCheck,
   ShieldOff,
+  Zap,
+  Loader2,
 } from 'lucide-react';
 import {
   useProposta,
@@ -47,6 +50,7 @@ import {
   useSolicitarDocumentos,
   useReprovarProposta,
 } from '@/hooks/usePropostasPendentes';
+import { useAtivarRastreador } from '@/hooks/useAtivarRastreador';
 import { SolicitarDocumentosDialog } from '@/components/cadastro/SolicitarDocumentosDialog';
 import { DocumentosAnexadosCard } from '@/components/cadastro/DocumentosAnexadosCard';
 import { DocumentosSolicitadosCard } from '@/components/cadastro/DocumentosSolicitadosCard';
@@ -133,10 +137,12 @@ function StatusBadge({ status }: { status: string | null }) {
 export default function PropostaAnalise() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const [showSolicitarDocs, setShowSolicitarDocs] = useState(false);
   const [showReprovar, setShowReprovar] = useState(false);
   const [showConfirmAprovar, setShowConfirmAprovar] = useState(false);
+  const [showConfirmAtivacaoSoftruck, setShowConfirmAtivacaoSoftruck] = useState(false);
 
   const { data: proposta, isLoading } = useProposta(id);
   const { data: todasPropostas } = usePropostasPendentes();
@@ -144,6 +150,7 @@ export default function PropostaAnalise() {
   const aprovarMutation = useAprovarProposta();
   const solicitarDocsMutation = useSolicitarDocumentos();
   const reprovarMutation = useReprovarProposta();
+  const ativarRastreadorMutation = useAtivarRastreador();
 
   // Encontrar próxima proposta
   const currentIndex = todasPropostas?.findIndex((p) => p.id === id) ?? -1;
@@ -198,6 +205,39 @@ export default function PropostaAnalise() {
       navigate('/cadastro/propostas');
     }
   };
+
+  // Handler para ativar rastreador Softruck
+  const handleConfirmarAtivacaoSoftruck = async () => {
+    if (!proposta?.instalacao_info?.rastreador_imei || 
+        !proposta?.veiculo_id || 
+        !proposta?.associado_id) {
+      return;
+    }
+    
+    setShowConfirmAtivacaoSoftruck(false);
+    
+    try {
+      await ativarRastreadorMutation.mutateAsync({
+        imei: proposta.instalacao_info.rastreador_imei,
+        veiculoId: proposta.veiculo_id,
+        associadoId: proposta.associado_id,
+        associadoEmail: proposta.cliente_email || undefined,
+      });
+      
+      // Refetch para atualizar estado
+      queryClient.invalidateQueries({ queryKey: ['proposta', id] });
+    } catch (error) {
+      console.error('Erro ao ativar rastreador:', error);
+    }
+  };
+
+  // Verificar se pode ativar Softruck
+  const podeAtivarSoftruck = proposta?.status === 'ativo' &&
+    proposta?.instalacao_info?.rastreador_plataforma === 'softruck' &&
+    !proposta?.instalacao_info?.rastreador_ativado &&
+    !proposta?.veiculo_cobertura_total;
+
+  const isAtivandoSoftruck = ativarRastreadorMutation.isPending;
 
   if (isLoading) {
     return (
@@ -597,12 +637,50 @@ export default function PropostaAnalise() {
                     </div>
                   )}
                   {proposta.status === 'ativo' && (
-                    <div className="flex items-center justify-center gap-2 text-success">
-                      <CheckCircle className="h-5 w-5" />
-                      <span className="text-sm font-medium">
-                        Esta proposta já foi aprovada
-                      </span>
-                    </div>
+                    <>
+                      <div className="flex items-center justify-center gap-2 text-success">
+                        <CheckCircle className="h-5 w-5" />
+                        <span className="text-sm font-medium">
+                          Esta proposta já foi aprovada
+                        </span>
+                      </div>
+                      
+                      {/* Botão de ativação Softruck */}
+                      {podeAtivarSoftruck && (
+                        <div className="mt-4 space-y-3">
+                          <div className="bg-warning/10 border border-warning/30 rounded-lg p-3">
+                            <div className="flex items-start gap-2">
+                              <AlertTriangle className="h-5 w-5 text-warning mt-0.5" />
+                              <div>
+                                <p className="font-medium text-warning">Ativação Pendente</p>
+                                <p className="text-sm text-muted-foreground">
+                                  O rastreador foi instalado mas ainda não foi ativado na plataforma Softruck.
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <Button
+                            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
+                            size="lg"
+                            onClick={() => setShowConfirmAtivacaoSoftruck(true)}
+                            disabled={isAtivandoSoftruck}
+                          >
+                            {isAtivandoSoftruck ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Ativando na Softruck...
+                              </>
+                            ) : (
+                              <>
+                                <Zap className="mr-2 h-4 w-4" />
+                                Ativar Rastreador Softruck
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      )}
+                    </>
                   )}
                   {proposta.status === 'reprovado' && (
                     <div className="flex items-center justify-center gap-2 text-destructive">
@@ -766,6 +844,49 @@ export default function PropostaAnalise() {
           </AlertDialog>
         );
       })()}
+
+      {/* Dialog de confirmação de ativação Softruck */}
+      <AlertDialog open={showConfirmAtivacaoSoftruck} onOpenChange={setShowConfirmAtivacaoSoftruck}>
+        <AlertDialogContent className="bg-card border-border">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-foreground">
+              <Zap className="h-5 w-5 text-primary" />
+              Confirmar Ativação do Rastreador
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-muted-foreground">
+                <p>Esta ação irá:</p>
+                <ul className="list-disc list-inside space-y-1 text-sm">
+                  <li>Ativar o rastreador na plataforma <strong className="text-foreground">SOFTRUCK</strong></li>
+                  <li>Liberar a <strong className="text-foreground">cobertura total</strong> para o veículo {proposta?.veiculo_placa}</li>
+                  <li>Criar veículo/device na Softruck se necessário</li>
+                </ul>
+                <p className="font-medium text-foreground">Deseja continuar?</p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-border">Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-primary hover:bg-primary/90 text-primary-foreground"
+              onClick={handleConfirmarAtivacaoSoftruck}
+              disabled={isAtivandoSoftruck}
+            >
+              {isAtivandoSoftruck ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Ativando...
+                </>
+              ) : (
+                <>
+                  <Zap className="mr-2 h-4 w-4" />
+                  Confirmar Ativação
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

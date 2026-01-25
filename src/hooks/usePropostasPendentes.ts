@@ -54,6 +54,9 @@ export interface InstalacaoInfo {
   concluida_em: string | null;
   rastreador_imei: string | null;
   rastreador_codigo: string | null;
+  rastreador_id: string | null;
+  rastreador_plataforma: string | null; // 'softruck', 'rede_veiculos', etc
+  rastreador_ativado: boolean; // true se plataforma_device_id existe
   instalador_nome: string | null;
   assinatura_cliente_url: string | null;
 }
@@ -83,6 +86,8 @@ export interface PropostaPendente {
   dia_vencimento: number | null;
   associado_id: string | null;
   cotacao_id: string | null;
+  veiculo_id: string | null; // ID do veículo vinculado
+  veiculo_cobertura_total: boolean | null; // Se veículo tem cobertura total ativada
   associado: Associado | null;
   plano: { nome: string } | null;
   plano_nome: string | null; // Fallback do nome do plano
@@ -347,20 +352,26 @@ export function usePropostasPendentes() {
         .maybeSingle();
 
       if (instalacaoData) {
-        // Buscar dados do rastreador instalado (com IMEI)
+        // Buscar dados do rastreador instalado (com IMEI, plataforma e status de ativação)
         let rastreadorImei: string | null = null;
         let rastreadorCodigo: string | null = null;
+        let rastreadorId: string | null = null;
+        let rastreadorPlataforma: string | null = null;
+        let rastreadorAtivado = false;
         
         if (instalacaoData.rastreador_id) {
           const { data: rastreador } = await supabase
             .from('rastreadores')
-            .select('imei, codigo')
+            .select('id, imei, codigo, plataforma, plataforma_device_id')
             .eq('id', instalacaoData.rastreador_id)
             .single();
           
           if (rastreador) {
             rastreadorImei = rastreador.imei;
             rastreadorCodigo = rastreador.codigo;
+            rastreadorId = rastreador.id;
+            rastreadorPlataforma = rastreador.plataforma;
+            rastreadorAtivado = !!rastreador.plataforma_device_id;
           }
         }
         
@@ -416,6 +427,9 @@ export function usePropostasPendentes() {
           concluida_em: instalacaoData.concluida_em,
           rastreador_imei: rastreadorImei,
           rastreador_codigo: rastreadorCodigo,
+          rastreador_id: rastreadorId,
+          rastreador_plataforma: rastreadorPlataforma,
+          rastreador_ativado: rastreadorAtivado,
           instalador_nome: instaladorNome,
           assinatura_cliente_url: assinaturaUrl,
         };
@@ -443,6 +457,8 @@ export function usePropostasPendentes() {
             documentos_solicitados_enviados: documentosSolicitadosEnviados,
             instalacao_info: instalacaoInfo,
             instalacao_agendada: instalacaoAgendada,
+            veiculo_id: null, // Não disponível na lista resumida
+            veiculo_cobertura_total: null, // Não disponível na lista resumida
           } as PropostaPendente;
         })
       );
@@ -720,22 +736,28 @@ export function useProposta(contratoId: string | undefined) {
         .maybeSingle();
 
       if (instalacaoData) {
-        // Buscar dados do rastreador instalado (com IMEI)
+        // Buscar dados do rastreador instalado (com IMEI, plataforma e status de ativação)
         let rastreadorImei: string | null = null;
         let rastreadorCodigo: string | null = null;
+        let rastreadorId: string | null = null;
+        let rastreadorPlataforma: string | null = null;
+        let rastreadorAtivado = false;
         let instaladorNome: string | null = null;
         let assinaturaUrl = instalacaoData.assinatura_cliente_url;
         
         if (instalacaoData.rastreador_id) {
           const { data: rastreador } = await supabase
             .from('rastreadores')
-            .select('imei, codigo')
+            .select('id, imei, codigo, plataforma, plataforma_device_id')
             .eq('id', instalacaoData.rastreador_id)
             .maybeSingle();
           
           if (rastreador) {
             rastreadorImei = rastreador.imei;
             rastreadorCodigo = rastreador.codigo;
+            rastreadorId = rastreador.id;
+            rastreadorPlataforma = rastreador.plataforma;
+            rastreadorAtivado = !!rastreador.plataforma_device_id;
           }
         }
         
@@ -770,13 +792,16 @@ export function useProposta(contratoId: string | undefined) {
             // Buscar dados do rastreador
             const { data: rastreadorServico } = await supabase
               .from('rastreadores')
-              .select('imei, codigo')
+              .select('id, imei, codigo, plataforma, plataforma_device_id')
               .eq('id', servicoRastreador.rastreador_id)
               .maybeSingle();
             
             if (rastreadorServico) {
               rastreadorImei = rastreadorServico.imei;
               rastreadorCodigo = rastreadorServico.codigo;
+              rastreadorId = rastreadorServico.id;
+              rastreadorPlataforma = rastreadorServico.plataforma;
+              rastreadorAtivado = !!rastreadorServico.plataforma_device_id;
             }
             
             // Também pegar nome do instalador se não tinha
@@ -835,6 +860,9 @@ export function useProposta(contratoId: string | undefined) {
           concluida_em: instalacaoData.concluida_em,
           rastreador_imei: rastreadorImei,
           rastreador_codigo: rastreadorCodigo,
+          rastreador_id: rastreadorId,
+          rastreador_plataforma: rastreadorPlataforma,
+          rastreador_ativado: rastreadorAtivado,
           instalador_nome: instaladorNome,
           assinatura_cliente_url: assinaturaUrl,
         };
@@ -861,19 +889,25 @@ export function useProposta(contratoId: string | undefined) {
         if (servicoCompleto) {
           let rastreadorImei: string | null = null;
           let rastreadorCodigo: string | null = null;
+          let rastreadorId: string | null = null;
+          let rastreadorPlataforma: string | null = null;
+          let rastreadorAtivado = false;
           let instaladorNome: string | null = null;
           
           // Buscar rastreador
           if (servicoCompleto.rastreador_id) {
             const { data: rastreador } = await supabase
               .from('rastreadores')
-              .select('imei, codigo')
+              .select('id, imei, codigo, plataforma, plataforma_device_id')
               .eq('id', servicoCompleto.rastreador_id)
               .maybeSingle();
             
             if (rastreador) {
               rastreadorImei = rastreador.imei;
               rastreadorCodigo = rastreador.codigo;
+              rastreadorId = rastreador.id;
+              rastreadorPlataforma = rastreador.plataforma;
+              rastreadorAtivado = !!rastreador.plataforma_device_id;
             }
           }
           
@@ -910,9 +944,31 @@ export function useProposta(contratoId: string | undefined) {
             concluida_em: servicoCompleto.concluida_em,
             rastreador_imei: rastreadorImei,
             rastreador_codigo: rastreadorCodigo,
+            rastreador_id: rastreadorId,
+            rastreador_plataforma: rastreadorPlataforma,
+            rastreador_ativado: rastreadorAtivado,
             instalador_nome: instaladorNome,
             assinatura_cliente_url: assinaturaUrl,
           };
+        }
+      }
+
+      // Buscar veículo_id e cobertura_total do veículo
+      let veiculoId: string | null = null;
+      let veiculoCoberturaTotal: boolean | null = null;
+      
+      if (contrato.associado_id) {
+        const { data: veiculo } = await supabase
+          .from('veiculos')
+          .select('id, cobertura_total')
+          .eq('associado_id', contrato.associado_id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        
+        if (veiculo) {
+          veiculoId = veiculo.id;
+          veiculoCoberturaTotal = veiculo.cobertura_total;
         }
       }
 
@@ -930,6 +986,8 @@ export function useProposta(contratoId: string | undefined) {
         documentos_solicitados_enviados: documentosSolicitadosEnviados,
         instalacao_info: instalacaoInfo,
         instalacao_agendada: instalacaoAgendada,
+        veiculo_id: veiculoId,
+        veiculo_cobertura_total: veiculoCoberturaTotal,
       };
       return result;
     },
