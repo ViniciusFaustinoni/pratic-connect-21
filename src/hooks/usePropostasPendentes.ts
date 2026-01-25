@@ -793,6 +793,32 @@ export function useProposta(contratoId: string | undefined) {
           assinatura_cliente_url: assinaturaUrl,
         };
       }
+      
+      // NOVO FALLBACK: Se não encontrou instalação concluída MAS há autovistoria,
+      // buscar assinatura diretamente em servicos pelo contrato
+      if (!instalacaoInfo && vistoria?.id) {
+        const { data: servicoAssinaturaData } = await supabase
+          .from('servicos')
+          .select('assinatura_cliente_url, concluida_em')
+          .eq('contrato_id', contrato.id)
+          .not('assinatura_cliente_url', 'is', null)
+          .order('concluida_em', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        
+        if (servicoAssinaturaData?.assinatura_cliente_url) {
+          // Criar instalacaoInfo mínimo para exibir a assinatura
+          instalacaoInfo = {
+            id: vistoria.id,
+            status: 'concluida',
+            concluida_em: servicoAssinaturaData.concluida_em,
+            rastreador_imei: null,
+            rastreador_codigo: null,
+            instalador_nome: null,
+            assinatura_cliente_url: servicoAssinaturaData.assinatura_cliente_url,
+          };
+        }
+      }
 
       const result: PropostaPendente = {
         ...contrato,

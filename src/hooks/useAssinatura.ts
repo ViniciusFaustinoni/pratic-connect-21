@@ -61,22 +61,36 @@ export function useSaveAssinatura() {
           .eq('id', entityId);
         if (error) throw error;
         
-        // Também salvar na vistoria_fotos se houver vistoria vinculada
+        // CORREÇÃO: Buscar vistoria via contrato_id do serviço (não por servico_id que não existe)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const vistoriaResult = await (supabase as any)
-          .from('vistorias')
-          .select('id')
-          .eq('servico_id', entityId)
-          .maybeSingle();
-        const servicoData = vistoriaResult?.data as { id: string } | null;
+        const servicoInfoResult = await (supabase as any)
+          .from('servicos')
+          .select('contrato_id')
+          .eq('id', entityId)
+          .single();
+        const servicoInfo = servicoInfoResult?.data as { contrato_id: string | null } | null;
         
-        if (servicoData?.id) {
-          await supabase.from('vistoria_fotos').insert({
-            vistoria_id: servicoData.id,
-            tipo: 'assinatura_cliente',
-            arquivo_url: publicUrl,
-            visivel_cliente: true,
-          });
+        if (servicoInfo?.contrato_id) {
+          // Buscar vistoria vinculada ao mesmo contrato
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const vistoriaResult = await (supabase as any)
+            .from('vistorias')
+            .select('id')
+            .eq('contrato_id', servicoInfo.contrato_id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          const vistoriaData = vistoriaResult?.data as { id: string } | null;
+          
+          if (vistoriaData?.id) {
+            await supabase.from('vistoria_fotos').insert({
+              vistoria_id: vistoriaData.id,
+              tipo: 'assinatura_cliente',
+              arquivo_url: publicUrl,
+              visivel_cliente: true,
+            });
+            console.log('Assinatura salva em vistoria_fotos:', vistoriaData.id);
+          }
         }
       } else {
         // Instalação (legado): salvar na tabela instalacoes
