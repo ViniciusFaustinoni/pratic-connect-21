@@ -61,14 +61,14 @@ export function useSaveAssinatura() {
           .eq('id', entityId);
         if (error) throw error;
         
-        // CORREÇÃO: Buscar vistoria via contrato_id do serviço (não por servico_id que não existe)
+        // Buscar dados do serviço para salvar assinatura em vistoria_fotos e gerar laudo
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const servicoInfoResult = await (supabase as any)
           .from('servicos')
-          .select('contrato_id')
+          .select('contrato_id, veiculo_id')
           .eq('id', entityId)
           .single();
-        const servicoInfo = servicoInfoResult?.data as { contrato_id: string | null } | null;
+        const servicoInfo = servicoInfoResult?.data as { contrato_id: string | null; veiculo_id: string | null } | null;
         
         if (servicoInfo?.contrato_id) {
           // Buscar vistoria vinculada ao mesmo contrato
@@ -83,6 +83,7 @@ export function useSaveAssinatura() {
           const vistoriaData = vistoriaResult?.data as { id: string } | null;
           
           if (vistoriaData?.id) {
+            // Salvar assinatura em vistoria_fotos
             await supabase.from('vistoria_fotos').insert({
               vistoria_id: vistoriaData.id,
               tipo: 'assinatura_cliente',
@@ -90,6 +91,37 @@ export function useSaveAssinatura() {
               visivel_cliente: true,
             });
             console.log('Assinatura salva em vistoria_fotos:', vistoriaData.id);
+            
+            // Buscar dados do veículo e associado para gerar laudo
+            if (servicoInfo.veiculo_id) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const veiculoResult = await (supabase as any)
+                .from('veiculos')
+                .select('placa, associado_id')
+                .eq('id', servicoInfo.veiculo_id)
+                .single();
+              const veiculoData = veiculoResult?.data as { placa: string | null; associado_id: string | null } | null;
+              
+              if (veiculoData?.placa && veiculoData?.associado_id) {
+                // Gerar laudo de vistoria em background (não bloqueia)
+                console.log('Gerando laudo após assinatura para vistoria:', vistoriaData.id);
+                supabase.functions.invoke('gerar-laudo-vistoria', {
+                  body: {
+                    vistoriaId: vistoriaData.id,
+                    associadoId: veiculoData.associado_id,
+                    veiculoId: servicoInfo.veiculo_id,
+                    contratoId: servicoInfo.contrato_id,
+                    placa: veiculoData.placa,
+                  }
+                }).then(res => {
+                  if (res.error) {
+                    console.error('Laudo: erro ao gerar após assinatura:', res.error);
+                  } else {
+                    console.log('Laudo gerado com sucesso após assinatura:', res.data);
+                  }
+                });
+              }
+            }
           }
         }
       } else {

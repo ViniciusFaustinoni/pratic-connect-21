@@ -939,74 +939,8 @@ export function useAprovarVeiculoServico() {
         usuario_id: profile?.id,
       });
 
-      // 6. Buscar dados para gerar laudo de vistoria (async, não bloqueia)
-      const { data: servicoCompleto } = await supabase
-        .from('servicos')
-        .select('contrato_id')
-        .eq('id', data.servicoId)
-        .single();
-
-      const { data: veiculoData } = await supabase
-        .from('veiculos')
-        .select('placa')
-        .eq('id', data.veiculoId)
-        .single();
-
-      // 7. Gerar laudo de vistoria em PDF (não crítico, não bloqueia em background)
-      // Busca a vistoria associada ao serviço e gera o laudo
-      (async () => {
-        try {
-          // Buscar vistoria vinculada ao contrato do serviço
-          if (!servicoCompleto?.contrato_id) {
-            console.warn('Laudo: contrato_id não encontrado no serviço');
-            return;
-          }
-          
-          const vistoriaQuery = await supabase
-            .from('vistorias')
-            .select('id')
-            .eq('contrato_id', servicoCompleto.contrato_id)
-            .order('created_at', { ascending: false })
-            .limit(1);
-          
-          if (vistoriaQuery.error) {
-            console.error('Laudo: erro ao buscar vistoria:', vistoriaQuery.error);
-            return;
-          }
-          
-          const vistoriaId = (vistoriaQuery.data as { id: string }[] | null)?.[0]?.id;
-          
-          if (!vistoriaId) {
-            console.warn('Laudo: nenhuma vistoria encontrada para contrato', servicoCompleto.contrato_id);
-            return;
-          }
-          
-          if (!veiculoData?.placa) {
-            console.warn('Laudo: placa do veículo não encontrada');
-            return;
-          }
-          
-          console.log('Gerando laudo para vistoria:', vistoriaId, 'placa:', veiculoData.placa);
-          
-          const { data: laudoResult, error: laudoError } = await supabase.functions.invoke('gerar-laudo-vistoria', {
-            body: {
-              vistoriaId: vistoriaId,
-              associadoId: data.associadoId,
-              veiculoId: data.veiculoId,
-              contratoId: servicoCompleto.contrato_id,
-              placa: veiculoData.placa,
-            }
-          });
-          
-          if (laudoError) {
-            console.error('Laudo: erro na edge function:', laudoError);
-          } else {
-            console.log('Laudo gerado com sucesso:', laudoResult);
-          }
-        } catch (err) {
-          console.error('Laudo: exceção ao gerar:', err);
-        }
-      })();
+      // Nota: O laudo de vistoria é gerado no momento da assinatura do cliente (useAssinatura.ts)
+      // Isso garante que o laudo só é gerado após fotos + assinatura estarem completos
 
       return { sucesso: true };
     },
