@@ -261,6 +261,42 @@ serve(async (req) => {
           } catch (autentiqueErr) {
             console.error('[asaas-webhook] Erro ao processar Autentique (fallback):', autentiqueErr);
           }
+
+          // === CRIAR INSTALAÇÃO PÓS-PAGAMENTO (FALLBACK) ===
+          // Buscar cotacao_id do contrato para criar instalação
+          try {
+            const { data: contratoParaInstalacao } = await supabase
+              .from('contratos')
+              .select('cotacao_id')
+              .eq('id', payment.externalReference)
+              .maybeSingle();
+
+            if (contratoParaInstalacao?.cotacao_id) {
+              console.log(`[asaas-webhook] Fallback: Criando instalação para cotação ${contratoParaInstalacao.cotacao_id}...`);
+              
+              const instalacaoResponse = await fetch(
+                `${SUPABASE_URL}/functions/v1/criar-instalacao-pos-pagamento`,
+                {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+                    'Content-Type': 'application/json'
+                  },
+                  body: JSON.stringify({ cotacaoId: contratoParaInstalacao.cotacao_id })
+                }
+              );
+
+              const instalacaoResult = await instalacaoResponse.json();
+              
+              if (instalacaoResult.success) {
+                console.log(`[asaas-webhook] ✓ Fallback: Instalação criada: ${instalacaoResult.instalacaoId || 'já existente'}`);
+              } else {
+                console.warn(`[asaas-webhook] ⚠️ Fallback: Instalação não criada: ${instalacaoResult.error || instalacaoResult.message}`);
+              }
+            }
+          } catch (instalacaoErr) {
+            console.error('[asaas-webhook] Erro ao criar instalação (fallback):', instalacaoErr);
+          }
         }
       }
 
@@ -490,6 +526,37 @@ serve(async (req) => {
               } catch (autentiqueErr) {
                 console.error('[asaas-webhook] Erro ao processar Autentique:', autentiqueErr);
                 // Não bloqueia o fluxo principal se falhar
+              }
+
+              // === CRIAR INSTALAÇÃO PÓS-PAGAMENTO (AUTOMÁTICO VIA BACKEND) ===
+              // Garante que a instalação seja criada mesmo se o cliente fechar o navegador
+              if (contratoData?.cotacao_id) {
+                try {
+                  console.log(`[asaas-webhook] Criando instalação pós-pagamento para cotação ${contratoData.cotacao_id}...`);
+                  
+                  const instalacaoResponse = await fetch(
+                    `${SUPABASE_URL}/functions/v1/criar-instalacao-pos-pagamento`,
+                    {
+                      method: 'POST',
+                      headers: {
+                        'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+                        'Content-Type': 'application/json'
+                      },
+                      body: JSON.stringify({ cotacaoId: contratoData.cotacao_id })
+                    }
+                  );
+
+                  const instalacaoResult = await instalacaoResponse.json();
+                  
+                  if (instalacaoResult.success) {
+                    console.log(`[asaas-webhook] ✓ Instalação criada/confirmada: ${instalacaoResult.instalacaoId || 'já existente'}`);
+                  } else {
+                    console.warn(`[asaas-webhook] ⚠️ Instalação não criada: ${instalacaoResult.error || instalacaoResult.message}`);
+                  }
+                } catch (instalacaoErr) {
+                  console.error('[asaas-webhook] Erro ao criar instalação pós-pagamento:', instalacaoErr);
+                  // Não bloqueia o fluxo principal se falhar
+                }
               }
             }
 
