@@ -943,7 +943,10 @@ export function useAprovarVeiculoServico() {
       (async () => {
         try {
           // Buscar vistoria vinculada ao contrato do serviço
-          if (!servicoCompleto?.contrato_id) return;
+          if (!servicoCompleto?.contrato_id) {
+            console.warn('Laudo: contrato_id não encontrado no serviço');
+            return;
+          }
           
           const vistoriaQuery = await supabase
             .from('vistorias')
@@ -952,21 +955,42 @@ export function useAprovarVeiculoServico() {
             .order('created_at', { ascending: false })
             .limit(1);
           
+          if (vistoriaQuery.error) {
+            console.error('Laudo: erro ao buscar vistoria:', vistoriaQuery.error);
+            return;
+          }
+          
           const vistoriaId = (vistoriaQuery.data as { id: string }[] | null)?.[0]?.id;
           
-          if (vistoriaId && veiculoData?.placa) {
-            await supabase.functions.invoke('gerar-laudo-vistoria', {
-              body: {
-                vistoriaId: vistoriaId,
-                associadoId: data.associadoId,
-                veiculoId: data.veiculoId,
-                contratoId: servicoCompleto.contrato_id,
-                placa: veiculoData.placa,
-              }
-            });
+          if (!vistoriaId) {
+            console.warn('Laudo: nenhuma vistoria encontrada para contrato', servicoCompleto.contrato_id);
+            return;
+          }
+          
+          if (!veiculoData?.placa) {
+            console.warn('Laudo: placa do veículo não encontrada');
+            return;
+          }
+          
+          console.log('Gerando laudo para vistoria:', vistoriaId, 'placa:', veiculoData.placa);
+          
+          const { data: laudoResult, error: laudoError } = await supabase.functions.invoke('gerar-laudo-vistoria', {
+            body: {
+              vistoriaId: vistoriaId,
+              associadoId: data.associadoId,
+              veiculoId: data.veiculoId,
+              contratoId: servicoCompleto.contrato_id,
+              placa: veiculoData.placa,
+            }
+          });
+          
+          if (laudoError) {
+            console.error('Laudo: erro na edge function:', laudoError);
+          } else {
+            console.log('Laudo gerado com sucesso:', laudoResult);
           }
         } catch (err) {
-          console.warn('Erro ao gerar laudo (não crítico):', err);
+          console.error('Laudo: exceção ao gerar:', err);
         }
       })();
 

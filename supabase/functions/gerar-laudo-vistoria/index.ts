@@ -105,7 +105,7 @@ serve(async (req) => {
           id, marca, modelo, ano_fabricacao, ano_modelo, cor, placa, chassi
         ),
         vistoriador:vistoriador_id (
-          id, name
+          id, nome
         )
       `)
       .eq('id', vistoriaId)
@@ -331,7 +331,7 @@ serve(async (req) => {
 
     y -= 20;
 
-    page.drawText(`Vistoriador: ${vistoriador?.name || 'Não informado'}`, { x: MARGIN, y, size: 10, font, color: TEXT_COLOR });
+    page.drawText(`Vistoriador: ${vistoriador?.nome || 'Não informado'}`, { x: MARGIN, y, size: 10, font, color: TEXT_COLOR });
 
     y -= 18;
 
