@@ -12,6 +12,9 @@ import {
   User, FileCheck, FilePlus, Scale, Plus, Link as LinkIcon
 } from 'lucide-react';
 import { ModalVincularProcesso } from '@/components/sinistros/ModalVincularProcesso';
+import { AtualizarStatusModal } from '@/components/eventos/AtualizarStatusModal';
+import { AgendarVistoriaModal } from '@/components/eventos/AgendarVistoriaModal';
+import { EmitirParecerModal } from '@/components/eventos/EmitirParecerModal';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -100,6 +103,9 @@ export default function SinistroDetalhe() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [modalVincularOpen, setModalVincularOpen] = useState(false);
+  const [modalStatusOpen, setModalStatusOpen] = useState(false);
+  const [modalVistoriaOpen, setModalVistoriaOpen] = useState(false);
+  const [modalParecerOpen, setModalParecerOpen] = useState(false);
 
   const { data: sinistro, isLoading } = useQuery({
     queryKey: ['sinistro', id],
@@ -245,7 +251,7 @@ export default function SinistroDetalhe() {
           </Badge>
         </div>
 
-        <DropdownMenu>
+        <DropdownMenu modal={false}>
           <DropdownMenuTrigger asChild>
             <Button variant="outline">
               <MoreHorizontal className="h-4 w-4 mr-2" />
@@ -253,15 +259,24 @@ export default function SinistroDetalhe() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem>
+            <DropdownMenuItem onSelect={(e) => {
+              e.preventDefault();
+              setTimeout(() => setModalStatusOpen(true), 0);
+            }}>
               <FileCheck className="h-4 w-4 mr-2" />
               Atualizar Status
             </DropdownMenuItem>
-            <DropdownMenuItem>
+            <DropdownMenuItem onSelect={(e) => {
+              e.preventDefault();
+              setTimeout(() => setModalVistoriaOpen(true), 0);
+            }}>
               <Calendar className="h-4 w-4 mr-2" />
               Agendar Vistoria
             </DropdownMenuItem>
-            <DropdownMenuItem>
+            <DropdownMenuItem onSelect={(e) => {
+              e.preventDefault();
+              setTimeout(() => setModalParecerOpen(true), 0);
+            }}>
               <FileText className="h-4 w-4 mr-2" />
               Emitir Parecer
             </DropdownMenuItem>
@@ -275,7 +290,10 @@ export default function SinistroDetalhe() {
               <Scale className="h-4 w-4 mr-2" />
               Criar Processo Jurídico
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setModalVincularOpen(true)}>
+            <DropdownMenuItem onSelect={(e) => {
+              e.preventDefault();
+              setTimeout(() => setModalVincularOpen(true), 0);
+            }}>
               <LinkIcon className="h-4 w-4 mr-2" />
               Vincular Processo Existente
             </DropdownMenuItem>
@@ -683,6 +701,48 @@ export default function SinistroDetalhe() {
         sinistroId={id!}
         open={modalVincularOpen}
         onOpenChange={setModalVincularOpen}
+      />
+
+      {/* Modal Atualizar Status */}
+      <AtualizarStatusModal
+        open={modalStatusOpen}
+        onClose={() => setModalStatusOpen(false)}
+        sinistro={sinistro ? {
+          id: sinistro.id,
+          protocolo: sinistro.protocolo,
+          status: sinistro.status
+        } : null}
+      />
+
+      {/* Modal Agendar Vistoria */}
+      <AgendarVistoriaModal
+        open={modalVistoriaOpen}
+        onClose={() => setModalVistoriaOpen(false)}
+        sinistro={sinistro ? {
+          id: sinistro.id,
+          protocolo: sinistro.protocolo,
+          status: sinistro.status,
+          associado_id: sinistro.associado_id,
+          veiculo_id: sinistro.veiculo_id
+        } : null}
+      />
+
+      {/* Modal Emitir Parecer */}
+      <EmitirParecerModal
+        open={modalParecerOpen}
+        onClose={() => setModalParecerOpen(false)}
+        sinistro={sinistro ? {
+          id: sinistro.id,
+          protocolo: sinistro.protocolo,
+          status: sinistro.status,
+          tipo: sinistro.tipo,
+          valor_fipe: sinistro.valor_fipe,
+          veiculo: sinistro.veiculo ? {
+            placa: sinistro.veiculo.placa || '',
+            marca: sinistro.veiculo.marca || '',
+            modelo: sinistro.veiculo.modelo || ''
+          } : null
+        } : null}
       />
     </div>
   );
