@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Outlet, useLocation, Link } from 'react-router-dom';
-import { Home, Receipt, MapPin, HelpCircle, User, Bell } from 'lucide-react';
+import { Home, Receipt, MapPin, MessageCircle, User, Bell } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 import { useNotificacoesRealtime } from '@/hooks/useNotificacoesRealtime';
@@ -14,8 +14,8 @@ import { usePWAInstall } from '@/hooks/usePWAInstall';
 const NAV_ITEMS = [
   { icon: Home, label: 'Início', path: '/app' },
   { icon: Receipt, label: 'Boletos', path: '/app/boletos' },
+  { icon: MessageCircle, label: 'Ajuda', path: '/app/chat' },
   { icon: MapPin, label: 'Rastrear', path: '/app/rastreamento' },
-  { icon: HelpCircle, label: 'Ajuda', path: '/app/assistencia' },
   { icon: User, label: 'Perfil', path: '/app/perfil' },
 ];
 

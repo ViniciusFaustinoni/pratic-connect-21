@@ -209,3 +209,6 @@ verify_jwt = false
 
 [functions.gerar-laudo-vistoria]
 verify_jwt = false
+
+[functions.assistente-chat]
+verify_jwt = false
