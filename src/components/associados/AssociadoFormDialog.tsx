@@ -208,7 +208,7 @@ export function AssociadoFormDialog({ open, onOpenChange, onSuccess }: Associado
         plano_id: data.plano_id,
         dia_vencimento: data.dia_vencimento,
         data_adesao: data.data_adesao || new Date().toISOString().split('T')[0],
-        status: 'em_analise',
+        status: 'pendente_vistoria',
       });
 
       // Create veiculo

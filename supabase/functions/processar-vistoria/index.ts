@@ -115,6 +115,22 @@ serve(async (req) => {
       // === VISTORIA APROVADA ===
       console.log('[processar-vistoria] Processando aprovação da análise...');
 
+      // 4.0 Atualizar status do associado: pendente_vistoria -> em_analise (pronto para análise final)
+      const { error: assocStatusError } = await supabase
+        .from('associados')
+        .update({ 
+          status: 'em_analise',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', vistoria.associado_id)
+        .in('status', ['pendente_vistoria']); // Só atualiza se estava pendente de vistoria
+
+      if (assocStatusError) {
+        console.error('[processar-vistoria] Erro ao atualizar status do associado:', assocStatusError);
+      } else {
+        console.log('[processar-vistoria] Associado movido para em_analise (pronto para análise final)');
+      }
+
       // 4.1 VERIFICAR SE RASTREADOR JÁ FOI VINCULADO PELO VISTORIADOR
       const { data: rastreadorVinculado } = await supabase
         .from('rastreadores')

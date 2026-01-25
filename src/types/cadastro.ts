@@ -41,6 +41,7 @@ import type {
 
 export const STATUS_ASSOCIADO_COLORS: Record<StatusAssociado, string> = {
   em_analise: 'bg-blue-100 text-blue-800 border-blue-200',
+  pendente_vistoria: 'bg-violet-100 text-violet-800 border-violet-200',
   aprovado: 'bg-teal-100 text-teal-800 border-teal-200',
   documentacao_pendente: 'bg-amber-100 text-amber-800 border-amber-200',
   aguardando_instalacao: 'bg-purple-100 text-purple-800 border-purple-200',
