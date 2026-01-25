@@ -257,7 +257,7 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-[400px] p-0" align="start">
-                    <Command>
+                    <Command shouldFilter={false}>
                       <CommandInput
                         placeholder="Digite nome ou CPF (mín. 3 caracteres)..."
                         value={searchAssociado}
