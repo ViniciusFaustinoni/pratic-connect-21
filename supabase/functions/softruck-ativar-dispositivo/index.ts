@@ -272,6 +272,41 @@ serve(async (req) => {
       throw new Error(`Erro ao atualizar rastreador: ${updateError.message}`);
     }
 
+    // ===== 7.5. Atualizar status do associado para 'ativo' =====
+    console.log('[Softruck Ativar] Atualizando status do associado para ativo...');
+    
+    const { error: updateAssociadoError } = await supabase
+      .from('associados')
+      .update({
+        status: 'ativo',
+        data_ativacao: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', associadoId);
+
+    if (updateAssociadoError) {
+      console.error('[Softruck Ativar] Erro ao ativar associado:', updateAssociadoError);
+    } else {
+      console.log('[Softruck Ativar] Associado ativado com sucesso');
+    }
+
+    // ===== 7.6. Liberar cobertura total no veículo =====
+    console.log('[Softruck Ativar] Liberando cobertura total do veículo...');
+    
+    const { error: updateVeiculoError } = await supabase
+      .from('veiculos')
+      .update({
+        cobertura_total: true,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', veiculoId);
+
+    if (updateVeiculoError) {
+      console.error('[Softruck Ativar] Erro ao liberar cobertura:', updateVeiculoError);
+    } else {
+      console.log('[Softruck Ativar] Cobertura total liberada');
+    }
+
     // ===== 8. Chamar ativar-associado para criar acesso do cliente =====
     console.log('[Softruck Ativar] Ativando associado...');
     
