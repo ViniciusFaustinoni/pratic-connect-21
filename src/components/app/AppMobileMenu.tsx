@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Menu, User, FileCheck, AlertTriangle, Settings, LogOut } from 'lucide-react';
+import { Menu, User, FileCheck, AlertTriangle, Settings, LogOut, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Sheet,
@@ -16,6 +16,7 @@ const menuItems = [
   { path: '/app/perfil', label: 'Meus Dados', icon: User },
   { path: '/app/documentos', label: 'Documentos', icon: FileCheck },
   { path: '/app/sinistros', label: 'Sinistros', icon: AlertTriangle },
+  { path: '/app/chat', label: 'Assistente IA', icon: MessageCircle },
   { path: '/app/configuracoes', label: 'Configurações', icon: Settings },
 ];
 

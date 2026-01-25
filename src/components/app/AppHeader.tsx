@@ -11,6 +11,7 @@ const navItems = [
   { path: '/app/boletos', label: 'Boletos' },
   { path: '/app/rastreamento', label: 'Mapa' },
   { path: '/app/assistencia', label: 'Assistência' },
+  { path: '/app/chat', label: 'Ajuda IA' },
 ];
 
 export function AppHeader() {
