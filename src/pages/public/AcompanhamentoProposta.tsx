@@ -204,19 +204,37 @@ function getStatusInfo(associado: AssociadoData) {
     };
   }
 
-  // ATIVO MAS SEM CONTA CRIADA → Mostrar formulário de criação
-  if (associado.status === 'ativo' && !associado.user_id) {
+  // ATIVO COM COBERTURA TOTAL MAS SEM CONTA CRIADA → Mostrar formulário de criação
+  // Só mostra quando cobertura_total = true (após instalação física aprovada)
+  if (associado.status === 'ativo' && veiculo?.cobertura_total && !associado.user_id) {
     return {
       status: 'criar_conta',
       icon: KeyRound,
       color: 'success',
       title: 'Crie sua Conta!',
-      description: 'Seu cadastro foi aprovado! Crie seu login para acessar o app PRATIC.',
+      description: 'Seu cadastro foi aprovado com cobertura total! Crie seu login para acessar o app PRATIC.',
       showDetails: true,
       showCriarConta: true,
       showEmRota: false,
       showEmAndamento: false,
       showAtribuidaRota: false,
+    };
+  }
+
+  // ATIVO COM COBERTURA PARCIAL (roubo/furto) - aguardando instalação física para cobertura total
+  if (associado.status === 'ativo' && veiculo?.cobertura_roubo_furto && !veiculo?.cobertura_total) {
+    return {
+      status: 'cobertura_parcial',
+      icon: Shield,
+      color: 'primary',
+      title: 'Cobertura Parcial Ativa',
+      description: 'Sua proteção contra roubo e furto está ativa! Aguarde a instalação do rastreador para cobertura total e acesso ao app.',
+      showDetails: true,
+      showCriarConta: false,
+      showEmRota: false,
+      showEmAndamento: false,
+      showAtribuidaRota: false,
+      showInstalacao: true,
     };
   }
 

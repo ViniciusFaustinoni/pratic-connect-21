@@ -5,7 +5,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Eye, EyeOff, KeyRound, Loader2, Rocket, Check, X, Mail } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -17,33 +16,19 @@ interface CriarContaAssociadoFormProps {
   onSuccess?: () => void;
 }
 
-// Função para mascarar email (segurança)
-const mascarEmail = (email?: string): string => {
-  if (!email) return '';
-  const parts = email.split('@');
-  if (parts.length !== 2) return email;
-  const [user, domain] = parts;
-  const maskedUser = user.length > 2 
-    ? user[0] + '***' + user[user.length - 1]
-    : user[0] + '***';
-  return `${maskedUser}@${domain}`;
-};
-
 export function CriarContaAssociadoForm({ associadoId, nomeAssociado, emailCadastrado }: CriarContaAssociadoFormProps) {
   const navigate = useNavigate();
-  const [usarEmailCadastrado, setUsarEmailCadastrado] = useState(!!emailCadastrado);
-  const [emailCustomizado, setEmailCustomizado] = useState('');
   const [senha, setSenha] = useState('');
   const [confirmarSenha, setConfirmarSenha] = useState('');
   const [mostrarSenha, setMostrarSenha] = useState(false);
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
-  // Email efetivo a ser usado
-  const emailFinal = usarEmailCadastrado ? emailCadastrado : emailCustomizado;
+  // Email é sempre o cadastrado (obrigatório e travado)
+  const emailFinal = emailCadastrado;
+  const emailValido = emailFinal ? /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailFinal) : false;
 
   // Validações
-  const emailValido = emailFinal ? /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailFinal) : false;
   const senhaMinimo = senha.length >= 6;
   const senhaTemNumero = /[0-9]/.test(senha);
   const senhasConferem = senha === confirmarSenha && confirmarSenha.length > 0;
@@ -117,57 +102,26 @@ export function CriarContaAssociadoForm({ associadoId, nomeAssociado, emailCadas
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Seleção de Email */}
-          <div className="space-y-3">
+          {/* Campo de Email - Travado (obrigatório usar o cadastrado) */}
+          <div className="space-y-2">
             <Label className="flex items-center gap-2">
               <Mail className="h-4 w-4" />
-              Qual email deseja usar?
+              Email de acesso
             </Label>
-            
-            <RadioGroup 
-              value={usarEmailCadastrado ? 'cadastrado' : 'outro'} 
-              onValueChange={(value) => setUsarEmailCadastrado(value === 'cadastrado')}
-              className="space-y-2"
-            >
-              {emailCadastrado && (
-                <div className="flex items-start space-x-3 p-3 rounded-lg border border-border/50 bg-background/30 hover:bg-background/50 transition-colors">
-                  <RadioGroupItem value="cadastrado" id="email-cadastrado" className="mt-0.5" />
-                  <Label htmlFor="email-cadastrado" className="cursor-pointer flex-1">
-                    <span className="font-medium">Usar email cadastrado</span>
-                    <p className="text-sm text-muted-foreground mt-0.5">
-                      {mascarEmail(emailCadastrado)}
-                    </p>
-                  </Label>
-                </div>
-              )}
-              
-              <div className="flex items-start space-x-3 p-3 rounded-lg border border-border/50 bg-background/30 hover:bg-background/50 transition-colors">
-                <RadioGroupItem value="outro" id="email-outro" className="mt-0.5" />
-                <Label htmlFor="email-outro" className="cursor-pointer flex-1">
-                  <span className="font-medium">Usar outro email</span>
-                  <p className="text-sm text-muted-foreground mt-0.5">
-                    Informar um email diferente
-                  </p>
-                </Label>
-              </div>
-            </RadioGroup>
-
-            {/* Campo para email customizado */}
-            {!usarEmailCadastrado && (
-              <div className="space-y-2 pt-2">
-                <Input
-                  id="email-custom"
-                  type="email"
-                  placeholder="seu@email.com"
-                  value={emailCustomizado}
-                  onChange={(e) => setEmailCustomizado(e.target.value)}
-                  disabled={loading}
-                  className="bg-background/50"
-                />
-                {emailCustomizado && !emailValido && (
-                  <p className="text-xs text-destructive">Digite um email válido</p>
-                )}
-              </div>
+            <Input
+              type="email"
+              value={emailCadastrado || ''}
+              disabled
+              readOnly
+              className="bg-muted/50 cursor-not-allowed border-border/50"
+            />
+            <p className="text-xs text-muted-foreground">
+              Este é o email cadastrado na sua proposta
+            </p>
+            {!emailCadastrado && (
+              <p className="text-xs text-destructive">
+                Não foi encontrado um email cadastrado. Entre em contato com o suporte.
+              </p>
             )}
           </div>
 

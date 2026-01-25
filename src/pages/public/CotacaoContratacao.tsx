@@ -1,4 +1,4 @@
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AlertTriangle, Car, CheckCircle2, CalendarCheck, Calendar, Clock, MapPin, PartyPopper, Shield, Loader2, Puzzle } from 'lucide-react';
@@ -38,6 +38,7 @@ const pageVariants = {
 
 export default function CotacaoContratacao() {
   const { token } = useParams<{ token: string }>();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const {
     cotacao,
@@ -52,6 +53,8 @@ export default function CotacaoContratacao() {
     isPending,
     // Novos campos para documentos pendentes
     associadoId,
+    associadoStatus,
+    contratoLinkToken,
     docsPendentes,
     refetch,
     refetchDocs,
@@ -109,6 +112,15 @@ export default function CotacaoContratacao() {
         return false;
     }
   }, [cotacao?.status_contratacao, cotacao?.plano_escolhido_id, cotacao?.tipo_vistoria]);
+
+  // Redirecionar para /acompanhar/:link_token quando associado está em_analise ou ativo
+  // Isso garante que o cliente veja a tela de acompanhamento após a vistoria ser concluída
+  useEffect(() => {
+    if (associadoStatus && ['em_analise', 'ativo'].includes(associadoStatus) && contratoLinkToken) {
+      console.log('[CotacaoContratacao] Redirecionando para /acompanhar:', contratoLinkToken, 'status:', associadoStatus);
+      navigate(`/acompanhar/${contratoLinkToken}`, { replace: true });
+    }
+  }, [associadoStatus, contratoLinkToken, navigate]);
 
   // Sincronizar etapa com status da cotação
   useEffect(() => {

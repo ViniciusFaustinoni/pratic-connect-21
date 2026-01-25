@@ -110,6 +110,7 @@ export function useCotacaoContratacao(token: string | undefined) {
 
   // Query de fallback para buscar contrato via cotacao_token_publico
   // Isso resolve o problema quando o embed via FK é bloqueado por RLS para anon
+  // IMPORTANTE: Inclui link_token para permitir redirecionamento para /acompanhar/:link_token
   const { data: contratoFallback } = useQuery({
     queryKey: ['contrato-publico-fallback', token],
     queryFn: async () => {
@@ -122,6 +123,7 @@ export function useCotacaoContratacao(token: string | undefined) {
         .select(`
           id,
           associado_id,
+          link_token,
           associados:associados!fk_contratos_associado(
             id,
             status
@@ -135,7 +137,7 @@ export function useCotacaoContratacao(token: string | undefined) {
         return null;
       }
       
-      console.log('[CotacaoContratacao] Contrato fallback encontrado:', data?.id);
+      console.log('[CotacaoContratacao] Contrato fallback encontrado:', data?.id, 'link_token:', data?.link_token);
       return data;
     },
     enabled: !!token,
@@ -488,6 +490,11 @@ export function useCotacaoContratacao(token: string | undefined) {
     },
   });
 
+  // Link token para redirecionamento para /acompanhar/:link_token
+  const contratoLinkToken = useMemo(() => {
+    return contratoFallback?.link_token || null;
+  }, [contratoFallback?.link_token]);
+
   return {
     cotacao,
     isLoading: isLoading || isLoadingDocs,
@@ -510,6 +517,7 @@ export function useCotacaoContratacao(token: string | undefined) {
     // Novos campos para documentos pendentes
     associadoId,
     associadoStatus,
+    contratoLinkToken,
     docsPendentes: docsPendentes || [],
     refetch,
     refetchDocs,
