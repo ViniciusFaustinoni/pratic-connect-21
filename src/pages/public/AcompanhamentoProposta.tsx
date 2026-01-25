@@ -375,6 +375,20 @@ export default function AcompanhamentoProposta() {
           queryClient.invalidateQueries({ queryKey: ['acompanhamento-proposta', token] });
         }
       )
+      // Escutar mudanças nos veículos (para liberação de cobertura_total após ativação)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'veiculos',
+          filter: `associado_id=eq.${associado.id}`,
+        },
+        () => {
+          console.log('[Acompanhamento] Veículo atualizado - invalidando query');
+          queryClient.invalidateQueries({ queryKey: ['acompanhamento-proposta', token] });
+        }
+      )
       // Escutar mudanças em documentos_solicitados (para pendências)
       .on(
         'postgres_changes',
