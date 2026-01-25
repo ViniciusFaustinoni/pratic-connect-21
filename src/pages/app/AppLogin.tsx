@@ -243,8 +243,39 @@ export default function AppLogin() {
     setLoading(true);
 
     try {
-      const email = `${rawCPF}@associado.pratic.com.br`;
-      const result = await signIn({ email, password });
+      // PASSO 1: Buscar email real do associado pelo CPF
+      console.log('[AppLogin] Buscando email pelo CPF:', rawCPF);
+      
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('cpf', rawCPF)
+        .eq('tipo', 'associado')
+        .maybeSingle();
+
+      // Se CPF não encontrado na base
+      if (profileError) {
+        console.error('[AppLogin] Erro ao buscar profile:', profileError);
+        setError('network_error');
+        setLoading(false);
+        return;
+      }
+
+      if (!profile?.email) {
+        console.log('[AppLogin] CPF não encontrado na base:', rawCPF);
+        recordFailedAttempt(rawCPF);
+        setError('cpf_not_found');
+        setLoading(false);
+        return;
+      }
+
+      console.log('[AppLogin] Email encontrado:', profile.email);
+
+      // PASSO 2: Fazer login com o email real encontrado
+      const result = await signIn({ 
+        email: profile.email.toLowerCase().trim(), 
+        password 
+      });
 
       if (!result.success) {
         const errorMessage = result.error || 'Erro ao fazer login';
@@ -273,6 +304,7 @@ export default function AppLogin() {
         resetAttempts(rawCPF);
       }
     } catch (err) {
+      console.error('[AppLogin] Erro inesperado:', err);
       setError('unknown_error');
     } finally {
       setLoading(false);
