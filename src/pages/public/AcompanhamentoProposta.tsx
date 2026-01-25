@@ -206,15 +206,15 @@ function getStatusInfo(associado: AssociadoData) {
     };
   }
 
-  // ATIVO COM COBERTURA TOTAL MAS SEM CONTA CRIADA → Mostrar formulário de criação
-  // Só mostra quando cobertura_total = true (após instalação física aprovada)
-  if (associado.status === 'ativo' && veiculo?.cobertura_total && !associado.user_id) {
+  // ATIVO MAS SEM CONTA CRIADA → Mostrar formulário de criação
+  // Permite criar conta independente da ativação do rastreador (cobertura_total)
+  if (associado.status === 'ativo' && !associado.user_id) {
     return {
       status: 'criar_conta',
       icon: KeyRound,
       color: 'success',
       title: 'Crie sua Conta!',
-      description: 'Seu cadastro foi aprovado com cobertura total! Crie seu login para acessar o app PRATIC.',
+      description: 'Seu cadastro foi aprovado! Crie seu login para acessar o app PRATIC.',
       showDetails: true,
       showCriarConta: true,
       showEmRota: false,

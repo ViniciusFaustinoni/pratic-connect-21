@@ -123,6 +123,33 @@ export function useAppAssociadoRealtime() {
               }
             }
           )
+          // Escutar mudanças em veículos (cobertura_total)
+          .on(
+            'postgres_changes',
+            {
+              event: 'UPDATE',
+              schema: 'public',
+              table: 'veiculos',
+              filter: `associado_id=eq.${associado.id}`,
+            },
+            (payload) => {
+              console.log('[AppAssociadoRealtime] Veículo atualizado:', payload);
+              
+              const newData = payload.new as { cobertura_total?: boolean };
+              const oldData = payload.old as { cobertura_total?: boolean };
+              
+              // Invalidar queries de veículos
+              queryClient.invalidateQueries({ queryKey: ['app-veiculos'] });
+              
+              // Toast quando cobertura total for ativada
+              if (newData.cobertura_total && !oldData.cobertura_total) {
+                toast.success('🚗 Cobertura Total Ativada!', {
+                  description: 'Seu rastreador está ativo! Acesse todas as funcionalidades do app.',
+                  duration: 10000,
+                });
+              }
+            }
+          )
           .subscribe((status) => {
             console.log('[AppAssociadoRealtime] Subscription status:', status);
           });
