@@ -62,11 +62,13 @@ export function useSaveAssinatura() {
         if (error) throw error;
         
         // Também salvar na vistoria_fotos se houver vistoria vinculada
-        const { data: servicoData } = await supabase
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const vistoriaResult = await (supabase as any)
           .from('vistorias')
           .select('id')
           .eq('servico_id', entityId)
           .maybeSingle();
+        const servicoData = vistoriaResult?.data as { id: string } | null;
         
         if (servicoData?.id) {
           await supabase.from('vistoria_fotos').insert({
