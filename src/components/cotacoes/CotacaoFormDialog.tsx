@@ -754,6 +754,21 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       return;
     }
     
+    // Validar valor mínimo de adesão (R$ 50,00) para evitar erros de digitação
+    const VALOR_ADESAO_MINIMO = 50;
+    if (data.valor_adesao < VALOR_ADESAO_MINIMO) {
+      toast.error(`O valor de adesão (${formatCurrency(data.valor_adesao)}) está muito baixo. O mínimo é ${formatCurrency(VALOR_ADESAO_MINIMO)}.`);
+      return;
+    }
+    
+    // Alertar se valor estiver muito diferente do plano selecionado
+    if (planosSelecionados.length > 0) {
+      const valorPlano = planosSelecionados[0].valorAdesao || 199.90;
+      if (data.valor_adesao < valorPlano * 0.5) {
+        toast.warning(`Atenção: O valor de adesão (${formatCurrency(data.valor_adesao)}) está bem abaixo do sugerido pelo plano (${formatCurrency(valorPlano)}). Verifique se está correto.`);
+      }
+    }
+    
     // Guardar dados e abrir popup de confirmação
     setPendingFormData(data);
     setShowConfirmDialog(true);

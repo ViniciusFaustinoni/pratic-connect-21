@@ -82,10 +82,10 @@ serve(async (req) => {
   try {
     let { contratoId, valor, formaPagamento, cliente }: CobrancaAdesaoRequest = await req.json();
 
-    console.log(`[asaas-cobranca-adesao] Iniciando para contrato ${contratoId}, valor recebido: R$ ${valor}, forma: ${formaPagamento || 'PIX'}`);
+  console.log(`[asaas-cobranca-adesao] Iniciando para contrato ${contratoId}, valor recebido: R$ ${valor}, forma: ${formaPagamento || 'UNDEFINED'}`);
 
-    // Definir billingType - usar PIX como padrão
-    const billingType = formaPagamento || 'PIX';
+    // Definir billingType - usar UNDEFINED como padrão para permitir PIX e Cartão
+    const billingType = formaPagamento || 'UNDEFINED';
 
     // VALIDAÇÃO DE VALOR MÍNIMO - Asaas não aceita cobranças abaixo de R$ 5,00
     const VALOR_MINIMO_ASAAS = 5;
