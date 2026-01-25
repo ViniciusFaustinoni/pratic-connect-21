@@ -126,6 +126,7 @@ export function PagamentoAdesao({
         body: {
           contratoId,
           valor: valorAdesao,
+          formaPagamento: 'UNDEFINED', // Permite PIX e Cartão de Crédito
           cliente: {
             nome: clienteNome,
             email: clienteEmail,
