@@ -15479,6 +15479,7 @@ export type Database = {
       periodo_servico: "manha" | "tarde" | "noite"
       status_associado:
         | "em_analise"
+        | "pendente_vistoria"
         | "aprovado"
         | "documentacao_pendente"
         | "aguardando_instalacao"
@@ -15830,6 +15831,7 @@ export const Constants = {
       periodo_servico: ["manha", "tarde", "noite"],
       status_associado: [
         "em_analise",
+        "pendente_vistoria",
         "aprovado",
         "documentacao_pendente",
         "aguardando_instalacao",

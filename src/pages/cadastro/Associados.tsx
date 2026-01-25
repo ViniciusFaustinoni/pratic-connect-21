@@ -45,6 +45,7 @@ import { useToast } from '@/hooks/use-toast';
 
 const statusColors: Record<StatusAssociado, string> = {
   em_analise: 'bg-yellow-100 text-yellow-800',
+  pendente_vistoria: 'bg-violet-100 text-violet-800',
   aprovado: 'bg-blue-100 text-blue-800',
   documentacao_pendente: 'bg-orange-100 text-orange-800',
   aguardando_instalacao: 'bg-purple-100 text-purple-800',

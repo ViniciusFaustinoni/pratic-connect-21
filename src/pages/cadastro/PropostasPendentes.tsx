@@ -105,6 +105,7 @@ function StatusBadge({ status, associadoStatus, temDocumentoPendente }: StatusBa
   const config: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
     assinado: { label: 'Aguardando Análise', variant: 'secondary' },
     em_analise: { label: 'Em Análise', variant: 'default' },
+    pendente_vistoria: { label: 'Pendente de Vistoria', variant: 'outline' },
     ativo: { label: 'Aprovado', variant: 'default' },
     reprovado: { label: 'Reprovado', variant: 'destructive' },
   };
@@ -115,6 +116,7 @@ function StatusBadge({ status, associadoStatus, temDocumentoPendente }: StatusBa
     <Badge variant={statusConfig.variant} className={cn(
       status === 'assinado' && 'bg-warning/20 text-warning-foreground border-warning',
       status === 'em_analise' && 'bg-info/20 text-info-foreground border-info',
+      status === 'pendente_vistoria' && 'bg-violet-500/20 text-violet-400 border-violet-500',
       status === 'ativo' && 'bg-success/20 text-success-foreground border-success',
     )}>
       {statusConfig.label}
@@ -234,6 +236,7 @@ export default function PropostasPendentes() {
               <SelectContent>
                 <SelectItem value="todos">Todos os status</SelectItem>
                 <SelectItem value="assinado">Aguardando Análise</SelectItem>
+                <SelectItem value="pendente_vistoria">Pendente de Vistoria</SelectItem>
                 <SelectItem value="em_analise">Em Análise</SelectItem>
               </SelectContent>
             </Select>

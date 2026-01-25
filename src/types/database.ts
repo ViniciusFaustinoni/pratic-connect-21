@@ -64,6 +64,7 @@ export type MotivoPerda =
 
 export type StatusAssociado =
   | 'em_analise'
+  | 'pendente_vistoria'
   | 'aprovado'
   | 'documentacao_pendente'
   | 'aguardando_instalacao'
@@ -540,6 +541,7 @@ export const ORIGEM_LABELS: Record<OrigemLead, string> = {
 
 export const STATUS_ASSOCIADO_LABELS: Record<StatusAssociado, string> = {
   em_analise: 'Em Análise',
+  pendente_vistoria: 'Pendente de Vistoria',
   aprovado: 'Aprovado',
   documentacao_pendente: 'Doc. Pendente',
   aguardando_instalacao: 'Aguard. Instalação',
