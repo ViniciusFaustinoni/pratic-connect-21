@@ -18,7 +18,8 @@ import {
   Navigation,
   MapPin,
   UserCheck,
-  Bell
+  Bell,
+  FileWarning
 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -26,6 +27,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion } from 'framer-motion';
 import { CriarContaAssociadoForm } from '@/components/public/CriarContaAssociadoForm';
+import { DocumentosPendentes } from '@/components/associado/DocumentosPendentes';
 
 interface AssociadoData {
   id: string;
@@ -288,6 +290,23 @@ function getStatusInfo(associado: AssociadoData) {
     };
   }
 
+  // Documentação pendente - cliente deve enviar documentos solicitados
+  if (associado.status === 'documentacao_pendente') {
+    return {
+      status: 'documentacao_pendente',
+      icon: FileWarning,
+      color: 'warning',
+      title: 'Documentos Pendentes',
+      description: 'O analista solicitou documentos adicionais para prosseguir com sua filiação.',
+      showDetails: true,
+      showDocumentosPendentes: true,
+      showCriarConta: false,
+      showEmRota: false,
+      showEmAndamento: false,
+      showAtribuidaRota: false,
+    };
+  }
+
   // Em análise
   if (associado.status === 'em_analise') {
     return {
@@ -354,6 +373,20 @@ export default function AcompanhamentoProposta() {
         },
         () => {
           queryClient.invalidateQueries({ queryKey: ['acompanhamento-proposta', token] });
+        }
+      )
+      // Escutar mudanças em documentos_solicitados (para pendências)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'documentos_solicitados',
+          filter: `associado_id=eq.${associado.id}`,
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['acompanhamento-proposta', token] });
+          queryClient.invalidateQueries({ queryKey: ['docs-solicitados-pendentes', associado.id] });
         }
       )
       .subscribe();
@@ -523,6 +556,22 @@ export default function AcompanhamentoProposta() {
                 associadoId={associado.id}
                 nomeAssociado={associado.nome}
                 emailCadastrado={associado.email}
+              />
+            </motion.div>
+          )}
+
+          {/* Card de Documentos Pendentes */}
+          {(statusInfo.showDocumentosPendentes || associado.status === 'documentacao_pendente') && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+            >
+              <DocumentosPendentes 
+                associadoId={associado.id}
+                onTodosEnviados={() => {
+                  queryClient.invalidateQueries({ queryKey: ['acompanhamento-proposta', token] });
+                }}
               />
             </motion.div>
           )}
