@@ -24,7 +24,17 @@ import {
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import type { DocumentoAnexado } from '@/hooks/usePropostasPendentes';
+interface DocumentoAnexado {
+  id: string;
+  tipo: string;
+  arquivo_url: string;
+  status: string;
+  created_at: string;
+  ocr_resultado?: {
+    validado_ocr?: boolean;
+    [key: string]: unknown;
+  };
+}
 
 // Labels para tipos de documento
 const TIPO_DOC_CONFIG: Record<string, { label: string; icon: React.ComponentType<{ className?: string }>; highlight?: boolean }> = {
@@ -158,6 +168,13 @@ export function DocumentosAnexadosCard({ documentos }: DocumentosAnexadosCardPro
                     <StatusIcon className="h-3 w-3 mr-1" />
                     {statusConfig.label}
                   </Badge>
+                  {/* Badge adicional se OCR validou o documento */}
+                  {doc.ocr_resultado?.validado_ocr && doc.status === 'pendente' && (
+                    <Badge variant="outline" className="text-xs border-success/40 text-success bg-success/5">
+                      <CheckCircle className="h-3 w-3 mr-1" />
+                      Validado por IA
+                    </Badge>
+                  )}
                   <Button
                     variant="ghost"
                     size="sm"

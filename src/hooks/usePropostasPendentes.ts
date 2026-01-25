@@ -1298,6 +1298,7 @@ export function useAprovarProposta() {
         .eq('status', 'enviado');
 
       // Atualizar anexos da cotação (tabela 'contratos_documentos')
+      // Incluir 'pendente' e 'processando' para garantir que todos sejam aprovados
       if (contrato.cotacao_id) {
         await supabase
           .from('contratos_documentos')
@@ -1306,7 +1307,7 @@ export function useAprovarProposta() {
             updated_at: agora,
           })
           .eq('cotacao_id', contrato.cotacao_id)
-          .eq('status', 'pendente');
+          .in('status', ['pendente', 'processando']);
       }
 
       // Nota: Cobranças serão geradas em outro momento do fluxo (após instalação ou pelo financeiro)

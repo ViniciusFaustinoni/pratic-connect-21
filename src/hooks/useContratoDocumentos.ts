@@ -40,6 +40,7 @@ export interface OcrResultado {
   tipo_detectado?: string;
   confianca?: number;
   erro?: string;
+  validado_ocr?: boolean; // Flag que indica se documento passou na validação automática por IA
 }
 
 interface UploadDocumentoParams {
@@ -132,25 +133,28 @@ export function useUploadDocumentoContrato() {
       }
 
       // 5. Atualizar documento com resultado do OCR
-      const novoStatus = ocrResult.sucesso && ocrResult.confianca && ocrResult.confianca > 0.7 
-        ? 'aprovado' 
-        : 'pendente';
+      // Status sempre 'pendente' - a aprovação é feita pelo analista ao aprovar a proposta
+      // O resultado do OCR inclui flag 'validado_ocr' para indicar se passou na validação automática
+      const ocrResultadoComValidacao = {
+        ...ocrResult,
+        validado_ocr: ocrResult.sucesso && ocrResult.confianca && ocrResult.confianca > 0.7,
+      };
 
       await supabase
         .from('contratos_documentos')
         .update({
-          ocr_resultado: ocrResult as any,
-          status: novoStatus,
+          ocr_resultado: ocrResultadoComValidacao as any,
+          status: 'pendente',
         })
         .eq('id', docData.id);
 
       return {
         documento: {
           ...docData,
-          ocr_resultado: ocrResult,
-          status: novoStatus,
+          ocr_resultado: ocrResultadoComValidacao,
+          status: 'pendente',
         } as DocumentoContrato,
-        ocr: ocrResult,
+        ocr: ocrResultadoComValidacao,
       };
     },
     onSuccess: () => {
