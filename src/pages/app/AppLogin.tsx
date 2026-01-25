@@ -16,18 +16,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Eye, EyeOff, Loader2, AlertCircle, Lock, CheckCircle, FlaskConical, Copy, Check, User } from 'lucide-react';
+import { Eye, EyeOff, Loader2, AlertCircle, CheckCircle, FlaskConical, Copy, Check, User } from 'lucide-react';
 import { z } from 'zod';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { PrimeiroAcessoModal } from '@/components/app/PrimeiroAcessoModal';
-import {
-  isLocked,
-  recordFailedAttempt,
-  resetAttempts,
-  getRemainingLockTimeSeconds,
-  getAttemptsRemaining,
-} from '@/lib/login-rate-limit';
 
 // ============================================
 // TIPOS E CONSTANTES
@@ -37,16 +30,14 @@ type LoginError =
   | 'cpf_not_found'
   | 'account_blocked'
   | 'account_suspended'
-  | 'too_many_requests'
   | 'network_error'
   | 'unknown_error';
 
 const ERROR_MESSAGES: Record<LoginError, string> = {
-  invalid_credentials: 'CPF ou senha incorretos',
+  invalid_credentials: 'CPF ou senha inválidos',
   cpf_not_found: 'CPF não encontrado. Verifique os dados.',
   account_blocked: 'Sua conta está bloqueada. Entre em contato conosco.',
   account_suspended: 'Sua conta está suspensa. Regularize sua situação.',
-  too_many_requests: 'Muitas tentativas. Aguarde alguns minutos.',
   network_error: 'Erro de conexão. Verifique sua internet.',
   unknown_error: 'Erro inesperado. Tente novamente.',
 };
@@ -94,7 +85,7 @@ function isValidCPF(cpf: string): boolean {
 }
 
 function parseLoginError(errorMessage: string): LoginError {
-  if (errorMessage.includes('Invalid login credentials') || errorMessage.includes('incorretos')) {
+  if (errorMessage.includes('Invalid login credentials') || errorMessage.includes('incorretos') || errorMessage.includes('inválidos')) {
     return 'invalid_credentials';
   }
   if (errorMessage.includes('not found') || errorMessage.includes('não encontrado')) {
@@ -105,9 +96,6 @@ function parseLoginError(errorMessage: string): LoginError {
   }
   if (errorMessage.includes('suspended') || errorMessage.includes('suspenso')) {
     return 'account_suspended';
-  }
-  if (errorMessage.includes('Too many') || errorMessage.includes('rate limit')) {
-    return 'too_many_requests';
   }
   if (errorMessage.includes('fetch') || errorMessage.includes('network')) {
     return 'network_error';
@@ -134,8 +122,6 @@ export default function AppLogin() {
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<LoginError | string | null>(null);
-  const [accountLocked, setAccountLocked] = useState(false);
-  const [lockTimeRemaining, setLockTimeRemaining] = useState(0);
 
   // Modal states
   const [modalPrimeiroAcesso, setModalPrimeiroAcesso] = useState(false);
@@ -143,8 +129,6 @@ export default function AppLogin() {
   const [loadingContaTeste, setLoadingContaTeste] = useState(false);
   const [testCredentials, setTestCredentials] = useState<{ cpf: string; password: string } | null>(null);
   const [copiedField, setCopiedField] = useState<'cpf' | 'password' | null>(null);
-
-  const cpfKey = unformatCPF(cpf);
 
   // Carregar CPF salvo ao montar
   useEffect(() => {
@@ -154,29 +138,6 @@ export default function AppLogin() {
       setRememberMe(true);
     }
   }, []);
-
-  // Check lock status and countdown
-  useEffect(() => {
-    if (!cpfKey || cpfKey.length !== 11) {
-      setAccountLocked(false);
-      setLockTimeRemaining(0);
-      return;
-    }
-
-    const checkLock = () => {
-      if (isLocked(cpfKey)) {
-        setAccountLocked(true);
-        setLockTimeRemaining(getRemainingLockTimeSeconds(cpfKey));
-      } else {
-        setAccountLocked(false);
-        setLockTimeRemaining(0);
-      }
-    };
-
-    checkLock();
-    const interval = setInterval(checkLock, 1000);
-    return () => clearInterval(interval);
-  }, [cpfKey]);
 
   // Redirect if already logged in as associado or test mode
   useEffect(() => {
@@ -190,14 +151,6 @@ export default function AppLogin() {
     }
   }, [user, profile, navigate, location, isTestMode]);
 
-  const formatLockTime = (seconds: number): string => {
-    const minutes = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    if (minutes > 0) {
-      return `${minutes}min ${secs}s`;
-    }
-    return `${secs}s`;
-  };
 
   const handleCPFChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setCpf(formatCPF(e.target.value));
@@ -230,11 +183,6 @@ export default function AppLogin() {
       return;
     }
 
-    if (isLocked(rawCPF)) {
-      setError('too_many_requests');
-      return;
-    }
-
     if (!password || password.length < 6) {
       setError('invalid_credentials');
       return;
@@ -263,7 +211,6 @@ export default function AppLogin() {
 
       if (!profile?.email) {
         console.log('[AppLogin] CPF não encontrado na base:', rawCPF);
-        recordFailedAttempt(rawCPF);
         setError('cpf_not_found');
         setLoading(false);
         return;
@@ -280,20 +227,7 @@ export default function AppLogin() {
       if (!result.success) {
         const errorMessage = result.error || 'Erro ao fazer login';
         const parsedError = parseLoginError(errorMessage);
-        
-        if (parsedError === 'invalid_credentials') {
-          const attemptsRemaining = getAttemptsRemaining(rawCPF);
-          recordFailedAttempt(rawCPF);
-
-          if (isLocked(rawCPF)) {
-            setAccountLocked(true);
-            setError('too_many_requests');
-          } else {
-            setError(`CPF ou senha inválidos. ${attemptsRemaining - 1} tentativas restantes.`);
-          }
-        } else {
-          setError(parsedError);
-        }
+        setError(parsedError);
       } else {
         // Login bem-sucedido - salvar CPF se "lembrar" estiver marcado
         if (rememberMe) {
@@ -301,7 +235,6 @@ export default function AppLogin() {
         } else {
           localStorage.removeItem(STORAGE_KEY_REMEMBER_CPF);
         }
-        resetAttempts(rawCPF);
       }
     } catch (err) {
       console.error('[AppLogin] Erro inesperado:', err);
@@ -395,15 +328,6 @@ export default function AppLogin() {
             </Alert>
           )}
 
-          {/* Alerta de bloqueio */}
-          {accountLocked && lockTimeRemaining > 0 && (
-            <Alert variant="destructive" className="mb-4">
-              <Lock className="h-4 w-4" />
-              <AlertDescription>
-                Tempo restante: <strong>{formatLockTime(lockTimeRemaining)}</strong>
-              </AlertDescription>
-            </Alert>
-          )}
 
           {/* Formulário */}
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -421,7 +345,7 @@ export default function AppLogin() {
                   placeholder="000.000.000-00"
                   value={cpf}
                   onChange={handleCPFChange}
-                  disabled={loading || accountLocked}
+                  disabled={loading}
                   className="h-12 pl-10 text-lg tracking-wide"
                 />
               </div>
@@ -442,7 +366,7 @@ export default function AppLogin() {
                     setPassword(e.target.value);
                     setError(null);
                   }}
-                  disabled={loading || accountLocked}
+                  disabled={loading}
                   className="h-12 pr-12"
                 />
                 <Button
@@ -451,7 +375,7 @@ export default function AppLogin() {
                   size="icon"
                   className="absolute right-1 top-1/2 h-10 w-10 -translate-y-1/2 hover:bg-transparent"
                   onClick={() => setShowPassword(!showPassword)}
-                  disabled={loading || accountLocked}
+                  disabled={loading}
                   aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
                 >
                   {showPassword ? (
@@ -482,17 +406,12 @@ export default function AppLogin() {
             <Button
               type="submit"
               className="h-12 w-full text-base font-semibold bg-blue-600 hover:bg-blue-700"
-              disabled={loading || accountLocked}
+              disabled={loading}
             >
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                   Entrando...
-                </>
-              ) : accountLocked ? (
-                <>
-                  <Lock className="mr-2 h-5 w-5" />
-                  Bloqueado
                 </>
               ) : (
                 'Entrar'
