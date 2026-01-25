@@ -150,15 +150,13 @@ export default function InstaladorChecklist() {
     }
   }, [servico]);
 
-  // Carregar KM identificado por OCR se já existir na vistoria
+  // Sincronizar KM identificado por OCR automaticamente
   useEffect(() => {
-    if (vistoriaCompleta?.km_atual && !kmIdentificado) {
+    if (vistoriaCompleta?.km_atual) {
       setKmIdentificado(vistoriaCompleta.km_atual);
-      if (!quilometragem) {
-        setQuilometragem(String(vistoriaCompleta.km_atual));
-      }
+      setQuilometragem(String(vistoriaCompleta.km_atual));
     }
-  }, [vistoriaCompleta?.km_atual, kmIdentificado, quilometragem]);
+  }, [vistoriaCompleta?.km_atual]);
 
   // Abrir primeira categoria incompleta ao carregar
   useEffect(() => {
@@ -644,26 +642,52 @@ export default function InstaladorChecklist() {
               Verifique todos os itens antes de iniciar a instalação:
             </p>
             
-            {/* Campo de Quilometragem */}
-            <Card className="border-slate-700 bg-slate-800">
-              <CardContent className="pt-4">
+            {/* Card de KM identificado pela IA (extraído da foto do odômetro) */}
+            <Card className={cn(
+              "border transition-all",
+              processandoOCR 
+                ? "bg-blue-950/20 border-blue-800/50 animate-pulse"
+                : kmIdentificado 
+                  ? "bg-emerald-950/30 border-emerald-800"
+                  : "bg-slate-800 border-slate-700"
+            )}>
+              <CardContent className="py-4">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-blue-500/20">
-                    <Gauge className="h-5 w-5 text-blue-400" />
+                  <div className={cn(
+                    "p-2 rounded-full",
+                    processandoOCR ? "bg-blue-500/20" : kmIdentificado ? "bg-emerald-500/30" : "bg-slate-600"
+                  )}>
+                    <Gauge className={cn(
+                      "h-6 w-6",
+                      processandoOCR ? "text-blue-400" : kmIdentificado ? "text-emerald-400" : "text-slate-400"
+                    )} />
                   </div>
                   <div className="flex-1">
-                    <Label htmlFor="quilometragem" className="text-white text-sm">
-                      Quilometragem do Veículo
-                    </Label>
-                    <Input
-                      id="quilometragem"
-                      type="number"
-                      placeholder="Ex: 45000"
-                      value={quilometragem}
-                      onChange={(e) => setQuilometragem(e.target.value)}
-                      className="mt-1 bg-slate-700 border-slate-600 text-white"
-                    />
+                    <p className="text-xs text-slate-400">
+                      {processandoOCR 
+                        ? 'Analisando odômetro...' 
+                        : kmIdentificado 
+                          ? 'Quilometragem Identificada (IA)' 
+                          : 'Quilometragem (via foto do odômetro)'}
+                    </p>
+                    {processandoOCR ? (
+                      <div className="flex items-center gap-2 mt-1">
+                        <Loader2 className="h-4 w-4 animate-spin text-blue-400" />
+                        <span className="text-sm text-slate-300">Processando imagem...</span>
+                      </div>
+                    ) : kmIdentificado ? (
+                      <p className="font-bold text-emerald-400 text-lg">
+                        {kmIdentificado.toLocaleString('pt-BR')} km
+                      </p>
+                    ) : (
+                      <p className="text-sm text-slate-500">
+                        Capture a foto do odômetro na próxima etapa
+                      </p>
+                    )}
                   </div>
+                  {kmIdentificado && !processandoOCR && (
+                    <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -796,44 +820,6 @@ export default function InstaladorChecklist() {
                   );
                 })}
 
-                {/* Card de KM identificado pela IA */}
-                {(kmIdentificado || processandoOCR) && (
-                  <Card className={cn(
-                    "border transition-all",
-                    processandoOCR 
-                      ? "bg-blue-950/20 border-blue-800/50 animate-pulse"
-                      : "bg-blue-950/30 border-blue-800"
-                  )}>
-                    <CardContent className="py-4">
-                      <div className="flex items-center gap-3">
-                        <div className={cn(
-                          "p-2 rounded-full",
-                          processandoOCR ? "bg-blue-500/20" : "bg-blue-500/30"
-                        )}>
-                          <Gauge className="h-6 w-6 text-blue-400" />
-                        </div>
-                        <div className="flex-1">
-                          <p className="text-xs text-slate-400">
-                            {processandoOCR ? 'Analisando odômetro...' : 'Quilometragem Identificada (IA)'}
-                          </p>
-                          {processandoOCR ? (
-                            <div className="flex items-center gap-2 mt-1">
-                              <Loader2 className="h-4 w-4 animate-spin text-blue-400" />
-                              <span className="text-sm text-slate-300">Processando imagem...</span>
-                            </div>
-                          ) : (
-                            <p className="font-bold text-blue-400 text-lg">
-                              {kmIdentificado?.toLocaleString('pt-BR')} km
-                            </p>
-                          )}
-                        </div>
-                        {!processandoOCR && (
-                          <CheckCircle2 className="h-5 w-5 text-emerald-500" />
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
 
                 {/* Vídeo 360 Obrigatório */}
                 <Card className={cn(
