@@ -1234,13 +1234,10 @@ export function useAprovarProposta() {
         }
       }
       
-      // 5. Definir status do associado baseado na instalação
-      // Se instalação JÁ concluída: 'em_analise' (aguardando ativação do rastreador)
-      // Se instalação ativa existe (agendada/em_rota/em_andamento): 'aguardando_instalacao'
-      // Se NÃO existe instalação: 'aguardando_instalacao' (será criada)
-      const statusAssociado = jaTemInstalacaoConcluida 
-        ? 'em_analise' 
-        : 'aguardando_instalacao';
+      // 5. Definir status do associado como 'ativo' imediatamente na aprovação
+      // Isso permite que o cliente crie sua conta no app independente da instalação do rastreador
+      // A cobertura_total será liberada posteriormente quando o rastreador for ativado
+      const statusAssociado = 'ativo';
 
       const { data: associadoAtualizado, error: associadoError } = await supabase
         .from('associados')
