@@ -306,12 +306,13 @@ export default function AcompanhamentoProposta() {
   const queryClient = useQueryClient();
   const { data: associado, isLoading, error } = useAcompanhamentoProposta(token);
 
-  // Realtime subscription para atualização instantânea quando vistoriador iniciar rota
+  // Realtime subscription para atualização instantânea quando status mudar
   useEffect(() => {
     if (!associado?.id) return;
 
     const channel = supabase
-      .channel(`instalacao-cliente-${associado.id}`)
+      .channel(`acompanhamento-cliente-${associado.id}`)
+      // Escutar mudanças nas instalações
       .on(
         'postgres_changes',
         {
@@ -321,7 +322,19 @@ export default function AcompanhamentoProposta() {
           filter: `associado_id=eq.${associado.id}`,
         },
         () => {
-          // Invalidar query para refetch imediato
+          queryClient.invalidateQueries({ queryKey: ['acompanhamento-proposta', token] });
+        }
+      )
+      // Escutar mudanças no status do associado (para análise cadastral e ativação)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'associados',
+          filter: `id=eq.${associado.id}`,
+        },
+        () => {
           queryClient.invalidateQueries({ queryKey: ['acompanhamento-proposta', token] });
         }
       )

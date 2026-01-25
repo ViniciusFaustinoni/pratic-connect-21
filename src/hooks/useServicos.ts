@@ -911,7 +911,21 @@ export function useAprovarVeiculoServico() {
 
       if (veiculoError) throw veiculoError;
 
-      // 5. Registrar histórico
+      // 5. Atualizar status do associado para análise cadastral
+      const { error: associadoError } = await supabase
+        .from('associados')
+        .update({ 
+          status: 'em_analise',
+          updated_at: agora,
+        })
+        .eq('id', data.associadoId)
+        .in('status', ['pendente_vistoria', 'aguardando_instalacao']);
+
+      if (associadoError) {
+        console.error('Erro ao atualizar status do associado para análise:', associadoError);
+      }
+
+      // 6. Registrar histórico
       await supabase.from('associados_historico').insert({
         associado_id: data.associadoId,
         tipo: 'instalacao_concluida',
