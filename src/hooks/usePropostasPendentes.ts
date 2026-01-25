@@ -723,13 +723,15 @@ export function useProposta(contratoId: string | undefined) {
         // Buscar dados do rastreador instalado (com IMEI)
         let rastreadorImei: string | null = null;
         let rastreadorCodigo: string | null = null;
+        let instaladorNome: string | null = null;
+        let assinaturaUrl = instalacaoData.assinatura_cliente_url;
         
         if (instalacaoData.rastreador_id) {
           const { data: rastreador } = await supabase
             .from('rastreadores')
             .select('imei, codigo')
             .eq('id', instalacaoData.rastreador_id)
-            .single();
+            .maybeSingle();
           
           if (rastreador) {
             rastreadorImei = rastreador.imei;
@@ -738,19 +740,63 @@ export function useProposta(contratoId: string | undefined) {
         }
         
         // Buscar nome do instalador
-        let instaladorNome: string | null = null;
         if (instalacaoData.instalador_id) {
           const { data: instalador } = await supabase
             .from('profiles')
             .select('nome')
             .eq('id', instalacaoData.instalador_id)
-            .single();
+            .maybeSingle();
           instaladorNome = instalador?.nome || null;
         }
         
-        // Buscar assinatura: priorizar vistoria_fotos > servicos > instalacoes
-        let assinaturaUrl = instalacaoData.assinatura_cliente_url;
+        // FALLBACK: Se não tem rastreador em instalacoes, buscar em servicos
+        if (!rastreadorImei) {
+          const { data: servicoRastreador } = await (supabase as any)
+            .from('servicos')
+            .select(`
+              rastreador_id,
+              profissional_id,
+              concluida_em,
+              assinatura_cliente_url
+            `)
+            .eq('contrato_id', contrato.id)
+            .eq('status', 'concluida')
+            .not('rastreador_id', 'is', null)
+            .order('concluida_em', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          
+          if (servicoRastreador?.rastreador_id) {
+            // Buscar dados do rastreador
+            const { data: rastreadorServico } = await supabase
+              .from('rastreadores')
+              .select('imei, codigo')
+              .eq('id', servicoRastreador.rastreador_id)
+              .maybeSingle();
+            
+            if (rastreadorServico) {
+              rastreadorImei = rastreadorServico.imei;
+              rastreadorCodigo = rastreadorServico.codigo;
+            }
+            
+            // Também pegar nome do instalador se não tinha
+            if (!instaladorNome && servicoRastreador.profissional_id) {
+              const { data: profissional } = await supabase
+                .from('profiles')
+                .select('nome')
+                .eq('id', servicoRastreador.profissional_id)
+                .maybeSingle();
+              instaladorNome = profissional?.nome || null;
+            }
+            
+            // E assinatura se não tinha
+            if (!assinaturaUrl && servicoRastreador.assinatura_cliente_url) {
+              assinaturaUrl = servicoRastreador.assinatura_cliente_url;
+            }
+          }
+        }
         
+        // Buscar assinatura: priorizar vistoria_fotos > servicos > instalacoes
         // Se vistoria existe, verificar se há assinatura em vistoria_fotos
         if (vistoria?.id && !assinaturaUrl) {
           const { data: fotoAssinatura } = await supabase
@@ -767,9 +813,9 @@ export function useProposta(contratoId: string | undefined) {
           }
         }
         
-        // Fallback: buscar em servicos
+        // Fallback final: buscar em servicos
         if (!assinaturaUrl) {
-          const { data: servicoData } = await supabase
+          const { data: servicoData } = await (supabase as any)
             .from('servicos')
             .select('assinatura_cliente_url')
             .eq('contrato_id', contrato.id)
@@ -794,28 +840,78 @@ export function useProposta(contratoId: string | undefined) {
         };
       }
       
-      // NOVO FALLBACK: Se não encontrou instalação concluída MAS há autovistoria,
-      // buscar assinatura diretamente em servicos pelo contrato
-      if (!instalacaoInfo && vistoria?.id) {
-        const { data: servicoAssinaturaData } = await supabase
+      // FALLBACK: Se não encontrou instalação concluída MAS há autovistoria ou serviço concluído,
+      // buscar dados diretamente em servicos pelo contrato
+      if (!instalacaoInfo) {
+        const { data: servicoCompleto } = await (supabase as any)
           .from('servicos')
-          .select('assinatura_cliente_url, concluida_em')
+          .select(`
+            id,
+            rastreador_id,
+            profissional_id,
+            concluida_em,
+            assinatura_cliente_url
+          `)
           .eq('contrato_id', contrato.id)
-          .not('assinatura_cliente_url', 'is', null)
+          .eq('status', 'concluida')
           .order('concluida_em', { ascending: false })
           .limit(1)
           .maybeSingle();
         
-        if (servicoAssinaturaData?.assinatura_cliente_url) {
-          // Criar instalacaoInfo mínimo para exibir a assinatura
+        if (servicoCompleto) {
+          let rastreadorImei: string | null = null;
+          let rastreadorCodigo: string | null = null;
+          let instaladorNome: string | null = null;
+          
+          // Buscar rastreador
+          if (servicoCompleto.rastreador_id) {
+            const { data: rastreador } = await supabase
+              .from('rastreadores')
+              .select('imei, codigo')
+              .eq('id', servicoCompleto.rastreador_id)
+              .maybeSingle();
+            
+            if (rastreador) {
+              rastreadorImei = rastreador.imei;
+              rastreadorCodigo = rastreador.codigo;
+            }
+          }
+          
+          // Buscar profissional
+          if (servicoCompleto.profissional_id) {
+            const { data: profissional } = await supabase
+              .from('profiles')
+              .select('nome')
+              .eq('id', servicoCompleto.profissional_id)
+              .maybeSingle();
+            instaladorNome = profissional?.nome || null;
+          }
+          
+          // Buscar assinatura em vistoria_fotos se tiver vistoria
+          let assinaturaUrl = servicoCompleto.assinatura_cliente_url;
+          if (vistoria?.id && !assinaturaUrl) {
+            const { data: fotoAssinatura } = await supabase
+              .from('vistoria_fotos')
+              .select('arquivo_url')
+              .eq('vistoria_id', vistoria.id)
+              .eq('tipo', 'assinatura_cliente')
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            
+            if (fotoAssinatura?.arquivo_url) {
+              assinaturaUrl = fotoAssinatura.arquivo_url;
+            }
+          }
+          
           instalacaoInfo = {
-            id: vistoria.id,
+            id: servicoCompleto.id,
             status: 'concluida',
-            concluida_em: servicoAssinaturaData.concluida_em,
-            rastreador_imei: null,
-            rastreador_codigo: null,
-            instalador_nome: null,
-            assinatura_cliente_url: servicoAssinaturaData.assinatura_cliente_url,
+            concluida_em: servicoCompleto.concluida_em,
+            rastreador_imei: rastreadorImei,
+            rastreador_codigo: rastreadorCodigo,
+            instalador_nome: instaladorNome,
+            assinatura_cliente_url: assinaturaUrl,
           };
         }
       }
