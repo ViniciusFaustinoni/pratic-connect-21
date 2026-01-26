@@ -1,17 +1,24 @@
 import { cn } from '@/lib/utils';
 import { Bot, User, Loader2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import { LocationButton } from './LocationButton';
 
 interface ChatMessageProps {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
   isLoading?: boolean;
+  onLocationCapture?: (latitude: number, longitude: number) => void;
 }
 
-export function ChatMessage({ role, content, timestamp, isLoading }: ChatMessageProps) {
+export function ChatMessage({ role, content, timestamp, isLoading, onLocationCapture }: ChatMessageProps) {
   const isUser = role === 'user';
-
+  
+  // Verificar se a mensagem contém o marcador de botão de localização
+  const hasLocationButton = !isUser && content.includes('[BOTAO_LOCALIZACAO]');
+  
+  // Remover o marcador do conteúdo para exibição
+  const displayContent = content.replace('[BOTAO_LOCALIZACAO]', '').trim();
   return (
     <div
       className={cn(
@@ -88,8 +95,16 @@ export function ChatMessage({ role, content, timestamp, isLoading }: ChatMessage
                   ),
                 }}
               >
-                {content}
+                {displayContent}
               </ReactMarkdown>
+              
+              {/* Renderizar botão de localização se necessário */}
+              {hasLocationButton && onLocationCapture && (
+                <LocationButton 
+                  onLocationCapture={onLocationCapture}
+                  disabled={isLoading}
+                />
+              )}
             </div>
           )}
         </div>

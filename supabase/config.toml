@@ -215,3 +215,6 @@ verify_jwt = false
 
 [functions.assistente-chat]
 verify_jwt = false
+
+[functions.reverse-geocode]
+verify_jwt = false

@@ -194,12 +194,19 @@ export function useAssistenteChat() {
     setMessages([]);
   }, []);
 
+  const sendLocation = useCallback(async (latitude: number, longitude: number) => {
+    // Formatar mensagem com coordenadas que a IA vai processar
+    const locationMessage = `📍 Minha localização atual: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+    await sendMessage(locationMessage);
+  }, [sendMessage]);
+
   return {
     messages,
     isLoading,
     isTranscribing,
     sendMessage,
     sendAudio,
+    sendLocation,
     clearMessages,
   };
 }
