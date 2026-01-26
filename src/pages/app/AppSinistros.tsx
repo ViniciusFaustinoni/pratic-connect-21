@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -18,16 +18,32 @@ import {
   Square,
   HelpCircle,
   AlertCircle,
-  FileX
+  FileX,
+  Clock,
+  Bot
 } from 'lucide-react';
-import { useMySinistros, useMyAssociado } from '@/hooks/useMyData';
+import { useMyAssociado } from '@/hooks/useMyData';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
-import { TIPO_SINISTRO_LABELS, STATUS_SINISTRO_LABELS } from '@/types/sinistros';
+import { TIPO_SINISTRO_LABELS } from '@/types/sinistros';
 import type { ElementType } from 'react';
+
+// ============================================
+// TIPOS
+// ============================================
+interface SolicitacaoPendenteData {
+  tipo?: string;
+  descricao?: string;
+  veiculo_id?: string;
+  veiculo_placa?: string;
+  veiculo_marca?: string;
+  veiculo_modelo?: string;
+  data_ocorrencia?: string;
+  local_ocorrencia?: string;
+}
 
 // Mapeamento de tipos para ícones e cores
 const getIconeTipo = (tipo: string): { icon: ElementType; bgColor: string; iconColor: string } => {
@@ -76,7 +92,7 @@ export default function AppSinistros() {
   const [filtroAtivo, setFiltroAtivo] = useState('todos');
   const { data: associado } = useMyAssociado();
 
-  // Query com veículo incluído
+  // Query sinistros aprovados
   const { data: sinistros, isLoading } = useQuery({
     queryKey: ['my-sinistros-historico', associado?.id],
     queryFn: async () => {
@@ -89,6 +105,24 @@ export default function AppSinistros() {
         `)
         .eq('associado_id', associado.id)
         .order('data_ocorrencia', { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!associado?.id,
+  });
+
+  // Query para solicitações pendentes (via IA)
+  const { data: solicitacoesPendentes, isLoading: isLoadingPendentes } = useQuery({
+    queryKey: ['my-sinistros-pendentes', associado?.id],
+    queryFn: async () => {
+      if (!associado?.id) return [];
+      const { data, error } = await supabase
+        .from('chat_solicitacoes_ia')
+        .select('id, tipo, dados, status, created_at')
+        .eq('associado_id', associado.id)
+        .eq('tipo', 'sinistro')
+        .eq('status', 'pendente')
+        .order('created_at', { ascending: false });
       if (error) throw error;
       return data;
     },
@@ -113,21 +147,30 @@ export default function AppSinistros() {
     }
   }, [sinistros, filtroAtivo]);
 
-  // Contadores para os tabs
+  // Contadores para os tabs (incluindo pendentes no "todos")
   const contadores = useMemo(() => {
-    if (!sinistros) return { todos: 0, analise: 0, aprovados: 0, concluidos: 0, negados: 0 };
+    const pendentesCount = solicitacoesPendentes?.length || 0;
+    if (!sinistros) return { todos: pendentesCount, analise: 0, aprovados: 0, concluidos: 0, negados: 0 };
     return {
-      todos: sinistros.length,
+      todos: sinistros.length + pendentesCount,
       analise: sinistros.filter(s => statusEmAnalise.includes(s.status)).length,
       aprovados: sinistros.filter(s => statusAprovados.includes(s.status)).length,
       concluidos: sinistros.filter(s => statusConcluidos.includes(s.status)).length,
       negados: sinistros.filter(s => statusNegados.includes(s.status)).length,
     };
-  }, [sinistros]);
+  }, [sinistros, solicitacoesPendentes]);
 
   const formatDate = (dateStr: string) => {
     return format(new Date(dateStr), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
   };
+
+  const formatDateTime = (dateStr: string) => {
+    return format(new Date(dateStr), "dd/MM 'às' HH:mm", { locale: ptBR });
+  };
+
+  // Verificar se há dados para exibir
+  const temDados = (sinistrosFiltrados?.length > 0) || 
+                   (filtroAtivo === 'todos' && (solicitacoesPendentes?.length || 0) > 0);
 
   return (
     <div className="flex flex-col min-h-screen bg-background pb-24">
@@ -192,7 +235,7 @@ export default function AppSinistros() {
 
       {/* Lista de Sinistros */}
       <div className="flex-1 px-4 space-y-3">
-        {isLoading ? (
+        {isLoading || isLoadingPendentes ? (
           <div className="space-y-3">
             {[1, 2, 3].map((i) => (
               <Card key={i} className="border-0 shadow-sm">
@@ -202,7 +245,7 @@ export default function AppSinistros() {
               </Card>
             ))}
           </div>
-        ) : !sinistrosFiltrados || sinistrosFiltrados.length === 0 ? (
+        ) : !temDados ? (
           <div className="flex flex-col items-center justify-center py-20 text-center px-4">
             <div className="p-5 rounded-full bg-muted/50 mb-5">
               <FileX className="h-12 w-12 text-muted-foreground/50" />
@@ -226,71 +269,152 @@ export default function AppSinistros() {
           </div>
         ) : (
           <div className="space-y-3">
-            {sinistrosFiltrados.map((sinistro) => {
-              const tipoInfo = getIconeTipo(sinistro.tipo);
-              const IconeTipo = tipoInfo.icon;
-              const statusInfo = getStatusBadge(sinistro.status);
-              const veiculo = sinistro.veiculo as { placa: string; marca: string; modelo: string } | null;
-
-              return (
-                <Card 
-                  key={sinistro.id} 
-                  className="border-0 shadow-sm hover:shadow-md transition-all cursor-pointer"
-                  onClick={() => navigate(`/app/sinistros/${sinistro.id}`)}
-                >
-                  <CardContent className="p-4">
-                    <div className="flex items-start gap-3">
-                      {/* Ícone do tipo */}
-                      <div className={cn("p-2.5 rounded-xl flex-shrink-0", tipoInfo.bgColor)}>
-                        <IconeTipo className={cn("h-5 w-5", tipoInfo.iconColor)} />
-                      </div>
-                      
-                      <div className="flex-1 min-w-0">
-                        {/* Tipo + Badge */}
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="font-semibold text-foreground">
-                            {TIPO_SINISTRO_LABELS[sinistro.tipo as keyof typeof TIPO_SINISTRO_LABELS] || sinistro.tipo}
-                          </p>
-                          <Badge variant="outline" className={cn("text-xs whitespace-nowrap", statusInfo.className)}>
-                            {statusInfo.label}
-                          </Badge>
-                        </div>
-                        
-                        {/* Protocolo */}
-                        <p className="text-xs font-mono text-muted-foreground mt-0.5">
-                          #{sinistro.protocolo}
-                        </p>
-                        
-                        {/* Veículo */}
-                        {veiculo && (
-                          <p className="text-sm text-muted-foreground mt-1.5">
-                            <span className="font-medium">{veiculo.placa}</span>
-                            <span className="mx-1.5">-</span>
-                            {veiculo.marca} {veiculo.modelo}
-                          </p>
-                        )}
-                        
-                        {/* Indicador de pendências */}
-                        {sinistro.status === 'documentacao_pendente' && (
-                          <div className="flex items-center gap-1 text-orange-600 mt-1.5">
-                            <AlertCircle className="h-3.5 w-3.5" />
-                            <span className="text-xs font-medium">Documentos pendentes</span>
+            {/* Solicitações Pendentes (via IA) - Mostrar apenas no "Todos" */}
+            {filtroAtivo === 'todos' && solicitacoesPendentes && solicitacoesPendentes.length > 0 && (
+              <div className="space-y-3 mb-4">
+                <p className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  Aguardando Aprovação
+                </p>
+                
+                {solicitacoesPendentes.map((solicitacao) => {
+                  const dados = solicitacao.dados as SolicitacaoPendenteData | null;
+                  const tipoSinistro = dados?.tipo || 'outro';
+                  const tipoInfo = getIconeTipo(tipoSinistro);
+                  const IconeTipo = tipoInfo.icon;
+                  
+                  return (
+                    <Card 
+                      key={solicitacao.id} 
+                      className="border-0 shadow-sm bg-amber-50/50 border-l-4 border-l-amber-400"
+                    >
+                      <CardContent className="p-4">
+                        <div className="flex items-start gap-3">
+                          <div className={cn("p-2.5 rounded-xl flex-shrink-0", tipoInfo.bgColor)}>
+                            <IconeTipo className={cn("h-5 w-5", tipoInfo.iconColor)} />
                           </div>
-                        )}
-                        
-                        {/* Data */}
-                        <p className="text-xs text-muted-foreground mt-2">
-                          {formatDate(sinistro.data_ocorrencia)}
-                        </p>
-                      </div>
-                      
-                      {/* Seta */}
-                      <ChevronRight className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-1" />
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
+                          
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="font-semibold text-foreground">
+                                {TIPO_SINISTRO_LABELS[tipoSinistro as keyof typeof TIPO_SINISTRO_LABELS] || 'Sinistro'}
+                              </p>
+                              <Badge className="bg-amber-100 text-amber-800 border-amber-200 text-xs">
+                                <Clock className="h-3 w-3 mr-1" />
+                                Aguardando
+                              </Badge>
+                            </div>
+                            
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
+                              <Bot className="h-3 w-3" />
+                              <span>Solicitado via IA</span>
+                            </div>
+                            
+                            {/* Veículo - dados do JSONB */}
+                            {dados?.veiculo_placa && (
+                              <p className="text-sm text-muted-foreground mt-1.5">
+                                <span className="font-medium">{dados.veiculo_placa}</span>
+                                {dados.veiculo_marca && (
+                                  <>
+                                    <span className="mx-1.5">-</span>
+                                    {dados.veiculo_marca} {dados.veiculo_modelo}
+                                  </>
+                                )}
+                              </p>
+                            )}
+                            
+                            <p className="text-sm text-muted-foreground mt-2">
+                              Sua solicitação está sendo analisada pelo diretor.
+                            </p>
+                            
+                            <p className="text-xs text-muted-foreground mt-2">
+                              Enviado em {formatDateTime(solicitacao.created_at)}
+                            </p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Sinistros já registrados */}
+            {sinistrosFiltrados.length > 0 && (
+              <>
+                {filtroAtivo === 'todos' && (solicitacoesPendentes?.length || 0) > 0 && (
+                  <p className="text-sm font-medium text-muted-foreground flex items-center gap-2 pt-2">
+                    Sinistros Registrados
+                  </p>
+                )}
+                
+                {sinistrosFiltrados.map((sinistro) => {
+                  const tipoInfo = getIconeTipo(sinistro.tipo);
+                  const IconeTipo = tipoInfo.icon;
+                  const statusInfo = getStatusBadge(sinistro.status);
+                  const veiculo = sinistro.veiculo as { placa: string; marca: string; modelo: string } | null;
+
+                  return (
+                    <Card 
+                      key={sinistro.id} 
+                      className="border-0 shadow-sm hover:shadow-md transition-all cursor-pointer"
+                      onClick={() => navigate(`/app/sinistros/${sinistro.id}`)}
+                    >
+                      <CardContent className="p-4">
+                        <div className="flex items-start gap-3">
+                          {/* Ícone do tipo */}
+                          <div className={cn("p-2.5 rounded-xl flex-shrink-0", tipoInfo.bgColor)}>
+                            <IconeTipo className={cn("h-5 w-5", tipoInfo.iconColor)} />
+                          </div>
+                          
+                          <div className="flex-1 min-w-0">
+                            {/* Tipo + Badge */}
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="font-semibold text-foreground">
+                                {TIPO_SINISTRO_LABELS[sinistro.tipo as keyof typeof TIPO_SINISTRO_LABELS] || sinistro.tipo}
+                              </p>
+                              <Badge variant="outline" className={cn("text-xs whitespace-nowrap", statusInfo.className)}>
+                                {statusInfo.label}
+                              </Badge>
+                            </div>
+                            
+                            {/* Protocolo */}
+                            <p className="text-xs font-mono text-muted-foreground mt-0.5">
+                              #{sinistro.protocolo}
+                            </p>
+                            
+                            {/* Veículo */}
+                            {veiculo && (
+                              <p className="text-sm text-muted-foreground mt-1.5">
+                                <span className="font-medium">{veiculo.placa}</span>
+                                <span className="mx-1.5">-</span>
+                                {veiculo.marca} {veiculo.modelo}
+                              </p>
+                            )}
+                            
+                            {/* Indicador de pendências */}
+                            {sinistro.status === 'documentacao_pendente' && (
+                              <div className="flex items-center gap-1 text-orange-600 mt-1.5">
+                                <AlertCircle className="h-3.5 w-3.5" />
+                                <span className="text-xs font-medium">Documentos pendentes</span>
+                              </div>
+                            )}
+                            
+                            {/* Data */}
+                            <p className="text-xs text-muted-foreground mt-2">
+                              {formatDate(sinistro.data_ocorrencia)}
+                            </p>
+                          </div>
+                          
+                          {/* Seta */}
+                          <ChevronRight className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-1" />
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </>
+            )}
           </div>
         )}
       </div>
