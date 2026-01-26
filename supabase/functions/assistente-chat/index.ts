@@ -32,6 +32,22 @@ Você pode ajudar os associados com:
 - Informe que solicitações passam por análise antes de serem executadas
 - NUNCA invente informações - use apenas os dados disponíveis nas tools
 
+## FLUXO DE COLETA DE ENDEREÇO (MUITO IMPORTANTE!)
+Quando precisar coletar o endereço para sinistro ou assistência:
+
+1. **PRIMEIRO** pergunte: "Você está próximo ao veículo agora?"
+
+2. **Se o usuário responder SIM** (ou equivalente como "sim", "estou", "tô aqui", "estou do lado"):
+   - Responda: "Ótimo! Clique no botão abaixo para usar sua localização atual:"
+   - Inclua EXATAMENTE este marcador na sua resposta: [BOTAO_LOCALIZACAO]
+   - Quando receber as coordenadas (mensagem começando com "📍 Minha localização:"), use a tool 'reverse_geocode' para obter o endereço
+   - Confirme com o usuário: "O endereço identificado foi: **[endereço]**. Este endereço está correto?"
+
+3. **Se o usuário responder NÃO** (ou equivalente como "não", "não estou", "longe"):
+   - Peça para digitar o endereço: "Por favor, digite o endereço completo onde ocorreu o sinistro (ou onde está o veículo)."
+
+4. **Após confirmar o endereço**, continue coletando os demais dados necessários.
+
 ## Formato de Respostas
 - Use Markdown para formatar (negrito, listas, etc.)
 - Seja conciso mas completo
@@ -165,6 +181,27 @@ const tools = [
           },
         },
         required: ["tipo_servico", "localizacao", "descricao"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "reverse_geocode",
+      description: "Converte coordenadas GPS (latitude/longitude) em um endereço legível. Use quando o usuário fornecer sua localização GPS (mensagem começando com '📍 Minha localização:') para obter o endereço antes de criar sinistro ou assistência.",
+      parameters: {
+        type: "object",
+        properties: {
+          latitude: {
+            type: "number",
+            description: "Latitude da localização",
+          },
+          longitude: {
+            type: "number",
+            description: "Longitude da localização",
+          },
+        },
+        required: ["latitude", "longitude"],
       },
     },
   },
@@ -373,6 +410,52 @@ async function executeTool(
           message: "Solicitação de assistência 24h registrada! Um diretor irá analisar e aprovar em breve.",
           id: data.id,
         });
+      }
+
+      case "reverse_geocode": {
+        // Chamar a Edge Function de reverse geocoding
+        const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+        
+        const response = await fetch(`${SUPABASE_URL}/functions/v1/reverse-geocode`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            latitude: args.latitude,
+            longitude: args.longitude,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`[assistente-chat] Erro no reverse-geocode: ${errorText}`);
+          return JSON.stringify({
+            success: false,
+            error: "Não foi possível obter o endereço da localização",
+          });
+        }
+
+        const geocodeResult = await response.json();
+        
+        if (geocodeResult.success) {
+          return JSON.stringify({
+            success: true,
+            endereco: geocodeResult.endereco_completo || geocodeResult.endereco,
+            detalhes: {
+              logradouro: geocodeResult.endereco,
+              bairro: geocodeResult.bairro,
+              cidade: geocodeResult.cidade,
+              uf: geocodeResult.uf,
+              cep: geocodeResult.cep,
+            },
+          });
+        } else {
+          return JSON.stringify({
+            success: false,
+            error: geocodeResult.error || "Endereço não encontrado",
+          });
+        }
       }
 
       default:
