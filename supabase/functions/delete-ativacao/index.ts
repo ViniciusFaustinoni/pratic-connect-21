@@ -176,6 +176,9 @@ Deno.serve(async (req) => {
 
     // 12. Handle associate cleanup
     let associadoExcluido = false;
+    let usuarioAuthExcluido = false;
+    let associadoUserId: string | null = null;
+    
     if (contrato.associado_id) {
       // Check if associate has other contracts
       const { count } = await supabaseAdmin
@@ -185,6 +188,16 @@ Deno.serve(async (req) => {
 
       if (count === 0) {
         console.log("[delete-ativacao] Associado não tem outros contratos, excluindo...");
+
+        // IMPORTANTE: Buscar user_id do associado ANTES de excluí-lo
+        const { data: associadoData } = await supabaseAdmin
+          .from("associados")
+          .select("user_id")
+          .eq("id", contrato.associado_id)
+          .single();
+        
+        associadoUserId = associadoData?.user_id || null;
+        console.log(`[delete-ativacao] User ID do associado: ${associadoUserId || 'N/A'}`);
 
         // Delete associate dependencies
         await supabaseAdmin.from("cobranca_fila").delete().eq("associado_id", contrato.associado_id);
@@ -240,10 +253,46 @@ Deno.serve(async (req) => {
           associadoExcluido = true;
           console.log("[delete-ativacao] Associado excluído");
         }
+
+        // 13. Excluir conta do usuário do App do Associado (se existir)
+        if (associadoUserId) {
+          console.log(`[delete-ativacao] Excluindo conta de usuário auth: ${associadoUserId}`);
+
+          try {
+            // Excluir notificações do usuário
+            await supabaseAdmin.from("notificacoes").delete().eq("user_id", associadoUserId);
+            console.log("[delete-ativacao] Notificações do usuário excluídas");
+
+            // Excluir push subscriptions do usuário
+            await supabaseAdmin.from("push_subscriptions").delete().eq("user_id", associadoUserId);
+            console.log("[delete-ativacao] Push subscriptions do usuário excluídas");
+
+            // Excluir roles do usuário
+            await supabaseAdmin.from("user_roles").delete().eq("user_id", associadoUserId);
+            console.log("[delete-ativacao] Roles do usuário excluídas");
+
+            // Excluir profile do usuário
+            await supabaseAdmin.from("profiles").delete().eq("user_id", associadoUserId);
+            console.log("[delete-ativacao] Profile do usuário excluído");
+
+            // Excluir usuário do Supabase Auth (conta de login)
+            const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(associadoUserId);
+            
+            if (authDeleteError) {
+              console.warn("[delete-ativacao] Aviso ao excluir usuário do Auth:", authDeleteError.message);
+            } else {
+              usuarioAuthExcluido = true;
+              console.log("[delete-ativacao] Usuário do Auth excluído com sucesso");
+            }
+          } catch (authCleanupError) {
+            console.warn("[delete-ativacao] Erro durante limpeza do usuário auth:", authCleanupError);
+            // Não falhar a operação principal por causa disso
+          }
+        }
       }
     }
 
-    // 13. Log the action
+    // 14. Log the action
     await supabaseAdmin.from("auth_logs").insert({
       acao: "excluir_ativacao",
       modulo: "ativacoes",
@@ -255,18 +304,23 @@ Deno.serve(async (req) => {
         cliente_nome: contrato.cliente_nome,
         cotacao_excluida: !!contrato.cotacao_id,
         associado_excluido: associadoExcluido,
+        usuario_auth_excluido: usuarioAuthExcluido,
+        usuario_auth_id: associadoUserId,
       },
     });
 
-    console.log(`[delete-ativacao] Ativação excluída com sucesso`);
+    console.log(`[delete-ativacao] Ativação excluída com sucesso. Associado: ${associadoExcluido}, User Auth: ${usuarioAuthExcluido}`);
+
+    console.log(`[delete-ativacao] Ativação excluída com sucesso. Associado: ${associadoExcluido}, User Auth: ${usuarioAuthExcluido}`);
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: `Ativação ${contrato.numero} excluída com sucesso`,
+        message: `Ativação ${contrato!.numero} excluída com sucesso`,
         details: {
-          cotacao_excluida: !!contrato.cotacao_id,
+          cotacao_excluida: !!contrato!.cotacao_id,
           associado_excluido: associadoExcluido,
+          usuario_auth_excluido: usuarioAuthExcluido,
         },
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
