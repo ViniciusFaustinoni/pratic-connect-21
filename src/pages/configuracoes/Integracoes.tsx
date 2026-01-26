@@ -1,9 +1,10 @@
-import { Plug, Globe, Inbox, Key, CheckCircle, XCircle, TrendingUp, AlertTriangle } from 'lucide-react';
+import { Plug, Globe, Inbox, Key, CheckCircle, XCircle, TrendingUp, AlertTriangle, MessageCircle } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { ServicosTab } from '@/components/integracoes/ServicosTab';
 import { ApisLeadsTab } from '@/components/integracoes/ApisLeadsTab';
 import { ChavesApiTab } from '@/components/integracoes/ChavesApiTab';
+import { WhatsAppTab } from '@/components/integracoes/WhatsAppTab';
 import { useApiLeadsLogStats } from '@/hooks/useApiLeadsLogs';
 
 // Mock data for connection status - in production this would come from a real check
@@ -86,8 +87,12 @@ export default function Integracoes() {
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="servicos" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3 lg:w-auto lg:inline-grid">
+      <Tabs defaultValue="whatsapp" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-grid">
+          <TabsTrigger value="whatsapp" className="gap-2">
+            <MessageCircle className="h-4 w-4" />
+            <span className="hidden sm:inline">WhatsApp</span>
+          </TabsTrigger>
           <TabsTrigger value="servicos" className="gap-2">
             <Globe className="h-4 w-4" />
             <span className="hidden sm:inline">Serviços</span>
@@ -101,6 +106,10 @@ export default function Integracoes() {
             <span className="hidden sm:inline">API Keys</span>
           </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="whatsapp">
+          <WhatsAppTab />
+        </TabsContent>
 
         <TabsContent value="servicos">
           <ServicosTab />
