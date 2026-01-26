@@ -117,8 +117,11 @@ export default function AppConfiguracoes() {
     toast.success('Você saiu da sua conta');
   };
 
-  // Handler de senha mantido
-  const handleAlterarSenha = () => {
+  // Estado de loading para alteração de senha
+  const [isAlterandoSenha, setIsAlterandoSenha] = useState(false);
+
+  // Handler de senha REAL - chama Supabase Auth
+  const handleAlterarSenha = async () => {
     if (!senhaAtual || !novaSenha || !confirmarSenha) {
       toast.error('Preencha todos os campos');
       return;
@@ -131,12 +134,32 @@ export default function AppConfiguracoes() {
       toast.error('A senha deve ter pelo menos 6 caracteres');
       return;
     }
-    // Simular alteração
-    setShowSenhaModal(false);
-    toast.success('Senha alterada com sucesso!');
-    setSenhaAtual('');
-    setNovaSenha('');
-    setConfirmarSenha('');
+
+    setIsAlterandoSenha(true);
+    
+    try {
+      // Chamar Supabase Auth para alterar a senha
+      const { error } = await supabase.auth.updateUser({ 
+        password: novaSenha 
+      });
+      
+      if (error) {
+        console.error('Erro ao alterar senha:', error);
+        toast.error(error.message || 'Erro ao alterar senha');
+        return;
+      }
+      
+      setShowSenhaModal(false);
+      toast.success('Senha alterada com sucesso!');
+      setSenhaAtual('');
+      setNovaSenha('');
+      setConfirmarSenha('');
+    } catch (error) {
+      console.error('Erro ao alterar senha:', error);
+      toast.error('Erro ao alterar senha. Tente novamente.');
+    } finally {
+      setIsAlterandoSenha(false);
+    }
   };
 
   const handleAvaliar = () => {
