@@ -131,7 +131,7 @@ export default function AppPlano() {
   const { data: associado, isLoading } = useMyAssociado();
 
   const plano = associado?.planos;
-  const contrato = associado?.contratos;
+  const contrato = associado?.contratos?.find(c => c.status === 'ativo') || associado?.contratos?.[0];
   const tipoUso = plano?.tipo_uso?.toLowerCase() || 'passeio';
   const beneficios = BENEFICIOS_POR_TIPO[tipoUso] || BENEFICIOS_POR_TIPO.passeio;
   const cores = CORES_POR_TIPO[tipoUso] || CORES_POR_TIPO.passeio;

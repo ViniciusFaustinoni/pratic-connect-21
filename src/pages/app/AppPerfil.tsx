@@ -453,16 +453,16 @@ export default function AppPerfil() {
               <p className="text-sm text-muted-foreground capitalize">
                 Tipo: {associado.planos.tipo_uso}
               </p>
-              {associado.contratos && (
-                <>
-                  <p className="text-sm text-muted-foreground">
-                    Mensalidade: R$ {associado.contratos.valor_mensal.toFixed(2).replace('.', ',')}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    Associado desde: {formatDataAdesao(associado.contratos.data_inicio)}
-                  </p>
-                </>
-              )}
+          {associado.contratos && associado.contratos.length > 0 && (
+            <>
+              <p className="text-sm text-muted-foreground">
+                Mensalidade: R$ {(associado.contratos.find(c => c.status === 'ativo') || associado.contratos[0]).valor_mensal.toFixed(2).replace('.', ',')}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Associado desde: {formatDataAdesao((associado.contratos.find(c => c.status === 'ativo') || associado.contratos[0]).data_inicio)}
+              </p>
+            </>
+          )}
             </div>
             
             {/* Coberturas Resumidas */}
