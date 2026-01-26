@@ -1,360 +1,360 @@
 
-# Plano: Corrigir Área de Documentos do Associado
 
-## 🔍 Diagnóstico do Problema
+# Revisão Completa das Áreas do App do Associado
 
-### Problema Identificado
-A página de documentos (`/app/documentos`) está mostrando **dados fictícios** (Placa: ABC-0000, Matrícula: 00000000) ao invés dos dados reais do associado Marcus.
+## Resumo Executivo
 
-### Dados Reais no Banco
-✅ **Associado:** MARCUS VINICIUS FAUSTINONI DE FREITAS
-✅ **CPF:** 124.936.497-37
-✅ **Veículo:** Toyota Corolla XEI Flex 2013
-✅ **Placa:** LTB4J74
-✅ **Cor:** Azul
-✅ **Status:** Ativo
-✅ **Contrato:** CTR-20260125121152-J87YYJ (PDF assinado disponível)
+Após análise detalhada do código, identifiquei o seguinte status para cada área:
 
-### Causa Raiz
-Analisando o código em `src/pages/app/AppDocumentos.tsx` (linhas 100-111), o componente usa **fallbacks com dados fictícios**:
+| Área | Status Geral | Problemas Identificados |
+|------|--------------|-------------------------|
+| **Configurações** | ✅ Funcional | Alteração de senha simulada (não persiste de fato) |
+| **Sinistros** | ⚠️ Parcial | `AppSinistroDetalhe.tsx` usa dados MOCK |
+| **Assistência 24h** | ⚠️ Parcial | `AppAssistenciaNova.tsx` usa dados MOCK de veículo |
+
+---
+
+## 1. Configurações (`/app/configuracoes`)
+
+### Status: ✅ **Funciona corretamente**
+
+**O que funciona:**
+- Notificações (Push, Email, WhatsApp) → Salvam na tabela `notificacoes_preferencias`
+- Categorias (Financeiro, Veículo, Comunicados) → Persistem corretamente
+- Alertas do Rastreador → Salvam na tabela `rastreadores_preferencias`
+- Tema (Claro/Escuro/Sistema) → Funciona via `next-themes`
+- Logout → Funciona corretamente
+
+**Problema identificado:**
+- **Alteração de Senha (linhas 121-140)**: Apenas simula a alteração, não chama `supabase.auth.updateUser()`:
 
 ```typescript
-const carteirinhaData = {
-  nome: associado?.nome || 'João da Silva',  // ❌ Fallback fictício
-  cpf: associado?.cpf || '123.456.789-00',   // ❌ Fallback fictício
+// ATUAL - apenas simula (NÃO PERSISTE)
+const handleAlterarSenha = () => {
+  // ...validações...
+  // Simular alteração
+  setShowSenhaModal(false);
+  toast.success('Senha alterada com sucesso!');
+};
+```
+
+**Correção necessária:**
+```typescript
+const handleAlterarSenha = async () => {
+  // ...validações...
+  const { error } = await supabase.auth.updateUser({ password: novaSenha });
+  if (error) {
+    toast.error('Erro ao alterar senha');
+    return;
+  }
+  toast.success('Senha alterada com sucesso!');
+  setShowSenhaModal(false);
+};
+```
+
+---
+
+## 2. Sinistros (`/app/sinistros`)
+
+### Status: ⚠️ **Parcialmente funcional**
+
+### 2.1 Listagem de Sinistros (`AppSinistros.tsx`)
+✅ **Funciona corretamente**
+- Busca dados reais da tabela `sinistros` filtrados pelo `associado_id`
+- Mostra protocolo, tipo, status e veículo corretamente
+
+### 2.2 Abertura de Sinistro (`NovoSinistro.tsx`)
+✅ **Funciona corretamente**
+- Usa Edge Function `criar-sinistro` que:
+  - Gera protocolo automático (SIN-YYYYMMDD-XXXX)
+  - Valida duplicidade e cobertura
+  - Cria documentos pendentes baseado no tipo
+  - Notifica analistas automaticamente
+- Upload de fotos e B.O. funcionam
+- **Conecta com o painel**: Sinistros criados aparecem imediatamente em `/sinistros` no backoffice
+
+### 2.3 Detalhe do Sinistro (`AppSinistroDetalhe.tsx`)
+❌ **NÃO FUNCIONA - USA DADOS MOCK**
+
+**Problema crítico (linhas 98-150):**
+```typescript
+// Mock data - DADOS FICTÍCIOS
+const sinistroMock: Sinistro = {
+  id: "1",
+  protocolo: "SIN-2024-0001",  // ❌ FAKE
+  status: "em_analise",
   veiculo: {
-    modelo: veiculo?.marca && veiculo?.modelo ? `${veiculo.marca} ${veiculo.modelo}` : 'Gol G5 1.0',  // ❌ Fallback fictício
-    placa: veiculo?.placa || 'ABC-1234',  // ❌ Fallback fictício
+    modelo: "Gol G5 1.0",  // ❌ FAKE
+    placa: "ABC-1234"      // ❌ FAKE
   },
   // ...
 };
 ```
 
-**O que acontece:**
-1. Se `associado` ou `veiculo` são `null`/`undefined`, os fallbacks são usados
-2. Isso ocorre quando:
-   - O usuário **não está autenticado** (está em `/app/login`)
-   - Os hooks `useMyAssociado()` e `useMyVehicles()` ainda estão carregando
-   - Há erro de RLS (mas as policies estão corretas)
+O componente:
+1. Ignora o parâmetro `id` da URL
+2. Mostra sempre os mesmos dados fictícios
+3. Não busca dados reais do Supabase
+4. Não exibe histórico real de mudanças de status
+
+**Correção necessária:**
+- Implementar busca real usando o hook `useSinistro(id)` existente
+- Buscar documentos pendentes de `sinistro_documentos`
+- Buscar histórico de `sinistro_historico`
 
 ---
 
-## 🛠️ Soluções a Implementar
+## 3. Assistência 24h (`/app/assistencia`)
 
-### 1. Proteção de Rota (Prevenir Acesso Não Autenticado)
+### Status: ⚠️ **Parcialmente funcional**
 
-**Problema:** Usuário consegue acessar `/app/documentos` mesmo sem estar logado
+### 3.1 Página Principal (`SolicitarAssistencia.tsx` - rota `/app/assistencia`)
+✅ **Funciona corretamente**
+- Lista tipos de assistência
+- Verifica chamados em aberto (não permite duplicatas)
+- Solicita via Edge Function `criar-chamado-assistencia`
+- Usa dados reais do associado e veículos
 
-**Solução:** Adicionar `AuthGuard` ou verificar autenticação no componente
+### 3.2 Nova Assistência (`AppAssistenciaNova.tsx` - rota `/app/assistencia/nova`)
+⚠️ **Parcialmente funcional**
 
-**Arquivo:** `src/pages/app/AppDocumentos.tsx`
-
-**Modificação (adicionar no início do componente):**
+**Problema (linhas 59-68):**
 ```typescript
-export default function AppDocumentos() {
-  const navigate = useNavigate();
-  const { user } = useAuth(); // Adicionar
-  const { data: associado, isLoading: loadingAssociado } = useMyAssociado();
-  const { data: veiculos, isLoading: loadingVeiculos } = useMyVehicles();
-  
-  // Redirecionar para login se não autenticado
-  useEffect(() => {
-    if (!user && !loadingAssociado) {
-      navigate('/app/login');
-    }
-  }, [user, loadingAssociado, navigate]);
-  
-  // ...resto do código
-}
+// MOCK DATA - DADOS FICTÍCIOS
+const veiculoMock = { modelo: 'Gol G5 1.0', placa: 'ABC-1234' };
+const associadoMock = { nome: 'João da Silva', telefone: '(34) 99999-8888' };
 ```
 
----
-
-### 2. Melhorar Estado de Loading (Evitar Mostrar Fallbacks Durante Carregamento)
-
-**Problema:** Durante o carregamento, os fallbacks aparecem brevemente
-
-**Solução:** Mostrar skeleton/loading até os dados reais carregarem
-
-**Modificação (linhas 192-269):**
+Usado na confirmação (linha 473-474):
 ```typescript
-{/* Carteirinha Digital - Hero */}
-<div className="mx-4 mt-4">
-  {isLoading || !associado || !veiculo ? (
-    <Skeleton className="h-72 w-full rounded-2xl" />
-  ) : (
-    <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-blue-900 rounded-2xl p-5 text-white shadow-xl">
-      {/* ... conteúdo da carteirinha COM DADOS REAIS */}
-      <div className="text-xl font-bold">{associado.nome}</div>
-      <div className="text-blue-200 text-sm">CPF: {associado.cpf}</div>
-      {/* ... */}
-      <div className="font-semibold">{veiculo.marca} {veiculo.modelo}</div>
-      <div className="font-semibold font-mono">{veiculo.placa}</div>
-      {/* ... */}
-    </div>
-  )}
-</div>
+<p className="font-semibold">{veiculoMock.modelo}</p>
+<Badge variant="secondary" className="text-xs">{veiculoMock.placa}</Badge>
 ```
 
----
-
-### 3. Remover Fallbacks Fictícios (Usar Apenas Dados Reais)
-
-**Problema:** Fallbacks fictícios confundem o usuário
-
-**Solução:** Não renderizar carteirinha se não houver dados
-
-**Modificação (linhas 100-111):**
+**Problema adicional (linha 244-251):**
+A função `handleConfirmar()` apenas simula o envio - não chama a Edge Function real:
 ```typescript
-// REMOVER objeto carteirinhaData com fallbacks
-// USAR DIRETAMENTE associado e veiculo no JSX
-
-// Se não houver dados, mostrar mensagem
-{!associado && !isLoading && (
-  <div className="text-center p-8">
-    <p className="text-muted-foreground">Não foi possível carregar seus dados.</p>
-    <Button onClick={() => navigate('/app/home')}>Voltar para Home</Button>
-  </div>
-)}
+const handleConfirmar = async () => {
+  setIsEnviando(true);
+  await new Promise(resolve => setTimeout(resolve, 2000)); // Apenas delay
+  const protocolo = `AST-...`; // Gera localmente (errado)
+  toast.success(`Solicitação enviada!`);
+  navigate('/app/assistencia');
+};
 ```
 
+### 3.3 Acompanhamento (`AppAssistencia.tsx`)
+✅ **Funciona corretamente**
+- Mostra chamados em andamento com dados reais
+- Link "Acompanhar" funciona
+
+### 3.4 Histórico (`HistoricoChamados.tsx`)
+✅ **Funciona corretamente** (verificar se existe)
+
 ---
 
-### 4. Buscar Documentos Contratuais Reais (Substituir Mocks)
+## Correções Necessárias
 
-**Problema:** Documentos contratuais são **hardcoded** (linhas 51-56):
+### Prioridade 1 - Crítica (dados falsos visíveis ao usuário)
 
-```typescript
-const documentosContratuaisMock: DocumentoContratual[] = [
-  { id: '1', tipo: 'contrato', nome: 'Proposta de Filiação', subtitulo: 'Assinatura pendente', ... },
-  // ...
-];
+#### 1.1 Corrigir `AppSinistroDetalhe.tsx`
+- Substituir dados mock por query real usando `useSinistro(id)`
+- Buscar documentos pendentes de `sinistro_documentos`
+- Buscar histórico de `sinistro_historico`
+
+#### 1.2 Corrigir `AppAssistenciaNova.tsx`
+- Buscar veículo real usando `useMyVehicles()`
+- Buscar dados do associado usando `useMyAssociado()`
+- Chamar Edge Function `criar-chamado-assistencia` na confirmação
+
+### Prioridade 2 - Importante
+
+#### 2.1 Corrigir `AppConfiguracoes.tsx`
+- Implementar alteração de senha real via `supabase.auth.updateUser()`
+
+---
+
+## Fluxo de Dados: Conexão App → Painel
+
+### Sinistros
+```
+App (NovoSinistro.tsx)
+    ↓ Edge Function 'criar-sinistro'
+Tabela 'sinistros' ← protocolo SIN-YYYYMMDD-XXXX gerado
+    ↓ Notificação automática para analistas
+Painel (/sinistros/:id) → Analista vê e processa
 ```
 
-**Solução:** Buscar contratos reais do banco com PDFs assinados
+✅ **Conexão funcionando** - Sinistros criados no app aparecem no painel administrativo em tempo real.
 
-**Novo Hook (adicionar em `src/hooks/useMyData.ts`):**
-```typescript
-export function useMyContratos() {
-  const { data: associado } = useMyAssociado();
-
-  return useQuery({
-    queryKey: ['my-contratos', associado?.id],
-    queryFn: async () => {
-      if (!associado?.id) return [];
-
-      const { data, error } = await supabase
-        .from('contratos')
-        .select(`
-          id,
-          numero,
-          status,
-          pdf_assinado_url,
-          data_inicio,
-          plano:planos(nome)
-        `)
-        .eq('associado_id', associado.id)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!associado?.id,
-  });
-}
+### Assistência 24h
+```
+App (SolicitarAssistencia.tsx)
+    ↓ Edge Function 'criar-chamado-assistencia'
+Tabela 'chamados_assistencia' ← protocolo ASS-YYYYMMDD-XXXX
+    ↓ Notificação + WhatsApp para central
+Painel (/assistencia/:id) → Operador despacha prestador
 ```
 
-**Modificação em `AppDocumentos.tsx`:**
-```typescript
-const { data: contratos } = useMyContratos(); // Adicionar
-
-// Substituir documentosContratuaisMock por:
-const documentosContratuais = contratos?.map(c => ({
-  id: c.id,
-  tipo: 'contrato',
-  nome: `Contrato ${c.numero}`,
-  subtitulo: c.status === 'ativo' ? `Assinado em ${new Date(c.data_inicio).toLocaleDateString('pt-BR')}` : 'Assinatura pendente',
-  formato: 'PDF',
-  url: c.pdf_assinado_url,
-  icon: FileText,
-  cor: 'blue',
-})) || [];
-```
+⚠️ **Conexão funcionando apenas via SolicitarAssistencia.tsx**
+A rota alternativa `AppAssistenciaNova.tsx` NÃO salva no banco.
 
 ---
 
-### 5. Adicionar Logs de Debug (Identificar Problemas de Carregamento)
-
-**Solução:** Adicionar console.logs temporários para debugar
-
-**Modificação:**
-```typescript
-useEffect(() => {
-  console.log('🔍 Debug AppDocumentos:', {
-    user: user?.id,
-    associado: associado?.id,
-    veiculos: veiculos?.length,
-    isLoading,
-  });
-}, [user, associado, veiculos, isLoading]);
-```
-
----
-
-## 📋 Checklist de Implementação
-
-### Prioridade 1 (Crítico)
-- [ ] **Proteção de rota:** Redirecionar para `/app/login` se não autenticado
-- [ ] **Remover fallbacks fictícios:** Usar apenas dados reais ou mostrar skeleton
-- [ ] **Melhorar loading state:** Não renderizar carteirinha até dados carregarem
-
-### Prioridade 2 (Importante)
-- [ ] **Buscar contratos reais:** Criar hook `useMyContratos` e substituir mocks
-- [ ] **Formatar CPF:** Adicionar máscara no CPF exibido (`formatCPF()`)
-- [ ] **Validar dados:** Adicionar verificações de campos obrigatórios
-
-### Prioridade 3 (Melhorias)
-- [ ] **Mensagem de erro:** Mostrar mensagem clara se não houver dados
-- [ ] **Retry automático:** Retentar carregamento em caso de erro
-- [ ] **Adicionar logs:** Temporariamente para debugar em produção
-
----
-
-## 🧪 Como Testar
-
-### Teste 1: Usuário Não Autenticado
-1. Limpar cookies/sessão
-2. Acessar `/app/documentos` diretamente
-3. ✅ **Esperado:** Redirecionar para `/app/login`
-
-### Teste 2: Usuário Autenticado (Marcus)
-1. Login com CPF: `12493649737` e senha
-2. Navegar para "Documentos"
-3. ✅ **Esperado:** 
-   - Nome: MARCUS VINICIUS FAUSTINONI DE FREITAS
-   - Placa: LTB4J74
-   - Veículo: Toyota Corolla XEI Flex 2013
-   - Contrato assinado visível
-
-### Teste 3: Carregamento
-1. Abrir DevTools > Network
-2. Throttling em "Slow 3G"
-3. Acessar documentos
-4. ✅ **Esperado:** Skeleton durante carregamento (sem dados fictícios)
-
----
-
-## 📁 Arquivos a Modificar
+## Arquivos a Modificar
 
 | Arquivo | Modificação | Prioridade |
 |---------|-------------|------------|
-| `src/pages/app/AppDocumentos.tsx` | Adicionar proteção de rota, remover fallbacks, melhorar loading | 🔴 Alta |
-| `src/hooks/useMyData.ts` | Criar hook `useMyContratos()` | 🟡 Média |
-| `src/pages/app/AppDocumentos.tsx` | Substituir mocks por contratos reais | 🟡 Média |
-| `src/utils/format.ts` | Criar função `formatCPF()` (se não existir) | 🟢 Baixa |
+| `src/pages/app/AppSinistroDetalhe.tsx` | Substituir mocks por dados reais (linhas 98-150) | Alta |
+| `src/pages/app/AppAssistenciaNova.tsx` | Buscar veículo/associado reais + chamar Edge Function | Alta |
+| `src/pages/app/AppConfiguracoes.tsx` | Implementar alteração de senha real (linhas 121-140) | Média |
 
 ---
 
-## 🎯 Resultado Esperado
+## Implementação Detalhada
 
-Após implementação:
-
-| Antes | Depois |
-|-------|--------|
-| Placa: ABC-0000 | Placa: LTB4J74 |
-| Veículo: Não informado | Veículo: Toyota Corolla XEI Flex 2013 |
-| Matrícula: 00000000 | Matrícula: 03DD7FE8 |
-| Documentos: Mocks | Documentos: Contrato CTR-20260125121152-J87YYJ (PDF real) |
-
----
-
-## 🔧 Código de Exemplo Completo
-
-### Estrutura do Componente Corrigido
+### 1. AppSinistroDetalhe.tsx - Buscar dados reais
 
 ```typescript
-export default function AppDocumentos() {
-  const navigate = useNavigate();
-  const { user } = useAuth();
-  const { data: associado, isLoading: loadingAssociado } = useMyAssociado();
-  const { data: veiculos, isLoading: loadingVeiculos } = useMyVehicles();
-  const { data: documentos, isLoading: loadingDocumentos } = useMyDocumentos();
-  const { data: contratos } = useMyContratos();
+// ADICIONAR imports
+import { useSinistro } from '@/hooks/useSinistros';
+import { useQuery } from '@tanstack/react-query';
 
-  const veiculo = veiculos?.[0];
-  const isLoading = loadingAssociado || loadingVeiculos || loadingDocumentos;
-
-  // Proteção de rota
-  useEffect(() => {
-    if (!user && !loadingAssociado) {
-      navigate('/app/login');
-    }
-  }, [user, loadingAssociado, navigate]);
-
-  // Não renderizar até ter dados
-  if (isLoading) {
-    return <div className="p-4"><Skeleton className="h-screen" /></div>;
-  }
-
-  if (!associado || !veiculo) {
-    return (
-      <div className="flex flex-col items-center justify-center h-screen p-8">
-        <p className="text-muted-foreground mb-4">Não foi possível carregar seus dados.</p>
-        <Button onClick={() => navigate('/app/home')}>Voltar para Home</Button>
-      </div>
-    );
-  }
-
-  // USAR DADOS REAIS DIRETAMENTE (sem fallbacks)
-  return (
-    <div className="pb-20">
-      {/* Carteirinha com DADOS REAIS */}
-      <div className="mx-4 mt-4">
-        <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-blue-900 rounded-2xl p-5 text-white shadow-xl">
-          <div className="text-xl font-bold">{associado.nome}</div>
-          <div className="text-blue-200 text-sm">CPF: {formatCPF(associado.cpf)}</div>
-          
-          <div className="mt-4 pt-4 border-t border-white/20">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <div className="text-xs text-blue-200">Veículo</div>
-                <div className="font-semibold">{veiculo.marca} {veiculo.modelo}</div>
-              </div>
-              <div>
-                <div className="text-xs text-blue-200">Placa</div>
-                <div className="font-semibold font-mono">{veiculo.placa}</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Documentos REAIS */}
-      {contratos && contratos.length > 0 && (
-        <div className="p-4">
-          <h3 className="font-semibold mb-3">Documentos Contratuais</h3>
-          {contratos.map(contrato => (
-            <div key={contrato.id} className="flex items-center gap-4 p-4 bg-card rounded-lg">
-              <FileText className="h-8 w-8 text-blue-600" />
-              <div className="flex-1">
-                <p className="font-medium">{contrato.numero}</p>
-                <p className="text-sm text-muted-foreground">
-                  {contrato.status === 'ativo' ? 'Assinado' : 'Pendente'}
-                </p>
-              </div>
-              {contrato.pdf_assinado_url && (
-                <Button 
-                  size="sm" 
-                  onClick={() => window.open(contrato.pdf_assinado_url, '_blank')}
-                >
-                  Visualizar
-                </Button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+export default function AppSinistroDetalhe() {
+  const { id } = useParams<{ id: string }>();
+  
+  // SUBSTITUIR mock por query real
+  const { data: sinistro, isLoading } = useSinistro(id);
+  
+  // Buscar documentos pendentes
+  const { data: documentos } = useQuery({
+    queryKey: ['sinistro-documentos', id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('sinistro_documentos')
+        .select('*')
+        .eq('sinistro_id', id)
+        .eq('status', 'pendente');
+      return data;
+    },
+    enabled: !!id,
+  });
+  
+  // Buscar histórico
+  const { data: timeline } = useQuery({
+    queryKey: ['sinistro-historico', id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('sinistro_historico')
+        .select('*')
+        .eq('sinistro_id', id)
+        .order('created_at', { ascending: false });
+      return data;
+    },
+    enabled: !!id,
+  });
+  
+  if (isLoading) return <LoadingScreen />;
+  if (!sinistro) return <NotFound />;
+  
+  // Usar sinistro real no JSX
 }
 ```
+
+### 2. AppAssistenciaNova.tsx - Integrar com dados reais
+
+```typescript
+// ADICIONAR imports
+import { useMyAssociado, useMyVehicles } from '@/hooks/useMyData';
+import { useSolicitarAssistencia } from '@/hooks/useAppAssociado';
+
+export default function AppAssistenciaNova() {
+  const { data: associado } = useMyAssociado();
+  const { data: veiculos } = useMyVehicles();
+  const solicitarAssistencia = useSolicitarAssistencia();
+  
+  const veiculo = veiculos?.[0];
+  
+  // SUBSTITUIR handleConfirmar
+  const handleConfirmar = async () => {
+    if (!veiculo) return;
+    
+    setIsEnviando(true);
+    try {
+      await solicitarAssistencia.mutateAsync({
+        tipo: formState.tipoServico as TipoAssistencia,
+        veiculo_id: veiculo.id,
+        endereco: `${formState.logradouro}, ${formState.numero} - ${formState.bairro}`,
+        latitude: 0, // ou coordenadas reais se disponíveis
+        longitude: 0,
+        descricao: formState.observacoes,
+      });
+      navigate('/app/assistencia');
+    } finally {
+      setIsEnviando(false);
+    }
+  };
+  
+  // Na etapa 3, usar dados reais:
+  <p className="font-semibold">{veiculo?.marca} {veiculo?.modelo}</p>
+  <Badge>{veiculo?.placa}</Badge>
+}
+```
+
+### 3. AppConfiguracoes.tsx - Alteração de senha real
+
+```typescript
+const handleAlterarSenha = async () => {
+  if (!senhaAtual || !novaSenha || !confirmarSenha) {
+    toast.error('Preencha todos os campos');
+    return;
+  }
+  if (novaSenha !== confirmarSenha) {
+    toast.error('As senhas não coincidem');
+    return;
+  }
+  if (novaSenha.length < 6) {
+    toast.error('A senha deve ter pelo menos 6 caracteres');
+    return;
+  }
+  
+  // Chamar Supabase Auth
+  const { error } = await supabase.auth.updateUser({ 
+    password: novaSenha 
+  });
+  
+  if (error) {
+    toast.error(error.message || 'Erro ao alterar senha');
+    return;
+  }
+  
+  setShowSenhaModal(false);
+  toast.success('Senha alterada com sucesso!');
+  setSenhaAtual('');
+  setNovaSenha('');
+  setConfirmarSenha('');
+};
+```
+
+---
+
+## Testes Recomendados
+
+### Teste 1: Sinistros E2E
+1. Login como associado (Marcus)
+2. Criar novo sinistro no app
+3. Verificar se aparece no painel em `/sinistros`
+4. Abrir detalhe do sinistro no app → Deve mostrar dados REAIS
+
+### Teste 2: Assistência E2E
+1. Login como associado
+2. Solicitar assistência via `/app/assistencia`
+3. Verificar se protocolo foi gerado
+4. Verificar se aparece no painel de assistência
+
+### Teste 3: Configurações
+1. Alterar senha
+2. Fazer logout
+3. Tentar login com senha antiga → Deve falhar
+4. Login com nova senha → Deve funcionar
+
