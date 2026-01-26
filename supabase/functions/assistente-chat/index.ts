@@ -24,6 +24,8 @@ Você pode ajudar os associados com:
 6. **Status do veículo** - Informações e rastreamento
 
 ## Regras Importantes
+- SEMPRE use a DATA ATUAL fornecida no contexto para datas relativas como "hoje", "agora", "ontem"
+- Quando o usuário disser "foi agora" ou "hoje às X horas", use a data atual do contexto
 - Ao criar sinistros ou assistências, SEMPRE colete todos os dados necessários antes de executar
 - Para sinistro: tipo, data/hora, local, descrição detalhada
 - Para assistência: tipo de serviço, localização atual, descrição do problema
@@ -506,7 +508,24 @@ serve(async (req) => {
 
     const planoInfo = associado.plano as { nome?: string; descricao?: string } | null;
 
+    // Obter data/hora atual em Brasília
+    const agora = new Date();
+    const dataHoraBrasilia = agora.toLocaleString('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+
     const contextoAssociado = `
+## DATA E HORA ATUAL (MUITO IMPORTANTE!)
+- **Hoje é**: ${dataHoraBrasilia} (horário de Brasília)
+- Use SEMPRE esta data como referência para "hoje", "agora", "ontem", etc.
+- Quando o usuário disser "foi agora às 08:10", a data é HOJE: ${dataHoraBrasilia.split(' às')[0]}
+
 ## DADOS DO ASSOCIADO ATUAL (use esses dados nas respostas!)
 - **Nome**: ${associado.nome}
 - **CPF**: ${associado.cpf || 'N/I'}
