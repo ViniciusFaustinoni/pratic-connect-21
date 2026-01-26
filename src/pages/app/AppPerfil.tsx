@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -91,10 +91,17 @@ const COBERTURAS_RESUMIDAS = [
 
 export default function AppPerfil() {
   const navigate = useNavigate();
-  const { signOut } = useAuth();
-  const { data: associado, isLoading: associadoLoading } = useMyAssociado();
+  const { user, signOut } = useAuth();
+  const { data: associado, isLoading: associadoLoading, error: associadoError } = useMyAssociado();
   const { data: vehicles, isLoading: vehiclesLoading } = useMyVehicles();
   const updateAssociado = useUpdateAssociado();
+
+  // Proteção de rota adicional - redireciona se não autenticado
+  useEffect(() => {
+    if (!user && !associadoLoading) {
+      navigate('/app/login');
+    }
+  }, [user, associadoLoading, navigate]);
 
   const [modalDadosPessoais, setModalDadosPessoais] = useState(false);
   const [modalEndereco, setModalEndereco] = useState(false);
@@ -201,11 +208,28 @@ export default function AppPerfil() {
 
   if (!associado) {
     return (
-      <div className="flex flex-col items-center justify-center p-8 text-center">
-        <User className="h-16 w-16 text-muted-foreground mb-4" />
+      <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 text-center">
+        <div className="bg-muted/30 rounded-full p-6 mb-4">
+          <User className="h-16 w-16 text-muted-foreground" />
+        </div>
         <p className="text-lg font-medium text-foreground">Dados não encontrados</p>
-        <p className="text-sm text-muted-foreground mb-4">Não foi possível carregar seus dados</p>
-        <Button onClick={() => window.location.reload()}>Tentar novamente</Button>
+        <p className="text-sm text-muted-foreground mb-6 max-w-xs">
+          Não foi possível carregar seus dados. Sua sessão pode ter expirado.
+        </p>
+        <div className="flex flex-col gap-2 w-full max-w-[200px]">
+          <Button onClick={() => window.location.reload()}>
+            Tentar novamente
+          </Button>
+          <Button 
+            variant="outline" 
+            onClick={async () => {
+              await signOut();
+              navigate('/app/login');
+            }}
+          >
+            Fazer login novamente
+          </Button>
+        </div>
       </div>
     );
   }
