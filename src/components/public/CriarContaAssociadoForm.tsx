@@ -51,8 +51,16 @@ export function CriarContaAssociadoForm({ associadoId, nomeAssociado, emailCadas
         body: { associadoId, email: emailFinal.toLowerCase().trim(), senha }
       });
 
-      if (error) throw error;
-      if (!data?.success) throw new Error(data?.error || 'Erro ao criar conta');
+      // Verificar erro HTTP (status não-2xx)
+      if (error) {
+        console.error('Erro HTTP da Edge Function:', error);
+        throw new Error('Erro de conexão. Tente novamente.');
+      }
+      
+      // Verificar resposta de erro da Edge Function
+      if (!data?.success) {
+        throw new Error(data?.error || 'Erro ao criar conta');
+      }
 
       // 2. Fazer login automático com as credenciais recém-criadas
       const { error: loginError } = await supabase.auth.signInWithPassword({
@@ -72,7 +80,19 @@ export function CriarContaAssociadoForm({ associadoId, nomeAssociado, emailCadas
 
     } catch (err: any) {
       console.error('Erro ao criar conta:', err);
-      setErro(err.message || 'Erro ao criar conta. Tente novamente.');
+      
+      // Mensagem amigável baseada no erro
+      let mensagemErro = 'Erro ao criar conta. Tente novamente.';
+      
+      if (err.message?.includes('email já está em uso') || err.message?.includes('already been registered')) {
+        mensagemErro = 'Este email já está cadastrado no sistema. Entre em contato com o suporte para resolver.';
+      } else if (err.message?.includes('já possui uma conta')) {
+        mensagemErro = 'Você já possui uma conta. Use "Esqueci minha senha" na tela de login.';
+      } else if (err.message) {
+        mensagemErro = err.message;
+      }
+      
+      setErro(mensagemErro);
     } finally {
       setLoading(false);
     }

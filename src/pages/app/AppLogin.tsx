@@ -13,7 +13,6 @@ import { Eye, EyeOff, Loader2, AlertCircle, CheckCircle, FlaskConical, Copy, Che
 import { z } from 'zod';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { PrimeiroAcessoModal } from '@/components/app/PrimeiroAcessoModal';
 
 // ============================================
 // TIPOS E CONSTANTES
@@ -110,7 +109,6 @@ export default function AppLogin() {
   const [error, setError] = useState<LoginError | string | null>(null);
 
   // Modal states
-  const [modalPrimeiroAcesso, setModalPrimeiroAcesso] = useState(false);
   const [modalContaTeste, setModalContaTeste] = useState(false);
   const [loadingContaTeste, setLoadingContaTeste] = useState(false);
   const [testCredentials, setTestCredentials] = useState<{
@@ -347,13 +345,10 @@ export default function AppLogin() {
         </div>
 
         {/* LINKS AUXILIARES */}
-        <div className="mt-6 text-center space-y-3">
+        <div className="mt-6 text-center">
           <Link to="/app/forgot-password" className="block text-sm font-medium text-blue-600 hover:underline">
             Esqueci minha senha
           </Link>
-          <button type="button" onClick={() => setModalPrimeiroAcesso(true)} className="block w-full text-sm font-medium text-blue-600 hover:underline">
-            Primeiro acesso? Criar senha
-          </button>
         </div>
 
         {/* CREDENCIAIS DE TESTE - Apenas em DEV */}
@@ -378,9 +373,6 @@ export default function AppLogin() {
         </div>
 
       </div>
-
-      {/* Modal Primeiro Acesso */}
-      <PrimeiroAcessoModal open={modalPrimeiroAcesso} onClose={() => setModalPrimeiroAcesso(false)} />
 
       {/* Modal Conta de Teste */}
       <Dialog open={modalContaTeste} onOpenChange={setModalContaTeste}>
