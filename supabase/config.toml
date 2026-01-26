@@ -224,3 +224,6 @@ verify_jwt = false
 
 [functions.upload-arquivo-chat]
 verify_jwt = false
+
+[functions.aprovar-solicitacao-ia]
+verify_jwt = false
