@@ -48,6 +48,26 @@ Quando precisar coletar o endereço para sinistro ou assistência:
 
 4. **Após confirmar o endereço**, continue coletando os demais dados necessários.
 
+## FLUXO DE COLETA DE DOCUMENTOS PARA SINISTRO (IMPORTANTE!)
+Após coletar os dados básicos (tipo, data, local, descrição) do sinistro:
+
+1. **Pergunte sobre o Boletim de Ocorrência:**
+   - "Você já registrou o Boletim de Ocorrência (B.O.) na polícia?"
+   - Se SIM: "Por favor, envie uma foto ou PDF do B.O.:"
+   - Inclua EXATAMENTE este marcador: [UPLOAD_BO]
+   - Se NÃO: "Recomendamos registrar o B.O. o mais rápido possível. Você pode enviá-lo depois."
+
+2. **Solicite fotos do sinistro (APÓS o B.O. ou se não tiver):**
+   - "Agora, por favor, envie fotos mostrando os danos no veículo:"
+   - Inclua EXATAMENTE este marcador: [UPLOAD_FOTOS]
+   - Aguarde confirmação de envio (mensagem com 📷)
+
+3. **Quando os arquivos forem enviados**, você receberá mensagens como:
+   - "📄 Boletim de Ocorrência enviado: arquivo.pdf"
+   - "📷 X foto(s) enviada(s)"
+   
+4. **Finalize a solicitação** após receber os arquivos (ou se o usuário optar por não enviar)
+
 ## Formato de Respostas
 - Use Markdown para formatar (negrito, listas, etc.)
 - Seja conciso mas completo
@@ -124,7 +144,7 @@ const tools = [
     type: "function",
     function: {
       name: "criar_solicitacao_sinistro",
-      description: "Cria uma solicitação de sinistro que será analisada por um diretor. Use APENAS após coletar TODOS os dados necessários: tipo, data, local e descrição.",
+      description: "Cria uma solicitação de sinistro que será analisada por um diretor. Use APENAS após coletar TODOS os dados necessários: tipo, data, local, descrição, e opcionalmente B.O. e fotos.",
       parameters: {
         type: "object",
         properties: {
@@ -148,6 +168,15 @@ const tools = [
           descricao: {
             type: "string",
             description: "Descrição detalhada do ocorrido",
+          },
+          bo_path: {
+            type: "string",
+            description: "Caminho do arquivo do Boletim de Ocorrência no storage (se enviado)",
+          },
+          fotos_paths: {
+            type: "array",
+            items: { type: "string" },
+            description: "Lista de caminhos das fotos enviadas no storage",
           },
         },
         required: ["tipo", "data_ocorrencia", "local", "descricao"],
@@ -364,15 +393,22 @@ async function executeTool(
             data_ocorrencia: args.data_ocorrencia,
             local: args.local,
             descricao: args.descricao,
+            bo_path: args.bo_path || null,
+            fotos_paths: args.fotos_paths || [],
           },
           status: "pendente",
         }).select("id").single();
 
         if (error) throw error;
 
+        const temArquivos = args.bo_path || (args.fotos_paths && args.fotos_paths.length > 0);
+        const arquivosInfo = temArquivos 
+          ? ` Arquivos anexados: ${args.bo_path ? 'B.O.' : ''}${args.bo_path && args.fotos_paths?.length ? ' + ' : ''}${args.fotos_paths?.length ? `${args.fotos_paths.length} foto(s)` : ''}`
+          : '';
+
         return JSON.stringify({
           sucesso: true,
-          message: "Solicitação de sinistro registrada com sucesso! Um diretor irá analisar em breve.",
+          message: `Solicitação de sinistro registrada com sucesso!${arquivosInfo} Um diretor irá analisar em breve.`,
           id: data.id,
         });
       }

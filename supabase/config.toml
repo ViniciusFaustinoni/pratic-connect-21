@@ -221,3 +221,6 @@ verify_jwt = false
 
 [functions.delete-sinistro]
 verify_jwt = false
+
+[functions.upload-arquivo-chat]
+verify_jwt = false

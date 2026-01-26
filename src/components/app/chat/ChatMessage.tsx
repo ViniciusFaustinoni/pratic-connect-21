@@ -2,6 +2,8 @@ import { cn } from '@/lib/utils';
 import { Bot, User, Loader2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { LocationButton } from './LocationButton';
+import { UploadBOButton } from './UploadBOButton';
+import { UploadFotosButton } from './UploadFotosButton';
 
 interface ChatMessageProps {
   role: 'user' | 'assistant';
@@ -9,16 +11,24 @@ interface ChatMessageProps {
   timestamp: Date;
   isLoading?: boolean;
   onLocationCapture?: (latitude: number, longitude: number) => void;
+  onUploadBO?: (file: File) => Promise<void>;
+  onUploadFotos?: (files: File[]) => Promise<void>;
 }
 
-export function ChatMessage({ role, content, timestamp, isLoading, onLocationCapture }: ChatMessageProps) {
+export function ChatMessage({ role, content, timestamp, isLoading, onLocationCapture, onUploadBO, onUploadFotos }: ChatMessageProps) {
   const isUser = role === 'user';
   
-  // Verificar se a mensagem contém o marcador de botão de localização
+  // Verificar se a mensagem contém marcadores de componentes interativos
   const hasLocationButton = !isUser && content.includes('[BOTAO_LOCALIZACAO]');
+  const hasUploadBO = !isUser && content.includes('[UPLOAD_BO]');
+  const hasUploadFotos = !isUser && content.includes('[UPLOAD_FOTOS]');
   
-  // Remover o marcador do conteúdo para exibição
-  const displayContent = content.replace('[BOTAO_LOCALIZACAO]', '').trim();
+  // Remover os marcadores do conteúdo para exibição
+  const displayContent = content
+    .replace('[BOTAO_LOCALIZACAO]', '')
+    .replace('[UPLOAD_BO]', '')
+    .replace('[UPLOAD_FOTOS]', '')
+    .trim();
   return (
     <div
       className={cn(
@@ -98,12 +108,30 @@ export function ChatMessage({ role, content, timestamp, isLoading, onLocationCap
                 {displayContent}
               </ReactMarkdown>
               
-              {/* Renderizar botão de localização se necessário */}
+              {/* Renderizar componentes interativos */}
               {hasLocationButton && onLocationCapture && (
                 <LocationButton 
                   onLocationCapture={onLocationCapture}
                   disabled={isLoading}
                 />
+              )}
+              
+              {hasUploadBO && onUploadBO && (
+                <div className="mt-3">
+                  <UploadBOButton 
+                    onUpload={onUploadBO}
+                    disabled={isLoading}
+                  />
+                </div>
+              )}
+              
+              {hasUploadFotos && onUploadFotos && (
+                <div className="mt-3">
+                  <UploadFotosButton 
+                    onUpload={onUploadFotos}
+                    disabled={isLoading}
+                  />
+                </div>
               )}
             </div>
           )}

@@ -20,7 +20,7 @@ import {
 
 export default function AppChat() {
   const navigate = useNavigate();
-  const { messages, isLoading, isTranscribing, sendMessage, sendAudio, sendLocation, clearMessages } = useAssistenteChat();
+  const { messages, isLoading, isTranscribing, sendMessage, sendAudio, sendLocation, uploadBO, uploadFotos, clearMessages } = useAssistenteChat();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom on new messages
@@ -93,6 +93,8 @@ export default function AppChat() {
                 timestamp={message.timestamp}
                 isLoading={message.isLoading}
                 onLocationCapture={sendLocation}
+                onUploadBO={uploadBO}
+                onUploadFotos={uploadFotos}
               />
             ))}
             <div ref={messagesEndRef} />
