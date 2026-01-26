@@ -1,235 +1,360 @@
-# Plano: Implementacao do Modelo Pratic de Precificacao
 
-## Visao Geral do Modelo
+# Plano: Corrigir Área de Documentos do Associado
 
-O modelo Pratic define que:
-- **Preco do Plano** = Soma dos Precos dos Beneficios + Valor Adicional
-- **Custo Real do Beneficio** = Gasto Total (60 dias) / Quantidade de Cotas Ativas
-- **Indicadores**: Vermelho (prejuizo), Amarelo (equilibrio), Verde (superavit)
+## 🔍 Diagnóstico do Problema
 
----
+### Problema Identificado
+A página de documentos (`/app/documentos`) está mostrando **dados fictícios** (Placa: ABC-0000, Matrícula: 00000000) ao invés dos dados reais do associado Marcus.
 
-## Analise do Estado Atual
+### Dados Reais no Banco
+✅ **Associado:** MARCUS VINICIUS FAUSTINONI DE FREITAS
+✅ **CPF:** 124.936.497-37
+✅ **Veículo:** Toyota Corolla XEI Flex 2013
+✅ **Placa:** LTB4J74
+✅ **Cor:** Azul
+✅ **Status:** Ativo
+✅ **Contrato:** CTR-20260125121152-J87YYJ (PDF assinado disponível)
 
-### Tabelas Existentes (que serao REUTILIZADAS/ADAPTADAS)
+### Causa Raiz
+Analisando o código em `src/pages/app/AppDocumentos.tsx` (linhas 100-111), o componente usa **fallbacks com dados fictícios**:
 
-| Tabela | Situacao | Acao Necessaria |
-|--------|----------|-----------------|
-| `beneficios_adicionais` | Existe com 14 registros | Adicionar campo `preco_sugerido` (renomear logica de `preco`) |
-| `benefits` | Existe com 16 registros (coberturas) | Adicionar campos de precificacao |
-| `planos` | Existe com ~15 planos | Ja tem `adicional_mensal` e `valor_adesao` |
-| `plan_benefits` | Existe (relacao N:N) | Ja funciona |
-| `sinistros` | Existe com `valor_pago` | Usar para calcular gastos de coberturas |
-| `chamados_assistencia` | Existe | Usar para calcular gastos de assistencias |
-
-### Tabelas que PRECISAM SER CRIADAS
-
-| Tabela | Proposito |
-|--------|-----------|
-| `gastos_beneficios` | Registrar cada gasto associado a um beneficio (para calculo de custo real) |
-| `vw_custo_real_beneficios` | View para calcular automaticamente custo real e indicador de saude |
-
----
-
-## Etapas de Implementacao
-
-### FASE 1: Banco de Dados (Migration)
-
-#### 1.1 Adicionar campo `preco_sugerido` na tabela `benefits`
-```sql
-ALTER TABLE benefits 
-ADD COLUMN IF NOT EXISTS preco_sugerido DECIMAL(10,2) DEFAULT 0;
-```
-
-#### 1.2 Criar tabela `gastos_beneficios`
-```sql
-CREATE TABLE IF NOT EXISTS gastos_beneficios (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    beneficio_id UUID NOT NULL,
-    beneficio_tipo VARCHAR(20) NOT NULL CHECK (beneficio_tipo IN ('benefit', 'adicional')),
-    sinistro_id UUID REFERENCES sinistros(id),
-    chamado_id UUID REFERENCES chamados_assistencia(id),
-    associado_id UUID NOT NULL REFERENCES associados(id),
-    contrato_id UUID REFERENCES contratos(id),
-    descricao VARCHAR(255),
-    valor_gasto DECIMAL(10,2) NOT NULL,
-    data_ocorrencia DATE NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE INDEX idx_gastos_beneficio ON gastos_beneficios(beneficio_id, beneficio_tipo);
-CREATE INDEX idx_gastos_data ON gastos_beneficios(data_ocorrencia);
-CREATE INDEX idx_gastos_associado ON gastos_beneficios(associado_id);
-```
-
-#### 1.3 Criar View `vw_custo_real_beneficios`
-View que calcula automaticamente:
-- Gasto total nos ultimos 60 dias
-- Quantidade de cotas ativas
-- Custo real por cota
-- Indicador de saude (prejuizo/equilibrio/superavit)
-
-#### 1.4 Criar funcao RPC `fn_calcular_custo_beneficio`
-Para calculo sob demanda de um beneficio especifico.
-
----
-
-### FASE 2: Hooks e Logica (Frontend)
-
-#### 2.1 Criar `src/hooks/useCustoBeneficios.ts`
 ```typescript
-// Hook para buscar custo real dos beneficios
-export function useCustoBeneficios() {...}
-
-// Funcao para calcular indicador de saude
-export function calcularIndicadorSaude(preco: number, custoReal: number): 'prejuizo' | 'equilibrio' | 'superavit' | 'sem_dados'
-
-// Funcao para calcular margem
-export function calcularMargem(preco: number, custoReal: number): number
+const carteirinhaData = {
+  nome: associado?.nome || 'João da Silva',  // ❌ Fallback fictício
+  cpf: associado?.cpf || '123.456.789-00',   // ❌ Fallback fictício
+  veiculo: {
+    modelo: veiculo?.marca && veiculo?.modelo ? `${veiculo.marca} ${veiculo.modelo}` : 'Gol G5 1.0',  // ❌ Fallback fictício
+    placa: veiculo?.placa || 'ABC-1234',  // ❌ Fallback fictício
+  },
+  // ...
+};
 ```
 
-#### 2.2 Criar `src/hooks/usePlanosPrecificacao.ts`
+**O que acontece:**
+1. Se `associado` ou `veiculo` são `null`/`undefined`, os fallbacks são usados
+2. Isso ocorre quando:
+   - O usuário **não está autenticado** (está em `/app/login`)
+   - Os hooks `useMyAssociado()` e `useMyVehicles()` ainda estão carregando
+   - Há erro de RLS (mas as policies estão corretas)
+
+---
+
+## 🛠️ Soluções a Implementar
+
+### 1. Proteção de Rota (Prevenir Acesso Não Autenticado)
+
+**Problema:** Usuário consegue acessar `/app/documentos` mesmo sem estar logado
+
+**Solução:** Adicionar `AuthGuard` ou verificar autenticação no componente
+
+**Arquivo:** `src/pages/app/AppDocumentos.tsx`
+
+**Modificação (adicionar no início do componente):**
 ```typescript
-// Hook para calcular preco de um plano
-export function usePrecoPlano(planoId: string) {...}
-
-// Retorna: somaBeneficios, valorAdicional, mensalidadeFinal, adesao
+export default function AppDocumentos() {
+  const navigate = useNavigate();
+  const { user } = useAuth(); // Adicionar
+  const { data: associado, isLoading: loadingAssociado } = useMyAssociado();
+  const { data: veiculos, isLoading: loadingVeiculos } = useMyVehicles();
+  
+  // Redirecionar para login se não autenticado
+  useEffect(() => {
+    if (!user && !loadingAssociado) {
+      navigate('/app/login');
+    }
+  }, [user, loadingAssociado, navigate]);
+  
+  // ...resto do código
+}
 ```
 
 ---
 
-### FASE 3: Componentes de UI
+### 2. Melhorar Estado de Loading (Evitar Mostrar Fallbacks Durante Carregamento)
 
-#### 3.1 Criar `src/components/beneficios/IndicadorSaude.tsx`
-Componente visual que mostra:
-- Icone colorido (verde/amarelo/vermelho/cinza)
-- Valor da margem (+R$ X,XX ou -R$ X,XX)
-- Tooltip com detalhes
+**Problema:** Durante o carregamento, os fallbacks aparecem brevemente
 
-#### 3.2 Atualizar `BeneficioAdicionalModal.tsx`
-Adicionar secao "Precificacao" mostrando:
-- Preco sugerido (editavel)
-- Custo real (somente leitura, calculado)
-- Indicador de saude
-- Detalhes: gasto total, total de cotas, custo por cota
+**Solução:** Mostrar skeleton/loading até os dados reais carregarem
 
-#### 3.3 Criar nova Tab "Saude Financeira" em `/vendas/planos-beneficios`
-- Resumo geral: X superavit, Y equilibrio, Z prejuizo
-- Tabela com todos beneficios e seus indicadores
-- Alertas para beneficios em prejuizo
-
-#### 3.4 Atualizar visualizacao de Planos
-- Mostrar soma dos beneficios
-- Mostrar valor adicional
-- Mostrar mensalidade final calculada
-- Indicador de saude geral do plano
+**Modificação (linhas 192-269):**
+```typescript
+{/* Carteirinha Digital - Hero */}
+<div className="mx-4 mt-4">
+  {isLoading || !associado || !veiculo ? (
+    <Skeleton className="h-72 w-full rounded-2xl" />
+  ) : (
+    <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-blue-900 rounded-2xl p-5 text-white shadow-xl">
+      {/* ... conteúdo da carteirinha COM DADOS REAIS */}
+      <div className="text-xl font-bold">{associado.nome}</div>
+      <div className="text-blue-200 text-sm">CPF: {associado.cpf}</div>
+      {/* ... */}
+      <div className="font-semibold">{veiculo.marca} {veiculo.modelo}</div>
+      <div className="font-semibold font-mono">{veiculo.placa}</div>
+      {/* ... */}
+    </div>
+  )}
+</div>
+```
 
 ---
 
-### FASE 4: Integracao com Sinistros/Chamados
+### 3. Remover Fallbacks Fictícios (Usar Apenas Dados Reais)
 
-#### 4.1 Trigger para popular `gastos_beneficios`
-Quando um sinistro for pago ou um chamado de assistencia for concluido:
-- Inserir registro em `gastos_beneficios`
-- Vincular ao beneficio correspondente
+**Problema:** Fallbacks fictícios confundem o usuário
 
-```sql
-CREATE OR REPLACE FUNCTION fn_registrar_gasto_sinistro()
-RETURNS TRIGGER AS $$
-BEGIN
-  IF NEW.status = 'pago' AND OLD.status != 'pago' AND NEW.valor_pago > 0 THEN
-    INSERT INTO gastos_beneficios (beneficio_id, beneficio_tipo, sinistro_id, associado_id, valor_gasto, data_ocorrencia, descricao)
-    VALUES (
-      -- mapear tipo de sinistro para beneficio
-      (SELECT id FROM benefits WHERE slug = CASE NEW.tipo 
-        WHEN 'roubo_furto' THEN 'roubo-furto'
-        WHEN 'colisao' THEN 'colisao'
-        -- etc
-       END),
-      'benefit',
-      NEW.id,
-      NEW.associado_id,
-      NEW.valor_pago,
-      NEW.data_ocorrencia::date,
-      'Sinistro ' || NEW.protocolo
+**Solução:** Não renderizar carteirinha se não houver dados
+
+**Modificação (linhas 100-111):**
+```typescript
+// REMOVER objeto carteirinhaData com fallbacks
+// USAR DIRETAMENTE associado e veiculo no JSX
+
+// Se não houver dados, mostrar mensagem
+{!associado && !isLoading && (
+  <div className="text-center p-8">
+    <p className="text-muted-foreground">Não foi possível carregar seus dados.</p>
+    <Button onClick={() => navigate('/app/home')}>Voltar para Home</Button>
+  </div>
+)}
+```
+
+---
+
+### 4. Buscar Documentos Contratuais Reais (Substituir Mocks)
+
+**Problema:** Documentos contratuais são **hardcoded** (linhas 51-56):
+
+```typescript
+const documentosContratuaisMock: DocumentoContratual[] = [
+  { id: '1', tipo: 'contrato', nome: 'Proposta de Filiação', subtitulo: 'Assinatura pendente', ... },
+  // ...
+];
+```
+
+**Solução:** Buscar contratos reais do banco com PDFs assinados
+
+**Novo Hook (adicionar em `src/hooks/useMyData.ts`):**
+```typescript
+export function useMyContratos() {
+  const { data: associado } = useMyAssociado();
+
+  return useQuery({
+    queryKey: ['my-contratos', associado?.id],
+    queryFn: async () => {
+      if (!associado?.id) return [];
+
+      const { data, error } = await supabase
+        .from('contratos')
+        .select(`
+          id,
+          numero,
+          status,
+          pdf_assinado_url,
+          data_inicio,
+          plano:planos(nome)
+        `)
+        .eq('associado_id', associado.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!associado?.id,
+  });
+}
+```
+
+**Modificação em `AppDocumentos.tsx`:**
+```typescript
+const { data: contratos } = useMyContratos(); // Adicionar
+
+// Substituir documentosContratuaisMock por:
+const documentosContratuais = contratos?.map(c => ({
+  id: c.id,
+  tipo: 'contrato',
+  nome: `Contrato ${c.numero}`,
+  subtitulo: c.status === 'ativo' ? `Assinado em ${new Date(c.data_inicio).toLocaleDateString('pt-BR')}` : 'Assinatura pendente',
+  formato: 'PDF',
+  url: c.pdf_assinado_url,
+  icon: FileText,
+  cor: 'blue',
+})) || [];
+```
+
+---
+
+### 5. Adicionar Logs de Debug (Identificar Problemas de Carregamento)
+
+**Solução:** Adicionar console.logs temporários para debugar
+
+**Modificação:**
+```typescript
+useEffect(() => {
+  console.log('🔍 Debug AppDocumentos:', {
+    user: user?.id,
+    associado: associado?.id,
+    veiculos: veiculos?.length,
+    isLoading,
+  });
+}, [user, associado, veiculos, isLoading]);
+```
+
+---
+
+## 📋 Checklist de Implementação
+
+### Prioridade 1 (Crítico)
+- [ ] **Proteção de rota:** Redirecionar para `/app/login` se não autenticado
+- [ ] **Remover fallbacks fictícios:** Usar apenas dados reais ou mostrar skeleton
+- [ ] **Melhorar loading state:** Não renderizar carteirinha até dados carregarem
+
+### Prioridade 2 (Importante)
+- [ ] **Buscar contratos reais:** Criar hook `useMyContratos` e substituir mocks
+- [ ] **Formatar CPF:** Adicionar máscara no CPF exibido (`formatCPF()`)
+- [ ] **Validar dados:** Adicionar verificações de campos obrigatórios
+
+### Prioridade 3 (Melhorias)
+- [ ] **Mensagem de erro:** Mostrar mensagem clara se não houver dados
+- [ ] **Retry automático:** Retentar carregamento em caso de erro
+- [ ] **Adicionar logs:** Temporariamente para debugar em produção
+
+---
+
+## 🧪 Como Testar
+
+### Teste 1: Usuário Não Autenticado
+1. Limpar cookies/sessão
+2. Acessar `/app/documentos` diretamente
+3. ✅ **Esperado:** Redirecionar para `/app/login`
+
+### Teste 2: Usuário Autenticado (Marcus)
+1. Login com CPF: `12493649737` e senha
+2. Navegar para "Documentos"
+3. ✅ **Esperado:** 
+   - Nome: MARCUS VINICIUS FAUSTINONI DE FREITAS
+   - Placa: LTB4J74
+   - Veículo: Toyota Corolla XEI Flex 2013
+   - Contrato assinado visível
+
+### Teste 3: Carregamento
+1. Abrir DevTools > Network
+2. Throttling em "Slow 3G"
+3. Acessar documentos
+4. ✅ **Esperado:** Skeleton durante carregamento (sem dados fictícios)
+
+---
+
+## 📁 Arquivos a Modificar
+
+| Arquivo | Modificação | Prioridade |
+|---------|-------------|------------|
+| `src/pages/app/AppDocumentos.tsx` | Adicionar proteção de rota, remover fallbacks, melhorar loading | 🔴 Alta |
+| `src/hooks/useMyData.ts` | Criar hook `useMyContratos()` | 🟡 Média |
+| `src/pages/app/AppDocumentos.tsx` | Substituir mocks por contratos reais | 🟡 Média |
+| `src/utils/format.ts` | Criar função `formatCPF()` (se não existir) | 🟢 Baixa |
+
+---
+
+## 🎯 Resultado Esperado
+
+Após implementação:
+
+| Antes | Depois |
+|-------|--------|
+| Placa: ABC-0000 | Placa: LTB4J74 |
+| Veículo: Não informado | Veículo: Toyota Corolla XEI Flex 2013 |
+| Matrícula: 00000000 | Matrícula: 03DD7FE8 |
+| Documentos: Mocks | Documentos: Contrato CTR-20260125121152-J87YYJ (PDF real) |
+
+---
+
+## 🔧 Código de Exemplo Completo
+
+### Estrutura do Componente Corrigido
+
+```typescript
+export default function AppDocumentos() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const { data: associado, isLoading: loadingAssociado } = useMyAssociado();
+  const { data: veiculos, isLoading: loadingVeiculos } = useMyVehicles();
+  const { data: documentos, isLoading: loadingDocumentos } = useMyDocumentos();
+  const { data: contratos } = useMyContratos();
+
+  const veiculo = veiculos?.[0];
+  const isLoading = loadingAssociado || loadingVeiculos || loadingDocumentos;
+
+  // Proteção de rota
+  useEffect(() => {
+    if (!user && !loadingAssociado) {
+      navigate('/app/login');
+    }
+  }, [user, loadingAssociado, navigate]);
+
+  // Não renderizar até ter dados
+  if (isLoading) {
+    return <div className="p-4"><Skeleton className="h-screen" /></div>;
+  }
+
+  if (!associado || !veiculo) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen p-8">
+        <p className="text-muted-foreground mb-4">Não foi possível carregar seus dados.</p>
+        <Button onClick={() => navigate('/app/home')}>Voltar para Home</Button>
+      </div>
     );
-  END IF;
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
+  }
+
+  // USAR DADOS REAIS DIRETAMENTE (sem fallbacks)
+  return (
+    <div className="pb-20">
+      {/* Carteirinha com DADOS REAIS */}
+      <div className="mx-4 mt-4">
+        <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-blue-900 rounded-2xl p-5 text-white shadow-xl">
+          <div className="text-xl font-bold">{associado.nome}</div>
+          <div className="text-blue-200 text-sm">CPF: {formatCPF(associado.cpf)}</div>
+          
+          <div className="mt-4 pt-4 border-t border-white/20">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <div className="text-xs text-blue-200">Veículo</div>
+                <div className="font-semibold">{veiculo.marca} {veiculo.modelo}</div>
+              </div>
+              <div>
+                <div className="text-xs text-blue-200">Placa</div>
+                <div className="font-semibold font-mono">{veiculo.placa}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Documentos REAIS */}
+      {contratos && contratos.length > 0 && (
+        <div className="p-4">
+          <h3 className="font-semibold mb-3">Documentos Contratuais</h3>
+          {contratos.map(contrato => (
+            <div key={contrato.id} className="flex items-center gap-4 p-4 bg-card rounded-lg">
+              <FileText className="h-8 w-8 text-blue-600" />
+              <div className="flex-1">
+                <p className="font-medium">{contrato.numero}</p>
+                <p className="text-sm text-muted-foreground">
+                  {contrato.status === 'ativo' ? 'Assinado' : 'Pendente'}
+                </p>
+              </div>
+              {contrato.pdf_assinado_url && (
+                <Button 
+                  size="sm" 
+                  onClick={() => window.open(contrato.pdf_assinado_url, '_blank')}
+                >
+                  Visualizar
+                </Button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 ```
-
----
-
-## Diagrama de Relacionamentos
-
-```
-+-------------------+       +---------------------+
-|    benefits       |       | beneficios_adicionais|
-+-------------------+       +---------------------+
-| id                |       | id                  |
-| preco_sugerido    |       | preco (=sugerido)   |
-+-------------------+       +---------------------+
-         |                           |
-         +-----------+---------------+
-                     |
-                     v
-         +------------------------+
-         |   gastos_beneficios    |
-         +------------------------+
-         | beneficio_id           |
-         | beneficio_tipo         |
-         | valor_gasto            |
-         | data_ocorrencia        |
-         +------------------------+
-                     |
-                     v
-         +------------------------+
-         | vw_custo_real_beneficios|
-         +------------------------+
-         | custo_real             |
-         | indicador              |
-         | gasto_total_60d        |
-         | total_cotas            |
-         +------------------------+
-```
-
----
-
-## Arquivos a Criar/Modificar
-
-| Arquivo | Acao |
-|---------|------|
-| `supabase/migrations/XXXXX_modelo_pratic_precificacao.sql` | Criar - Migration completa |
-| `src/hooks/useCustoBeneficios.ts` | Criar - Hook de custo real |
-| `src/hooks/usePlanosPrecificacao.ts` | Criar - Hook de preco de planos |
-| `src/components/beneficios/IndicadorSaude.tsx` | Criar - Componente visual |
-| `src/components/beneficios/CustoBeneficioCard.tsx` | Criar - Card com detalhes financeiros |
-| `src/components/planos/BeneficioAdicionalModal.tsx` | Modificar - Adicionar secao precificacao |
-| `src/pages/vendas/PlanosBeneficios.tsx` | Modificar - Adicionar tab "Saude Financeira" |
-
----
-
-## Resultado Esperado
-
-1. **Gestao de Beneficios**: Cada beneficio mostra seu preco configurado, custo real calculado e indicador visual de saude
-
-2. **Gestao de Planos**: Cada plano mostra a soma dos beneficios inclusos + valor adicional = mensalidade
-
-3. **Dashboard de Saude**: Visao geral de quantos beneficios estao em superavit/equilibrio/prejuizo
-
-4. **Alertas**: Notificacao visual quando beneficios estao com preco abaixo do custo real
-
----
-
-## Observacoes Importantes
-
-1. **O campo `preco` em `beneficios_adicionais` sera usado como "preco sugerido"** - nao precisa renomear a coluna
-
-2. **A view `vw_custo_real_beneficios` unifica `benefits` e `beneficios_adicionais`** para ter uma visao consolidada
-
-3. **Os gastos serao registrados automaticamente** via triggers quando sinistros forem pagos ou chamados concluidos
-
-4. **O calculo de cotas usa o hook `useValorPorCota`** ja implementado anteriormente
-
-5. **RLS necessario**: A tabela `gastos_beneficios` precisara de policies para visualizacao (diretores) e insercao (sistema/triggers)
