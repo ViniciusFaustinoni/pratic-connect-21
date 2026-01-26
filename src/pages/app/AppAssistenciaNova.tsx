@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Select,
   SelectContent,
@@ -22,6 +23,9 @@ import { CepInput, TelefoneInput } from '@/components/inputs/MaskedInputs';
 import { buscarCep } from '@/lib/cep';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { useMyAssociado, useMyVehicles } from '@/hooks/useMyData';
+import { useSolicitarAssistencia } from '@/hooks/useAppAssociado';
+import { useAuth } from '@/contexts/AuthContext';
 
 // Types
 interface TipoServico {
@@ -55,17 +59,6 @@ const tiposServico: TipoServico[] = [
   { id: 'troca_pneu', nome: 'Troca de Pneu', descricao: 'Substituição pelo estepe', icone: CircleDot, cor: 'text-gray-700', bg: 'bg-gray-100' },
   { id: 'bateria', nome: 'Bateria', descricao: 'Carga ou troca de bateria', icone: Battery, cor: 'text-green-500', bg: 'bg-green-50' },
 ];
-
-const veiculoMock = { modelo: 'Gol G5 1.0', placa: 'ABC-1234' };
-const associadoMock = { nome: 'João da Silva', telefone: '(34) 99999-8888' };
-const enderecoGPSMock = {
-  cep: '38400-000',
-  logradouro: 'Rua das Flores',
-  numero: '123',
-  bairro: 'Centro',
-  cidade: 'Uberlândia',
-  estado: 'MG',
-};
 
 const UFs = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
 
@@ -161,7 +154,16 @@ function ServicoCard({
 export default function AppAssistenciaNova() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useAuth();
   const tipoServicoInicial = location.state?.tipoServico || '';
+
+  // Buscar dados REAIS do associado e veículos
+  const { data: associado, isLoading: loadingAssociado } = useMyAssociado();
+  const { data: veiculos, isLoading: loadingVeiculos } = useMyVehicles();
+  const solicitarAssistencia = useSolicitarAssistencia();
+  
+  // Selecionar primeiro veículo automaticamente
+  const veiculo = veiculos?.[0];
 
   const [etapaAtual, setEtapaAtual] = useState(tipoServicoInicial ? 2 : 1);
   const [formState, setFormState] = useState<FormState>({
@@ -174,15 +176,30 @@ export default function AppAssistenciaNova() {
     cidade: '',
     estado: '',
     referencia: '',
-    telefoneContato: associadoMock.telefone,
+    telefoneContato: '',
     observacoes: '',
   });
 
   const [isGettingGPS, setIsGettingGPS] = useState(false);
   const [gpsObtido, setGpsObtido] = useState(false);
+  const [coordenadas, setCoordenadas] = useState<{ lat: number; lng: number } | null>(null);
   const [isBuscandoCep, setIsBuscandoCep] = useState(false);
   const [isEnviando, setIsEnviando] = useState(false);
   const [editandoTelefone, setEditandoTelefone] = useState(false);
+
+  // Atualizar telefone quando associado carregar
+  useEffect(() => {
+    if (associado?.telefone && !formState.telefoneContato) {
+      setFormState(prev => ({ ...prev, telefoneContato: associado.telefone }));
+    }
+  }, [associado]);
+
+  // Redirecionar se não autenticado
+  useEffect(() => {
+    if (!user && !loadingAssociado) {
+      navigate('/app/login');
+    }
+  }, [user, loadingAssociado, navigate]);
 
   const updateForm = (field: keyof FormState, value: string) => {
     setFormState(prev => ({ ...prev, [field]: value }));
@@ -198,20 +215,48 @@ export default function AppAssistenciaNova() {
 
   const handleGetGPS = async () => {
     setIsGettingGPS(true);
-    // Simulate GPS fetch
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    setFormState(prev => ({
-      ...prev,
-      cep: enderecoGPSMock.cep,
-      logradouro: enderecoGPSMock.logradouro,
-      numero: enderecoGPSMock.numero,
-      bairro: enderecoGPSMock.bairro,
-      cidade: enderecoGPSMock.cidade,
-      estado: enderecoGPSMock.estado,
-    }));
-    setGpsObtido(true);
-    setIsGettingGPS(false);
-    toast.success('Localização obtida com sucesso!');
+
+    try {
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0,
+        });
+      });
+
+      const { latitude, longitude } = position.coords;
+      setCoordenadas({ lat: latitude, lng: longitude });
+
+      // Tentar buscar endereço via reverse geocoding (Nominatim)
+      try {
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1`
+        );
+        const data = await response.json();
+        
+        if (data.address) {
+          setFormState(prev => ({
+            ...prev,
+            logradouro: data.address.road || data.address.pedestrian || '',
+            numero: data.address.house_number || '',
+            bairro: data.address.suburb || data.address.neighbourhood || '',
+            cidade: data.address.city || data.address.town || data.address.village || '',
+            estado: data.address.state?.slice(0, 2).toUpperCase() || '',
+            cep: data.address.postcode?.replace('-', '') || '',
+          }));
+        }
+      } catch {
+        // Se falhar reverse geocoding, só mantém coordenadas
+      }
+
+      setGpsObtido(true);
+      toast.success('Localização obtida com sucesso!');
+    } catch (error) {
+      toast.error('Não foi possível obter sua localização');
+    } finally {
+      setIsGettingGPS(false);
+    }
   };
 
   const handleCepComplete = async (cep: string) => {
@@ -241,16 +286,76 @@ export default function AppAssistenciaNova() {
     formState.cidade.trim() !== '' &&
     formState.estado !== '';
 
+  // Handler REAL que chama a Edge Function
   const handleConfirmar = async () => {
+    if (!veiculo) {
+      toast.error('Nenhum veículo encontrado');
+      return;
+    }
+
     setIsEnviando(true);
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    const protocolo = `AST-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9999)).padStart(4, '0')}`;
-    toast.success(`Solicitação enviada! Protocolo: ${protocolo}`);
-    setIsEnviando(false);
-    navigate('/app/assistencia');
+    
+    try {
+      const enderecoCompleto = `${formState.logradouro}, ${formState.numero}${formState.complemento ? ` - ${formState.complemento}` : ''} - ${formState.bairro}, ${formState.cidade}/${formState.estado}`;
+      
+      const resultado = await solicitarAssistencia.mutateAsync({
+        tipo: formState.tipoServico as any,
+        veiculo_id: veiculo.id,
+        endereco: enderecoCompleto,
+        latitude: coordenadas?.lat || 0,
+        longitude: coordenadas?.lng || 0,
+        descricao: formState.observacoes || undefined,
+      });
+
+      toast.success(`Solicitação enviada! Protocolo: ${resultado.protocolo}`, {
+        description: 'Você receberá uma ligação em breve.'
+      });
+      
+      navigate('/app/assistencia');
+    } catch (error) {
+      console.error('Erro ao solicitar assistência:', error);
+      toast.error(error instanceof Error ? error.message : 'Erro ao enviar solicitação');
+    } finally {
+      setIsEnviando(false);
+    }
   };
 
   const servicoSelecionado = tiposServico.find(s => s.id === formState.tipoServico);
+
+  // Loading state
+  if (loadingAssociado || loadingVeiculos) {
+    return (
+      <div className="min-h-screen bg-background pb-24">
+        <div className="sticky top-0 z-10 bg-background border-b">
+          <div className="flex items-center gap-3 p-4">
+            <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <Skeleton className="h-6 w-40" />
+          </div>
+        </div>
+        <div className="p-4 space-y-4">
+          <Skeleton className="h-16 w-full rounded-xl" />
+          <Skeleton className="h-16 w-full rounded-xl" />
+          <Skeleton className="h-16 w-full rounded-xl" />
+        </div>
+      </div>
+    );
+  }
+
+  // Sem veículo
+  if (!veiculo) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
+        <Car className="h-16 w-16 text-muted-foreground mb-4" />
+        <h2 className="text-xl font-semibold mb-2">Nenhum veículo encontrado</h2>
+        <p className="text-muted-foreground text-center mb-6">
+          Você precisa ter um veículo cadastrado para solicitar assistência.
+        </p>
+        <Button onClick={() => navigate('/app/home')}>Voltar para Home</Button>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -460,7 +565,7 @@ export default function AppAssistenciaNova() {
           <div className="space-y-4 animate-fade-in">
             <h2 className="text-base font-medium text-foreground">Confirme sua solicitação</h2>
 
-            {/* Card Veículo */}
+            {/* Card Veículo - DADOS REAIS */}
             <Card className="border-0 shadow-sm bg-muted/50">
               <CardContent className="p-4">
                 <div className="flex items-center gap-3">
@@ -470,8 +575,8 @@ export default function AppAssistenciaNova() {
                   <div className="flex-1">
                     <p className="text-xs text-muted-foreground uppercase font-medium">Veículo</p>
                     <div className="flex items-center gap-2">
-                      <p className="font-semibold">{veiculoMock.modelo}</p>
-                      <Badge variant="secondary" className="text-xs">{veiculoMock.placa}</Badge>
+                      <p className="font-semibold">{veiculo.marca} {veiculo.modelo}</p>
+                      <Badge variant="secondary" className="text-xs">{veiculo.placa}</Badge>
                     </div>
                   </div>
                 </div>
@@ -519,7 +624,7 @@ export default function AppAssistenciaNova() {
               </CardContent>
             </Card>
 
-            {/* Card Contato */}
+            {/* Card Contato - DADOS REAIS */}
             <Card className="border-0 shadow-sm">
               <CardContent className="p-4">
                 <div className="flex items-center gap-3">
@@ -537,7 +642,7 @@ export default function AppAssistenciaNova() {
                         className="mt-1"
                       />
                     ) : (
-                      <p className="font-semibold">{formState.telefoneContato}</p>
+                      <p className="font-semibold">{formState.telefoneContato || associado?.telefone || '-'}</p>
                     )}
                   </div>
                   {!editandoTelefone && (
