@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useParams, useNavigate, Link } from 'react-router-dom';
@@ -9,7 +9,8 @@ import {
   Car, ShieldAlert, ShieldX, Flame, CloudRain, Square, 
   HelpCircle, FileText, Clock, MoreHorizontal, Loader2,
   ExternalLink, Download, CheckCircle, XCircle, AlertCircle,
-  User, FileCheck, FilePlus, Scale, Plus, Link as LinkIcon, Trash2
+  User, FileCheck, FilePlus, Scale, Plus, Link as LinkIcon, Trash2,
+  Bot
 } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useDeleteSinistro } from '@/hooks/useSinistros';
@@ -18,6 +19,7 @@ import { ModalVincularProcesso } from '@/components/sinistros/ModalVincularProce
 import { AtualizarStatusModal } from '@/components/eventos/AtualizarStatusModal';
 import { AgendarVistoriaModal } from '@/components/eventos/AgendarVistoriaModal';
 import { EmitirParecerModal } from '@/components/eventos/EmitirParecerModal';
+import { ConversaIADialog } from '@/components/sinistros/ConversaIADialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -110,6 +112,7 @@ export default function SinistroDetalhe() {
   const [modalVistoriaOpen, setModalVistoriaOpen] = useState(false);
   const [modalParecerOpen, setModalParecerOpen] = useState(false);
   const [modalExcluirOpen, setModalExcluirOpen] = useState(false);
+  const [modalConversaOpen, setModalConversaOpen] = useState(false);
 
   const { isDiretor } = usePermissions();
   const deleteSinistro = useDeleteSinistro();
@@ -183,6 +186,69 @@ export default function SinistroDetalhe() {
     },
     enabled: !!id,
   });
+
+  // Query para buscar solicitação IA vinculada ao sinistro
+  const { data: solicitacaoIA } = useQuery({
+    queryKey: ['sinistro-solicitacao-ia', id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('chat_solicitacoes_ia')
+        .select('*')
+        .eq('resultado_id', id!)
+        .eq('tipo', 'sinistro')
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!id,
+  });
+
+  // Query para buscar mensagens do chat relacionadas
+  const { data: mensagensChat } = useQuery({
+    queryKey: ['sinistro-chat-mensagens', sinistro?.associado_id, solicitacaoIA?.created_at],
+    queryFn: async () => {
+      if (!sinistro?.associado_id) return [];
+      
+      // Buscar mensagens do associado antes e após a criação da solicitação
+      const solicitacaoDate = solicitacaoIA?.created_at 
+        ? new Date(solicitacaoIA.created_at) 
+        : new Date();
+      
+      // Intervalo de 24 horas antes da solicitação
+      const startDate = new Date(solicitacaoDate);
+      startDate.setHours(startDate.getHours() - 24);
+      
+      const { data, error } = await supabase
+        .from('chat_mensagens_ia')
+        .select('*')
+        .eq('associado_id', sinistro.associado_id)
+        .gte('created_at', startDate.toISOString())
+        .lte('created_at', solicitacaoDate.toISOString())
+        .order('created_at', { ascending: true });
+      
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!sinistro?.associado_id && !!solicitacaoIA,
+  });
+
+  // Extrair descrição original do cliente das mensagens
+  const descricaoCliente = useMemo(() => {
+    if (!mensagensChat || mensagensChat.length === 0) return null;
+    
+    // Buscar mensagens do usuário que parecem descrições (maiores que 20 caracteres)
+    const mensagensUsuario = mensagensChat
+      .filter(m => m.role === 'user')
+      .filter(m => {
+        const content = m.content?.toLowerCase() || '';
+        // Filtrar respostas curtas como "sim", "não", "ok", "já", etc.
+        return content.length > 20 && 
+          !content.match(/^(sim|não|nao|ok|já|ja|certo|isso|entendi|blz|beleza)\.?$/);
+      })
+      .map(m => m.content);
+      
+    return mensagensUsuario.length > 0 ? mensagensUsuario.join('\n\n') : null;
+  }, [mensagensChat]);
 
   if (isLoading) {
     return (
@@ -375,9 +441,45 @@ export default function SinistroDetalhe() {
 
               <Separator />
 
-              <div>
-                <p className="text-sm text-muted-foreground">Descrição do Sinistro</p>
-                <p className="font-medium whitespace-pre-wrap">{sinistro.descricao || '-'}</p>
+              {/* Descrição do Sinistro - Expandida com IA e Cliente */}
+              <div className="space-y-4">
+                <div>
+                  <p className="text-sm text-muted-foreground flex items-center gap-2">
+                    <Bot className="h-4 w-4" />
+                    Descrição (Resumo IA)
+                  </p>
+                  <div className="bg-muted/50 p-3 rounded-lg mt-1">
+                    <p className="font-medium whitespace-pre-wrap">
+                      {sinistro.descricao || '-'}
+                    </p>
+                  </div>
+                </div>
+
+                {descricaoCliente && (
+                  <div>
+                    <p className="text-sm text-muted-foreground flex items-center gap-2">
+                      <User className="h-4 w-4" />
+                      Texto Original do Cliente
+                    </p>
+                    <div className="bg-blue-50 dark:bg-blue-950/30 p-3 rounded-lg mt-1 border border-blue-200 dark:border-blue-800">
+                      <p className="font-medium whitespace-pre-wrap text-blue-900 dark:text-blue-100">
+                        {descricaoCliente}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {mensagensChat && mensagensChat.length > 0 && (
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setModalConversaOpen(true)}
+                    className="mt-2"
+                  >
+                    <MessageCircle className="h-4 w-4 mr-2" />
+                    Ver Conversa com IA ({mensagensChat.length} mensagens)
+                  </Button>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -779,6 +881,15 @@ export default function SinistroDetalhe() {
           }}
         />
       )}
+
+      {/* Modal Conversa IA */}
+      <ConversaIADialog
+        open={modalConversaOpen}
+        onOpenChange={setModalConversaOpen}
+        mensagens={mensagensChat || []}
+        associadoNome={sinistro?.associado?.nome}
+        dataConversa={solicitacaoIA?.created_at || mensagensChat?.[0]?.created_at}
+      />
     </div>
   );
 }
