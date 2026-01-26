@@ -280,3 +280,33 @@ export function useEmitirParecer() {
     }
   });
 }
+
+// Hook para excluir sinistro (apenas diretor)
+export function useDeleteSinistro() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ sinistroId, motivo }: { sinistroId: string; motivo: string }) => {
+      const { data, error } = await supabase.functions.invoke('delete-sinistro', {
+        body: { sinistroId, motivo }
+      });
+
+      if (error) throw error;
+      
+      if (!data?.success) {
+        throw new Error(data?.error || 'Erro ao excluir sinistro');
+      }
+
+      return data;
+    },
+    onSuccess: (data) => {
+      toast.success(data.message || 'Sinistro excluído permanentemente');
+      queryClient.invalidateQueries({ queryKey: ['sinistros'] });
+      queryClient.invalidateQueries({ queryKey: ['meus-sinistros'] });
+    },
+    onError: (error) => {
+      console.error('Erro ao excluir sinistro:', error);
+      toast.error(error instanceof Error ? error.message : 'Erro ao excluir sinistro');
+    }
+  });
+}

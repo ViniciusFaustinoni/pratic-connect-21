@@ -218,3 +218,6 @@ verify_jwt = false
 
 [functions.reverse-geocode]
 verify_jwt = false
+
+[functions.delete-sinistro]
+verify_jwt = false

@@ -9,8 +9,11 @@ import {
   Car, ShieldAlert, ShieldX, Flame, CloudRain, Square, 
   HelpCircle, FileText, Clock, MoreHorizontal, Loader2,
   ExternalLink, Download, CheckCircle, XCircle, AlertCircle,
-  User, FileCheck, FilePlus, Scale, Plus, Link as LinkIcon
+  User, FileCheck, FilePlus, Scale, Plus, Link as LinkIcon, Trash2
 } from 'lucide-react';
+import { usePermissions } from '@/hooks/usePermissions';
+import { useDeleteSinistro } from '@/hooks/useSinistros';
+import { ConfirmacaoExclusaoDialog } from '@/components/sinistros/ConfirmacaoExclusaoDialog';
 import { ModalVincularProcesso } from '@/components/sinistros/ModalVincularProcesso';
 import { AtualizarStatusModal } from '@/components/eventos/AtualizarStatusModal';
 import { AgendarVistoriaModal } from '@/components/eventos/AgendarVistoriaModal';
@@ -106,6 +109,10 @@ export default function SinistroDetalhe() {
   const [modalStatusOpen, setModalStatusOpen] = useState(false);
   const [modalVistoriaOpen, setModalVistoriaOpen] = useState(false);
   const [modalParecerOpen, setModalParecerOpen] = useState(false);
+  const [modalExcluirOpen, setModalExcluirOpen] = useState(false);
+
+  const { isDiretor } = usePermissions();
+  const deleteSinistro = useDeleteSinistro();
 
   const { data: sinistro, isLoading } = useQuery({
     queryKey: ['sinistro', id],
@@ -297,6 +304,21 @@ export default function SinistroDetalhe() {
               <LinkIcon className="h-4 w-4 mr-2" />
               Vincular Processo Existente
             </DropdownMenuItem>
+            {isDiretor && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onSelect={(e) => {
+                    e.preventDefault();
+                    setTimeout(() => setModalExcluirOpen(true), 0);
+                  }}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Excluir Sinistro
+                </DropdownMenuItem>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -744,6 +766,19 @@ export default function SinistroDetalhe() {
           } : null
         } : null}
       />
+
+      {/* Modal Excluir Sinistro (apenas diretor) */}
+      {isDiretor && sinistro && (
+        <ConfirmacaoExclusaoDialog
+          open={modalExcluirOpen}
+          onOpenChange={setModalExcluirOpen}
+          protocolo={sinistro.protocolo}
+          onConfirm={async (motivo) => {
+            await deleteSinistro.mutateAsync({ sinistroId: id!, motivo });
+            navigate('/eventos/sinistros');
+          }}
+        />
+      )}
     </div>
   );
 }
