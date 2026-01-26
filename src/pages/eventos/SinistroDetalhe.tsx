@@ -16,6 +16,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { useDeleteSinistro } from '@/hooks/useSinistros';
 import { ConfirmacaoExclusaoDialog } from '@/components/sinistros/ConfirmacaoExclusaoDialog';
 import { ModalVincularProcesso } from '@/components/sinistros/ModalVincularProcesso';
+import { SolicitarDocumentosSinistroDialog } from '@/components/sinistros/SolicitarDocumentosSinistroDialog';
 import { AtualizarStatusModal } from '@/components/eventos/AtualizarStatusModal';
 import { AgendarVistoriaModal } from '@/components/eventos/AgendarVistoriaModal';
 import { EmitirParecerModal } from '@/components/eventos/EmitirParecerModal';
@@ -113,6 +114,7 @@ export default function SinistroDetalhe() {
   const [modalParecerOpen, setModalParecerOpen] = useState(false);
   const [modalExcluirOpen, setModalExcluirOpen] = useState(false);
   const [modalConversaOpen, setModalConversaOpen] = useState(false);
+  const [modalSolicitarDocsOpen, setModalSolicitarDocsOpen] = useState(false);
 
   const { isDiretor } = usePermissions();
   const deleteSinistro = useDeleteSinistro();
@@ -670,7 +672,11 @@ export default function SinistroDetalhe() {
                 <FileText className="h-5 w-5" />
                 Documentos
               </CardTitle>
-              <Button variant="outline" size="sm">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setModalSolicitarDocsOpen(true)}
+              >
                 <FilePlus className="h-4 w-4 mr-2" />
                 Solicitar
               </Button>
@@ -890,6 +896,17 @@ export default function SinistroDetalhe() {
         associadoNome={sinistro?.associado?.nome}
         dataConversa={solicitacaoIA?.created_at || mensagensChat?.[0]?.created_at}
       />
+
+      {/* Modal Solicitar Documentos */}
+      {sinistro && (
+        <SolicitarDocumentosSinistroDialog
+          open={modalSolicitarDocsOpen}
+          onOpenChange={setModalSolicitarDocsOpen}
+          sinistroId={sinistro.id}
+          protocolo={sinistro.protocolo}
+          statusAtual={sinistro.status}
+        />
+      )}
     </div>
   );
 }

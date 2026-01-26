@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -38,11 +39,12 @@ import {
   DollarSign,
   Building,
   Loader2,
+  Bot,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSinistro } from '@/hooks/useSinistros';
-import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { ConversaIADialog } from '@/components/sinistros/ConversaIADialog';
 
 // Types
 type StatusSinistro = 'comunicado' | 'em_analise' | 'documentacao_pendente' | 'aprovado' | 'negado' | 'pago' | 'encerrado';
@@ -184,10 +186,56 @@ export default function AppSinistroDetalhe() {
     enabled: !!id,
   });
 
+  // Query para buscar solicitação IA vinculada ao sinistro
+  const { data: solicitacaoIA } = useQuery({
+    queryKey: ['sinistro-solicitacao-ia', id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('chat_solicitacoes_ia')
+        .select('*')
+        .eq('resultado_id', id!)
+        .eq('tipo', 'sinistro')
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!id,
+  });
+
+  // Query para buscar mensagens do chat relacionadas
+  const { data: mensagensChat = [] } = useQuery({
+    queryKey: ['sinistro-chat-mensagens', sinistro?.associado_id, solicitacaoIA?.created_at],
+    queryFn: async () => {
+      if (!sinistro?.associado_id) return [];
+      
+      // Buscar mensagens do associado antes e após a criação da solicitação
+      const solicitacaoDate = solicitacaoIA?.created_at 
+        ? new Date(solicitacaoIA.created_at) 
+        : new Date();
+      
+      // Intervalo de 24 horas antes da solicitação
+      const startDate = new Date(solicitacaoDate);
+      startDate.setHours(startDate.getHours() - 24);
+      
+      const { data, error } = await supabase
+        .from('chat_mensagens_ia')
+        .select('*')
+        .eq('associado_id', sinistro.associado_id)
+        .gte('created_at', startDate.toISOString())
+        .lte('created_at', solicitacaoDate.toISOString())
+        .order('created_at', { ascending: true });
+      
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!sinistro?.associado_id && !!solicitacaoIA,
+  });
+
   const [detalhesAberto, setDetalhesAberto] = useState(false);
   const [avaliacao, setAvaliacao] = useState(0);
   const [comentario, setComentario] = useState("");
   const [enviandoAvaliacao, setEnviandoAvaliacao] = useState(false);
+  const [modalConversaOpen, setModalConversaOpen] = useState(false);
 
   // Mapear status do banco para UI
   const getStatus = (): StatusSinistro => {
@@ -543,7 +591,30 @@ export default function AppSinistroDetalhe() {
           </Card>
         </Collapsible>
 
-        {/* Timeline / Histórico */}
+        {/* Conversa com IA (se sinistro foi criado via IA) */}
+        {mensagensChat.length > 0 && (
+          <Card className="border-0 shadow-md border-l-4 border-l-primary">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Bot className="h-5 w-5 text-primary" />
+                Conversa com Assistente IA
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground mb-3">
+                Este sinistro foi registrado através do assistente virtual. Você pode ver todo o histórico da conversa.
+              </p>
+              <Button 
+                variant="outline" 
+                className="w-full gap-2"
+                onClick={() => setModalConversaOpen(true)}
+              >
+                <MessageSquare className="h-4 w-4" />
+                Ver Conversa Completa ({mensagensChat.length} mensagens)
+              </Button>
+            </CardContent>
+          </Card>
+        )}
         <Card className="border-0 shadow-md">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-base">
@@ -715,6 +786,14 @@ export default function AppSinistroDetalhe() {
           </Button>
         )}
       </div>
+
+      {/* Modal Conversa IA */}
+      <ConversaIADialog
+        open={modalConversaOpen}
+        onOpenChange={setModalConversaOpen}
+        mensagens={mensagensChat}
+        dataConversa={solicitacaoIA?.created_at || mensagensChat[0]?.created_at}
+      />
     </div>
   );
 }

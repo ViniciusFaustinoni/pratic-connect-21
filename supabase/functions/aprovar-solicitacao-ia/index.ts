@@ -189,6 +189,39 @@ serve(async (req) => {
         observacao: "Sinistro criado via aprovação de solicitação IA",
       });
 
+      // Transferir documentos coletados pela IA para sinistro_documentos
+      const boPath = dados.bo_path as string | null;
+      const fotosPaths = (dados.fotos_paths as string[]) || [];
+
+      // Anexar B.O. se existir
+      if (boPath) {
+        await supabaseAdmin.from("sinistro_documentos").insert({
+          sinistro_id: sinistro.id,
+          tipo: "bo",
+          nome_arquivo: "Boletim de Ocorrência",
+          arquivo_url: boPath,
+          status: "aprovado",
+          enviado_em: new Date().toISOString(),
+        });
+        console.log("[aprovar-solicitacao-ia] B.O. anexado ao sinistro");
+      }
+
+      // Anexar fotos se existirem
+      for (let i = 0; i < fotosPaths.length; i++) {
+        await supabaseAdmin.from("sinistro_documentos").insert({
+          sinistro_id: sinistro.id,
+          tipo: i === 0 ? "foto_dano_frontal" : i === 1 ? "foto_dano_traseiro" : "foto_dano",
+          nome_arquivo: `Foto do Veículo ${i + 1}`,
+          arquivo_url: fotosPaths[i],
+          status: "aprovado",
+          enviado_em: new Date().toISOString(),
+        });
+      }
+      
+      if (fotosPaths.length > 0) {
+        console.log(`[aprovar-solicitacao-ia] ${fotosPaths.length} foto(s) anexadas ao sinistro`);
+      }
+
     } else if (solicitacao.tipo === "assistencia") {
       // Criar chamado de assistência
       console.log("[aprovar-solicitacao-ia] Criando assistência...", dados);
