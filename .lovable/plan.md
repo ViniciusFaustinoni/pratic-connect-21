@@ -1,360 +1,360 @@
 
+# Plano: Implementar Entrada de Áudio no Chat do Assistente
 
-# Revisão Completa das Áreas do App do Associado
+## Visão Geral
 
-## Resumo Executivo
+**SIM, é possível!** O associado poderá gravar áudios que serão transcritos e enviados para a IA entender.
 
-Após análise detalhada do código, identifiquei o seguinte status para cada área:
+### Fluxo Proposto
 
-| Área | Status Geral | Problemas Identificados |
-|------|--------------|-------------------------|
-| **Configurações** | ✅ Funcional | Alteração de senha simulada (não persiste de fato) |
-| **Sinistros** | ⚠️ Parcial | `AppSinistroDetalhe.tsx` usa dados MOCK |
-| **Assistência 24h** | ⚠️ Parcial | `AppAssistenciaNova.tsx` usa dados MOCK de veículo |
-
----
-
-## 1. Configurações (`/app/configuracoes`)
-
-### Status: ✅ **Funciona corretamente**
-
-**O que funciona:**
-- Notificações (Push, Email, WhatsApp) → Salvam na tabela `notificacoes_preferencias`
-- Categorias (Financeiro, Veículo, Comunicados) → Persistem corretamente
-- Alertas do Rastreador → Salvam na tabela `rastreadores_preferencias`
-- Tema (Claro/Escuro/Sistema) → Funciona via `next-themes`
-- Logout → Funciona corretamente
-
-**Problema identificado:**
-- **Alteração de Senha (linhas 121-140)**: Apenas simula a alteração, não chama `supabase.auth.updateUser()`:
-
-```typescript
-// ATUAL - apenas simula (NÃO PERSISTE)
-const handleAlterarSenha = () => {
-  // ...validações...
-  // Simular alteração
-  setShowSenhaModal(false);
-  toast.success('Senha alterada com sucesso!');
-};
 ```
-
-**Correção necessária:**
-```typescript
-const handleAlterarSenha = async () => {
-  // ...validações...
-  const { error } = await supabase.auth.updateUser({ password: novaSenha });
-  if (error) {
-    toast.error('Erro ao alterar senha');
-    return;
-  }
-  toast.success('Senha alterada com sucesso!');
-  setShowSenhaModal(false);
-};
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐    ┌──────────────────┐
+│  Usuário grava  │ →  │  Áudio enviado   │ →  │   Transcrição   │ →  │   IA processa    │
+│   áudio (mic)   │    │  para backend    │    │   via Whisper   │    │  texto normal    │
+└─────────────────┘    └──────────────────┘    └─────────────────┘    └──────────────────┘
 ```
 
 ---
 
-## 2. Sinistros (`/app/sinistros`)
+## Implementação
 
-### Status: ⚠️ **Parcialmente funcional**
+### 1. Atualizar ChatInput.tsx - Adicionar Botão de Microfone
 
-### 2.1 Listagem de Sinistros (`AppSinistros.tsx`)
-✅ **Funciona corretamente**
-- Busca dados reais da tabela `sinistros` filtrados pelo `associado_id`
-- Mostra protocolo, tipo, status e veículo corretamente
+**Arquivo:** `src/components/app/chat/ChatInput.tsx`
 
-### 2.2 Abertura de Sinistro (`NovoSinistro.tsx`)
-✅ **Funciona corretamente**
-- Usa Edge Function `criar-sinistro` que:
-  - Gera protocolo automático (SIN-YYYYMMDD-XXXX)
-  - Valida duplicidade e cobertura
-  - Cria documentos pendentes baseado no tipo
-  - Notifica analistas automaticamente
-- Upload de fotos e B.O. funcionam
-- **Conecta com o painel**: Sinistros criados aparecem imediatamente em `/sinistros` no backoffice
-
-### 2.3 Detalhe do Sinistro (`AppSinistroDetalhe.tsx`)
-❌ **NÃO FUNCIONA - USA DADOS MOCK**
-
-**Problema crítico (linhas 98-150):**
-```typescript
-// Mock data - DADOS FICTÍCIOS
-const sinistroMock: Sinistro = {
-  id: "1",
-  protocolo: "SIN-2024-0001",  // ❌ FAKE
-  status: "em_analise",
-  veiculo: {
-    modelo: "Gol G5 1.0",  // ❌ FAKE
-    placa: "ABC-1234"      // ❌ FAKE
-  },
-  // ...
-};
-```
-
-O componente:
-1. Ignora o parâmetro `id` da URL
-2. Mostra sempre os mesmos dados fictícios
-3. Não busca dados reais do Supabase
-4. Não exibe histórico real de mudanças de status
-
-**Correção necessária:**
-- Implementar busca real usando o hook `useSinistro(id)` existente
-- Buscar documentos pendentes de `sinistro_documentos`
-- Buscar histórico de `sinistro_historico`
-
----
-
-## 3. Assistência 24h (`/app/assistencia`)
-
-### Status: ⚠️ **Parcialmente funcional**
-
-### 3.1 Página Principal (`SolicitarAssistencia.tsx` - rota `/app/assistencia`)
-✅ **Funciona corretamente**
-- Lista tipos de assistência
-- Verifica chamados em aberto (não permite duplicatas)
-- Solicita via Edge Function `criar-chamado-assistencia`
-- Usa dados reais do associado e veículos
-
-### 3.2 Nova Assistência (`AppAssistenciaNova.tsx` - rota `/app/assistencia/nova`)
-⚠️ **Parcialmente funcional**
-
-**Problema (linhas 59-68):**
-```typescript
-// MOCK DATA - DADOS FICTÍCIOS
-const veiculoMock = { modelo: 'Gol G5 1.0', placa: 'ABC-1234' };
-const associadoMock = { nome: 'João da Silva', telefone: '(34) 99999-8888' };
-```
-
-Usado na confirmação (linha 473-474):
-```typescript
-<p className="font-semibold">{veiculoMock.modelo}</p>
-<Badge variant="secondary" className="text-xs">{veiculoMock.placa}</Badge>
-```
-
-**Problema adicional (linha 244-251):**
-A função `handleConfirmar()` apenas simula o envio - não chama a Edge Function real:
-```typescript
-const handleConfirmar = async () => {
-  setIsEnviando(true);
-  await new Promise(resolve => setTimeout(resolve, 2000)); // Apenas delay
-  const protocolo = `AST-...`; // Gera localmente (errado)
-  toast.success(`Solicitação enviada!`);
-  navigate('/app/assistencia');
-};
-```
-
-### 3.3 Acompanhamento (`AppAssistencia.tsx`)
-✅ **Funciona corretamente**
-- Mostra chamados em andamento com dados reais
-- Link "Acompanhar" funciona
-
-### 3.4 Histórico (`HistoricoChamados.tsx`)
-✅ **Funciona corretamente** (verificar se existe)
-
----
-
-## Correções Necessárias
-
-### Prioridade 1 - Crítica (dados falsos visíveis ao usuário)
-
-#### 1.1 Corrigir `AppSinistroDetalhe.tsx`
-- Substituir dados mock por query real usando `useSinistro(id)`
-- Buscar documentos pendentes de `sinistro_documentos`
-- Buscar histórico de `sinistro_historico`
-
-#### 1.2 Corrigir `AppAssistenciaNova.tsx`
-- Buscar veículo real usando `useMyVehicles()`
-- Buscar dados do associado usando `useMyAssociado()`
-- Chamar Edge Function `criar-chamado-assistencia` na confirmação
-
-### Prioridade 2 - Importante
-
-#### 2.1 Corrigir `AppConfiguracoes.tsx`
-- Implementar alteração de senha real via `supabase.auth.updateUser()`
-
----
-
-## Fluxo de Dados: Conexão App → Painel
-
-### Sinistros
-```
-App (NovoSinistro.tsx)
-    ↓ Edge Function 'criar-sinistro'
-Tabela 'sinistros' ← protocolo SIN-YYYYMMDD-XXXX gerado
-    ↓ Notificação automática para analistas
-Painel (/sinistros/:id) → Analista vê e processa
-```
-
-✅ **Conexão funcionando** - Sinistros criados no app aparecem no painel administrativo em tempo real.
-
-### Assistência 24h
-```
-App (SolicitarAssistencia.tsx)
-    ↓ Edge Function 'criar-chamado-assistencia'
-Tabela 'chamados_assistencia' ← protocolo ASS-YYYYMMDD-XXXX
-    ↓ Notificação + WhatsApp para central
-Painel (/assistencia/:id) → Operador despacha prestador
-```
-
-⚠️ **Conexão funcionando apenas via SolicitarAssistencia.tsx**
-A rota alternativa `AppAssistenciaNova.tsx` NÃO salva no banco.
-
----
-
-## Arquivos a Modificar
-
-| Arquivo | Modificação | Prioridade |
-|---------|-------------|------------|
-| `src/pages/app/AppSinistroDetalhe.tsx` | Substituir mocks por dados reais (linhas 98-150) | Alta |
-| `src/pages/app/AppAssistenciaNova.tsx` | Buscar veículo/associado reais + chamar Edge Function | Alta |
-| `src/pages/app/AppConfiguracoes.tsx` | Implementar alteração de senha real (linhas 121-140) | Média |
-
----
-
-## Implementação Detalhada
-
-### 1. AppSinistroDetalhe.tsx - Buscar dados reais
+Adicionar:
+- Botão de microfone ao lado do campo de texto
+- Estados para controlar gravação (`isRecording`, `audioBlob`)
+- Animação visual durante gravação (pulso vermelho)
+- Lógica de `MediaRecorder` para capturar áudio
 
 ```typescript
-// ADICIONAR imports
-import { useSinistro } from '@/hooks/useSinistros';
-import { useQuery } from '@tanstack/react-query';
+import { useState, useRef, useEffect } from 'react';
+import { Send, Loader2, Mic, MicOff, Square } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { cn } from '@/lib/utils';
 
-export default function AppSinistroDetalhe() {
-  const { id } = useParams<{ id: string }>();
-  
-  // SUBSTITUIR mock por query real
-  const { data: sinistro, isLoading } = useSinistro(id);
-  
-  // Buscar documentos pendentes
-  const { data: documentos } = useQuery({
-    queryKey: ['sinistro-documentos', id],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('sinistro_documentos')
-        .select('*')
-        .eq('sinistro_id', id)
-        .eq('status', 'pendente');
-      return data;
-    },
-    enabled: !!id,
-  });
-  
-  // Buscar histórico
-  const { data: timeline } = useQuery({
-    queryKey: ['sinistro-historico', id],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('sinistro_historico')
-        .select('*')
-        .eq('sinistro_id', id)
-        .order('created_at', { ascending: false });
-      return data;
-    },
-    enabled: !!id,
-  });
-  
-  if (isLoading) return <LoadingScreen />;
-  if (!sinistro) return <NotFound />;
-  
-  // Usar sinistro real no JSX
+interface ChatInputProps {
+  onSend: (message: string) => void;
+  onSendAudio?: (audioBlob: Blob) => void;
+  isLoading?: boolean;
+  isTranscribing?: boolean;
+  placeholder?: string;
 }
-```
 
-### 2. AppAssistenciaNova.tsx - Integrar com dados reais
+export function ChatInput({ 
+  onSend, 
+  onSendAudio,
+  isLoading, 
+  isTranscribing,
+  placeholder = 'Digite sua mensagem...' 
+}: ChatInputProps) {
+  const [value, setValue] = useState('');
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-```typescript
-// ADICIONAR imports
-import { useMyAssociado, useMyVehicles } from '@/hooks/useMyData';
-import { useSolicitarAssistencia } from '@/hooks/useAppAssociado';
-
-export default function AppAssistenciaNova() {
-  const { data: associado } = useMyAssociado();
-  const { data: veiculos } = useMyVehicles();
-  const solicitarAssistencia = useSolicitarAssistencia();
-  
-  const veiculo = veiculos?.[0];
-  
-  // SUBSTITUIR handleConfirmar
-  const handleConfirmar = async () => {
-    if (!veiculo) return;
-    
-    setIsEnviando(true);
+  // Iniciar gravação
+  const startRecording = async () => {
     try {
-      await solicitarAssistencia.mutateAsync({
-        tipo: formState.tipoServico as TipoAssistencia,
-        veiculo_id: veiculo.id,
-        endereco: `${formState.logradouro}, ${formState.numero} - ${formState.bairro}`,
-        latitude: 0, // ou coordenadas reais se disponíveis
-        longitude: 0,
-        descricao: formState.observacoes,
-      });
-      navigate('/app/assistencia');
-    } finally {
-      setIsEnviando(false);
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      mediaRecorderRef.current = mediaRecorder;
+      chunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(chunksRef.current, { type: 'audio/webm' });
+        if (onSendAudio) onSendAudio(audioBlob);
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingTime(0);
+      timerRef.current = setInterval(() => setRecordingTime(t => t + 1), 1000);
+    } catch (err) {
+      console.error('Erro ao acessar microfone:', err);
+      toast.error('Não foi possível acessar o microfone');
     }
   };
-  
-  // Na etapa 3, usar dados reais:
-  <p className="font-semibold">{veiculo?.marca} {veiculo?.modelo}</p>
-  <Badge>{veiculo?.placa}</Badge>
+
+  // Parar gravação
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      if (timerRef.current) clearInterval(timerRef.current);
+    }
+  };
+
+  // Cancelar gravação
+  const cancelRecording = () => {
+    if (mediaRecorderRef.current) {
+      mediaRecorderRef.current.stream.getTracks().forEach(t => t.stop());
+      setIsRecording(false);
+      if (timerRef.current) clearInterval(timerRef.current);
+    }
+  };
+
+  return (
+    <div className="flex items-end gap-2 p-4 border-t bg-background">
+      {isRecording ? (
+        // UI de gravação
+        <div className="flex-1 flex items-center gap-3 px-4 py-3 bg-red-50 dark:bg-red-950 rounded-lg">
+          <div className="h-3 w-3 rounded-full bg-red-500 animate-pulse" />
+          <span className="text-sm font-medium text-red-600 dark:text-red-400">
+            Gravando... {Math.floor(recordingTime / 60)}:{(recordingTime % 60).toString().padStart(2, '0')}
+          </span>
+          <Button variant="ghost" size="sm" onClick={cancelRecording}>
+            Cancelar
+          </Button>
+        </div>
+      ) : (
+        <Textarea
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder={isTranscribing ? 'Transcrevendo áudio...' : placeholder}
+          disabled={isLoading || isTranscribing}
+          className="min-h-[44px] max-h-[120px] resize-none"
+          rows={1}
+        />
+      )}
+
+      {/* Botão de Microfone */}
+      {!value.trim() && !isRecording && (
+        <Button
+          onClick={startRecording}
+          disabled={isLoading || isTranscribing}
+          variant="ghost"
+          size="icon"
+          className="h-11 w-11 shrink-0"
+        >
+          <Mic className="h-5 w-5" />
+        </Button>
+      )}
+
+      {/* Botão de Parar/Enviar */}
+      {isRecording ? (
+        <Button onClick={stopRecording} size="icon" className="h-11 w-11 shrink-0 bg-red-500 hover:bg-red-600">
+          <Square className="h-5 w-5" />
+        </Button>
+      ) : (
+        <Button
+          onClick={handleSubmit}
+          disabled={!value.trim() || isLoading}
+          size="icon"
+          className="h-11 w-11 shrink-0"
+        >
+          {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+        </Button>
+      )}
+    </div>
+  );
 }
-```
-
-### 3. AppConfiguracoes.tsx - Alteração de senha real
-
-```typescript
-const handleAlterarSenha = async () => {
-  if (!senhaAtual || !novaSenha || !confirmarSenha) {
-    toast.error('Preencha todos os campos');
-    return;
-  }
-  if (novaSenha !== confirmarSenha) {
-    toast.error('As senhas não coincidem');
-    return;
-  }
-  if (novaSenha.length < 6) {
-    toast.error('A senha deve ter pelo menos 6 caracteres');
-    return;
-  }
-  
-  // Chamar Supabase Auth
-  const { error } = await supabase.auth.updateUser({ 
-    password: novaSenha 
-  });
-  
-  if (error) {
-    toast.error(error.message || 'Erro ao alterar senha');
-    return;
-  }
-  
-  setShowSenhaModal(false);
-  toast.success('Senha alterada com sucesso!');
-  setSenhaAtual('');
-  setNovaSenha('');
-  setConfirmarSenha('');
-};
 ```
 
 ---
 
-## Testes Recomendados
+### 2. Criar Edge Function de Transcrição de Áudio
 
-### Teste 1: Sinistros E2E
-1. Login como associado (Marcus)
-2. Criar novo sinistro no app
-3. Verificar se aparece no painel em `/sinistros`
-4. Abrir detalhe do sinistro no app → Deve mostrar dados REAIS
+**Arquivo:** `supabase/functions/transcrever-audio/index.ts`
 
-### Teste 2: Assistência E2E
-1. Login como associado
-2. Solicitar assistência via `/app/assistencia`
-3. Verificar se protocolo foi gerado
-4. Verificar se aparece no painel de assistência
+Usar OpenAI Whisper (já temos a `OPENAI_API_KEY`):
 
-### Teste 3: Configurações
-1. Alterar senha
-2. Fazer logout
-3. Tentar login com senha antiga → Deve falhar
-4. Login com nova senha → Deve funcionar
+```typescript
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const formData = await req.formData();
+    const audioFile = formData.get("audio") as File;
+
+    if (!audioFile) {
+      return new Response(
+        JSON.stringify({ error: "Arquivo de áudio não fornecido" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY não configurada");
+
+    // Enviar para Whisper API
+    const whisperFormData = new FormData();
+    whisperFormData.append("file", audioFile, "audio.webm");
+    whisperFormData.append("model", "whisper-1");
+    whisperFormData.append("language", "pt"); // Português
+
+    const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+      },
+      body: whisperFormData,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Whisper error:", errorText);
+      throw new Error("Erro ao transcrever áudio");
+    }
+
+    const result = await response.json();
+
+    return new Response(
+      JSON.stringify({ 
+        success: true, 
+        text: result.text 
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+
+  } catch (error) {
+    console.error("Erro:", error);
+    return new Response(
+      JSON.stringify({ error: error.message || "Erro interno" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+});
+```
+
+---
+
+### 3. Atualizar Hook useAssistenteChat
+
+**Arquivo:** `src/hooks/useAssistenteChat.ts`
+
+Adicionar função para processar áudio:
+
+```typescript
+const sendAudio = useCallback(async (audioBlob: Blob) => {
+  if (isLoading) return;
+
+  // Placeholder para feedback visual
+  const userMessageId = crypto.randomUUID();
+  setMessages(prev => [...prev, {
+    id: userMessageId,
+    role: 'user',
+    content: '🎤 Mensagem de voz',
+    timestamp: new Date(),
+    isAudio: true,
+  }]);
+
+  setIsLoading(true);
+  setIsTranscribing(true);
+
+  try {
+    // 1. Transcrever áudio
+    const formData = new FormData();
+    formData.append('audio', audioBlob, 'audio.webm');
+
+    const { data, error } = await supabase.functions.invoke('transcrever-audio', {
+      body: formData,
+    });
+
+    if (error || !data?.text) throw new Error('Falha na transcrição');
+
+    // 2. Atualizar mensagem do usuário com texto transcrito
+    setMessages(prev => prev.map(m => 
+      m.id === userMessageId 
+        ? { ...m, content: data.text, isAudio: false }
+        : m
+    ));
+
+    setIsTranscribing(false);
+
+    // 3. Enviar texto para a IA (fluxo normal)
+    await sendMessage(data.text);
+
+  } catch (error) {
+    console.error('Erro ao processar áudio:', error);
+    toast.error('Não foi possível processar o áudio');
+    setMessages(prev => prev.filter(m => m.id !== userMessageId));
+  } finally {
+    setIsLoading(false);
+    setIsTranscribing(false);
+  }
+}, [isLoading, sendMessage]);
+```
+
+---
+
+### 4. Atualizar AppChat.tsx
+
+**Arquivo:** `src/pages/app/AppChat.tsx`
+
+Conectar o novo callback de áudio:
+
+```typescript
+const { messages, isLoading, isTranscribing, sendMessage, sendAudio, clearMessages } = useAssistenteChat();
+
+// ...
+
+<ChatInput
+  onSend={sendMessage}
+  onSendAudio={sendAudio}
+  isLoading={isLoading}
+  isTranscribing={isTranscribing}
+  placeholder="Digite ou grave sua mensagem..."
+/>
+```
+
+---
+
+## Resumo dos Arquivos
+
+| Arquivo | Ação | Descrição |
+|---------|------|-----------|
+| `src/components/app/chat/ChatInput.tsx` | Modificar | Adicionar botão de microfone e lógica de gravação |
+| `supabase/functions/transcrever-audio/index.ts` | Criar | Edge Function para transcrição via Whisper |
+| `src/hooks/useAssistenteChat.ts` | Modificar | Adicionar `sendAudio` e estado `isTranscribing` |
+| `src/pages/app/AppChat.tsx` | Modificar | Conectar novo callback de áudio |
+
+---
+
+## UX Esperada
+
+1. **Sem texto digitado** → Aparece botão de **microfone** 🎤
+2. **Usuário toca no microfone** → Inicia gravação com timer e animação vermelha
+3. **Usuário toca em parar** → Áudio é enviado para transcrição
+4. **Durante transcrição** → Mostra "Transcrevendo áudio..." no placeholder
+5. **Texto transcrito** → Aparece no chat e IA responde normalmente
+
+---
+
+## Alternativa: Entrada de Áudio Direta no Gemini
+
+O modelo Gemini 2.5 suporta entrada de áudio diretamente (sem transcrição prévia). Podemos usar isso como alternativa futura para:
+- Reduzir latência
+- Capturar nuances de voz
+- Suportar comandos por voz mais naturais
+
+Mas o fluxo com Whisper é mais simples para implementar agora e funciona perfeitamente.
+
+---
+
+## Tecnologias Utilizadas
+
+| Componente | Tecnologia |
+|------------|------------|
+| Gravação | `MediaRecorder` API (nativo do browser) |
+| Transcrição | OpenAI Whisper (`whisper-1`) via `OPENAI_API_KEY` |
+| Processamento | Edge Function `transcrever-audio` |
+| Chat | Fluxo existente do `assistente-chat` |
