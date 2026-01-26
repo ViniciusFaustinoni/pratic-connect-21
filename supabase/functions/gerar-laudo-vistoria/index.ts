@@ -19,11 +19,37 @@ const MUTED_COLOR = rgb(0.5, 0.5, 0.5);
 const SUCCESS_COLOR = rgb(0.1, 0.6, 0.3);
 const SECTION_BG = rgb(0.95, 0.95, 0.97);
 
-// Image grid settings
-const IMG_WIDTH = 400;
-const IMG_HEIGHT = 280;
+// Image grid settings - reduced size to save memory
+const IMG_WIDTH = 350;
+const IMG_HEIGHT = 240;
 const IMG_GAP = 15;
 const COLS = 1;
+
+// MEMORY OPTIMIZATION: Limit total photos to prevent memory overflow
+// Note: Supabase Edge Functions have 150MB memory limit
+// Each high-res photo can be 3-5MB, so we limit to ~12 photos max
+const MAX_FOTOS_TOTAL = 12; // Maximum photos to include in the report
+const MAX_BYTES_PER_IMAGE = 6 * 1024 * 1024; // Allow images up to 6MB (typical smartphone photo)
+
+// Priority order for photos (most important first)
+const PRIORITY_TIPOS = [
+  'assinatura_cliente',
+  'chassi',
+  'motor',
+  'etiqueta_motor',
+  'placa',
+  'odometro',
+  'frente',
+  'traseira',
+  'lateral_esquerda',
+  'lateral_direita',
+  'diagonal_dianteira_esquerda',
+  'diagonal_traseira_direita',
+  'painel',
+  'bancos_frente',
+  'porta_malas',
+  'pneus',
+];
 
 // Category configuration for inspection photos
 const CATEGORIAS = [
@@ -61,6 +87,75 @@ const TIPO_FOTO_LABELS: Record<string, string> = {
   acessorios: 'Acessórios',
 };
 
+// Function to prioritize and limit photos
+function selectPriorityPhotos(fotos: any[]): any[] {
+  // Sort by priority
+  const sorted = [...fotos].sort((a, b) => {
+    const priorityA = PRIORITY_TIPOS.findIndex(t => a.tipo?.toLowerCase().includes(t));
+    const priorityB = PRIORITY_TIPOS.findIndex(t => b.tipo?.toLowerCase().includes(t));
+    
+    // If not in priority list, put at end
+    const indexA = priorityA === -1 ? 999 : priorityA;
+    const indexB = priorityB === -1 ? 999 : priorityB;
+    
+    return indexA - indexB;
+  });
+  
+  // Return limited set
+  return sorted.slice(0, MAX_FOTOS_TOTAL);
+}
+
+// Function to safely fetch and embed image with memory limits
+async function fetchAndEmbedImage(
+  pdfDoc: PDFDocument, 
+  url: string
+): Promise<{ image: any; skipped: boolean; reason?: string }> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+    
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      return { image: null, skipped: true, reason: 'fetch failed' };
+    }
+    
+    // Check content-length header to avoid downloading huge files
+    const contentLength = response.headers.get('content-length');
+    if (contentLength && parseInt(contentLength) > MAX_BYTES_PER_IMAGE) {
+      console.warn(`Image too large (${contentLength} bytes), skipping: ${url}`);
+      return { image: null, skipped: true, reason: 'too large' };
+    }
+    
+    const arrayBuffer = await response.arrayBuffer();
+    
+    // Double-check actual size
+    if (arrayBuffer.byteLength > MAX_BYTES_PER_IMAGE) {
+      console.warn(`Image too large after download (${arrayBuffer.byteLength} bytes), skipping`);
+      return { image: null, skipped: true, reason: 'too large' };
+    }
+    
+    const bytes = new Uint8Array(arrayBuffer);
+    
+    let image;
+    try {
+      image = await pdfDoc.embedJpg(bytes);
+    } catch {
+      try {
+        image = await pdfDoc.embedPng(bytes);
+      } catch {
+        return { image: null, skipped: true, reason: 'embed failed' };
+      }
+    }
+    
+    return { image, skipped: false };
+  } catch (err) {
+    console.warn('Error fetching image:', url, err);
+    return { image: null, skipped: true, reason: 'error' };
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -76,7 +171,8 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Gerando laudo de vistoria: ${vistoriaId}`);
+    console.log(`[LAUDO] Iniciando geração para vistoria: ${vistoriaId}`);
+    console.log(`[LAUDO] Memory optimization: MAX_FOTOS=${MAX_FOTOS_TOTAL}, MAX_BYTES=${MAX_BYTES_PER_IMAGE}`);
 
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -92,7 +188,7 @@ serve(async (req) => {
         .eq('id', contratoId)
         .single();
       cotacaoId = contratoData?.cotacao_id || null;
-      console.log(`CotacaoId recuperado do contrato: ${cotacaoId}`);
+      console.log(`[LAUDO] CotacaoId recuperado do contrato: ${cotacaoId}`);
     }
 
     // Fetch vistoria with related data
@@ -124,7 +220,7 @@ serve(async (req) => {
       .single();
 
     if (vistoriaError || !vistoria) {
-      console.error('Erro ao buscar vistoria:', vistoriaError);
+      console.error('[LAUDO] Erro ao buscar vistoria:', vistoriaError);
       return new Response(
         JSON.stringify({ error: 'Vistoria não encontrada' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -137,6 +233,8 @@ serve(async (req) => {
       .select('tipo, arquivo_url, visivel_cliente')
       .eq('vistoria_id', vistoriaId)
       .neq('visivel_cliente', false); // Exclude hidden photos (tracker location)
+
+    console.log(`[LAUDO] Total de fotos encontradas: ${fotos?.length || 0}`);
 
     const associado = vistoria.associados as any;
     const veiculo = vistoria.veiculos as any;
@@ -391,16 +489,23 @@ serve(async (req) => {
       y -= 20;
     }
 
-    // Photos section
+    // Photos section - with memory optimization
     const fotosValidas = (fotos || []).filter(f => f.arquivo_url);
     
+    // Apply priority selection to limit total photos
+    const fotosSelecionadas = selectPriorityPhotos(fotosValidas);
+    console.log(`[LAUDO] Fotos selecionadas após priorização: ${fotosSelecionadas.length} de ${fotosValidas.length}`);
+    
     // Separar assinatura das outras fotos
-    const fotosAssinatura = fotosValidas.filter(f => 
+    const fotosAssinatura = fotosSelecionadas.filter(f => 
       f.tipo === 'assinatura_cliente' || f.tipo?.toLowerCase().includes('assinatura')
     );
-    const fotosOutrasSemAssinatura = fotosValidas.filter(f => 
+    const fotosOutrasSemAssinatura = fotosSelecionadas.filter(f => 
       f.tipo !== 'assinatura_cliente' && !f.tipo?.toLowerCase().includes('assinatura')
     );
+
+    let fotosProcessadas = 0;
+    let fotosSkipped = 0;
 
     // Desenhar assinatura primeiro se existir
     if (fotosAssinatura.length > 0) {
@@ -432,56 +537,41 @@ serve(async (req) => {
 
         const x = MARGIN + col * (IMG_WIDTH + IMG_GAP);
 
-        try {
-          const response = await fetch(foto.arquivo_url);
-          if (response.ok) {
-            const arrayBuffer = await response.arrayBuffer();
-            const bytes = new Uint8Array(arrayBuffer);
+        const { image, skipped, reason } = await fetchAndEmbedImage(pdfDoc, foto.arquivo_url);
+        
+        if (skipped) {
+          console.warn(`[LAUDO] Assinatura skipped: ${reason}`);
+          fotosSkipped++;
+        } else if (image) {
+          fotosProcessadas++;
+          const aspectRatio = image.width / image.height;
+          let drawWidth = IMG_WIDTH;
+          let drawHeight = IMG_WIDTH / aspectRatio;
 
-            let image;
-            try {
-              image = await pdfDoc.embedJpg(bytes);
-            } catch {
-              try {
-                image = await pdfDoc.embedPng(bytes);
-              } catch {
-                image = null;
-              }
-            }
-
-            if (image) {
-              const aspectRatio = image.width / image.height;
-              let drawWidth = IMG_WIDTH;
-              let drawHeight = IMG_WIDTH / aspectRatio;
-
-              if (drawHeight > IMG_HEIGHT) {
-                drawHeight = IMG_HEIGHT;
-                drawWidth = IMG_HEIGHT * aspectRatio;
-              }
-
-              page.drawRectangle({
-                x,
-                y: rowY - IMG_HEIGHT,
-                width: IMG_WIDTH,
-                height: IMG_HEIGHT,
-                color: rgb(0.97, 0.97, 0.97),
-                borderColor: rgb(0.9, 0.9, 0.9),
-                borderWidth: 1,
-              });
-
-              const offsetX = (IMG_WIDTH - drawWidth) / 2;
-              const offsetY = (IMG_HEIGHT - drawHeight) / 2;
-
-              page.drawImage(image, {
-                x: x + offsetX,
-                y: rowY - IMG_HEIGHT + offsetY,
-                width: drawWidth,
-                height: drawHeight,
-              });
-            }
+          if (drawHeight > IMG_HEIGHT) {
+            drawHeight = IMG_HEIGHT;
+            drawWidth = IMG_HEIGHT * aspectRatio;
           }
-        } catch (err) {
-          console.warn('Error loading signature image:', foto.arquivo_url, err);
+
+          page.drawRectangle({
+            x,
+            y: rowY - IMG_HEIGHT,
+            width: IMG_WIDTH,
+            height: IMG_HEIGHT,
+            color: rgb(0.97, 0.97, 0.97),
+            borderColor: rgb(0.9, 0.9, 0.9),
+            borderWidth: 1,
+          });
+
+          const offsetX = (IMG_WIDTH - drawWidth) / 2;
+          const offsetY = (IMG_HEIGHT - drawHeight) / 2;
+
+          page.drawImage(image, {
+            x: x + offsetX,
+            y: rowY - IMG_HEIGHT + offsetY,
+            width: drawWidth,
+            height: drawHeight,
+          });
         }
 
         page.drawText('Assinatura do Cliente', {
@@ -555,61 +645,44 @@ serve(async (req) => {
 
           const x = MARGIN + col * (IMG_WIDTH + IMG_GAP);
 
-          try {
-            // Fetch and embed image
-            const response = await fetch(foto.arquivo_url);
-            if (response.ok) {
-              const arrayBuffer = await response.arrayBuffer();
-              const bytes = new Uint8Array(arrayBuffer);
+          const { image, skipped, reason } = await fetchAndEmbedImage(pdfDoc, foto.arquivo_url);
+          
+          if (skipped) {
+            console.warn(`[LAUDO] Foto skipped (${foto.tipo}): ${reason}`);
+            fotosSkipped++;
+          } else if (image) {
+            fotosProcessadas++;
+            // Calculate aspect ratio
+            const aspectRatio = image.width / image.height;
+            let drawWidth = IMG_WIDTH;
+            let drawHeight = IMG_WIDTH / aspectRatio;
 
-              let image;
-              try {
-                image = await pdfDoc.embedJpg(bytes);
-              } catch {
-                try {
-                  image = await pdfDoc.embedPng(bytes);
-                } catch {
-                  console.warn('Could not embed image:', foto.arquivo_url);
-                  image = null;
-                }
-              }
-
-              if (image) {
-                // Calculate aspect ratio
-                const aspectRatio = image.width / image.height;
-                let drawWidth = IMG_WIDTH;
-                let drawHeight = IMG_WIDTH / aspectRatio;
-
-                if (drawHeight > IMG_HEIGHT) {
-                  drawHeight = IMG_HEIGHT;
-                  drawWidth = IMG_HEIGHT * aspectRatio;
-                }
-
-                // Draw image placeholder background
-                page.drawRectangle({
-                  x,
-                  y: rowY - IMG_HEIGHT,
-                  width: IMG_WIDTH,
-                  height: IMG_HEIGHT,
-                  color: rgb(0.97, 0.97, 0.97),
-                  borderColor: rgb(0.9, 0.9, 0.9),
-                  borderWidth: 1,
-                });
-
-                // Center image in placeholder
-                const offsetX = (IMG_WIDTH - drawWidth) / 2;
-                const offsetY = (IMG_HEIGHT - drawHeight) / 2;
-
-                page.drawImage(image, {
-                  x: x + offsetX,
-                  y: rowY - IMG_HEIGHT + offsetY,
-                  width: drawWidth,
-                  height: drawHeight,
-                });
-              }
+            if (drawHeight > IMG_HEIGHT) {
+              drawHeight = IMG_HEIGHT;
+              drawWidth = IMG_HEIGHT * aspectRatio;
             }
-          } catch (err) {
-            console.warn('Error loading image:', foto.arquivo_url, err);
+
+            // Draw image placeholder background
+            page.drawRectangle({
+              x,
+              y: rowY - IMG_HEIGHT,
+              width: IMG_WIDTH,
+              height: IMG_HEIGHT,
+              color: rgb(0.97, 0.97, 0.97),
+              borderColor: rgb(0.9, 0.9, 0.9),
+              borderWidth: 1,
+            });
+
+            // Center image in placeholder
+            const offsetX = (IMG_WIDTH - drawWidth) / 2;
+            const offsetY = (IMG_HEIGHT - drawHeight) / 2;
+
+            page.drawImage(image, {
+              x: x + offsetX,
+              y: rowY - IMG_HEIGHT + offsetY,
+              width: drawWidth,
+              height: drawHeight,
+            });
           }
 
           // Draw label
@@ -672,56 +745,41 @@ serve(async (req) => {
 
           const x = MARGIN + col * (IMG_WIDTH + IMG_GAP);
 
-          try {
-            const response = await fetch(foto.arquivo_url);
-            if (response.ok) {
-              const arrayBuffer = await response.arrayBuffer();
-              const bytes = new Uint8Array(arrayBuffer);
+          const { image, skipped, reason } = await fetchAndEmbedImage(pdfDoc, foto.arquivo_url);
+          
+          if (skipped) {
+            console.warn(`[LAUDO] Foto outras skipped: ${reason}`);
+            fotosSkipped++;
+          } else if (image) {
+            fotosProcessadas++;
+            const aspectRatio = image.width / image.height;
+            let drawWidth = IMG_WIDTH;
+            let drawHeight = IMG_WIDTH / aspectRatio;
 
-              let image;
-              try {
-                image = await pdfDoc.embedJpg(bytes);
-              } catch {
-                try {
-                  image = await pdfDoc.embedPng(bytes);
-                } catch {
-                  image = null;
-                }
-              }
-
-              if (image) {
-                const aspectRatio = image.width / image.height;
-                let drawWidth = IMG_WIDTH;
-                let drawHeight = IMG_WIDTH / aspectRatio;
-
-                if (drawHeight > IMG_HEIGHT) {
-                  drawHeight = IMG_HEIGHT;
-                  drawWidth = IMG_HEIGHT * aspectRatio;
-                }
-
-                page.drawRectangle({
-                  x,
-                  y: rowY - IMG_HEIGHT,
-                  width: IMG_WIDTH,
-                  height: IMG_HEIGHT,
-                  color: rgb(0.97, 0.97, 0.97),
-                  borderColor: rgb(0.9, 0.9, 0.9),
-                  borderWidth: 1,
-                });
-
-                const offsetX = (IMG_WIDTH - drawWidth) / 2;
-                const offsetY = (IMG_HEIGHT - drawHeight) / 2;
-
-                page.drawImage(image, {
-                  x: x + offsetX,
-                  y: rowY - IMG_HEIGHT + offsetY,
-                  width: drawWidth,
-                  height: drawHeight,
-                });
-              }
+            if (drawHeight > IMG_HEIGHT) {
+              drawHeight = IMG_HEIGHT;
+              drawWidth = IMG_HEIGHT * aspectRatio;
             }
-          } catch (err) {
-            console.warn('Error loading image:', foto.arquivo_url, err);
+
+            page.drawRectangle({
+              x,
+              y: rowY - IMG_HEIGHT,
+              width: IMG_WIDTH,
+              height: IMG_HEIGHT,
+              color: rgb(0.97, 0.97, 0.97),
+              borderColor: rgb(0.9, 0.9, 0.9),
+              borderWidth: 1,
+            });
+
+            const offsetX = (IMG_WIDTH - drawWidth) / 2;
+            const offsetY = (IMG_HEIGHT - drawHeight) / 2;
+
+            page.drawImage(image, {
+              x: x + offsetX,
+              y: rowY - IMG_HEIGHT + offsetY,
+              width: drawWidth,
+              height: drawHeight,
+            });
           }
 
           const label = TIPO_FOTO_LABELS[foto.tipo] || foto.tipo || 'Foto';
@@ -741,6 +799,8 @@ serve(async (req) => {
         }
       }
     }
+
+    console.log(`[LAUDO] Fotos processadas: ${fotosProcessadas}, skipped: ${fotosSkipped}`);
 
     // Add footer to all pages
     const pages = pdfDoc.getPages();
@@ -772,6 +832,7 @@ serve(async (req) => {
     }
 
     // Save PDF
+    console.log(`[LAUDO] Salvando PDF com ${totalPages} páginas...`);
     const pdfBytes = await pdfDoc.save();
     const placaFormatada = (veiculo?.placa || placa || 'SEMPLACA').replace(/[^A-Z0-9]/gi, '').toUpperCase();
     const nomeArquivo = `Laudo_Vistoria_${placaFormatada}_${Date.now()}.pdf`;
@@ -785,7 +846,7 @@ serve(async (req) => {
       });
 
     if (uploadError) {
-      console.error('Erro ao fazer upload do PDF:', uploadError);
+      console.error('[LAUDO] Erro ao fazer upload do PDF:', uploadError);
       return new Response(
         JSON.stringify({ error: 'Erro ao salvar o PDF' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -799,7 +860,7 @@ serve(async (req) => {
 
     const arquivoUrl = publicUrlData.publicUrl;
 
-    console.log('PDF gerado e salvo:', arquivoUrl);
+    console.log('[LAUDO] PDF gerado e salvo:', arquivoUrl);
 
     // Insert into documentos table (for cadastro analyst view)
     const { error: docError } = await supabase
@@ -814,7 +875,7 @@ serve(async (req) => {
       });
 
     if (docError) {
-      console.error('Erro ao inserir documento:', docError);
+      console.error('[LAUDO] Erro ao inserir documento:', docError);
     }
 
     // Also insert into contratos_documentos if contratoId or cotacaoId provided (compatibility)
@@ -831,24 +892,32 @@ serve(async (req) => {
         });
 
       if (contratoDocError) {
-        console.warn('Erro ao inserir documento do contrato (não crítico):', contratoDocError);
+        console.warn('[LAUDO] Erro ao inserir documento do contrato (não crítico):', contratoDocError);
       } else {
-        console.log(`Laudo inserido em contratos_documentos: contrato=${contratoId}, cotacao=${cotacaoId}`);
+        console.log(`[LAUDO] Laudo inserido em contratos_documentos: contrato=${contratoId}, cotacao=${cotacaoId}`);
       }
     }
+
+    console.log(`[LAUDO] Geração concluída com sucesso!`);
 
     return new Response(
       JSON.stringify({ 
         success: true, 
         url: arquivoUrl,
         nomeArquivo,
+        stats: {
+          fotosTotal: fotosValidas.length,
+          fotosSelecionadas: fotosSelecionadas.length,
+          fotosProcessadas,
+          fotosSkipped,
+        }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error: unknown) {
     const errMessage = error instanceof Error ? error.message : 'Erro interno ao gerar laudo';
-    console.error('Erro ao gerar laudo:', error);
+    console.error('[LAUDO] Erro ao gerar laudo:', error);
     return new Response(
       JSON.stringify({ error: errMessage }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
