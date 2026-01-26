@@ -42,7 +42,40 @@ export function useContratoAssociado() {
 }
 
 /**
- * Hook para buscar URL do regulamento do plano
+ * Hook para buscar todos os contratos do associado (histórico)
+ */
+export function useMyContratos() {
+  const { data: associado } = useMyAssociado();
+
+  return useQuery({
+    queryKey: ['my-contratos', associado?.id],
+    queryFn: async () => {
+      if (!associado?.id) return [];
+
+      const { data, error } = await supabase
+        .from('contratos')
+        .select(`
+          id,
+          numero,
+          status,
+          pdf_url,
+          pdf_assinado_url,
+          data_inicio,
+          data_assinatura,
+          plano:planos(nome)
+        `)
+        .eq('associado_id', associado.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!associado?.id,
+  });
+}
+
+/**
+ * Hook para buscar dados do plano (para regulamento futuro)
  */
 export function useRegulamentoPlano() {
   const { data: associado } = useMyAssociado();
@@ -54,7 +87,7 @@ export function useRegulamentoPlano() {
       
       const { data, error } = await supabase
         .from('planos')
-        .select('regulamento_url, nome')
+        .select('nome, descricao')
         .eq('id', associado.plano_id)
         .single();
       
