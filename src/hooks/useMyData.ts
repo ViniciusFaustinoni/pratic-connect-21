@@ -64,7 +64,7 @@ export interface AssociadoWithRelations extends Associado {
     tipo_uso: string;
     valor_adesao: number;
   } | null;
-  contratos?: {
+  contratos?: Array<{
     id: string;
     numero: string;
     status: string;
@@ -72,7 +72,7 @@ export interface AssociadoWithRelations extends Associado {
     valor_adesao: number;
     data_inicio: string;
     dia_vencimento?: number | null;
-  } | null;
+  }>;
 }
 
 export function useMyAssociado() {
@@ -95,7 +95,7 @@ export function useMyAssociado() {
             tipo_uso,
             valor_adesao
           ),
-          contratos (
+          contratos!fk_contratos_associado (
             id,
             numero,
             status,
