@@ -227,3 +227,9 @@ verify_jwt = false
 
 [functions.aprovar-solicitacao-ia]
 verify_jwt = false
+
+[functions.whatsapp-webhook]
+verify_jwt = false
+
+[functions.whatsapp-send-text]
+verify_jwt = false

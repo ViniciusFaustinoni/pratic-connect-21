@@ -14490,6 +14490,7 @@ export type Database = {
           created_at: string | null
           descricao: string | null
           foto_perfil: string | null
+          ia_habilitada: boolean
           id: string
           instance_name: string
           nome: string
@@ -14509,6 +14510,7 @@ export type Database = {
           created_at?: string | null
           descricao?: string | null
           foto_perfil?: string | null
+          ia_habilitada?: boolean
           id?: string
           instance_name: string
           nome: string
@@ -14528,6 +14530,7 @@ export type Database = {
           created_at?: string | null
           descricao?: string | null
           foto_perfil?: string | null
+          ia_habilitada?: boolean
           id?: string
           instance_name?: string
           nome?: string

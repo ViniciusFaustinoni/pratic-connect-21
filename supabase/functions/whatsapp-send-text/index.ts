@@ -1,0 +1,108 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const { telefone, mensagem, instancia_id } = await req.json();
+
+    if (!telefone || !mensagem) {
+      return new Response(
+        JSON.stringify({ success: false, error: "telefone e mensagem são obrigatórios" }),
+        { status: 400, headers: corsHeaders }
+      );
+    }
+
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    );
+
+    // Buscar instância
+    let query = supabase.from("whatsapp_instancias").select("id, api_url, instance_name");
+    
+    if (instancia_id) {
+      query = query.eq("id", instancia_id);
+    } else {
+      query = query.eq("principal", true);
+    }
+
+    const { data: instancia, error: instError } = await query.single();
+
+    if (instError || !instancia) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Instância não encontrada" }),
+        { status: 404, headers: corsHeaders }
+      );
+    }
+
+    const EVOLUTION_API_KEY = Deno.env.get("EVOLUTION_API_KEY");
+    if (!EVOLUTION_API_KEY) {
+      return new Response(
+        JSON.stringify({ success: false, error: "EVOLUTION_API_KEY não configurada" }),
+        { status: 500, headers: corsHeaders }
+      );
+    }
+
+    // Formatar telefone (remover caracteres especiais)
+    const telefoneFormatado = telefone.replace(/\D/g, "");
+
+    // Enviar mensagem via Evolution API
+    const response = await fetch(`${instancia.api_url}/message/sendText/${instancia.instance_name}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: EVOLUTION_API_KEY,
+      },
+      body: JSON.stringify({
+        number: telefoneFormatado,
+        text: mensagem,
+      }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      console.error("[whatsapp-send-text] Erro Evolution:", result);
+      return new Response(
+        JSON.stringify({ success: false, error: result.message || "Erro ao enviar" }),
+        { status: response.status, headers: corsHeaders }
+      );
+    }
+
+    // Registrar mensagem enviada
+    await supabase.from("whatsapp_mensagens").insert({
+      instancia_id: instancia.id,
+      telefone: telefoneFormatado,
+      tipo: "text",
+      mensagem,
+      direcao: "saida",
+      status: "enviada",
+      message_id: result.key?.id,
+    });
+
+    console.log(`[whatsapp-send-text] Mensagem enviada para ${telefoneFormatado}`);
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message_id: result.key?.id,
+      }),
+      { headers: corsHeaders }
+    );
+  } catch (error: any) {
+    console.error("[whatsapp-send-text] Erro:", error);
+    return new Response(
+      JSON.stringify({ success: false, error: error.message }),
+      { status: 500, headers: corsHeaders }
+    );
+  }
+});
