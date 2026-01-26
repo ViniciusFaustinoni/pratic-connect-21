@@ -425,19 +425,116 @@ serve(async (req) => {
 
     const userId = claims.claims.sub;
 
-    // Get associado_id
+    // Get associado with full context
     const { data: associado, error: assocError } = await supabase
       .from("associados")
-      .select("id, nome")
+      .select(`
+        id, nome, cpf, email, telefone, whatsapp, status, 
+        data_adesao, dia_vencimento,
+        plano:planos(nome, descricao)
+      `)
       .eq("user_id", userId)
       .single();
 
     if (assocError || !associado) {
+      console.error("[assistente-chat] Associado não encontrado:", assocError);
       return new Response(JSON.stringify({ error: "Associado não encontrado" }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    // Fetch all relevant data for context in parallel
+    const [veiculosResult, boletosResult, sinistrosResult, assistenciasResult] = await Promise.all([
+      // Veículos do associado
+      supabase
+        .from("veiculos")
+        .select("id, placa, marca, modelo, ano_modelo, cor, status")
+        .eq("associado_id", associado.id),
+      
+      // Boletos pendentes
+      supabase
+        .from("cobrancas")
+        .select("id, valor, data_vencimento, status, competencia")
+        .eq("associado_id", associado.id)
+        .in("status", ["pendente", "vencido", "em_aberto", "aguardando_pagamento"])
+        .order("data_vencimento", { ascending: true })
+        .limit(5),
+      
+      // Sinistros em aberto
+      supabase
+        .from("sinistros")
+        .select("id, protocolo, tipo, status")
+        .eq("associado_id", associado.id)
+        .not("status", "in", "(finalizado,encerrado,cancelado)")
+        .limit(5),
+      
+      // Assistências em aberto
+      supabase
+        .from("chamados_assistencia")
+        .select("id, protocolo, tipo_servico, status")
+        .eq("associado_id", associado.id)
+        .not("status", "in", "(concluido,cancelado)")
+        .limit(5),
+    ]);
+
+    const veiculos = veiculosResult.data || [];
+    const boletosPendentes = boletosResult.data || [];
+    const sinistrosAbertos = sinistrosResult.data || [];
+    const assistenciasAbertas = assistenciasResult.data || [];
+
+    // Build rich context for the AI
+    const veiculosTexto = veiculos.length > 0 
+      ? veiculos.map((v: any) => 
+          `- ${v.marca} ${v.modelo} ${v.ano_modelo || ''} (Placa: ${v.placa}, Cor: ${v.cor || 'N/I'}, Status: ${v.status}, ID: ${v.id})`
+        ).join('\n')
+      : 'Nenhum veículo cadastrado';
+
+    const boletosTexto = boletosPendentes.length > 0
+      ? boletosPendentes.map((b: any) => 
+          `- R$ ${(b.valor || 0).toFixed(2)} - Vencimento: ${new Date(b.data_vencimento).toLocaleDateString('pt-BR')} (${b.status})`
+        ).join('\n')
+      : 'Nenhum boleto pendente - situação em dia! ✅';
+
+    const sinistrosTexto = sinistrosAbertos.length > 0 
+      ? sinistrosAbertos.map((s: any) => `- ${s.protocolo}: ${s.tipo} (${s.status})`).join('\n') 
+      : 'Nenhum sinistro em aberto';
+
+    const assistenciasTexto = assistenciasAbertas.length > 0 
+      ? assistenciasAbertas.map((a: any) => `- ${a.protocolo}: ${a.tipo_servico} (${a.status})`).join('\n') 
+      : 'Nenhuma assistência em aberto';
+
+    const planoInfo = associado.plano as { nome?: string; descricao?: string } | null;
+
+    const contextoAssociado = `
+## DADOS DO ASSOCIADO ATUAL (use esses dados nas respostas!)
+- **Nome**: ${associado.nome}
+- **CPF**: ${associado.cpf || 'N/I'}
+- **Email**: ${associado.email || 'N/I'}
+- **Telefone**: ${associado.telefone || associado.whatsapp || 'Não informado'}
+- **WhatsApp**: ${associado.whatsapp || 'N/I'}
+- **Plano**: ${planoInfo?.nome || 'Não definido'}
+- **Status**: ${associado.status}
+- **Membro desde**: ${associado.data_adesao ? new Date(associado.data_adesao).toLocaleDateString('pt-BR') : 'N/A'}
+- **Dia de vencimento**: ${associado.dia_vencimento || 10}
+
+## VEÍCULOS DO ASSOCIADO
+${veiculosTexto}
+
+## BOLETOS PENDENTES
+${boletosTexto}
+
+## SINISTROS EM ANDAMENTO
+${sinistrosTexto}
+
+## ASSISTÊNCIAS EM ANDAMENTO
+${assistenciasTexto}
+
+## INSTRUÇÕES IMPORTANTES
+- Use SEMPRE os dados acima ao responder. NÃO invente informações!
+- Se o associado tem apenas um veículo, use-o automaticamente sem perguntar qual é.
+- Ao abrir sinistro ou assistência, use o ID do veículo disponível.
+- Trate o associado pelo nome: ${associado.nome.split(' ')[0]}`;
 
     const { messages, conversationHistory = [] } = await req.json();
 
@@ -448,11 +545,12 @@ serve(async (req) => {
       });
     }
 
-    console.log(`[assistente-chat] Processando mensagem para associado ${associado.id}`);
+    console.log(`[assistente-chat] Processando mensagem para associado ${associado.id} (${associado.nome})`);
+    console.log(`[assistente-chat] Contexto: ${veiculos.length} veículos, ${boletosPendentes.length} boletos pendentes`);
 
-    // Build messages array with context
+    // Build messages array with FULL context
     const aiMessages = [
-      { role: "system", content: SYSTEM_PROMPT + `\n\nContexto: O associado se chama ${associado.nome}.` },
+      { role: "system", content: SYSTEM_PROMPT + "\n\n" + contextoAssociado },
       ...conversationHistory.slice(-10), // Last 10 messages for context
       ...messages,
     ];
