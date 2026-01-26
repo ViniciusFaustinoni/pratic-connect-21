@@ -20,7 +20,7 @@ import {
 
 export default function AppChat() {
   const navigate = useNavigate();
-  const { messages, isLoading, sendMessage, clearMessages } = useAssistenteChat();
+  const { messages, isLoading, isTranscribing, sendMessage, sendAudio, clearMessages } = useAssistenteChat();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom on new messages
@@ -50,7 +50,7 @@ export default function AppChat() {
             <div>
               <h1 className="font-semibold">Assistente PRATIC</h1>
               <p className="text-xs text-muted-foreground">
-                {isLoading ? 'Digitando...' : 'Online'}
+                {isTranscribing ? 'Transcrevendo...' : isLoading ? 'Digitando...' : 'Online'}
               </p>
             </div>
           </div>
@@ -109,8 +109,10 @@ export default function AppChat() {
       {/* Input area */}
       <ChatInput
         onSend={sendMessage}
+        onSendAudio={sendAudio}
         isLoading={isLoading}
-        placeholder="Digite sua mensagem..."
+        isTranscribing={isTranscribing}
+        placeholder="Digite ou grave sua mensagem..."
       />
     </div>
   );
