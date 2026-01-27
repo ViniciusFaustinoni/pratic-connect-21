@@ -1,180 +1,98 @@
 
 
-# Plano: Corrigir Contraste das Datas e Exibição dos Horários no AgendamentoBase
+# Plano: Permitir Leitura Pública das Configurações da Base
 
-## Problemas Identificados
+## Problema Identificado
 
-### 1. Baixo Contraste das Datas
-Conforme a imagem fornecida, os números das datas (28, 29, 30, 31, 2) estão quase invisíveis no modo escuro. Isso ocorre porque:
+A tabela `configuracoes` tem RLS (Row Level Security) ativado com políticas que só permitem acesso a usuários autenticados como funcionários ou gerência:
 
-- Os botões de data não selecionados não têm cor de texto explícita
-- Os spans internos usam `opacity-70`, reduzindo ainda mais a visibilidade
-- No fundo escuro (`bg: 214 63% 6%`), o texto herda branco mas fica muito tênue
+| Política | Comando | Condição |
+|----------|---------|----------|
+| `config_all_gerencia` | ALL | `is_gerencia(auth.uid())` |
+| `config_select_funcionario` | SELECT | `is_funcionario(auth.uid())` |
 
-### 2. Horários Não Aparecem Após Selecionar Data
-O problema tem duas causas possíveis:
+O cliente que acessa o fluxo de contratação pública **não está autenticado**, portanto não consegue ler as configurações da base (horários, endereço), resultando em um array vazio de slots de horário.
 
-1. **Slots vazios**: A função `slotsHorario` retorna array vazio se `configBase?.base_horario_inicio` ou `configBase?.base_horario_fim` forem strings vazias
-2. **Renderização vazia**: Se `slotsHorario.length === 0`, o grid é renderizado mas sem nenhum botão, aparentando não funcionar
+## Solução
 
-## Arquitetura da Correção
-
-```text
-┌────────────────────────────────────────────────────────────────────┐
-│                ANTES (Problemas)                                   │
-├────────────────────────────────────────────────────────────────────┤
-│                                                                    │
-│  Botões de Data:                                                   │
-│  ┌─────────┐  ┌─────────┐  ┌─────────┐                            │
-│  │   28    │  │   29    │  │   30    │  ← Texto quase invisível   │
-│  │  (0.7)  │  │  (0.7)  │  │  (0.7)  │    devido a opacity-70    │
-│  └─────────┘  └─────────┘  └─────────┘                            │
-│                                                                    │
-│  Após clicar na data:                                             │
-│  ┌────────────────────────────┐                                   │
-│  │ Horários disponíveis...    │                                   │
-│  │ ┌──────────────────────┐  │  ← Grid vazio!                     │
-│  │ │                      │  │    slotsHorario = []               │
-│  │ └──────────────────────┘  │                                    │
-│  └────────────────────────────┘                                   │
-│                                                                    │
-└────────────────────────────────────────────────────────────────────┘
-
-┌────────────────────────────────────────────────────────────────────┐
-│                DEPOIS (Correções)                                  │
-├────────────────────────────────────────────────────────────────────┤
-│                                                                    │
-│  Botões de Data:                                                   │
-│  ┌─────────┐  ┌─────────┐  ┌─────────┐                            │
-│  │   28    │  │   29    │  │   30    │  ← Texto claro e legível   │
-│  │  seg    │  │  ter    │  │  qua    │    com cores explícitas    │
-│  │  jan    │  │  jan    │  │  jan    │                            │
-│  └─────────┘  └─────────┘  └─────────┘                            │
-│                                                                    │
-│  Após clicar na data:                                             │
-│  ┌────────────────────────────────────────────────────────────┐   │
-│  │ Horários disponíveis para 28 de janeiro                    │   │
-│  │ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐                       │   │
-│  │ │08:00 │ │08:30 │ │09:00 │ │09:30 │ ...                   │   │
-│  │ └──────┘ └──────┘ └──────┘ └──────┘                       │   │
-│  └────────────────────────────────────────────────────────────┘   │
-│                                                                    │
-│  OU (se não houver config):                                       │
-│  ┌────────────────────────────────────────────────────────────┐   │
-│  │ ⚠ Horários de atendimento não configurados.                │   │
-│  │ Entre em contato para agendar.                              │   │
-│  └────────────────────────────────────────────────────────────┘   │
-│                                                                    │
-└────────────────────────────────────────────────────────────────────┘
-```
+Adicionar uma política de RLS que permita leitura pública **apenas das chaves relacionadas à base** (endereço e horários de funcionamento).
 
 ## Implementação
 
-### Arquivo: `src/components/cotacao-publica/AgendamentoBase.tsx`
+### Migração SQL
 
-#### Correção 1: Melhorar Contraste dos Botões de Data
+Criar uma nova política que permite SELECT anônimo apenas para as chaves `base_*`:
 
-**Linhas 182-211**: Adicionar cores explícitas para melhor legibilidade no modo escuro.
-
-```typescript
-// ANTES (linha 192-196)
-className={cn(
-  "flex flex-col items-center p-2 rounded-lg border transition-all text-center",
-  isSelected
-    ? "bg-primary text-primary-foreground border-primary"
-    : "hover:border-primary/50 hover:bg-muted/50"
-)}
-
-// DEPOIS - cores explícitas para estado não selecionado
-className={cn(
-  "flex flex-col items-center p-2 rounded-lg border transition-all text-center",
-  isSelected
-    ? "bg-primary text-primary-foreground border-primary"
-    : "border-border bg-card text-card-foreground hover:border-primary/50 hover:bg-muted/50"
-)}
+```sql
+CREATE POLICY "config_base_public_read" 
+ON public.configuracoes 
+FOR SELECT 
+TO anon
+USING (
+  chave IN (
+    'base_cep', 
+    'base_logradouro', 
+    'base_numero',
+    'base_bairro', 
+    'base_cidade', 
+    'base_uf', 
+    'base_complemento',
+    'base_horario_inicio', 
+    'base_horario_fim', 
+    'base_capacidade_horario'
+  )
+);
 ```
 
-**Linhas 199-206**: Remover `opacity-70` e usar cores semânticas.
+### Fluxo de Dados
 
-```typescript
-// ANTES
-<span className="text-[10px] uppercase tracking-wide opacity-70">
-  {format(dia, 'EEE', { locale: ptBR })}
-</span>
-<span className="text-lg font-semibold">
-  {format(dia, 'd')}
-</span>
-<span className="text-[10px] opacity-70">
-  {format(dia, 'MMM', { locale: ptBR })}
-</span>
+```text
+ANTES:
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│ Cliente Público │────►│ useConfiguracaoBase│───►│ configuracoes  │
+│ (não logado)    │     │ (SELECT)        │     │ ⛔ RLS BLOQUEIA │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+                                                      │
+                                                      ▼
+                                               data = [] ❌
 
-// DEPOIS - cores com bom contraste
-<span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-  {format(dia, 'EEE', { locale: ptBR })}
-</span>
-<span className="text-lg font-semibold text-foreground">
-  {format(dia, 'd')}
-</span>
-<span className="text-[10px] text-muted-foreground">
-  {format(dia, 'MMM', { locale: ptBR })}
-</span>
+DEPOIS:
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│ Cliente Público │────►│ useConfiguracaoBase│───►│ configuracoes  │
+│ (role: anon)    │     │ (SELECT base_*) │     │ ✅ NOVA POLICY  │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+                                                      │
+                                                      ▼
+                                               data = [
+                                                 base_horario_inicio: 08:00,
+                                                 base_horario_fim: 17:30,
+                                                 ...
+                                               ] ✅
 ```
 
-#### Correção 2: Exibir Mensagem Quando Não Há Horários
+## Segurança
 
-**Linhas 228-259**: Adicionar fallback para array vazio.
+A nova política é segura porque:
 
-```typescript
-// DEPOIS
-{loadingHorarios ? (
-  <div className="grid grid-cols-4 gap-2">
-    {[...Array(8)].map((_, i) => (
-      <Skeleton key={i} className="h-10 w-full" />
-    ))}
-  </div>
-) : slotsHorario.length === 0 ? (
-  // NOVO: Mensagem quando não há slots configurados
-  <Alert className="bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-900">
-    <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-    <AlertDescription className="text-amber-700 dark:text-amber-300">
-      Os horários de atendimento não estão configurados. 
-      Entre em contato para agendar sua vistoria.
-    </AlertDescription>
-  </Alert>
-) : (
-  <div className="grid grid-cols-4 gap-2">
-    {slotsHorario.map((horario) => ...)}
-  </div>
-)}
-```
+1. **Apenas leitura (SELECT)** - não permite inserção, atualização ou exclusão
+2. **Escopo limitado** - apenas as 10 chaves `base_*` são expostas
+3. **Dados não sensíveis** - endereço e horários de funcionamento são informações públicas
 
-#### Correção 3: Garantir Valores Default no Hook
+Outras configurações do sistema (chaves de API, configurações internas, etc.) continuam protegidas.
 
-**Arquivo**: `src/hooks/useAgendamentoBase.ts` (opcional)
+## Alterações
 
-Garantir que o hook sempre retorne valores válidos:
-
-```typescript
-// Na linha 68-69, verificar se o valor não é string vazia
-base_horario_inicio: config.base_horario_inicio?.trim() || '08:00',
-base_horario_fim: config.base_horario_fim?.trim() || '17:30',
-```
-
-## Resumo das Alterações
-
-| Arquivo | Alteração | Impacto |
-|---------|-----------|---------|
-| `AgendamentoBase.tsx` | Adicionar `bg-card text-card-foreground` aos botões de data | Contraste legível no modo escuro |
-| `AgendamentoBase.tsx` | Trocar `opacity-70` por `text-muted-foreground` | Texto sempre visível |
-| `AgendamentoBase.tsx` | Adicionar fallback para `slotsHorario.length === 0` | Mensagem clara se não houver config |
-| `useAgendamentoBase.ts` | Adicionar `.trim()` nos valores de horário | Evitar strings com espaços |
+| Tipo | Descrição |
+|------|-----------|
+| Migração SQL | Adicionar política `config_base_public_read` para leitura anônima das chaves `base_*` |
 
 ## Resultado Esperado
 
-Após as correções:
+Após a migração:
 
-1. **Datas**: Números claramente visíveis com bom contraste em ambos os modos (claro/escuro)
-2. **Horários**: 
-   - Se configurados: aparecem corretamente após selecionar data
-   - Se não configurados: mensagem amigável orientando o cliente
+1. Cliente acessa página de agendamento na base
+2. Hook `useConfiguracaoBase` faz SELECT das configurações
+3. RLS permite leitura das chaves `base_*` para usuário anônimo
+4. Horários 08:00 - 17:30 são retornados corretamente
+5. Slots de horário são gerados e exibidos ao cliente
 
