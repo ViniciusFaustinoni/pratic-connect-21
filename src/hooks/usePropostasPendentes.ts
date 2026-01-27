@@ -68,6 +68,15 @@ export interface InstalacaoAgendadaInfo {
   permite_encaixe: boolean;
 }
 
+// Informações da vistoria na base
+export interface VistoriaBaseInfo {
+  id: string;
+  data_agendada: string;
+  horario: string;
+  status: string;
+  atendido_por_nome: string | null;
+}
+
 export interface PropostaPendente {
   id: string;
   numero: string | null;
@@ -99,7 +108,8 @@ export interface PropostaPendente {
   vistoria: VistoriaInfo | null;
   documentos_solicitados_enviados: DocumentoSolicitadoEnviado[];
   instalacao_info: InstalacaoInfo | null; // Dados da instalação concluída
-  instalacao_agendada: InstalacaoAgendadaInfo | null; // NOVO: Dados do agendamento (pré-instalação)
+  instalacao_agendada: InstalacaoAgendadaInfo | null; // Dados do agendamento (pré-instalação)
+  vistoria_base_info: VistoriaBaseInfo | null; // Dados da vistoria na base
 }
 
 export interface PropostaStats {
@@ -438,8 +448,47 @@ export function usePropostasPendentes() {
       // REGRA ATUALIZADA: Incluir propostas que tenham:
       // - Instalação concluída (fluxo normal)
       // - OU Autovistoria concluída com fotos (aguardando aprovação para roubo/furto)
+      // - OU Vistoria na base concluída
       const temAutovistoria = vistoria && vistoria.fotos && vistoria.fotos.length > 0;
-      if (!instalacaoInfo && !temAutovistoria) {
+      
+      // NOVO: Verificar se tem vistoria na base concluída
+      let vistoriaBaseInfo: {
+        id: string;
+        data_agendada: string;
+        horario: string;
+        status: string;
+        atendido_por_nome: string | null;
+      } | null = null;
+      
+      if (contrato.cotacao_id) {
+        const { data: agendamentoBase } = await supabase
+          .from('agendamentos_base')
+          .select(`
+            id, 
+            data_agendada, 
+            horario, 
+            status,
+            atendido_por_profile:profiles!agendamentos_base_atendido_por_fkey(nome)
+          `)
+          .eq('cotacao_id', contrato.cotacao_id)
+          .eq('status', 'realizado')
+          .limit(1)
+          .maybeSingle();
+        
+        if (agendamentoBase) {
+          vistoriaBaseInfo = {
+            id: agendamentoBase.id,
+            data_agendada: agendamentoBase.data_agendada,
+            horario: agendamentoBase.horario,
+            status: agendamentoBase.status,
+            atendido_por_nome: (agendamentoBase.atendido_por_profile as any)?.nome || null,
+          };
+        }
+      }
+      
+      const temVistoriaBaseRealizada = !!vistoriaBaseInfo;
+      
+      if (!instalacaoInfo && !temAutovistoria && !temVistoriaBaseRealizada) {
         return null;
       }
 
@@ -457,6 +506,7 @@ export function usePropostasPendentes() {
             documentos_solicitados_enviados: documentosSolicitadosEnviados,
             instalacao_info: instalacaoInfo,
             instalacao_agendada: instalacaoAgendada,
+            vistoria_base_info: vistoriaBaseInfo,
             veiculo_id: null, // Não disponível na lista resumida
             veiculo_cobertura_total: null, // Não disponível na lista resumida
           } as PropostaPendente;
@@ -972,6 +1022,41 @@ export function useProposta(contratoId: string | undefined) {
         }
       }
 
+      // NOVO: Buscar vistoria na base realizada
+      let vistoriaBaseInfo: {
+        id: string;
+        data_agendada: string;
+        horario: string;
+        status: string;
+        atendido_por_nome: string | null;
+      } | null = null;
+      
+      if (contrato.cotacao_id) {
+        const { data: agendamentoBase } = await supabase
+          .from('agendamentos_base')
+          .select(`
+            id, 
+            data_agendada, 
+            horario, 
+            status,
+            atendido_por_profile:profiles!agendamentos_base_atendido_por_fkey(nome)
+          `)
+          .eq('cotacao_id', contrato.cotacao_id)
+          .eq('status', 'realizado')
+          .limit(1)
+          .maybeSingle();
+        
+        if (agendamentoBase) {
+          vistoriaBaseInfo = {
+            id: agendamentoBase.id,
+            data_agendada: agendamentoBase.data_agendada,
+            horario: agendamentoBase.horario,
+            status: agendamentoBase.status,
+            atendido_por_nome: (agendamentoBase.atendido_por_profile as any)?.nome || null,
+          };
+        }
+      }
+
       const result: PropostaPendente = {
         ...contrato,
         associado,
@@ -986,6 +1071,7 @@ export function useProposta(contratoId: string | undefined) {
         documentos_solicitados_enviados: documentosSolicitadosEnviados,
         instalacao_info: instalacaoInfo,
         instalacao_agendada: instalacaoAgendada,
+        vistoria_base_info: vistoriaBaseInfo,
         veiculo_id: veiculoId,
         veiculo_cobertura_total: veiculoCoberturaTotal,
       };
@@ -1049,12 +1135,28 @@ export function usePropostaStats() {
           cotacoesComFotos = new Set(fotosData?.map(f => f.cotacao_id) || []);
         }
 
+        // NOVO: Buscar agendamentos base realizados
+        let cotacoesComVistoriaBase = new Set<string>();
+        if (cotacaoIds.length > 0) {
+          const { data: agendamentosRealizados } = await supabase
+            .from('agendamentos_base')
+            .select('cotacao_id')
+            .in('cotacao_id', cotacaoIds)
+            .eq('status', 'realizado');
+
+          cotacoesComVistoriaBase = new Set(
+            agendamentosRealizados?.map(a => a.cotacao_id).filter(Boolean) as string[] || []
+          );
+        }
+
         // Contar apenas propostas prontas para análise
         aguardando = contratosAssinados.filter(contrato => {
           // Tem instalação concluída?
           if (contratosComInstalacao.has(contrato.id)) return true;
           // Tem autovistoria com fotos?
           if (contrato.cotacao_id && cotacoesComFotos.has(contrato.cotacao_id)) return true;
+          // NOVO: Tem vistoria na base realizada?
+          if (contrato.cotacao_id && cotacoesComVistoriaBase.has(contrato.cotacao_id)) return true;
           return false;
         }).length;
       }

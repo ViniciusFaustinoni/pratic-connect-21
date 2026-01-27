@@ -208,6 +208,16 @@ export function useAtualizarAgendamentoBase() {
       observacoes?: string;
       atendidoPor?: string;
     }) => {
+      // 1. Buscar dados do agendamento para obter cotacao_id
+      const { data: agendamento, error: fetchError } = await supabase
+        .from('agendamentos_base')
+        .select('cotacao_id')
+        .eq('id', dados.id)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      // 2. Atualizar status do agendamento
       const { error } = await supabase
         .from('agendamentos_base')
         .update({
@@ -219,10 +229,42 @@ export function useAtualizarAgendamentoBase() {
         .eq('id', dados.id);
 
       if (error) throw error;
+
+      // 3. Se marcou como realizado e tem cotacao_id, propagar para análise cadastral
+      if (dados.status === 'realizado' && agendamento?.cotacao_id) {
+        // Atualizar cotação para status vistoria_ok
+        await supabase
+          .from('cotacoes')
+          .update({
+            status_contratacao: 'vistoria_ok',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', agendamento.cotacao_id);
+
+        // Buscar contrato vinculado à cotação
+        const { data: contrato } = await supabase
+          .from('contratos')
+          .select('id, associado_id')
+          .eq('cotacao_id', agendamento.cotacao_id)
+          .maybeSingle();
+
+        // Atualizar associado para status em_analise
+        if (contrato?.associado_id) {
+          await supabase
+            .from('associados')
+            .update({ 
+              status: 'em_analise',
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', contrato.associado_id);
+        }
+      }
     },
     onSuccess: () => {
       toast.success('Agendamento atualizado!');
       queryClient.invalidateQueries({ queryKey: ['agendamentos-base-dia'] });
+      queryClient.invalidateQueries({ queryKey: ['propostas-pendentes'] });
+      queryClient.invalidateQueries({ queryKey: ['propostas-stats'] });
     },
     onError: () => {
       toast.error('Erro ao atualizar agendamento');
