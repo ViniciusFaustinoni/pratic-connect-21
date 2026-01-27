@@ -1,243 +1,119 @@
 
 
-# Plano: Integrar Vistoria na Base ao Fluxo de Análise Cadastral
+# Plano: Tornar Solicitações IA Acessíveis e Visíveis
 
-## Diagnóstico do Problema
+## Problema Identificado
 
-O fluxo de vistorias na base está **desconectado** da análise cadastral. Quando o coordenador marca o agendamento como "realizado", nada acontece com a cotação ou contrato vinculado.
+O sinistro **foi registrado corretamente** na tabela `chat_solicitacoes_ia` com status `pendente`. O fluxo está funcionando conforme projetado:
 
-### Fluxo Atual (Quebrado)
+| Etapa | Status |
+|-------|--------|
+| Associado conversou com IA | ✅ OK |
+| IA coletou dados do sinistro | ✅ OK |
+| Solicitação criada com ID `62490bb2-0f30-43ed-bc44-30cb53a93be6` | ✅ OK |
+| Solicitação com status `pendente` | ✅ OK |
+| Sinistro não criado na tabela `sinistros` | ⏳ **Esperado** - Aguarda aprovação do diretor |
 
-```text
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│ Cliente agenda  │────►│ Coordenador     │────►│ agendamentos_   │
-│ vistoria base   │     │ marca realizado │     │ base = realizado│
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-                                                        │
-                                                        ✘ FIM (sem propagação)
-                                                        
-┌─────────────────┐
-│ Analista de     │ ← Nunca recebe a proposta
-│ Cadastro        │
-└─────────────────┘
-```
+**Porém**, o diretor não consegue aprovar porque:
 
-### Fluxo Desejado
+1. **A tela de aprovação não está no menu** - A rota `/diretoria/solicitacoes-ia` existe mas não aparece no menu lateral
+2. **Não há indicador visual** - Nenhum badge ou notificação alerta sobre solicitações pendentes
 
-```text
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│ Cliente agenda  │────►│ Coordenador     │────►│ agendamentos_   │
-│ vistoria base   │     │ marca realizado │     │ base = realizado│
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-                                                        │
-                                                        ▼
-                                                ┌─────────────────┐
-                                                │ cotacao.status_ │
-                                                │ contratacao =   │
-                                                │ 'vistoria_ok'   │
-                                                └────────┬────────┘
-                                                         │
-                                                         ▼
-                                                ┌─────────────────┐
-                                                │ Analista de     │
-                                                │ Cadastro vê a   │
-                                                │ proposta ✅     │
-                                                └─────────────────┘
-```
+## Solução
 
-## Implementação
+### 1. Adicionar Item ao Menu da Diretoria
 
-### 1. Atualizar a Mutação `useAtualizarAgendamentoBase`
+Incluir "Solicitações IA" no menu lateral com badge de contagem de pendentes:
 
-Quando o status for alterado para `realizado`, buscar a cotação vinculada e atualizar seu `status_contratacao`:
-
-**Arquivo:** `src/hooks/useAgendamentoBase.ts`
+**Arquivo:** `src/components/layout/AppSidebar.tsx` (linha ~358)
 
 ```typescript
-export function useAtualizarAgendamentoBase() {
-  const queryClient = useQueryClient();
+items: [
+  { title: 'Dashboard', url: '/diretoria', icon: BarChart3 },
+  { title: 'Solicitações IA', url: '/diretoria/solicitacoes-ia', icon: Bot }, // NOVO
+  { title: 'Produtos', url: '/diretoria/produtos', icon: Package },
+  // ... resto
+],
+```
 
-  return useMutation({
-    mutationFn: async (dados: {
-      id: string;
-      status: string;
-      observacoes?: string;
-      atendidoPor?: string;
-    }) => {
-      // 1. Buscar dados do agendamento para obter cotacao_id
-      const { data: agendamento, error: fetchError } = await supabase
-        .from('agendamentos_base')
-        .select('cotacao_id')
-        .eq('id', dados.id)
-        .single();
+### 2. Adicionar Badge de Contagem no Menu
 
-      if (fetchError) throw fetchError;
+Criar hook para contar solicitações pendentes e exibir badge:
 
-      // 2. Atualizar status do agendamento
-      const { error } = await supabase
-        .from('agendamentos_base')
-        .update({
-          status: dados.status,
-          observacoes: dados.observacoes,
-          atendido_por: dados.atendidoPor,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', dados.id);
+**Arquivo:** `src/hooks/useSolicitacoesIAPendentes.ts` (novo)
 
-      if (error) throw error;
-
-      // 3. Se marcou como realizado e tem cotacao_id, atualizar cotação
-      if (dados.status === 'realizado' && agendamento?.cotacao_id) {
-        await supabase
-          .from('cotacoes')
-          .update({
-            status_contratacao: 'vistoria_ok',
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', agendamento.cotacao_id);
-
-        // 4. Atualizar status do associado/contrato para 'em_analise'
-        const { data: cotacao } = await supabase
-          .from('cotacoes')
-          .select('contrato:contratos!contratos_cotacao_id_fkey(id, associado_id)')
-          .eq('id', agendamento.cotacao_id)
-          .single();
-
-        if (cotacao?.contrato) {
-          // Atualizar associado
-          if (cotacao.contrato.associado_id) {
-            await supabase
-              .from('associados')
-              .update({ status: 'em_analise' })
-              .eq('id', cotacao.contrato.associado_id);
-          }
-        }
-      }
+```typescript
+export function useSolicitacoesIAPendentes() {
+  return useQuery({
+    queryKey: ['solicitacoes-ia-pendentes-count'],
+    queryFn: async () => {
+      const { count } = await supabase
+        .from('chat_solicitacoes_ia')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'pendente');
+      return count || 0;
     },
-    onSuccess: () => {
-      toast.success('Agendamento atualizado!');
-      queryClient.invalidateQueries({ queryKey: ['agendamentos-base-dia'] });
-      queryClient.invalidateQueries({ queryKey: ['propostas-pendentes'] });
-      queryClient.invalidateQueries({ queryKey: ['propostas-stats'] });
-    },
-    ...
+    refetchInterval: 30000, // Atualizar a cada 30s
   });
 }
 ```
 
-### 2. Atualizar Filtro de Propostas Pendentes
+### 3. Adicionar ao Breadcrumb
 
-Incluir propostas com vistoria na base concluída no filtro:
-
-**Arquivo:** `src/hooks/usePropostasPendentes.ts` (linha ~438-444)
+**Arquivo:** `src/components/layout/GlobalBreadcrumb.tsx`
 
 ```typescript
-// REGRA ATUALIZADA: Incluir propostas que tenham:
-// - Instalação concluída (fluxo normal)
-// - OU Autovistoria concluída com fotos (aguardando aprovação roubo/furto)
-// - OU Vistoria na Base concluída (novo)
-const temAutovistoria = vistoria && vistoria.fotos && vistoria.fotos.length > 0;
-
-// NOVO: Verificar se tem vistoria na base concluída
-let temVistoriaBaseRealizada = false;
-if (contrato.cotacao_id) {
-  const { data: agendamentoBase } = await supabase
-    .from('agendamentos_base')
-    .select('id, status')
-    .eq('cotacao_id', contrato.cotacao_id)
-    .eq('status', 'realizado')
-    .limit(1)
-    .maybeSingle();
-  
-  temVistoriaBaseRealizada = !!agendamentoBase;
-}
-
-if (!instalacaoInfo && !temAutovistoria && !temVistoriaBaseRealizada) {
-  return null;
-}
+'/diretoria/solicitacoes-ia': { label: 'Solicitações IA' },
 ```
 
-### 3. Atualizar KPI de Stats
+### 4. Adicionar Notificação no Dashboard Principal
 
-Incluir vistorias na base na contagem:
+Exibir um alerta no dashboard quando houver solicitações pendentes:
 
-**Arquivo:** `src/hooks/usePropostasPendentes.ts` (linha ~1053-1059)
+**Arquivo:** `src/pages/Index.tsx` ou componente de alertas
 
-```typescript
-// Buscar agendamentos base realizados
-const { data: agendamentosRealizados } = await supabase
-  .from('agendamentos_base')
-  .select('cotacao_id')
-  .eq('status', 'realizado');
+Card de alerta com link direto para a tela de aprovação.
 
-const cotacoesComVistoriaBase = new Set(
-  agendamentosRealizados?.map(a => a.cotacao_id).filter(Boolean) || []
-);
+## Fluxo Corrigido
 
-// Contar apenas propostas prontas para análise
-aguardando = contratosAssinados.filter(contrato => {
-  // Tem instalação concluída?
-  if (contratosComInstalacao.has(contrato.id)) return true;
-  // Tem autovistoria com fotos?
-  if (contrato.cotacao_id && cotacoesComFotos.has(contrato.cotacao_id)) return true;
-  // NOVO: Tem vistoria na base realizada?
-  if (contrato.cotacao_id && cotacoesComVistoriaBase.has(contrato.cotacao_id)) return true;
-  return false;
-}).length;
-```
+```text
+ANTES:
+┌────────────────────┐     ┌────────────────────┐
+│ Solicitação criada │────►│ Diretor NÃO SABE   │ ❌
+│ status: pendente   │     │ onde aprovar       │
+└────────────────────┘     └────────────────────┘
 
-### 4. Atualizar Tela de Análise - Exibir Info da Vistoria Base
-
-Adicionar seção específica para exibir detalhes da vistoria na base:
-
-**Arquivo:** `src/pages/cadastro/PropostaAnalise.tsx`
-
-Adicionar novo tipo e busca para `agendamentos_base` e exibir card informativo quando a vistoria foi realizada na base.
-
-### 5. Adicionar Campo ao Interface `PropostaPendente`
-
-**Arquivo:** `src/hooks/usePropostasPendentes.ts`
-
-```typescript
-export interface PropostaPendente {
-  // ... campos existentes
-  vistoria_base_info: {
-    id: string;
-    data_agendada: string;
-    horario: string;
-    status: string;
-    atendido_por_nome: string | null;
-  } | null; // NOVO
-}
-```
-
-## Migração de Dados
-
-Para corrigir registros existentes (cotação de teste que ficou sem `tipo_vistoria`):
-
-```sql
-UPDATE cotacoes 
-SET tipo_vistoria = 'agendada_base' 
-WHERE id IN (
-  SELECT DISTINCT cotacao_id 
-  FROM agendamentos_base 
-  WHERE cotacao_id IS NOT NULL
-) AND (tipo_vistoria IS NULL OR tipo_vistoria = '');
+DEPOIS:
+┌────────────────────┐     ┌────────────────────┐     ┌────────────────────┐
+│ Solicitação criada │────►│ Badge (2) aparece  │────►│ Diretor aprova     │ ✅
+│ status: pendente   │     │ no menu Diretoria  │     │ Sinistro criado    │
+└────────────────────┘     └────────────────────┘     └────────────────────┘
 ```
 
 ## Alterações de Arquivos
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/hooks/useAgendamentoBase.ts` | Propagar status para cotação quando `realizado` |
-| `src/hooks/usePropostasPendentes.ts` | Incluir propostas com vistoria base no filtro e stats |
-| `src/pages/cadastro/PropostaAnalise.tsx` | Exibir informações da vistoria na base |
+| `src/components/layout/AppSidebar.tsx` | Adicionar item "Solicitações IA" no menu Diretoria |
+| `src/hooks/useSolicitacoesIAPendentes.ts` | Criar hook para contagem de pendentes |
+| `src/components/layout/GlobalBreadcrumb.tsx` | Adicionar label do breadcrumb |
+| `src/pages/Index.tsx` | (Opcional) Adicionar alerta de solicitações pendentes |
+
+## Ação Imediata (Workaround)
+
+Enquanto a implementação não for feita, o diretor pode acessar diretamente:
+
+**URL: `/diretoria/solicitacoes-ia`**
+
+Na tela, a solicitação do sinistro `62490bb2...` estará na aba "Pendentes" aguardando aprovação.
 
 ## Resultado Esperado
 
-1. Coordenador marca agendamento como "Realizado" ✅
-2. Sistema atualiza `cotacoes.status_contratacao = 'vistoria_ok'` ✅
-3. Proposta aparece na fila do analista de cadastro ✅
-4. KPI "Aguardando Análise" incrementa ✅
-5. Analista pode aprovar a proposta ✅
+Após as alterações:
+
+1. Menu Diretoria exibe "Solicitações IA" com badge (1) indicando pendência ✅
+2. Diretor clica e vê a solicitação de sinistro pendente ✅
+3. Diretor clica "Aprovar" ✅
+4. Edge Function `aprovar-solicitacao-ia` cria o sinistro real com protocolo SIN-XXXXXXXX-XXXX ✅
+5. Sinistro aparece na lista `/eventos/sinistros` ✅
 
