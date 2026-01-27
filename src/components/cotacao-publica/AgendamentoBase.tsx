@@ -1,11 +1,12 @@
 import { useState, useMemo } from 'react';
 import { format, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { MapPin, Clock, Calendar, Check, ChevronLeft, ChevronRight, Building2 } from 'lucide-react';
+import { MapPin, Clock, Calendar, Check, ChevronLeft, ChevronRight, Building2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useConfiguracaoBase, useHorariosDisponiveis, useCriarAgendamentoBase } from '@/hooks/useAgendamentoBase';
 import { cn } from '@/lib/utils';
 import { isDomingo, isSabado } from '@/data/autovistoriaConfig';
@@ -183,7 +184,7 @@ export function AgendamentoBase({
           {diasDisponiveis.slice(0, 5).map((dia) => {
             const isSelected = dataSelecionada && format(dataSelecionada, 'yyyy-MM-dd') === format(dia, 'yyyy-MM-dd');
             return (
-              <button
+                <button
                 key={dia.toISOString()}
                 onClick={() => {
                   setDataSelecionada(dia);
@@ -193,16 +194,16 @@ export function AgendamentoBase({
                   "flex flex-col items-center p-2 rounded-lg border transition-all text-center",
                   isSelected
                     ? "bg-primary text-primary-foreground border-primary"
-                    : "hover:border-primary/50 hover:bg-muted/50"
+                    : "border-border bg-card text-card-foreground hover:border-primary/50 hover:bg-muted/50"
                 )}
               >
-                <span className="text-[10px] uppercase tracking-wide opacity-70">
+                <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
                   {format(dia, 'EEE', { locale: ptBR })}
                 </span>
-                <span className="text-lg font-semibold">
+                <span className="text-lg font-semibold text-foreground">
                   {format(dia, 'd')}
                 </span>
-                <span className="text-[10px] opacity-70">
+                <span className="text-[10px] text-muted-foreground">
                   {format(dia, 'MMM', { locale: ptBR })}
                 </span>
               </button>
@@ -225,6 +226,14 @@ export function AgendamentoBase({
                 <Skeleton key={i} className="h-10 w-full" />
               ))}
             </div>
+          ) : slotsHorario.length === 0 ? (
+            <Alert className="bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-900">
+              <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              <AlertDescription className="text-amber-700 dark:text-amber-300">
+                Os horários de atendimento não estão configurados. 
+                Entre em contato com a central para agendar sua vistoria.
+              </AlertDescription>
+            </Alert>
           ) : (
             <div className="grid grid-cols-4 gap-2">
               {slotsHorario.map((horario) => {

@@ -65,8 +65,8 @@ export function useConfiguracaoBase() {
         base_cidade: config.base_cidade || '',
         base_uf: config.base_uf || '',
         base_complemento: config.base_complemento || '',
-        base_horario_inicio: config.base_horario_inicio || '08:00',
-        base_horario_fim: config.base_horario_fim || '17:30',
+        base_horario_inicio: config.base_horario_inicio?.trim() || '08:00',
+        base_horario_fim: config.base_horario_fim?.trim() || '17:30',
         base_capacidade_horario: parseInt(config.base_capacidade_horario) || 2,
       };
     },
