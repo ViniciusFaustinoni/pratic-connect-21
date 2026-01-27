@@ -1,150 +1,219 @@
 
-# Plano: Corrigir Tela Travada Após Agendamento na Base
 
-## Problema Identificado
+# Plano: Integrar Vistoria na Base ao Fluxo de Análise Cadastral
 
-Quando o cliente escolhe "Levar até a Base" e confirma o pagamento, a tela fica eternamente em "Verificando status da sua proposta..." porque:
+## Diagnóstico do Problema
 
-1. **`tipo_vistoria` não é definido**: O hook `useCriarAgendamentoBase` atualiza `status_contratacao` para `vistoria_agendada`, mas **não define** `tipo_vistoria`
-2. **`hasAgendamentoBase` é ignorado**: O hook `useAgendamentoExistente` retorna `hasAgendamentoBase: true`, mas o componente `CotacaoContratacao.tsx` não extrai nem usa essa variável
-3. **Fallback genérico**: O switch de etapas só reconhece `tipo_vistoria === 'autovistoria'` ou `tipo_vistoria === 'agendada'` - qualquer outro valor (incluindo `null`) cai no fallback de carregamento infinito
+O fluxo de vistorias na base está **desconectado** da análise cadastral. Quando o coordenador marca o agendamento como "realizado", nada acontece com a cotação ou contrato vinculado.
 
-### Dados atuais da cotação:
-- `status_contratacao`: `pagamento_ok`
-- `tipo_vistoria`: `null` (deveria ser `'agendada_base'` ou usar flag `hasAgendamentoBase`)
-- Existe registro em `agendamentos_base`: Data 2026-01-28 às 08:30
+### Fluxo Atual (Quebrado)
 
-## Solução
-
-Implementar suporte completo ao fluxo de agendamento na base:
-
-### 1. Hook `useCriarAgendamentoBase` - Definir tipo_vistoria
-
-Atualizar o hook para definir `tipo_vistoria = 'agendada_base'` ao criar o agendamento:
-
-```typescript
-// src/hooks/useAgendamentoBase.ts (linha 177-184)
-await supabase
-  .from('cotacoes')
-  .update({ 
-    status_contratacao: 'vistoria_agendada',
-    tipo_vistoria: 'agendada_base', // NOVO
-    updated_at: new Date().toISOString()
-  })
-  .eq('id', dados.cotacaoId);
+```text
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│ Cliente agenda  │────►│ Coordenador     │────►│ agendamentos_   │
+│ vistoria base   │     │ marca realizado │     │ base = realizado│
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+                                                        │
+                                                        ✘ FIM (sem propagação)
+                                                        
+┌─────────────────┐
+│ Analista de     │ ← Nunca recebe a proposta
+│ Cadastro        │
+└─────────────────┘
 ```
 
-### 2. Componente `CotacaoContratacao.tsx` - Extrair hasAgendamentoBase
+### Fluxo Desejado
 
-Adicionar extração da variável:
-
-```typescript
-// src/pages/public/CotacaoContratacao.tsx (linha 64)
-const { hasVistoriaAgendada, hasInstalacaoAgendada, hasAgendamentoBase, isLoading: isLoadingAgendamento } = useAgendamentoExistente(cotacao?.id);
+```text
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│ Cliente agenda  │────►│ Coordenador     │────►│ agendamentos_   │
+│ vistoria base   │     │ marca realizado │     │ base = realizado│
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+                                                        │
+                                                        ▼
+                                                ┌─────────────────┐
+                                                │ cotacao.status_ │
+                                                │ contratacao =   │
+                                                │ 'vistoria_ok'   │
+                                                └────────┬────────┘
+                                                         │
+                                                         ▼
+                                                ┌─────────────────┐
+                                                │ Analista de     │
+                                                │ Cadastro vê a   │
+                                                │ proposta ✅     │
+                                                └─────────────────┘
 ```
 
-### 3. Componente `CotacaoContratacao.tsx` - Adicionar Fluxo de Vistoria na Base
+## Implementação
 
-Inserir novo bloco condicional na Etapa 5 para tratar `tipo_vistoria === 'agendada_base'` ou `hasAgendamentoBase`:
+### 1. Atualizar a Mutação `useAtualizarAgendamentoBase`
 
-```typescript
-// Antes do fallback (linha ~826), adicionar:
-) : (cotacao?.tipo_vistoria === 'agendada_base' || hasAgendamentoBase) ? (
-  // ========== FLUXO AGENDAMENTO NA BASE ==========
-  <Card className="border-primary/30 bg-card/80 backdrop-blur-xl">
-    <CardContent className="py-12 text-center space-y-6">
-      <motion.div 
-        className="w-20 h-20 mx-auto rounded-full bg-primary/10 flex items-center justify-center"
-        initial={{ scale: 0 }}
-        animate={{ scale: 1 }}
-        transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
-      >
-        <Building2 className="h-10 w-10 text-primary" />
-      </motion.div>
-      
-      <div>
-        <Badge className="bg-primary/20 text-primary border-primary/30 mb-4">
-          Agendamento na Base Confirmado
-        </Badge>
-        <h2 className="text-2xl font-bold mb-3 text-foreground">
-          Vistoria Agendada com Sucesso!
-        </h2>
-        <p className="text-muted-foreground max-w-md mx-auto">
-          Compareça à base PRATIC na data e horário agendados 
-          com seu veículo para realizar a vistoria.
-        </p>
-      </div>
+Quando o status for alterado para `realizado`, buscar a cotação vinculada e atualizar seu `status_contratacao`:
 
-      {/* Detalhes do agendamento - buscar de agendamentos_base */}
-      <AgendamentoBaseResumo cotacaoId={cotacao.id} />
-
-      {/* Aviso importante */}
-      <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 max-w-md mx-auto">
-        <AlertTriangle className="h-5 w-5 text-amber-500 mt-0.5 flex-shrink-0" />
-        <p className="text-sm text-left text-amber-200">
-          <strong>Importante:</strong> A cobertura será ativada após a realização 
-          da vistoria presencial na base.
-        </p>
-      </div>
-    </CardContent>
-  </Card>
-) : (
-```
-
-### 4. Novo Componente `AgendamentoBaseResumo`
-
-Criar componente para exibir os detalhes do agendamento na base:
+**Arquivo:** `src/hooks/useAgendamentoBase.ts`
 
 ```typescript
-// src/components/cotacao-publica/AgendamentoBaseResumo.tsx
-function AgendamentoBaseResumo({ cotacaoId }: { cotacaoId: string }) {
-  // Buscar dados do agendamento e configurações da base
-  const { data: agendamento } = useQuery({...});
-  const { data: configBase } = useConfiguracaoBase();
-  
-  // Exibir: Data, Horário, Endereço da base
-  return (
-    <div className="bg-muted/30 rounded-lg p-4 max-w-md mx-auto text-left space-y-3">
-      {/* Data e horário */}
-      {/* Endereço da base */}
-    </div>
-  );
+export function useAtualizarAgendamentoBase() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (dados: {
+      id: string;
+      status: string;
+      observacoes?: string;
+      atendidoPor?: string;
+    }) => {
+      // 1. Buscar dados do agendamento para obter cotacao_id
+      const { data: agendamento, error: fetchError } = await supabase
+        .from('agendamentos_base')
+        .select('cotacao_id')
+        .eq('id', dados.id)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      // 2. Atualizar status do agendamento
+      const { error } = await supabase
+        .from('agendamentos_base')
+        .update({
+          status: dados.status,
+          observacoes: dados.observacoes,
+          atendido_por: dados.atendidoPor,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', dados.id);
+
+      if (error) throw error;
+
+      // 3. Se marcou como realizado e tem cotacao_id, atualizar cotação
+      if (dados.status === 'realizado' && agendamento?.cotacao_id) {
+        await supabase
+          .from('cotacoes')
+          .update({
+            status_contratacao: 'vistoria_ok',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', agendamento.cotacao_id);
+
+        // 4. Atualizar status do associado/contrato para 'em_analise'
+        const { data: cotacao } = await supabase
+          .from('cotacoes')
+          .select('contrato:contratos!contratos_cotacao_id_fkey(id, associado_id)')
+          .eq('id', agendamento.cotacao_id)
+          .single();
+
+        if (cotacao?.contrato) {
+          // Atualizar associado
+          if (cotacao.contrato.associado_id) {
+            await supabase
+              .from('associados')
+              .update({ status: 'em_analise' })
+              .eq('id', cotacao.contrato.associado_id);
+          }
+        }
+      }
+    },
+    onSuccess: () => {
+      toast.success('Agendamento atualizado!');
+      queryClient.invalidateQueries({ queryKey: ['agendamentos-base-dia'] });
+      queryClient.invalidateQueries({ queryKey: ['propostas-pendentes'] });
+      queryClient.invalidateQueries({ queryKey: ['propostas-stats'] });
+    },
+    ...
+  });
 }
 ```
 
-## Fluxo Corrigido
+### 2. Atualizar Filtro de Propostas Pendentes
 
-```text
-ANTES:
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│ Cliente agenda  │────►│ tipo_vistoria   │────►│ CotacaoContrat. │
-│ na base         │     │ = null          │     │ if tipo = null  │
-└─────────────────┘     └─────────────────┘     │ FALLBACK ❌     │
-                                                └─────────────────┘
+Incluir propostas com vistoria na base concluída no filtro:
 
-DEPOIS:
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│ Cliente agenda  │────►│ tipo_vistoria   │────►│ CotacaoContrat. │
-│ na base         │     │ = agendada_base │     │ if tipo = base  │
-└─────────────────┘     └─────────────────┘     │ SUCESSO ✅      │
-                               OU                └─────────────────┘
-                        ┌─────────────────┐
-                        │ hasAgendamento  │
-                        │ Base = true     │
-                        └─────────────────┘
+**Arquivo:** `src/hooks/usePropostasPendentes.ts` (linha ~438-444)
+
+```typescript
+// REGRA ATUALIZADA: Incluir propostas que tenham:
+// - Instalação concluída (fluxo normal)
+// - OU Autovistoria concluída com fotos (aguardando aprovação roubo/furto)
+// - OU Vistoria na Base concluída (novo)
+const temAutovistoria = vistoria && vistoria.fotos && vistoria.fotos.length > 0;
+
+// NOVO: Verificar se tem vistoria na base concluída
+let temVistoriaBaseRealizada = false;
+if (contrato.cotacao_id) {
+  const { data: agendamentoBase } = await supabase
+    .from('agendamentos_base')
+    .select('id, status')
+    .eq('cotacao_id', contrato.cotacao_id)
+    .eq('status', 'realizado')
+    .limit(1)
+    .maybeSingle();
+  
+  temVistoriaBaseRealizada = !!agendamentoBase;
+}
+
+if (!instalacaoInfo && !temAutovistoria && !temVistoriaBaseRealizada) {
+  return null;
+}
 ```
 
-## Alterações Necessárias
+### 3. Atualizar KPI de Stats
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/hooks/useAgendamentoBase.ts` | Definir `tipo_vistoria: 'agendada_base'` ao criar agendamento |
-| `src/pages/public/CotacaoContratacao.tsx` | Extrair `hasAgendamentoBase` do hook e adicionar bloco condicional para exibir tela de sucesso |
-| `src/components/cotacao-publica/AgendamentoBaseResumo.tsx` | Criar componente para exibir detalhes do agendamento na base |
+Incluir vistorias na base na contagem:
 
-## Seção Tecnica - Migração de Dados
+**Arquivo:** `src/hooks/usePropostasPendentes.ts` (linha ~1053-1059)
 
-Para corrigir a cotação já existente (dados retroativos):
+```typescript
+// Buscar agendamentos base realizados
+const { data: agendamentosRealizados } = await supabase
+  .from('agendamentos_base')
+  .select('cotacao_id')
+  .eq('status', 'realizado');
+
+const cotacoesComVistoriaBase = new Set(
+  agendamentosRealizados?.map(a => a.cotacao_id).filter(Boolean) || []
+);
+
+// Contar apenas propostas prontas para análise
+aguardando = contratosAssinados.filter(contrato => {
+  // Tem instalação concluída?
+  if (contratosComInstalacao.has(contrato.id)) return true;
+  // Tem autovistoria com fotos?
+  if (contrato.cotacao_id && cotacoesComFotos.has(contrato.cotacao_id)) return true;
+  // NOVO: Tem vistoria na base realizada?
+  if (contrato.cotacao_id && cotacoesComVistoriaBase.has(contrato.cotacao_id)) return true;
+  return false;
+}).length;
+```
+
+### 4. Atualizar Tela de Análise - Exibir Info da Vistoria Base
+
+Adicionar seção específica para exibir detalhes da vistoria na base:
+
+**Arquivo:** `src/pages/cadastro/PropostaAnalise.tsx`
+
+Adicionar novo tipo e busca para `agendamentos_base` e exibir card informativo quando a vistoria foi realizada na base.
+
+### 5. Adicionar Campo ao Interface `PropostaPendente`
+
+**Arquivo:** `src/hooks/usePropostasPendentes.ts`
+
+```typescript
+export interface PropostaPendente {
+  // ... campos existentes
+  vistoria_base_info: {
+    id: string;
+    data_agendada: string;
+    horario: string;
+    status: string;
+    atendido_por_nome: string | null;
+  } | null; // NOVO
+}
+```
+
+## Migração de Dados
+
+Para corrigir registros existentes (cotação de teste que ficou sem `tipo_vistoria`):
 
 ```sql
 UPDATE cotacoes 
@@ -156,13 +225,19 @@ WHERE id IN (
 ) AND (tipo_vistoria IS NULL OR tipo_vistoria = '');
 ```
 
+## Alterações de Arquivos
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/hooks/useAgendamentoBase.ts` | Propagar status para cotação quando `realizado` |
+| `src/hooks/usePropostasPendentes.ts` | Incluir propostas com vistoria base no filtro e stats |
+| `src/pages/cadastro/PropostaAnalise.tsx` | Exibir informações da vistoria na base |
+
 ## Resultado Esperado
 
-Após as alterações:
+1. Coordenador marca agendamento como "Realizado" ✅
+2. Sistema atualiza `cotacoes.status_contratacao = 'vistoria_ok'` ✅
+3. Proposta aparece na fila do analista de cadastro ✅
+4. KPI "Aguardando Análise" incrementa ✅
+5. Analista pode aprovar a proposta ✅
 
-1. Cliente escolhe "Levar até a Base" na etapa de vistoria
-2. Cliente seleciona data/horário e confirma agendamento
-3. Hook define `tipo_vistoria = 'agendada_base'` e `status_contratacao = 'vistoria_agendada'`
-4. Cliente realiza pagamento
-5. Após pagamento confirmado, `status_contratacao = 'pagamento_ok'`
-6. Etapa 5 reconhece `tipo_vistoria === 'agendada_base'` e exibe tela de sucesso com detalhes do agendamento na base
