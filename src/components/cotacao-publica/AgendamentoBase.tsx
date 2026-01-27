@@ -251,7 +251,7 @@ export function AgendamentoBase({
                       isSelected
                         ? "bg-primary text-primary-foreground border-primary"
                         : disponivel
-                          ? "hover:border-primary/50 hover:bg-muted/50"
+                          ? "border-border bg-card text-card-foreground hover:border-primary/50 hover:bg-muted/50"
                           : "bg-muted text-muted-foreground cursor-not-allowed opacity-50"
                     )}
                   >
