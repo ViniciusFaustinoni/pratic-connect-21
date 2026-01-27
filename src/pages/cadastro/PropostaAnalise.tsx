@@ -42,6 +42,7 @@ import {
   ShieldOff,
   Zap,
   Loader2,
+  Building2,
 } from 'lucide-react';
 import {
   useProposta,
@@ -433,6 +434,45 @@ export default function PropostaAnalise() {
                     </div>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Vistoria na Base Realizada */}
+          {proposta.vistoria_base_info && (
+            <Card className="border-border bg-card border-2 border-green-500/30">
+              <CardHeader className="bg-green-500/10">
+                <CardTitle className="flex items-center gap-2 text-foreground">
+                  <Building2 className="h-5 w-5 text-green-500" />
+                  Vistoria na Base
+                </CardTitle>
+                <CardDescription>
+                  Cliente compareceu à base PRATIC para realizar a vistoria presencial
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="pt-4 grid gap-4 sm:grid-cols-2">
+                <InfoItem
+                  icon={Calendar}
+                  label="Data da Vistoria"
+                  value={format(new Date(proposta.vistoria_base_info.data_agendada + 'T00:00:00'), "dd/MM/yyyy", { locale: ptBR })}
+                  highlight
+                />
+                <InfoItem
+                  icon={Clock}
+                  label="Horário"
+                  value={proposta.vistoria_base_info.horario}
+                />
+                <InfoItem
+                  icon={User}
+                  label="Atendido por"
+                  value={proposta.vistoria_base_info.atendido_por_nome}
+                />
+                <div className="flex items-center gap-2">
+                  <Badge className="bg-green-500/20 text-green-500 border-green-500/30">
+                    <CheckCircle className="h-3 w-3 mr-1" />
+                    Vistoria Realizada
+                  </Badge>
+                </div>
               </CardContent>
             </Card>
           )}
