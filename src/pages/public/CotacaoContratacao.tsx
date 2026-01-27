@@ -1,7 +1,7 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertTriangle, Car, CheckCircle2, CalendarCheck, Calendar, Clock, MapPin, PartyPopper, Shield, Loader2, Puzzle } from 'lucide-react';
+import { AlertTriangle, Car, CheckCircle2, CalendarCheck, Calendar, Clock, MapPin, PartyPopper, Shield, Loader2, Puzzle, Building2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useCotacaoContratacao } from '@/hooks/useCotacaoContratacao';
@@ -14,6 +14,7 @@ import { EtapaVistoria } from '@/components/cotacao-publica/EtapaVistoria';
 import { EtapaPagamentoCotacao } from '@/components/cotacao-publica/EtapaPagamentoCotacao';
 import { AgendamentoVistoriaCompleta } from '@/components/cotacao-publica/AgendamentoVistoriaCompleta';
 import { DocumentosPendentesPublico } from '@/components/cotacao-publica/DocumentosPendentesPublico';
+import { AgendamentoBaseResumo } from '@/components/cotacao-publica/AgendamentoBaseResumo';
 import type { DadosPessoaisForm } from '@/components/cotacao-publica/FormularioDadosPessoais';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Badge } from '@/components/ui/badge';
@@ -61,7 +62,7 @@ export default function CotacaoContratacao() {
   } = useCotacaoContratacao(token);
 
   // Verificar se já existe agendamento nas tabelas operacionais (fonte da verdade)
-  const { hasVistoriaAgendada, hasInstalacaoAgendada, isLoading: isLoadingAgendamento } = useAgendamentoExistente(cotacao?.id);
+  const { hasVistoriaAgendada, hasInstalacaoAgendada, hasAgendamentoBase, isLoading: isLoadingAgendamento } = useAgendamentoExistente(cotacao?.id);
   
   // Estado local para travar UI após agendamento bem-sucedido
   const [agendamentoConcluido, setAgendamentoConcluido] = useState(false);
@@ -823,6 +824,45 @@ export default function CotacaoContratacao() {
                         </CardContent>
                       </Card>
                     )
+                  ) : (cotacao?.tipo_vistoria === 'agendada_base' || hasAgendamentoBase) ? (
+                    // ========== FLUXO AGENDAMENTO NA BASE ==========
+                    <Card className="border-primary/30 bg-card/80 backdrop-blur-xl">
+                      <CardContent className="py-12 text-center space-y-6">
+                        <motion.div 
+                          className="w-20 h-20 mx-auto rounded-full bg-primary/10 flex items-center justify-center"
+                          initial={{ scale: 0 }}
+                          animate={{ scale: 1 }}
+                          transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
+                        >
+                          <Building2 className="h-10 w-10 text-primary" />
+                        </motion.div>
+                        
+                        <div>
+                          <Badge className="bg-primary/20 text-primary border-primary/30 mb-4">
+                            Agendamento na Base Confirmado
+                          </Badge>
+                          <h2 className="text-2xl font-bold mb-3 text-foreground">
+                            Vistoria Agendada com Sucesso!
+                          </h2>
+                          <p className="text-muted-foreground max-w-md mx-auto">
+                            Compareça à base PRATIC na data e horário agendados 
+                            com seu veículo para realizar a vistoria.
+                          </p>
+                        </div>
+
+                        {/* Detalhes do agendamento - buscar de agendamentos_base */}
+                        <AgendamentoBaseResumo cotacaoId={cotacao.id} />
+
+                        {/* Aviso importante */}
+                        <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 max-w-md mx-auto">
+                          <AlertTriangle className="h-5 w-5 text-amber-500 mt-0.5 flex-shrink-0" />
+                          <p className="text-sm text-left text-amber-200">
+                            <strong>Importante:</strong> A cobertura será ativada após a realização 
+                            da vistoria presencial na base.
+                          </p>
+                        </div>
+                      </CardContent>
+                    </Card>
                   ) : (
                     // ========== FALLBACK: Tipo não definido ou estado inconsistente ==========
                     <Card className="border-border/50 bg-card/80 backdrop-blur-xl">
