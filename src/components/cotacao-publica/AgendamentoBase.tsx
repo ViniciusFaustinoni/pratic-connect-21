@@ -291,7 +291,7 @@ export function AgendamentoBase({
 
       {/* Botões de ação */}
       <div className="flex gap-3">
-        <Button variant="outline" onClick={onVoltar} className="flex-1">
+        <Button variant="outline" onClick={onVoltar} className="flex-1 border-border text-foreground hover:bg-muted">
           Voltar
         </Button>
         <Button
