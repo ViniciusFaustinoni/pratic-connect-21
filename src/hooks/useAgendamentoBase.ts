@@ -174,11 +174,12 @@ export function useCriarAgendamentoBase() {
 
       if (error) throw error;
 
-      // Atualizar cotação com local_vistoria = 'base'
+      // Atualizar cotação com tipo_vistoria = 'agendada_base'
       await supabase
         .from('cotacoes')
         .update({ 
           status_contratacao: 'vistoria_agendada',
+          tipo_vistoria: 'agendada_base',
           updated_at: new Date().toISOString()
         })
         .eq('id', dados.cotacaoId);
