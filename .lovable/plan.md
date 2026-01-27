@@ -1,98 +1,91 @@
 
-
-# Plano: Permitir Leitura Pública das Configurações da Base
+# Plano: Adicionar Política SELECT para Usuários Anônimos na agendamentos_base
 
 ## Problema Identificado
 
-A tabela `configuracoes` tem RLS (Row Level Security) ativado com políticas que só permitem acesso a usuários autenticados como funcionários ou gerência:
+A tabela `agendamentos_base` tem políticas RLS que permitem:
 
-| Política | Comando | Condição |
-|----------|---------|----------|
-| `config_all_gerencia` | ALL | `is_gerencia(auth.uid())` |
-| `config_select_funcionario` | SELECT | `is_funcionario(auth.uid())` |
+| Política | Comando | Role |
+|----------|---------|------|
+| Anon users can insert | INSERT | anon ✅ |
+| Authenticated users can view | SELECT | authenticated ✅ |
+| **Faltando** | **SELECT** | **anon ❌** |
 
-O cliente que acessa o fluxo de contratação pública **não está autenticado**, portanto não consegue ler as configurações da base (horários, endereço), resultando em um array vazio de slots de horário.
+O hook `useCriarAgendamentoBase` executa uma query SELECT para verificar se o horário ainda tem vagas **antes** de inserir:
+
+```typescript
+// src/hooks/useAgendamentoBase.ts (linha 136-141)
+const { data: existentes } = await supabase
+  .from('agendamentos_base')
+  .select('id')
+  .eq('data_agendada', dados.dataAgendada)
+  .eq('horario', dados.horario)
+  .in('status', ['agendado', 'confirmado']);
+```
+
+Como não existe política SELECT para `anon`, o RLS bloqueia e retorna o erro `42501`.
 
 ## Solução
 
-Adicionar uma política de RLS que permita leitura pública **apenas das chaves relacionadas à base** (endereço e horários de funcionamento).
+Criar uma política SELECT para usuários anônimos na tabela `agendamentos_base`, permitindo que o fluxo público verifique a disponibilidade de horários.
 
 ## Implementação
 
 ### Migração SQL
 
-Criar uma nova política que permite SELECT anônimo apenas para as chaves `base_*`:
-
 ```sql
-CREATE POLICY "config_base_public_read" 
-ON public.configuracoes 
+-- Permitir que usuários anônimos verifiquem disponibilidade de horários
+CREATE POLICY "Anon users can view agendamentos_base" 
+ON public.agendamentos_base 
 FOR SELECT 
-TO anon
-USING (
-  chave IN (
-    'base_cep', 
-    'base_logradouro', 
-    'base_numero',
-    'base_bairro', 
-    'base_cidade', 
-    'base_uf', 
-    'base_complemento',
-    'base_horario_inicio', 
-    'base_horario_fim', 
-    'base_capacidade_horario'
-  )
-);
+TO anon 
+USING (true);
 ```
 
-### Fluxo de Dados
+### Fluxo Corrigido
 
 ```text
 ANTES:
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│ Cliente Público │────►│ useConfiguracaoBase│───►│ configuracoes  │
-│ (não logado)    │     │ (SELECT)        │     │ ⛔ RLS BLOQUEIA │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-                                                      │
-                                                      ▼
-                                               data = [] ❌
+│ Cliente Público │────►│ SELECT para     │────►│ agendamentos_   │
+│ (role: anon)    │     │ verificar vagas │     │ base            │
+└─────────────────┘     └─────────────────┘     │ ⛔ RLS BLOQUEIA │
+                                                └─────────────────┘
 
 DEPOIS:
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│ Cliente Público │────►│ useConfiguracaoBase│───►│ configuracoes  │
-│ (role: anon)    │     │ (SELECT base_*) │     │ ✅ NOVA POLICY  │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-                                                      │
-                                                      ▼
-                                               data = [
-                                                 base_horario_inicio: 08:00,
-                                                 base_horario_fim: 17:30,
-                                                 ...
-                                               ] ✅
+│ Cliente Público │────►│ SELECT para     │────►│ agendamentos_   │
+│ (role: anon)    │     │ verificar vagas │     │ base            │
+└─────────────────┘     └─────────────────┘     │ ✅ PERMITIDO    │
+                              │                 └─────────────────┘
+                              ▼
+                        ┌─────────────────┐
+                        │ INSERT novo     │
+                        │ agendamento     │
+                        │ ✅ JÁ PERMITIDO │
+                        └─────────────────┘
 ```
 
 ## Segurança
 
-A nova política é segura porque:
+Esta alteração é segura porque:
 
-1. **Apenas leitura (SELECT)** - não permite inserção, atualização ou exclusão
-2. **Escopo limitado** - apenas as 10 chaves `base_*` são expostas
-3. **Dados não sensíveis** - endereço e horários de funcionamento são informações públicas
-
-Outras configurações do sistema (chaves de API, configurações internas, etc.) continuam protegidas.
+1. **Dados não sensíveis**: Os agendamentos contêm apenas nome do cliente, data/horário e placa - informações que o próprio cliente fornece
+2. **Padrão consistente**: A política de INSERT para `anon` já existe, indicando que o fluxo público é intencional
+3. **Mesmo nível de acesso**: Usuários autenticados já têm SELECT irrestrito
 
 ## Alterações
 
 | Tipo | Descrição |
 |------|-----------|
-| Migração SQL | Adicionar política `config_base_public_read` para leitura anônima das chaves `base_*` |
+| Migração SQL | Adicionar política `Anon users can view agendamentos_base` para SELECT |
 
 ## Resultado Esperado
 
 Após a migração:
 
-1. Cliente acessa página de agendamento na base
-2. Hook `useConfiguracaoBase` faz SELECT das configurações
-3. RLS permite leitura das chaves `base_*` para usuário anônimo
-4. Horários 08:00 - 17:30 são retornados corretamente
-5. Slots de horário são gerados e exibidos ao cliente
-
+1. Cliente seleciona data e horário ✅
+2. Clica em "Confirmar Agendamento" ✅
+3. SELECT para verificar vagas passa (nova política) ✅
+4. INSERT do agendamento funciona (política existente) ✅
+5. Toast de sucesso: "Agendamento realizado com sucesso!" ✅
