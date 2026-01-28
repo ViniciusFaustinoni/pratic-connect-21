@@ -1,119 +1,196 @@
 
 
-# Plano: Tornar Solicitações IA Acessíveis e Visíveis
+# Plano: Exclusão Cascata de Cotações para Diretores
 
 ## Problema Identificado
 
-O sinistro **foi registrado corretamente** na tabela `chat_solicitacoes_ia` com status `pendente`. O fluxo está funcionando conforme projetado:
+Ao tentar excluir cotações finalizadas, o sistema exibe: **"Erro ao excluir cotação. Verifique se há registros dependentes."**
 
-| Etapa | Status |
-|-------|--------|
-| Associado conversou com IA | ✅ OK |
-| IA coletou dados do sinistro | ✅ OK |
-| Solicitação criada com ID `62490bb2-0f30-43ed-bc44-30cb53a93be6` | ✅ OK |
-| Solicitação com status `pendente` | ✅ OK |
-| Sinistro não criado na tabela `sinistros` | ⏳ **Esperado** - Aguarda aprovação do diretor |
+### Causa Técnica
 
-**Porém**, o diretor não consegue aprovar porque:
+O hook `useExcluirCotacao` atual (linhas 402-494 de `useCotacoes.ts`) não trata todas as dependências:
 
-1. **A tela de aprovação não está no menu** - A rota `/diretoria/solicitacoes-ia` existe mas não aparece no menu lateral
-2. **Não há indicador visual** - Nenhum badge ou notificação alerta sobre solicitações pendentes
+| Tabela | Ação DELETE | Tratada? |
+|--------|-------------|----------|
+| `agendamentos_base` | NO ACTION ⚠️ | ❌ **Bloqueia** |
+| `servicos` | SET NULL | ❌ Precisa limpar |
+| `contratos` | SET NULL | ✅ |
+| `contratos_documentos` | SET NULL | ❌ Precisa limpar via contrato |
+| `cotacoes_historico` | CASCADE | ✅ Auto |
+| `cotacoes_vistoria_fotos` | CASCADE | ✅ Auto |
+| `instalacoes` | CASCADE | ✅ Auto |
+| `vistorias` | CASCADE | ✅ Auto |
+| `leads` | SET NULL | ✅ |
+
+A FK `agendamentos_base.cotacao_id` tem `NO ACTION`, bloqueando a exclusão.
 
 ## Solução
 
-### 1. Adicionar Item ao Menu da Diretoria
+Criar uma Edge Function `delete-cotacao` que:
+1. Verifica se o usuário é diretor
+2. Exclui todas as dependências em ordem correta usando `service_role`
+3. Registra log de auditoria
 
-Incluir "Solicitações IA" no menu lateral com badge de contagem de pendentes:
+### Arquitetura
 
-**Arquivo:** `src/components/layout/AppSidebar.tsx` (linha ~358)
-
-```typescript
-items: [
-  { title: 'Dashboard', url: '/diretoria', icon: BarChart3 },
-  { title: 'Solicitações IA', url: '/diretoria/solicitacoes-ia', icon: Bot }, // NOVO
-  { title: 'Produtos', url: '/diretoria/produtos', icon: Package },
-  // ... resto
-],
+```text
+┌─────────────────────────┐
+│ Diretor clica "Excluir" │
+└───────────┬─────────────┘
+            │
+            ▼
+┌─────────────────────────┐
+│ Edge Function           │
+│ delete-cotacao          │
+│                         │
+│ 1. Verifica role=diretor│
+│ 2. Usa service_role     │
+│ 3. Exclui dependências: │
+│    - agendamentos_base  │
+│    - servicos           │
+│    - contratos_docs     │
+│    - contratos          │
+│    - leads (null FK)    │
+│    - cotacao            │
+│ 4. Registra log         │
+└───────────┬─────────────┘
+            │
+            ▼
+┌─────────────────────────┐
+│ Toast: "Cotação         │
+│ excluída com sucesso!"  │
+└─────────────────────────┘
 ```
 
-### 2. Adicionar Badge de Contagem no Menu
+## Implementação
 
-Criar hook para contar solicitações pendentes e exibir badge:
+### 1. Criar Edge Function `delete-cotacao`
 
-**Arquivo:** `src/hooks/useSolicitacoesIAPendentes.ts` (novo)
+**Arquivo:** `supabase/functions/delete-cotacao/index.ts`
 
 ```typescript
-export function useSolicitacoesIAPendentes() {
-  return useQuery({
-    queryKey: ['solicitacoes-ia-pendentes-count'],
-    queryFn: async () => {
-      const { count } = await supabase
-        .from('chat_solicitacoes_ia')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'pendente');
-      return count || 0;
+// Verificar role = diretor
+// Usar service_role para bypass RLS
+// Ordem de exclusão:
+// 1. agendamentos_base (cotacao_id)
+// 2. cotacoes_historico (cascade automático, mas garantir)
+// 3. cotacoes_vistoria_fotos (cascade automático)
+// 4. servicos (SET NULL cotacao_id)
+// 5. Para cada contrato:
+//    - contratos_documentos
+//    - contratos_historico
+//    - instalacoes (via contrato_id)
+//    - vistorias (via contrato_id)
+//    - asaas_cobrancas
+//    - contrato
+// 6. vistorias (cotacao_id - cascade, mas garantir)
+// 7. instalacoes (cotacao_id - cascade, mas garantir)
+// 8. leads (SET NULL cotacao_id)
+// 9. cotacao
+// 10. Registrar log de auditoria
+```
+
+### 2. Atualizar Hook `useExcluirCotacao`
+
+**Arquivo:** `src/hooks/useCotacoes.ts`
+
+Substituir a lógica atual por chamada à Edge Function:
+
+```typescript
+export function useExcluirCotacao() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (cotacaoId: string) => {
+      const { data, error } = await supabase.functions.invoke('delete-cotacao', {
+        body: { cotacaoId },
+      });
+      
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error);
+      
+      return data;
     },
-    refetchInterval: 30000, // Atualizar a cada 30s
+    onSuccess: () => {
+      // Invalidar todas as queries relacionadas
+      queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
+      queryClient.invalidateQueries({ queryKey: ['contratos'] });
+      // ... etc
+      toast.success('Cotação excluída com sucesso!');
+    },
+    onError: (error: Error) => {
+      console.error('Erro ao excluir cotação:', error);
+      toast.error(error.message || 'Erro ao excluir cotação');
+    },
   });
 }
 ```
 
-### 3. Adicionar ao Breadcrumb
+### 3. Restringir Exclusão a Diretores
 
-**Arquivo:** `src/components/layout/GlobalBreadcrumb.tsx`
+**Arquivo:** `src/components/cotacoes/CotacaoAcoes.tsx`
+
+Adicionar verificação de role:
 
 ```typescript
-'/diretoria/solicitacoes-ia': { label: 'Solicitações IA' },
+interface CotacaoAcoesProps {
+  // ... existentes
+  canDelete?: boolean; // NOVO - apenas diretores
+}
+
+// No componente, mostrar botão Excluir apenas se canDelete
+{canDelete && (
+  <AlertDialog>
+    {/* botão excluir */}
+  </AlertDialog>
+)}
 ```
 
-### 4. Adicionar Notificação no Dashboard Principal
+**Arquivo:** `src/pages/vendas/CotacaoDetalhe.tsx`
 
-Exibir um alerta no dashboard quando houver solicitações pendentes:
+Passar prop `canDelete`:
 
-**Arquivo:** `src/pages/Index.tsx` ou componente de alertas
+```typescript
+const { roles } = useAuth();
+const isDiretor = roles?.includes('diretor');
 
-Card de alerta com link direto para a tela de aprovação.
-
-## Fluxo Corrigido
-
-```text
-ANTES:
-┌────────────────────┐     ┌────────────────────┐
-│ Solicitação criada │────►│ Diretor NÃO SABE   │ ❌
-│ status: pendente   │     │ onde aprovar       │
-└────────────────────┘     └────────────────────┘
-
-DEPOIS:
-┌────────────────────┐     ┌────────────────────┐     ┌────────────────────┐
-│ Solicitação criada │────►│ Badge (2) aparece  │────►│ Diretor aprova     │ ✅
-│ status: pendente   │     │ no menu Diretoria  │     │ Sinistro criado    │
-└────────────────────┘     └────────────────────┘     └────────────────────┘
+<CotacaoAcoes
+  // ... props existentes
+  canDelete={isDiretor}
+/>
 ```
+
+### 4. Atualizar Lista de Cotações
+
+**Arquivo:** `src/pages/vendas/Cotacoes.tsx`
+
+Verificar role antes de exibir opção de exclusão no dropdown.
+
+## Segurança
+
+| Verificação | Implementação |
+|-------------|---------------|
+| Autenticação | Edge Function valida token JWT |
+| Autorização | Verifica role `diretor` via `user_roles` |
+| Bypass RLS | Usa `SUPABASE_SERVICE_ROLE_KEY` |
+| Auditoria | Registra em `auth_logs` |
 
 ## Alterações de Arquivos
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/layout/AppSidebar.tsx` | Adicionar item "Solicitações IA" no menu Diretoria |
-| `src/hooks/useSolicitacoesIAPendentes.ts` | Criar hook para contagem de pendentes |
-| `src/components/layout/GlobalBreadcrumb.tsx` | Adicionar label do breadcrumb |
-| `src/pages/Index.tsx` | (Opcional) Adicionar alerta de solicitações pendentes |
-
-## Ação Imediata (Workaround)
-
-Enquanto a implementação não for feita, o diretor pode acessar diretamente:
-
-**URL: `/diretoria/solicitacoes-ia`**
-
-Na tela, a solicitação do sinistro `62490bb2...` estará na aba "Pendentes" aguardando aprovação.
+| `supabase/functions/delete-cotacao/index.ts` | **Criar** - Edge Function para exclusão cascata |
+| `src/hooks/useCotacoes.ts` | Atualizar `useExcluirCotacao` para chamar Edge Function |
+| `src/components/cotacoes/CotacaoAcoes.tsx` | Adicionar prop `canDelete` |
+| `src/pages/vendas/CotacaoDetalhe.tsx` | Passar `canDelete` baseado em role |
+| `src/pages/vendas/Cotacoes.tsx` | Verificar role antes de exibir opção excluir |
 
 ## Resultado Esperado
 
-Após as alterações:
-
-1. Menu Diretoria exibe "Solicitações IA" com badge (1) indicando pendência ✅
-2. Diretor clica e vê a solicitação de sinistro pendente ✅
-3. Diretor clica "Aprovar" ✅
-4. Edge Function `aprovar-solicitacao-ia` cria o sinistro real com protocolo SIN-XXXXXXXX-XXXX ✅
-5. Sinistro aparece na lista `/eventos/sinistros` ✅
+1. Diretor acessa cotação finalizada com contrato assinado ✅
+2. Botão "Excluir Cotação" visível apenas para diretores ✅
+3. Confirma exclusão ✅
+4. Edge Function remove: agendamentos_base, contratos, docs, etc ✅
+5. Toast: "Cotação excluída com sucesso!" ✅
+6. Log de auditoria registrado ✅
 
