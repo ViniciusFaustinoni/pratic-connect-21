@@ -1,252 +1,221 @@
 
-# Analise de Conformidade: Sistema Atual vs PRD
+# Plano de Implementacao: Adequacao do Fluxo de Sinistros ao PRD
 
-## Resumo Executivo
+## Resumo da Analise
 
-Apos investigacao detalhada do codigo-fonte, o sistema esta **parcialmente conforme** com o PRD descrito. Os tres modulos principais (Assistencia 24h, Eventos/Sinistros e Oficinas) estao implementados, mas existem lacunas funcionais importantes na integracao entre eles.
-
----
-
-## 1. MODULO ASSISTENCIA 24H
-
-### Status: CONFORME (85%)
-
-**O que esta implementado:**
-
-| Funcionalidade | Status | Localizacao |
-|----------------|--------|-------------|
-| Pipeline de Status | OK | `src/pages/assistencia/ChamadosList.tsx` |
-| Tipos de Servico (guincho, chaveiro, pane, bateria, troca pneu) | OK | `supabase/functions/criar-chamado-assistencia/index.ts` |
-| Protocolo automatico (ASS-YYYYMMDD-XXXX) | OK | Edge function `criar-chamado-assistencia` |
-| Historico de atendimento | OK | Tabela `chamados_assistencia_historico` |
-| Atribuicao de prestadores | OK | `src/components/assistencia/AtribuirPrestadorModal.tsx` |
-| Notificacao via WhatsApp | OK | Integrado na edge function |
-
-**Status disponiveis no sistema:**
-```
-aberto -> aguardando_prestador -> prestador_despachado -> 
-prestador_a_caminho -> em_atendimento -> concluido
-
-Excecoes: cancelado_associado, cancelado_sistema
-```
-
-**O que falta:**
-
-| Gap | Impacto | Prioridade |
-|-----|---------|------------|
-| Botao para "Transferir para Sinistro" | Nao existe link direto da Assistencia para criar Evento quando surge dano relevante | ALTA |
-| Campo `sinistro_id` na tabela de chamados | Nao ha FK vinculando chamado a sinistro gerado | MEDIA |
+Apos analisar o documento tecnico completo (partes 1-9) e comparar com o codigo atual, identifiquei o nivel de conformidade e os gaps que precisam ser corrigidos.
 
 ---
 
-## 2. MODULO EVENTOS (SINISTROS)
+## 1. Analise de Conformidade Atual
 
-### Status: CONFORME (80%)
+### Modulo Assistencia 24h
+| Funcionalidade PRD | Status | Observacao |
+|-------------------|--------|------------|
+| Dashboard com KPIs (chamados hoje, abertos, em andamento, concluidos) | OK | Implementado em `AssistenciaDashboard.tsx` |
+| Pipeline de status | OK | 8 status definidos |
+| Protocolo automatico (ASS-YYYY-XXXXX) | OK | Via edge function |
+| Transferir para Eventos | OK | Botao adicionado recentemente |
+| Taxa de transferencia para Eventos | NAO | KPI ausente no dashboard |
+| Custo operacional total | NAO | KPI ausente |
+| Avaliacao media dos prestadores | NAO | KPI ausente |
 
-**O que esta implementado:**
+### Modulo Eventos (Sinistros)
+| Funcionalidade PRD | Status | Observacao |
+|-------------------|--------|------------|
+| Dashboard com KPIs | PARCIAL | Falta: em sindicancia, valor aprovado no periodo |
+| Pipeline de status | PARCIAL | Falta status `em_sindicancia` no banco (apenas no codigo) |
+| Link para criar OS | OK | Botao adicionado recentemente |
+| Regra 75% FIPE (Dano Parcial vs Perda Total) | NAO | Nao ha campo/logica implementada |
+| Campo participacao do associado | NAO | Campo nao existe na tabela sinistros |
+| Bloqueio de OS para Perda Total | NAO | Sem validacao |
+| Tempo medio de analise | NAO | KPI ausente |
+| Contagem eventos em sindicancia | NAO | Ausente |
 
-| Funcionalidade | Status | Localizacao |
-|----------------|--------|-------------|
-| Pipeline de Status | OK | `src/types/sinistros.ts` (WORKFLOW_SINISTRO) |
-| Tipos de Evento | OK | colisao, roubo, furto, incendio, fenomeno_natural, terceiros, vidros |
-| Protocolo automatico (SIN-YYYYMMDD-XXXX) | OK | `supabase/functions/criar-sinistro/index.ts` |
-| Abertura via App | OK | `src/pages/app/AppSinistroNovo.tsx` |
-| Abertura via IA | OK | `supabase/functions/aprovar-solicitacao-ia/index.ts` |
-| Documentos obrigatorios por tipo | OK | Gerados automaticamente na criacao |
-| Historico de mudanca de status | OK | Tabela `sinistro_historico` |
-| Valores FIPE/Indenizacao/Pago | OK | Campos na tabela `sinistros` |
-| Vinculo com processo juridico | OK | `src/components/sinistros/ModalVincularProcesso.tsx` |
-| Solicitar guincho junto com sinistro | OK | `src/components/app/SinistroFormDialog.tsx` |
-| Timeline de historico | OK | `src/components/eventos/SinistroTimeline.tsx` |
-
-**Status disponiveis no sistema:**
-```
-comunicado -> em_analise -> documentacao_pendente
-                        |-> aguardando_vistoria -> em_vistoria -> aguardando_parecer
-                        |-> aprovado -> em_regulacao -> em_reparo -> aguardando_pagamento -> pago
-                        |-> negado -> encerrado
-cancelado (qualquer ponto)
-```
-
-**Tipos de Sinistro PRD vs Sistema:**
-
-| Tipo PRD | Sistema | Status |
-|----------|---------|--------|
-| Colisao | colisao | OK |
-| Roubo | roubo | OK |
-| Furto | furto | OK |
-| Incendio | incendio | OK |
-| Alagamento | alagamento (tipos) | OK |
-| Fenomenos Naturais | fenomeno_natural | OK |
-| Terceiros | terceiros | OK |
-| Vidros | vidros | OK |
-
-**O que falta:**
-
-| Gap | Impacto | Prioridade |
-|-----|---------|------------|
-| Botao "Criar OS" direto na tela do sinistro | Usuario precisa ir ao modulo Oficinas e buscar sinistro manualmente | ALTA |
-| Status "SINDICANCIA" | Nao existe no enum de status | MEDIA |
-| Campo tipo_dano (parcial/perda_total) | Nao ha distincao explicita no banco | MEDIA |
-| Calculo automatico 75% FIPE | Nao implementado | MEDIA |
-| Termo de Anuencia de pecas | Nao existe fluxo | BAIXA |
-| Gestao de salvados | Nao implementado | BAIXA |
+### Modulo Oficina (OS)
+| Funcionalidade PRD | Status | Observacao |
+|-------------------|--------|------------|
+| Dashboard com KPIs | PARCIAL | KPIs calculados da lista, nao do servidor |
+| Criar OS a partir de Sinistro (via URL) | NAO | Pagina nao processa `?novo=true&sinistro_id=` |
+| Vinculo com sinistro | OK | FK existe e e usado |
+| Regulagem de pecas | NAO | Sem workflow implementado |
+| Termo de anuencia/quitacao | NAO | Sem workflow |
+| Tempo medio de reparo | NAO | KPI ausente |
 
 ---
 
-## 3. MODULO OFICINAS (OS)
+## 2. Gaps Criticos Identificados
 
-### Status: CONFORME (90%)
+### Gap 1: Pagina de OS nao abre modal com sinistro pre-carregado
+**Problema:** O botao "Criar OS" no sinistro navega para `/oficina/ordens-servico?novo=true&sinistro_id=XXX`, mas a pagina nao processa esses parametros.
 
-**O que esta implementado:**
+**Solucao:**
+- Adicionar `useSearchParams` para ler parametros da URL
+- Auto-abrir modal `NovaOSModal` quando `novo=true`
+- Passar `sinistroId` para o modal
 
-| Funcionalidade | Status | Localizacao |
-|----------------|--------|-------------|
-| Cadastro de oficinas credenciadas | OK | `src/pages/oficinas/Oficinas.tsx` |
-| Dados bancarios (banco, agencia, conta, PIX) | OK | Interface `Oficina` em `types/database.ts` |
-| Especialidades (funilaria, pintura, mecanica, eletrica, vidros) | OK | Campo array na tabela |
-| Pipeline de OS | OK | 11 status definidos |
-| Numero automatico (OS-YYYY-XXXXX) | OK | Trigger `gerar_numero_os` |
-| Itens do orcamento (peca, mao_de_obra, servico_terceiro) | OK | `src/hooks/useOrdensServico.ts` |
-| Fotos da OS (entrada, execucao, conclusao) | OK | Tipo `TipoFotoOS` |
-| Historico de mudancas | OK | Tabela `ordens_servico_historico` |
-| Vinculo com sinistro (sinistro_id) | OK | FK na tabela `ordens_servico` |
-| Calculo automatico do total | OK | Trigger `trigger_atualizar_valor_os` |
-| Pagamento de oficinas | OK | Interface `OficinaPagamento` |
+### Gap 2: Status "em_sindicancia" nao existe no banco
+**Problema:** Adicionamos o status no codigo TypeScript, mas o enum no banco nao foi atualizado.
 
-**Pipeline de OS no sistema:**
-```
-rascunho -> aguardando_orcamento -> orcamento_enviado -> 
-aguardando_aprovacao -> aprovado -> em_execucao -> 
-[aguardando_peca] -> concluido -> aguardando_pagamento -> pago
+**Solucao:**
+- Executar migracao SQL para adicionar `em_sindicancia` ao enum `status_sinistro`
 
-cancelado (qualquer ponto)
-```
+### Gap 3: Campo "tipo_dano" (parcial/perda_total) ausente
+**Problema:** O PRD define que eventos com dano >= 75% FIPE sao "Perda Total" e nao geram OS. Nao existe campo para isso.
 
-**O que falta:**
+**Solucao:**
+- Adicionar campo `tipo_dano` (enum: parcial, perda_total) na tabela sinistros
+- Calcular automaticamente baseado em `valor_indenizacao` vs `valor_fipe`
 
-| Gap | Impacto | Prioridade |
-|-----|---------|------------|
-| Regulagem de pecas (original/paralela/mercado verde) | Campo existe mas workflow nao esta implementado | MEDIA |
-| Vistoria de saida | Nao existe fluxo especifico | BAIXA |
-| Test drive do associado | Nao implementado | BAIXA |
-| Termo de Quitacao | Nao implementado | BAIXA |
-| Garantia 90 dias | Nao existe controle | BAIXA |
+### Gap 4: Campo "valor_participacao" ausente no sinistro
+**Problema:** O PRD menciona "participacao do associado" como dedutivel. Campo nao existe.
+
+**Solucao:**
+- Adicionar campo `valor_participacao` (NUMERIC) na tabela sinistros
+- Exibir na tela de detalhe
+
+### Gap 5: Validacao de criacao de OS para Perda Total
+**Problema:** Nao ha validacao impedindo criar OS para sinistros classificados como "Perda Total".
+
+**Solucao:**
+- Adicionar validacao no modal `NovaOSModal`
+- Exibir mensagem explicando que Perda Total vai para indenizacao
 
 ---
 
-## 4. CORRELACOES ENTRE MODULOS
+## 3. Plano de Implementacao
 
-### Assistencia -> Evento
-| Regra PRD | Sistema | Status |
-|-----------|---------|--------|
-| Chamado pode virar sinistro quando surge dano | Nao existe link/botao direto | NAO CONFORME |
-| Guincho pode ir junto com sinistro | Implementado via Switch no formulario | CONFORME |
+### Fase 1: Correcoes Criticas de Integracao
 
-### Evento -> Oficina
-| Regra PRD | Sistema | Status |
-|-----------|---------|--------|
-| Sinistro aprovado gera OS para reparo | OS pode vincular sinistro, mas fluxo nao e automatico | PARCIAL |
-| Criar OS a partir da tela do sinistro | Nao existe botao na tela de detalhes | NAO CONFORME |
-| Perda total nao gera OS (vai para indenizacao) | Nao ha regra impedindo | NAO CONFORME |
+#### 1.1 Corrigir navegacao Sinistro -> OS
+**Arquivo:** `src/pages/oficina/OrdensServicoList.tsx`
 
-### Assistencia -> Oficina (reboque direto)
-| Regra PRD | Sistema | Status |
-|-----------|---------|--------|
-| Reboque pode levar direto para oficina | Nao existe integracao direta | NAO CONFORME |
+Alteracoes:
+- Importar `useSearchParams` do react-router-dom
+- Adicionar estado `sinistroIdFromUrl` para capturar parametro
+- useEffect para abrir modal quando `novo=true`
+- Passar `sinistroId` para o componente `NovaOSModal`
 
----
-
-## 5. GAPS CRITICOS IDENTIFICADOS
-
-### 5.1 Falta link "Assistencia -> Sinistro"
-
-**Problema:** Quando um chamado de assistencia revela dano que precisa analise de cobertura, o operador nao tem botao para criar sinistro vinculado.
-
-**Onde adicionar:**
-- `src/pages/assistencia/ChamadoDetalhe.tsx` - Menu de acoes
-
-**Sugestao de implementacao:**
-```typescript
-<DropdownMenuItem onClick={() => navigate(`/eventos/sinistros/novo?chamado_id=${chamado.id}&associado_id=${chamado.associado_id}&veiculo_id=${chamado.veiculo_id}`)}>
-  <AlertTriangle className="h-4 w-4 mr-2" />
-  Abrir Sinistro
-</DropdownMenuItem>
+```text
+Fluxo esperado:
+1. Usuario clica "Criar OS" no sinistro
+2. Navega para /oficina/ordens-servico?novo=true&sinistro_id=XXX
+3. Pagina abre automaticamente modal com sinistro pre-carregado
+4. Usuario seleciona oficina e cria OS
 ```
 
-### 5.2 Falta link "Sinistro -> OS"
+#### 1.2 Migracao SQL: Adicionar status e campos faltantes
+**Arquivo:** Nova migracao SQL
 
-**Problema:** Na tela de detalhe do sinistro aprovado, nao existe botao para criar OS vinculada.
+```sql
+-- 1. Adicionar status em_sindicancia ao enum
+ALTER TYPE status_sinistro ADD VALUE IF NOT EXISTS 'em_sindicancia';
 
-**Onde adicionar:**
-- `src/pages/eventos/SinistroDetalhe.tsx` - Menu de acoes (apos aprovacao)
+-- 2. Adicionar campo tipo_dano
+ALTER TABLE public.sinistros 
+ADD COLUMN IF NOT EXISTS tipo_dano TEXT 
+CHECK (tipo_dano IN ('parcial', 'perda_total'));
 
-**Sugestao de implementacao:**
-```typescript
-{['aprovado', 'em_regulacao', 'em_reparo'].includes(sinistro.status) && (
-  <DropdownMenuItem onClick={() => navigate(`/oficina/ordens-servico?novo=true&sinistro_id=${sinistro.id}`)}>
-    <Wrench className="h-4 w-4 mr-2" />
-    Criar Ordem de Servico
-  </DropdownMenuItem>
-)}
+-- 3. Adicionar campo valor_participacao
+ALTER TABLE public.sinistros 
+ADD COLUMN IF NOT EXISTS valor_participacao NUMERIC(12,2) DEFAULT 0;
+
+-- 4. Adicionar indice para tipo_dano
+CREATE INDEX IF NOT EXISTS idx_sinistros_tipo_dano 
+ON public.sinistros(tipo_dano) 
+WHERE tipo_dano IS NOT NULL;
 ```
 
-### 5.3 Falta status "Sindicancia"
+### Fase 2: Atualizacoes de Interface
 
-**Problema:** O PRD menciona status SINDICANCIA/JURIDICO para investigacao especial, mas nao existe no enum.
+#### 2.1 Exibir campos novos na tela de detalhe do sinistro
+**Arquivo:** `src/pages/eventos/SinistroDetalhe.tsx`
 
-**Onde adicionar:**
-- `src/types/sinistros.ts` - Adicionar ao tipo StatusSinistro
-- Criar migracao para adicionar ao enum no banco
+Alteracoes no card "Valores":
+- Adicionar campo "Tipo de Dano" (Parcial/Perda Total)
+- Adicionar campo "Participacao do Associado"
+- Adicionar calculo visual: 75% do FIPE
 
----
+#### 2.2 Validacao no modal de criacao de OS
+**Arquivo:** `src/components/oficina/NovaOSModal.tsx`
 
-## 6. RESUMO DE CONFORMIDADE
+Alteracoes:
+- Verificar se sinistro selecionado tem `tipo_dano = 'perda_total'`
+- Se for perda total, exibir alerta e bloquear criacao
 
-| Modulo | Conformidade | Observacao |
-|--------|--------------|------------|
-| Assistencia 24h | 85% | Falta link para criar sinistro |
-| Eventos (Sinistros) | 80% | Falta link para criar OS e status sindicancia |
-| Oficinas (OS) | 90% | Bem completo, falta alguns fluxos pos-reparo |
-| **Integracao entre modulos** | **60%** | **Gaps criticos na correlacao** |
+#### 2.3 Adicionar status em_sindicancia no Dashboard de Eventos
+**Arquivo:** `src/pages/eventos/SinistrosDashboard.tsx`
 
----
+Alteracoes:
+- Adicionar configuracao de cor/label para `em_sindicancia`
+- Incluir no calculo de eventos em aberto
 
-## 7. RECOMENDACOES PRIORIZADAS
+### Fase 3: KPIs Adicionais nos Dashboards
 
-### Alta Prioridade
+#### 3.1 Dashboard Assistencia 24h
+**Arquivo:** `src/pages/assistencia/AssistenciaDashboard.tsx`
 
-1. **Adicionar botao "Abrir Sinistro" na tela de Chamado**
-   - Arquivo: `ChamadoDetalhe.tsx`
-   - Passar dados do chamado para pre-preencher formulario
+Novos KPIs a adicionar:
+- Taxa de transferencia para Eventos (%)
+- Custo operacional total do dia
+- Tempo medio de atendimento
 
-2. **Adicionar botao "Criar OS" na tela de Sinistro**
-   - Arquivo: `SinistroDetalhe.tsx`
-   - Visivel apenas quando status permite (aprovado, em_regulacao)
+#### 3.2 Dashboard Eventos
+**Arquivo:** `src/pages/eventos/SinistrosDashboard.tsx`
 
-3. **Adicionar campo `chamado_origem_id` na tabela sinistros**
-   - Permite rastrear sinistros originados de assistencia
-
-### Media Prioridade
-
-4. **Adicionar status "em_sindicancia" ao enum**
-   - Migracao de banco necessaria
-
-5. **Implementar calculo de dano parcial vs perda total**
-   - Regra: se valor estimado >= 75% do FIPE = perda total
-
-6. **Bloquear criacao de OS para sinistros com perda total**
-   - Validacao no modal NovaOSModal
-
-### Baixa Prioridade
-
-7. Implementar termo de anuencia de pecas
-8. Implementar vistoria de saida
-9. Implementar controle de garantia 90 dias
-10. Implementar gestao de salvados
+Novos KPIs a adicionar:
+- Eventos em sindicancia
+- Tempo medio de analise (dias)
+- Valor total aprovado (separado de pago)
 
 ---
 
-## Conclusao
+## 4. Mapa de Arquivos a Modificar
 
-O sistema possui uma **base solida** com os tres modulos bem implementados individualmente. O principal gap esta na **integracao/correlacao** entre eles, que nao segue o fluxo descrito no PRD. Com as melhorias de alta prioridade (estimativa: 2-3 horas de desenvolvimento), o sistema atingiria ~95% de conformidade com o PRD.
+| Arquivo | Tipo de Alteracao |
+|---------|-------------------|
+| `src/pages/oficina/OrdensServicoList.tsx` | Adicionar processamento de URL params |
+| `src/pages/eventos/SinistroDetalhe.tsx` | Exibir novos campos (tipo_dano, participacao) |
+| `src/pages/eventos/SinistrosDashboard.tsx` | Adicionar status em_sindicancia |
+| `src/components/oficina/NovaOSModal.tsx` | Validacao para Perda Total |
+| `src/types/sinistros.ts` | Ja atualizado |
+| Nova migracao SQL | Adicionar campos e status ao banco |
+
+---
+
+## 5. Consideracoes de Dados Cruzados (PRD Secao 7.4)
+
+O PRD define onde cada dado deve aparecer. Apos as alteracoes:
+
+| Dado | Origem | Onde Aparece |
+|------|--------|--------------|
+| Protocolo Sinistro | Eventos | Eventos, Oficina, Financeiro, Historico Associado, App |
+| Tipo do Evento | Eventos | Dashboard Eventos, App, Financeiro |
+| Status do Evento | Eventos | Dashboard Eventos, Oficina (via OS), App |
+| Tipo de Dano | Eventos | Detalhe Sinistro, Decisao de OS |
+| Valor Participacao | Eventos | Detalhe Sinistro, Calculo Indenizacao |
+| Numero da OS | Oficina | Eventos (vinculado), Financeiro |
+
+---
+
+## 6. Resultado Esperado
+
+Apos implementacao:
+
+1. **Fluxo Assistencia -> Sinistro**: Funcionando (ja implementado)
+2. **Fluxo Sinistro -> OS**: Modal abre automaticamente com sinistro pre-carregado
+3. **Regra 75% FIPE**: Campo `tipo_dano` permite classificar e bloquear OS para Perda Total
+4. **Status Sindicancia**: Disponivel no banco e em todas as telas
+5. **Participacao**: Campo visivel e editavel no sinistro
+
+---
+
+## Resumo de Prioridades
+
+| Prioridade | Item | Impacto |
+|------------|------|---------|
+| ALTA | Corrigir URL params na pagina de OS | Fluxo Sinistro->OS quebrado |
+| ALTA | Migracao SQL (status + campos) | Integridade de dados |
+| MEDIA | Exibir novos campos na tela | UX completa |
+| MEDIA | Validacao Perda Total | Regra de negocio |
+| BAIXA | KPIs adicionais nos dashboards | Melhoria de gestao |
