@@ -18,6 +18,7 @@ import {
   Plus,
   RefreshCw,
   LucideIcon,
+  Timer,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -71,7 +72,7 @@ export default function AssistenciaDashboard() {
 
       const { data, error } = await supabase
         .from('chamados_assistencia')
-        .select('status, tipo_servico')
+        .select('status, tipo_servico, data_abertura, data_conclusao')
         .gte('data_abertura', hoje);
 
       if (error) throw error;
@@ -83,12 +84,28 @@ export default function AssistenciaDashboard() {
         'em_atendimento',
       ];
 
+      const total = data?.length || 0;
+      
+      // Calcular tempo médio de atendimento (minutos entre abertura e conclusão)
+      const chamadosConcluidos = data?.filter((c) => c.status === 'concluido' && c.data_conclusao) || [];
+      let tempoMedioMinutos = 0;
+      if (chamadosConcluidos.length > 0) {
+        const totalMinutos = chamadosConcluidos.reduce((acc, c) => {
+          const abertura = new Date(c.data_abertura);
+          const conclusao = new Date(c.data_conclusao!);
+          const minutos = Math.max(0, Math.floor((conclusao.getTime() - abertura.getTime()) / (1000 * 60)));
+          return acc + minutos;
+        }, 0);
+        tempoMedioMinutos = Math.round(totalMinutos / chamadosConcluidos.length);
+      }
+
       return {
-        total: data?.length || 0,
+        total,
         abertos: data?.filter((c) => c.status === 'aberto').length || 0,
         em_andamento: data?.filter((c) => statusEmAndamento.includes(c.status)).length || 0,
-        concluidos: data?.filter((c) => c.status === 'concluido').length || 0,
+        concluidos: chamadosConcluidos.length,
         cancelados: data?.filter((c) => c.status.includes('cancelado')).length || 0,
+        tempoMedioMinutos,
         por_tipo: data?.reduce(
           (acc, c) => {
             acc[c.tipo_servico] = (acc[c.tipo_servico] || 0) + 1;
@@ -172,7 +189,7 @@ export default function AssistenciaDashboard() {
       />
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
@@ -224,6 +241,22 @@ export default function AssistenciaDashboard() {
               <div>
                 <p className="text-sm text-muted-foreground">Concluídos</p>
                 <p className="text-2xl font-bold text-green-600">{estatisticas?.concluidos || 0}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-orange-100 dark:bg-orange-900/30 rounded-lg">
+                <Timer className="h-5 w-5 text-orange-600" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Tempo Médio</p>
+                <p className="text-2xl font-bold text-orange-600">
+                  {estatisticas?.tempoMedioMinutos || 0}<span className="text-sm font-normal"> min</span>
+                </p>
               </div>
             </div>
           </CardContent>

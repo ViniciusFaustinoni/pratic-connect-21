@@ -29,6 +29,8 @@ import {
   CloudRain,
   Square,
   HelpCircle,
+  Search,
+  Timer,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -66,6 +68,7 @@ const statusConfig: Record<string, { label: string; class: string }> = {
   pago: { label: 'Pago', class: 'bg-emerald-100 text-emerald-800' },
   encerrado: { label: 'Encerrado', class: 'bg-gray-100 text-gray-800' },
   cancelado: { label: 'Cancelado', class: 'bg-slate-100 text-slate-800' },
+  em_sindicancia: { label: 'Em Sindicância', class: 'bg-rose-100 text-rose-800' },
 };
 
 const tipoConfig: Record<string, { label: string; icon: React.ElementType }> = {
@@ -114,7 +117,7 @@ export default function SinistrosDashboard() {
     queryFn: async () => {
       let query = supabase
         .from('sinistros')
-        .select('status, tipo, valor_fipe, valor_indenizacao, valor_pago, created_at');
+        .select('status, tipo, valor_fipe, valor_indenizacao, valor_pago, created_at, data_parecer');
 
       if (dataInicial) {
         query = query.gte('created_at', dataInicial.toISOString());
@@ -129,6 +132,7 @@ export default function SinistrosDashboard() {
       const aprovados = sinistros?.filter(s =>
         ['aprovado', 'pago', 'em_regulacao', 'em_reparo'].includes(s.status)
       ).length || 0;
+      const emSindicancia = sinistros?.filter(s => s.status === 'em_sindicancia').length || 0;
 
       const valorTotalAprovado = sinistros?.reduce((acc, s) =>
         acc + (s.valor_indenizacao || 0), 0
@@ -141,13 +145,28 @@ export default function SinistrosDashboard() {
         ? ((aprovados / total) * 100).toFixed(1)
         : '0.0';
 
+      // Calcular tempo médio de análise (dias entre created_at e data_parecer)
+      const sinistrosComParecer = sinistros?.filter(s => s.data_parecer) || [];
+      let tempoMedioAnalise = 0;
+      if (sinistrosComParecer.length > 0) {
+        const totalDias = sinistrosComParecer.reduce((acc, s) => {
+          const created = new Date(s.created_at);
+          const parecer = new Date(s.data_parecer!);
+          const dias = Math.max(0, Math.floor((parecer.getTime() - created.getTime()) / (1000 * 60 * 60 * 24)));
+          return acc + dias;
+        }, 0);
+        tempoMedioAnalise = Math.round(totalDias / sinistrosComParecer.length);
+      }
+
       return {
         total,
         abertos,
         aprovados,
+        emSindicancia,
         taxaAprovacao,
         valorTotalAprovado,
         valorTotalPago,
+        tempoMedioAnalise,
       };
     }
   });
@@ -250,7 +269,7 @@ export default function SinistrosDashboard() {
       </div>
 
       {/* KPIs */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total de Sinistros</CardTitle>
@@ -304,6 +323,36 @@ export default function SinistrosDashboard() {
             ) : (
               <div className="text-2xl font-bold">
                 {formatCurrency(metricas?.valorTotalPago || 0)}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Em Sindicância</CardTitle>
+            <Search className="h-4 w-4 text-rose-600" />
+          </CardHeader>
+          <CardContent>
+            {loadingMetricas ? (
+              <Skeleton className="h-8 w-20" />
+            ) : (
+              <div className="text-2xl font-bold text-rose-600">{metricas?.emSindicancia || 0}</div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Tempo Médio Análise</CardTitle>
+            <Timer className="h-4 w-4 text-purple-600" />
+          </CardHeader>
+          <CardContent>
+            {loadingMetricas ? (
+              <Skeleton className="h-8 w-20" />
+            ) : (
+              <div className="text-2xl font-bold">
+                {metricas?.tempoMedioAnalise || 0} <span className="text-sm font-normal text-muted-foreground">dias</span>
               </div>
             )}
           </CardContent>
