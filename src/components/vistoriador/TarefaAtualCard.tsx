@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   MapPin, Phone, Car, Clock, Navigation, Play, 
-  CheckCircle2, User, ChevronRight, Loader2, Route, Zap 
+  CheckCircle2, User, ChevronRight, Loader2, Route, Zap,
+  MessageCircle, MessageSquareWarning
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,7 +18,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { TarefaAtual, useIniciarTarefa, useIniciarRota } from '@/hooks/useTarefaAtual';
+import { TarefaAtual, useIniciarTarefa, useIniciarRota, TarefaAtualComConfirmacao } from '@/hooks/useTarefaAtual';
 import { useIniciarServico } from '@/hooks/useIniciarServico';
 import { TIPO_SERVICO_LABELS, isInstalacao } from '@/hooks/useServicos';
 import { cn } from '@/lib/utils';
@@ -25,7 +26,10 @@ import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 interface TarefaAtualCardProps {
-  tarefa: TarefaAtual;
+  tarefa: TarefaAtual & {
+    confirmacao_whatsapp?: string | null;
+    confirmado_via_whatsapp_em?: string | null;
+  };
 }
 
 export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
@@ -108,6 +112,34 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
                 >
                   <Zap className="h-3 w-3" />
                   Encaixe
+                </Badge>
+              )}
+              {/* Badge de Confirmação WhatsApp */}
+              {tarefa.confirmacao_whatsapp === 'confirmado' && (
+                <Badge 
+                  variant="outline"
+                  className="bg-green-500/20 text-green-700 border-green-500/50 dark:text-green-400 gap-1"
+                >
+                  <MessageCircle className="h-3 w-3" />
+                  Cliente confirmou
+                </Badge>
+              )}
+              {tarefa.confirmacao_whatsapp === 'enviada' && (
+                <Badge 
+                  variant="outline"
+                  className="bg-blue-500/20 text-blue-700 border-blue-500/50 dark:text-blue-400 gap-1"
+                >
+                  <MessageCircle className="h-3 w-3" />
+                  Aguardando resposta
+                </Badge>
+              )}
+              {tarefa.confirmacao_whatsapp === 'reagendado' && (
+                <Badge 
+                  variant="outline"
+                  className="bg-orange-500/20 text-orange-700 border-orange-500/50 dark:text-orange-400 gap-1"
+                >
+                  <MessageSquareWarning className="h-3 w-3" />
+                  Cliente quer reagendar
                 </Badge>
               )}
             </div>

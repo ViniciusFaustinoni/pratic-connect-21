@@ -3565,6 +3565,77 @@ export type Database = {
           },
         ]
       }
+      confirmacoes_agendamento: {
+        Row: {
+          contexto_ia: Json | null
+          created_at: string
+          id: string
+          instalacao_id: string | null
+          mensagem_enviada_em: string | null
+          novo_servico_id: string | null
+          resposta_cliente: string | null
+          resposta_recebida_em: string | null
+          servico_id: string | null
+          status: string
+          telefone: string
+        }
+        Insert: {
+          contexto_ia?: Json | null
+          created_at?: string
+          id?: string
+          instalacao_id?: string | null
+          mensagem_enviada_em?: string | null
+          novo_servico_id?: string | null
+          resposta_cliente?: string | null
+          resposta_recebida_em?: string | null
+          servico_id?: string | null
+          status?: string
+          telefone: string
+        }
+        Update: {
+          contexto_ia?: Json | null
+          created_at?: string
+          id?: string
+          instalacao_id?: string | null
+          mensagem_enviada_em?: string | null
+          novo_servico_id?: string | null
+          resposta_cliente?: string | null
+          resposta_recebida_em?: string | null
+          servico_id?: string | null
+          status?: string
+          telefone?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "confirmacoes_agendamento_instalacao_id_fkey"
+            columns: ["instalacao_id"]
+            isOneToOne: false
+            referencedRelation: "instalacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "confirmacoes_agendamento_instalacao_id_fkey"
+            columns: ["instalacao_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["instalacao_id"]
+          },
+          {
+            foreignKeyName: "confirmacoes_agendamento_novo_servico_id_fkey"
+            columns: ["novo_servico_id"]
+            isOneToOne: false
+            referencedRelation: "servicos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "confirmacoes_agendamento_servico_id_fkey"
+            columns: ["servico_id"]
+            isOneToOne: false
+            referencedRelation: "servicos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       consultas_juridicas: {
         Row: {
           associado_id: string | null
@@ -12808,6 +12879,8 @@ export type Database = {
           cidade: string | null
           complemento: string | null
           concluida_em: string | null
+          confirmacao_whatsapp: string | null
+          confirmado_via_whatsapp_em: string | null
           contrato_id: string | null
           cotacao_id: string | null
           created_at: string
@@ -12867,6 +12940,8 @@ export type Database = {
           cidade?: string | null
           complemento?: string | null
           concluida_em?: string | null
+          confirmacao_whatsapp?: string | null
+          confirmado_via_whatsapp_em?: string | null
           contrato_id?: string | null
           cotacao_id?: string | null
           created_at?: string
@@ -12926,6 +13001,8 @@ export type Database = {
           cidade?: string | null
           complemento?: string | null
           concluida_em?: string | null
+          confirmacao_whatsapp?: string | null
+          confirmado_via_whatsapp_em?: string | null
           contrato_id?: string | null
           cotacao_id?: string | null
           created_at?: string

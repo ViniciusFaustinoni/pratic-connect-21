@@ -11,7 +11,13 @@ import {
   TIPO_SERVICO_LABELS 
 } from './useServicos';
 
-// Re-exportar o tipo TarefaAtual para compatibilidade
+// Tipo estendido com confirmação WhatsApp
+export type TarefaAtualComConfirmacao = TarefaAtual & {
+  confirmacao_whatsapp?: 'pendente' | 'enviada' | 'confirmado' | 'reagendado' | 'nao_respondeu' | null;
+  confirmado_via_whatsapp_em?: string | null;
+};
+
+// Re-exportar os tipos para compatibilidade
 export type { TarefaAtual };
 
 /**
@@ -26,7 +32,7 @@ export function useTarefaAtual() {
 
   const query = useQuery({
     queryKey: ['tarefa-atual', profissionalId],
-    queryFn: async (): Promise<TarefaAtual | null> => {
+    queryFn: async (): Promise<(TarefaAtual & { confirmacao_whatsapp?: string | null; confirmado_via_whatsapp_em?: string | null }) | null> => {
       if (!profissionalId) return null;
 
       // Usar a nova RPC que consulta a tabela servicos
@@ -85,6 +91,8 @@ export function useTarefaAtual() {
         em_rota_em: tarefa.em_rota_em,
         instalacao_origem_id: tarefa.instalacao_origem_id,
         vistoria_origem_id: tarefa.vistoria_origem_id,
+        confirmacao_whatsapp: (tarefa as any).confirmacao_whatsapp || null,
+        confirmado_via_whatsapp_em: (tarefa as any).confirmado_via_whatsapp_em || null,
       };
     },
     enabled: !!profissionalId,
