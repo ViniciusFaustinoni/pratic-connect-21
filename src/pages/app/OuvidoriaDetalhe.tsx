@@ -20,7 +20,8 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { mockManifestacoes, mockInteracoes } from "@/mocks/ouvidoria";
+import { useManifestacao } from "@/hooks/useOuvidoria";
+import { useInteracoes } from "@/hooks/useOuvidoriaInteracoes";
 
 interface StatusConfig {
   label: string;
@@ -65,12 +66,20 @@ export default function OuvidoriaDetalheApp() {
   const [comentarioAvaliacao, setComentarioAvaliacao] = useState('');
   const [enviandoAvaliacao, setEnviandoAvaliacao] = useState(false);
 
-  // Mock data
-  const manifestacao = mockManifestacoes.find(m => m.id === id) || mockManifestacoes[0];
-  const interacoes = mockInteracoes.filter(i => i.manifestacao_id === manifestacao.id);
+  // Dados reais do banco
+  const { data: manifestacao, isLoading } = useManifestacao(id);
+  const { data: interacoes } = useInteracoes(id);
+
+  if (isLoading || !manifestacao) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <p className="text-muted-foreground">Carregando...</p>
+      </div>
+    );
+  }
 
   const tipo = tipoConfig[manifestacao.tipo];
-  const Icon = tipo.icon;
+  const Icon = tipo?.icon || MessageSquare;
   const status = statusConfig[manifestacao.status];
   const isEncerrado = manifestacao.status === 'encerrado';
 

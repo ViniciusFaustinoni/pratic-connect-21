@@ -18,7 +18,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { toast } from "sonner";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useEncaminharManifestacao, useEncaminharJuridico } from "@/hooks/useOuvidoria";
 
 interface EncaminharModalProps {
   open: boolean;
@@ -26,12 +28,6 @@ interface EncaminharModalProps {
   manifestacaoId: string;
   onSuccess?: () => void;
 }
-
-const analistas = [
-  { id: '1', nome: 'Ana Paula' },
-  { id: '2', nome: 'Carlos Lima' },
-  { id: '3', nome: 'Maria Oliveira' },
-];
 
 const departamentos = [
   { id: 'atendimento', nome: 'Atendimento' },
@@ -49,24 +45,48 @@ export function EncaminharModal({
   const [destino, setDestino] = useState<'analista' | 'departamento' | 'juridico'>('analista');
   const [selectedId, setSelectedId] = useState('');
   const [motivo, setMotivo] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const encaminharMutation = useEncaminharManifestacao();
+  const encaminharJuridicoMutation = useEncaminharJuridico();
+
+  // Buscar analistas (funcionários ativos)
+  const { data: analistas, isLoading: isLoadingAnalistas } = useQuery({
+    queryKey: ["funcionarios-ouvidoria-encaminhar"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, nome")
+        .eq("tipo", "funcionario")
+        .eq("ativo", true)
+        .order("nome");
+      if (error) throw error;
+      return data || [];
+    },
+  });
 
   const handleSubmit = async () => {
     if (!motivo.trim()) {
-      toast.error('Informe o motivo do encaminhamento');
       return;
     }
 
     if (destino !== 'juridico' && !selectedId) {
-      toast.error(`Selecione ${destino === 'analista' ? 'o analista' : 'o departamento'}`);
       return;
     }
 
-    setIsSubmitting(true);
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    toast.success('Manifestação encaminhada com sucesso!');
-    setIsSubmitting(false);
+    if (destino === 'juridico') {
+      await encaminharJuridicoMutation.mutateAsync({
+        manifestacao_id: manifestacaoId,
+        observacao: motivo,
+      });
+    } else {
+      await encaminharMutation.mutateAsync({
+        manifestacaoId,
+        destino,
+        destinoId: selectedId,
+        motivo,
+      });
+    }
+
     onOpenChange(false);
     onSuccess?.();
 
@@ -75,6 +95,8 @@ export function EncaminharModal({
     setSelectedId('');
     setMotivo('');
   };
+
+  const isSubmitting = encaminharMutation.isPending || encaminharJuridicoMutation.isPending;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -118,10 +140,10 @@ export function EncaminharModal({
               <Label>Analista</Label>
               <Select value={selectedId} onValueChange={setSelectedId}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Selecione o analista" />
+                  <SelectValue placeholder={isLoadingAnalistas ? "Carregando..." : "Selecione o analista"} />
                 </SelectTrigger>
                 <SelectContent>
-                  {analistas.map(a => (
+                  {(analistas || []).map(a => (
                     <SelectItem key={a.id} value={a.id}>{a.nome}</SelectItem>
                   ))}
                 </SelectContent>

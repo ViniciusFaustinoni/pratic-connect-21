@@ -25,8 +25,9 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { setoresElogio } from "@/constants/ouvidoria";
-import { CATEGORIA_LABELS } from "@/types/ouvidoria";
+import { CATEGORIA_LABELS, type TipoManifestacao, type CategoriaManifestacao } from "@/types/ouvidoria";
 import { SetorElogioModal } from "@/components/ouvidoria/SetorElogioModal";
+import { useCreateManifestacao } from "@/hooks/useOuvidoria";
 
 interface TipoConfig {
   label: string;
@@ -91,6 +92,8 @@ export default function NovaManifestacao() {
   const [setorElogio, setSetorElogio] = useState(setorParam);
   const [colaborador, setColaborador] = useState('');
   
+  const createMutation = useCreateManifestacao();
+  
   // Modal de setores - abrir automaticamente se for elogio sem setor
   const [showSetorModal, setShowSetorModal] = useState(
     tipoParam === 'elogio' && !setorParam
@@ -148,13 +151,24 @@ export default function NovaManifestacao() {
 
     setIsSubmitting(true);
     
-    // Simula envio
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    const protocolo = `OUV-2026-${String(Math.floor(Math.random() * 99999)).padStart(5, '0')}`;
-    
-    toast.success(`Manifestação criada! Protocolo: ${protocolo}`);
-    navigate('/ouvidoria/manifestacoes');
+    try {
+      await createMutation.mutateAsync({
+        tipo: tipo as TipoManifestacao,
+        categoria: tipo !== 'elogio' ? (categoria as CategoriaManifestacao) : undefined,
+        assunto,
+        descricao,
+        anonimo,
+        canal: 'app',
+        prioridade: tipo === 'reclamacao_urgente' ? 'urgente' : 'normal',
+        setor_elogio: setorElogio || undefined,
+        colaborador_elogiado: colaborador || undefined,
+      });
+      navigate('/ouvidoria/manifestacoes');
+    } catch (error) {
+      // Erro tratado pelo hook
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Verifica se o formulário está válido

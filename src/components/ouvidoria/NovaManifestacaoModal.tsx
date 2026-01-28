@@ -35,7 +35,6 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { 
-  Search, 
   User, 
   Phone, 
   Mail, 
@@ -44,17 +43,25 @@ import {
   Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
 import {
   canaisOrigem,
   tiposManifestacao,
   categoriasManifestacao,
   prioridades,
   setoresElogio,
-  analistasOuvidoria,
-  mockAssociados,
 } from "@/constants/ouvidoria";
 import type { CanalManifestacao, TipoManifestacao, CategoriaManifestacao, PrioridadeManifestacao } from "@/types/ouvidoria";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
+import { useCreateManifestacao } from "@/hooks/useOuvidoria";
+
+interface Associado {
+  id: string;
+  nome: string;
+  cpf: string;
+  telefone: string;
+  email: string;
+}
 
 interface NovaManifestacaoModalProps {
   open: boolean;
@@ -64,11 +71,12 @@ interface NovaManifestacaoModalProps {
 
 export function NovaManifestacaoModal({ open, onOpenChange, onSuccess }: NovaManifestacaoModalProps) {
   const navigate = useNavigate();
+  const createMutation = useCreateManifestacao();
   
   // Busca de associado
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedAssociado, setSelectedAssociado] = useState<typeof mockAssociados[0] | null>(null);
+  const [selectedAssociado, setSelectedAssociado] = useState<Associado | null>(null);
   const [isAnonimo, setIsAnonimo] = useState(false);
   
   // Dados da manifestação
@@ -84,7 +92,6 @@ export function NovaManifestacaoModal({ open, onOpenChange, onSuccess }: NovaMan
   const [dataContato, setDataContato] = useState(
     new Date().toISOString().slice(0, 16)
   );
-  const [responsavel, setResponsavel] = useState("eu");
   const [observacaoInterna, setObservacaoInterna] = useState("");
   
   // Ações pós-cadastro
@@ -92,18 +99,23 @@ export function NovaManifestacaoModal({ open, onOpenChange, onSuccess }: NovaMan
   const [enviarEmail, setEnviarEmail] = useState(false);
   const [iniciarAtendimento, setIniciarAtendimento] = useState(false);
   
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  // Busca real de associados do banco
+  const { data: associadosData, isLoading: isLoadingAssociados } = useQuery({
+    queryKey: ["associados-busca-ouvidoria", searchQuery],
+    queryFn: async () => {
+      if (!searchQuery || searchQuery.length < 2) return [];
+      const { data, error } = await supabase
+        .from("associados")
+        .select("id, nome, cpf, telefone, email")
+        .or(`nome.ilike.%${searchQuery}%,cpf.ilike.%${searchQuery}%`)
+        .limit(10);
+      if (error) throw error;
+      return data as Associado[];
+    },
+    enabled: searchQuery.length >= 2,
+  });
   
-  // Filtrar associados baseado na busca
-  const filteredAssociados = useMemo(() => {
-    if (!searchQuery) return mockAssociados;
-    const query = searchQuery.toLowerCase();
-    return mockAssociados.filter(
-      a => a.nome.toLowerCase().includes(query) ||
-           a.cpf.includes(query) ||
-           a.codigo.toLowerCase().includes(query)
-    );
-  }, [searchQuery]);
+  const filteredAssociados = associadosData || [];
   
   // Validação do formulário
   const isFormValid = useMemo(() => {
@@ -133,7 +145,6 @@ export function NovaManifestacaoModal({ open, onOpenChange, onSuccess }: NovaMan
     setAssunto("");
     setDescricao("");
     setDataContato(new Date().toISOString().slice(0, 16));
-    setResponsavel("eu");
     setObservacaoInterna("");
     setEnviarWhatsapp(true);
     setEnviarEmail(false);
@@ -143,27 +154,32 @@ export function NovaManifestacaoModal({ open, onOpenChange, onSuccess }: NovaMan
   const handleSubmit = async () => {
     if (!isFormValid) return;
     
-    setIsSubmitting(true);
-    
-    // Simular delay de salvamento
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // Gerar protocolo mock
-    const protocolo = `OUV-2026-${String(Math.floor(Math.random() * 100000)).padStart(5, '0')}`;
-    const id = crypto.randomUUID();
-    
-    setIsSubmitting(false);
-    
-    toast.success(`Manifestação registrada! Protocolo: ${protocolo}`);
-    
-    resetForm();
-    onOpenChange(false);
-    
-    if (iniciarAtendimento) {
-      onSuccess?.(id, true);
-      navigate(`/ouvidoria/${id}`);
-    } else {
-      onSuccess?.(id, false);
+    try {
+      const result = await createMutation.mutateAsync({
+        associado_id: isAnonimo ? undefined : selectedAssociado?.id,
+        tipo: tipo as TipoManifestacao,
+        categoria: categoria as CategoriaManifestacao,
+        assunto,
+        descricao,
+        anonimo: isAnonimo,
+        canal: canal as CanalManifestacao,
+        prioridade,
+        setor_elogio: setorElogio || undefined,
+        data_contato: dataContato,
+        observacao_interna: observacaoInterna || undefined,
+      });
+      
+      resetForm();
+      onOpenChange(false);
+      
+      if (iniciarAtendimento && result) {
+        onSuccess?.(result.id, true);
+        navigate(`/ouvidoria/${result.id}`);
+      } else if (result) {
+        onSuccess?.(result.id, false);
+      }
+    } catch (error) {
+      // Erro tratado pelo hook
     }
   };
   
@@ -198,47 +214,58 @@ export function NovaManifestacaoModal({ open, onOpenChange, onSuccess }: NovaMan
                           className="w-full justify-between font-normal"
                         >
                           {selectedAssociado ? (
-                            <span>{selectedAssociado.nome} - {selectedAssociado.codigo}</span>
+                            <span>{selectedAssociado.nome}</span>
                           ) : (
-                            <span className="text-muted-foreground">Digite nome, CPF ou código...</span>
+                            <span className="text-muted-foreground">Digite nome ou CPF...</span>
                           )}
                           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-[400px] p-0" align="start">
-                        <Command>
+                        <Command shouldFilter={false}>
                           <CommandInput 
-                            placeholder="Buscar associado..." 
+                            placeholder="Digite nome ou CPF..." 
                             value={searchQuery}
                             onValueChange={setSearchQuery}
                           />
                           <CommandList>
-                            <CommandEmpty>Nenhum associado encontrado.</CommandEmpty>
-                            <CommandGroup>
-                              {filteredAssociados.map((associado) => (
-                                <CommandItem
-                                  key={associado.id}
-                                  value={`${associado.nome} ${associado.cpf} ${associado.codigo}`}
-                                  onSelect={() => {
-                                    setSelectedAssociado(associado);
-                                    setSearchOpen(false);
-                                  }}
-                                >
-                                  <Check
-                                    className={cn(
-                                      "mr-2 h-4 w-4",
-                                      selectedAssociado?.id === associado.id ? "opacity-100" : "opacity-0"
-                                    )}
-                                  />
-                                  <div className="flex flex-col">
-                                    <span className="font-medium">{associado.nome}</span>
-                                    <span className="text-xs text-muted-foreground">
-                                      {associado.codigo} · {associado.cpf}
-                                    </span>
-                                  </div>
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
+                            {isLoadingAssociados ? (
+                              <div className="p-4 text-center text-sm text-muted-foreground">
+                                Buscando...
+                              </div>
+                            ) : filteredAssociados.length === 0 && searchQuery.length >= 2 ? (
+                              <CommandEmpty>Nenhum associado encontrado.</CommandEmpty>
+                            ) : searchQuery.length < 2 ? (
+                              <div className="p-4 text-center text-sm text-muted-foreground">
+                                Digite pelo menos 2 caracteres
+                              </div>
+                            ) : (
+                              <CommandGroup>
+                                {filteredAssociados.map((associado) => (
+                                  <CommandItem
+                                    key={associado.id}
+                                    value={associado.id}
+                                    onSelect={() => {
+                                      setSelectedAssociado(associado);
+                                      setSearchOpen(false);
+                                    }}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4",
+                                        selectedAssociado?.id === associado.id ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
+                                    <div className="flex flex-col">
+                                      <span className="font-medium">{associado.nome}</span>
+                                      <span className="text-xs text-muted-foreground">
+                                        {associado.cpf}
+                                      </span>
+                                    </div>
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            )}
                           </CommandList>
                         </Command>
                       </PopoverContent>
@@ -250,7 +277,6 @@ export function NovaManifestacaoModal({ open, onOpenChange, onSuccess }: NovaMan
                       <div className="flex items-center gap-2">
                         <User className="h-4 w-4 text-muted-foreground" />
                         <span className="font-medium">{selectedAssociado.nome}</span>
-                        <span className="text-sm text-muted-foreground">({selectedAssociado.codigo})</span>
                       </div>
                       <div className="grid grid-cols-2 gap-2 text-sm">
                         <div className="flex items-center gap-2 text-muted-foreground">
@@ -432,23 +458,6 @@ export function NovaManifestacaoModal({ open, onOpenChange, onSuccess }: NovaMan
                     onChange={(e) => setDataContato(e.target.value)}
                   />
                 </div>
-                
-                <div className="space-y-2">
-                  <Label>Atribuir para</Label>
-                  <Select value={responsavel} onValueChange={setResponsavel}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {analistasOuvidoria.map((a) => (
-                        <SelectItem key={a.id} value={a.id}>
-                          {a.nome}
-                        </SelectItem>
-                      ))}
-                      <SelectItem value="nenhum">Não atribuir</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
               </div>
               
               <div className="space-y-2">
@@ -514,9 +523,9 @@ export function NovaManifestacaoModal({ open, onOpenChange, onSuccess }: NovaMan
           </Button>
           <Button 
             onClick={handleSubmit} 
-            disabled={!isFormValid || isSubmitting}
+            disabled={!isFormValid || createMutation.isPending}
           >
-            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {createMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Registrar Manifestação
           </Button>
         </DialogFooter>

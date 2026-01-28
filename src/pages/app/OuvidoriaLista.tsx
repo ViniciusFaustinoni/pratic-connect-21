@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { mockManifestacoes } from "@/mocks/ouvidoria";
+import { useManifestacoes } from "@/hooks/useOuvidoria";
 
 interface StatusConfig {
   label: string;
