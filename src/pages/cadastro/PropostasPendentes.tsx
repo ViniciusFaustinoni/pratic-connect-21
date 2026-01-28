@@ -28,8 +28,10 @@ import {
   Search,
   FileText,
   RefreshCw,
+  Zap,
 } from 'lucide-react';
 import { usePropostasPendentes, usePropostaStats } from '@/hooks/usePropostasPendentes';
+import { useInstalacoesAguardandoAtivacao } from '@/hooks/useVistoriaCompletaAnalise';
 import { formatDistanceToNow, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -155,6 +157,7 @@ export default function PropostasPendentes() {
 
   const { data: propostas, isLoading: propostasLoading, refetch } = usePropostasPendentes();
   const { data: stats, isLoading: statsLoading } = usePropostaStats();
+  const { data: instalacoesPendentes, isLoading: instalacoesPendentesLoading } = useInstalacoesAguardandoAtivacao();
 
   // Filtrar propostas
   const propostasFiltradas = propostas?.filter((proposta) => {
@@ -185,7 +188,7 @@ export default function PropostasPendentes() {
       </div>
 
       {/* KPIs */}
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-5">
         <KPICard
           titulo="Aguardando Análise"
           valor={stats?.aguardando || 0}
@@ -199,6 +202,13 @@ export default function PropostasPendentes() {
           icon={<Eye className="h-5 w-5 text-white" />}
           cor="bg-info"
           loading={statsLoading}
+        />
+        <KPICard
+          titulo="Aguard. Ativação"
+          valor={instalacoesPendentes?.length || 0}
+          icon={<Zap className="h-5 w-5 text-white" />}
+          cor="bg-purple-600"
+          loading={instalacoesPendentesLoading}
         />
         <KPICard
           titulo="Aprovados Hoje"
@@ -215,6 +225,79 @@ export default function PropostasPendentes() {
           loading={statsLoading}
         />
       </div>
+
+      {/* SEÇÃO AGUARDANDO ATIVAÇÃO */}
+      {instalacoesPendentes && instalacoesPendentes.length > 0 && (
+        <Card className="border-2 border-purple-500 bg-card">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-foreground">
+              <Zap className="h-5 w-5 text-purple-500" />
+              Instalações Aguardando Ativação de Rastreador
+            </CardTitle>
+            <CardDescription>
+              Clique para ativar o rastreador na plataforma e liberar a cobertura total
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded-md border border-border overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/50 hover:bg-muted/50">
+                    <TableHead className="text-foreground">Associado</TableHead>
+                    <TableHead className="text-foreground">Veículo</TableHead>
+                    <TableHead className="text-foreground">Rastreador</TableHead>
+                    <TableHead className="text-foreground">Concluída em</TableHead>
+                    <TableHead className="text-foreground text-right">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {instalacoesPendentes.map((inst: any) => (
+                    <TableRow key={inst.id} className="hover:bg-muted/30">
+                      <TableCell className="font-medium text-foreground">
+                        {inst.associados?.nome || '---'}
+                        <div className="text-sm text-muted-foreground">
+                          {inst.associados?.telefone || '---'}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-foreground">
+                          {inst.veiculos?.marca} {inst.veiculos?.modelo}
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          {inst.veiculos?.placa || '---'}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-foreground font-mono text-sm">
+                          {inst.rastreadores?.imei || '---'}
+                        </div>
+                        <Badge variant="outline" className="text-xs">
+                          {inst.rastreadores?.plataforma || 'N/A'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {inst.concluida_em
+                          ? format(new Date(inst.concluida_em), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
+                          : '---'}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          size="sm"
+                          className="bg-purple-600 hover:bg-purple-700 text-white"
+                          onClick={() => navigate(`/cadastro/instalacoes/${inst.id}/ativar`)}
+                        >
+                          <Zap className="mr-1 h-4 w-4" />
+                          Ativar
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* FILTROS */}
       <Card className="border-border bg-card">
