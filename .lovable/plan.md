@@ -1,241 +1,271 @@
 
-# Plano de Revisão Completa da Área Financeira + Correção ASAAS
+# Plano de Revisão Completa da Área de Contabilidade
 
-## Diagnóstico Final
+## Diagnóstico Atual
 
-### Problemas nas Páginas (UI não conectada)
-1. **Dashboard** - Botões não abrem modais
-2. **Cobranças** - Ações sem funcionalidade
-3. **Contas a Pagar** - Modais não conectados
-4. **Extrato** - Nova movimentação não funciona
+Após análise detalhada de todas as páginas, hooks e componentes da área de contabilidade, identifiquei:
 
-### BUG CRÍTICO: Integração ASAAS
-A edge function `asaas-cobrancas` tenta usar `dados.customer` que **nunca é passado** pelo hook. A chamada à API do ASAAS falha porque o campo `customer` é obrigatório.
+### O que está funcionando corretamente:
+- **Dashboard**: KPIs reais, lista de últimos lançamentos, ações rápidas
+- **Plano de Contas**: CRUD completo (39 contas já cadastradas no banco)
+- **Novo Lançamento**: Formulário, editor de partidas, validação de balanceamento
+- **Detalhe do Lançamento**: Visualização e estorno
+- **Balancete, Balanço Patrimonial, DRE**: Relatórios com dados reais
+- **Fechamentos**: Verificação e fechamento de períodos
+- **Razão da Conta**: Movimentação analítica por conta
+- **Integração com Financeiro**: Já implementada! Os modais `PagarContaModal` e `RegistrarPagamentoModal` já criam lançamentos contábeis automaticamente
+
+### Problemas Identificados:
+
+| # | Problema | Arquivo | Impacto |
+|---|----------|---------|---------|
+| 1 | Hook `useLancamentos` não busca partidas | `useContabilidade.ts` | Lista mostra R$ 0,00 em todas as linhas |
+| 2 | Botões Imprimir/Download não implementados | Balancete, BP, DRE, Razão | Botões não fazem nada |
+| 3 | Gráfico de categoria é placeholder | Dashboard | Área em branco |
+| 4 | Falta navegação para Razão da Conta | Dashboard | Menu não tem acesso |
+
+### Não há dados mock
+Todos os dados vêm do banco de dados real (atualmente vazio porque não houve operações financeiras).
 
 ---
 
 ## Correções Necessárias
 
-### 1. Edge Function `asaas-cobrancas` (BUG CRÍTICO)
+### 1. BUG CRÍTICO: Hook `useLancamentos` sem partidas
 
-**Problema:** Linha 85 usa `dados.customer` que não é passado
-**Solução:** Buscar o `asaas_id` do cliente pelo `associado_id` ANTES de criar a cobrança
+**Arquivo**: `src/hooks/useContabilidade.ts`
+**Linha**: 169
 
+**Problema**: O select usa apenas `*` e não traz as partidas vinculadas.
+
+**Solução**:
 ```typescript
-case 'criar': {
-  if (!dados) throw new Error('Dados da cobrança são obrigatórios');
-  
-  // CORREÇÃO: Buscar asaas_id do cliente pelo associado_id
-  let customerAsaasId = dados.customer;
-  
-  if (!customerAsaasId && associado_id) {
-    const { data: clienteAsaas } = await supabase
-      .from('asaas_clientes')
-      .select('asaas_id')
-      .eq('associado_id', associado_id)
-      .maybeSingle();
-    
-    if (!clienteAsaas?.asaas_id) {
-      throw new Error('Cliente não sincronizado com ASAAS. Sincronize primeiro.');
-    }
-    
-    customerAsaasId = clienteAsaas.asaas_id;
-  }
-  
-  if (!customerAsaasId) {
-    throw new Error('customer ou associado_id é obrigatório');
-  }
-
-  // Agora usar customerAsaasId na chamada
-  const asaasCobranca = await asaasRequest('/payments', 'POST', {
-    customer: customerAsaasId,
-    // ... resto dos dados
-  });
+export function useLancamentos(filtros?: FiltrosLancamentos) {
+  return useQuery({
+    queryKey: ['lancamentos', filtros],
+    queryFn: async () => {
+      let query = supabase
+        .from('lancamentos_contabeis')
+        .select(`
+          *,
+          partidas:lancamentos_partidas(
+            id, tipo, valor, ordem,
+            conta:plano_contas(codigo, descricao)
+          )
+        `)
+        .order('data_competencia', { ascending: false })
+        .order('created_at', { ascending: false });
+      // ... resto mantém igual
 ```
+
+Isso permite que a página `LancamentosList.tsx` calcule corretamente os totais de débito/crédito em cada linha.
 
 ---
 
-### 2. Dashboard Financeiro (`FinanceiroDashboard.tsx`)
+### 2. Implementar Exportação PDF (Balancete, BP, DRE, Razão)
 
-**Adicionar imports e estados:**
+Criar função utilitária de exportação e conectar aos botões.
+
+**Novo arquivo**: `src/lib/contabilidade-exports.ts`
+
 ```typescript
-import { NovaCobrancaModal } from '@/components/financeiro/NovaCobrancaModal';
-import { NovaContaPagarModal } from '@/components/financeiro/NovaContaPagarModal';
+import jsPDF from 'jspdf';
 
-const [modalCobranca, setModalCobranca] = useState(false);
-const [modalDespesa, setModalDespesa] = useState(false);
-```
+interface ExportConfig {
+  titulo: string;
+  periodo: string;
+  dados: any[];
+  colunas: { header: string; key: string; align?: 'left' | 'right' }[];
+}
 
-**Conectar botões:**
-- "Nova Cobrança" → `onClick={() => setModalCobranca(true)}`
-- "Nova Despesa" → `onClick={() => setModalDespesa(true)}`
-- "Gerar Faturamento" → `onClick={() => navigate('/financeiro/faturamento')}`
-
-**Conectar Ações Rápidas:**
-- "Gerar Faturamento Mensal" → `/financeiro/faturamento`
-- "Ver Cobranças Pendentes" → `/financeiro/cobrancas?status=pendente`
-- "Ver Contas a Pagar" → `/financeiro/contas-pagar`
-- "Conciliação Bancária" → `/financeiro/extratos-bancarios`
-- "Ver extrato completo" → `/financeiro/extrato`
-
-**Renderizar modais no final:**
-```tsx
-<NovaCobrancaModal open={modalCobranca} onClose={() => setModalCobranca(false)} />
-<NovaContaPagarModal open={modalDespesa} onClose={() => setModalDespesa(false)} />
-```
-
----
-
-### 3. Lista de Cobranças (`CobrancasList.tsx`)
-
-**Adicionar imports e estados:**
-```typescript
-import { NovaCobrancaModal } from '@/components/financeiro/NovaCobrancaModal';
-import { RegistrarPagamentoModal } from '@/components/financeiro/RegistrarPagamentoModal';
-
-const [modalNovaCobranca, setModalNovaCobranca] = useState(false);
-const [modalPagamento, setModalPagamento] = useState(false);
-const [cobrancaSelecionada, setCobrancaSelecionada] = useState<any>(null);
-```
-
-**Conectar botão header:**
-```tsx
-<Button onClick={() => setModalNovaCobranca(true)}>
-  <Plus className="mr-2 h-4 w-4" /> Nova Cobrança
-</Button>
-```
-
-**Conectar ações do dropdown:**
-- "Ver Detalhes" → `navigate(\`/financeiro/cobrancas/${cobranca.id}\`)`
-- "Registrar Pagamento" → Abrir `RegistrarPagamentoModal`
-- "Enviar WhatsApp" → Função com link do boleto
-
-**Renderizar modais:**
-```tsx
-<NovaCobrancaModal open={modalNovaCobranca} onClose={() => setModalNovaCobranca(false)} />
-<RegistrarPagamentoModal 
-  open={modalPagamento} 
-  onClose={() => setModalPagamento(false)}
-  cobranca={cobrancaSelecionada}
-/>
-```
-
----
-
-### 4. Contas a Pagar (`ContasPagar.tsx`)
-
-**Adicionar imports e estados:**
-```typescript
-import { NovaContaPagarModal } from '@/components/financeiro/NovaContaPagarModal';
-import { PagarContaModal } from '@/components/financeiro/PagarContaModal';
-
-const [modalNovaConta, setModalNovaConta] = useState(false);
-const [modalPagar, setModalPagar] = useState(false);
-const [contaSelecionada, setContaSelecionada] = useState<any>(null);
-```
-
-**Adicionar mutation para cancelar:**
-```typescript
-const cancelarConta = useMutation({
-  mutationFn: async (contaId: string) => {
-    const { error } = await supabase
-      .from('contas_pagar')
-      .update({ status: 'cancelado', updated_at: new Date().toISOString() })
-      .eq('id', contaId);
-    if (error) throw error;
-  },
-  onSuccess: () => {
-    toast.success('Conta cancelada com sucesso');
-    queryClient.invalidateQueries({ queryKey: ['contas-pagar'] });
-  },
-  onError: () => toast.error('Erro ao cancelar conta'),
-});
-```
-
-**Conectar ações:**
-- "Nova Conta" → `onClick={() => setModalNovaConta(true)}`
-- "Pagar" → Abrir `PagarContaModal`
-- "Cancelar" → `cancelarConta.mutate(conta.id)`
-
----
-
-### 5. Extrato (`Extrato.tsx`)
-
-**Adicionar imports e estados:**
-```typescript
-import { NovaMovimentacaoModal } from '@/components/financeiro/NovaMovimentacaoModal';
-
-const [modalMovimentacao, setModalMovimentacao] = useState(false);
-```
-
-**Conectar botão Nova Movimentação:**
-```tsx
-<Button variant="outline" onClick={() => setModalMovimentacao(true)}>
-  <Plus className="mr-2 h-4 w-4" /> Nova Movimentação
-</Button>
-```
-
-**Implementar exportação CSV:**
-```typescript
-const handleExportar = () => {
-  if (!movimentacoes?.length) {
-    toast.error('Nenhuma movimentação para exportar');
-    return;
-  }
+export function exportarRelatorioPDF(config: ExportConfig) {
+  const doc = new jsPDF();
+  const { titulo, periodo, dados, colunas } = config;
   
-  const headers = 'Data,Tipo,Categoria,Descrição,Valor\n';
-  const rows = movimentacoes.map(m => 
-    `${m.data_movimentacao},${m.tipo},${m.categoria || ''},${m.descricao || ''},${m.valor}`
+  // Cabeçalho
+  doc.setFontSize(16);
+  doc.text('SGA PRATIC - ASSOCIAÇÃO DE PROTEÇÃO VEICULAR', 105, 20, { align: 'center' });
+  doc.setFontSize(14);
+  doc.text(titulo, 105, 30, { align: 'center' });
+  doc.setFontSize(10);
+  doc.text(periodo, 105, 38, { align: 'center' });
+  
+  // Tabela simplificada
+  let y = 50;
+  // ... implementação da tabela
+  
+  doc.save(`${titulo.toLowerCase().replace(/ /g, '_')}_${periodo}.pdf`);
+}
+
+export function exportarRelatorioCSV(config: ExportConfig) {
+  const { titulo, periodo, dados, colunas } = config;
+  
+  const headers = colunas.map(c => c.header).join(';');
+  const rows = dados.map(d => 
+    colunas.map(c => d[c.key] || '').join(';')
   ).join('\n');
   
-  const blob = new Blob([headers + rows], { type: 'text/csv;charset=utf-8' });
+  const csv = `${headers}\n${rows}`;
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
+  
   const a = document.createElement('a');
   a.href = url;
-  a.download = `extrato_${filters.dataInicio}_${filters.dataFim}.csv`;
+  a.download = `${titulo.toLowerCase().replace(/ /g, '_')}_${periodo}.csv`;
   a.click();
   URL.revokeObjectURL(url);
-  toast.success('Extrato exportado!');
-};
+}
 ```
 
 ---
 
-## Arquivos a Modificar
+### 3. Conectar Botões de Exportação nos Relatórios
+
+#### 3.1 Balancete (`Balancete.tsx`)
+
+**Linhas 114-119**: Conectar botões
+
+```typescript
+const handlePrint = () => {
+  window.print();
+};
+
+const handleExportPDF = () => {
+  if (!balancete?.length) {
+    toast.error('Nenhum dado para exportar');
+    return;
+  }
+  // Chamar função de exportação
+  toast.success('PDF gerado!');
+};
+
+// Nos botões:
+<Button variant="outline" size="icon" onClick={handlePrint}>
+  <Printer className="h-4 w-4" />
+</Button>
+<Button variant="outline" size="icon" onClick={handleExportPDF}>
+  <Download className="h-4 w-4" />
+</Button>
+```
+
+#### 3.2 Balanço Patrimonial (`BalancoPatrimonial.tsx`)
+#### 3.3 DRE (`DRE.tsx`)
+#### 3.4 Razão da Conta (`RazaoConta.tsx`)
+
+Mesma lógica aplicada em todos os relatórios.
+
+---
+
+### 4. Gráfico de Categoria no Dashboard
+
+**Arquivo**: `ContabilidadeDashboard.tsx`
+**Linhas 386-398**: Substituir placeholder por gráfico real
+
+**Solução**: Usar Recharts (já instalado) para mostrar despesas por categoria
+
+```typescript
+// Adicionar query para buscar despesas por categoria
+const { data: despesasPorCategoria } = useQuery({
+  queryKey: ['despesas-categoria', mesAtual, anoAtual],
+  queryFn: async () => {
+    const { data: partidas } = await supabase
+      .from('lancamentos_partidas')
+      .select(`
+        valor,
+        conta:plano_contas!inner(codigo, descricao, tipo),
+        lancamento:lancamentos_contabeis!inner(data_competencia, status)
+      `)
+      .eq('tipo', 'debito')
+      .eq('conta.tipo', 'despesa')
+      .eq('lancamento.status', 'ativo')
+      .gte('lancamento.data_competencia', inicioMes)
+      .lt('lancamento.data_competencia', fimMes);
+    
+    // Agrupar por descrição da conta
+    const agrupado = partidas?.reduce((acc, p) => {
+      const desc = p.conta.descricao;
+      acc[desc] = (acc[desc] || 0) + p.valor;
+      return acc;
+    }, {});
+    
+    return Object.entries(agrupado || {}).map(([name, value]) => ({ name, value }));
+  }
+});
+
+// Renderizar com Recharts
+<ResponsiveContainer width="100%" height={250}>
+  <PieChart>
+    <Pie data={despesasPorCategoria} dataKey="value" nameKey="name" />
+    <Tooltip formatter={(value) => formatCurrency(value)} />
+    <Legend />
+  </PieChart>
+</ResponsiveContainer>
+```
+
+---
+
+### 5. Adicionar Link para Razão no Dashboard
+
+**Arquivo**: `ContabilidadeDashboard.tsx`
+**Seção Ações Rápidas** (linha ~440)
+
+```typescript
+<Button 
+  variant="outline" 
+  className="w-full justify-start"
+  onClick={() => navigate('/contabilidade/razao')}
+>
+  <BookOpen className="h-4 w-4 mr-2" />
+  Razão da Conta
+</Button>
+```
+
+---
+
+## Resumo das Alterações
 
 | Arquivo | Tipo | Alteração |
 |---------|------|-----------|
-| `supabase/functions/asaas-cobrancas/index.ts` | Edge Function | Buscar asaas_id antes de criar cobrança |
-| `src/pages/financeiro/FinanceiroDashboard.tsx` | Página | Conectar modais + navegações |
-| `src/pages/financeiro/CobrancasList.tsx` | Página | Modal nova cobrança + pagamento |
-| `src/pages/financeiro/ContasPagar.tsx` | Página | Modal nova conta + pagar + cancelar |
-| `src/pages/financeiro/Extrato.tsx` | Página | Modal movimentação + exportar CSV |
+| `src/hooks/useContabilidade.ts` | Hook | Adicionar partidas no select de `useLancamentos` |
+| `src/lib/contabilidade-exports.ts` | **Novo** | Funções de exportação PDF/CSV |
+| `src/pages/contabilidade/Balancete.tsx` | Página | Conectar botões de exportação |
+| `src/pages/contabilidade/BalancoPatrimonial.tsx` | Página | Conectar botões de exportação |
+| `src/pages/contabilidade/DRE.tsx` | Página | Conectar botões de exportação |
+| `src/pages/contabilidade/RazaoConta.tsx` | Página | Conectar botões de exportação |
+| `src/pages/contabilidade/ContabilidadeDashboard.tsx` | Página | Gráfico real + link Razão |
 
 ---
 
-## Fluxo de Integração ASAAS Corrigido
+## Integração com Área Financeira
 
-```text
-1. Usuário clica "Nova Cobrança"
-2. Modal abre, usuário seleciona associado
-3. Ao salvar (com "Gerar Boleto" marcado):
-   a. Hook chama sincronizarCliente(associado_id)
-      → Edge function cria/atualiza cliente no ASAAS
-      → Salva asaas_id na tabela asaas_clientes
-   b. Hook chama criarCobranca({ associado_id, ... })
-      → Edge function BUSCA asaas_id pelo associado_id (CORREÇÃO)
-      → Cria cobrança no ASAAS com customer correto
-      → Gera boleto + PIX
-      → Salva na tabela asaas_cobrancas
-4. Sucesso! Cobrança criada com boleto/PIX funcionais
-```
+**Já implementada e não precisa alteração!**
+
+A integração já existe nos seguintes pontos:
+
+1. **`PagarContaModal.tsx`** (linha 161): Ao pagar uma conta, cria lançamento contábil automático
+   - Débito: Conta de despesa conforme categoria
+   - Crédito: Banco Conta Movimento
+
+2. **`RegistrarPagamentoModal.tsx`** (linha 135): Ao receber pagamento, cria lançamento contábil
+   - Débito: Banco Conta Movimento
+   - Crédito: Conta de receita conforme tipo
+
+3. **`contabilidade-config.ts`**: Mapeamento de tipos/categorias para contas contábeis
 
 ---
 
 ## Verificação Pós-Implementação
 
-1. **Testar criação de cobrança com boleto** - Verificar se ASAAS gera corretamente
-2. **Verificar logs da edge function** - Confirmar fluxo sem erros
-3. **Testar todas as ações do dropdown** - Pagamento, cancelamento, WhatsApp
-4. **Testar contas a pagar** - Criar, pagar, cancelar
-5. **Testar extrato** - Nova movimentação, exportar CSV
+1. Acessar **Lista de Lançamentos** e verificar se débitos/créditos aparecem corretamente
+2. Testar **exportação PDF** em Balancete, BP, DRE e Razão
+3. Verificar se o **gráfico de categorias** aparece no Dashboard
+4. Criar uma **cobrança no Financeiro**, registrar pagamento, e verificar se o lançamento contábil foi criado automaticamente
+5. Criar uma **conta a pagar**, pagar, e verificar o lançamento contábil gerado
+
+---
+
+## Observação
+
+**Não há necessidade de alterações em outras áreas do sistema.** A integração Contabilidade ↔ Financeiro já está implementada e funcionando. Os lançamentos contábeis serão criados automaticamente quando:
+- Pagamentos de cobranças forem registrados
+- Contas a pagar forem pagas
