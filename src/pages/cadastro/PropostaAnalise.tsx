@@ -43,6 +43,7 @@ import {
   Zap,
   Loader2,
   Building2,
+  RefreshCw,
 } from 'lucide-react';
 import {
   useProposta,
@@ -311,6 +312,31 @@ export default function PropostaAnalise() {
           </Button>
         )}
       </div>
+
+      {/* BANNER DE REANÁLISE - Documentos enviados pelo cliente */}
+      {proposta.documentos_solicitados_enviados && proposta.documentos_solicitados_enviados.length > 0 && (
+        <Card className="border-amber-500 bg-amber-500/10">
+          <CardContent className="py-4">
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-lg bg-amber-500/20">
+                <RefreshCw className="h-5 w-5 text-amber-500" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-amber-600 dark:text-amber-400">
+                  Reanálise Necessária
+                </h3>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  O cliente enviou {proposta.documentos_solicitados_enviados.length} documento(s) solicitado(s). 
+                  Verifique a seção "Documentos Solicitados" na coluna direita.
+                </p>
+              </div>
+              <Badge className="bg-amber-500/20 text-amber-600 border-amber-500/30">
+                {proposta.documentos_solicitados_enviados.length} novo(s)
+              </Badge>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* CONTEÚDO */}
       <div className="grid gap-6 lg:grid-cols-5">
