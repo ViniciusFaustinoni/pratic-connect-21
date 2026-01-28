@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Camera, Check, AlertTriangle, 
   Gauge, CheckCircle2, Loader2, Car, Video,
-  ChevronDown, ChevronUp, XCircle, MapPin, Lock, ShieldCheck, ShieldX
+  ChevronDown, ChevronUp, XCircle, MapPin, Lock, ShieldCheck, ShieldX, MessageSquare
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,6 +11,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { FotoCapture } from '@/components/instalador/FotoCapture';
 import { VideoCapture } from '@/components/instalador/VideoCapture';
@@ -53,6 +54,7 @@ export default function ExecutarVistoriaCompleta() {
     placa: false, chassi: false, modelo: false, cor: false,
   });
   const [hodometro, setHodometro] = useState('');
+  const [observacoes, setObservacoes] = useState('');
 
   // Dados
   const vistoriaId = vistoria?.id;
@@ -130,6 +132,7 @@ export default function ExecutarVistoriaCompleta() {
         veiculoId: veiculo.id,
         associadoId: associado.id,
         hodometro: parseInt(hodometro),
+        observacoes: observacoes.trim() || undefined,
       });
       setShowConfirmacao(true);
     } catch (e) {
@@ -358,6 +361,28 @@ export default function ExecutarVistoriaCompleta() {
             </Collapsible>
           );
         })}
+
+        {/* Observações do Vistoriador (opcional) */}
+        <Card className="border-slate-700 bg-slate-800">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base text-white">
+              <MessageSquare className="h-5 w-5 text-amber-400" />
+              Observações (opcional)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Textarea
+              placeholder="Registre qualquer observação relevante sobre o veículo ou a vistoria..."
+              value={observacoes}
+              onChange={(e) => setObservacoes(e.target.value)}
+              className="resize-none border-slate-600 bg-slate-900 text-white min-h-[100px]"
+              rows={4}
+            />
+            <p className="text-xs text-slate-400 mt-2">
+              Essas observações serão visíveis para o analista de cadastro.
+            </p>
+          </CardContent>
+        </Card>
 
         {/* Vídeo 360 */}
         <Card className="border-slate-700 bg-slate-800">

@@ -30,6 +30,8 @@ export interface VistoriaInfo {
   tipo: string;
   modalidade?: string; // 'autovistoria' | 'presencial' | 'ponto_fixo'
   fotos: VistoriaFotoInfo[];
+  observacoes?: string | null;
+  km_atual?: number | null;
 }
 
 export interface DocumentoSolicitadoEnviado {
@@ -269,7 +271,7 @@ export function usePropostasPendentes() {
       // 1. Tentar buscar vistoria vinculada ao contrato (nova arquitetura)
       const { data: vistoriaData } = await supabase
         .from('vistorias')
-        .select('id, status, modalidade')
+        .select('id, status, modalidade, observacoes, km_atual')
         .eq('contrato_id', contrato.id)
         .order('created_at', { ascending: false })
         .limit(1)
@@ -290,6 +292,8 @@ export function usePropostasPendentes() {
             tipo: vistoriaData.modalidade === 'autovistoria' ? 'autovistoria' : 'agendada',
             modalidade: vistoriaData.modalidade || undefined,
             fotos: fotosVistoria as VistoriaFotoInfo[],
+            observacoes: vistoriaData.observacoes,
+            km_atual: vistoriaData.km_atual,
           };
         }
       }
