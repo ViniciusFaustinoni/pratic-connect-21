@@ -22,7 +22,7 @@ export function EscolhaLocalVistoria({ onEscolher }: EscolhaLocalVistoriaProps) 
   return (
     <div className="space-y-6">
       <div className="text-center space-y-2">
-        <h2 className="text-xl font-semibold">Onde deseja realizar a vistoria?</h2>
+        <h2 className="text-xl font-semibold">Onde deseja realizar a instalação do rastreador?</h2>
         <p className="text-sm text-muted-foreground">
           Escolha a opção mais conveniente para você
         </p>
@@ -45,7 +45,7 @@ export function EscolhaLocalVistoria({ onEscolher }: EscolhaLocalVistoriaProps) 
                   <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
                 </h3>
                 <p className="text-sm text-muted-foreground">
-                  Um vistoriador irá ao seu endereço para realizar a vistoria do veículo
+                  Um técnico irá ao seu endereço para realizar a instalação do rastreador
                 </p>
                 <p className="text-xs text-muted-foreground/70 mt-2">
                   📅 Agendamento disponível em até 48h
@@ -71,7 +71,7 @@ export function EscolhaLocalVistoria({ onEscolher }: EscolhaLocalVistoriaProps) 
                   <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
                 </h3>
                 <p className="text-sm text-muted-foreground">
-                  Leve seu veículo à nossa sede para realizar a vistoria no local
+                  Leve seu veículo à nossa sede para realizar a instalação no local
                 </p>
                 
                 {isLoading ? (
@@ -107,7 +107,7 @@ export function EscolhaLocalVistoria({ onEscolher }: EscolhaLocalVistoriaProps) 
       </div>
 
       <p className="text-xs text-center text-muted-foreground">
-        Após escolher o local, você poderá selecionar o melhor horário para a vistoria
+        Após escolher o local, você poderá selecionar o melhor horário para a instalação
       </p>
     </div>
   );
