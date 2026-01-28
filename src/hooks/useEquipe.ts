@@ -45,7 +45,7 @@ export function useProfissionaisEquipe() {
       const { data: roles, error: rolesError } = await supabase
         .from('user_roles')
         .select('user_id')
-        .eq('role', 'instalador_vistoriador');
+        .in('role', ['instalador_vistoriador', 'vistoriador_base']);
 
       if (rolesError) throw rolesError;
       if (!roles?.length) return [];
