@@ -217,11 +217,11 @@ export function AgendamentoVistoria({
   
   const titulo = contexto === 'presencial-direto' 
     ? 'Agendar Vistoria Presencial'
-    : 'Agendar Vistoria Completa';
+    : 'Agendar Instalação';
     
   const subtitulo = contexto === 'presencial-direto'
     ? 'Escolha data e horário para o vistoriador ir até você'
-    : 'Agende a visita para ativar todas as coberturas do seu plano';
+    : 'Escolha data e horário para o técnico instalar o rastreador';
 
   return (
     <div className="space-y-6">
@@ -339,7 +339,7 @@ export function AgendamentoVistoria({
                   >
                     <Label className="flex items-center gap-2">
                       <MapPin className="h-4 w-4" />
-                      Endereço para a vistoria
+                      Endereço para a instalação
                     </Label>
                     
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -442,7 +442,7 @@ export function AgendamentoVistoria({
                   >
                     <Label className="flex items-center gap-2">
                       <User className="h-4 w-4" />
-                      Quem vai receber o vistoriador?
+                      Quem receberá o técnico/instalador?
                     </Label>
                     
                     <RadioGroup
