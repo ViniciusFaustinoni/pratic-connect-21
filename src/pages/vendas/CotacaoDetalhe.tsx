@@ -51,7 +51,10 @@ export default function CotacaoDetalhe() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { profile } = useAuth();
+  const { profile, roles } = useAuth();
+
+  // Verificar se é diretor para permissão de exclusão
+  const isDiretor = roles?.includes('diretor');
 
   // Realtime para notificações
   useCotacoesRealtime();
@@ -465,6 +468,7 @@ Ficou com alguma dúvida? Estou à disposição!
             isExcluindo={excluirMutation.isPending}
             isGerando={isGerando}
             isDuplicando={duplicarMutation.isPending}
+            canDelete={isDiretor}
           />
 
           {/* TIMELINE */}
