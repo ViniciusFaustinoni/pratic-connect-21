@@ -7,6 +7,8 @@ import { Scale, Download, FileSpreadsheet, Check, X, Loader2 } from 'lucide-reac
 import { useBalancete } from '@/hooks/useContabilidade';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { exportarRelatorioPDF, exportarRelatorioCSV } from '@/lib/contabilidade-exports';
+import { toast } from 'sonner';
 
 const BalancoPatrimonial = () => {
   const currentDate = new Date();
@@ -183,11 +185,119 @@ const BalancoPatrimonial = () => {
               </SelectContent>
             </Select>
           </div>
-          <Button variant="outline" size="sm">
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => {
+              if (!balanco) {
+                toast.error('Nenhum dado para exportar');
+                return;
+              }
+              const dados = [
+                ...(balanco.ativo.circulante.contas || []).map(c => ({
+                  grupo: 'ATIVO CIRCULANTE',
+                  codigo: c.codigo,
+                  descricao: c.descricao,
+                  saldo: c.debitos - c.creditos,
+                })),
+                ...(balanco.ativo.naoCirculante.contas || []).map(c => ({
+                  grupo: 'ATIVO NÃO CIRCULANTE',
+                  codigo: c.codigo,
+                  descricao: c.descricao,
+                  saldo: c.debitos - c.creditos,
+                })),
+                ...(balanco.passivo.circulante.contas || []).map(c => ({
+                  grupo: 'PASSIVO CIRCULANTE',
+                  codigo: c.codigo,
+                  descricao: c.descricao,
+                  saldo: c.creditos - c.debitos,
+                })),
+                ...(balanco.passivo.naoCirculante.contas || []).map(c => ({
+                  grupo: 'PASSIVO NÃO CIRCULANTE',
+                  codigo: c.codigo,
+                  descricao: c.descricao,
+                  saldo: c.creditos - c.debitos,
+                })),
+                ...(balanco.patrimonioLiquido.contas || []).map(c => ({
+                  grupo: 'PATRIMÔNIO LÍQUIDO',
+                  codigo: c.codigo,
+                  descricao: c.descricao,
+                  saldo: c.creditos - c.debitos,
+                })),
+              ].filter(d => Math.abs(d.saldo) > 0.01);
+              
+              exportarRelatorioPDF({
+                titulo: 'Balanço Patrimonial',
+                periodo: `${meses.find(m => m.value === mes)?.label} de ${ano}`,
+                dados,
+                colunas: [
+                  { header: 'Grupo', key: 'grupo', align: 'left' },
+                  { header: 'Código', key: 'codigo', align: 'left' },
+                  { header: 'Descrição', key: 'descricao', align: 'left' },
+                  { header: 'Saldo', key: 'saldo', align: 'right' },
+                ],
+              });
+              toast.success('PDF gerado com sucesso!');
+            }}
+          >
             <Download className="h-4 w-4 mr-2" />
             PDF
           </Button>
-          <Button variant="outline" size="sm">
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => {
+              if (!balanco) {
+                toast.error('Nenhum dado para exportar');
+                return;
+              }
+              const dados = [
+                ...(balanco.ativo.circulante.contas || []).map(c => ({
+                  grupo: 'ATIVO CIRCULANTE',
+                  codigo: c.codigo,
+                  descricao: c.descricao,
+                  saldo: c.debitos - c.creditos,
+                })),
+                ...(balanco.ativo.naoCirculante.contas || []).map(c => ({
+                  grupo: 'ATIVO NÃO CIRCULANTE',
+                  codigo: c.codigo,
+                  descricao: c.descricao,
+                  saldo: c.debitos - c.creditos,
+                })),
+                ...(balanco.passivo.circulante.contas || []).map(c => ({
+                  grupo: 'PASSIVO CIRCULANTE',
+                  codigo: c.codigo,
+                  descricao: c.descricao,
+                  saldo: c.creditos - c.debitos,
+                })),
+                ...(balanco.passivo.naoCirculante.contas || []).map(c => ({
+                  grupo: 'PASSIVO NÃO CIRCULANTE',
+                  codigo: c.codigo,
+                  descricao: c.descricao,
+                  saldo: c.creditos - c.debitos,
+                })),
+                ...(balanco.patrimonioLiquido.contas || []).map(c => ({
+                  grupo: 'PATRIMÔNIO LÍQUIDO',
+                  codigo: c.codigo,
+                  descricao: c.descricao,
+                  saldo: c.creditos - c.debitos,
+                })),
+              ].filter(d => Math.abs(d.saldo) > 0.01);
+              
+              exportarRelatorioCSV({
+                titulo: 'Balanço Patrimonial',
+                periodo: `${meses.find(m => m.value === mes)?.label} de ${ano}`,
+                dados,
+                colunas: [
+                  { header: 'Grupo', key: 'grupo', align: 'left' },
+                  { header: 'Código', key: 'codigo', align: 'left' },
+                  { header: 'Descrição', key: 'descricao', align: 'left' },
+                  { header: 'Saldo', key: 'saldo', align: 'right' },
+                ],
+              });
+              toast.success('CSV gerado com sucesso!');
+            }}
+          >
             <FileSpreadsheet className="h-4 w-4 mr-2" />
             Excel
           </Button>

@@ -14,6 +14,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { exportarRelatorioPDF, imprimirRelatorio } from '@/lib/contabilidade-exports';
+import { toast } from 'sonner';
 
 export default function DRE() {
   const now = new Date();
@@ -171,10 +173,51 @@ export default function DRE() {
             </SelectContent>
           </Select>
 
-          <Button variant="outline" size="icon">
+          <Button variant="outline" size="icon" onClick={imprimirRelatorio} title="Imprimir">
             <Printer className="h-4 w-4" />
           </Button>
-          <Button variant="outline" size="icon">
+          <Button 
+            variant="outline" 
+            size="icon" 
+            title="Exportar PDF"
+            onClick={() => {
+              if (!dre) {
+                toast.error('Nenhum dado para exportar');
+                return;
+              }
+              const dados = [
+                ...dre.receitas.map(r => ({
+                  tipo: 'RECEITA',
+                  codigo: r.codigo,
+                  descricao: r.descricao,
+                  valor: r.valor,
+                })),
+                ...dre.despesas.map(d => ({
+                  tipo: 'DESPESA',
+                  codigo: d.codigo,
+                  descricao: d.descricao,
+                  valor: -d.valor,
+                })),
+              ];
+              
+              exportarRelatorioPDF({
+                titulo: 'Demonstração do Resultado do Exercício',
+                subtitulo: 'DRE',
+                periodo: format(new Date(ano, mes - 1), 'MMMM yyyy', { locale: ptBR }),
+                dados,
+                colunas: [
+                  { header: 'Tipo', key: 'tipo', align: 'left' },
+                  { header: 'Código', key: 'codigo', align: 'left' },
+                  { header: 'Descrição', key: 'descricao', align: 'left' },
+                  { header: 'Valor', key: 'valor', align: 'right' },
+                ],
+                totais: {
+                  valor: resultado,
+                },
+              });
+              toast.success('PDF gerado com sucesso!');
+            }}
+          >
             <Download className="h-4 w-4" />
           </Button>
         </div>

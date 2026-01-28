@@ -22,6 +22,8 @@ import { useRazaoConta, usePlanoContas } from '@/hooks/useContabilidade';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { exportarRelatorioPDF, imprimirRelatorio } from '@/lib/contabilidade-exports';
+import { toast } from 'sonner';
 
 export default function RazaoConta() {
   const now = new Date();
@@ -76,10 +78,56 @@ export default function RazaoConta() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" disabled={!contaId}>
+          <Button 
+            variant="outline" 
+            size="icon" 
+            disabled={!contaId || movimentacoes.length === 0}
+            onClick={imprimirRelatorio}
+            title="Imprimir"
+          >
             <Printer className="h-4 w-4" />
           </Button>
-          <Button variant="outline" size="icon" disabled={!contaId}>
+          <Button 
+            variant="outline" 
+            size="icon" 
+            disabled={!contaId || movimentacoes.length === 0}
+            title="Exportar PDF"
+            onClick={() => {
+              if (!contaSelecionada || movimentacoes.length === 0) {
+                toast.error('Nenhum dado para exportar');
+                return;
+              }
+              const dados = movimentacoes.map((m: any) => ({
+                data: format(new Date(m.lancamento.data_competencia), 'dd/MM/yyyy'),
+                numero: m.lancamento.numero,
+                historico: m.lancamento.historico,
+                debito: m.debito,
+                credito: m.credito,
+                saldo: m.saldo,
+              }));
+              
+              exportarRelatorioPDF({
+                titulo: 'Razão Analítico',
+                subtitulo: `${contaSelecionada.codigo} - ${contaSelecionada.descricao}`,
+                periodo: format(new Date(ano, mes - 1), 'MMMM yyyy', { locale: ptBR }),
+                dados,
+                colunas: [
+                  { header: 'Data', key: 'data', align: 'left' },
+                  { header: 'Lançamento', key: 'numero', align: 'left' },
+                  { header: 'Histórico', key: 'historico', align: 'left' },
+                  { header: 'Débito', key: 'debito', align: 'right' },
+                  { header: 'Crédito', key: 'credito', align: 'right' },
+                  { header: 'Saldo', key: 'saldo', align: 'right' },
+                ],
+                totais: {
+                  debito: totalDebitos,
+                  credito: totalCreditos,
+                  saldo: saldoAcumulado,
+                },
+              });
+              toast.success('PDF gerado com sucesso!');
+            }}
+          >
             <Download className="h-4 w-4" />
           </Button>
         </div>

@@ -166,7 +166,13 @@ export function useLancamentos(filtros?: FiltrosLancamentos) {
     queryFn: async () => {
       let query = supabase
         .from('lancamentos_contabeis')
-        .select(`*`)
+        .select(`
+          *,
+          partidas:lancamentos_partidas(
+            id, tipo, valor, ordem,
+            conta:plano_contas(codigo, descricao)
+          )
+        `)
         .order('data_competencia', { ascending: false })
         .order('created_at', { ascending: false });
 

@@ -22,6 +22,8 @@ import { useBalancete } from '@/hooks/useContabilidade';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { exportarRelatorioPDF, exportarRelatorioCSV, imprimirRelatorio } from '@/lib/contabilidade-exports';
+import { toast } from 'sonner';
 
 export default function Balancete() {
   const now = new Date();
@@ -111,10 +113,56 @@ export default function Balancete() {
             </SelectContent>
           </Select>
 
-          <Button variant="outline" size="icon">
+          <Button variant="outline" size="icon" onClick={imprimirRelatorio} title="Imprimir">
             <Printer className="h-4 w-4" />
           </Button>
-          <Button variant="outline" size="icon">
+          <Button 
+            variant="outline" 
+            size="icon" 
+            title="Exportar PDF"
+            onClick={() => {
+              if (!balancete || balancete.length === 0) {
+                toast.error('Nenhum dado para exportar');
+                return;
+              }
+              const contasComMovimento = balancete.filter(c => c.debitos > 0 || c.creditos > 0);
+              if (contasComMovimento.length === 0) {
+                toast.error('Nenhuma movimentação no período');
+                return;
+              }
+              const dados = contasComMovimento.map(c => {
+                const saldoLiquido = c.debitos - c.creditos;
+                return {
+                  codigo: c.codigo,
+                  descricao: c.descricao,
+                  debitos: c.debitos,
+                  creditos: c.creditos,
+                  saldoDevedor: saldoLiquido > 0 ? saldoLiquido : 0,
+                  saldoCredor: saldoLiquido < 0 ? Math.abs(saldoLiquido) : 0,
+                };
+              });
+              exportarRelatorioPDF({
+                titulo: 'Balancete de Verificação',
+                periodo: format(new Date(ano, mes - 1), 'MMMM yyyy', { locale: ptBR }),
+                dados,
+                colunas: [
+                  { header: 'Código', key: 'codigo', align: 'left' },
+                  { header: 'Descrição', key: 'descricao', align: 'left' },
+                  { header: 'Débitos', key: 'debitos', align: 'right' },
+                  { header: 'Créditos', key: 'creditos', align: 'right' },
+                  { header: 'Sld. Devedor', key: 'saldoDevedor', align: 'right' },
+                  { header: 'Sld. Credor', key: 'saldoCredor', align: 'right' },
+                ],
+                totais: {
+                  debitos: totais.debitos,
+                  creditos: totais.creditos,
+                  saldoDevedor: totais.saldoDevedor,
+                  saldoCredor: totais.saldoCredor,
+                },
+              });
+              toast.success('PDF gerado com sucesso!');
+            }}
+          >
             <Download className="h-4 w-4" />
           </Button>
         </div>

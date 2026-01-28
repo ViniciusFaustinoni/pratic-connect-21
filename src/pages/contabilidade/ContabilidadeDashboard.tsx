@@ -15,6 +15,7 @@ import {
   ChevronRight,
   AlertTriangle,
   FolderTree,
+  Search,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -31,6 +32,7 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 
 export default function ContabilidadeDashboard() {
   const navigate = useNavigate();
@@ -111,6 +113,52 @@ export default function ContabilidadeDashboard() {
       };
     }
   });
+
+  // Despesas por categoria para gráfico
+  const { data: despesasPorCategoria } = useQuery({
+    queryKey: ['despesas-categoria', mesAtual, anoAtual],
+    queryFn: async () => {
+      const inicioMes = `${anoAtual}-${String(mesAtual).padStart(2, '0')}-01`;
+      const proximoMes = mesAtual === 12 ? 1 : mesAtual + 1;
+      const anoProximoMes = mesAtual === 12 ? anoAtual + 1 : anoAtual;
+      const fimMes = `${anoProximoMes}-${String(proximoMes).padStart(2, '0')}-01`;
+
+      const { data: partidas } = await supabase
+        .from('lancamentos_partidas')
+        .select(`
+          valor,
+          conta:plano_contas!inner(codigo, descricao, tipo),
+          lancamento:lancamentos_contabeis!inner(data_competencia, status)
+        `)
+        .eq('tipo', 'debito')
+        .eq('conta.tipo', 'despesa')
+        .eq('lancamento.status', 'ativo')
+        .gte('lancamento.data_competencia', inicioMes)
+        .lt('lancamento.data_competencia', fimMes);
+
+      // Agrupar por descrição da conta
+      const agrupado: Record<string, number> = {};
+      partidas?.forEach((p: any) => {
+        const desc = p.conta.descricao;
+        agrupado[desc] = (agrupado[desc] || 0) + Number(p.valor);
+      });
+
+      return Object.entries(agrupado)
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 6); // Top 6 categorias
+    }
+  });
+
+  // Cores para o gráfico
+  const CHART_COLORS = [
+    'hsl(var(--primary))',
+    'hsl(220, 70%, 50%)',
+    'hsl(160, 60%, 45%)',
+    'hsl(45, 90%, 55%)',
+    'hsl(280, 60%, 55%)',
+    'hsl(0, 70%, 55%)',
+  ];
 
   // Últimos lançamentos com partidas
   const { data: ultimosLancamentos, isLoading: lancamentosLoading } = useQuery({
@@ -386,14 +434,38 @@ export default function ContabilidadeDashboard() {
           {/* Resultado por Categoria */}
           <Card>
             <CardHeader>
-              <CardTitle>Resultado por Categoria</CardTitle>
+              <CardTitle>Despesas por Categoria</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                <BarChart3 className="h-12 w-12 mb-4 opacity-50" />
-                <p>Despesas por categoria do mês</p>
-                <p className="text-sm">(Gráfico em desenvolvimento)</p>
-              </div>
+              {despesasPorCategoria && despesasPorCategoria.length > 0 ? (
+                <ResponsiveContainer width="100%" height={250}>
+                  <PieChart>
+                    <Pie
+                      data={despesasPorCategoria}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={80}
+                      label={({ name, percent }) => `${name.substring(0, 15)}${name.length > 15 ? '...' : ''} (${(percent * 100).toFixed(0)}%)`}
+                      labelLine={false}
+                    >
+                      {despesasPorCategoria.map((_, index) => (
+                        <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip 
+                      formatter={(value: number) => formatCurrency(value)}
+                    />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                  <BarChart3 className="h-12 w-12 mb-4 opacity-50" />
+                  <p>Nenhuma despesa registrada no período</p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -437,6 +509,14 @@ export default function ContabilidadeDashboard() {
               >
                 <FolderTree className="h-4 w-4 mr-2" />
                 Plano de Contas
+              </Button>
+              <Button 
+                variant="outline" 
+                className="w-full justify-start"
+                onClick={() => navigate('/contabilidade/razao')}
+              >
+                <Search className="h-4 w-4 mr-2" />
+                Razão da Conta
               </Button>
             </CardContent>
           </Card>
