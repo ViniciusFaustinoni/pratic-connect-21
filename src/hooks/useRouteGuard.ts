@@ -9,7 +9,7 @@ import { usePermissions } from './usePermissions';
 export function useRouteGuard() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { isAnalistaCadastroOnly, isInstaladorVistoriadorOnly } = usePermissions();
+  const { isAnalistaCadastroOnly, isInstaladorVistoriadorOnly, isVistoriadorBaseOnly } = usePermissions();
 
   useEffect(() => {
     // Instalador/Vistoriador só pode acessar /instalador/*
@@ -17,6 +17,17 @@ export function useRouteGuard() {
       const isInInstaladorArea = location.pathname.startsWith('/instalador');
       
       if (!isInInstaladorArea) {
+        navigate('/instalador', { replace: true });
+        return;
+      }
+    }
+
+    // Vistoriador Base só pode acessar /instalador/* (sem mapa)
+    if (isVistoriadorBaseOnly) {
+      const isInInstaladorArea = location.pathname.startsWith('/instalador');
+      const isMapaRoute = location.pathname === '/instalador/mapa';
+      
+      if (!isInInstaladorArea || isMapaRoute) {
         navigate('/instalador', { replace: true });
         return;
       }
@@ -41,5 +52,5 @@ export function useRouteGuard() {
         navigate('/dashboard', { replace: true });
       }
     }
-  }, [location.pathname, isAnalistaCadastroOnly, isInstaladorVistoriadorOnly, navigate]);
+  }, [location.pathname, isAnalistaCadastroOnly, isInstaladorVistoriadorOnly, isVistoriadorBaseOnly, navigate]);
 }

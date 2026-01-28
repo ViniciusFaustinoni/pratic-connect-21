@@ -62,6 +62,7 @@ export type PerfilAcesso =
   | 'coordenador_monitoramento'
   | 'analista_plataforma'
   | 'instalador_vistoriador'
+  | 'vistoriador_base'
   | 'associado'
   | 'analista_marketing'
   | 'analista_juridico';
@@ -289,6 +290,7 @@ export const PERFIL_ACESSO_LABELS: Record<PerfilAcesso, string> = {
   coordenador_monitoramento: 'Coordenador de Monitoramento',
   analista_plataforma: 'Analista de Plataforma',
   instalador_vistoriador: 'Instalador/Vistoriador',
+  vistoriador_base: 'Vistoriador Base',
   associado: 'Associado',
   analista_marketing: 'Analista de Marketing',
   analista_juridico: 'Analista Jurídico',

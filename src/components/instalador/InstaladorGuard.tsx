@@ -25,8 +25,8 @@ export function InstaladorGuard({ children }: InstaladorGuardProps) {
     return <Navigate to="/instalador/login" state={{ from: location }} replace />;
   }
 
-  // Verificar se tem a role de instalador
-  if (!hasRole('instalador_vistoriador')) {
+  // Verificar se tem a role de instalador OU vistoriador base
+  if (!hasRole('instalador_vistoriador') && !hasRole('vistoriador_base')) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-slate-900 px-4">
         <div className="text-center">
