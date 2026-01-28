@@ -8,14 +8,16 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { format, parseISO, isToday, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
+import { NovaContaPagarModal } from '@/components/financeiro/NovaContaPagarModal';
+import { PagarContaModal } from '@/components/financeiro/PagarContaModal';
 
 const categorias = [
   { value: 'todos', label: 'Todas as categorias' },
@@ -68,6 +70,8 @@ const formatDocumento = (doc: string | null) => {
 
 export default function ContasPagar() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  
   const [filters, setFilters] = useState({
     status: 'todos',
     categoria: 'todos',
@@ -75,7 +79,31 @@ export default function ContasPagar() {
   });
   const [activeTab, setActiveTab] = useState('todas');
 
+  // Estados dos modais
+  const [modalNovaConta, setModalNovaConta] = useState(false);
+  const [modalPagar, setModalPagar] = useState(false);
+  const [contaSelecionada, setContaSelecionada] = useState<any>(null);
+
   const hoje = new Date().toISOString().split('T')[0];
+
+  // Mutation para cancelar conta
+  const cancelarConta = useMutation({
+    mutationFn: async (contaId: string) => {
+      const { error } = await supabase
+        .from('contas_pagar')
+        .update({ status: 'cancelado', updated_at: new Date().toISOString() })
+        .eq('id', contaId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Conta cancelada com sucesso');
+      queryClient.invalidateQueries({ queryKey: ['contas-pagar'] });
+      queryClient.invalidateQueries({ queryKey: ['contas-pagar-kpis'] });
+    },
+    onError: () => {
+      toast.error('Erro ao cancelar conta');
+    },
+  });
 
   // Query principal - Contas
   const { data: contas, isLoading } = useQuery({
@@ -193,14 +221,6 @@ export default function ContasPagar() {
     };
   }, [contas, hoje]);
 
-  const handleRegistrarPagamento = (conta: any) => {
-    toast.info('Modal de pagamento será implementado em breve');
-  };
-
-  const handleCancelar = (conta: any) => {
-    toast.info('Funcionalidade de cancelamento será implementada em breve');
-  };
-
   const limparFiltros = () => {
     setFilters({ status: 'todos', categoria: 'todos', busca: '' });
     setActiveTab('todas');
@@ -214,7 +234,7 @@ export default function ContasPagar() {
           <h1 className="text-2xl font-bold tracking-tight">Contas a Pagar</h1>
           <p className="text-muted-foreground">Gerenciamento de despesas e pagamentos</p>
         </div>
-        <Button onClick={() => toast.info('Modal de nova conta será implementado em breve')}>
+        <Button onClick={() => setModalNovaConta(true)}>
           <Plus className="mr-2 h-4 w-4" />
           Nova Conta
         </Button>
@@ -447,7 +467,10 @@ export default function ContasPagar() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           {conta.status !== 'pago' && conta.status !== 'cancelado' && (
-                            <DropdownMenuItem onClick={() => handleRegistrarPagamento(conta)}>
+                            <DropdownMenuItem onClick={() => {
+                              setContaSelecionada(conta);
+                              setModalPagar(true);
+                            }}>
                               <DollarSign className="mr-2 h-4 w-4" />
                               Registrar Pagamento
                             </DropdownMenuItem>
@@ -457,13 +480,20 @@ export default function ContasPagar() {
                             Ver Detalhes
                           </DropdownMenuItem>
                           {conta.status !== 'pago' && conta.status !== 'cancelado' && (
-                            <DropdownMenuItem 
-                              onClick={() => handleCancelar(conta)}
-                              className="text-destructive"
-                            >
-                              <X className="mr-2 h-4 w-4" />
-                              Cancelar
-                            </DropdownMenuItem>
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem 
+                                onClick={() => {
+                                  if (confirm('Tem certeza que deseja cancelar esta conta?')) {
+                                    cancelarConta.mutate(conta.id);
+                                  }
+                                }}
+                                className="text-destructive"
+                              >
+                                <X className="mr-2 h-4 w-4" />
+                                Cancelar
+                              </DropdownMenuItem>
+                            </>
                           )}
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -475,6 +505,20 @@ export default function ContasPagar() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Modais */}
+      <NovaContaPagarModal 
+        open={modalNovaConta} 
+        onClose={() => setModalNovaConta(false)} 
+      />
+      <PagarContaModal 
+        open={modalPagar} 
+        onClose={() => {
+          setModalPagar(false);
+          setContaSelecionada(null);
+        }}
+        conta={contaSelecionada}
+      />
     </div>
   );
 }

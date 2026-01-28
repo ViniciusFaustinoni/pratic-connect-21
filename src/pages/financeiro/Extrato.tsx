@@ -8,11 +8,12 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format, parseISO, isToday, isYesterday, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
+import { NovaMovimentacaoModal } from '@/components/financeiro/NovaMovimentacaoModal';
 
 const categorias = [
   { value: 'todos', label: 'Todas as categorias' },
@@ -30,6 +31,9 @@ const categorias = [
 ];
 
 export default function Extrato() {
+  const queryClient = useQueryClient();
+  const [modalMovimentacao, setModalMovimentacao] = useState(false);
+  
   const [filters, setFilters] = useState({
     dataInicio: startOfMonth(new Date()).toISOString().split('T')[0],
     dataFim: endOfMonth(new Date()).toISOString().split('T')[0],
@@ -121,11 +125,24 @@ export default function Extrato() {
   };
 
   const handleExportar = () => {
-    toast.info('Funcionalidade de exportação será implementada em breve');
-  };
+    if (!movimentacoes?.length) {
+      toast.error('Nenhuma movimentação para exportar');
+      return;
+    }
 
-  const handleNovaMovimentacao = () => {
-    toast.info('Modal de nova movimentação será implementado em breve');
+    const headers = 'Data,Tipo,Categoria,Descrição,Valor\n';
+    const rows = movimentacoes.map(m => 
+      `"${m.data_movimentacao}","${m.tipo}","${m.categoria || ''}","${m.descricao || ''}","${m.valor}"`
+    ).join('\n');
+    
+    const blob = new Blob([headers + rows], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `extrato_${filters.dataInicio}_${filters.dataFim}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('Extrato exportado com sucesso!');
   };
 
   return (
@@ -141,7 +158,7 @@ export default function Extrato() {
             <Download className="mr-2 h-4 w-4" />
             Exportar
           </Button>
-          <Button onClick={handleNovaMovimentacao}>
+          <Button onClick={() => setModalMovimentacao(true)}>
             <Plus className="mr-2 h-4 w-4" />
             Nova Movimentação
           </Button>
@@ -335,6 +352,12 @@ export default function Extrato() {
           )}
         </CardContent>
       </Card>
+
+      {/* Modal */}
+      <NovaMovimentacaoModal 
+        open={modalMovimentacao} 
+        onClose={() => setModalMovimentacao(false)} 
+      />
     </div>
   );
 }

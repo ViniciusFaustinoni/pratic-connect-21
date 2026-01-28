@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Search, Plus, Download, Send, X, Eye, MoreHorizontal } from 'lucide-react';
+import { Search, Plus, Download, Send, X, Eye, MoreHorizontal, DollarSign, MessageSquare } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -7,13 +7,16 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { format, isToday, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { toast } from 'sonner';
+import { NovaCobrancaModal } from '@/components/financeiro/NovaCobrancaModal';
+import { RegistrarPagamentoModal } from '@/components/financeiro/RegistrarPagamentoModal';
 
 const statusConfig: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
   'PENDING': { label: 'Pendente', variant: 'secondary' },
@@ -102,6 +105,8 @@ const mapStatusToAsaas = (status: string): string[] => {
 
 export default function CobrancasList() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  
   const [filters, setFilters] = useState({
     status: 'todos',
     tipo: 'todos',
@@ -113,6 +118,31 @@ export default function CobrancasList() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 25;
 
+  // Estados dos modais
+  const [modalNovaCobranca, setModalNovaCobranca] = useState(false);
+  const [modalPagamento, setModalPagamento] = useState(false);
+  const [cobrancaSelecionada, setCobrancaSelecionada] = useState<any>(null);
+
+  // Mutation para cancelar cobrança
+  const cancelarCobranca = useMutation({
+    mutationFn: async (asaasId: string) => {
+      const { data, error } = await supabase.functions.invoke('asaas-cobrancas', {
+        body: { action: 'cancelar', asaas_id: asaasId },
+      });
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error || 'Erro ao cancelar');
+      return data;
+    },
+    onSuccess: () => {
+      toast.success('Cobrança cancelada com sucesso!');
+      queryClient.invalidateQueries({ queryKey: ['cobrancas-lista'] });
+      queryClient.invalidateQueries({ queryKey: ['cobrancas-kpis'] });
+    },
+    onError: (error: Error) => {
+      toast.error(`Erro ao cancelar: ${error.message}`);
+    },
+  });
+
   // Query principal de cobranças
   const { data: cobrancas, isLoading } = useQuery({
     queryKey: ['cobrancas-lista', filters],
@@ -123,7 +153,7 @@ export default function CobrancasList() {
         .from('asaas_cobrancas')
         .select(`
           *,
-          associado:associados(id, nome, cpf, telefone)
+          associado:associados(id, nome, cpf, telefone, whatsapp)
         `)
         .order('data_vencimento', { ascending: false });
 
@@ -245,6 +275,57 @@ export default function CobrancasList() {
     return '';
   };
 
+  const handleEnviarWhatsApp = (cobranca: any) => {
+    const telefone = cobranca.associado?.whatsapp || cobranca.associado?.telefone;
+    if (!telefone) {
+      toast.error('Associado sem telefone cadastrado');
+      return;
+    }
+    
+    const telefoneFormatado = telefone.replace(/\D/g, '');
+    const valor = formatCurrency(Number(cobranca.valor));
+    const vencimento = cobranca.data_vencimento 
+      ? format(parseISO(cobranca.data_vencimento), 'dd/MM/yyyy', { locale: ptBR })
+      : '';
+    
+    let mensagem = `Olá ${cobranca.associado?.nome || ''}! 👋\n\n`;
+    mensagem += `Segue sua cobrança:\n`;
+    mensagem += `💰 Valor: ${valor}\n`;
+    mensagem += `📅 Vencimento: ${vencimento}\n`;
+    
+    if (cobranca.boleto_url) {
+      mensagem += `\n📄 Boleto: ${cobranca.boleto_url}\n`;
+    }
+    
+    if (cobranca.pix_copia_cola) {
+      mensagem += `\n📱 PIX Copia e Cola:\n${cobranca.pix_copia_cola}\n`;
+    }
+    
+    const url = `https://wa.me/55${telefoneFormatado}?text=${encodeURIComponent(mensagem)}`;
+    window.open(url, '_blank');
+  };
+
+  const handleExportar = () => {
+    if (!filteredCobrancas.length) {
+      toast.error('Nenhuma cobrança para exportar');
+      return;
+    }
+
+    const headers = 'Nome,CPF,Tipo,Valor,Vencimento,Status\n';
+    const rows = filteredCobrancas.map(c => 
+      `"${c.associado?.nome || ''}","${c.associado?.cpf || ''}","${c.tipo}","${c.valor}","${c.data_vencimento}","${c.status}"`
+    ).join('\n');
+    
+    const blob = new Blob([headers + rows], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `cobrancas_${filters.mes}_${filters.ano}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('Cobranças exportadas!');
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -256,11 +337,11 @@ export default function CobrancasList() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline">
+          <Button variant="outline" onClick={handleExportar}>
             <Download className="mr-2 h-4 w-4" />
             Exportar
           </Button>
-          <Button>
+          <Button onClick={() => setModalNovaCobranca(true)}>
             <Plus className="mr-2 h-4 w-4" />
             Nova Cobrança
           </Button>
@@ -471,18 +552,37 @@ export default function CobrancasList() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => navigate(`/financeiro/cobrancas/${cobranca.id}`)}>
                             <Eye className="mr-2 h-4 w-4" />
                             Ver detalhes
                           </DropdownMenuItem>
-                          <DropdownMenuItem>
-                            <Send className="mr-2 h-4 w-4" />
-                            Enviar lembrete
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive">
-                            <X className="mr-2 h-4 w-4" />
-                            Cancelar
-                          </DropdownMenuItem>
+                          {!['RECEIVED', 'CONFIRMED', 'pago', 'CANCELED', 'cancelado'].includes(cobranca.status) && (
+                            <>
+                              <DropdownMenuItem onClick={() => {
+                                setCobrancaSelecionada(cobranca);
+                                setModalPagamento(true);
+                              }}>
+                                <DollarSign className="mr-2 h-4 w-4" />
+                                Registrar Pagamento
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleEnviarWhatsApp(cobranca)}>
+                                <MessageSquare className="mr-2 h-4 w-4" />
+                                Enviar WhatsApp
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem 
+                                className="text-destructive"
+                                onClick={() => {
+                                  if (confirm('Tem certeza que deseja cancelar esta cobrança?')) {
+                                    cancelarCobranca.mutate(cobranca.asaas_id);
+                                  }
+                                }}
+                              >
+                                <X className="mr-2 h-4 w-4" />
+                                Cancelar
+                              </DropdownMenuItem>
+                            </>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
@@ -535,6 +635,20 @@ export default function CobrancasList() {
           </div>
         </div>
       )}
+
+      {/* Modais */}
+      <NovaCobrancaModal 
+        open={modalNovaCobranca} 
+        onClose={() => setModalNovaCobranca(false)} 
+      />
+      <RegistrarPagamentoModal 
+        open={modalPagamento} 
+        onClose={() => {
+          setModalPagamento(false);
+          setCobrancaSelecionada(null);
+        }}
+        cobranca={cobrancaSelecionada}
+      />
     </div>
   );
 }
