@@ -29,6 +29,34 @@ function calcularDistanciaKm(
   return R * c;
 }
 
+/**
+ * Verifica se um serviço pode ser atribuído no momento atual
+ * Regras:
+ * - Serviços com permite_encaixe = true podem ser atribuídos a qualquer momento
+ * - Serviços normais de HOJE só podem ser atribuídos após o hora_agendada
+ * - Serviços de datas futuras (amanhã) podem ser atribuídos normalmente
+ */
+function podeSerAtribuido(
+  servico: { data_agendada: string; hora_agendada: string | null; permite_encaixe: boolean },
+  agora: Date,
+  hojeStr: string
+): boolean {
+  // Encaixes podem ser atribuídos livremente
+  if (servico.permite_encaixe) return true;
+  
+  // Serviços de datas futuras podem ser atribuídos (amanhã)
+  if (servico.data_agendada > hojeStr) return true;
+  
+  // Serviços de HOJE com hora específica
+  if (servico.data_agendada === hojeStr && servico.hora_agendada) {
+    const horaAtual = agora.toTimeString().slice(0, 5); // "HH:MM"
+    return horaAtual >= servico.hora_agendada;
+  }
+  
+  // Sem hora específica = pode ser atribuído
+  return true;
+}
+
 interface ProfissionalDisponivel {
   vistoriador_id: string;
   latitude: number;
@@ -190,8 +218,24 @@ serve(async (req) => {
         continue;
       }
 
+      // NOVO: Filtrar serviços que ainda não podem ser atribuídos (horário futuro)
+      const agoraFiltro = new Date();
+      const servicosFiltrados = todosServicos.filter((s: any) => 
+        podeSerAtribuido(s, agoraFiltro, hoje)
+      );
+      
+      const bloqueadosPorHorario = todosServicos.length - servicosFiltrados.length;
+      if (bloqueadosPorHorario > 0) {
+        console.log(`[cron-atribuir-tarefas] ${servicosFiltrados.length} serviços após filtro de horário (${bloqueadosPorHorario} bloqueados por horário futuro)`);
+      }
+      
+      if (servicosFiltrados.length === 0) {
+        console.log(`[cron-atribuir-tarefas] Nenhum serviço disponível no horário atual para profissional ${prof.vistoriador_id}`);
+        continue;
+      }
+
       // 4. Mapear, calcular distâncias e aplicar NOVA LÓGICA DE ORDENAÇÃO
-      const servicosComDistancia: ServicoComDistancia[] = todosServicos
+      const servicosComDistancia: ServicoComDistancia[] = servicosFiltrados
         .map((s: any) => {
           const distancia = calcularDistanciaKm(
             prof.latitude, prof.longitude,
