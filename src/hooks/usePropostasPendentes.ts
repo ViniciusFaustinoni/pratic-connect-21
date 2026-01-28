@@ -295,7 +295,18 @@ export function usePropostasPendentes() {
       }
 
       // 2. Fallback: buscar em cotacoes_vistoria_fotos (legado, apenas se tiver cotacao_id)
+      // E também buscar tipo_vistoria da cotação para determinar modalidade corretamente
       if (!vistoria && contrato.cotacao_id) {
+        // Primeiro, buscar o tipo_vistoria da cotação para determinar modalidade
+        const { data: cotacaoTipo } = await supabase
+          .from('cotacoes')
+          .select('tipo_vistoria')
+          .eq('id', contrato.cotacao_id)
+          .maybeSingle();
+        
+        // tipo_vistoria: 'autovistoria' | 'agendada' | 'agendada_base'
+        const isAutoFromCotacao = cotacaoTipo?.tipo_vistoria === 'autovistoria';
+        
         const { data: fotosLegado } = await supabase
           .from('cotacoes_vistoria_fotos')
           .select('id, tipo, arquivo_url, created_at')
@@ -303,10 +314,12 @@ export function usePropostasPendentes() {
           .order('created_at', { ascending: true });
 
         if (fotosLegado && fotosLegado.length > 0) {
+          // Só marcar como autovistoria se a cotação indicar isso
           vistoria = {
             id: contrato.cotacao_id,
             status: 'pendente',
-            tipo: 'autovistoria',
+            tipo: isAutoFromCotacao ? 'autovistoria' : 'agendada',
+            modalidade: isAutoFromCotacao ? 'autovistoria' : 'presencial',
             fotos: fotosLegado as VistoriaFotoInfo[],
           };
         }
