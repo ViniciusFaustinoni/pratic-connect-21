@@ -1,53 +1,100 @@
 
 
-# Plano: Incluir Vistoriadores BASE no Dropdown de Portador
+# Plano de Correção: QR Code WhatsApp Evolution API
 
 ## Problema Identificado
 
-O hook `useProfissionaisEquipe` em `src/hooks/useEquipe.ts` busca apenas usuários com a role `instalador_vistoriador`:
+A Evolution API retorna o QR code **já com o prefixo completo** `data:image/png;base64,...`, mas o código atual adiciona o prefixo novamente, resultando em uma URL de imagem inválida.
 
-```typescript
-// Linha 48 atual:
-.eq('role', 'instalador_vistoriador');
+**Resposta da API (log do banco):**
+```
+qrcode.base64: "data:image/png;base64,iVBORw0KGgo..."
 ```
 
-Isso exclui usuários com a role `vistoriador_base`, que são vistoriadores que trabalham na base física (sem app de campo).
+**Código atual do frontend:**
+```tsx
+<img src={`data:image/png;base64,${qrCodeData}`} />
+```
 
-## Impacto
+**Resultado:** `data:image/png;base64,data:image/png;base64,...` (INVÁLIDO)
 
-| Componente | Arquivo | Uso |
-|------------|---------|-----|
-| AtribuirPortadorDialog | estoque/AtribuirPortadorDialog.tsx | Modal de atribuição individual |
-| AtribuirPortadorLoteDialog | estoque/AtribuirPortadorLoteDialog.tsx | Modal de atribuição em lote |
-| RastreadorFormDialog | rastreadores/RastreadorFormDialog.tsx | Form de novo rastreador |
-| ListaRastreadores | estoque/ListaRastreadores.tsx | Lista de rastreadores |
-| Equipe | monitoramento/Equipe.tsx | Página de gestão da equipe |
+---
 
 ## Solução
 
-Modificar a query para incluir **ambas** as roles:
+Modificar o componente `WhatsAppStatusCard.tsx` para verificar se o dado já possui o prefixo antes de adicioná-lo.
 
-```typescript
-// De:
-.eq('role', 'instalador_vistoriador');
-
-// Para:
-.in('role', ['instalador_vistoriador', 'vistoriador_base']);
-```
-
-## Arquivo a Modificar
+### Arquivo a Modificar
 
 | Arquivo | Linha | Alteração |
 |---------|-------|-----------|
-| `src/hooks/useEquipe.ts` | 48 | Trocar `.eq()` por `.in()` para incluir ambas roles |
+| `src/components/whatsapp/WhatsAppStatusCard.tsx` | 226 | Verificar se já tem prefixo `data:image` |
+
+### Código Atual (Linha 226)
+```tsx
+<img 
+  src={`data:image/png;base64,${qrCodeData}`}
+  alt="QR Code WhatsApp"
+  className="w-64 h-64"
+/>
+```
+
+### Código Corrigido
+```tsx
+<img 
+  src={qrCodeData.startsWith('data:image') ? qrCodeData : `data:image/png;base64,${qrCodeData}`}
+  alt="QR Code WhatsApp"
+  className="w-64 h-64"
+/>
+```
+
+---
+
+## Alternativa (Mais Robusta)
+
+Corrigir na edge function para normalizar a resposta, removendo o prefixo se existir:
+
+### Arquivo
+`supabase/functions/whatsapp-qrcode/index.ts`
+
+### Código a Adicionar (função helper)
+```typescript
+// Normalizar base64 - remover prefixo se existir
+function normalizeBase64(data: string | undefined): string | undefined {
+  if (!data) return undefined;
+  // Se já tem o prefixo data:image, retornar como está
+  if (data.startsWith('data:image')) {
+    return data;
+  }
+  // Se não tem, adicionar o prefixo
+  return `data:image/png;base64,${data}`;
+}
+```
+
+E usar no retorno:
+```typescript
+return new Response(
+  JSON.stringify({
+    success: true,
+    qrcode: normalizeBase64(createData.qrcode?.base64),
+    // ...
+  }),
+);
+```
+
+---
+
+## Recomendação
+
+**Opção 1 (frontend)** é mais simples e resolve imediatamente.
+
+**Opção 2 (edge function)** é mais robusta e centraliza a lógica.
+
+Recomendo implementar **ambas** para garantir compatibilidade com diferentes versões da Evolution API.
+
+---
 
 ## Resultado Esperado
 
-Após a alteração, o dropdown "Portador (Profissional Responsável)" exibirá:
-- ✅ Instaladores/Vistoriadores (role `instalador_vistoriador`)
-- ✅ Vistoriadores Base (role `vistoriador_base`)
-
-## Outras Áreas Afetadas
-
-Nenhuma. A alteração está isolada no hook `useProfissionaisEquipe` e todos os componentes que o utilizam se beneficiarão automaticamente da mudança sem necessidade de alterações adicionais.
+Após a correção, o QR code será exibido corretamente no modal de conexão WhatsApp.
 
