@@ -235,12 +235,49 @@ serve(async (req) => {
     }
 
     // 5.1 VALIDAÇÃO CRÍTICA: Verificar coordenadas para atribuição automática
+    // Se não tiver coordenadas, GEOCODIFICAR para garantir que atribuição automática funcione
     if (!endereco.latitude || !endereco.longitude) {
-      console.warn('[CriarInstalacaoPosPagamento] ⚠️ ALERTA: Coordenadas ausentes! Atribuição automática pode falhar.');
-      console.warn('[CriarInstalacaoPosPagamento] Endereço:', JSON.stringify(endereco));
-      // Não bloqueamos, mas logamos para debug - idealmente deveria geocodificar aqui
+      console.warn('[CriarInstalacaoPosPagamento] ⚠️ Coordenadas ausentes! Tentando geocodificar...');
+      console.log('[CriarInstalacaoPosPagamento] Endereço para geocodificação:', JSON.stringify(endereco));
+      
+      if (endereco.logradouro && endereco.cidade) {
+        try {
+          const geoResponse = await fetch(`${supabaseUrl}/functions/v1/geocode-endereco`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${serviceRoleKey}`,
+            },
+            body: JSON.stringify({
+              logradouro: endereco.logradouro,
+              numero: endereco.numero,
+              bairro: endereco.bairro,
+              cidade: endereco.cidade,
+              uf: endereco.estado,
+              cep: endereco.cep,
+            }),
+          });
+          
+          if (geoResponse.ok) {
+            const geoData = await geoResponse.json();
+            if (geoData.success && geoData.latitude && geoData.longitude) {
+              endereco.latitude = geoData.latitude;
+              endereco.longitude = geoData.longitude;
+              console.log(`[CriarInstalacaoPosPagamento] ✓ Geocodificado com sucesso: (${endereco.latitude}, ${endereco.longitude})`);
+            } else {
+              console.warn('[CriarInstalacaoPosPagamento] Geocodificação retornou sem coordenadas:', geoData);
+            }
+          } else {
+            console.warn('[CriarInstalacaoPosPagamento] Geocodificação falhou com status:', geoResponse.status);
+          }
+        } catch (geoError) {
+          console.warn('[CriarInstalacaoPosPagamento] Erro na geocodificação:', geoError);
+        }
+      } else {
+        console.warn('[CriarInstalacaoPosPagamento] Dados insuficientes para geocodificar');
+      }
     } else {
-      console.log(`[CriarInstalacaoPosPagamento] ✓ Coordenadas válidas: ${endereco.latitude}, ${endereco.longitude}`);
+      console.log(`[CriarInstalacaoPosPagamento] ✓ Coordenadas já presentes: (${endereco.latitude}, ${endereco.longitude})`);
     }
 
     // 5.2 Log do permite_encaixe
