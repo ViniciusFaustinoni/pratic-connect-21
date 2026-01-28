@@ -6,14 +6,14 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// System prompt adaptado para WhatsApp (mais conciso)
+// System prompt adaptado para WhatsApp (mais conciso) - ALINHADO COM APP
 const WHATSAPP_SYSTEM_PROMPT = `Você é o Assistente Virtual PRATIC via WhatsApp.
 
 ## Regras do WhatsApp
 - Seja CONCISO (mensagens curtas)
 - Use formatação: *negrito*, _itálico_
 - NÃO use marcadores especiais como [BOTAO_LOCALIZACAO] ou [UPLOAD_*]
-- Para localização, peça o endereço digitado
+- Para localização, peça o endereço digitado OU use a tool reverse_geocode se receber coordenadas
 - Para fotos, oriente enviar depois no app
 
 ## Capacidades
@@ -23,8 +23,25 @@ const WHATSAPP_SYSTEM_PROMPT = `Você é o Assistente Virtual PRATIC via WhatsAp
 4. Abrir sinistro (coleta dados e registra para aprovação)
 5. Solicitar assistência 24h (guincho, chaveiro, etc.)
 6. Informações sobre veículos
+7. Converter coordenadas GPS em endereço (reverse_geocode)
 
-## Regras
+## REGRAS DE COBERTURA (VERIFICAR SEMPRE!)
+Antes de criar QUALQUER solicitação, verifique a cobertura do veículo:
+
+### Se veículo tem APENAS cobertura "Roubo/Furto" (cobertura_total = false):
+- ✅ PERMITIDO: Sinistros de roubo/furto
+- ❌ BLOQUEADO: Assistência 24h (guincho, chaveiro, pane, etc.)
+- ❌ BLOQUEADO: Sinistros de colisão, incêndio, fenômenos naturais
+
+### Se veículo tem cobertura "Total" (cobertura_total = true):
+- ✅ TUDO LIBERADO
+
+### Resposta quando bloqueado:
+"Sua cobertura atual é apenas para roubo/furto. 
+Após a instalação do rastreador, você terá acesso à cobertura total com assistência 24h.
+Entre em contato com a associação para mais informações."
+
+## Regras Gerais
 - Use a DATA ATUAL fornecida para datas relativas
 - Confirme dados antes de criar solicitações
 - Informe que solicitações passam por aprovação
@@ -121,7 +138,7 @@ Ajudar o cliente a escolher uma nova data e horário para o serviço.
 - Confirme os dados antes de finalizar
 - Use formatação WhatsApp (*negrito*)`;
 
-// Tools padrão do assistente
+// Tools padrão do assistente - ALINHADAS COM APP
 const tools = [
   {
     type: "function",
@@ -163,7 +180,7 @@ const tools = [
     type: "function",
     function: {
       name: "get_veiculos",
-      description: "Lista veículos do associado",
+      description: "Lista veículos do associado com informações de cobertura",
       parameters: { type: "object", properties: {}, required: [] },
     },
   },
@@ -171,7 +188,7 @@ const tools = [
     type: "function",
     function: {
       name: "criar_solicitacao_sinistro",
-      description: "Cria solicitação de sinistro para aprovação",
+      description: "Cria solicitação de sinistro para aprovação. IMPORTANTE: Verificar cobertura do veículo antes de usar.",
       parameters: {
         type: "object",
         properties: {
@@ -188,7 +205,7 @@ const tools = [
     type: "function",
     function: {
       name: "criar_solicitacao_assistencia",
-      description: "Cria solicitação de assistência 24h",
+      description: "Cria solicitação de assistência 24h. IMPORTANTE: Só pode ser usado se veículo tiver cobertura_total = true.",
       parameters: {
         type: "object",
         properties: {
@@ -197,6 +214,21 @@ const tools = [
           descricao: { type: "string" },
         },
         required: ["tipo_servico", "localizacao", "descricao"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "reverse_geocode",
+      description: "Converte coordenadas GPS (latitude e longitude) em endereço legível. Use quando o cliente enviar coordenadas de localização.",
+      parameters: {
+        type: "object",
+        properties: {
+          latitude: { type: "number", description: "Latitude da localização" },
+          longitude: { type: "number", description: "Longitude da localização" },
+        },
+        required: ["latitude", "longitude"],
       },
     },
   },
@@ -286,9 +318,10 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
     }
 
     case "get_veiculos": {
+      // ATUALIZADO: Incluir dados de cobertura para verificação
       const { data } = await supabase
         .from("veiculos")
-        .select("id, placa, marca, modelo, ano, status")
+        .select("id, placa, marca, modelo, ano, status, cobertura_roubo_furto, cobertura_total")
         .eq("associado_id", associadoId);
 
       if (!data?.length) return JSON.stringify({ message: "Nenhum veículo encontrado" });
@@ -299,6 +332,9 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
           placa: v.placa,
           descricao: `${v.marca} ${v.modelo} ${v.ano}`,
           status: v.status,
+          cobertura_roubo_furto: v.cobertura_roubo_furto ?? true,
+          cobertura_total: v.cobertura_total ?? false,
+          tipo_cobertura: v.cobertura_total ? "Total (todos os serviços)" : "Apenas Roubo/Furto",
         })),
       });
     }
@@ -306,16 +342,30 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
     case "criar_solicitacao_sinistro": {
       const { data: veiculos } = await supabase
         .from("veiculos")
-        .select("id")
+        .select("id, cobertura_total, cobertura_roubo_furto")
         .eq("associado_id", associadoId)
         .eq("status", "ativo")
         .limit(1);
+
+      const veiculo = veiculos?.[0];
+      
+      // Verificar cobertura antes de criar sinistro
+      if (veiculo && !veiculo.cobertura_total) {
+        // Só permite roubo/furto se não tem cobertura total
+        if (args.tipo !== "roubo_furto") {
+          return JSON.stringify({
+            sucesso: false,
+            bloqueado: true,
+            message: "Sua cobertura atual é apenas para roubo/furto. Para sinistros de colisão, incêndio ou outros, é necessário ter cobertura total. Entre em contato com a associação para mais informações.",
+          });
+        }
+      }
 
       const { data, error } = await supabase.from("chat_solicitacoes_ia").insert({
         associado_id: associadoId,
         tipo: "sinistro",
         dados: {
-          veiculo_id: veiculos?.[0]?.id,
+          veiculo_id: veiculo?.id,
           tipo: args.tipo,
           data_ocorrencia: args.data_ocorrencia,
           local: args.local,
@@ -336,16 +386,27 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
     case "criar_solicitacao_assistencia": {
       const { data: veiculos } = await supabase
         .from("veiculos")
-        .select("id")
+        .select("id, cobertura_total, cobertura_roubo_furto")
         .eq("associado_id", associadoId)
         .eq("status", "ativo")
         .limit(1);
+
+      const veiculo = veiculos?.[0];
+      
+      // VERIFICAR COBERTURA - Assistência 24h requer cobertura total
+      if (!veiculo?.cobertura_total) {
+        return JSON.stringify({
+          sucesso: false,
+          bloqueado: true,
+          message: "Sua cobertura atual é apenas para roubo/furto. A assistência 24h (guincho, chaveiro, etc.) está disponível apenas para veículos com cobertura total. Após a instalação do rastreador, você terá acesso à cobertura total. Entre em contato com a associação para mais informações.",
+        });
+      }
 
       const { data, error } = await supabase.from("chat_solicitacoes_ia").insert({
         associado_id: associadoId,
         tipo: "assistencia",
         dados: {
-          veiculo_id: veiculos?.[0]?.id,
+          veiculo_id: veiculo?.id,
           tipo_servico: args.tipo_servico,
           localizacao: args.localizacao,
           descricao: args.descricao,
@@ -362,12 +423,64 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
       });
     }
 
+    case "reverse_geocode": {
+      // Nova tool: Converter coordenadas em endereço
+      const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+      
+      try {
+        const response = await fetch(`${SUPABASE_URL}/functions/v1/reverse-geocode`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+          },
+          body: JSON.stringify({
+            latitude: args.latitude,
+            longitude: args.longitude,
+          }),
+        });
+
+        if (!response.ok) {
+          const errText = await response.text();
+          console.error(`[whatsapp-webhook] Erro reverse_geocode: ${errText}`);
+          return JSON.stringify({
+            sucesso: false,
+            message: "Não foi possível converter a localização em endereço. Por favor, digite o endereço manualmente.",
+          });
+        }
+
+        const data = await response.json();
+        
+        if (data.success && data.endereco_completo) {
+          return JSON.stringify({
+            sucesso: true,
+            endereco: data.endereco_completo,
+            bairro: data.bairro,
+            cidade: data.cidade,
+            uf: data.uf,
+            message: `Endereço encontrado: ${data.endereco_completo}`,
+          });
+        } else {
+          return JSON.stringify({
+            sucesso: false,
+            message: "Localização não encontrada. Por favor, digite o endereço manualmente.",
+          });
+        }
+      } catch (err) {
+        console.error(`[whatsapp-webhook] Erro ao chamar reverse-geocode:`, err);
+        return JSON.stringify({
+          sucesso: false,
+          message: "Erro ao processar localização. Por favor, digite o endereço manualmente.",
+        });
+      }
+    }
+
     default:
       return JSON.stringify({ error: "Tool não reconhecida" });
   }
 }
 
-// Buscar contexto do associado
+// Buscar contexto do associado - ATUALIZADO com dados de cobertura
 async function getAssociadoContext(supabase: any, associadoId: string) {
   const { data: associado } = await supabase
     .from("associados")
@@ -375,18 +488,31 @@ async function getAssociadoContext(supabase: any, associadoId: string) {
     .eq("id", associadoId)
     .single();
 
+  // ATUALIZADO: Incluir dados de cobertura dos veículos
   const { data: veiculos } = await supabase
     .from("veiculos")
-    .select("placa, marca, modelo, ano")
+    .select("placa, marca, modelo, ano, status, cobertura_roubo_furto, cobertura_total")
     .eq("associado_id", associadoId)
     .limit(3);
+
+  // Formatar veículos com informação de cobertura
+  const veiculosFormatados = veiculos?.map((v: any) => {
+    const cobertura = v.cobertura_total ? "TOTAL" : "APENAS ROUBO/FURTO";
+    return `${v.placa} (${v.marca} ${v.modelo}) - Cobertura: ${cobertura}`;
+  }).join("\n  - ") || "Nenhum";
 
   return `
 ## CONTEXTO DO ASSOCIADO
 - Nome: ${associado?.nome || "N/A"}
 - Status: ${associado?.status || "N/A"}
-- Veículos: ${veiculos?.map((v: any) => `${v.placa} (${v.marca} ${v.modelo})`).join(", ") || "Nenhum"}
+- Veículos:
+  - ${veiculosFormatados}
 - Data atual: ${new Date().toLocaleDateString("pt-BR")} ${new Date().toLocaleTimeString("pt-BR")}
+
+## IMPORTANTE - REGRAS DE COBERTURA
+Verifique SEMPRE a cobertura antes de criar solicitações:
+- Se cobertura = "APENAS ROUBO/FURTO": NÃO criar assistência 24h nem sinistros de colisão/incêndio
+- Se cobertura = "TOTAL": Pode criar qualquer solicitação
 `;
 }
 
@@ -402,13 +528,13 @@ async function getConversationHistory(supabase: any, associadoId: string, telefo
   return (data || []).reverse();
 }
 
-// Chamar a IA
+// Chamar a IA - ATUALIZADO para usar Gemini 3 Flash via ai.gateway.lovable.dev
 async function callAI(messages: any[], systemPrompt: string, useTools: boolean = true) {
   const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
   if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY não configurada");
 
   const body: any = {
-    model: "gpt-4o-mini",
+    model: "google/gemini-3-flash-preview", // ATUALIZADO: Mesmo modelo do App
     messages: [
       { role: "system", content: systemPrompt },
       ...messages,
@@ -421,7 +547,8 @@ async function callAI(messages: any[], systemPrompt: string, useTools: boolean =
     body.tool_choice = "auto";
   }
 
-  const response = await fetch("https://api.lovable.dev/v1/chat/completions", {
+  // ATUALIZADO: Usar ai.gateway.lovable.dev (mesmo endpoint do App)
+  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -432,6 +559,7 @@ async function callAI(messages: any[], systemPrompt: string, useTools: boolean =
 
   if (!response.ok) {
     const err = await response.text();
+    console.error(`[whatsapp-webhook] AI Error: ${err}`);
     throw new Error(`AI Error: ${err}`);
   }
 
