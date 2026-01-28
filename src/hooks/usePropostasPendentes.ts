@@ -1403,6 +1403,37 @@ export function useAprovarProposta() {
         if (!jaTemInstalacaoConcluida && !jaTemInstalacaoAtiva) {
           const associadoData = contrato.associado as any;
           const dataAgendada = new Date().toISOString().split('T')[0];
+          
+          // GEOCODIFICAR endereço antes de criar instalação para atribuição automática funcionar
+          let endereco_latitude: number | null = null;
+          let endereco_longitude: number | null = null;
+          
+          if (associadoData?.logradouro && associadoData?.cidade) {
+            try {
+              console.log('[Aprovação] Geocodificando endereço do associado...');
+              const { data: geoResult, error: geoError } = await supabase.functions.invoke('geocode-endereco', {
+                body: {
+                  logradouro: associadoData.logradouro,
+                  numero: associadoData.numero,
+                  bairro: associadoData.bairro,
+                  cidade: associadoData.cidade,
+                  uf: associadoData.uf,
+                  cep: associadoData.cep,
+                }
+              });
+              
+              if (!geoError && geoResult?.latitude && geoResult?.longitude) {
+                endereco_latitude = geoResult.latitude;
+                endereco_longitude = geoResult.longitude;
+                console.log(`[Aprovação] Geocodificação OK: (${endereco_latitude}, ${endereco_longitude})`);
+              } else {
+                console.warn('[Aprovação] Geocodificação retornou sem coordenadas:', geoResult);
+              }
+            } catch (geoError) {
+              console.warn('[Aprovação] Geocodificação falhou, continuando sem coordenadas:', geoError);
+            }
+          }
+          
           const { error: instalacaoError } = await supabase
             .from('instalacoes')
             .insert({
@@ -1418,6 +1449,9 @@ export function useAprovarProposta() {
               cidade: associadoData?.cidade || null,
               uf: associadoData?.uf || null,
               cep: associadoData?.cep || null,
+              endereco_latitude,
+              endereco_longitude,
+              local_vistoria: 'cliente',
             } as any);
           
           if (instalacaoError) {
