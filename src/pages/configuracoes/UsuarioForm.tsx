@@ -24,6 +24,7 @@ const perfisDisponiveis = [
   { value: 'coordenador_monitoramento', label: 'Coord. Monitoramento', desc: 'Instalações e rotas' },
   { value: 'analista_plataforma', label: 'Analista de Plataforma', desc: 'Rastreadores' },
   { value: 'instalador_vistoriador', label: 'Instalador/Vistoriador', desc: 'App instalador' },
+  { value: 'vistoriador_base', label: 'Vistoriador Base', desc: 'Vistorias agendadas na base' },
   { value: 'analista_marketing', label: 'Analista de Marketing', desc: 'Campanhas e leads' },
   { value: 'analista_juridico', label: 'Analista Jurídico', desc: 'Processos e contratos' },
 ];
