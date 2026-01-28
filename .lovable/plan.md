@@ -1,245 +1,320 @@
 
-# Plano: Corrigir Lógica de Identificação Autovistoria vs Vistoria Presencial
+# Plano: Acesso Antecipado ao App com Cobertura Parcial (Roubo/Furto)
 
-## Diagnóstico do Problema
+## Objetivo
 
-A tela de análise cadastral (`PropostaAnalise.tsx`) está identificando incorretamente **todas as propostas com fotos** como autovistoria, quando deveria distinguir entre:
+Permitir que associados com **cobertura de roubo e furto ativada** (mas sem cobertura total) possam:
+1. Criar senha e acessar o app do associado
+2. Ver funcionalidades limitadas apenas a roubo e furto
+3. Receber informação da IA quando tentar acessar coberturas não ativas
 
-| Cenário | Quem tira fotos | tipo_vistoria | modalidade | Aprovação Analista |
-|---------|-----------------|---------------|------------|-------------------|
-| Autovistoria | **Cliente** | `autovistoria` | `autovistoria` | Roubo/Furto apenas |
-| Vistoria Presencial | **Vistoriador** | `agendada` | `presencial` | Cobertura Total |
-| Vistoria na Base | **Vistoriador** | `agendada_base` | `presencial` | Cobertura Total |
+## Diagnóstico do Estado Atual
 
-### Código Problemático
+### Problema 1: Criação de Conta Bloqueada para Cobertura Parcial
 
-**Arquivo:** `src/pages/cadastro/PropostaAnalise.tsx` (linhas 626 e 777)
+**Arquivo:** `src/pages/public/AcompanhamentoProposta.tsx` (linhas 209-241)
 
-```typescript
-// LÓGICA ATUAL (INCORRETA)
-const isAutovistoria = proposta.vistoria?.fotos?.length > 0 && !proposta.instalacao_info;
-```
+A lógica atual mostra o formulário de criação de conta apenas quando:
+- `associado.status === 'ativo'` E `!associado.user_id`
 
-Esta lógica falha porque:
-- Vistoria presencial também tem fotos (tiradas pelo vistoriador)
-- Vistoria na base também tem fotos
-- O único critério confiável é o campo `modalidade`
+**Mas**, logo depois (linhas 226-241), se tem `cobertura_roubo_furto` sem `cobertura_total`:
+- Mostra status "cobertura_parcial" com `showCriarConta: false`
+- Mensagem diz: "Aguarde a instalação do rastreador para cobertura total **e acesso ao app**"
 
-## Fluxos Detalhados (Conforme Especificação)
+Isso impede o cliente de criar a conta mesmo tendo cobertura ativa.
 
-### 1. AUTOVISTORIA SELECIONADA
+### Problema 2: App Não Diferencia Coberturas
 
-```text
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│ Cliente tira    │────►│ Paga e agenda   │────►│ Analista aprova │
-│ fotos (auto)    │     │ vistoria completa    │ Roubo/Furto     │
-└─────────────────┘     └─────────────────┘     └────────┬────────┘
-                                                         │
-            ┌────────────────────────────────────────────┘
-            ▼
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│ Atribuição      │────►│ Vistoriador     │────►│ Cobertura Total │
-│ automática      │     │ aprova          │     │ ATIVADA ✅      │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-```
+**Arquivos afetados:**
+- `src/pages/app/AppHome.tsx` - Mostra todos os atalhos (Assistência, Sinistro)
+- `src/pages/app/NovoSinistro.tsx` - Permite todos os tipos de sinistro
+- `supabase/functions/assistente-chat/index.ts` - IA não conhece as coberturas ativas
 
-**Cenário alternativo:** Se vistoriador aprovar ANTES do analista:
-- Proposta fica "Pendente de Análise Cadastral"
-- Analista aprova → Cobertura Total ativada
+## Fluxos Esperados
 
-### 2. AGENDAMENTO (SEM AUTOVISTORIA)
-
-```text
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│ Cliente agenda  │────►│ Atribuição      │────►│ Vistoriador     │
-│ vistoria        │     │ automática      │     │ realiza e aprova│
-└─────────────────┘     └─────────────────┘     └────────┬────────┘
-                                                         │
-            ┌────────────────────────────────────────────┘
-            ▼
-┌─────────────────┐     ┌─────────────────┐
-│ Pendente de     │────►│ Analista aprova │
-│ Análise Cadastral     │ Cobertura Total │
-└─────────────────┘     └─────────────────┘
-```
-
-### 3. VISTORIA NA BASE
-
-```text
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│ Cliente seleciona    │ Cliente leva    │────►│ Vistoriador da  │
-│ horário na base │────►│ carro na data   │     │ base realiza    │
-└─────────────────┘     └─────────────────┘     └────────┬────────┘
-                                                         │
-            ┌────────────────────────────────────────────┘
-            ▼
-┌─────────────────┐     ┌─────────────────┐
-│ Pendente de     │────►│ Analista aprova │
-│ Análise Cadastral     │ Cobertura Total │
-└─────────────────┘     └─────────────────┘
-```
-
-### Status do Associado
-
-| Situação | Status |
-|----------|--------|
-| Nenhuma aprovação | `pendente_vistoria` |
-| Analista aprovou autovistoria (aguarda vistoriador) | `em_analise` + `cobertura_roubo_furto=true` |
-| Vistoriador aprovou (aguarda analista) | `em_analise` |
-| Ambos aprovaram | `ativo` + `cobertura_total=true` |
-| Qualquer um recusou | `recusado` |
+| Cobertura | Funcionalidades Permitidas |
+|-----------|---------------------------|
+| Roubo/Furto apenas | Abrir sinistro de Roubo ou Furto, Consultar boletos, Documentos |
+| Cobertura Total | Tudo: Assistência 24h, Todos tipos de sinistro, Rastreamento |
 
 ## Implementação
 
-### 1. Corrigir Identificação de Autovistoria na Tela de Análise
+### 1. Permitir Criação de Conta com Cobertura Parcial
 
-**Arquivo:** `src/pages/cadastro/PropostaAnalise.tsx`
+**Arquivo:** `src/pages/public/AcompanhamentoProposta.tsx`
 
-Substituir a lógica em 2 locais (linhas ~626 e ~777):
-
-```typescript
-// LÓGICA CORRIGIDA
-// Autovistoria = modalidade é 'autovistoria' E ainda não tem instalação concluída
-const isAutovistoria = (
-  proposta.vistoria?.modalidade === 'autovistoria' ||
-  proposta.vistoria?.tipo === 'autovistoria'
-) && !proposta.instalacao_info;
-```
-
-### 2. Garantir Campo `modalidade` Disponível no Hook
-
-**Arquivo:** `src/hooks/usePropostasPendentes.ts`
-
-Verificar que a busca em `vistorias` (linha 271-276) já inclui `modalidade`:
+Alterar a lógica em `getStatusInfo()`:
 
 ```typescript
-const { data: vistoriaData } = await supabase
-  .from('vistorias')
-  .select('id, status, modalidade')  // ✅ Já inclui modalidade
-  .eq('contrato_id', contrato.id)
-  ...
-```
+// ANTES (linha 226-241)
+// ATIVO COM COBERTURA PARCIAL - showCriarConta: false
 
-E que está sendo propagado corretamente para a interface `VistoriaInfo`:
+// DEPOIS
+// Verificar se tem cobertura_roubo_furto E não tem user_id → showCriarConta: true
+if (associado.status === 'ativo' && veiculo?.cobertura_roubo_furto && !veiculo?.cobertura_total && !associado.user_id) {
+  return {
+    status: 'cobertura_parcial',
+    icon: Shield,
+    color: 'primary',
+    title: 'Cobertura de Roubo e Furto Ativa!',
+    description: 'Sua proteção contra roubo e furto está ativa. Crie sua conta para acessar o app!',
+    showDetails: true,
+    showCriarConta: true,  // ✅ HABILITAR criação de conta
+    showInstalacao: true,
+    // ...
+  };
+}
 
-```typescript
-vistoria = {
-  id: vistoriaData.id,
-  status: vistoriaData.status || 'pendente',
-  tipo: vistoriaData.modalidade === 'autovistoria' ? 'autovistoria' : 'agendada',
-  modalidade: vistoriaData.modalidade || undefined,  // ✅ Já propaga
-  fotos: fotosVistoria as VistoriaFotoInfo[],
-};
-```
-
-### 3. Adicionar Fallback para Cotações Sem Registro em `vistorias`
-
-Quando não existe registro na tabela `vistorias` mas existe em `cotacoes_vistoria_fotos` (legado), buscar o `tipo_vistoria` da cotação para determinar corretamente:
-
-**Arquivo:** `src/hooks/usePropostasPendentes.ts` (após linha ~297)
-
-```typescript
-// 3. Fallback adicional: buscar tipo_vistoria da cotação quando não tem vistoria nem fotos legadas
-if (!vistoria && contrato.cotacao_id) {
-  const { data: cotacao } = await supabase
-    .from('cotacoes')
-    .select('tipo_vistoria')
-    .eq('id', contrato.cotacao_id)
-    .maybeSingle();
-  
-  // Se cotação indica tipo de vistoria, usar para determinar modalidade
-  if (cotacao?.tipo_vistoria) {
-    // tipo_vistoria = 'autovistoria' | 'agendada' | 'agendada_base'
-    const isAuto = cotacao.tipo_vistoria === 'autovistoria';
-    // Nota: Mesmo sem fotos, podemos saber a modalidade esperada
-  }
+// Se já tem conta mas cobertura parcial
+if (associado.status === 'ativo' && veiculo?.cobertura_roubo_furto && !veiculo?.cobertura_total && associado.user_id) {
+  return {
+    status: 'cobertura_parcial_conta_criada',
+    // ...
+    showCriarConta: false,
+    description: 'Você já pode acessar o app! Login: /app/login',
+  };
 }
 ```
 
-### 4. Atualizar Texto do Botão de Aprovação
+### 2. Adicionar Verificação de Cobertura no App
 
-**Arquivo:** `src/pages/cadastro/PropostaAnalise.tsx`
+**Novo Hook:** `src/hooks/useMinhasCoberturasApp.ts`
 
-O texto do botão deve refletir o cenário corretamente:
-
-| Cenário | Botão | Descrição no Dialog |
-|---------|-------|---------------------|
-| Autovistoria sem instalação | "Aprovar Cobertura de Roubo e Furto" | Libera apenas roubo/furto, aguarda instalação |
-| Vistoria presencial/base sem instalação | "Aprovar Proposta" | Aguarda instalação para cobertura total |
-| Qualquer com instalação concluída | "Ativar Cobertura Total" | Ativa cobertura completa |
-
-### 5. Adicionar Verificação de Vistoria na Base
-
-**Arquivo:** `src/pages/cadastro/PropostaAnalise.tsx`
-
-Quando `vistoria_base_info` existe, considerar como vistoria presencial (não autovistoria):
+Criar hook que retorna as coberturas ativas do veículo do associado:
 
 ```typescript
-const isVistoriaBase = !!proposta.vistoria_base_info;
-const isAutovistoria = (
-  proposta.vistoria?.modalidade === 'autovistoria' ||
-  proposta.vistoria?.tipo === 'autovistoria'
-) && !proposta.instalacao_info && !isVistoriaBase;
+export function useMinhasCoberturas() {
+  const { data: veiculos } = useVeiculosApp();
+  
+  const veiculo = veiculos?.[0];
+  
+  return {
+    temCoberturaRouboFurto: veiculo?.cobertura_roubo_furto || false,
+    temCoberturaTotal: veiculo?.cobertura_total || false,
+    // Assistência 24h requer cobertura total
+    podeAssistencia: veiculo?.cobertura_total || false,
+    // Sinistros permitidos
+    tiposSinistroPermitidos: veiculo?.cobertura_total 
+      ? ['colisao', 'roubo', 'furto', 'incendio', 'fenomeno_natural', 'vandalismo', 'outro']
+      : ['roubo', 'furto'],
+  };
+}
 ```
 
-## Alterações de Arquivos
+### 3. Atualizar Home para Mostrar Funcionalidades Baseadas em Cobertura
+
+**Arquivo:** `src/pages/app/AppHome.tsx`
+
+Modificar o grid de atalhos para desabilitar opções não cobertas:
+
+```typescript
+// Importar hook
+import { useMinhasCoberturas } from '@/hooks/useMinhasCoberturasApp';
+
+// No componente
+const { podeAssistencia, temCoberturaTotal } = useMinhasCoberturas();
+
+// No grid de atalhos - Assistência 24h
+{podeAssistencia ? (
+  <Link to="/app/assistencia">
+    {/* Card normal */}
+  </Link>
+) : (
+  <Card className="bg-gray-100 opacity-60 cursor-not-allowed">
+    <CardContent className="p-4 flex flex-col items-center gap-2">
+      <Phone className="h-6 w-6 text-gray-400" />
+      <span className="text-sm text-gray-400">Assistência 24h</span>
+      <Badge variant="outline" className="text-xs">Requer instalação</Badge>
+    </CardContent>
+  </Card>
+)}
+
+// Rastreamento - só se tiver cobertura total
+{temCoberturaTotal && veiculoPrincipal?.rastreador_ativo && (
+  <Card className="...">Rastreamento</Card>
+)}
+```
+
+### 4. Filtrar Tipos de Sinistro Permitidos
+
+**Arquivo:** `src/pages/app/NovoSinistro.tsx`
+
+Filtrar os tipos de sinistro baseado na cobertura:
+
+```typescript
+import { useMinhasCoberturas } from '@/hooks/useMinhasCoberturasApp';
+
+// No componente
+const { tiposSinistroPermitidos, temCoberturaTotal } = useMinhasCoberturas();
+
+// Filtrar lista de tipos
+const tiposDisponiveis = TIPOS_SINISTRO.filter(tipo => 
+  tiposSinistroPermitidos.includes(tipo.id)
+);
+
+// Mostrar mensagem se cobertura parcial
+{!temCoberturaTotal && (
+  <Alert className="mb-4">
+    <AlertDescription>
+      Sua cobertura atual é apenas para <strong>roubo e furto</strong>. 
+      Após a instalação do rastreador, você terá cobertura total.
+    </AlertDescription>
+  </Alert>
+)}
+```
+
+### 5. Instruir a IA sobre Coberturas
+
+**Arquivo:** `supabase/functions/assistente-chat/index.ts`
+
+Atualizar o contexto enviado para a IA incluindo informações de cobertura:
+
+```typescript
+// Na busca de veículos (linha 588-591), adicionar coberturas
+const { data: veiculosResult } = await supabase
+  .from("veiculos")
+  .select("id, placa, marca, modelo, ano_modelo, cor, status, cobertura_roubo_furto, cobertura_total")
+  .eq("associado_id", associado.id);
+
+// No contexto do associado (linhas 625-629)
+const veiculosTexto = veiculos.length > 0 
+  ? veiculos.map((v: any) => {
+      const coberturas = [];
+      if (v.cobertura_roubo_furto) coberturas.push('Roubo/Furto');
+      if (v.cobertura_total) coberturas.push('Total (inclui Assistência 24h)');
+      const coberturaInfo = coberturas.length > 0 
+        ? `Coberturas: ${coberturas.join(', ')}` 
+        : 'Aguardando ativação de cobertura';
+      return `- ${v.marca} ${v.modelo} (Placa: ${v.placa}, ${coberturaInfo}, ID: ${v.id})`;
+    }).join('\n')
+  : 'Nenhum veículo cadastrado';
+
+// Adicionar instrução ao SYSTEM_PROMPT
+// Após linha 91, adicionar:
+`
+## REGRAS DE COBERTURA (MUITO IMPORTANTE!)
+- Verifique SEMPRE a cobertura do veículo antes de criar solicitações
+- Se o veículo tem apenas cobertura "Roubo/Furto":
+  - APENAS sinistros de roubo ou furto são permitidos
+  - Assistência 24h (guincho, chaveiro, etc.) NÃO está disponível
+  - Informe educadamente: "Sua cobertura atual é apenas para roubo e furto. Após a instalação do rastreador, você terá acesso à assistência 24h e cobertura total."
+- Se o veículo tem cobertura "Total":
+  - Todos os tipos de sinistro e assistência estão liberados
+`
+```
+
+### 6. Atualizar Hook de Veículos para Incluir Coberturas
+
+**Arquivo:** `src/hooks/useAppAssociado.ts`
+
+Atualizar a query de veículos para trazer as coberturas:
+
+```typescript
+// Em useVeiculosApp (linha 64-71)
+const { data, error } = await supabase
+  .from('veiculos')
+  .select(`
+    id, placa, marca, modelo, ano_modelo, cor, status,
+    cobertura_roubo_furto, cobertura_total,  // ✅ Adicionar
+    rastreadores(id, status)
+  `)
+  .eq('associado_id', assoc.id)
+  .eq('status', 'ativo');
+```
+
+Atualizar interface `VeiculoApp` em `src/types/app-associado.ts`:
+
+```typescript
+export interface VeiculoApp {
+  // ... existentes
+  cobertura_roubo_furto?: boolean;
+  cobertura_total?: boolean;
+}
+```
+
+## Arquivos a Serem Modificados
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/pages/cadastro/PropostaAnalise.tsx` | Corrigir lógica `isAutovistoria` em 2 locais (linhas ~626 e ~777), adicionar verificação de vistoria base |
-| `src/hooks/usePropostasPendentes.ts` | Adicionar fallback para buscar `tipo_vistoria` da cotação quando necessário |
+| `src/pages/public/AcompanhamentoProposta.tsx` | Permitir criação de conta com cobertura parcial |
+| `src/hooks/useMinhasCoberturasApp.ts` | **Criar** - Hook para verificar coberturas ativas |
+| `src/types/app-associado.ts` | Adicionar campos `cobertura_*` à interface `VeiculoApp` |
+| `src/hooks/useAppAssociado.ts` | Incluir coberturas na query de veículos |
+| `src/pages/app/AppHome.tsx` | Ocultar/desabilitar atalhos baseado em cobertura |
+| `src/pages/app/NovoSinistro.tsx` | Filtrar tipos de sinistro permitidos |
+| `supabase/functions/assistente-chat/index.ts` | Instruir IA sobre coberturas e restrições |
 
 ## Seção Técnica - Detalhes de Implementação
 
-### Lógica Final para `isAutovistoria`
+### Lógica Completa para `getStatusInfo()`
 
 ```typescript
-// Em PropostaAnalise.tsx - substituir em ambos os locais
+// Verificar cobertura parcial ANTES da verificação de ativo genérico
+// Ordem de prioridade:
 
-// Vistoria na base NÃO é autovistoria (mesmo que tenha fotos)
-const isVistoriaBase = !!proposta.vistoria_base_info;
+// 1. Se tem roubo/furto mas não total E não tem conta → criar conta
+if (associado.status === 'ativo' && veiculo?.cobertura_roubo_furto && !veiculo?.cobertura_total && !associado.user_id) {
+  return {
+    status: 'cobertura_parcial_criar_conta',
+    icon: KeyRound,
+    color: 'success',
+    title: 'Cobertura Ativa - Crie sua Conta!',
+    description: 'Sua proteção contra roubo e furto já está ativa. Crie sua conta para acessar o app.',
+    showCriarConta: true,
+    showInstalacao: true,
+    // ...
+  };
+}
 
-// Autovistoria = modalidade explícita 'autovistoria' E ainda não tem instalação concluída
-// E não é vistoria na base
-const isAutovistoria = (
-  proposta.vistoria?.modalidade === 'autovistoria' ||
-  proposta.vistoria?.tipo === 'autovistoria'
-) && !proposta.instalacao_info && !isVistoriaBase;
-
-// Determinar texto do botão
-const textoAprovar = isAutovistoria 
-  ? 'Aprovar Cobertura de Roubo e Furto'
-  : proposta.instalacao_info
-    ? 'Ativar Cobertura Total'
-    : 'Aprovar Proposta';
+// 2. Se tem roubo/furto mas não total E já tem conta
+if (associado.status === 'ativo' && veiculo?.cobertura_roubo_furto && !veiculo?.cobertura_total && associado.user_id) {
+  return {
+    status: 'cobertura_parcial',
+    icon: Shield,
+    color: 'primary',
+    title: 'Cobertura Parcial Ativa',
+    description: 'Sua proteção contra roubo e furto está ativa. Acesse o app e aguarde a instalação para cobertura total.',
+    showCriarConta: false,
+    showInstalacao: true,
+    // ...
+  };
+}
 ```
 
-### Fallback no Hook (quando necessário)
+### SYSTEM_PROMPT Atualizado para IA
 
 ```typescript
-// Em usePropostasPendentes.ts - adicionar após busca de fotos legadas (linha ~313)
+const REGRAS_COBERTURA = `
+## REGRAS DE COBERTURA (VERIFICAR SEMPRE!)
 
-// 3. Se ainda não tem vistoria e tem cotacao_id, verificar tipo_vistoria
-if (!vistoria && contrato.cotacao_id) {
-  // Já temos a cotação buscada acima com tipo_vistoria, usar esse dado
-  // Para determinar se espera-se autovistoria ou presencial
-}
+Antes de criar qualquer solicitação, verifique a cobertura do veículo no contexto:
+
+1. **Cobertura apenas "Roubo/Furto":**
+   - ✅ Permitido: Sinistros de roubo ou furto
+   - ❌ Bloqueado: Assistência 24h, colisão, incêndio, outros tipos
+   - Resposta padrão: "Entendo sua necessidade, mas sua cobertura atual é apenas para roubo e furto. Após a instalação do rastreador, você terá acesso à cobertura total que inclui assistência 24h, colisão, e outros tipos de sinistro. Posso ajudar com algo relacionado a roubo ou furto?"
+
+2. **Cobertura "Total":**
+   - ✅ Tudo liberado: Assistência 24h, todos tipos de sinistro, rastreamento
+`;
+
+const SYSTEM_PROMPT = `...
+
+${REGRAS_COBERTURA}
+
+...`;
 ```
 
 ## Resultado Esperado
 
-### Antes (Bug)
-
-| Cliente fez | Sistema identifica | Botão mostrado |
-|-------------|-------------------|----------------|
-| Autovistoria | Autovistoria ✅ | Roubo/Furto ✅ |
-| Vistoria Presencial | **Autovistoria** ❌ | **Roubo/Furto** ❌ |
-| Vistoria na Base | **Autovistoria** ❌ | **Roubo/Furto** ❌ |
+### Antes (Problema)
+1. Cliente com cobertura roubo/furto não consegue criar conta
+2. App mostra todas as opções mesmo sem cobertura total
+3. IA não sabe das limitações de cobertura
 
 ### Depois (Corrigido)
-
-| Cliente fez | Sistema identifica | Botão mostrado |
-|-------------|-------------------|----------------|
-| Autovistoria | Autovistoria ✅ | Roubo/Furto ✅ |
-| Vistoria Presencial | Presencial ✅ | Aprovar Proposta ✅ |
-| Vistoria na Base | Presencial ✅ | Aprovar Proposta ✅ |
+1. Cliente com cobertura roubo/furto pode criar conta ✅
+2. App mostra apenas opções cobertas (sinistro roubo/furto) ✅
+3. Atalho de Assistência 24h desabilitado com "Requer instalação" ✅
+4. IA informa educadamente sobre limitações de cobertura ✅
+5. Após instalação e ativação total, tudo fica liberado ✅
