@@ -13484,6 +13484,7 @@ export type Database = {
           bo_arquivo_url: string | null
           bo_numero: string | null
           canal: string
+          chamado_origem_id: string | null
           cidade_ocorrencia: string | null
           created_at: string
           data_ocorrencia: string
@@ -13509,6 +13510,7 @@ export type Database = {
           bo_arquivo_url?: string | null
           bo_numero?: string | null
           canal?: string
+          chamado_origem_id?: string | null
           cidade_ocorrencia?: string | null
           created_at?: string
           data_ocorrencia: string
@@ -13534,6 +13536,7 @@ export type Database = {
           bo_arquivo_url?: string | null
           bo_numero?: string | null
           canal?: string
+          chamado_origem_id?: string | null
           cidade_ocorrencia?: string | null
           created_at?: string
           data_ocorrencia?: string
@@ -13609,6 +13612,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "sinistros_chamado_origem_id_fkey"
+            columns: ["chamado_origem_id"]
+            isOneToOne: false
+            referencedRelation: "chamados_assistencia"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "sinistros_veiculo_id_fkey"

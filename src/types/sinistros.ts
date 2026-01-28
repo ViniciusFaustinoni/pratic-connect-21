@@ -23,7 +23,8 @@ export type StatusSinistro =
   | 'aguardando_pagamento'
   | 'pago'
   | 'encerrado'
-  | 'cancelado';
+  | 'cancelado'
+  | 'em_sindicancia';
 
 export type CanalAbertura = 'app' | 'whatsapp' | 'telefone' | 'presencial';
 
@@ -65,6 +66,7 @@ export const STATUS_SINISTRO_LABELS: Record<StatusSinistro, string> = {
   pago: 'Pago',
   encerrado: 'Encerrado',
   cancelado: 'Cancelado',
+  em_sindicancia: 'Em Sindicância',
 };
 
 export const STATUS_SINISTRO_COLORS: Record<StatusSinistro, string> = {
@@ -79,6 +81,7 @@ export const STATUS_SINISTRO_COLORS: Record<StatusSinistro, string> = {
   pago: 'bg-emerald-100 text-emerald-800',
   encerrado: 'bg-gray-100 text-gray-800',
   cancelado: 'bg-gray-100 text-gray-500',
+  em_sindicancia: 'bg-rose-100 text-rose-800',
 };
 
 export const CANAL_LABELS: Record<CanalAbertura, string> = {
@@ -267,9 +270,9 @@ export interface EstatisticasSinistros {
 // ============================================
 
 export const WORKFLOW_SINISTRO: Record<StatusSinistro, StatusSinistro[]> = {
-  comunicado: ['em_analise', 'cancelado'],
-  em_analise: ['documentacao_pendente', 'aprovado', 'negado', 'cancelado'],
-  documentacao_pendente: ['em_analise', 'cancelado'],
+  comunicado: ['em_analise', 'em_sindicancia', 'cancelado'],
+  em_analise: ['documentacao_pendente', 'aprovado', 'negado', 'em_sindicancia', 'cancelado'],
+  documentacao_pendente: ['em_analise', 'em_sindicancia', 'cancelado'],
   aprovado: ['em_regulacao', 'em_reparo', 'aguardando_pagamento'],
   negado: ['encerrado'],
   em_regulacao: ['em_reparo', 'aguardando_pagamento'],
@@ -278,4 +281,5 @@ export const WORKFLOW_SINISTRO: Record<StatusSinistro, StatusSinistro[]> = {
   pago: ['encerrado'],
   encerrado: [],
   cancelado: [],
+  em_sindicancia: ['em_analise', 'aprovado', 'negado', 'cancelado'],
 };
