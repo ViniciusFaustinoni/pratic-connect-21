@@ -30,6 +30,34 @@ function calcularDistanciaKm(
 }
 
 /**
+ * Verifica se um serviço pode ser atribuído no momento atual
+ * Regras:
+ * - Serviços com permite_encaixe = true podem ser atribuídos a qualquer momento
+ * - Serviços normais de HOJE só podem ser atribuídos após o hora_agendada
+ * - Serviços de datas futuras (amanhã) podem ser atribuídos normalmente
+ */
+function podeSerAtribuido(
+  servico: { data_agendada: string; hora_agendada: string | null; permite_encaixe: boolean },
+  agora: Date,
+  hojeStr: string
+): boolean {
+  // Encaixes podem ser atribuídos livremente
+  if (servico.permite_encaixe) return true;
+  
+  // Serviços de datas futuras podem ser atribuídos (amanhã)
+  if (servico.data_agendada > hojeStr) return true;
+  
+  // Serviços de HOJE com hora específica
+  if (servico.data_agendada === hojeStr && servico.hora_agendada) {
+    const horaAtual = agora.toTimeString().slice(0, 5); // "HH:MM"
+    return horaAtual >= servico.hora_agendada;
+  }
+  
+  // Sem hora específica = pode ser atribuído
+  return true;
+}
+
+/**
  * Verifica se o profissional tem tarefas agendadas dentro da janela de horas configurada
  * CORRIGIDO: Usa APENAS a tabela SERVICOS como fonte única de verdade
  */
@@ -374,7 +402,18 @@ serve(async (req) => {
 
     console.log(`[atribuir-proxima-tarefa] ${servicosDisponiveis.length} serviços disponíveis no total`);
 
-    if (servicosDisponiveis.length === 0) {
+    // NOVO: Filtrar serviços que ainda não podem ser atribuídos (horário futuro)
+    const agora = new Date();
+    const servicosFiltradosPorHorario = servicosDisponiveis.filter(s => 
+      podeSerAtribuido(s, agora, hoje)
+    );
+    
+    const bloqueadosPorHorario = servicosDisponiveis.length - servicosFiltradosPorHorario.length;
+    if (bloqueadosPorHorario > 0) {
+      console.log(`[atribuir-proxima-tarefa] ${servicosFiltradosPorHorario.length} serviços após filtro de horário (${bloqueadosPorHorario} bloqueados por horário futuro)`);
+    }
+
+    if (servicosFiltradosPorHorario.length === 0) {
       // ========== DEBUG: Por que não encontrou serviços? ==========
       console.log(`[atribuir-proxima-tarefa] DEBUG: Nenhum serviço disponível. Investigando motivo...`);
       
@@ -452,7 +491,7 @@ serve(async (req) => {
     }
 
     // 4. Calcular distâncias e ordenar com nova lógica de prioridades
-    const servicosComDistancia: ServicoComDistancia[] = servicosDisponiveis
+    const servicosComDistancia: ServicoComDistancia[] = servicosFiltradosPorHorario
       .filter(s => s.latitude && s.longitude)
       .map(s => {
         const distancia_km = calcularDistanciaKm(latitude, longitude, s.latitude!, s.longitude!);
