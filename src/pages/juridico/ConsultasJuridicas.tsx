@@ -24,6 +24,7 @@ import {
   PrioridadePrazo
 } from '@/types/juridico';
 import { ResponderConsultaModal } from '@/components/juridico/ResponderConsultaModal';
+import { NovaConsultaModal } from '@/components/juridico/NovaConsultaModal';
 
 interface ConsultasFilters {
   busca: string;
@@ -49,6 +50,7 @@ export default function ConsultasJuridicas() {
     status: 'todos',
   });
   const [consultaSelecionada, setConsultaSelecionada] = useState<ConsultaSelecionada | null>(null);
+  const [novaConsultaOpen, setNovaConsultaOpen] = useState(false);
 
   const { consultas, isLoading } = useConsultasJuridicas({
     status: filters.status !== 'todos' ? filters.status : undefined,
@@ -125,7 +127,7 @@ export default function ConsultasJuridicas() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Consultas Jurídicas</h1>
-        <Button onClick={() => navigate('/juridico/consultas/nova')}>
+        <Button onClick={() => setNovaConsultaOpen(true)}>
           <Plus className="h-4 w-4 mr-2" />
           Nova Consulta
         </Button>
@@ -207,7 +209,7 @@ export default function ConsultasJuridicas() {
             <p className="text-muted-foreground mb-4">
               Crie uma nova consulta para solicitar parecer jurídico.
             </p>
-            <Button onClick={() => navigate('/juridico/consultas/nova')}>
+            <Button onClick={() => setNovaConsultaOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Nova Consulta
             </Button>
@@ -316,6 +318,12 @@ export default function ConsultasJuridicas() {
           consulta={consultaSelecionada}
         />
       )}
+
+      {/* Modal Nova Consulta */}
+      <NovaConsultaModal
+        open={novaConsultaOpen}
+        onClose={() => setNovaConsultaOpen(false)}
+      />
     </div>
   );
 }

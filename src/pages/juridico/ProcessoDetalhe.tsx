@@ -20,6 +20,8 @@ import {
   DropdownMenuSeparator, DropdownMenuTrigger 
 } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 import { useProcesso } from '@/hooks/useProcessos';
 import { useProcessosPrazos } from '@/hooks/useProcessosPrazos';
@@ -31,6 +33,12 @@ import {
   STATUS_AUDIENCIA_LABELS, STATUS_AUDIENCIA_COLORS, TIPO_CUSTA_LABELS,
   STATUS_CUSTA_LABELS, STATUS_CUSTA_COLORS, TIPO_DOCUMENTO_PROCESSO_LABELS
 } from '@/types/juridico';
+
+import { NovoAndamentoModal } from '@/components/juridico/NovoAndamentoModal';
+import { NovaAudienciaModal } from '@/components/juridico/NovaAudienciaModal';
+import { UploadDocumentoModal } from '@/components/juridico/UploadDocumentoModal';
+import { NovoPrazoModal } from '@/components/juridico/NovoPrazoModal';
+import { NovaCustaModal } from '@/components/juridico/NovaCustaModal';
 
 const naturezaConfig: Record<string, string> = {
   autor: 'bg-green-100 text-green-800',
@@ -66,13 +74,18 @@ const getDiasRestantes = (dataFim: string) => {
   return { label: `${dias} dias`, class: 'bg-muted text-muted-foreground' };
 };
 
-import { NovoAndamentoModal } from '@/components/juridico/NovoAndamentoModal';
-
 export default function ProcessoDetalhe() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('resumo');
+  
+  // Modal states
   const [novoAndamentoOpen, setNovoAndamentoOpen] = useState(false);
+  const [novaAudienciaOpen, setNovaAudienciaOpen] = useState(false);
+  const [uploadDocumentoOpen, setUploadDocumentoOpen] = useState(false);
+  const [novoPrazoOpen, setNovoPrazoOpen] = useState(false);
+  const [novaCustaOpen, setNovaCustaOpen] = useState(false);
 
   const { processo, andamentos, audiencias, documentos, custas, isLoading } = useProcesso(id);
   const { prazos, cumprirPrazo, cancelarPrazo, isCumprindo } = useProcessosPrazos({ processo_id: id });
@@ -100,9 +113,22 @@ export default function ProcessoDetalhe() {
     return { pendente, pago };
   }, [custas]);
 
-  const handleNotImplemented = () => {
-    toast.info('Funcionalidade em desenvolvimento');
-  };
+  // Mutation para alterar status do processo
+  const alterarStatusMutation = useMutation({
+    mutationFn: async (novoStatus: string) => {
+      const { error } = await supabase
+        .from('processos')
+        .update({ status: novoStatus, updated_at: new Date().toISOString() })
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['processos'] });
+      queryClient.invalidateQueries({ queryKey: ['juridico-stats'] });
+      toast.success('Status do processo atualizado!');
+    },
+    onError: (e: Error) => toast.error('Erro: ' + e.message),
+  });
 
   if (isLoading) {
     return (
@@ -165,17 +191,17 @@ export default function ProcessoDetalhe() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={handleNotImplemented}>
+            <DropdownMenuItem onClick={() => navigate(`/juridico/processos/${id}/editar`)}>
               Editar Processo
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleNotImplemented}>
+            <DropdownMenuItem onClick={() => alterarStatusMutation.mutate('suspenso')}>
               Suspender Processo
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={handleNotImplemented}>
+            <DropdownMenuItem onClick={() => alterarStatusMutation.mutate('arquivado')}>
               Arquivar Processo
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={handleNotImplemented} className="text-destructive">
+            <DropdownMenuItem onClick={() => alterarStatusMutation.mutate('encerrado')} className="text-destructive">
               Encerrar Processo
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -443,7 +469,7 @@ export default function ProcessoDetalhe() {
         <TabsContent value="prazos" className="space-y-4">
           <div className="flex justify-between items-center">
             <h3 className="text-lg font-semibold">Prazos</h3>
-            <Button onClick={handleNotImplemented}>
+            <Button onClick={() => setNovoPrazoOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Novo Prazo
             </Button>
@@ -517,7 +543,7 @@ export default function ProcessoDetalhe() {
         <TabsContent value="audiencias" className="space-y-4">
           <div className="flex justify-between items-center">
             <h3 className="text-lg font-semibold">Audiências</h3>
-            <Button onClick={handleNotImplemented}>
+            <Button onClick={() => setNovaAudienciaOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Nova Audiência
             </Button>
@@ -583,7 +609,7 @@ export default function ProcessoDetalhe() {
         <TabsContent value="documentos" className="space-y-4">
           <div className="flex justify-between items-center">
             <h3 className="text-lg font-semibold">Documentos</h3>
-            <Button onClick={handleNotImplemented}>
+            <Button onClick={() => setUploadDocumentoOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Upload Documento
             </Button>
@@ -632,7 +658,7 @@ export default function ProcessoDetalhe() {
         <TabsContent value="custas" className="space-y-4">
           <div className="flex justify-between items-center">
             <h3 className="text-lg font-semibold">Custas e Honorários</h3>
-            <Button onClick={handleNotImplemented}>
+            <Button onClick={() => setNovaCustaOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Nova Custa
             </Button>
@@ -715,6 +741,26 @@ export default function ProcessoDetalhe() {
       <NovoAndamentoModal
         open={novoAndamentoOpen}
         onClose={() => setNovoAndamentoOpen(false)}
+        processoId={id!}
+      />
+      <NovaAudienciaModal
+        open={novaAudienciaOpen}
+        onClose={() => setNovaAudienciaOpen(false)}
+        processoId={id!}
+      />
+      <UploadDocumentoModal
+        open={uploadDocumentoOpen}
+        onClose={() => setUploadDocumentoOpen(false)}
+        processoId={id!}
+      />
+      <NovoPrazoModal
+        open={novoPrazoOpen}
+        onClose={() => setNovoPrazoOpen(false)}
+        processoId={id!}
+      />
+      <NovaCustaModal
+        open={novaCustaOpen}
+        onClose={() => setNovaCustaOpen(false)}
         processoId={id!}
       />
     </div>
