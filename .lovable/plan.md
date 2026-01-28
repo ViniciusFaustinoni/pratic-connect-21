@@ -1,153 +1,164 @@
 
-## Diagnóstico (por que não aparece)
+# Plano: Adicionar Escolha de Local (Base vs Técnico) Após Pagamento de Autovistoria
 
-Na rota **/configuracoes/usuarios/novo** a lista de “Perfis de Acesso” não é gerada a partir de `PERFIS_FUNCIONARIO` (do modal NovoFuncionarioModal). Ela é uma lista fixa (`perfisDisponiveis`) dentro de:
+## Diagnóstico do Problema
 
-- **`src/pages/configuracoes/UsuarioForm.tsx`** (linhas ~17–29)
+O problema está em **`CotacaoContratacao.tsx`** (linha ~688-700):
 
-Esse array ainda **não contém** `vistoriador_base`, então a UI nunca vai renderizar essa opção — mesmo que o enum/labels já existam no sistema.
+Após o cliente realizar a **autovistoria** e **confirmar o pagamento**, o sistema exibe diretamente o componente `<AgendamentoVistoriaCompleta>`, que por sua vez usa `<AgendamentoVistoria>` com `contexto="pos-autovistoria"`.
 
-Além disso, encontrei outra lista fixa de perfis (para gerenciar perfis) que também precisa incluir o novo role:
+O problema é que esse fluxo **vai direto para o formulário de agendamento de técnico no endereço do cliente**, sem dar a opção de:
+- **"Quero que o técnico venha até mim"** (agendamento em casa)
+- **"Quero levar meu veículo até a Base"** (agendamento na base)
 
-- **`src/components/usuarios/GerenciarPerfisModal.tsx`**: `PERFIS_FUNCIONARIO` está sem `vistoriador_base` (apesar de já existir cor de badge para ele).
+Essa tela de escolha (`EscolhaLocalVistoria`) só existe no fluxo **antes do pagamento** (na etapa de vistoria presencial, dentro de `EtapaVistoria`), mas **não existe no fluxo pós-autovistoria**.
 
-Opcionalmente (dependendo do seu uso), existe outra lista fixa para importação em massa que também não inclui `vistoriador_base`:
+## Solução Proposta
 
-- **`src/components/usuarios/ImportarUsuariosDialog.tsx`**: `perfisDisponiveis` não inclui `vistoriador_base` (isso não afeta diretamente a tela /configuracoes/usuarios/novo, mas afeta importações).
+Criar um novo componente **`AgendamentoVistoriaCompletaComEscolha`** que:
+1. Primeiro exibe `EscolhaLocalVistoria` para o cliente escolher base ou técnico
+2. Se escolher "técnico vem até mim" → exibe `AgendamentoVistoria` (já existente)
+3. Se escolher "base" → exibe `AgendamentoBase` (já existente)
 
----
+### Implementação
 
-## Objetivo da correção
+#### 1. Modificar `AgendamentoVistoriaCompleta.tsx`
 
-1) Fazer **aparecer “Vistoriador Base”** na criação de usuário em **/configuracoes/usuarios/novo**.  
-2) Garantir que ele também apareça nas telas de **gerenciar perfis** (para adicionar/remover perfis de um usuário).  
-3) (Opcional) Permitir selecionar `vistoriador_base` na **importação** de usuários.
+Transformar o componente para ter estados internos que gerenciam a escolha:
 
----
+```typescript
+import { useState } from 'react';
+import { ArrowLeft } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { AgendamentoVistoria } from './AgendamentoVistoria';
+import { EscolhaLocalVistoria } from './EscolhaLocalVistoria';
+import { AgendamentoBase } from './AgendamentoBase';
+import { motion, AnimatePresence } from 'framer-motion';
 
-## Implementação (mudanças planejadas)
+interface AgendamentoVistoriaCompletaProps {
+  cotacaoId: string;
+  tipoVistoria?: 'autovistoria' | 'agendada';
+  clienteNome?: string;
+  clienteTelefone?: string;
+  clienteEmail?: string;
+  veiculoPlaca?: string;
+  veiculoDescricao?: string;
+  onConfirmar: () => void;
+}
 
-### 1) Adicionar “Vistoriador Base” na tela /configuracoes/usuarios/novo
+type ModoAgendamento = 'escolha' | 'cliente' | 'base';
 
-**Arquivo:** `src/pages/configuracoes/UsuarioForm.tsx`  
-**Mudança:** inserir `vistoriador_base` no array `perfisDisponiveis`, logo após `instalador_vistoriador` para manter ordem lógica.
+export function AgendamentoVistoriaCompleta({ 
+  cotacaoId, 
+  tipoVistoria, 
+  clienteNome = '',
+  clienteTelefone,
+  clienteEmail,
+  veiculoPlaca,
+  veiculoDescricao,
+  onConfirmar 
+}: AgendamentoVistoriaCompletaProps) {
+  const [modo, setModo] = useState<ModoAgendamento>('escolha');
 
-Exemplo:
+  return (
+    <AnimatePresence mode="wait">
+      {modo === 'escolha' && (
+        <motion.div
+          key="escolha"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+        >
+          <EscolhaLocalVistoria 
+            onEscolher={(local) => setModo(local)}
+          />
+        </motion.div>
+      )}
 
-```ts
-const perfisDisponiveis = [
-  { value: 'diretor', label: 'Diretor', desc: 'Acesso total ao sistema' },
-  { value: 'gerente_comercial', label: 'Gerente Comercial', desc: 'Vendas, relatórios e equipe' },
-  { value: 'supervisor_vendas', label: 'Supervisor de Vendas', desc: 'Vendas da equipe' },
-  { value: 'vendedor_clt', label: 'Vendedor CLT', desc: 'Vendas próprias' },
-  { value: 'vendedor_externo', label: 'Vendedor Externo', desc: 'Vendas próprias' },
-  { value: 'analista_cadastro', label: 'Analista de Cadastro', desc: 'Documentos e associados' },
-  { value: 'coordenador_monitoramento', label: 'Coord. Monitoramento', desc: 'Instalações e rotas' },
-  { value: 'analista_plataforma', label: 'Analista de Plataforma', desc: 'Rastreadores' },
-  { value: 'instalador_vistoriador', label: 'Instalador/Vistoriador', desc: 'App instalador' },
+      {modo === 'cliente' && (
+        <motion.div
+          key="cliente"
+          initial={{ opacity: 0, x: 50 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -50 }}
+        >
+          <Button variant="ghost" size="sm" onClick={() => setModo('escolha')}>
+            <ArrowLeft className="h-4 w-4 mr-2" /> Voltar
+          </Button>
+          <AgendamentoVistoria
+            cotacaoId={cotacaoId}
+            onConfirmar={onConfirmar}
+            contexto="pos-autovistoria"
+            tipoVistoria={tipoVistoria}
+          />
+        </motion.div>
+      )}
 
-  // NOVO:
-  { value: 'vistoriador_base', label: 'Vistoriador Base', desc: 'Vistorias agendadas na base' },
-
-  { value: 'analista_marketing', label: 'Analista de Marketing', desc: 'Campanhas e leads' },
-  { value: 'analista_juridico', label: 'Analista Jurídico', desc: 'Processos e contratos' },
-];
+      {modo === 'base' && (
+        <motion.div
+          key="base"
+          initial={{ opacity: 0, x: 50 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -50 }}
+        >
+          <AgendamentoBase
+            cotacaoId={cotacaoId}
+            clienteNome={clienteNome}
+            clienteTelefone={clienteTelefone}
+            clienteEmail={clienteEmail}
+            veiculoPlaca={veiculoPlaca}
+            veiculoDescricao={veiculoDescricao}
+            onAgendado={onConfirmar}
+            onVoltar={() => setModo('escolha')}
+          />
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
 ```
 
-**Resultado esperado:** o card/checkbox “Vistoriador Base” aparecerá imediatamente na lista de perfis no formulário.
+#### 2. Atualizar chamada em `CotacaoContratacao.tsx` (linha ~690)
 
----
+Passar as props necessárias para o `AgendamentoVistoriaCompleta`:
 
-### 2) Permitir adicionar “Vistoriador Base” no modal de Gerenciar Perfis
-
-**Arquivo:** `src/components/usuarios/GerenciarPerfisModal.tsx`  
-**Mudança:** incluir `vistoriador_base` no `PERFIS_FUNCIONARIO`.
-
-Hoje está assim:
-
-```ts
-const PERFIS_FUNCIONARIO: PerfilAcesso[] = [
-  'diretor',
-  'gerente_comercial',
-  'supervisor_vendas',
-  'vendedor_clt',
-  'vendedor_externo',
-  'analista_cadastro',
-  'coordenador_monitoramento',
-  'analista_plataforma',
-  'instalador_vistoriador',
-  'analista_marketing',
-  'analista_juridico',
-];
+```diff
+  <AgendamentoVistoriaCompleta
+    cotacaoId={cotacao.id}
+    tipoVistoria="autovistoria"
++   clienteNome={cotacao?.leads?.nome || ''}
++   clienteTelefone={cotacao?.leads?.telefone}
++   clienteEmail={cotacao?.leads?.email}
++   veiculoPlaca={cotacao?.veiculo_placa}
++   veiculoDescricao={`${cotacao?.veiculo_marca} ${cotacao?.veiculo_modelo}`}
+    onConfirmar={() => {
+      setAgendamentoConcluido(true);
+      queryClient.invalidateQueries({ queryKey: ['cotacao-contratacao'] });
+      queryClient.invalidateQueries({ queryKey: ['instalacao-existente'] });
+      queryClient.invalidateQueries({ queryKey: ['vistoria-existente'] });
++     queryClient.invalidateQueries({ queryKey: ['agendamento-base-existente'] });
+      refetch();
+    }}
+  />
 ```
 
-Vai ficar:
+## Arquivos a Modificar
 
-```ts
-const PERFIS_FUNCIONARIO: PerfilAcesso[] = [
-  'diretor',
-  'gerente_comercial',
-  'supervisor_vendas',
-  'vendedor_clt',
-  'vendedor_externo',
-  'analista_cadastro',
-  'coordenador_monitoramento',
-  'analista_plataforma',
-  'instalador_vistoriador',
-  'vistoriador_base', // NOVO
-  'analista_marketing',
-  'analista_juridico',
-];
-```
+1. **`src/components/cotacao-publica/AgendamentoVistoriaCompleta.tsx`** - Adicionar lógica de escolha de local
+2. **`src/pages/public/CotacaoContratacao.tsx`** - Passar props adicionais para o componente
 
-**Resultado esperado:** ao abrir “Gerenciar Perfis”, o perfil “Vistoriador Base” aparecerá como opção disponível para atribuição.
+## Resultado Esperado
 
----
+Após o pagamento no fluxo de autovistoria:
+1. Cliente verá a tela de escolha com duas opções:
+   - "Quero que o técnico venha até mim" 
+   - "Quero levar meu veículo até a Base"
+2. Ao escolher "técnico", exibirá o formulário de agendamento com endereço (atual)
+3. Ao escolher "base", exibirá o agendamento na base com slots disponíveis
 
-### 3) (Opcional) Incluir “Vistoriador Base” na importação de usuários
+## Notas Técnicas
 
-**Arquivo:** `src/components/usuarios/ImportarUsuariosDialog.tsx`  
-**Mudança:** adicionar um item ao `perfisDisponiveis`.
-
-Exemplo:
-
-```ts
-const perfisDisponiveis = [
-  { value: 'vendedor_clt', label: 'Vendedor CLT', shortLabel: 'CLT' },
-  { value: 'vendedor_externo', label: 'Vendedor Externo', shortLabel: 'EXT' },
-  { value: 'agencia', label: 'Agência', shortLabel: 'AGE' },
-  { value: 'analista_cadastro', label: 'Analista Cadastro', shortLabel: 'CAD' },
-  { value: 'instalador_vistoriador', label: 'Instalador/Vistoriador', shortLabel: 'INS' },
-  { value: 'vistoriador_base', label: 'Vistoriador Base', shortLabel: 'VB' }, // NOVO
-  { value: 'analista_marketing', label: 'Analista Marketing', shortLabel: 'MKT' },
-];
-```
-
-**Observação:** isso não é necessário para “aparecer no /configuracoes/usuarios/novo”, mas evita inconsistência no sistema.
-
----
-
-## Validação (como vamos testar)
-
-1) Abrir **/configuracoes/usuarios/novo** e verificar que o card “Vistoriador Base” aparece em “Perfis de Acesso”.  
-2) Criar um usuário selecionando esse perfil e confirmar que:
-   - o usuário é criado com role `vistoriador_base` na tabela `user_roles`;
-   - o login com esse usuário direciona para o app do vistoriador (mas sem mapa), conforme as regras já implementadas.  
-3) Abrir um usuário existente e testar **Gerenciar Perfis**:
-   - “Vistoriador Base” deve aparecer como perfil disponível para adicionar (quando não atribuído).  
-4) (Se aplicarmos a etapa opcional) testar o fluxo de **Importar Usuários** selecionando “Vistoriador Base”.
-
----
-
-## Arquivos que serão modificados
-
-- `src/pages/configuracoes/UsuarioForm.tsx` (obrigatório)
-- `src/components/usuarios/GerenciarPerfisModal.tsx` (obrigatório)
-- `src/components/usuarios/ImportarUsuariosDialog.tsx` (opcional, recomendado para consistência)
-
----
-
-## Risco/causa raiz e prevenção
-
-Causa raiz: perfis estão duplicados em múltiplas listas fixas no front-end.  
-Como melhoria futura (não incluída nesta correção): centralizar os perfis (e descrições) em um único arquivo (ex.: `src/constants/perfis.ts`) para evitar esse mesmo problema quando novos perfis forem adicionados.
+- O componente `EscolhaLocalVistoria` já existe e está pronto para reuso
+- O componente `AgendamentoBase` já existe e funciona corretamente
+- Ambos os fluxos já salvam no local correto (`servicos` com `local_vistoria = 'cliente'` ou `agendamentos_base`)
+- A verificação `hasAgendamentoBase` no hook `useAgendamentoExistente` já considera ambos os cenários
