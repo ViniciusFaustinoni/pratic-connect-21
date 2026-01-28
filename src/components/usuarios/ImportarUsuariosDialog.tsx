@@ -54,6 +54,7 @@ const perfisDisponiveis = [
   { value: 'agencia', label: 'Agência', shortLabel: 'AGE' },
   { value: 'analista_cadastro', label: 'Analista Cadastro', shortLabel: 'CAD' },
   { value: 'instalador_vistoriador', label: 'Instalador/Vistoriador', shortLabel: 'INS' },
+  { value: 'vistoriador_base', label: 'Vistoriador Base', shortLabel: 'VB' },
   { value: 'analista_marketing', label: 'Analista Marketing', shortLabel: 'MKT' },
 ];
 
