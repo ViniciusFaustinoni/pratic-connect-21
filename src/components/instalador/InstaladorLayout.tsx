@@ -28,18 +28,31 @@ const NAV_ITEMS = [
 ];
 
 export function InstaladorLayout() {
-  const { profile, signOut } = useAuth();
+  const { profile, signOut, hasRole } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isRetrying, setIsRetrying] = useState(false);
 
+  // Verificar se é vistoriador base (sem acesso a mapa)
+  const isVistoriadorBase = hasRole('vistoriador_base') && !hasRole('instalador_vistoriador');
+
   // Hooks para verificar localização e tarefa ativa
   const { geoState } = useIniciarServico();
   const { data: tarefaAtual } = useTarefaAtual();
 
+  // Filtrar itens de navegação (vistoriador base não vê mapa)
+  const navItems = NAV_ITEMS.filter(item => {
+    if (isVistoriadorBase && item.path === '/instalador/mapa') {
+      return false;
+    }
+    return true;
+  });
+
   // Condição: bloquear se localização negada/indisponível E tem tarefa ativa
+  // Vistoriador base não precisa de GPS
   const deveBloqueiarPorLocalizacao = 
+    !isVistoriadorBase &&
     (geoState.status === 'denied' || geoState.status === 'unavailable') &&
     tarefaAtual !== null;
 
@@ -204,7 +217,7 @@ export function InstaladorLayout() {
           {/* Bottom Navigation */}
           <nav className="fixed bottom-0 left-0 right-0 z-50 bg-slate-800 border-t border-slate-700 max-w-md mx-auto bottom-nav-safe">
             <div className="flex items-center justify-around py-2 pb-safe">
-              {NAV_ITEMS.map((item) => {
+              {navItems.map((item) => {
                 const Icon = item.icon;
                 const active = isActive(item.path);
                 

@@ -129,8 +129,17 @@ export function usePermissions() {
     !isDesenvolvedor && 
     !isAdminMaster;
 
+  // Verifica se é vistoriador base (apenas vistorias na base, sem mapa)
+  const isVistoriadorBase = hasRoleByName('vistoriador_base');
+  const isVistoriadorBaseOnly = isVistoriadorBase && 
+    !isInstaladorVistoriador &&
+    !isDiretor && 
+    !isGerencia() && 
+    !isDesenvolvedor && 
+    !isAdminMaster;
+
   // Perfis que devem ver "Perfil" ao invés de "Configurações"
-  const isPerfilLimitado = isAnalistaCadastroOnly || isVendedorCltOnly || isCoordenadorMonitoramentoOnly || isInstaladorVistoriadorOnly;
+  const isPerfilLimitado = isAnalistaCadastroOnly || isVendedorCltOnly || isCoordenadorMonitoramentoOnly || isInstaladorVistoriadorOnly || isVistoriadorBaseOnly;
 
   // Verificações de grupo para cotações
   const isVendedorCotacao = hasRole('vendedor_clt') || hasRole('vendedor_externo');
@@ -199,6 +208,8 @@ export function usePermissions() {
     isCoordenadorMonitoramento,
     isCoordenadorMonitoramentoOnly,
     isInstaladorVistoriadorOnly,
+    isVistoriadorBase,
+    isVistoriadorBaseOnly,
     isAnalistaPlataforma: hasRole('analista_plataforma'),
     isInstaladorVistoriador,
     isAnalistaMarketing: hasRole('analista_marketing'),

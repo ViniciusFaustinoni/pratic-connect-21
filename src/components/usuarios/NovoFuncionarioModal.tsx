@@ -43,6 +43,7 @@ const PERFIS_FUNCIONARIO: PerfilAcesso[] = [
   'coordenador_monitoramento',
   'analista_plataforma',
   'instalador_vistoriador',
+  'vistoriador_base',
   'analista_marketing',
   'analista_juridico',
 ];
