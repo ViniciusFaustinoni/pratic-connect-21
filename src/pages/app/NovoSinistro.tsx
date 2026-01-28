@@ -43,7 +43,9 @@ import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useCreateSinistro } from '@/hooks/useSinistros';
 import { useMyVehicles } from '@/hooks/useMyData';
+import { useMinhasCoberturas } from '@/hooks/useMinhasCoberturasApp';
 import { toast } from 'sonner';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -176,6 +178,12 @@ export default function NovoSinistro() {
   const navigate = useNavigate();
   const createSinistro = useCreateSinistro();
   const { data: veiculos, isLoading: loadingVeiculos } = useMyVehicles();
+  const { tiposSinistroPermitidos, temCoberturaTotal, mensagemCoberturaParcial } = useMinhasCoberturas();
+  
+  // Filtrar tipos de sinistro baseado na cobertura
+  const tiposDisponiveis = TIPOS_SINISTRO.filter(tipo => 
+    tiposSinistroPermitidos.includes(tipo.id)
+  );
   
   // Wizard state
   const [etapa, setEtapa] = useState(1);
@@ -484,12 +492,21 @@ export default function NovoSinistro() {
               <p className="text-sm text-muted-foreground">Selecione o tipo de ocorrência</p>
             </div>
             
+            {/* Alerta de cobertura parcial */}
+            {mensagemCoberturaParcial && (
+              <Alert className="border-blue-200 bg-blue-50">
+                <AlertDescription className="text-blue-800 text-sm">
+                  {mensagemCoberturaParcial}
+                </AlertDescription>
+              </Alert>
+            )}
+            
             <RadioGroup 
               value={tipoSelecionado || ''} 
               onValueChange={(v) => setTipoSelecionado(v as TipoSinistro)}
               className="space-y-3"
             >
-              {TIPOS_SINISTRO.map((tipo) => (
+              {tiposDisponiveis.map((tipo) => (
                 <label
                   key={tipo.id}
                   className={cn(

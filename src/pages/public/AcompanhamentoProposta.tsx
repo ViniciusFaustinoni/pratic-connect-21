@@ -223,14 +223,15 @@ function getStatusInfo(associado: AssociadoData) {
     };
   }
 
-  // ATIVO COM COBERTURA PARCIAL (roubo/furto) - aguardando instalação física para cobertura total
-  if (associado.status === 'ativo' && veiculo?.cobertura_roubo_furto && !veiculo?.cobertura_total) {
+  // ATIVO COM COBERTURA PARCIAL (roubo/furto) - já tem conta criada, aguardando instalação física
+  // Nota: showCriarConta = false porque a conta já foi criada no bloco acima (linha 211-223)
+  if (associado.status === 'ativo' && veiculo?.cobertura_roubo_furto && !veiculo?.cobertura_total && associado.user_id) {
     return {
       status: 'cobertura_parcial',
       icon: Shield,
       color: 'primary',
       title: 'Cobertura Parcial Ativa',
-      description: 'Sua proteção contra roubo e furto está ativa! Aguarde a instalação do rastreador para cobertura total e acesso ao app.',
+      description: 'Sua proteção contra roubo e furto está ativa! Acesse o app e aguarde a instalação do rastreador para cobertura total.',
       showDetails: true,
       showCriarConta: false,
       showEmRota: false,

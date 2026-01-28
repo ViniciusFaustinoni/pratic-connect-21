@@ -65,6 +65,7 @@ export function useVeiculosApp() {
         .from('veiculos')
         .select(`
           id, placa, marca, modelo, ano_modelo, cor, status,
+          cobertura_roubo_furto, cobertura_total,
           rastreadores(id, status)
         `)
         .eq('associado_id', assoc.id)
@@ -76,6 +77,8 @@ export function useVeiculosApp() {
         ...v,
         tem_rastreador: Array.isArray(v.rastreadores) && v.rastreadores.length > 0,
         rastreador_ativo: Array.isArray(v.rastreadores) && v.rastreadores.some(r => r.status === 'instalado'),
+        cobertura_roubo_furto: v.cobertura_roubo_furto || false,
+        cobertura_total: v.cobertura_total || false,
       })) as VeiculoApp[];
     },
   });

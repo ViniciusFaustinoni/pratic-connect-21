@@ -205,6 +205,9 @@ export interface VeiculoApp {
   tem_rastreador: boolean;
   rastreador_ativo: boolean;
   ultima_posicao?: PosicaoVeiculo;
+  // Coberturas ativas
+  cobertura_roubo_furto?: boolean;
+  cobertura_total?: boolean;
 }
 
 export interface PosicaoVeiculo {
