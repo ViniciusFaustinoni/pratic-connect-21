@@ -53,7 +53,9 @@ interface AssociadoData {
     id: string;
     status: string;
     data_agendada: string | null;
+    hora_agendada: string | null;
     rota_id: string | null;
+    confirmacao_whatsapp?: string | null;
     instalador_responsavel: {
       nome: string;
     } | null;
@@ -109,12 +111,25 @@ function useAcompanhamentoProposta(token: string | undefined) {
           id, 
           status, 
           data_agendada,
+          hora_agendada,
           rota_id,
           instalador_responsavel:profiles!instalador_responsavel_id(nome)
         `)
         .eq('associado_id', contrato.associado_id)
         .order('created_at', { ascending: false })
         .limit(1);
+
+      // Buscar confirmação de agendamento (do serviço mais recente)
+      let confirmacaoWhatsapp: string | null = null;
+      if (instalacoes?.[0]?.id) {
+        const { data: servico } = await supabase
+          .from('servicos')
+          .select('confirmacao_whatsapp')
+          .eq('instalacao_origem_id', instalacoes[0].id)
+          .maybeSingle();
+        
+        confirmacaoWhatsapp = servico?.confirmacao_whatsapp || null;
+      }
 
       return {
         ...associado,
@@ -124,7 +139,7 @@ function useAcompanhamentoProposta(token: string | undefined) {
           id: contrato.id,
           status: contrato.status || 'pendente',
         },
-        instalacoes: instalacoes || [],
+        instalacoes: (instalacoes || []).map(i => ({ ...i, confirmacao_whatsapp: confirmacaoWhatsapp })),
       };
     },
     enabled: !!token,

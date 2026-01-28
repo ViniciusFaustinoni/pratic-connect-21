@@ -35,7 +35,93 @@ const WHATSAPP_SYSTEM_PROMPT = `Você é o Assistente Virtual PRATIC via WhatsAp
 - Use emojis com moderação
 - Máximo 3-4 parágrafos por mensagem`;
 
-// Tools (mesmo do assistente-chat)
+// System prompt para confirmação de agendamento
+const CONFIRMACAO_SYSTEM_PROMPT = `Você é o Assistente de Confirmação de Agendamentos da PRATIC.
+
+## Sua Tarefa
+Interpretar a resposta do cliente sobre confirmação de agendamento.
+
+## Respostas do Cliente
+Analise a mensagem e determine a INTENÇÃO:
+- CONFIRMADO: Cliente disse sim, ok, confirmado, pode vir, estou aguardando, etc.
+- REAGENDAR: Cliente quer remarcar, mudar data/hora, não pode hoje, etc.
+- CANCELAR: Cliente quer cancelar completamente o serviço
+- DUVIDA: Cliente tem dúvida sobre o serviço ou precisa de mais informações
+
+## Resposta SEMPRE em JSON
+{
+  "intencao": "CONFIRMADO" | "REAGENDAR" | "CANCELAR" | "DUVIDA",
+  "mensagem_resposta": "Mensagem para enviar ao cliente"
+}
+
+## Exemplos de Mensagens
+
+Se CONFIRMADO:
+"Perfeito, *{{nome}}*! ✅
+
+Sua presença está *confirmada*!
+
+Nosso técnico *{{tecnico}}* está a caminho e chegará em breve.
+
+Aguarde no local combinado. 🚗"
+
+Se REAGENDAR:
+"Entendi, *{{nome}}*! 📅
+
+Sem problemas, vamos reagendar.
+
+Em breve nossa equipe entrará em contato para definir uma nova data e horário.
+
+Obrigado pela compreensão! 🙏"
+
+Se CANCELAR:
+"Entendi, *{{nome}}*.
+
+Lamentamos que não poderá realizar o serviço neste momento.
+
+Se mudar de ideia, entre em contato conosco. 📞
+
+Obrigado!"
+
+Se DUVIDA:
+"Olá, *{{nome}}*! 
+
+{{responda a dúvida de forma breve}}
+
+Por favor, confirme se poderá nos receber hoje no horário agendado. ✅"`;
+
+// System prompt para reagendamento com IA
+const REAGENDAMENTO_SYSTEM_PROMPT = `Você é o Assistente de Reagendamento da PRATIC.
+
+## Sua Tarefa
+Ajudar o cliente a escolher uma nova data e horário para o serviço.
+
+## Informações Disponíveis
+- Próximas 5 datas úteis disponíveis
+- Períodos: MANHÃ (08:00-12:00) ou TARDE (14:00-18:00)
+
+## Fluxo
+1. Pergunte qual data o cliente prefere (oferecendo as opções)
+2. Pergunte o período preferido (manhã ou tarde)
+3. Confirme o novo agendamento
+
+## Formato de Resposta (JSON)
+{
+  "etapa": "PERGUNTA_DATA" | "PERGUNTA_PERIODO" | "CONFIRMAR" | "FINALIZADO",
+  "mensagem": "Mensagem para o cliente",
+  "dados_coletados": {
+    "data": "YYYY-MM-DD ou null",
+    "periodo": "manha" | "tarde" | null
+  }
+}
+
+## Regras
+- Seja cordial e objetivo
+- Ofereça opções claras
+- Confirme os dados antes de finalizar
+- Use formatação WhatsApp (*negrito*)`;
+
+// Tools padrão do assistente
 const tools = [
   {
     type: "function",
@@ -317,9 +403,23 @@ async function getConversationHistory(supabase: any, associadoId: string, telefo
 }
 
 // Chamar a IA
-async function callAI(messages: any[], context: string) {
+async function callAI(messages: any[], systemPrompt: string, useTools: boolean = true) {
   const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
   if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY não configurada");
+
+  const body: any = {
+    model: "gpt-4o-mini",
+    messages: [
+      { role: "system", content: systemPrompt },
+      ...messages,
+    ],
+    max_tokens: 1000,
+  };
+
+  if (useTools) {
+    body.tools = tools;
+    body.tool_choice = "auto";
+  }
 
   const response = await fetch("https://api.lovable.dev/v1/chat/completions", {
     method: "POST",
@@ -327,16 +427,7 @@ async function callAI(messages: any[], context: string) {
       "Content-Type": "application/json",
       Authorization: `Bearer ${LOVABLE_API_KEY}`,
     },
-    body: JSON.stringify({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: WHATSAPP_SYSTEM_PROMPT + "\n\n" + context },
-        ...messages,
-      ],
-      tools,
-      tool_choice: "auto",
-      max_tokens: 1000,
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
@@ -393,6 +484,162 @@ async function saveWhatsAppLog(supabase: any, instanciaId: string, telefone: str
   });
 }
 
+// ============================================
+// PROCESSAR RESPOSTA DE CONFIRMAÇÃO DE AGENDAMENTO
+// ============================================
+async function processarRespostaConfirmacao(
+  supabase: any,
+  confirmacao: any,
+  mensagemCliente: string,
+  instancia: any
+): Promise<Response> {
+  console.log(`[whatsapp-webhook] Processando confirmação para serviço ${confirmacao.servico_id}`);
+
+  const contexto = confirmacao.contexto_ia || {};
+  const nomeCliente = contexto.nome_cliente || "Cliente";
+  const nomeTecnico = contexto.nome_tecnico || "Técnico";
+
+  // Se já está em reagendamento, processar com IA de reagendamento
+  if (confirmacao.status === 'reagendando') {
+    return await processarReagendamento(supabase, confirmacao, mensagemCliente, instancia);
+  }
+
+  // Usar IA para interpretar a resposta
+  const promptCompleto = CONFIRMACAO_SYSTEM_PROMPT
+    .replace(/\{\{nome\}\}/g, nomeCliente.split(' ')[0])
+    .replace(/\{\{tecnico\}\}/g, nomeTecnico);
+
+  const aiResponse = await callAI([
+    { role: "user", content: `Mensagem do cliente: "${mensagemCliente}"` }
+  ], promptCompleto, false);
+
+  const content = aiResponse.choices?.[0]?.message?.content || "";
+  
+  let resultado: { intencao: string; mensagem_resposta: string };
+  try {
+    // Tentar extrair JSON da resposta
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      resultado = JSON.parse(jsonMatch[0]);
+    } else {
+      throw new Error("JSON não encontrado");
+    }
+  } catch (e) {
+    // Fallback: inferir intenção de palavras-chave
+    const msgLower = mensagemCliente.toLowerCase().trim();
+    if (/^(sim|ok|confirmado|confirmo|pode|estou|aguardando|certo|beleza|blz|s|yes)/.test(msgLower)) {
+      resultado = {
+        intencao: "CONFIRMADO",
+        mensagem_resposta: `Perfeito, *${nomeCliente.split(' ')[0]}*! ✅\n\nSua presença está *confirmada*!\n\nNosso técnico *${nomeTecnico}* está a caminho.\n\nAguarde no local combinado. 🚗`
+      };
+    } else if (/reagend|remar|mud|outro|n[aã]o|nao posso|impossível|trocar/.test(msgLower)) {
+      resultado = {
+        intencao: "REAGENDAR",
+        mensagem_resposta: `Entendi, *${nomeCliente.split(' ')[0]}*! 📅\n\nSem problemas, vamos reagendar.\n\nEm breve nossa equipe entrará em contato para definir uma nova data e horário.\n\nObrigado pela compreensão! 🙏`
+      };
+    } else {
+      resultado = {
+        intencao: "DUVIDA",
+        mensagem_resposta: `Olá, *${nomeCliente.split(' ')[0]}*!\n\nPor favor, confirme se poderá nos receber hoje no horário agendado.\n\nResponda *SIM* para confirmar ou informe se precisa *reagendar*. ✅`
+      };
+    }
+  }
+
+  // Atualizar confirmação
+  await supabase.from('confirmacoes_agendamento')
+    .update({
+      resposta_cliente: mensagemCliente,
+      resposta_recebida_em: new Date().toISOString(),
+      status: resultado.intencao === 'CONFIRMADO' ? 'confirmada' :
+              resultado.intencao === 'REAGENDAR' ? 'reagendando' :
+              resultado.intencao === 'CANCELAR' ? 'cancelada' : 'enviada'
+    })
+    .eq('id', confirmacao.id);
+
+  // Se confirmou, atualizar serviço e notificar vistoriador
+  if (resultado.intencao === 'CONFIRMADO') {
+    await supabase.from('servicos')
+      .update({
+        confirmacao_whatsapp: 'confirmado',
+        confirmado_via_whatsapp_em: new Date().toISOString()
+      })
+      .eq('id', confirmacao.servico_id);
+
+    // Buscar dados do serviço para notificar vistoriador
+    const { data: servico } = await supabase
+      .from('servicos')
+      .select('profissional_id, hora_agendada')
+      .eq('id', confirmacao.servico_id)
+      .single();
+
+    if (servico?.profissional_id) {
+      // Enviar push notification para o vistoriador
+      try {
+        await supabase.functions.invoke('send-push-profissional', {
+          body: {
+            profissional_id: servico.profissional_id,
+            notification: {
+              title: '✅ Cliente Confirmou!',
+              body: `${nomeCliente} confirmou presença para ${servico.hora_agendada?.slice(0, 5) || 'hoje'}`,
+              tag: `confirmacao-${confirmacao.servico_id}`,
+              data: {
+                servico_id: confirmacao.servico_id,
+                action: 'confirmacao_whatsapp'
+              }
+            }
+          }
+        });
+        console.log(`[whatsapp-webhook] Push enviado para profissional ${servico.profissional_id}`);
+      } catch (pushErr) {
+        console.error('[whatsapp-webhook] Erro ao enviar push:', pushErr);
+      }
+    }
+  }
+
+  // Se quer reagendar, atualizar status
+  if (resultado.intencao === 'REAGENDAR') {
+    await supabase.from('servicos')
+      .update({ confirmacao_whatsapp: 'reagendado' })
+      .eq('id', confirmacao.servico_id);
+  }
+
+  // Enviar resposta ao cliente
+  await sendWhatsAppMessage(instancia.api_url, instancia.instance_name, confirmacao.telefone, resultado.mensagem_resposta);
+  await saveWhatsAppLog(supabase, instancia.id, confirmacao.telefone, resultado.mensagem_resposta, "saida");
+
+  console.log(`[whatsapp-webhook] Confirmação processada: ${resultado.intencao}`);
+
+  return new Response(JSON.stringify({ ok: true, intencao: resultado.intencao }), { headers: corsHeaders });
+}
+
+// Processar fluxo de reagendamento
+async function processarReagendamento(
+  supabase: any,
+  confirmacao: any,
+  mensagemCliente: string,
+  instancia: any
+): Promise<Response> {
+  console.log(`[whatsapp-webhook] Processando reagendamento para ${confirmacao.servico_id}`);
+
+  // Por enquanto, apenas informar que a equipe entrará em contato
+  // Em uma versão futura, podemos implementar a IA de reagendamento completa
+  const mensagem = `Entendi! 📅
+
+Nossa equipe de agendamento entrará em contato em breve para definir uma nova data e horário para seu serviço.
+
+Obrigado pela compreensão! 🙏`;
+
+  await sendWhatsAppMessage(instancia.api_url, instancia.instance_name, confirmacao.telefone, mensagem);
+  await saveWhatsAppLog(supabase, instancia.id, confirmacao.telefone, mensagem, "saida");
+
+  // Marcar como reagendando (equipe vai contatar)
+  await supabase.from('confirmacoes_agendamento')
+    .update({ status: 'reagendada' })
+    .eq('id', confirmacao.id);
+
+  return new Response(JSON.stringify({ ok: true, action: 'reagendamento_solicitado' }), { headers: corsHeaders });
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -446,18 +693,39 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "Instância não configurada" }), { headers: corsHeaders });
     }
 
+    // Formatar telefone para busca (múltiplas variantes)
+    const telefoneLimpo = telefone.replace(/\D/g, "");
+    const telefonesBusca = [telefoneLimpo];
+    if (telefoneLimpo.startsWith("55") && telefoneLimpo.length >= 12) {
+      telefonesBusca.push(telefoneLimpo.substring(2)); // sem DDI
+    }
+    if (!telefoneLimpo.startsWith("55")) {
+      telefonesBusca.push("55" + telefoneLimpo); // com DDI
+    }
+
+    // ========================================
+    // VERIFICAR SE É RESPOSTA DE CONFIRMAÇÃO
+    // ========================================
+    const { data: confirmacaoPendente } = await supabase
+      .from('confirmacoes_agendamento')
+      .select('*, servico:servicos(id, profissional_id, hora_agendada)')
+      .in('telefone', telefonesBusca)
+      .in('status', ['enviada', 'reagendando'])
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (confirmacaoPendente) {
+      console.log(`[whatsapp-webhook] Resposta de confirmação detectada para ${confirmacaoPendente.servico_id}`);
+      return await processarRespostaConfirmacao(supabase, confirmacaoPendente, mensagemTexto, instancia);
+    }
+
+    // ========================================
+    // FLUXO PADRÃO: ASSOCIADO
+    // ========================================
     if (!instancia.ia_habilitada) {
       console.log("[whatsapp-webhook] IA desabilitada, ignorando");
       return new Response(JSON.stringify({ ok: true, ignored: "IA desabilitada" }), { headers: corsHeaders });
-    }
-
-    // Formatar telefone para busca
-    const telefonesBusca = [telefone];
-    if (telefone.startsWith("55") && telefone.length >= 12) {
-      telefonesBusca.push(telefone.substring(2)); // sem DDI
-    }
-    if (!telefone.startsWith("55")) {
-      telefonesBusca.push("55" + telefone); // com DDI
     }
 
     // Buscar associado pelo telefone
@@ -496,7 +764,7 @@ serve(async (req) => {
     ];
 
     // Loop de tool calls
-    let aiResponse = await callAI(messages, context);
+    let aiResponse = await callAI(messages, WHATSAPP_SYSTEM_PROMPT + "\n\n" + context);
     let assistantMessage = aiResponse.choices?.[0]?.message;
     let iterations = 0;
     const maxIterations = 5;
@@ -523,7 +791,7 @@ serve(async (req) => {
           assistantMessage,
           ...toolResults,
         ],
-        context
+        WHATSAPP_SYSTEM_PROMPT + "\n\n" + context
       );
       assistantMessage = aiResponse.choices?.[0]?.message;
     }

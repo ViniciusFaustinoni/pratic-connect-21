@@ -236,3 +236,6 @@ verify_jwt = false
 
 [functions.delete-cotacao]
 verify_jwt = false
+
+[functions.confirmar-agendamento-cron]
+verify_jwt = false
