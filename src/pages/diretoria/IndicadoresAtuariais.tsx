@@ -8,11 +8,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
+import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 const formatCurrency = (value: number | null) => {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
@@ -42,6 +44,7 @@ export default function IndicadoresAtuariais() {
   const currentYear = new Date().getFullYear();
   const [ano, setAno] = useState(currentYear);
   const [activeTab, setActiveTab] = useState('visao-geral');
+  const queryClient = useQueryClient();
 
   // Indicadores do ano selecionado
   const { data: indicadores, isLoading } = useQuery({
@@ -73,6 +76,81 @@ export default function IndicadoresAtuariais() {
     }
   });
 
+  // Mutation para recalcular indicadores
+  const recalcularMutation = useMutation({
+    mutationFn: async () => {
+      const mesAtual = new Date().getMonth() + 1;
+      const anoAtual = new Date().getFullYear();
+      const inicioMes = `${anoAtual}-${String(mesAtual).padStart(2, '0')}-01`;
+      
+      const [receita, sinistros, associados, novos, cancelados] = await Promise.all([
+        supabase.from('cobrancas')
+          .select('valor_pago')
+          .eq('status', 'pago')
+          .gte('data_pagamento', inicioMes),
+        supabase.from('sinistros')
+          .select('valor_indenizacao')
+          .in('status', ['aprovado', 'indenizado', 'pago'])
+          .gte('data_ocorrencia', inicioMes),
+        supabase.from('associados')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'ativo'),
+        supabase.from('associados')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'ativo')
+          .gte('created_at', inicioMes),
+        supabase.from('associados')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'cancelado')
+          .gte('updated_at', inicioMes),
+      ]);
+      
+      const receitaBruta = receita.data?.reduce((s, r) => s + (r.valor_pago || 0), 0) || 0;
+      const despesasSinistros = sinistros.data?.reduce((s, r) => s + (r.valor_indenizacao || 0), 0) || 0;
+      const totalAssociados = associados.count || 0;
+      const qtdSinistros = sinistros.data?.length || 0;
+      
+      const sinistralidade = receitaBruta > 0 ? (despesasSinistros / receitaBruta) * 100 : 0;
+      const frequencia = totalAssociados > 0 ? qtdSinistros / totalAssociados : 0;
+      const ticketMedio = qtdSinistros > 0 ? despesasSinistros / qtdSinistros : 0;
+      const resultado = receitaBruta - despesasSinistros;
+      const margem = receitaBruta > 0 ? (resultado / receitaBruta) * 100 : 0;
+      const taxaRetencao = totalAssociados > 0 ? ((totalAssociados - (cancelados.count || 0)) / totalAssociados) * 100 : 0;
+      const churnRate = totalAssociados > 0 ? ((cancelados.count || 0) / totalAssociados) * 100 : 0;
+      
+      const { error } = await supabase
+        .from('indicadores_atuariais')
+        .upsert({
+          mes: mesAtual,
+          ano: anoAtual,
+          receita_bruta: receitaBruta,
+          despesas_sinistros: despesasSinistros,
+          sinistralidade_bruta: sinistralidade,
+          sinistralidade_liquida: sinistralidade, // Simplificado para mesma
+          frequencia_sinistros: frequencia,
+          ticket_medio_sinistro: ticketMedio,
+          resultado_operacional: resultado,
+          margem_operacional: margem,
+          total_associados: totalAssociados,
+          novos_associados: novos.count || 0,
+          cancelamentos: cancelados.count || 0,
+          taxa_retencao: taxaRetencao,
+          churn_rate: churnRate,
+        }, { onConflict: 'mes,ano' });
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Indicadores recalculados com sucesso!');
+      queryClient.invalidateQueries({ queryKey: ['indicadores-atuariais'] });
+      queryClient.invalidateQueries({ queryKey: ['indicador-atual'] });
+    },
+    onError: (error) => {
+      console.error('Erro ao recalcular:', error);
+      toast.error('Erro ao recalcular indicadores');
+    },
+  });
+
   // Preparar dados para gráficos
   const chartData = indicadores?.map(ind => ({
     ...ind,
@@ -101,9 +179,13 @@ export default function IndicadoresAtuariais() {
               ))}
             </SelectContent>
           </Select>
-          <Button variant="outline" disabled>
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Recalcular
+          <Button 
+            variant="outline" 
+            onClick={() => recalcularMutation.mutate()}
+            disabled={recalcularMutation.isPending}
+          >
+            <RefreshCw className={cn("h-4 w-4 mr-2", recalcularMutation.isPending && "animate-spin")} />
+            {recalcularMutation.isPending ? 'Calculando...' : 'Recalcular'}
           </Button>
         </div>
       </div>

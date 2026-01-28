@@ -51,6 +51,10 @@ import {
   Pie,
   Cell,
 } from 'recharts';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { format } from 'date-fns';
+import { toast } from 'sonner';
 
 type Periodo = 'mes' | 'trimestre' | 'ano';
 
@@ -262,7 +266,66 @@ export default function DiretoriaDashboard() {
               <SelectItem value="ano">Ano</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="outline">
+          <Button 
+            variant="outline"
+            onClick={() => {
+              if (!stats) {
+                toast.error('Aguarde os dados carregarem');
+                return;
+              }
+              
+              const doc = new jsPDF();
+              doc.setFontSize(18);
+              doc.text('Dashboard Executivo', 14, 22);
+              
+              doc.setFontSize(10);
+              doc.setTextColor(100);
+              doc.text(`Período: ${periodo === 'mes' ? 'Mês Atual' : periodo === 'trimestre' ? 'Trimestre' : 'Ano'}`, 14, 32);
+              doc.text(`Gerado em: ${format(new Date(), "dd/MM/yyyy HH:mm")}`, 14, 38);
+              
+              // KPIs
+              const kpis = [
+                ['Associados Ativos', stats.associadosAtivos.toLocaleString()],
+                ['Receita', formatCurrency(stats.receitaMes)],
+                ['Sinistralidade', `${stats.sinistralidade.toFixed(1)}%`],
+                ['Taxa Conversão', `${stats.taxaConversao.toFixed(1)}%`],
+                ['Inadimplência', `${stats.taxaInadimplencia.toFixed(1)}%`],
+                ['Resultado', formatCurrency(stats.resultado)],
+              ];
+              
+              autoTable(doc, {
+                startY: 45,
+                head: [['Indicador', 'Valor']],
+                body: kpis,
+                theme: 'striped',
+                headStyles: { fillColor: [59, 130, 246] },
+              });
+              
+              // Evolução mensal se houver dados
+              if (evolucao && evolucao.length > 0) {
+                const finalY = (doc as any).lastAutoTable?.finalY || 90;
+                doc.setFontSize(12);
+                doc.setTextColor(0);
+                doc.text('Evolução Mensal', 14, finalY + 15);
+                
+                autoTable(doc, {
+                  startY: finalY + 20,
+                  head: [['Período', 'Receita', 'Sinistros', 'Resultado']],
+                  body: evolucao.map(e => [
+                    e.periodo,
+                    formatCurrency(e.receita),
+                    formatCurrency(e.sinistros),
+                    formatCurrency(e.resultado)
+                  ]),
+                  theme: 'striped',
+                  headStyles: { fillColor: [59, 130, 246] },
+                });
+              }
+              
+              doc.save(`dashboard-executivo-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
+              toast.success('Relatório exportado!');
+            }}
+          >
             <FileText className="mr-2 h-4 w-4" />
             Exportar
           </Button>
