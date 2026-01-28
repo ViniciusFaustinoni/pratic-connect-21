@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { DollarSign, Plus, Upload, Download, Edit, History, Trash2, Filter } from 'lucide-react';
+import { useState, useMemo, useRef } from 'react';
+import { DollarSign, Plus, Upload, Download, Edit, History, Trash2, Filter, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -8,9 +8,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { FaixaPrecoModal } from '@/components/diretoria';
+import { FaixaPrecoModal, HistoricoPrecoModal } from '@/components/diretoria';
+import { toast } from 'sonner';
+import { format } from 'date-fns';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface TabelaPrecoComPlano {
   id: string;
@@ -33,11 +45,17 @@ interface TabelaPrecoComPlano {
 }
 
 export default function TabelaPrecos() {
+  const queryClient = useQueryClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
   const [planoSelecionado, setPlanoSelecionado] = useState<string>('all');
   const [apenasVigentes, setApenasVigentes] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [faixaEdit, setFaixaEdit] = useState<TabelaPrecoComPlano | null>(null);
   const [planoIdParaModal, setPlanoIdParaModal] = useState<string>('');
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [historicoModalOpen, setHistoricoModalOpen] = useState(false);
+  const [historicoFaixaId, setHistoricoFaixaId] = useState<string | null>(null);
 
   const { data: precos, isLoading } = useQuery({
     queryKey: ['tabela-precos', planoSelecionado, apenasVigentes],
@@ -78,6 +96,25 @@ export default function TabelaPrecos() {
     }
   });
 
+  const deletarFaixaMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('tabelas_preco')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Faixa de preço excluída!');
+      queryClient.invalidateQueries({ queryKey: ['tabela-precos'] });
+      setDeleteConfirm(null);
+    },
+    onError: (error) => {
+      console.error('Erro ao excluir:', error);
+      toast.error('Erro ao excluir faixa de preço');
+    },
+  });
+
   const precosAgrupados = useMemo(() => {
     if (!precos) return {};
     return precos.reduce((acc, preco) => {
@@ -105,6 +142,115 @@ export default function TabelaPrecos() {
     return new Date(dateStr).toLocaleDateString('pt-BR');
   };
 
+  const handleExportar = () => {
+    if (!precos?.length) {
+      toast.warning('Nenhum dado para exportar');
+      return;
+    }
+    
+    const csv = [
+      ['Plano', 'FIPE De', 'FIPE Até', 'Valor Cota', 'Taxa Admin', 'Rastreamento', 'Assistência', 'Taxa App', 'Taxa Comercial', 'Vigência Início', 'Vigência Fim', 'Ativo'].join(';'),
+      ...precos.map(p => [
+        p.plano?.nome || '',
+        p.fipe_de,
+        p.fipe_ate,
+        p.valor_cota,
+        p.taxa_administrativa || '',
+        p.valor_rastreamento || '',
+        p.valor_assistencia || '',
+        p.taxa_aplicativo || '',
+        p.taxa_comercial || '',
+        p.vigencia_inicio || '',
+        p.vigencia_fim || '',
+        p.ativo ? 'Sim' : 'Não'
+      ].join(';'))
+    ].join('\n');
+
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `tabela-precos-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('Tabela exportada!');
+  };
+
+  const handleImportar = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const content = e.target?.result as string;
+        const lines = content.split('\n').filter(l => l.trim());
+        
+        if (lines.length < 2) {
+          toast.error('Arquivo vazio ou inválido');
+          return;
+        }
+        
+        // Pular cabeçalho
+        const dataLines = lines.slice(1);
+        let importados = 0;
+        let erros = 0;
+        
+        for (const line of dataLines) {
+          const cols = line.split(';');
+          if (cols.length < 4) {
+            erros++;
+            continue;
+          }
+          
+          // Buscar plano pelo nome
+          const planoNome = cols[0].trim();
+          const plano = planos?.find(p => p.nome === planoNome);
+          
+          if (!plano) {
+            erros++;
+            continue;
+          }
+          
+          const { error } = await supabase
+            .from('tabelas_preco')
+            .insert({
+              plano_id: plano.id,
+              fipe_de: parseFloat(cols[1]) || 0,
+              fipe_ate: parseFloat(cols[2]) || 0,
+              valor_cota: parseFloat(cols[3]) || 0,
+              taxa_administrativa: cols[4] ? parseFloat(cols[4]) : null,
+              valor_rastreamento: cols[5] ? parseFloat(cols[5]) : null,
+              valor_assistencia: cols[6] ? parseFloat(cols[6]) : null,
+              taxa_aplicativo: cols[7] ? parseFloat(cols[7]) : null,
+              taxa_comercial: cols[8] ? parseFloat(cols[8]) : null,
+              vigencia_inicio: cols[9] || null,
+              vigencia_fim: cols[10] || null,
+              ativo: cols[11]?.toLowerCase().includes('sim') ?? true,
+            });
+          
+          if (error) {
+            erros++;
+          } else {
+            importados++;
+          }
+        }
+        
+        queryClient.invalidateQueries({ queryKey: ['tabela-precos'] });
+        toast.success(`Importação concluída: ${importados} registros importados, ${erros} erros`);
+      } catch (error) {
+        console.error('Erro na importação:', error);
+        toast.error('Erro ao processar arquivo');
+      }
+    };
+    reader.readAsText(file);
+    
+    // Limpar input para permitir reimportar mesmo arquivo
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -114,11 +260,18 @@ export default function TabelaPrecos() {
           <h1 className="text-2xl font-bold">Tabela de Preços</h1>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline">
+          <input
+            type="file"
+            ref={fileInputRef}
+            accept=".csv"
+            onChange={handleImportar}
+            className="hidden"
+          />
+          <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
             <Upload className="h-4 w-4 mr-2" />
             Importar
           </Button>
-          <Button variant="outline">
+          <Button variant="outline" onClick={handleExportar}>
             <Download className="h-4 w-4 mr-2" />
             Exportar
           </Button>
@@ -260,10 +413,23 @@ export default function TabelaPrecos() {
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8"
+                            onClick={() => {
+                              setHistoricoFaixaId(preco.id);
+                              setHistoricoModalOpen(true);
+                            }}
+                          >
                             <History className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive">
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 text-destructive"
+                            onClick={() => setDeleteConfirm(preco.id)}
+                          >
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
@@ -282,27 +448,60 @@ export default function TabelaPrecos() {
           <p className="text-muted-foreground mb-4">
             {planoSelecionado !== 'all' ? 'Não há faixas de preço para este produto.' : 'Comece criando sua primeira faixa de preço.'}
           </p>
-        <Button 
-          onClick={() => {
-            if (planos?.length) {
-              setPlanoIdParaModal(planos[0].id);
-              setFaixaEdit(null);
-              setModalOpen(true);
-            }
-          }}
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Nova Faixa
-        </Button>
-      </Card>
-    )}
+          <Button 
+            onClick={() => {
+              if (planos?.length) {
+                setPlanoIdParaModal(planos[0].id);
+                setFaixaEdit(null);
+                setModalOpen(true);
+              }
+            }}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Nova Faixa
+          </Button>
+        </Card>
+      )}
 
-    <FaixaPrecoModal
-      open={modalOpen}
-      onClose={() => setModalOpen(false)}
-      planoId={planoIdParaModal}
-      faixa={faixaEdit}
-    />
-  </div>
-);
+      {/* Modal de Edição/Criação */}
+      <FaixaPrecoModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        planoId={planoIdParaModal}
+        faixa={faixaEdit}
+      />
+
+      {/* Modal de Histórico */}
+      <HistoricoPrecoModal
+        open={historicoModalOpen}
+        onClose={() => setHistoricoModalOpen(false)}
+        faixaId={historicoFaixaId}
+      />
+
+      {/* Dialog de Confirmação de Exclusão */}
+      <AlertDialog open={!!deleteConfirm} onOpenChange={() => setDeleteConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir esta faixa de preço? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => deleteConfirm && deletarFaixaMutation.mutate(deleteConfirm)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deletarFaixaMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                'Excluir'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
 }
