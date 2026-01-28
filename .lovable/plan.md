@@ -1,495 +1,332 @@
 
-# Plano de Revisao Completa: Ouvidoria
+# Plano de Revisao Completa: Diretoria
 
 ## Diagnostico Atual
 
 ### Status do Banco de Dados
 | Tabela | Registros |
 |--------|-----------|
-| ouvidoria_manifestacoes | 0 |
-| ouvidoria_interacoes | 0 |
-| ouvidoria_ia_logs | 0 |
-| ouvidoria_anexos | 0 |
+| planos | 18 |
+| tabelas_preco | 12 |
+| configuracoes | 33 |
+| faixas_cotas | 33 |
+| funcionarios (profiles) | 236 |
+| user_roles | 236 |
+| logs_auditoria | 58 |
+| indicadores_atuariais | 0 |
+| rateios | 0 |
 
-### O que esta funcionando corretamente
-- **useOuvidoria.ts**: Hooks CRUD completos com queries reais do Supabase
-- **useOuvidoriaInteracoes.ts**: Hooks para interacoes, logs de IA e anexos
-- **ManifestacaoDetalhe.tsx**: Visualizacao, responder, alterar status, encaminhar para juridico (usando hooks reais)
-- **StatusBadge, PrioridadeBadge, TipoBadge**: Componentes de visualizacao
-- **InteracaoTimeline**: Timeline de interacoes funcional
-
-### Problemas Identificados
-
-| # | Problema | Arquivo | Impacto |
-|---|----------|---------|---------|
-| 1 | Importa e usa `mockEstatisticas` para "Elogios do Mes" | OuvidoriaDashboard.tsx | Dados mock exibidos |
-| 2 | Counts das tabs sao hardcoded (minhas: 12, sem_responsavel: 8, atrasadas: 3) | ManifestacoesList.tsx | Contagem fake |
-| 3 | `handleAssumir()` so exibe toast, nao persiste | ManifestacoesList.tsx | Botao nao funciona |
-| 4 | `handleMarcarUrgente()` so exibe toast, nao persiste | ManifestacoesList.tsx | Botao nao funciona |
-| 5 | Formulario de nova manifestacao simula envio, nao persiste | NovaManifestacao.tsx | Dados nao salvos |
-| 6 | Modal usa `mockAssociados` e nao persiste | NovaManifestacaoModal.tsx | Busca fake, dados nao salvos |
-| 7 | Usa analistas e departamentos mock, nao persiste | EncaminharModal.tsx | Dados fake, nao salva |
-| 8 | Botao "Encaminhar para Setor + RH" so exibe toast | ManifestacaoDetalhe.tsx | Nao funciona |
-| 9 | Faltam colunas de elogio na tabela | Banco de dados | Erro ao salvar elogios |
+### Conclusao Principal
+**NAO HA DADOS MOCK** - Todas as paginas estao conectadas ao Supabase com queries reais.
 
 ---
 
-## Alteracoes Necessarias no Banco de Dados
+## O que esta funcionando corretamente
 
-### Adicionar colunas faltantes em ouvidoria_manifestacoes
-
-```sql
-ALTER TABLE ouvidoria_manifestacoes
-ADD COLUMN IF NOT EXISTS setor_elogio VARCHAR(50),
-ADD COLUMN IF NOT EXISTS colaborador_elogiado VARCHAR(255),
-ADD COLUMN IF NOT EXISTS data_atendimento DATE,
-ADD COLUMN IF NOT EXISTS data_contato TIMESTAMP WITH TIME ZONE,
-ADD COLUMN IF NOT EXISTS registrado_por_id UUID REFERENCES profiles(id),
-ADD COLUMN IF NOT EXISTS registrado_por_nome VARCHAR(255),
-ADD COLUMN IF NOT EXISTS observacao_interna TEXT;
-```
-
-### Criar trigger para gerar protocolo automaticamente
-
-```sql
-CREATE OR REPLACE FUNCTION generate_ouvidoria_protocolo()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.protocolo := 'OUV-' || TO_CHAR(CURRENT_DATE, 'YYYY') || '-' || 
-                   LPAD((SELECT COALESCE(MAX(CAST(SUBSTRING(protocolo FROM 10) AS INTEGER)), 0) + 1 
-                         FROM ouvidoria_manifestacoes 
-                         WHERE protocolo LIKE 'OUV-' || TO_CHAR(CURRENT_DATE, 'YYYY') || '-%')::TEXT, 5, '0');
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER trigger_generate_ouvidoria_protocolo
-BEFORE INSERT ON ouvidoria_manifestacoes
-FOR EACH ROW
-WHEN (NEW.protocolo IS NULL OR NEW.protocolo = '')
-EXECUTE FUNCTION generate_ouvidoria_protocolo();
-```
+| Pagina | Funcionalidade | Status |
+|--------|----------------|--------|
+| DiretoriaDashboard | KPIs (associados, receita, sinistralidade, conversao, inadimplencia, resultado) | OK |
+| DiretoriaDashboard | Graficos de evolucao mensal | OK |
+| DiretoriaDashboard | Metricas de tempo (transito, execucao) | OK |
+| DiretoriaDashboard | Rastreadores por portador | OK |
+| Usuarios | CRUD completo de usuarios | OK |
+| Usuarios | Filtros (tipo, perfil, status) | OK |
+| Usuarios | Ativar/Desativar/Bloquear/Resetar senha | OK |
+| RateioSinistros | Calcular rateio por cotas | OK |
+| RateioSinistros | Aprovar e aplicar rateio | OK |
+| RateioSinistros | Historico de rateios | OK |
+| ProdutosGestao | CRUD de planos | OK |
+| ProdutosGestao | Toggle ativo/inativo | OK |
+| ProdutoDetalhe | Visualizacao de precos e coberturas | OK |
+| Configuracoes | CRUD de todas configuracoes por categoria | OK |
+| LogsAuditoria | Listagem com filtros | OK |
+| LogsAuditoria | Exportacao CSV | OK |
+| LogsAuditoria | Expansao de detalhes (dados anteriores/novos) | OK |
+| FaixasCotas | CRUD de ajustes percentuais | OK |
+| FaixasCotas | Aplicar ajuste em grupo | OK |
+| FaixasCotas | Historico de alteracoes | OK |
+| FaixasCotas | Simulacao de impacto | OK |
+| PerfisAcesso | Visualizacao por perfil | OK |
+| PerfisAcesso | Edicao de roles por usuario | OK |
+| SolicitacoesIA | Listagem de solicitacoes pendentes/aprovadas/rejeitadas | OK |
+| SolicitacoesIA | Aprovar/Rejeitar via Edge Function | OK |
 
 ---
 
-## Correcoes de Codigo
+## Problemas Identificados
 
-### 1. OuvidoriaDashboard.tsx - Remover mockEstatisticas
+| # | Problema | Arquivo | Linha | Impacto |
+|---|----------|---------|-------|---------|
+| 1 | Botao "Exportar" sem onClick | DiretoriaDashboard.tsx | 265-268 | Nao exporta dados do dashboard |
+| 2 | handleGerarRelatorio so exibe toast | RelatoriosGerenciais.tsx | 130-139 | Nao gera arquivo real |
+| 3 | Botao "Importar" sem funcionalidade | TabelaPrecos.tsx | 117-119 | Nao importa tabela de precos |
+| 4 | Botao "Exportar" sem funcionalidade | TabelaPrecos.tsx | 120-124 | Nao exporta tabela de precos |
+| 5 | Botao "History" sem funcionalidade | TabelaPrecos.tsx | 263-265 | Nao mostra historico de alteracoes |
+| 6 | Botao "Delete" sem confirmacao/acao | TabelaPrecos.tsx | 266-267 | Nao exclui faixa de preco |
+| 7 | Botao "Recalcular" permanentemente disabled | IndicadoresAtuariais.tsx | 104 | Nao permite recalcular indicadores |
 
-**Problema**: Importa `mockEstatisticas` e usa para exibir "Elogios do Mes"
+---
 
-**Solucao**: Criar hook `useEstatisticasElogios` que busca dados reais do banco
+## Correcoes Necessarias
+
+### 1. DiretoriaDashboard - Implementar Exportacao
+
+**Arquivo**: `src/pages/diretoria/DiretoriaDashboard.tsx`
+
+Criar funcao que exporta PDF/Excel com:
+- KPIs atuais
+- Grafico de evolucao (como tabela)
+- Indicadores operacionais
 
 ```typescript
-// Novo hook em useOuvidoria.ts
-export function useEstatisticasElogios() {
-  return useQuery({
-    queryKey: ["ouvidoria", "elogios-stats"],
-    queryFn: async () => {
-      const inicioMes = new Date();
-      inicioMes.setDate(1);
-      inicioMes.setHours(0, 0, 0, 0);
-
-      const { data, error } = await supabase
-        .from("ouvidoria_manifestacoes")
-        .select("setor_elogio, colaborador_elogiado")
-        .eq("tipo", "elogio")
-        .gte("created_at", inicioMes.toISOString());
-
-      if (error) throw error;
-
-      const total_mes = data.length;
-      
-      // Calcular setor mais elogiado
-      const setorCount: Record<string, number> = {};
-      const colaboradorCount: Record<string, number> = {};
-      
-      data.forEach(m => {
-        if (m.setor_elogio) {
-          setorCount[m.setor_elogio] = (setorCount[m.setor_elogio] || 0) + 1;
-        }
-        if (m.colaborador_elogiado) {
-          colaboradorCount[m.colaborador_elogiado] = (colaboradorCount[m.colaborador_elogiado] || 0) + 1;
-        }
-      });
-
-      const setorMaisElogiado = Object.entries(setorCount)
-        .sort(([,a], [,b]) => b - a)[0];
-      const colaboradorDestaque = Object.entries(colaboradorCount)
-        .sort(([,a], [,b]) => b - a)[0];
-
-      return {
-        total_mes,
-        setor_mais_elogiado: setorMaisElogiado?.[0] || null,
-        setor_mais_elogiado_count: setorMaisElogiado?.[1] || 0,
-        colaborador_destaque: colaboradorDestaque?.[0] || null,
-        colaborador_destaque_count: colaboradorDestaque?.[1] || 0,
-      };
-    },
+const handleExportar = async () => {
+  if (!stats) return;
+  
+  const doc = new jsPDF();
+  doc.setFontSize(18);
+  doc.text('Dashboard Executivo', 14, 22);
+  
+  doc.setFontSize(12);
+  doc.text(`Periodo: ${periodo}`, 14, 32);
+  doc.text(`Gerado em: ${format(new Date(), "dd/MM/yyyy HH:mm")}`, 14, 40);
+  
+  // KPIs
+  const kpis = [
+    ['Associados Ativos', stats.associadosAtivos.toLocaleString()],
+    ['Receita', formatCurrency(stats.receitaMes)],
+    ['Sinistralidade', `${stats.sinistralidade.toFixed(1)}%`],
+    ['Taxa Conversao', `${stats.taxaConversao.toFixed(1)}%`],
+    ['Inadimplencia', `${stats.taxaInadimplencia.toFixed(1)}%`],
+    ['Resultado', formatCurrency(stats.resultado)],
+  ];
+  
+  autoTable(doc, {
+    startY: 50,
+    head: [['Indicador', 'Valor']],
+    body: kpis,
   });
-}
-```
-
-**Alteracao**: Substituir `mockEstatisticas.elogios` pelo hook `useEstatisticasElogios()`
-
----
-
-### 2. ManifestacoesList.tsx - Corrigir contagens das tabs
-
-**Problema**: Counts hardcoded
-
-**Solucao**: Criar query que calcule os counts reais
-
-```typescript
-const counts = useMemo(() => {
-  if (!manifestacoes) return { todas: 0, minhas: 0, sem_responsavel: 0, atrasadas: 0 };
   
-  const userId = user?.id; // Obter do auth
-  const agora = new Date();
-  
-  return {
-    todas: manifestacoes.length,
-    minhas: manifestacoes.filter(m => m.responsavel_id === userId).length,
-    sem_responsavel: manifestacoes.filter(m => !m.responsavel_id && m.status !== 'encerrado').length,
-    atrasadas: manifestacoes.filter(m => {
-      if (!m.data_limite || m.status === 'encerrado') return false;
-      return new Date(m.data_limite) < agora;
-    }).length,
-  };
-}, [manifestacoes, user]);
-```
-
----
-
-### 3. ManifestacoesList.tsx - Conectar handleAssumir ao hook real
-
-**Problema**: `handleAssumir` so exibe toast
-
-**Solucao**: Usar o hook `useAssumirManifestacao` existente
-
-```typescript
-// Adicionar no componente
-const assumirMutation = useAssumirManifestacao();
-
-const handleAssumir = (id: string) => {
-  assumirMutation.mutate(id);
+  doc.save(`dashboard-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
+  toast.success('Relatorio exportado!');
 };
 ```
 
----
+### 2. RelatoriosGerenciais - Implementar Geracao Real
 
-### 4. ManifestacoesList.tsx - Implementar handleMarcarUrgente
+**Arquivo**: `src/pages/diretoria/RelatoriosGerenciais.tsx`
 
-**Problema**: `handleMarcarUrgente` so exibe toast
-
-**Solucao**: Criar mutation e conectar
+Implementar geracao real de cada tipo de relatorio buscando dados do Supabase e gerando PDF/Excel.
 
 ```typescript
-const marcarUrgenteMutation = useMutation({
+const handleGerarRelatorio = async () => {
+  if (!reportFilters.dataInicio || !reportFilters.dataFim) {
+    toast.error('Selecione o periodo');
+    return;
+  }
+
+  toast.loading('Gerando relatorio...');
+
+  try {
+    let dados: any[] = [];
+
+    // Buscar dados baseado no tipo de relatorio
+    switch (selectedReport?.id) {
+      case 'associados-status':
+        const { data: associados } = await supabase
+          .from('associados')
+          .select('status')
+          .gte('created_at', reportFilters.dataInicio)
+          .lte('created_at', reportFilters.dataFim);
+        // Agrupar por status
+        break;
+      
+      case 'vendas-periodo':
+        const { data: leads } = await supabase
+          .from('leads')
+          .select('*')
+          .gte('created_at', reportFilters.dataInicio)
+          .lte('created_at', reportFilters.dataFim);
+        dados = leads || [];
+        break;
+      
+      // ... demais casos
+    }
+
+    if (reportFilters.formato === 'pdf') {
+      gerarPDF(selectedReport?.titulo || '', dados);
+    } else if (reportFilters.formato === 'excel' || reportFilters.formato === 'csv') {
+      gerarCSV(selectedReport?.titulo || '', dados);
+    }
+
+    toast.dismiss();
+    toast.success('Relatorio gerado!');
+  } catch (error) {
+    toast.dismiss();
+    toast.error('Erro ao gerar relatorio');
+  }
+  
+  setSelectedReport(null);
+};
+```
+
+### 3. TabelaPrecos - Implementar Import/Export e Delete
+
+**Arquivo**: `src/pages/diretoria/TabelaPrecos.tsx`
+
+#### Exportar
+```typescript
+const handleExportar = () => {
+  if (!precos?.length) return;
+  
+  const csv = [
+    ['Plano', 'FIPE De', 'FIPE Ate', 'Valor Cota', 'Taxa Admin', 'Rastreamento', 'Assistencia', 'Vigencia Inicio', 'Vigencia Fim', 'Ativo'].join(';'),
+    ...precos.map(p => [
+      p.plano?.nome || '',
+      p.fipe_de,
+      p.fipe_ate,
+      p.valor_cota,
+      p.taxa_administrativa || '',
+      p.valor_rastreamento || '',
+      p.valor_assistencia || '',
+      p.vigencia_inicio || '',
+      p.vigencia_fim || '',
+      p.ativo ? 'Sim' : 'Nao'
+    ].join(';'))
+  ].join('\n');
+
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `tabela-precos-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+  a.click();
+  toast.success('Exportado!');
+};
+```
+
+#### Importar (upload de CSV)
+```typescript
+const handleImportar = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try {
+      // Parsear CSV e inserir no banco
+      toast.success('Importacao concluida!');
+      queryClient.invalidateQueries({ queryKey: ['tabela-precos'] });
+    } catch (error) {
+      toast.error('Erro na importacao');
+    }
+  };
+  reader.readAsText(file);
+};
+```
+
+#### Delete com confirmacao
+```typescript
+const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+
+const deletarFaixa = useMutation({
   mutationFn: async (id: string) => {
     const { error } = await supabase
-      .from('ouvidoria_manifestacoes')
-      .update({ prioridade: 'urgente' })
+      .from('tabelas_preco')
+      .delete()
       .eq('id', id);
     if (error) throw error;
   },
   onSuccess: () => {
-    queryClient.invalidateQueries({ queryKey: ['ouvidoria'] });
-    toast.success('Marcada como urgente!');
-  },
-});
-
-const handleMarcarUrgente = (id: string) => {
-  marcarUrgenteMutation.mutate(id);
-};
-```
-
----
-
-### 5. NovaManifestacao.tsx - Conectar ao hook useCreateManifestacao
-
-**Problema**: Simula envio, nao persiste
-
-**Solucao**: Usar o hook `useCreateManifestacao` existente
-
-```typescript
-// Adicionar no componente
-const createMutation = useCreateManifestacao();
-
-const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  
-  if (tipo === 'elogio') {
-    if (!setorElogio || !assunto || descricao.length < 20) {
-      toast.error('Preencha todos os campos obrigatorios');
-      return;
-    }
-  } else {
-    if (!tipo || !categoria || !assunto || descricao.length < 20) {
-      toast.error('Preencha todos os campos obrigatorios');
-      return;
-    }
-  }
-
-  try {
-    await createMutation.mutateAsync({
-      tipo: tipo as TipoManifestacao,
-      categoria: categoria as CategoriaManifestacao || undefined,
-      assunto,
-      descricao,
-      anonimo,
-      canal: 'app', // Canal padrao para formulario publico
-      prioridade: tipo === 'reclamacao_urgente' ? 'urgente' : 'normal',
-      setor_elogio: setorElogio || undefined,
-      colaborador_elogiado: colaborador || undefined,
-    });
-    navigate('/ouvidoria/manifestacoes');
-  } catch (error) {
-    // Erro tratado pelo hook
-  }
-};
-```
-
----
-
-### 6. NovaManifestacaoModal.tsx - Substituir mockAssociados e persistir
-
-**Problema**: Usa dados mock e nao persiste
-
-**Solucao**: 
-1. Buscar associados do banco
-2. Usar o hook `useCreateManifestacao`
-
-```typescript
-// Busca de associados real
-const { data: associadosData } = useQuery({
-  queryKey: ['associados-busca', searchQuery],
-  queryFn: async () => {
-    if (!searchQuery || searchQuery.length < 2) return [];
-    const { data, error } = await supabase
-      .from('associados')
-      .select('id, nome, cpf, telefone, email, codigo')
-      .or(`nome.ilike.%${searchQuery}%,cpf.ilike.%${searchQuery}%,codigo.ilike.%${searchQuery}%`)
-      .limit(10);
-    if (error) throw error;
-    return data;
-  },
-  enabled: searchQuery.length >= 2,
-});
-
-// Usar mutation real
-const createMutation = useCreateManifestacao();
-
-const handleSubmit = async () => {
-  if (!isFormValid) return;
-  
-  try {
-    const result = await createMutation.mutateAsync({
-      associado_id: isAnonimo ? undefined : selectedAssociado?.id,
-      tipo: tipo as TipoManifestacao,
-      categoria: categoria as CategoriaManifestacao,
-      assunto,
-      descricao,
-      anonimo: isAnonimo,
-      canal: canal as CanalManifestacao,
-      prioridade: prioridade,
-      setor_elogio: setorElogio || undefined,
-      data_contato: dataContato,
-      registrado_por_nome: user?.email, // Preencher com usuario logado
-      observacao_interna: observacaoInterna || undefined,
-    });
-    
-    resetForm();
-    onOpenChange(false);
-    
-    if (iniciarAtendimento && result) {
-      navigate(`/ouvidoria/${result.id}`);
-    }
-  } catch (error) {
-    // Erro tratado pelo hook
-  }
-};
-```
-
----
-
-### 7. EncaminharModal.tsx - Buscar analistas e departamentos reais
-
-**Problema**: Usa dados mock
-
-**Solucao**: Buscar do banco
-
-```typescript
-// Buscar funcionarios (analistas)
-const { data: analistas } = useQuery({
-  queryKey: ['funcionarios-ouvidoria'],
-  queryFn: async () => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id, nome')
-      .eq('tipo', 'funcionario')
-      .eq('ativo', true);
-    if (error) throw error;
-    return data;
-  },
-});
-
-// Departamentos podem vir de uma tabela ou constante
-const departamentos = [
-  { id: 'atendimento', nome: 'Atendimento' },
-  { id: 'sinistros', nome: 'Sinistros' },
-  { id: 'financeiro', nome: 'Financeiro' },
-  { id: 'assistencia', nome: 'Assistencia 24h' },
-];
-
-// Mutation para encaminhar
-const encaminharMutation = useMutation({
-  mutationFn: async ({ manifestacaoId, destino, destinoId, motivo }) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    // Se for para juridico, usar hook existente
-    if (destino === 'juridico') {
-      // Chamar useEncaminharJuridico
-    }
-    
-    // Atualizar responsavel ou departamento
-    const updates: Record<string, unknown> = {};
-    if (destino === 'analista') {
-      updates.responsavel_id = destinoId;
-    } else if (destino === 'departamento') {
-      updates.departamento = destinoId;
-    }
-    
-    const { error: updateError } = await supabase
-      .from('ouvidoria_manifestacoes')
-      .update(updates)
-      .eq('id', manifestacaoId);
-    
-    if (updateError) throw updateError;
-    
-    // Registrar interacao de encaminhamento
-    const { error: interacaoError } = await supabase
-      .from('ouvidoria_interacoes')
-      .insert({
-        manifestacao_id: manifestacaoId,
-        usuario_id: user?.id,
-        tipo: 'encaminhamento',
-        mensagem: `Encaminhado para ${destino}: ${motivo}`,
-        visivel_associado: false,
-      });
-    
-    if (interacaoError) throw interacaoError;
-  },
-  onSuccess: () => {
-    queryClient.invalidateQueries({ queryKey: ['ouvidoria'] });
-    toast.success('Manifestacao encaminhada!');
+    toast.success('Faixa excluida!');
+    queryClient.invalidateQueries({ queryKey: ['tabela-precos'] });
+    setDeleteConfirm(null);
   },
 });
 ```
 
----
+#### Historico de alteracoes
+Criar modal `HistoricoPrecoModal` que busca de uma tabela de historico (se existir) ou exibe mensagem que nao ha historico.
 
-### 8. ManifestacaoDetalhe.tsx - Implementar "Encaminhar para Setor + RH"
+### 4. IndicadoresAtuariais - Habilitar Recalcular
 
-**Problema**: Botao so exibe toast
-
-**Solucao**: Criar integracao real
+**Arquivo**: `src/pages/diretoria/IndicadoresAtuariais.tsx`
 
 ```typescript
-const encaminharSetorRHMutation = useMutation({
-  mutationFn: async ({ manifestacaoId, setor, colaborador }) => {
-    // Registrar interacao
+// Adicionar mutation para recalcular
+const recalcularMutation = useMutation({
+  mutationFn: async () => {
+    // Buscar dados do periodo
+    const mesAtual = new Date().getMonth() + 1;
+    const anoAtual = new Date().getFullYear();
+    
+    const [receita, sinistros, associados, novos, cancelados] = await Promise.all([
+      supabase.from('cobrancas')
+        .select('valor_pago')
+        .eq('status', 'pago')
+        .gte('data_pagamento', `${anoAtual}-${String(mesAtual).padStart(2, '0')}-01`),
+      supabase.from('sinistros')
+        .select('valor_indenizacao')
+        .in('status', ['aprovado', 'indenizado'])
+        .gte('data_ocorrencia', `${anoAtual}-${String(mesAtual).padStart(2, '0')}-01`),
+      supabase.from('associados')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'ativo'),
+      supabase.from('associados')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'ativo')
+        .gte('created_at', `${anoAtual}-${String(mesAtual).padStart(2, '0')}-01`),
+      supabase.from('associados')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'cancelado')
+        .gte('updated_at', `${anoAtual}-${String(mesAtual).padStart(2, '0')}-01`),
+    ]);
+    
+    const receitaBruta = receita.data?.reduce((s, r) => s + (r.valor_pago || 0), 0) || 0;
+    const despesasSinistros = sinistros.data?.reduce((s, r) => s + (r.valor_indenizacao || 0), 0) || 0;
+    const totalAssociados = associados.count || 0;
+    const qtdSinistros = sinistros.data?.length || 0;
+    
+    const sinistralidade = receitaBruta > 0 ? (despesasSinistros / receitaBruta) * 100 : 0;
+    const frequencia = totalAssociados > 0 ? qtdSinistros / totalAssociados : 0;
+    const ticketMedio = qtdSinistros > 0 ? despesasSinistros / qtdSinistros : 0;
+    const resultado = receitaBruta - despesasSinistros;
+    const margem = receitaBruta > 0 ? (resultado / receitaBruta) * 100 : 0;
+    
     const { error } = await supabase
-      .from('ouvidoria_interacoes')
-      .insert({
-        manifestacao_id: manifestacaoId,
-        tipo: 'encaminhamento',
-        mensagem: `Elogio encaminhado para o setor ${setor} e para o RH. Colaborador: ${colaborador || 'Nao especificado'}`,
-        visivel_associado: false,
-      });
+      .from('indicadores_atuariais')
+      .upsert({
+        mes: mesAtual,
+        ano: anoAtual,
+        receita_bruta: receitaBruta,
+        despesas_sinistros: despesasSinistros,
+        sinistralidade_bruta: sinistralidade,
+        frequencia_sinistros: frequencia,
+        ticket_medio_sinistro: ticketMedio,
+        resultado_operacional: resultado,
+        margem_operacional: margem,
+        total_associados: totalAssociados,
+        novos_associados: novos.count || 0,
+        cancelamentos: cancelados.count || 0,
+      }, { onConflict: 'mes,ano' });
     
     if (error) throw error;
-    
-    // TODO: Integrar com modulo RH se necessario
-    // Esta integracao pode ser feita posteriormente quando o modulo RH tiver
-    // uma forma de receber notificacoes de elogios
   },
   onSuccess: () => {
-    queryClient.invalidateQueries({ queryKey: ['ouvidoria'] });
-    toast.success('Elogio encaminhado para o setor e RH!');
+    toast.success('Indicadores recalculados!');
+    queryClient.invalidateQueries({ queryKey: ['indicadores-atuariais'] });
+    queryClient.invalidateQueries({ queryKey: ['indicador-atual'] });
   },
 });
 
 // No botao:
 <Button 
   variant="outline" 
-  onClick={() => {
-    encaminharSetorRHMutation.mutate({
-      manifestacaoId: manifestacao.id,
-      setor: manifestacao.setor_elogio,
-      colaborador: manifestacao.colaborador_elogiado,
-    });
-  }}
+  onClick={() => recalcularMutation.mutate()}
+  disabled={recalcularMutation.isPending}
 >
-  <SendIcon className="h-4 w-4" />
-  Encaminhar para o Setor + RH
+  <RefreshCw className={cn("h-4 w-4 mr-2", recalcularMutation.isPending && "animate-spin")} />
+  Recalcular
 </Button>
-```
-
----
-
-### 9. Atualizar useCreateManifestacao para suportar novos campos
-
-**Arquivo**: `src/hooks/useOuvidoria.ts`
-
-```typescript
-export function useCreateManifestacao() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (data: {
-      associado_id?: string;
-      tipo: TipoManifestacao;
-      categoria?: CategoriaManifestacao;
-      assunto: string;
-      descricao: string;
-      anonimo?: boolean;
-      canal: CanalManifestacao;
-      prioridade?: PrioridadeManifestacao;
-      // Novos campos
-      setor_elogio?: string;
-      colaborador_elogiado?: string;
-      data_atendimento?: string;
-      data_contato?: string;
-      registrado_por_id?: string;
-      registrado_por_nome?: string;
-      observacao_interna?: string;
-    }) => {
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      const { data: manifestacao, error } = await supabase
-        .from("ouvidoria_manifestacoes")
-        .insert({
-          ...data,
-          protocolo: '', // Trigger ira gerar
-          registrado_por_id: data.registrado_por_id || user?.id,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      return manifestacao;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["ouvidoria"] });
-      toast.success("Manifestacao criada com sucesso!");
-    },
-    onError: (error) => {
-      console.error("Erro ao criar manifestacao:", error);
-      toast.error("Erro ao criar manifestacao");
-    },
-  });
-}
 ```
 
 ---
@@ -498,25 +335,25 @@ export function useCreateManifestacao() {
 
 | Arquivo | Tipo | Descricao |
 |---------|------|-----------|
-| **Banco de dados** | **Migration** | Adicionar colunas de elogio + trigger protocolo |
-| `src/hooks/useOuvidoria.ts` | Modificar | Adicionar hook useEstatisticasElogios, atualizar useCreateManifestacao |
-| `src/pages/ouvidoria/OuvidoriaDashboard.tsx` | Modificar | Remover mock, usar hook real |
-| `src/pages/ouvidoria/ManifestacoesList.tsx` | Modificar | Corrigir counts, conectar handleAssumir/handleMarcarUrgente |
-| `src/pages/ouvidoria/NovaManifestacao.tsx` | Modificar | Usar useCreateManifestacao |
-| `src/components/ouvidoria/NovaManifestacaoModal.tsx` | Modificar | Busca real de associados, usar mutation |
-| `src/components/ouvidoria/EncaminharModal.tsx` | Modificar | Busca real de analistas, persistir |
-| `src/pages/ouvidoria/ManifestacaoDetalhe.tsx` | Modificar | Implementar encaminhar para setor |
-| `src/mocks/ouvidoria.ts` | **Excluir** | Remover arquivo de mocks |
+| `src/pages/diretoria/DiretoriaDashboard.tsx` | Modificar | Implementar exportacao PDF |
+| `src/pages/diretoria/RelatoriosGerenciais.tsx` | Modificar | Implementar geracao real de relatorios |
+| `src/pages/diretoria/TabelaPrecos.tsx` | Modificar | Implementar import/export/delete/historico |
+| `src/components/diretoria/HistoricoPrecoModal.tsx` | **Novo** | Modal de historico de alteracoes |
+| `src/pages/diretoria/IndicadoresAtuariais.tsx` | Modificar | Habilitar e implementar recalculo |
 
 ---
 
 ## Integracoes Existentes (NAO MEXER)
 
-A area Ouvidoria ja possui integracao correta com:
+A area Diretoria ja possui integracao correta com:
 
-1. **Juridico**: Hook `useEncaminharJuridico` cria processo e vincula
-2. **Associados**: Query busca dados do associado vinculado
-3. **Profiles**: Responsavel vinculado corretamente
+1. **Associados**: Dashboard busca KPIs de associados ativos/inadimplentes
+2. **Leads**: Dashboard busca leads e conversoes
+3. **Cobrancas**: Dashboard e Indicadores buscam receita
+4. **Sinistros**: Dashboard, Rateio e Indicadores buscam sinistros
+5. **Instalacoes/Chamados**: Dashboard busca indicadores operacionais
+6. **Profiles/UserRoles**: Usuarios e PerfisAcesso gerenciam roles
+7. **Rastreadores**: Dashboard exibe metricas de tempo
 
 **Nao e necessario alterar outras areas do sistema.**
 
@@ -524,14 +361,12 @@ A area Ouvidoria ja possui integracao correta com:
 
 ## Verificacao Pos-Implementacao
 
-1. Criar manifestacao do tipo Reclamacao
-2. Criar manifestacao do tipo Elogio com setor e colaborador
-3. Assumir manifestacao na lista
-4. Marcar manifestacao como urgente
-5. Encaminhar manifestacao para analista
-6. Encaminhar manifestacao para departamento
-7. Encaminhar para juridico
-8. Responder manifestacao
-9. Verificar timeline de interacoes
-10. Verificar estatisticas do dashboard
-11. Verificar contagem correta nas tabs
+1. Acessar Dashboard e clicar em Exportar - deve baixar PDF
+2. Acessar Relatorios Gerenciais e gerar cada tipo - deve baixar arquivo
+3. Acessar Tabela de Precos:
+   - Clicar Exportar - deve baixar CSV
+   - Clicar Importar - deve permitir upload
+   - Clicar Delete em uma faixa - deve pedir confirmacao
+   - Clicar History em uma faixa - deve mostrar historico
+4. Acessar Indicadores Atuariais e clicar Recalcular - deve calcular e salvar
+5. Verificar se dados persistem apos refresh
