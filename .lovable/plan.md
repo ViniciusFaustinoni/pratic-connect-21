@@ -1,196 +1,245 @@
 
+# Plano: Corrigir Lógica de Identificação Autovistoria vs Vistoria Presencial
 
-# Plano: Exclusão Cascata de Cotações para Diretores
+## Diagnóstico do Problema
 
-## Problema Identificado
+A tela de análise cadastral (`PropostaAnalise.tsx`) está identificando incorretamente **todas as propostas com fotos** como autovistoria, quando deveria distinguir entre:
 
-Ao tentar excluir cotações finalizadas, o sistema exibe: **"Erro ao excluir cotação. Verifique se há registros dependentes."**
+| Cenário | Quem tira fotos | tipo_vistoria | modalidade | Aprovação Analista |
+|---------|-----------------|---------------|------------|-------------------|
+| Autovistoria | **Cliente** | `autovistoria` | `autovistoria` | Roubo/Furto apenas |
+| Vistoria Presencial | **Vistoriador** | `agendada` | `presencial` | Cobertura Total |
+| Vistoria na Base | **Vistoriador** | `agendada_base` | `presencial` | Cobertura Total |
 
-### Causa Técnica
+### Código Problemático
 
-O hook `useExcluirCotacao` atual (linhas 402-494 de `useCotacoes.ts`) não trata todas as dependências:
+**Arquivo:** `src/pages/cadastro/PropostaAnalise.tsx` (linhas 626 e 777)
 
-| Tabela | Ação DELETE | Tratada? |
-|--------|-------------|----------|
-| `agendamentos_base` | NO ACTION ⚠️ | ❌ **Bloqueia** |
-| `servicos` | SET NULL | ❌ Precisa limpar |
-| `contratos` | SET NULL | ✅ |
-| `contratos_documentos` | SET NULL | ❌ Precisa limpar via contrato |
-| `cotacoes_historico` | CASCADE | ✅ Auto |
-| `cotacoes_vistoria_fotos` | CASCADE | ✅ Auto |
-| `instalacoes` | CASCADE | ✅ Auto |
-| `vistorias` | CASCADE | ✅ Auto |
-| `leads` | SET NULL | ✅ |
+```typescript
+// LÓGICA ATUAL (INCORRETA)
+const isAutovistoria = proposta.vistoria?.fotos?.length > 0 && !proposta.instalacao_info;
+```
 
-A FK `agendamentos_base.cotacao_id` tem `NO ACTION`, bloqueando a exclusão.
+Esta lógica falha porque:
+- Vistoria presencial também tem fotos (tiradas pelo vistoriador)
+- Vistoria na base também tem fotos
+- O único critério confiável é o campo `modalidade`
 
-## Solução
+## Fluxos Detalhados (Conforme Especificação)
 
-Criar uma Edge Function `delete-cotacao` que:
-1. Verifica se o usuário é diretor
-2. Exclui todas as dependências em ordem correta usando `service_role`
-3. Registra log de auditoria
-
-### Arquitetura
+### 1. AUTOVISTORIA SELECIONADA
 
 ```text
-┌─────────────────────────┐
-│ Diretor clica "Excluir" │
-└───────────┬─────────────┘
-            │
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│ Cliente tira    │────►│ Paga e agenda   │────►│ Analista aprova │
+│ fotos (auto)    │     │ vistoria completa    │ Roubo/Furto     │
+└─────────────────┘     └─────────────────┘     └────────┬────────┘
+                                                         │
+            ┌────────────────────────────────────────────┘
             ▼
-┌─────────────────────────┐
-│ Edge Function           │
-│ delete-cotacao          │
-│                         │
-│ 1. Verifica role=diretor│
-│ 2. Usa service_role     │
-│ 3. Exclui dependências: │
-│    - agendamentos_base  │
-│    - servicos           │
-│    - contratos_docs     │
-│    - contratos          │
-│    - leads (null FK)    │
-│    - cotacao            │
-│ 4. Registra log         │
-└───────────┬─────────────┘
-            │
-            ▼
-┌─────────────────────────┐
-│ Toast: "Cotação         │
-│ excluída com sucesso!"  │
-└─────────────────────────┘
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│ Atribuição      │────►│ Vistoriador     │────►│ Cobertura Total │
+│ automática      │     │ aprova          │     │ ATIVADA ✅      │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
 ```
+
+**Cenário alternativo:** Se vistoriador aprovar ANTES do analista:
+- Proposta fica "Pendente de Análise Cadastral"
+- Analista aprova → Cobertura Total ativada
+
+### 2. AGENDAMENTO (SEM AUTOVISTORIA)
+
+```text
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│ Cliente agenda  │────►│ Atribuição      │────►│ Vistoriador     │
+│ vistoria        │     │ automática      │     │ realiza e aprova│
+└─────────────────┘     └─────────────────┘     └────────┬────────┘
+                                                         │
+            ┌────────────────────────────────────────────┘
+            ▼
+┌─────────────────┐     ┌─────────────────┐
+│ Pendente de     │────►│ Analista aprova │
+│ Análise Cadastral     │ Cobertura Total │
+└─────────────────┘     └─────────────────┘
+```
+
+### 3. VISTORIA NA BASE
+
+```text
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│ Cliente seleciona    │ Cliente leva    │────►│ Vistoriador da  │
+│ horário na base │────►│ carro na data   │     │ base realiza    │
+└─────────────────┘     └─────────────────┘     └────────┬────────┘
+                                                         │
+            ┌────────────────────────────────────────────┘
+            ▼
+┌─────────────────┐     ┌─────────────────┐
+│ Pendente de     │────►│ Analista aprova │
+│ Análise Cadastral     │ Cobertura Total │
+└─────────────────┘     └─────────────────┘
+```
+
+### Status do Associado
+
+| Situação | Status |
+|----------|--------|
+| Nenhuma aprovação | `pendente_vistoria` |
+| Analista aprovou autovistoria (aguarda vistoriador) | `em_analise` + `cobertura_roubo_furto=true` |
+| Vistoriador aprovou (aguarda analista) | `em_analise` |
+| Ambos aprovaram | `ativo` + `cobertura_total=true` |
+| Qualquer um recusou | `recusado` |
 
 ## Implementação
 
-### 1. Criar Edge Function `delete-cotacao`
+### 1. Corrigir Identificação de Autovistoria na Tela de Análise
 
-**Arquivo:** `supabase/functions/delete-cotacao/index.ts`
+**Arquivo:** `src/pages/cadastro/PropostaAnalise.tsx`
+
+Substituir a lógica em 2 locais (linhas ~626 e ~777):
 
 ```typescript
-// Verificar role = diretor
-// Usar service_role para bypass RLS
-// Ordem de exclusão:
-// 1. agendamentos_base (cotacao_id)
-// 2. cotacoes_historico (cascade automático, mas garantir)
-// 3. cotacoes_vistoria_fotos (cascade automático)
-// 4. servicos (SET NULL cotacao_id)
-// 5. Para cada contrato:
-//    - contratos_documentos
-//    - contratos_historico
-//    - instalacoes (via contrato_id)
-//    - vistorias (via contrato_id)
-//    - asaas_cobrancas
-//    - contrato
-// 6. vistorias (cotacao_id - cascade, mas garantir)
-// 7. instalacoes (cotacao_id - cascade, mas garantir)
-// 8. leads (SET NULL cotacao_id)
-// 9. cotacao
-// 10. Registrar log de auditoria
+// LÓGICA CORRIGIDA
+// Autovistoria = modalidade é 'autovistoria' E ainda não tem instalação concluída
+const isAutovistoria = (
+  proposta.vistoria?.modalidade === 'autovistoria' ||
+  proposta.vistoria?.tipo === 'autovistoria'
+) && !proposta.instalacao_info;
 ```
 
-### 2. Atualizar Hook `useExcluirCotacao`
+### 2. Garantir Campo `modalidade` Disponível no Hook
 
-**Arquivo:** `src/hooks/useCotacoes.ts`
+**Arquivo:** `src/hooks/usePropostasPendentes.ts`
 
-Substituir a lógica atual por chamada à Edge Function:
+Verificar que a busca em `vistorias` (linha 271-276) já inclui `modalidade`:
 
 ```typescript
-export function useExcluirCotacao() {
-  const queryClient = useQueryClient();
+const { data: vistoriaData } = await supabase
+  .from('vistorias')
+  .select('id, status, modalidade')  // ✅ Já inclui modalidade
+  .eq('contrato_id', contrato.id)
+  ...
+```
+
+E que está sendo propagado corretamente para a interface `VistoriaInfo`:
+
+```typescript
+vistoria = {
+  id: vistoriaData.id,
+  status: vistoriaData.status || 'pendente',
+  tipo: vistoriaData.modalidade === 'autovistoria' ? 'autovistoria' : 'agendada',
+  modalidade: vistoriaData.modalidade || undefined,  // ✅ Já propaga
+  fotos: fotosVistoria as VistoriaFotoInfo[],
+};
+```
+
+### 3. Adicionar Fallback para Cotações Sem Registro em `vistorias`
+
+Quando não existe registro na tabela `vistorias` mas existe em `cotacoes_vistoria_fotos` (legado), buscar o `tipo_vistoria` da cotação para determinar corretamente:
+
+**Arquivo:** `src/hooks/usePropostasPendentes.ts` (após linha ~297)
+
+```typescript
+// 3. Fallback adicional: buscar tipo_vistoria da cotação quando não tem vistoria nem fotos legadas
+if (!vistoria && contrato.cotacao_id) {
+  const { data: cotacao } = await supabase
+    .from('cotacoes')
+    .select('tipo_vistoria')
+    .eq('id', contrato.cotacao_id)
+    .maybeSingle();
   
-  return useMutation({
-    mutationFn: async (cotacaoId: string) => {
-      const { data, error } = await supabase.functions.invoke('delete-cotacao', {
-        body: { cotacaoId },
-      });
-      
-      if (error) throw error;
-      if (!data.success) throw new Error(data.error);
-      
-      return data;
-    },
-    onSuccess: () => {
-      // Invalidar todas as queries relacionadas
-      queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
-      queryClient.invalidateQueries({ queryKey: ['contratos'] });
-      // ... etc
-      toast.success('Cotação excluída com sucesso!');
-    },
-    onError: (error: Error) => {
-      console.error('Erro ao excluir cotação:', error);
-      toast.error(error.message || 'Erro ao excluir cotação');
-    },
-  });
+  // Se cotação indica tipo de vistoria, usar para determinar modalidade
+  if (cotacao?.tipo_vistoria) {
+    // tipo_vistoria = 'autovistoria' | 'agendada' | 'agendada_base'
+    const isAuto = cotacao.tipo_vistoria === 'autovistoria';
+    // Nota: Mesmo sem fotos, podemos saber a modalidade esperada
+  }
 }
 ```
 
-### 3. Restringir Exclusão a Diretores
+### 4. Atualizar Texto do Botão de Aprovação
 
-**Arquivo:** `src/components/cotacoes/CotacaoAcoes.tsx`
+**Arquivo:** `src/pages/cadastro/PropostaAnalise.tsx`
 
-Adicionar verificação de role:
+O texto do botão deve refletir o cenário corretamente:
 
-```typescript
-interface CotacaoAcoesProps {
-  // ... existentes
-  canDelete?: boolean; // NOVO - apenas diretores
-}
+| Cenário | Botão | Descrição no Dialog |
+|---------|-------|---------------------|
+| Autovistoria sem instalação | "Aprovar Cobertura de Roubo e Furto" | Libera apenas roubo/furto, aguarda instalação |
+| Vistoria presencial/base sem instalação | "Aprovar Proposta" | Aguarda instalação para cobertura total |
+| Qualquer com instalação concluída | "Ativar Cobertura Total" | Ativa cobertura completa |
 
-// No componente, mostrar botão Excluir apenas se canDelete
-{canDelete && (
-  <AlertDialog>
-    {/* botão excluir */}
-  </AlertDialog>
-)}
-```
+### 5. Adicionar Verificação de Vistoria na Base
 
-**Arquivo:** `src/pages/vendas/CotacaoDetalhe.tsx`
+**Arquivo:** `src/pages/cadastro/PropostaAnalise.tsx`
 
-Passar prop `canDelete`:
+Quando `vistoria_base_info` existe, considerar como vistoria presencial (não autovistoria):
 
 ```typescript
-const { roles } = useAuth();
-const isDiretor = roles?.includes('diretor');
-
-<CotacaoAcoes
-  // ... props existentes
-  canDelete={isDiretor}
-/>
+const isVistoriaBase = !!proposta.vistoria_base_info;
+const isAutovistoria = (
+  proposta.vistoria?.modalidade === 'autovistoria' ||
+  proposta.vistoria?.tipo === 'autovistoria'
+) && !proposta.instalacao_info && !isVistoriaBase;
 ```
-
-### 4. Atualizar Lista de Cotações
-
-**Arquivo:** `src/pages/vendas/Cotacoes.tsx`
-
-Verificar role antes de exibir opção de exclusão no dropdown.
-
-## Segurança
-
-| Verificação | Implementação |
-|-------------|---------------|
-| Autenticação | Edge Function valida token JWT |
-| Autorização | Verifica role `diretor` via `user_roles` |
-| Bypass RLS | Usa `SUPABASE_SERVICE_ROLE_KEY` |
-| Auditoria | Registra em `auth_logs` |
 
 ## Alterações de Arquivos
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `supabase/functions/delete-cotacao/index.ts` | **Criar** - Edge Function para exclusão cascata |
-| `src/hooks/useCotacoes.ts` | Atualizar `useExcluirCotacao` para chamar Edge Function |
-| `src/components/cotacoes/CotacaoAcoes.tsx` | Adicionar prop `canDelete` |
-| `src/pages/vendas/CotacaoDetalhe.tsx` | Passar `canDelete` baseado em role |
-| `src/pages/vendas/Cotacoes.tsx` | Verificar role antes de exibir opção excluir |
+| `src/pages/cadastro/PropostaAnalise.tsx` | Corrigir lógica `isAutovistoria` em 2 locais (linhas ~626 e ~777), adicionar verificação de vistoria base |
+| `src/hooks/usePropostasPendentes.ts` | Adicionar fallback para buscar `tipo_vistoria` da cotação quando necessário |
+
+## Seção Técnica - Detalhes de Implementação
+
+### Lógica Final para `isAutovistoria`
+
+```typescript
+// Em PropostaAnalise.tsx - substituir em ambos os locais
+
+// Vistoria na base NÃO é autovistoria (mesmo que tenha fotos)
+const isVistoriaBase = !!proposta.vistoria_base_info;
+
+// Autovistoria = modalidade explícita 'autovistoria' E ainda não tem instalação concluída
+// E não é vistoria na base
+const isAutovistoria = (
+  proposta.vistoria?.modalidade === 'autovistoria' ||
+  proposta.vistoria?.tipo === 'autovistoria'
+) && !proposta.instalacao_info && !isVistoriaBase;
+
+// Determinar texto do botão
+const textoAprovar = isAutovistoria 
+  ? 'Aprovar Cobertura de Roubo e Furto'
+  : proposta.instalacao_info
+    ? 'Ativar Cobertura Total'
+    : 'Aprovar Proposta';
+```
+
+### Fallback no Hook (quando necessário)
+
+```typescript
+// Em usePropostasPendentes.ts - adicionar após busca de fotos legadas (linha ~313)
+
+// 3. Se ainda não tem vistoria e tem cotacao_id, verificar tipo_vistoria
+if (!vistoria && contrato.cotacao_id) {
+  // Já temos a cotação buscada acima com tipo_vistoria, usar esse dado
+  // Para determinar se espera-se autovistoria ou presencial
+}
+```
 
 ## Resultado Esperado
 
-1. Diretor acessa cotação finalizada com contrato assinado ✅
-2. Botão "Excluir Cotação" visível apenas para diretores ✅
-3. Confirma exclusão ✅
-4. Edge Function remove: agendamentos_base, contratos, docs, etc ✅
-5. Toast: "Cotação excluída com sucesso!" ✅
-6. Log de auditoria registrado ✅
+### Antes (Bug)
 
+| Cliente fez | Sistema identifica | Botão mostrado |
+|-------------|-------------------|----------------|
+| Autovistoria | Autovistoria ✅ | Roubo/Furto ✅ |
+| Vistoria Presencial | **Autovistoria** ❌ | **Roubo/Furto** ❌ |
+| Vistoria na Base | **Autovistoria** ❌ | **Roubo/Furto** ❌ |
+
+### Depois (Corrigido)
+
+| Cliente fez | Sistema identifica | Botão mostrado |
+|-------------|-------------------|----------------|
+| Autovistoria | Autovistoria ✅ | Roubo/Furto ✅ |
+| Vistoria Presencial | Presencial ✅ | Aprovar Proposta ✅ |
+| Vistoria na Base | Presencial ✅ | Aprovar Proposta ✅ |
