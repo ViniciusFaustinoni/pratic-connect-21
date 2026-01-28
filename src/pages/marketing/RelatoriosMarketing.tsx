@@ -30,6 +30,8 @@ import { ptBR } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
 import { usePerformanceCanais, useTopIndicadores } from '@/hooks/useMarketing';
 import { toast } from 'sonner';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 type PeriodoType = 'este_mes' | 'ultimo_mes' | 'trimestre' | 'ano';
 
@@ -136,15 +138,87 @@ export default function RelatoriosMarketing() {
     return { total, convertidas, valorPago };
   }, [dados?.indicacoes]);
 
-  const handleExportarPDF = () => {
-    toast.info('Exportação de PDF em desenvolvimento');
-  };
-
   const periodoLabels: Record<PeriodoType, string> = {
     este_mes: 'Este Mês',
     ultimo_mes: 'Último Mês',
     trimestre: 'Trimestre',
     ano: 'Este Ano',
+  };
+
+  const handleExportarPDF = () => {
+    const doc = new jsPDF();
+    
+    // Título
+    doc.setFontSize(18);
+    doc.text('Relatório de Marketing', 14, 22);
+    
+    // Subtítulo com período
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(`Período: ${periodoLabels[periodo]}`, 14, 32);
+    doc.text(`${format(periodoRange.inicio, "dd/MM/yyyy", { locale: ptBR })} - ${format(periodoRange.fim, "dd/MM/yyyy", { locale: ptBR })}`, 14, 38);
+    doc.text(`Gerado em: ${format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}`, 14, 44);
+    
+    // KPIs
+    doc.setTextColor(0);
+    doc.setFontSize(12);
+    doc.text('Indicadores Principais', 14, 56);
+    
+    autoTable(doc, {
+      startY: 60,
+      head: [['Indicador', 'Valor']],
+      body: [
+        ['Total Leads', kpis.totalLeads.toString()],
+        ['Conversões', kpis.conversoes.toString()],
+        ['Taxa Conversão', `${kpis.taxaConversao.toFixed(1)}%`],
+        ['CPL Médio', `R$ ${kpis.cplMedio.toFixed(2)}`],
+        ['Total Investido', `R$ ${kpis.totalInvestido.toLocaleString('pt-BR')}`],
+        ['ROI', `${kpis.roi >= 0 ? '+' : ''}${kpis.roi.toFixed(1)}%`],
+      ],
+      styles: { fontSize: 9 },
+      headStyles: { fillColor: [59, 130, 246] },
+    });
+    
+    // Leads por Origem
+    if (leadsPorOrigem.length > 0) {
+      const finalY = (doc as any).lastAutoTable.finalY + 15;
+      doc.text('Leads por Origem', 14, finalY);
+      
+      autoTable(doc, {
+        startY: finalY + 4,
+        head: [['Origem', 'Leads', 'Conversões', 'Taxa']],
+        body: leadsPorOrigem.slice(0, 10).map(item => [
+          item.origem,
+          item.total.toString(),
+          item.conversoes.toString(),
+          `${item.total > 0 ? ((item.conversoes / item.total) * 100).toFixed(1) : 0}%`,
+        ]),
+        styles: { fontSize: 9 },
+        headStyles: { fillColor: [34, 197, 94] },
+      });
+    }
+    
+    // Indicações
+    if (indicacoesStats.total > 0) {
+      const finalY = (doc as any).lastAutoTable.finalY + 15;
+      doc.text('Programa de Indicações', 14, finalY);
+      
+      autoTable(doc, {
+        startY: finalY + 4,
+        head: [['Métrica', 'Valor']],
+        body: [
+          ['Total Indicações', indicacoesStats.total.toString()],
+          ['Convertidas', indicacoesStats.convertidas.toString()],
+          ['Taxa Conversão', `${indicacoesStats.total > 0 ? ((indicacoesStats.convertidas / indicacoesStats.total) * 100).toFixed(1) : 0}%`],
+          ['Valor Pago', `R$ ${indicacoesStats.valorPago.toLocaleString('pt-BR')}`],
+        ],
+        styles: { fontSize: 9 },
+        headStyles: { fillColor: [147, 51, 234] },
+      });
+    }
+    
+    doc.save(`marketing-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
+    toast.success('Relatório PDF exportado com sucesso!');
   };
 
   return (
