@@ -170,7 +170,13 @@ Deno.serve(async (req) => {
         .in('id', contratoIds)
     }
 
-    // 5. Nullificar vistoria_id na cotação
+    // 5. Nullificar contrato_gerado_id na cotação (FK que impede excluir contrato)
+    await adminClient
+      .from('cotacoes')
+      .update({ contrato_gerado_id: null })
+      .eq('id', cotacaoId)
+
+    // 6. Nullificar vistoria_id na cotação
     await adminClient
       .from('cotacoes')
       .update({ vistoria_id: null })
