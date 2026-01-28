@@ -1,182 +1,415 @@
 
-# Plano: Reestruturar Tela de Cotações
+# Plano: Adicionar Perfil "Vistoriador Base"
 
-## Problemas Identificados
+## Objetivo
 
-### 1. Aba "Finalizadas" Não Deveria Existir
-A tela atual separa cotações em duas abas:
-- **Em Andamento**: status `rascunho`, `enviada`, `visualizada`
-- **Finalizadas**: status `aceita`, `recusada`, `expirada`
+Criar um novo perfil de usuário chamado **Vistoriador Base** que:
+- Tem acesso ao App do Vistoriador (área `/instalador`)
+- **NÃO** tem acesso ao mapa (funcionalidade de GPS/rotas)
+- **NÃO** está associado a regiões geográficas
+- Recebe **automaticamente** apenas tarefas agendadas NA BASE (`local_vistoria = 'base'`)
+- Atribuição é feita por **disponibilidade** (quem está livre recebe)
 
-O problema é que cotações com status `aceita` ainda estão em fluxo ativo (cliente pagando, agendando vistoria, etc.), então não deveriam ir para "Finalizadas".
+## Análise do Sistema Atual
 
-### 2. Autovistoria Move Cotação para Finalizadas
-Quando autovistoria é realizada, a cotação assume status `aceita`, o que automaticamente a move para a aba "Finalizadas". Isso está incorreto pois o fluxo ainda está em andamento.
+| Aspecto | Situação Atual |
+|---------|---------------|
+| Enum `app_role` | Não inclui `vistoriador_base` |
+| Modal de Novo Funcionário | Usa lista fixa de perfis |
+| App do Instalador | Todos os perfis `instalador_vistoriador` veem o mapa |
+| Atribuição de tarefas | Edge function `atribuir-proxima-tarefa` filtra por `local_vistoria != 'base'` |
+| Agendamentos Base | Tabela `agendamentos_base` tem campo `atendido_por` mas sem atribuição automática |
 
-### 3. Status "Realizando Vistoria" Incorreto
-Quando o cliente agenda vistoria sem autovistoria:
-- Edge Function define `status_contratacao: 'vistoria_ok'`
-- Função `getEtapaVenda` mapeia `vistoria_ok` → `realizando_pagamento`
-- Deveria mostrar `vistoria_agendada` para quem agendou presencial
+## Arquitetura da Solução
 
-### 4. Clique Deveria Abrir Modal
-Atualmente, clicar na linha navega para `/vendas/cotacoes/:id`. O usuário prefere um modal de detalhes inline.
+### Novo Fluxo de Atribuição Base
+
+```text
+1. Cliente agenda vistoria NA BASE
+   └─ Registro criado em agendamentos_base (status: agendado)
+
+2. No horário agendado:
+   └─ Cron ou coordenador atribui ao vistoriador_base disponível
+   └─ atendido_por = profissional_id do vistoriador_base
+
+3. Vistoriador Base abre app:
+   └─ Vê apenas tarefas de BASE atribuídas a ele
+   └─ NÃO vê mapa no menu
+   └─ NÃO precisa de GPS para iniciar serviço
+```
+
+### Diferenças entre Instalador/Vistoriador vs Vistoriador Base
+
+| Funcionalidade | Instalador/Vistoriador | Vistoriador Base |
+|---------------|----------------------|------------------|
+| Acesso ao App | ✅ Sim | ✅ Sim |
+| Mapa | ✅ Sim | ❌ Não |
+| GPS obrigatório | ✅ Sim | ❌ Não |
+| Tarefas em campo | ✅ Sim | ❌ Não |
+| Tarefas na base | ❌ Não | ✅ Sim |
+| Regiões | ✅ Associado | ❌ Não |
+| Atribuição | Por proximidade | Por disponibilidade |
 
 ---
 
-## Solução Proposta
+## Alterações Necessárias
 
-### Parte 1: Remover Sistema de Abas
+### 1. Banco de Dados
 
-**Arquivo:** `src/pages/vendas/Cotacoes.tsx`
+**Migração SQL:**
 
-Alterações:
-- Remover separação em `emAndamento` e `fechadas`
-- Remover componente `Tabs` completamente
-- Exibir todas as cotações em uma única lista ordenada por status/data
-- Manter os filtros existentes (Status, Período, Busca) para o usuário filtrar
-
-```text
-ANTES:
-┌─────────────────────────────────────────────┐
-│  [Em Andamento (5)]  [Finalizadas (3)]      │
-├─────────────────────────────────────────────┤
-│  Lista de cotações da aba selecionada       │
-└─────────────────────────────────────────────┘
-
-DEPOIS:
-┌─────────────────────────────────────────────┐
-│  [Filtros: Status ▾] [Período ▾] [Buscar]   │
-├─────────────────────────────────────────────┤
-│  Cotação 1 - Status: Realizando Vistoria    │
-│  Cotação 2 - Status: Vistoria Agendada      │
-│  Cotação 3 - Status: Enviada                │
-│  Cotação 4 - Status: Rascunho               │
-└─────────────────────────────────────────────┘
+```sql
+-- Adicionar novo valor ao enum app_role
+ALTER TYPE app_role ADD VALUE IF NOT EXISTS 'vistoriador_base';
 ```
 
-### Parte 2: Corrigir Mapeamento de Etapa para Vistoria Agendada
+### 2. Tipos TypeScript
 
-**Arquivo:** `src/components/cotacoes/CotacaoCard.tsx`
-
-A função `getEtapaVenda` precisa diferenciar:
-- `vistoria_ok` + `tipo_vistoria='autovistoria'` → `realizando_pagamento` (cliente precisa pagar)
-- `vistoria_ok` + `tipo_vistoria='agendada'` → `vistoria_agendada` (cliente agendou presencial, aguardando técnico)
+**Arquivo:** `src/types/auth.ts`
 
 ```typescript
-// ANTES (linha 175):
-if (statusContratacao === 'vistoria_ok') return 'realizando_pagamento';
+// Adicionar ao type PerfilAcesso (linha ~55-67)
+export type PerfilAcesso = 
+  | 'diretor'
+  | ...
+  | 'instalador_vistoriador'
+  | 'vistoriador_base'  // ← NOVO
+  | 'associado'
+  | ...;
 
-// DEPOIS:
-if (statusContratacao === 'vistoria_ok') {
-  // Se agendou vistoria presencial, mostrar como "vistoria agendada"
-  if (cotacao.tipo_vistoria === 'agendada') return 'vistoria_agendada';
-  // Se fez autovistoria, cliente precisa pagar adesão
-  return 'realizando_pagamento';
+// Adicionar ao PERFIL_ACESSO_LABELS (linha ~282-295)
+export const PERFIL_ACESSO_LABELS: Record<PerfilAcesso, string> = {
+  ...
+  instalador_vistoriador: 'Instalador/Vistoriador',
+  vistoriador_base: 'Vistoriador Base',  // ← NOVO
+  ...
+};
+```
+
+### 3. Modal de Novo Funcionário
+
+**Arquivo:** `src/components/usuarios/NovoFuncionarioModal.tsx`
+
+Adicionar `vistoriador_base` à lista de perfis disponíveis:
+
+```typescript
+const PERFIS_FUNCIONARIO: PerfilAcesso[] = [
+  // ... perfis existentes
+  'instalador_vistoriador',
+  'vistoriador_base',  // ← NOVO
+  'analista_marketing',
+  'analista_juridico',
+];
+```
+
+### 4. Página de Usuários (cores do badge)
+
+**Arquivo:** `src/pages/diretoria/Usuarios.tsx`
+
+Adicionar cor para o novo perfil:
+
+```typescript
+const PERFIL_COLORS: Record<PerfilAcesso, string> = {
+  ...
+  instalador_vistoriador: 'bg-indigo-100 text-indigo-800 ...',
+  vistoriador_base: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',  // ← NOVO
+  ...
+};
+```
+
+### 5. InstaladorGuard
+
+**Arquivo:** `src/components/instalador/InstaladorGuard.tsx`
+
+Permitir acesso ao app para `vistoriador_base`:
+
+```typescript
+// Verificar se tem a role de instalador OU vistoriador base
+if (!hasRole('instalador_vistoriador') && !hasRole('vistoriador_base')) {
+  return (
+    <div className="flex min-h-screen ...">
+      <h1>Acesso Negado</h1>
+      ...
+    </div>
+  );
 }
 ```
 
-### Parte 3: Adicionar Modal de Detalhes
+### 6. InstaladorLayout (Esconder Mapa)
 
-**Novo componente:** `src/components/cotacoes/CotacaoDetalheModal.tsx`
+**Arquivo:** `src/components/instalador/InstaladorLayout.tsx`
 
-Criar modal que:
-- Exibe informações resumidas da cotação (cliente, veículo, plano, valores)
-- Mostra timeline de eventos
-- Inclui ações principais (WhatsApp, PDF, Aceitar, Gerar Contrato)
-- Tem link "Ver página completa" para navegação detalhada
+Filtrar itens de navegação para vistoriador base:
 
-**Arquivo:** `src/pages/vendas/Cotacoes.tsx`
+```typescript
+import { useAuth } from '@/contexts/AuthContext';
 
-- Adicionar estado para cotação selecionada no modal
-- Trocar `onClick={() => navigate(...)}` por `onClick={() => setModalCotacao(cotacao)}`
-- Importar e renderizar o novo `CotacaoDetalheModal`
+// Dentro do componente:
+const { hasRole } = useAuth();
+const isVistoriadorBase = hasRole('vistoriador_base') && !hasRole('instalador_vistoriador');
 
----
+// Filtrar itens de navegação
+const navItems = NAV_ITEMS.filter(item => {
+  // Vistoriador base não vê mapa
+  if (isVistoriadorBase && item.path === '/instalador/mapa') {
+    return false;
+  }
+  return true;
+});
 
-## Arquivos a Modificar
+// Usar navItems ao invés de NAV_ITEMS no render
+```
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/pages/vendas/Cotacoes.tsx` | Remover tabs, lista única, adicionar modal |
-| `src/components/cotacoes/CotacaoCard.tsx` | Corrigir `getEtapaVenda` para `vistoria_agendada` |
-| `src/components/cotacoes/CotacaoDetalheModal.tsx` | **NOVO** - Modal de detalhes |
+### 7. usePermissions
+
+**Arquivo:** `src/hooks/usePermissions.ts`
+
+Adicionar verificações para o novo perfil:
+
+```typescript
+// Verificar se é vistoriador base
+const isVistoriadorBase = hasRole('vistoriador_base');
+const isVistoriadorBaseOnly = isVistoriadorBase && 
+  !hasRole('instalador_vistoriador') &&
+  !isDiretor && 
+  !isGerencia() && 
+  !isDesenvolvedor && 
+  !isAdminMaster;
+
+// Adicionar ao objeto de permissions
+const permissions = {
+  ...
+  isVistoriadorBase,
+  isVistoriadorBaseOnly,
+  ...
+};
+```
+
+### 8. useRouteGuard
+
+**Arquivo:** `src/hooks/useRouteGuard.ts`
+
+Adicionar redirecionamento para vistoriador base:
+
+```typescript
+// Vistoriador Base só pode acessar /instalador/* (sem mapa)
+if (isVistoriadorBaseOnly) {
+  const isInInstaladorArea = location.pathname.startsWith('/instalador');
+  const isMapaRoute = location.pathname === '/instalador/mapa';
+  
+  if (!isInInstaladorArea || isMapaRoute) {
+    navigate('/instalador', { replace: true });
+    return;
+  }
+}
+```
+
+### 9. Hook de Tarefas Base (NOVO)
+
+**Novo arquivo:** `src/hooks/useTarefasBase.ts`
+
+```typescript
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+
+/**
+ * Hook para buscar tarefas da base atribuídas ao vistoriador
+ */
+export function useTarefasBase() {
+  const { user } = useAuth();
+  const hoje = new Date().toISOString().split('T')[0];
+
+  return useQuery({
+    queryKey: ['tarefas-base', user?.id, hoje],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('agendamentos_base')
+        .select(`
+          *,
+          cotacao:cotacoes(
+            id,
+            cliente_nome,
+            cliente_telefone,
+            veiculo_placa,
+            veiculo_marca,
+            veiculo_modelo
+          )
+        `)
+        .eq('atendido_por', user?.id)
+        .eq('data_agendada', hoje)
+        .in('status', ['agendado', 'confirmado', 'em_atendimento'])
+        .order('horario', { ascending: true });
+
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!user?.id,
+    refetchInterval: 30000,
+  });
+}
+
+/**
+ * Hook para iniciar atendimento de tarefa base
+ */
+export function useIniciarAtendimentoBase() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation({
+    mutationFn: async (agendamentoId: string) => {
+      const { error } = await supabase
+        .from('agendamentos_base')
+        .update({
+          status: 'em_atendimento',
+          atendido_por: user?.id,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', agendamentoId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tarefas-base'] });
+    },
+  });
+}
+```
+
+### 10. Componente BotaoIniciarServico (Adaptar)
+
+**Arquivo:** `src/components/vistoriador/BotaoIniciarServico.tsx`
+
+Adaptar para não exigir GPS para vistoriador base:
+
+```typescript
+const { hasRole } = useAuth();
+const isVistoriadorBase = hasRole('vistoriador_base') && !hasRole('instalador_vistoriador');
+
+// Se for vistoriador base, não precisa de GPS
+const precisaGPS = !isVistoriadorBase;
+
+// Lógica de iniciar serviço diferente para base
+const handleIniciar = async () => {
+  if (isVistoriadorBase) {
+    // Buscar próxima tarefa da base diretamente
+    // Sem envio de coordenadas GPS
+  } else {
+    // Fluxo atual com GPS
+  }
+};
+```
+
+### 11. Edge Function de Atribuição de Tarefas Base (NOVO)
+
+**Novo arquivo:** `supabase/functions/atribuir-tarefa-base/index.ts`
+
+```typescript
+/**
+ * Edge function para atribuir automaticamente tarefas da base
+ * aos vistoriadores_base por disponibilidade
+ * 
+ * Executado por cron ou manualmente pelo coordenador
+ */
+serve(async (req) => {
+  // 1. Buscar agendamentos_base pendentes do dia atual
+  // 2. Para cada agendamento sem atendido_por:
+  //    a. Buscar vistoriadores_base disponíveis (sem tarefa em andamento)
+  //    b. Atribuir ao primeiro disponível (round-robin ou menor carga)
+  // 3. Retornar resumo de atribuições
+});
+```
+
+### 12. InstaladorHome (Adaptar)
+
+**Arquivo:** `src/pages/instalador/InstaladorHome.tsx`
+
+Adaptar a home para vistoriador base:
+
+```typescript
+const { hasRole } = useAuth();
+const isVistoriadorBase = hasRole('vistoriador_base') && !hasRole('instalador_vistoriador');
+
+// Usar hook diferente para tarefas
+const { data: tarefaAtual, isLoading } = isVistoriadorBase 
+  ? useTarefasBase()  // Tarefas da base
+  : useTarefaAtual(); // Tarefas de campo
+
+// Esconder ação "Ver no Mapa" para vistoriador base
+const acoesRapidas = [
+  { ... minhasTarefas },
+  ...(!isVistoriadorBase ? [{ ... verNoMapa }] : []),
+  { ... ligarCoordenador },
+  { ... whatsapp },
+];
+```
 
 ---
 
 ## Seção Técnica
 
-### Lógica de Ordenação da Lista Única
+### Estrutura do Enum app_role
 
-```typescript
-const sortedCotacoes = [...filteredCotacoes].sort((a, b) => {
-  // 1. Prioridade por status_contratacao ativo (cliente em fluxo)
-  const temFluxoA = a.status_contratacao && a.status_contratacao !== 'aguardando';
-  const temFluxoB = b.status_contratacao && b.status_contratacao !== 'aguardando';
-  if (temFluxoA && !temFluxoB) return -1;
-  if (!temFluxoA && temFluxoB) return 1;
-  
-  // 2. Prioridade por status da cotação
-  const statusOrder = {
-    rascunho: 1,
-    enviada: 2,
-    visualizada: 3,
-    aceita: 4,  // Continua em cima porque pode ter fluxo ativo
-    recusada: 5,
-    expirada: 6,
-  };
-  const statusDiff = (statusOrder[a.status] || 99) - (statusOrder[b.status] || 99);
-  if (statusDiff !== 0) return statusDiff;
-  
-  // 3. Mais recentes primeiro
-  return new Date(b.created_at) - new Date(a.created_at);
-});
+```sql
+-- Valores atuais:
+'diretor', 'gerente_comercial', 'supervisor_vendas', 
+'vendedor_clt', 'vendedor_externo', 'analista_cadastro',
+'coordenador_monitoramento', 'analista_plataforma', 
+'instalador_vistoriador', 'associado', 'analista_marketing', 
+'analista_juridico', 'desenvolvedor', 'admin_master', 'agencia', 'admin'
+
+-- Adicionar:
+'vistoriador_base'
 ```
 
-### Mapeamento Completo de status_contratacao → Etapa Visual
-
-| status_contratacao | tipo_vistoria | Etapa Visual |
-|-------------------|---------------|--------------|
-| `aguardando` | - | (sem badge) |
-| `plano_escolhido` | - | Escolhendo Plano |
-| `dados_preenchidos` | - | Enviando Documentos |
-| `documentos_ok` | - | Escolha de Vistoria |
-| `vistoria_ok` | `autovistoria` | Realizando Pagamento |
-| `vistoria_ok` | `agendada` | **Vistoria Agendada** ← CORREÇÃO |
-| `pagamento_ok` | - | Assinando Contrato |
-| `contrato_assinado` | - | Vistoria Agendada |
-
-### Estrutura do Modal
+### Lógica de Atribuição por Disponibilidade
 
 ```typescript
-interface CotacaoDetalheModalProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  cotacao: CotacaoWithRelations | null;
-  onAcaoCompleta?: () => void; // Para invalidar queries após ação
+// Pseudocódigo da Edge Function
+async function atribuirTarefasBase() {
+  const agendamentosPendentes = await buscarAgendamentosSemAtendente(hoje);
+  const vistoriadoresBase = await buscarVistoriadoresBaseAtivos();
+  
+  for (const agendamento of agendamentosPendentes) {
+    // Encontrar vistoriador com menos tarefas no horário
+    const vistoriadorDisponivel = vistoriadoresBase
+      .sort((a, b) => a.tarefasNoHorario - b.tarefasNoHorario)[0];
+    
+    if (vistoriadorDisponivel) {
+      await atribuirAgendamento(agendamento.id, vistoriadorDisponivel.id);
+    }
+  }
 }
 ```
 
-Conteúdo do modal:
-- Header: Status + Etapa da Venda + Número da cotação
-- Seção Cliente: Nome, telefone, email
-- Seção Veículo: Marca/Modelo/Ano, Placa, FIPE
-- Seção Valores: Plano escolhido, mensalidade, adesão
-- Seção Timeline: Últimos 5 eventos
-- Footer: Botões de ação contextuais + "Ver detalhes completos"
+### Tabela de Referência: Arquivos a Modificar
+
+| Arquivo | Tipo | Alteração |
+|---------|------|-----------|
+| `supabase/migrations/XXXX.sql` | Migração | Adicionar enum value |
+| `src/types/auth.ts` | Tipo | Adicionar perfil ao type e labels |
+| `src/components/usuarios/NovoFuncionarioModal.tsx` | Componente | Adicionar perfil à lista |
+| `src/pages/diretoria/Usuarios.tsx` | Página | Adicionar cor do badge |
+| `src/components/instalador/InstaladorGuard.tsx` | Guard | Permitir acesso |
+| `src/components/instalador/InstaladorLayout.tsx` | Layout | Esconder mapa |
+| `src/hooks/usePermissions.ts` | Hook | Adicionar verificações |
+| `src/hooks/useRouteGuard.ts` | Hook | Adicionar redirecionamento |
+| `src/hooks/useTarefasBase.ts` | Hook | **NOVO** - Buscar tarefas base |
+| `src/components/vistoriador/BotaoIniciarServico.tsx` | Componente | Adaptar para base |
+| `src/pages/instalador/InstaladorHome.tsx` | Página | Adaptar UI |
+| `supabase/functions/atribuir-tarefa-base/index.ts` | Edge Function | **NOVO** - Atribuição automática |
 
 ---
 
 ## Resultado Esperado
 
-### Antes
-- 2 abas separando cotações
-- Autovistoria vai para "Finalizadas"
-- Agendamento presencial mostra "Realizando Vistoria"
-- Clique navega para outra página
+### Antes (Sem Vistoriador Base)
+- Coordenador atribui manualmente `atendido_por` nos agendamentos da base
+- Vistoriadores de campo podem acessar o mapa desnecessariamente
+- Sem diferenciação entre profissionais de campo e base
 
-### Depois
-- Lista única com filtros
-- Todas as cotações na mesma visualização
-- Agendamento presencial mostra "Vistoria Agendada"
-- Clique abre modal inline com ações rápidas
+### Depois (Com Vistoriador Base)
+- Novo perfil disponível na criação de funcionários
+- Atribuição automática de tarefas da base por disponibilidade
+- Interface simplificada (sem mapa) para quem trabalha apenas na base
+- Separação clara de responsabilidades entre campo e base
