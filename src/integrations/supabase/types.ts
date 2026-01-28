@@ -13498,10 +13498,12 @@ export type Database = {
           protocolo: string
           status: Database["public"]["Enums"]["status_sinistro"]
           tipo: Database["public"]["Enums"]["tipo_sinistro"]
+          tipo_dano: string | null
           updated_at: string
           valor_fipe: number | null
           valor_indenizacao: number | null
           valor_pago: number | null
+          valor_participacao: number | null
           veiculo_id: string
         }
         Insert: {
@@ -13524,10 +13526,12 @@ export type Database = {
           protocolo: string
           status?: Database["public"]["Enums"]["status_sinistro"]
           tipo: Database["public"]["Enums"]["tipo_sinistro"]
+          tipo_dano?: string | null
           updated_at?: string
           valor_fipe?: number | null
           valor_indenizacao?: number | null
           valor_pago?: number | null
+          valor_participacao?: number | null
           veiculo_id: string
         }
         Update: {
@@ -13550,10 +13554,12 @@ export type Database = {
           protocolo?: string
           status?: Database["public"]["Enums"]["status_sinistro"]
           tipo?: Database["public"]["Enums"]["tipo_sinistro"]
+          tipo_dano?: string | null
           updated_at?: string
           valor_fipe?: number | null
           valor_indenizacao?: number | null
           valor_pago?: number | null
+          valor_participacao?: number | null
           veiculo_id?: string
         }
         Relationships: [
@@ -15950,6 +15956,7 @@ export type Database = {
         | "em_reparo"
         | "pago"
         | "encerrado"
+        | "em_sindicancia"
       status_veiculo:
         | "em_analise"
         | "aprovado"
@@ -16306,6 +16313,7 @@ export const Constants = {
         "em_reparo",
         "pago",
         "encerrado",
+        "em_sindicancia",
       ],
       status_veiculo: [
         "em_analise",

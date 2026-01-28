@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useMemo, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
@@ -55,7 +55,9 @@ interface Filters {
 
 export default function OrdensServicoList() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [formOpen, setFormOpen] = useState(false);
+  const [sinistroIdFromUrl, setSinistroIdFromUrl] = useState<string | undefined>();
   const [filters, setFilters] = useState<Filters>({
     busca: '',
     oficina_id: '',
@@ -63,6 +65,19 @@ export default function OrdensServicoList() {
     data_inicio: '',
     data_fim: '',
   });
+
+  // Processar parâmetros da URL para abrir modal automaticamente
+  useEffect(() => {
+    const novoParam = searchParams.get('novo');
+    const sinistroIdParam = searchParams.get('sinistro_id');
+    
+    if (novoParam === 'true') {
+      setSinistroIdFromUrl(sinistroIdParam || undefined);
+      setFormOpen(true);
+      // Limpar parâmetros da URL após processar
+      setSearchParams({});
+    }
+  }, [searchParams, setSearchParams]);
 
   const { data: oficinas = [] } = useOficinas({ status: 'ativo' });
 
@@ -360,7 +375,11 @@ export default function OrdensServicoList() {
 
       <NovaOSModal
         open={formOpen}
-        onClose={() => setFormOpen(false)}
+        onClose={() => {
+          setFormOpen(false);
+          setSinistroIdFromUrl(undefined);
+        }}
+        sinistroId={sinistroIdFromUrl}
       />
     </div>
   );
