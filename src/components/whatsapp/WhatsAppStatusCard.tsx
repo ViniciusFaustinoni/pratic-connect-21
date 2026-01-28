@@ -223,7 +223,7 @@ export function WhatsAppStatusCard() {
               <>
                 <div className="p-4 bg-white rounded-lg">
                   <img 
-                    src={`data:image/png;base64,${qrCodeData}`}
+                    src={qrCodeData.startsWith('data:image') ? qrCodeData : `data:image/png;base64,${qrCodeData}`}
                     alt="QR Code WhatsApp"
                     className="w-64 h-64"
                   />
