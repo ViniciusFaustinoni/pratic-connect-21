@@ -12,9 +12,12 @@ interface StepperCotacaoProps {
   steps: Step[];
   currentStep: number;
   onStepClick?: (stepIndex: number) => void;
+  maxReachableStep?: number;
 }
 
-export function StepperCotacao({ steps, currentStep, onStepClick }: StepperCotacaoProps) {
+export function StepperCotacao({ steps, currentStep, onStepClick, maxReachableStep }: StepperCotacaoProps) {
+  // Etapa máxima alcançável (default para currentStep se não definido)
+  const maxStep = maxReachableStep ?? currentStep;
   return (
     <div className="w-full">
       {/* Mobile: Horizontal compacto - Premium Dark Style */}
@@ -22,12 +25,13 @@ export function StepperCotacao({ steps, currentStep, onStepClick }: StepperCotac
         {steps.map((step, index) => {
           const isCompleted = index < currentStep;
           const isCurrent = index === currentStep;
+          const isReachable = index <= maxStep;
 
           return (
             <div
               key={step.id}
               className="flex flex-col items-center flex-1"
-              onClick={() => isCompleted && onStepClick?.(index)}
+              onClick={() => isReachable && onStepClick?.(index)}
             >
               <motion.div
                 initial={false}
@@ -40,7 +44,8 @@ export function StepperCotacao({ steps, currentStep, onStepClick }: StepperCotac
                   'transition-all duration-300',
                   isCompleted && 'bg-primary text-primary-foreground cursor-pointer',
                   isCurrent && 'bg-primary text-primary-foreground step-glow-active',
-                  !isCompleted && !isCurrent && 'bg-muted/50 text-muted-foreground border border-border/50'
+                  !isCompleted && !isCurrent && isReachable && 'bg-muted/50 text-muted-foreground border border-border/50 cursor-pointer hover:border-primary/50',
+                  !isCompleted && !isCurrent && !isReachable && 'bg-muted/50 text-muted-foreground border border-border/50'
                 )}
               >
                 {isCompleted ? (
@@ -78,6 +83,7 @@ export function StepperCotacao({ steps, currentStep, onStepClick }: StepperCotac
           {steps.map((step, index) => {
             const isCompleted = index < currentStep;
             const isCurrent = index === currentStep;
+            const isReachable = index <= maxStep;
 
             return (
               <div key={step.id} className="flex-1 flex items-start">
@@ -85,9 +91,9 @@ export function StepperCotacao({ steps, currentStep, onStepClick }: StepperCotac
                 <div 
                   className={cn(
                     "flex flex-col items-center flex-1",
-                    isCompleted && "cursor-pointer"
+                    isReachable && "cursor-pointer"
                   )}
-                  onClick={() => isCompleted && onStepClick?.(index)}
+                  onClick={() => isReachable && onStepClick?.(index)}
                 >
                   <motion.div
                     initial={false}
@@ -98,7 +104,8 @@ export function StepperCotacao({ steps, currentStep, onStepClick }: StepperCotac
                       'transition-all duration-300',
                       isCompleted && 'bg-primary text-primary-foreground',
                       isCurrent && 'bg-primary text-primary-foreground step-glow-active ring-4 ring-primary/20',
-                      !isCompleted && !isCurrent && 'bg-muted/30 text-muted-foreground border border-border/50'
+                      !isCompleted && !isCurrent && isReachable && 'bg-muted/30 text-muted-foreground border border-border/50 hover:border-primary/50',
+                      !isCompleted && !isCurrent && !isReachable && 'bg-muted/30 text-muted-foreground border border-border/50'
                     )}
                   >
                     {isCompleted ? (

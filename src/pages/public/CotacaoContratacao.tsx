@@ -15,6 +15,7 @@ import { EtapaPagamentoCotacao } from '@/components/cotacao-publica/EtapaPagamen
 import { AgendamentoVistoriaCompleta } from '@/components/cotacao-publica/AgendamentoVistoriaCompleta';
 import { DocumentosPendentesPublico } from '@/components/cotacao-publica/DocumentosPendentesPublico';
 import { AgendamentoBaseResumo } from '@/components/cotacao-publica/AgendamentoBaseResumo';
+import { NavegacaoEtapas } from '@/components/cotacao-publica/NavegacaoEtapas';
 import type { DadosPessoaisForm } from '@/components/cotacao-publica/FormularioDadosPessoais';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Badge } from '@/components/ui/badge';
@@ -66,6 +67,9 @@ export default function CotacaoContratacao() {
   
   // Estado local para travar UI após agendamento bem-sucedido
   const [agendamentoConcluido, setAgendamentoConcluido] = useState(false);
+
+  // Estado para navegação manual (quando usuário clica em etapas anteriores para revisar)
+  const [navegacaoManual, setNavegacaoManual] = useState(false);
 
   const [planoSelecionadoId, setPlanoSelecionadoId] = useState<string | null>(null);
 
@@ -123,8 +127,11 @@ export default function CotacaoContratacao() {
     }
   }, [associadoStatus, contratoLinkToken, navigate]);
 
-  // Sincronizar etapa com status da cotação
+  // Sincronizar etapa com status da cotação (apenas se não está em navegação manual)
   useEffect(() => {
+    // Não sincronizar se usuário está navegando manualmente (revisando etapas anteriores)
+    if (navegacaoManual) return;
+    
     if (cotacao?.status_contratacao) {
       let etapa = determinarEtapa(cotacao.status_contratacao);
       
@@ -135,7 +142,34 @@ export default function CotacaoContratacao() {
       
       setEtapaAtual(etapa);
     }
-  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, determinarEtapa, setEtapaAtual]);
+  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, determinarEtapa, setEtapaAtual, navegacaoManual]);
+
+  // Handler para navegação no Stepper
+  const handleStepClick = useCallback((step: number) => {
+    if (step <= etapaDoStatus) {
+      setNavegacaoManual(true);
+      setEtapaAtual(step);
+    }
+  }, [etapaDoStatus, setEtapaAtual]);
+
+  // Handler para avançar para próxima etapa
+  const handleAvancar = useCallback(() => {
+    if (etapaAtual < etapaDoStatus) {
+      setEtapaAtual(etapaAtual + 1);
+    }
+    // Se chegou na etapa atual do status, desativa navegação manual
+    if (etapaAtual + 1 >= etapaDoStatus) {
+      setNavegacaoManual(false);
+    }
+  }, [etapaAtual, etapaDoStatus, setEtapaAtual]);
+
+  // Handler para voltar para etapa anterior
+  const handleVoltar = useCallback(() => {
+    if (etapaAtual > 0) {
+      setNavegacaoManual(true);
+      setEtapaAtual(etapaAtual - 1);
+    }
+  }, [etapaAtual, setEtapaAtual]);
 
   // Pré-selecionar plano se já escolhido
   useEffect(() => {
@@ -337,7 +371,8 @@ export default function CotacaoContratacao() {
               <StepperCotacao
                 steps={STEPS}
                 currentStep={etapaAtual}
-                onStepClick={(step) => isEtapaConcluida(step) && setEtapaAtual(step)}
+                onStepClick={handleStepClick}
+                maxReachableStep={etapaDoStatus}
               />
             </Card>
           </motion.div>
@@ -363,6 +398,14 @@ export default function CotacaoContratacao() {
                     categoriaVeiculo={(cotacao as { categoria_veiculo?: string }).categoria_veiculo}
                     readOnly={isEtapaConcluida(0)}
                   />
+                  <NavegacaoEtapas
+                    etapaAtual={etapaAtual}
+                    etapaMaxima={etapaDoStatus}
+                    totalEtapas={STEPS.length}
+                    onVoltar={handleVoltar}
+                    onAvancar={handleAvancar}
+                    navegacaoManual={navegacaoManual}
+                  />
                 </motion.div>
               )}
 
@@ -381,6 +424,14 @@ export default function CotacaoContratacao() {
                     defaultValues={dadosPessoaisDefault}
                     isLoading={isPending}
                     readOnly={isEtapaConcluida(1)}
+                  />
+                  <NavegacaoEtapas
+                    etapaAtual={etapaAtual}
+                    etapaMaxima={etapaDoStatus}
+                    totalEtapas={STEPS.length}
+                    onVoltar={handleVoltar}
+                    onAvancar={handleAvancar}
+                    navegacaoManual={navegacaoManual}
                   />
                 </motion.div>
               )}
@@ -402,6 +453,14 @@ export default function CotacaoContratacao() {
                     onContratoAssinado={() => setEtapaAtual(3)}
                     readOnly={isEtapaConcluida(2)}
                   />
+                  <NavegacaoEtapas
+                    etapaAtual={etapaAtual}
+                    etapaMaxima={etapaDoStatus}
+                    totalEtapas={STEPS.length}
+                    onVoltar={handleVoltar}
+                    onAvancar={handleAvancar}
+                    navegacaoManual={navegacaoManual}
+                  />
                 </motion.div>
               )}
 
@@ -421,6 +480,14 @@ export default function CotacaoContratacao() {
                     onAgendar={() => setEtapaAtual(4)}
                     readOnly={isEtapaConcluida(3)}
                     tipoVistoriaRealizada={cotacao.tipo_vistoria as 'autovistoria' | 'agendada' | undefined}
+                  />
+                  <NavegacaoEtapas
+                    etapaAtual={etapaAtual}
+                    etapaMaxima={etapaDoStatus}
+                    totalEtapas={STEPS.length}
+                    onVoltar={handleVoltar}
+                    onAvancar={handleAvancar}
+                    navegacaoManual={navegacaoManual}
                   />
                 </motion.div>
               )}
@@ -457,6 +524,14 @@ export default function CotacaoContratacao() {
                       cidade: cotacao.vistoria_endereco_cidade || undefined,
                       estado: cotacao.vistoria_endereco_estado || undefined,
                     } : undefined}
+                  />
+                  <NavegacaoEtapas
+                    etapaAtual={etapaAtual}
+                    etapaMaxima={etapaDoStatus}
+                    totalEtapas={STEPS.length}
+                    onVoltar={handleVoltar}
+                    onAvancar={handleAvancar}
+                    navegacaoManual={navegacaoManual}
                   />
                 </motion.div>
               )}
