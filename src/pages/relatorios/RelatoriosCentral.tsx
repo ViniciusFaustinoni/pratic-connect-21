@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,6 +11,8 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { RelatorioModal } from '@/components/relatorios/RelatorioModal';
+import { getRotaExistente, getRelatorioConfig } from '@/config/relatoriosConfig';
 
 interface Relatorio {
   id: string;
@@ -29,11 +32,14 @@ interface Categoria {
 }
 
 export default function RelatoriosCentral() {
+  const navigate = useNavigate();
   const [busca, setBusca] = useState('');
   const [favoritos, setFavoritos] = useState<string[]>(() => {
     const saved = localStorage.getItem('relatorios_favoritos');
     return saved ? JSON.parse(saved) : [];
   });
+  const [selectedRelatorio, setSelectedRelatorio] = useState<Relatorio | null>(null);
+  const [showModal, setShowModal] = useState(false);
 
   const toggleFavorito = (relatorioId: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
@@ -173,7 +179,25 @@ export default function RelatoriosCentral() {
     [favoritos, todosRelatorios]
   );
 
-  const handleRelatorioClick = (relatorio: { nome: string; rota: string }) => {
+  const handleRelatorioClick = (relatorio: Relatorio) => {
+    // Verificar se existe rota dedicada
+    const rotaExistente = getRotaExistente(relatorio.id);
+    
+    if (rotaExistente) {
+      navigate(rotaExistente);
+      return;
+    }
+    
+    // Verificar se tem configuração de relatório genérico
+    const config = getRelatorioConfig(relatorio.id);
+    
+    if (config) {
+      setSelectedRelatorio(relatorio);
+      setShowModal(true);
+      return;
+    }
+    
+    // Fallback: mostrar toast informativo
     toast.info(`Abrindo ${relatorio.nome}...`, {
       description: 'Este relatório será implementado em breve.'
     });
@@ -381,6 +405,13 @@ export default function RelatoriosCentral() {
           </Card>
         </>
       )}
+
+      {/* Modal de Relatório Genérico */}
+      <RelatorioModal 
+        open={showModal} 
+        onOpenChange={setShowModal}
+        relatorio={selectedRelatorio}
+      />
     </div>
   );
 }

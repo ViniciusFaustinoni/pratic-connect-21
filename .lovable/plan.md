@@ -1,19 +1,32 @@
 
 # Plano de Revisao Completa: Relatorios
 
+## Status: ✅ IMPLEMENTADO
+
+### Resumo das Alterações Realizadas
+| Arquivo | Tipo | Descrição |
+|---------|------|-----------|
+| `src/config/relatoriosConfig.ts` | **Novo** | Configurações de query para cada relatório |
+| `src/components/relatorios/RelatorioModal.tsx` | **Novo** | Modal genérico de geração de relatórios |
+| `src/pages/relatorios/RelatoriosCentral.tsx` | Modificado | Conectar cliques a rotas existentes e modal |
+| `src/pages/marketing/RelatoriosMarketing.tsx` | Modificado | Implementar exportação PDF real |
+
+---
+
 ## Diagnostico Atual
 
 ### Estrutura da Area
 | Pagina | Rota | Status |
 |--------|------|--------|
-| RelatoriosCentral.tsx | /relatorios | INDEX/CATALOGO - NAO FUNCIONAL |
-| RelatoriosVendas.tsx | /vendas/relatorios | FUNCIONAL |
-| RelatoriosMarketing.tsx | /marketing/relatorios | PARCIALMENTE FUNCIONAL |
-| RelatoriosGerenciais.tsx | /diretoria/relatorios | FUNCIONAL (ja revisado) |
+| RelatoriosCentral.tsx | /relatorios | ✅ FUNCIONAL |
+| RelatoriosVendas.tsx | /vendas/relatorios | ✅ FUNCIONAL |
+| RelatoriosMarketing.tsx | /marketing/relatorios | ✅ FUNCIONAL |
+| RelatoriosGerenciais.tsx | /diretoria/relatorios | ✅ FUNCIONAL |
 
 ### Status do Banco de Dados
 | Tabela | Registros |
 |--------|-----------|
+
 | leads | 0 |
 | cotacoes | 0 |
 | contratos | 0 |
