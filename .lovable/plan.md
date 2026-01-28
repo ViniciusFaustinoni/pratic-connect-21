@@ -1,222 +1,241 @@
 
-# Plano: Campo de Observações do Vistoriador na Etapa Final
+# Plano de Revisão Completa da Área Financeira + Correção ASAAS
 
-## Resumo
-Adicionar um campo de texto longo opcional na última etapa da vistoria para que o vistoriador possa registrar observações. Essas observações serão salvas na tabela `vistorias` e exibidas ao analista de cadastro durante a análise da proposta.
+## Diagnóstico Final
 
-## Análise Atual
+### Problemas nas Páginas (UI não conectada)
+1. **Dashboard** - Botões não abrem modais
+2. **Cobranças** - Ações sem funcionalidade
+3. **Contas a Pagar** - Modais não conectados
+4. **Extrato** - Nova movimentação não funciona
 
-### O que já existe:
-- Campo `observacoes` (text) já existe na tabela `vistorias`
-- O hook `useAprovarVeiculoVistoria` já aceita `observacoes` como parâmetro opcional
-- O hook salva as observações no banco ao aprovar a vistoria (linha 63-65 de `useVistoriaCompleta.ts`)
-
-### O que falta:
-- Campo de input na interface do vistoriador
-- Buscar o campo `observacoes` na query de propostas pendentes
-- Exibir as observações na tela de análise do analista de cadastro
+### BUG CRÍTICO: Integração ASAAS
+A edge function `asaas-cobrancas` tenta usar `dados.customer` que **nunca é passado** pelo hook. A chamada à API do ASAAS falha porque o campo `customer` é obrigatório.
 
 ---
 
-## Implementação
+## Correções Necessárias
 
-### 1. Tela do Vistoriador: `ExecutarVistoriaCompleta.tsx`
+### 1. Edge Function `asaas-cobrancas` (BUG CRÍTICO)
 
-**Adicionar estado para observações:**
+**Problema:** Linha 85 usa `dados.customer` que não é passado
+**Solução:** Buscar o `asaas_id` do cliente pelo `associado_id` ANTES de criar a cobrança
+
 ```typescript
-const [observacoes, setObservacoes] = useState('');
+case 'criar': {
+  if (!dados) throw new Error('Dados da cobrança são obrigatórios');
+  
+  // CORREÇÃO: Buscar asaas_id do cliente pelo associado_id
+  let customerAsaasId = dados.customer;
+  
+  if (!customerAsaasId && associado_id) {
+    const { data: clienteAsaas } = await supabase
+      .from('asaas_clientes')
+      .select('asaas_id')
+      .eq('associado_id', associado_id)
+      .maybeSingle();
+    
+    if (!clienteAsaas?.asaas_id) {
+      throw new Error('Cliente não sincronizado com ASAAS. Sincronize primeiro.');
+    }
+    
+    customerAsaasId = clienteAsaas.asaas_id;
+  }
+  
+  if (!customerAsaasId) {
+    throw new Error('customer ou associado_id é obrigatório');
+  }
+
+  // Agora usar customerAsaasId na chamada
+  const asaasCobranca = await asaasRequest('/payments', 'POST', {
+    customer: customerAsaasId,
+    // ... resto dos dados
+  });
 ```
 
-**Adicionar Textarea antes da seção de vídeo 360°:**
+---
+
+### 2. Dashboard Financeiro (`FinanceiroDashboard.tsx`)
+
+**Adicionar imports e estados:**
+```typescript
+import { NovaCobrancaModal } from '@/components/financeiro/NovaCobrancaModal';
+import { NovaContaPagarModal } from '@/components/financeiro/NovaContaPagarModal';
+
+const [modalCobranca, setModalCobranca] = useState(false);
+const [modalDespesa, setModalDespesa] = useState(false);
+```
+
+**Conectar botões:**
+- "Nova Cobrança" → `onClick={() => setModalCobranca(true)}`
+- "Nova Despesa" → `onClick={() => setModalDespesa(true)}`
+- "Gerar Faturamento" → `onClick={() => navigate('/financeiro/faturamento')}`
+
+**Conectar Ações Rápidas:**
+- "Gerar Faturamento Mensal" → `/financeiro/faturamento`
+- "Ver Cobranças Pendentes" → `/financeiro/cobrancas?status=pendente`
+- "Ver Contas a Pagar" → `/financeiro/contas-pagar`
+- "Conciliação Bancária" → `/financeiro/extratos-bancarios`
+- "Ver extrato completo" → `/financeiro/extrato`
+
+**Renderizar modais no final:**
 ```tsx
-{/* Observações do Vistoriador (opcional) */}
-<Card className="border-slate-700 bg-slate-800">
-  <CardHeader className="pb-2">
-    <CardTitle className="flex items-center gap-2 text-base text-white">
-      <MessageSquare className="h-5 w-5 text-amber-400" />
-      Observações (opcional)
-    </CardTitle>
-  </CardHeader>
-  <CardContent>
-    <Textarea
-      placeholder="Registre qualquer observação relevante sobre o veículo ou a vistoria..."
-      value={observacoes}
-      onChange={(e) => setObservacoes(e.target.value)}
-      className="resize-none border-slate-600 bg-slate-900 text-white min-h-[100px]"
-      rows={4}
-    />
-    <p className="text-xs text-slate-400 mt-2">
-      Essas observações serão visíveis para o analista de cadastro.
-    </p>
-  </CardContent>
-</Card>
+<NovaCobrancaModal open={modalCobranca} onClose={() => setModalCobranca(false)} />
+<NovaContaPagarModal open={modalDespesa} onClose={() => setModalDespesa(false)} />
 ```
 
-**Passar observações para o hook de aprovação (linha 127-133):**
+---
+
+### 3. Lista de Cobranças (`CobrancasList.tsx`)
+
+**Adicionar imports e estados:**
 ```typescript
-await aprovarVeiculo.mutateAsync({
-  vistoriaId,
-  instalacaoId,
-  veiculoId: veiculo.id,
-  associadoId: associado.id,
-  hodometro: parseInt(hodometro),
-  observacoes: observacoes.trim() || undefined, // <-- Adicionar
+import { NovaCobrancaModal } from '@/components/financeiro/NovaCobrancaModal';
+import { RegistrarPagamentoModal } from '@/components/financeiro/RegistrarPagamentoModal';
+
+const [modalNovaCobranca, setModalNovaCobranca] = useState(false);
+const [modalPagamento, setModalPagamento] = useState(false);
+const [cobrancaSelecionada, setCobrancaSelecionada] = useState<any>(null);
+```
+
+**Conectar botão header:**
+```tsx
+<Button onClick={() => setModalNovaCobranca(true)}>
+  <Plus className="mr-2 h-4 w-4" /> Nova Cobrança
+</Button>
+```
+
+**Conectar ações do dropdown:**
+- "Ver Detalhes" → `navigate(\`/financeiro/cobrancas/${cobranca.id}\`)`
+- "Registrar Pagamento" → Abrir `RegistrarPagamentoModal`
+- "Enviar WhatsApp" → Função com link do boleto
+
+**Renderizar modais:**
+```tsx
+<NovaCobrancaModal open={modalNovaCobranca} onClose={() => setModalNovaCobranca(false)} />
+<RegistrarPagamentoModal 
+  open={modalPagamento} 
+  onClose={() => setModalPagamento(false)}
+  cobranca={cobrancaSelecionada}
+/>
+```
+
+---
+
+### 4. Contas a Pagar (`ContasPagar.tsx`)
+
+**Adicionar imports e estados:**
+```typescript
+import { NovaContaPagarModal } from '@/components/financeiro/NovaContaPagarModal';
+import { PagarContaModal } from '@/components/financeiro/PagarContaModal';
+
+const [modalNovaConta, setModalNovaConta] = useState(false);
+const [modalPagar, setModalPagar] = useState(false);
+const [contaSelecionada, setContaSelecionada] = useState<any>(null);
+```
+
+**Adicionar mutation para cancelar:**
+```typescript
+const cancelarConta = useMutation({
+  mutationFn: async (contaId: string) => {
+    const { error } = await supabase
+      .from('contas_pagar')
+      .update({ status: 'cancelado', updated_at: new Date().toISOString() })
+      .eq('id', contaId);
+    if (error) throw error;
+  },
+  onSuccess: () => {
+    toast.success('Conta cancelada com sucesso');
+    queryClient.invalidateQueries({ queryKey: ['contas-pagar'] });
+  },
+  onError: () => toast.error('Erro ao cancelar conta'),
 });
 ```
 
+**Conectar ações:**
+- "Nova Conta" → `onClick={() => setModalNovaConta(true)}`
+- "Pagar" → Abrir `PagarContaModal`
+- "Cancelar" → `cancelarConta.mutate(conta.id)`
+
 ---
 
-### 2. Interface VistoriaInfo: `usePropostasPendentes.ts`
+### 5. Extrato (`Extrato.tsx`)
 
-**Modificar a interface (linha 27-33):**
+**Adicionar imports e estados:**
 ```typescript
-export interface VistoriaInfo {
-  id: string;
-  status: string;
-  tipo: string;
-  modalidade?: string;
-  fotos: VistoriaFotoInfo[];
-  observacoes?: string | null; // <-- Adicionar
-  km_atual?: number | null;    // <-- Adicionar (útil mostrar o hodômetro também)
-}
+import { NovaMovimentacaoModal } from '@/components/financeiro/NovaMovimentacaoModal';
+
+const [modalMovimentacao, setModalMovimentacao] = useState(false);
 ```
 
-**Modificar a query de busca de vistoria (linha 270-276):**
-```typescript
-const { data: vistoriaData } = await supabase
-  .from('vistorias')
-  .select('id, status, modalidade, observacoes, km_atual') // <-- Adicionar campos
-  .eq('contrato_id', contrato.id)
-  .order('created_at', { ascending: false })
-  .limit(1)
-  .maybeSingle();
+**Conectar botão Nova Movimentação:**
+```tsx
+<Button variant="outline" onClick={() => setModalMovimentacao(true)}>
+  <Plus className="mr-2 h-4 w-4" /> Nova Movimentação
+</Button>
 ```
 
-**Propagar os campos ao montar o objeto vistoria (linha 286-294):**
+**Implementar exportação CSV:**
 ```typescript
-vistoria = {
-  id: vistoriaData.id,
-  status: vistoriaData.status || 'pendente',
-  tipo: vistoriaData.modalidade === 'autovistoria' ? 'autovistoria' : 'agendada',
-  modalidade: vistoriaData.modalidade || undefined,
-  fotos: fotosVistoria as VistoriaFotoInfo[],
-  observacoes: vistoriaData.observacoes,   // <-- Adicionar
-  km_atual: vistoriaData.km_atual,         // <-- Adicionar
+const handleExportar = () => {
+  if (!movimentacoes?.length) {
+    toast.error('Nenhuma movimentação para exportar');
+    return;
+  }
+  
+  const headers = 'Data,Tipo,Categoria,Descrição,Valor\n';
+  const rows = movimentacoes.map(m => 
+    `${m.data_movimentacao},${m.tipo},${m.categoria || ''},${m.descricao || ''},${m.valor}`
+  ).join('\n');
+  
+  const blob = new Blob([headers + rows], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `extrato_${filters.dataInicio}_${filters.dataFim}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast.success('Extrato exportado!');
 };
-```
-
----
-
-### 3. Card de Observações: Novo componente `VistoriaObservacoesCard.tsx`
-
-Criar componente dedicado para exibir observações do vistoriador:
-
-```tsx
-// src/components/cadastro/VistoriaObservacoesCard.tsx
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { MessageSquare, Gauge } from 'lucide-react';
-
-interface VistoriaObservacoesCardProps {
-  observacoes?: string | null;
-  kmAtual?: number | null;
-}
-
-export function VistoriaObservacoesCard({ observacoes, kmAtual }: VistoriaObservacoesCardProps) {
-  if (!observacoes && !kmAtual) return null;
-
-  return (
-    <Card className="border-amber-500/30 bg-amber-500/5">
-      <CardHeader className="pb-2">
-        <CardTitle className="flex items-center gap-2 text-foreground text-base">
-          <MessageSquare className="h-5 w-5 text-amber-500" />
-          Observações do Vistoriador
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {kmAtual && (
-          <div className="flex items-center gap-2 text-sm">
-            <Gauge className="h-4 w-4 text-muted-foreground" />
-            <span className="text-muted-foreground">Hodômetro:</span>
-            <span className="font-semibold">{kmAtual.toLocaleString('pt-BR')} km</span>
-          </div>
-        )}
-        {observacoes && (
-          <div className="p-3 rounded-lg bg-muted/50 border border-border">
-            <p className="text-sm text-foreground whitespace-pre-wrap">
-              {observacoes}
-            </p>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-```
-
----
-
-### 4. Tela de Análise: `PropostaAnalise.tsx`
-
-**Adicionar import:**
-```typescript
-import { VistoriaObservacoesCard } from '@/components/cadastro/VistoriaObservacoesCard';
-```
-
-**Renderizar o card após VistoriaFotosCard (linha ~635):**
-```tsx
-{/* Fotos da Vistoria */}
-{proposta.vistoria && (
-  <VistoriaFotosCard 
-    fotos={proposta.vistoria.fotos || []} 
-    vistoriaStatus={proposta.vistoria.status}
-    modalidade={proposta.vistoria.modalidade}
-  />
-)}
-
-{/* Observações do Vistoriador */}
-{proposta.vistoria && (proposta.vistoria.observacoes || proposta.vistoria.km_atual) && (
-  <VistoriaObservacoesCard 
-    observacoes={proposta.vistoria.observacoes}
-    kmAtual={proposta.vistoria.km_atual}
-  />
-)}
 ```
 
 ---
 
 ## Arquivos a Modificar
 
-| Arquivo | Modificação |
-|---------|-------------|
-| `src/pages/instalador/ExecutarVistoriaCompleta.tsx` | Adicionar Textarea + estado + passar para hook |
-| `src/hooks/usePropostasPendentes.ts` | Adicionar `observacoes` e `km_atual` na interface e query |
-| `src/components/cadastro/VistoriaObservacoesCard.tsx` | **Criar** - Novo componente |
-| `src/pages/cadastro/PropostaAnalise.tsx` | Renderizar novo card |
+| Arquivo | Tipo | Alteração |
+|---------|------|-----------|
+| `supabase/functions/asaas-cobrancas/index.ts` | Edge Function | Buscar asaas_id antes de criar cobrança |
+| `src/pages/financeiro/FinanceiroDashboard.tsx` | Página | Conectar modais + navegações |
+| `src/pages/financeiro/CobrancasList.tsx` | Página | Modal nova cobrança + pagamento |
+| `src/pages/financeiro/ContasPagar.tsx` | Página | Modal nova conta + pagar + cancelar |
+| `src/pages/financeiro/Extrato.tsx` | Página | Modal movimentação + exportar CSV |
 
 ---
 
-## Fluxo Final
+## Fluxo de Integração ASAAS Corrigido
 
-1. **Vistoriador** preenche (opcionalmente) o campo de observações na última etapa da vistoria
-2. Ao clicar em "Aprovar", as observações são salvas junto com o hodômetro na tabela `vistorias`
-3. **Analista de Cadastro** abre a proposta e vê um card destacado com as observações do vistoriador
-4. O card mostra tanto o hodômetro registrado quanto as observações em formato de texto formatado
+```text
+1. Usuário clica "Nova Cobrança"
+2. Modal abre, usuário seleciona associado
+3. Ao salvar (com "Gerar Boleto" marcado):
+   a. Hook chama sincronizarCliente(associado_id)
+      → Edge function cria/atualiza cliente no ASAAS
+      → Salva asaas_id na tabela asaas_clientes
+   b. Hook chama criarCobranca({ associado_id, ... })
+      → Edge function BUSCA asaas_id pelo associado_id (CORREÇÃO)
+      → Cria cobrança no ASAAS com customer correto
+      → Gera boleto + PIX
+      → Salva na tabela asaas_cobrancas
+4. Sucesso! Cobrança criada com boleto/PIX funcionais
+```
 
 ---
 
-## Comportamento do Campo
+## Verificação Pós-Implementação
 
-- **Opcional**: O vistoriador pode deixar em branco
-- **Texto longo**: Textarea com mínimo de 4 linhas
-- **Placeholder**: "Registre qualquer observação relevante sobre o veículo ou a vistoria..."
-- **Indicação visual**: Texto explicativo informando que será visível ao analista
-- **Posição**: Antes do card de vídeo 360°, depois das fotos
-
----
-
-## Considerações Técnicas
-
-- O campo `observacoes` já existe na tabela `vistorias` (tipo `text`)
-- O hook `useAprovarVeiculoVistoria` já salva observações (linha 63-65)
-- Não é necessária migração de banco de dados
-- O card de observações só é renderizado se houver dados (null-safe)
+1. **Testar criação de cobrança com boleto** - Verificar se ASAAS gera corretamente
+2. **Verificar logs da edge function** - Confirmar fluxo sem erros
+3. **Testar todas as ações do dropdown** - Pagamento, cancelamento, WhatsApp
+4. **Testar contas a pagar** - Criar, pagar, cancelar
+5. **Testar extrato** - Nova movimentação, exportar CSV
