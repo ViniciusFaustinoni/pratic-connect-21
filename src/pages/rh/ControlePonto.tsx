@@ -18,6 +18,7 @@ import { toast } from 'sonner';
 import { useState, useMemo } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { RegistrarPontoModal } from '@/components/rh/RegistrarPontoModal';
 
 interface PontoRegistro {
   id: string;
@@ -66,6 +67,7 @@ export default function ControlePonto() {
   const [statusFilter, setStatusFilter] = useState('todos');
   const [funcionarioOpen, setFuncionarioOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [registrarPontoOpen, setRegistrarPontoOpen] = useState(false);
   const [editingRegistro, setEditingRegistro] = useState<PontoRegistro | null>(null);
 
   // Form state for editing
@@ -237,7 +239,7 @@ export default function ControlePonto() {
           <Clock className="h-8 w-8 text-primary" />
           <h1 className="text-2xl font-bold">Controle de Ponto</h1>
         </div>
-        <Button>
+        <Button onClick={() => setRegistrarPontoOpen(true)}>
           <Plus className="h-4 w-4 mr-2" />
           Registrar Ponto
         </Button>
@@ -573,6 +575,12 @@ export default function ControlePonto() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Modal Registrar Ponto */}
+      <RegistrarPontoModal 
+        open={registrarPontoOpen} 
+        onClose={() => setRegistrarPontoOpen(false)} 
+      />
     </div>
   );
 }
