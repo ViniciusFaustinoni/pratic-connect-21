@@ -900,29 +900,85 @@ export function useAprovarVeiculoServico() {
         usuario_id: profile?.id,
       });
 
-    // 4. Atualizar veículo para status ativo
-    const { error: veiculoError } = await supabase
-      .from('veiculos')
-      .update({
-        status: 'ativo',
-        updated_at: agora,
-      })
-      .eq('id', data.veiculoId);
+      // 4. Verificar se veículo já tinha cobertura_roubo_furto (autovistoria aprovada)
+      const { data: veiculoAtual } = await supabase
+        .from('veiculos')
+        .select('cobertura_roubo_furto, cobertura_total')
+        .eq('id', data.veiculoId)
+        .single();
 
-      if (veiculoError) throw veiculoError;
+      // 5. Se já tinha autovistoria aprovada, ativar cobertura total automaticamente
+      if (veiculoAtual?.cobertura_roubo_furto && !veiculoAtual?.cobertura_total) {
+        console.log('[useAprovarVeiculoServico] Autovistoria prévia detectada, ativando cobertura_total automaticamente');
+        
+        const { error: veiculoError } = await supabase
+          .from('veiculos')
+          .update({
+            status: 'ativo',
+            cobertura_total: true, // Ativar cobertura total automaticamente
+            updated_at: agora,
+          })
+          .eq('id', data.veiculoId);
 
-      // 5. Atualizar status do associado para análise cadastral
-      const { error: associadoError } = await supabase
+        if (veiculoError) throw veiculoError;
+
+        // Tentar ativar rastreador na plataforma (Softruck) - não bloqueia se falhar
+        try {
+          const { data: associadoData } = await supabase
+            .from('associados')
+            .select('email')
+            .eq('id', data.associadoId)
+            .single();
+
+          await supabase.functions.invoke('softruck-ativar-dispositivo', {
+            body: {
+              imei: data.imeiRastreador,
+              veiculoId: data.veiculoId,
+              associadoId: data.associadoId,
+              associadoEmail: associadoData?.email,
+            },
+          });
+          console.log('[useAprovarVeiculoServico] Rastreador ativado na Softruck com sucesso');
+        } catch (err) {
+          console.warn('[useAprovarVeiculoServico] Ativação na Softruck falhou, requer ação manual:', err);
+          // Não bloquear fluxo - ativação pode ser feita manualmente depois
+        }
+      } else {
+        // Fluxo normal sem autovistoria prévia
+        const { error: veiculoError } = await supabase
+          .from('veiculos')
+          .update({
+            status: 'ativo',
+            updated_at: agora,
+          })
+          .eq('id', data.veiculoId);
+
+        if (veiculoError) throw veiculoError;
+      }
+
+      // 6. Verificar status atual do associado antes de atualizar
+      const { data: associadoAtual } = await supabase
         .from('associados')
-        .update({ 
-          status: 'em_analise',
-          updated_at: agora,
-        })
+        .select('status')
         .eq('id', data.associadoId)
-        .in('status', ['pendente_vistoria', 'aguardando_instalacao']);
+        .single();
 
-      if (associadoError) {
-        console.error('Erro ao atualizar status do associado para análise:', associadoError);
+      // Só atualiza para em_analise se NÃO estava ativo (não regredir!)
+      if (associadoAtual?.status !== 'ativo') {
+        const { error: associadoError } = await supabase
+          .from('associados')
+          .update({ 
+            status: 'em_analise',
+            updated_at: agora,
+          })
+          .eq('id', data.associadoId)
+          .in('status', ['pendente_vistoria', 'aguardando_instalacao']);
+
+        if (associadoError) {
+          console.error('Erro ao atualizar status do associado para análise:', associadoError);
+        }
+      } else {
+        console.log('[useAprovarVeiculoServico] Associado já está ativo, mantendo status');
       }
 
       // 6. Registrar histórico
