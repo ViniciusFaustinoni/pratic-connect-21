@@ -10,7 +10,7 @@ import {
   HelpCircle, FileText, Clock, MoreHorizontal, Loader2,
   ExternalLink, Download, CheckCircle, XCircle, AlertCircle,
   User, FileCheck, FilePlus, Scale, Plus, Link as LinkIcon, Trash2,
-  Bot
+  Bot, Wrench
 } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useDeleteSinistro } from '@/hooks/useSinistros';
@@ -56,6 +56,7 @@ const statusConfig: Record<string, { label: string; class: string }> = {
   pago: { label: 'Pago', class: 'bg-emerald-100 text-emerald-800' },
   encerrado: { label: 'Encerrado', class: 'bg-gray-100 text-gray-800' },
   cancelado: { label: 'Cancelado', class: 'bg-slate-100 text-slate-800' },
+  em_sindicancia: { label: 'Em Sindicância', class: 'bg-rose-100 text-rose-800' },
 };
 
 const tipoConfig: Record<string, { label: string; icon: React.ComponentType<{ className?: string }> }> = {
@@ -361,6 +362,12 @@ export default function SinistroDetalhe() {
               Enviar WhatsApp
             </DropdownMenuItem>
             <DropdownMenuSeparator />
+            {['aprovado', 'em_regulacao', 'em_reparo'].includes(sinistro.status) && (
+              <DropdownMenuItem onClick={() => navigate(`/oficina/ordens-servico?novo=true&sinistro_id=${id}`)}>
+                <Wrench className="h-4 w-4 mr-2" />
+                Criar Ordem de Serviço
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem onClick={() => navigate(`/juridico/processos/novo?sinistro_id=${id}`)}>
               <Scale className="h-4 w-4 mr-2" />
               Criar Processo Jurídico

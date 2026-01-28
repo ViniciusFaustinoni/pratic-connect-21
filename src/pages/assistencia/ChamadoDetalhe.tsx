@@ -244,6 +244,13 @@ export default function ChamadoDetalhe() {
               Atualizar Status
             </DropdownMenuItem>
             <DropdownMenuSeparator />
+            <DropdownMenuItem 
+              onClick={() => navigate(`/eventos/sinistros/novo?chamado_id=${chamado.id}&associado_id=${chamado.associado?.id}&veiculo_id=${chamado.veiculo?.id}`)}
+            >
+              <AlertTriangle className="h-4 w-4 mr-2" />
+              Abrir Sinistro
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuItem className="text-red-600">
               <XCircle className="h-4 w-4 mr-2" />
               Cancelar Chamado
