@@ -9938,16 +9938,23 @@ export type Database = {
           avaliacao_nota: number | null
           canal: string
           categoria: string | null
+          colaborador_elogiado: string | null
           created_at: string | null
+          data_atendimento: string | null
+          data_contato: string | null
           data_encerramento: string | null
           data_limite: string | null
           data_primeira_resposta: string | null
           departamento: string | null
           descricao: string
           id: string
+          observacao_interna: string | null
           prioridade: string | null
           protocolo: string
+          registrado_por_id: string | null
+          registrado_por_nome: string | null
           responsavel_id: string | null
+          setor_elogio: string | null
           status: string | null
           tipo: string
           updated_at: string | null
@@ -9961,16 +9968,23 @@ export type Database = {
           avaliacao_nota?: number | null
           canal: string
           categoria?: string | null
+          colaborador_elogiado?: string | null
           created_at?: string | null
+          data_atendimento?: string | null
+          data_contato?: string | null
           data_encerramento?: string | null
           data_limite?: string | null
           data_primeira_resposta?: string | null
           departamento?: string | null
           descricao: string
           id?: string
+          observacao_interna?: string | null
           prioridade?: string | null
           protocolo: string
+          registrado_por_id?: string | null
+          registrado_por_nome?: string | null
           responsavel_id?: string | null
+          setor_elogio?: string | null
           status?: string | null
           tipo: string
           updated_at?: string | null
@@ -9984,16 +9998,23 @@ export type Database = {
           avaliacao_nota?: number | null
           canal?: string
           categoria?: string | null
+          colaborador_elogiado?: string | null
           created_at?: string | null
+          data_atendimento?: string | null
+          data_contato?: string | null
           data_encerramento?: string | null
           data_limite?: string | null
           data_primeira_resposta?: string | null
           departamento?: string | null
           descricao?: string
           id?: string
+          observacao_interna?: string | null
           prioridade?: string | null
           protocolo?: string
+          registrado_por_id?: string | null
+          registrado_por_nome?: string | null
           responsavel_id?: string | null
+          setor_elogio?: string | null
           status?: string | null
           tipo?: string
           updated_at?: string | null
@@ -10041,6 +10062,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "ouvidoria_manifestacoes_registrado_por_id_fkey"
+            columns: ["registrado_por_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ouvidoria_manifestacoes_registrado_por_id_fkey"
+            columns: ["registrado_por_id"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
           },
           {
             foreignKeyName: "ouvidoria_manifestacoes_responsavel_id_fkey"

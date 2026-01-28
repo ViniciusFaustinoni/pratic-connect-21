@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useEstatisticasOuvidoria, useManifestacoes } from "@/hooks/useOuvidoria";
+import { useEstatisticasOuvidoria, useManifestacoes, useEstatisticasElogios } from "@/hooks/useOuvidoria";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { 
@@ -17,12 +17,12 @@ import {
   Plus
 } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from "recharts";
-import { TIPO_MANIFESTACAO_LABELS, PRIORIDADE_LABELS, SETOR_ELOGIO_LABELS, type SetorElogio } from "@/types/ouvidoria";
+import { TIPO_MANIFESTACAO_LABELS, PRIORIDADE_LABELS } from "@/types/ouvidoria";
 import { ManifestacaoCard } from "@/components/ouvidoria/ManifestacaoCard";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
-import { mockEstatisticas } from "@/mocks/ouvidoria";
 import { NovaManifestacaoModal } from "@/components/ouvidoria/NovaManifestacaoModal";
+import { setoresElogio } from "@/constants/ouvidoria";
 
 const COLORS_TIPO = {
   reclamacao: "#f97316",
@@ -44,6 +44,7 @@ export default function OuvidoriaDashboard() {
   const [showModal, setShowModal] = useState(false);
   const { data: estatisticas, isLoading: isLoadingStats } = useEstatisticasOuvidoria();
   const { data: manifestacoesRecentes, isLoading: isLoadingRecentes } = useManifestacoes();
+  const { data: elogiosStats, isLoading: isLoadingElogios } = useEstatisticasElogios();
 
   // Dados para gráfico de tipo (pizza)
   const dadosTipo = estatisticas
@@ -350,36 +351,46 @@ export default function OuvidoriaDashboard() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-3 gap-4">
-            {/* Total de elogios */}
-            <div className="text-center">
-              <div className="text-3xl font-bold text-green-700">
-                {mockEstatisticas.elogios?.total_mes || 15}
-              </div>
-              <p className="text-sm text-green-600">Elogios recebidos</p>
+          {isLoadingElogios ? (
+            <div className="grid grid-cols-3 gap-4">
+              <Skeleton className="h-16" />
+              <Skeleton className="h-16" />
+              <Skeleton className="h-16" />
             </div>
-            
-            {/* Setor mais elogiado */}
-            <div className="text-center border-x border-green-200 px-4">
-              <div className="flex items-center justify-center gap-1 text-lg font-semibold text-green-700">
-                <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                {SETOR_ELOGIO_LABELS[(mockEstatisticas.elogios?.setor_mais_elogiado as SetorElogio) || 'atendimento']}
+          ) : (
+            <div className="grid grid-cols-3 gap-4">
+              {/* Total de elogios */}
+              <div className="text-center">
+                <div className="text-3xl font-bold text-green-700">
+                  {elogiosStats?.total_mes || 0}
+                </div>
+                <p className="text-sm text-green-600">Elogios recebidos</p>
               </div>
-              <p className="text-sm text-green-600">
-                Setor destaque ({mockEstatisticas.elogios?.setor_mais_elogiado_count || 8})
-              </p>
-            </div>
-            
-            {/* Colaborador destaque */}
-            <div className="text-center">
-              <div className="text-lg font-semibold text-green-700">
-                {mockEstatisticas.elogios?.colaborador_destaque || 'Ana Paula'}
+              
+              {/* Setor mais elogiado */}
+              <div className="text-center border-x border-green-200 px-4">
+                <div className="flex items-center justify-center gap-1 text-lg font-semibold text-green-700">
+                  <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                  {elogiosStats?.setor_mais_elogiado 
+                    ? (setoresElogio.find(s => s.value === elogiosStats.setor_mais_elogiado)?.label || elogiosStats.setor_mais_elogiado)
+                    : 'Nenhum'}
+                </div>
+                <p className="text-sm text-green-600">
+                  Setor destaque ({elogiosStats?.setor_mais_elogiado_count || 0})
+                </p>
               </div>
-              <p className="text-sm text-green-600">
-                Mais mencionado ({mockEstatisticas.elogios?.colaborador_destaque_count || 4})
-              </p>
+              
+              {/* Colaborador destaque */}
+              <div className="text-center">
+                <div className="text-lg font-semibold text-green-700">
+                  {elogiosStats?.colaborador_destaque || 'Nenhum'}
+                </div>
+                <p className="text-sm text-green-600">
+                  Mais mencionado ({elogiosStats?.colaborador_destaque_count || 0})
+                </p>
+              </div>
             </div>
-          </div>
+          )}
         </CardContent>
       </Card>
 

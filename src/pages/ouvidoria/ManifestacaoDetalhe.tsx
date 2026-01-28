@@ -6,6 +6,7 @@ import {
   useUpdateStatusManifestacao,
   useResponderManifestacao,
   useEncaminharJuridico,
+  useEncaminharSetorRH,
 } from "@/hooks/useOuvidoria";
 import { useInteracoes, useIALogs } from "@/hooks/useOuvidoriaInteracoes";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -69,6 +70,7 @@ export default function ManifestacaoDetalhe() {
   const updateStatus = useUpdateStatusManifestacao();
   const responder = useResponderManifestacao();
   const encaminharJuridico = useEncaminharJuridico();
+  const encaminharSetorRH = useEncaminharSetorRH();
 
   const [resposta, setResposta] = useState("");
   const [visivelAssociado, setVisivelAssociado] = useState(true);
@@ -389,12 +391,17 @@ export default function ManifestacaoDetalhe() {
                   <Button 
                     variant="outline" 
                     className="w-full border-green-300 text-green-700 hover:bg-green-100 gap-2"
+                    disabled={encaminharSetorRH.isPending}
                     onClick={() => {
-                      toast.success('Elogio encaminhado para o setor e RH!');
+                      encaminharSetorRH.mutate({
+                        manifestacaoId: manifestacao.id,
+                        setor: manifestacao.setor_elogio,
+                        colaborador: manifestacao.colaborador_elogiado,
+                      });
                     }}
                   >
                     <SendIcon className="h-4 w-4" />
-                    Encaminhar para o Setor + RH
+                    {encaminharSetorRH.isPending ? 'Encaminhando...' : 'Encaminhar para o Setor + RH'}
                   </Button>
                   <p className="text-xs text-green-600 mt-1 text-center">
                     Notifica o gestor do setor e envia cópia para RH

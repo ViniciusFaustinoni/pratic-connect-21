@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { useManifestacoes } from "@/hooks/useOuvidoria";
+import { useManifestacoes, useAssumirManifestacao, useMarcarUrgente } from "@/hooks/useOuvidoria";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -40,8 +40,7 @@ import {
   ChevronRight,
   Plus
 } from "lucide-react";
-import { format, differenceInHours } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { differenceInHours } from "date-fns";
 import type { ManifestacaoFilters } from "@/types/ouvidoria";
 import { TIPO_MANIFESTACAO_LABELS, STATUS_LABELS, PRIORIDADE_LABELS } from "@/types/ouvidoria";
 import { StatusBadge } from "@/components/ouvidoria/StatusBadge";
@@ -50,7 +49,8 @@ import { TipoBadge } from "@/components/ouvidoria/TipoBadge";
 import { EncaminharModal } from "@/components/ouvidoria/EncaminharModal";
 import { NovaManifestacaoModal } from "@/components/ouvidoria/NovaManifestacaoModal";
 import { canalIcons } from "@/constants/ouvidoria";
-import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
 
 export default function ManifestacoesList() {
   const navigate = useNavigate();
@@ -63,18 +63,40 @@ export default function ManifestacoesList() {
   const [encaminharId, setEncaminharId] = useState("");
   const [showNovaModal, setShowNovaModal] = useState(false);
 
+  const assumirMutation = useAssumirManifestacao();
+  const marcarUrgenteMutation = useMarcarUrgente();
+
+  // Obter usuário atual
+  const { data: currentUser } = useQuery({
+    queryKey: ["current-user"],
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      return user;
+    },
+  });
+
   const { data: manifestacoes, isLoading } = useManifestacoes({
     ...filters,
     search: search || undefined,
   });
 
-  // Contagem por tab (mock)
-  const counts = {
-    todas: manifestacoes?.length || 0,
-    minhas: 12,
-    sem_responsavel: 8,
-    atrasadas: 3,
-  };
+  // Contagem real por tab
+  const counts = useMemo(() => {
+    if (!manifestacoes) return { todas: 0, minhas: 0, sem_responsavel: 0, atrasadas: 0 };
+    
+    const userId = currentUser?.id;
+    const agora = new Date();
+    
+    return {
+      todas: manifestacoes.length,
+      minhas: manifestacoes.filter(m => m.responsavel_id === userId).length,
+      sem_responsavel: manifestacoes.filter(m => !m.responsavel_id && m.status !== 'encerrado').length,
+      atrasadas: manifestacoes.filter(m => {
+        if (!m.data_limite || m.status === 'encerrado') return false;
+        return new Date(m.data_limite) < agora;
+      }).length,
+    };
+  }, [manifestacoes, currentUser]);
 
   const handleFilterChange = (key: keyof ManifestacaoFilters, value: string) => {
     setFilters((prev) => ({
@@ -127,11 +149,11 @@ export default function ManifestacoesList() {
   };
 
   const handleAssumir = (id: string) => {
-    toast.success("Manifestação assumida");
+    assumirMutation.mutate(id);
   };
 
   const handleMarcarUrgente = (id: string) => {
-    toast.success("Marcada como urgente");
+    marcarUrgenteMutation.mutate(id);
   };
 
   return (

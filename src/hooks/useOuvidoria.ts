@@ -165,6 +165,54 @@ export function useEstatisticasOuvidoria() {
   });
 }
 
+// Hook para estatísticas de elogios do mês
+export function useEstatisticasElogios() {
+  return useQuery({
+    queryKey: ["ouvidoria", "elogios-stats"],
+    queryFn: async () => {
+      const inicioMes = new Date();
+      inicioMes.setDate(1);
+      inicioMes.setHours(0, 0, 0, 0);
+
+      const { data, error } = await supabase
+        .from("ouvidoria_manifestacoes")
+        .select("setor_elogio, colaborador_elogiado")
+        .eq("tipo", "elogio")
+        .gte("created_at", inicioMes.toISOString());
+
+      if (error) throw error;
+
+      const total_mes = data?.length || 0;
+      
+      // Calcular setor mais elogiado
+      const setorCount: Record<string, number> = {};
+      const colaboradorCount: Record<string, number> = {};
+      
+      (data || []).forEach(m => {
+        if (m.setor_elogio) {
+          setorCount[m.setor_elogio] = (setorCount[m.setor_elogio] || 0) + 1;
+        }
+        if (m.colaborador_elogiado) {
+          colaboradorCount[m.colaborador_elogiado] = (colaboradorCount[m.colaborador_elogiado] || 0) + 1;
+        }
+      });
+
+      const setorMaisElogiado = Object.entries(setorCount)
+        .sort(([,a], [,b]) => b - a)[0];
+      const colaboradorDestaque = Object.entries(colaboradorCount)
+        .sort(([,a], [,b]) => b - a)[0];
+
+      return {
+        total_mes,
+        setor_mais_elogiado: setorMaisElogiado?.[0] || null,
+        setor_mais_elogiado_count: setorMaisElogiado?.[1] || 0,
+        colaborador_destaque: colaboradorDestaque?.[0] || null,
+        colaborador_destaque_count: colaboradorDestaque?.[1] || 0,
+      };
+    },
+  });
+}
+
 // Hook para criar manifestação
 export function useCreateManifestacao() {
   const queryClient = useQueryClient();
@@ -179,13 +227,25 @@ export function useCreateManifestacao() {
       anonimo?: boolean;
       canal: CanalManifestacao;
       prioridade?: PrioridadeManifestacao;
+      // Campos para elogio
+      setor_elogio?: string;
+      colaborador_elogiado?: string;
+      data_atendimento?: string;
+      // Campos para registro manual
+      data_contato?: string;
+      registrado_por_id?: string;
+      registrado_por_nome?: string;
+      observacao_interna?: string;
     }) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      
       // Inserir sem protocolo - o trigger gera automaticamente
       const { data: manifestacao, error } = await supabase
         .from("ouvidoria_manifestacoes")
         .insert({
           ...data,
           protocolo: '', // Será substituído pelo trigger
+          registrado_por_id: data.registrado_por_id || user?.id,
         })
         .select()
         .single();
@@ -200,6 +260,131 @@ export function useCreateManifestacao() {
     onError: (error) => {
       console.error("Erro ao criar manifestação:", error);
       toast.error("Erro ao criar manifestação");
+    },
+  });
+}
+
+// Hook para marcar como urgente
+export function useMarcarUrgente() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("ouvidoria_manifestacoes")
+        .update({ prioridade: "urgente" })
+        .eq("id", id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ouvidoria"] });
+      toast.success("Marcada como urgente!");
+    },
+    onError: (error) => {
+      console.error("Erro ao marcar como urgente:", error);
+      toast.error("Erro ao marcar como urgente");
+    },
+  });
+}
+
+// Hook para encaminhar para setor/RH (para elogios)
+export function useEncaminharSetorRH() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      manifestacaoId,
+      setor,
+      colaborador,
+    }: {
+      manifestacaoId: string;
+      setor?: string | null;
+      colaborador?: string | null;
+    }) => {
+      const { data: { user } } = await supabase.auth.getUser();
+
+      // Registrar interação
+      const { error } = await supabase
+        .from("ouvidoria_interacoes")
+        .insert({
+          manifestacao_id: manifestacaoId,
+          usuario_id: user?.id,
+          tipo: "encaminhamento",
+          mensagem: `Elogio encaminhado para o setor ${setor || 'N/A'} e para o RH. Colaborador: ${colaborador || 'Não especificado'}`,
+          visivel_associado: false,
+        });
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ouvidoria"] });
+      toast.success("Elogio encaminhado para o setor e RH!");
+    },
+    onError: (error) => {
+      console.error("Erro ao encaminhar:", error);
+      toast.error("Erro ao encaminhar elogio");
+    },
+  });
+}
+
+// Hook para encaminhar manifestação (analista ou departamento)
+export function useEncaminharManifestacao() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      manifestacaoId,
+      destino,
+      destinoId,
+      motivo,
+    }: {
+      manifestacaoId: string;
+      destino: "analista" | "departamento" | "juridico";
+      destinoId?: string;
+      motivo: string;
+    }) => {
+      const { data: { user } } = await supabase.auth.getUser();
+
+      // Atualizar manifestação
+      const updates: Record<string, unknown> = {};
+      if (destino === "analista" && destinoId) {
+        updates.responsavel_id = destinoId;
+        updates.status = "em_analise";
+      } else if (destino === "departamento" && destinoId) {
+        updates.departamento = destinoId;
+      }
+
+      if (Object.keys(updates).length > 0) {
+        const { error: updateError } = await supabase
+          .from("ouvidoria_manifestacoes")
+          .update(updates)
+          .eq("id", manifestacaoId);
+
+        if (updateError) throw updateError;
+      }
+
+      // Registrar interação
+      const destinoLabel = destino === "analista" ? "analista" : destino === "departamento" ? "departamento" : "Jurídico";
+      const { error: interacaoError } = await supabase
+        .from("ouvidoria_interacoes")
+        .insert({
+          manifestacao_id: manifestacaoId,
+          usuario_id: user?.id,
+          tipo: "encaminhamento",
+          mensagem: `Encaminhado para ${destinoLabel}: ${motivo}`,
+          visivel_associado: false,
+        });
+
+      if (interacaoError) throw interacaoError;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ouvidoria"] });
+      toast.success("Manifestação encaminhada com sucesso!");
+    },
+    onError: (error) => {
+      console.error("Erro ao encaminhar:", error);
+      toast.error("Erro ao encaminhar manifestação");
     },
   });
 }
