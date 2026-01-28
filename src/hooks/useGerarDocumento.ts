@@ -399,29 +399,65 @@ export function useGerarDocumento() {
     templateId: string,
     associadoId: string,
     dados: DadosMerge,
-    arquivoUrl?: string,
-    arquivoNome?: string
+    pdfBytes: Uint8Array,
+    arquivoNome: string
   ): Promise<DocumentoGerado | null> => {
-    const { data: user } = await supabase.auth.getUser();
-
-    // Por enquanto, apenas logamos - a tabela será criada na próxima etapa
-    console.log('Salvando histórico de documento:', {
-      template_id: templateId,
-      associado_id: associadoId,
-      dados_utilizados: dados,
-      arquivo_url: arquivoUrl,
-      arquivo_nome: arquivoNome,
-      gerado_por: user?.user?.id,
-    });
-
-    // TODO: Implementar quando a tabela existir
-    // const { data, error } = await supabase
-    //   .from('documento_gerados')
-    //   .insert({...})
-    //   .select()
-    //   .single();
-
-    return null;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      // 1. Upload do PDF para o Storage
+      const timestamp = Date.now();
+      const nomeSeguro = arquivoNome.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const nomeUnico = `gerados/${associadoId}/${timestamp}-${nomeSeguro}`;
+      
+      // Converter Uint8Array para Blob corretamente
+      const pdfBlob = new Blob([new Uint8Array(pdfBytes)], { type: 'application/pdf' });
+      
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('documentos')
+        .upload(nomeUnico, pdfBlob, {
+          contentType: 'application/pdf',
+        });
+      
+      if (uploadError) {
+        console.error('Erro no upload:', uploadError);
+        throw uploadError;
+      }
+      
+      // 2. Obter URL pública
+      const { data: urlData } = supabase.storage
+        .from('documentos')
+        .getPublicUrl(uploadData.path);
+      
+      // 3. Gerar número do documento
+      const numeroDoc = `DOC-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}-${timestamp.toString().slice(-6)}`;
+      
+      // 4. Inserir na tabela documento_gerados
+      const { data, error } = await supabase
+        .from('documento_gerados')
+        .insert({
+          template_id: templateId,
+          associado_id: associadoId,
+          numero_documento: numeroDoc,
+          dados_utilizados: dados,
+          arquivo_url: urlData.publicUrl,
+          arquivo_nome: arquivoNome,
+          gerado_por: user?.id || null,
+          assinado: false,
+        })
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('Erro ao salvar registro:', error);
+        throw error;
+      }
+      
+      return data as DocumentoGerado;
+    } catch (error) {
+      console.error('Erro ao salvar histórico:', error);
+      return null;
+    }
   };
 
   // ===== BAIXAR PDF =====
@@ -450,8 +486,8 @@ export function useGerarDocumento() {
   const gerarDocumento = async (
     template: DocumentoTemplate,
     associadoId: string,
-    opcoes: OpcaoGeracaoPDF = { modo: 'baixar' }
-  ): Promise<Uint8Array | void> => {
+    opcoes: OpcaoGeracaoPDF & { salvarHistorico?: boolean } = { modo: 'baixar' }
+  ): Promise<{ pdfBytes?: Uint8Array; documentoGerado?: DocumentoGerado | null } | void> => {
     try {
       setGerando(true);
       setProgresso(0);
@@ -467,27 +503,38 @@ export function useGerarDocumento() {
       const nomeArquivo = opcoes.nomeArquivo || 
         `${template.codigo}-${dados.associado.nome.split(' ')[0]}-${Date.now()}.pdf`;
 
+      let documentoGerado: DocumentoGerado | null = null;
+
       // Salvar histórico se solicitado
-      if (opcoes.salvarHistorico !== false) {
-        await salvarHistorico(template.id, associadoId, dados, undefined, nomeArquivo);
+      if (opcoes.salvarHistorico === true) {
+        documentoGerado = await salvarHistorico(template.id, associadoId, dados, pdfBytes, nomeArquivo);
+        if (documentoGerado) {
+          toast.success('Documento salvo no histórico!');
+        }
       }
 
       // Executar ação conforme modo
       switch (opcoes.modo) {
         case 'baixar':
           baixarPDF(pdfBytes, nomeArquivo);
-          toast.success('Documento gerado com sucesso!');
+          if (!opcoes.salvarHistorico) {
+            toast.success('Documento gerado com sucesso!');
+          }
           break;
         case 'abrir':
           abrirPDF(pdfBytes);
           break;
         case 'bytes':
-          return pdfBytes;
+          return { pdfBytes, documentoGerado };
         case 'salvar':
-          // TODO: Implementar upload para Supabase Storage
-          toast.success('Documento salvo com sucesso!');
+          // Upload já feito em salvarHistorico
+          if (!documentoGerado) {
+            documentoGerado = await salvarHistorico(template.id, associadoId, dados, pdfBytes, nomeArquivo);
+          }
           break;
       }
+
+      return { documentoGerado };
 
     } catch (error) {
       console.error('Erro ao gerar documento:', error);
