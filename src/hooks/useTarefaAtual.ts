@@ -13,7 +13,7 @@ import {
 
 // Tipo estendido com confirmação WhatsApp
 export type TarefaAtualComConfirmacao = TarefaAtual & {
-  confirmacao_whatsapp?: 'pendente' | 'enviada' | 'confirmado' | 'reagendado' | 'nao_respondeu' | null;
+  confirmacao_whatsapp?: 'pendente' | 'enviada' | 'confirmada' | 'reagendado' | 'nao_respondeu' | null;
   confirmado_via_whatsapp_em?: string | null;
 };
 
@@ -91,8 +91,8 @@ export function useTarefaAtual() {
         em_rota_em: tarefa.em_rota_em,
         instalacao_origem_id: tarefa.instalacao_origem_id,
         vistoria_origem_id: tarefa.vistoria_origem_id,
-        confirmacao_whatsapp: (tarefa as any).confirmacao_whatsapp || null,
-        confirmado_via_whatsapp_em: (tarefa as any).confirmado_via_whatsapp_em || null,
+        confirmacao_whatsapp: tarefa.confirmacao_whatsapp || null,
+        confirmado_via_whatsapp_em: tarefa.confirmado_via_whatsapp_em || null,
       };
     },
     enabled: !!profissionalId,

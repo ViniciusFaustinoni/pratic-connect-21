@@ -560,7 +560,7 @@ async function processarRespostaConfirmacao(
   if (resultado.intencao === 'CONFIRMADO') {
     await supabase.from('servicos')
       .update({
-        confirmacao_whatsapp: 'confirmado',
+        confirmacao_whatsapp: 'confirmada',
         confirmado_via_whatsapp_em: new Date().toISOString()
       })
       .eq('id', confirmacao.servico_id);

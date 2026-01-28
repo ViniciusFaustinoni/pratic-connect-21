@@ -115,7 +115,7 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
                 </Badge>
               )}
               {/* Badge de Confirmação WhatsApp */}
-              {tarefa.confirmacao_whatsapp === 'confirmado' && (
+              {tarefa.confirmacao_whatsapp === 'confirmada' && (
                 <Badge 
                   variant="outline"
                   className="bg-green-500/20 text-green-700 border-green-500/50 dark:text-green-400 gap-1"

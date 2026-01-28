@@ -15479,6 +15479,8 @@ export type Database = {
           bairro: string
           cep: string
           cidade: string
+          confirmacao_whatsapp: string
+          confirmado_via_whatsapp_em: string
           contrato_id: string
           cotacao_id: string
           data_agendada: string
