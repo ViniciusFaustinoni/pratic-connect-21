@@ -1,332 +1,261 @@
 
-# Plano de Revisao Completa: Diretoria
+# Plano de Revisao Completa: Documentos
 
 ## Diagnostico Atual
 
 ### Status do Banco de Dados
 | Tabela | Registros |
 |--------|-----------|
-| planos | 18 |
-| tabelas_preco | 12 |
-| configuracoes | 33 |
-| faixas_cotas | 33 |
-| funcionarios (profiles) | 236 |
-| user_roles | 236 |
-| logs_auditoria | 58 |
-| indicadores_atuariais | 0 |
-| rateios | 0 |
+| documento_templates | 6 |
+| documento_categorias | 5 |
+| documento_gerados | 0 |
+| documento_assinaturas | 0 |
 
 ### Conclusao Principal
-**NAO HA DADOS MOCK** - Todas as paginas estao conectadas ao Supabase com queries reais.
+A area possui **DADOS MOCK** em `DocumentosHistorico.tsx` e a funcao de salvar historico esta **comentada/TODO** no hook `useGerarDocumento.ts`.
 
 ---
 
 ## O que esta funcionando corretamente
 
-| Pagina | Funcionalidade | Status |
-|--------|----------------|--------|
-| DiretoriaDashboard | KPIs (associados, receita, sinistralidade, conversao, inadimplencia, resultado) | OK |
-| DiretoriaDashboard | Graficos de evolucao mensal | OK |
-| DiretoriaDashboard | Metricas de tempo (transito, execucao) | OK |
-| DiretoriaDashboard | Rastreadores por portador | OK |
-| Usuarios | CRUD completo de usuarios | OK |
-| Usuarios | Filtros (tipo, perfil, status) | OK |
-| Usuarios | Ativar/Desativar/Bloquear/Resetar senha | OK |
-| RateioSinistros | Calcular rateio por cotas | OK |
-| RateioSinistros | Aprovar e aplicar rateio | OK |
-| RateioSinistros | Historico de rateios | OK |
-| ProdutosGestao | CRUD de planos | OK |
-| ProdutosGestao | Toggle ativo/inativo | OK |
-| ProdutoDetalhe | Visualizacao de precos e coberturas | OK |
-| Configuracoes | CRUD de todas configuracoes por categoria | OK |
-| LogsAuditoria | Listagem com filtros | OK |
-| LogsAuditoria | Exportacao CSV | OK |
-| LogsAuditoria | Expansao de detalhes (dados anteriores/novos) | OK |
-| FaixasCotas | CRUD de ajustes percentuais | OK |
-| FaixasCotas | Aplicar ajuste em grupo | OK |
-| FaixasCotas | Historico de alteracoes | OK |
-| FaixasCotas | Simulacao de impacto | OK |
-| PerfisAcesso | Visualizacao por perfil | OK |
-| PerfisAcesso | Edicao de roles por usuario | OK |
-| SolicitacoesIA | Listagem de solicitacoes pendentes/aprovadas/rejeitadas | OK |
-| SolicitacoesIA | Aprovar/Rejeitar via Edge Function | OK |
+| Pagina/Componente | Funcionalidade | Status |
+|-------------------|----------------|--------|
+| TemplatesList.tsx | CRUD completo de templates | OK |
+| TemplatesList.tsx | Filtros por busca e categoria | OK |
+| TemplatesList.tsx | Duplicar, visualizar, excluir template | OK |
+| TemplateForm.tsx | Criar novo template | OK |
+| TemplateForm.tsx | Editar template existente | OK |
+| TemplateForm.tsx | Validacoes e codigo automatico | OK |
+| GerarDocumento.tsx | Wizard 3 etapas (associado, template, preview) | OK |
+| GerarDocumento.tsx | Busca real de associados | OK |
+| GerarDocumento.tsx | Geracao de PDF com pdf-lib | OK |
+| GerarDocumento.tsx | Merge de variaveis | OK |
+| ModalVisualizarTemplate | Visualizacao de template | OK |
+| ModalEnviarAssinatura | Envio via Autentique (estrutura) | OK |
+| ModalEnviarWhatsApp | Envio via Evolution API (estrutura) | OK |
+| useDocumentoTemplates | Hooks CRUD completos | OK |
+| useDocumentoPermissoes | Controle de acesso por perfil | OK |
 
 ---
 
 ## Problemas Identificados
 
-| # | Problema | Arquivo | Linha | Impacto |
-|---|----------|---------|-------|---------|
-| 1 | Botao "Exportar" sem onClick | DiretoriaDashboard.tsx | 265-268 | Nao exporta dados do dashboard |
-| 2 | handleGerarRelatorio so exibe toast | RelatoriosGerenciais.tsx | 130-139 | Nao gera arquivo real |
-| 3 | Botao "Importar" sem funcionalidade | TabelaPrecos.tsx | 117-119 | Nao importa tabela de precos |
-| 4 | Botao "Exportar" sem funcionalidade | TabelaPrecos.tsx | 120-124 | Nao exporta tabela de precos |
-| 5 | Botao "History" sem funcionalidade | TabelaPrecos.tsx | 263-265 | Nao mostra historico de alteracoes |
-| 6 | Botao "Delete" sem confirmacao/acao | TabelaPrecos.tsx | 266-267 | Nao exclui faixa de preco |
-| 7 | Botao "Recalcular" permanentemente disabled | IndicadoresAtuariais.tsx | 104 | Nao permite recalcular indicadores |
+| # | Problema | Arquivo | Linhas | Impacto |
+|---|----------|---------|--------|---------|
+| 1 | Usa `mockHistorico` para lista de documentos | DocumentosHistorico.tsx | 14-20 | Dados falsos exibidos |
+| 2 | Usa `mockEstatisticas` para KPIs | DocumentosHistorico.tsx | 22-27 | Metricas falsas |
+| 3 | Filtro de periodo nao funciona | DocumentosHistorico.tsx | 76-87 | Nao filtra dados |
+| 4 | Acoes "Ver PDF", "Baixar", "Reemitir", "WhatsApp" so exibem toast | DocumentosHistorico.tsx | 52-54, 219-234 | Botoes nao funcionam |
+| 5 | Funcao `salvarHistorico` esta comentada/TODO | useGerarDocumento.ts | 397-425 | Documentos gerados nao sao salvos |
+| 6 | Checkbox "Salvar no historico" nao persiste | GerarDocumento.tsx | 526-538 | Opcao nao funciona |
 
 ---
 
 ## Correcoes Necessarias
 
-### 1. DiretoriaDashboard - Implementar Exportacao
+### 1. Implementar salvarHistorico no useGerarDocumento.ts
 
-**Arquivo**: `src/pages/diretoria/DiretoriaDashboard.tsx`
+**Arquivo**: `src/hooks/useGerarDocumento.ts`
 
-Criar funcao que exporta PDF/Excel com:
-- KPIs atuais
-- Grafico de evolucao (como tabela)
-- Indicadores operacionais
-
-```typescript
-const handleExportar = async () => {
-  if (!stats) return;
-  
-  const doc = new jsPDF();
-  doc.setFontSize(18);
-  doc.text('Dashboard Executivo', 14, 22);
-  
-  doc.setFontSize(12);
-  doc.text(`Periodo: ${periodo}`, 14, 32);
-  doc.text(`Gerado em: ${format(new Date(), "dd/MM/yyyy HH:mm")}`, 14, 40);
-  
-  // KPIs
-  const kpis = [
-    ['Associados Ativos', stats.associadosAtivos.toLocaleString()],
-    ['Receita', formatCurrency(stats.receitaMes)],
-    ['Sinistralidade', `${stats.sinistralidade.toFixed(1)}%`],
-    ['Taxa Conversao', `${stats.taxaConversao.toFixed(1)}%`],
-    ['Inadimplencia', `${stats.taxaInadimplencia.toFixed(1)}%`],
-    ['Resultado', formatCurrency(stats.resultado)],
-  ];
-  
-  autoTable(doc, {
-    startY: 50,
-    head: [['Indicador', 'Valor']],
-    body: kpis,
-  });
-  
-  doc.save(`dashboard-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
-  toast.success('Relatorio exportado!');
-};
-```
-
-### 2. RelatoriosGerenciais - Implementar Geracao Real
-
-**Arquivo**: `src/pages/diretoria/RelatoriosGerenciais.tsx`
-
-Implementar geracao real de cada tipo de relatorio buscando dados do Supabase e gerando PDF/Excel.
+Descomentar e implementar a funcao para:
+1. Fazer upload do PDF para o bucket 'documentos'
+2. Inserir registro na tabela `documento_gerados`
 
 ```typescript
-const handleGerarRelatorio = async () => {
-  if (!reportFilters.dataInicio || !reportFilters.dataFim) {
-    toast.error('Selecione o periodo');
-    return;
-  }
-
-  toast.loading('Gerando relatorio...');
-
+const salvarHistorico = async (
+  templateId: string,
+  associadoId: string,
+  dados: DadosMerge,
+  pdfBytes: Uint8Array,
+  arquivoNome: string
+): Promise<DocumentoGerado | null> => {
   try {
-    let dados: any[] = [];
-
-    // Buscar dados baseado no tipo de relatorio
-    switch (selectedReport?.id) {
-      case 'associados-status':
-        const { data: associados } = await supabase
-          .from('associados')
-          .select('status')
-          .gte('created_at', reportFilters.dataInicio)
-          .lte('created_at', reportFilters.dataFim);
-        // Agrupar por status
-        break;
-      
-      case 'vendas-periodo':
-        const { data: leads } = await supabase
-          .from('leads')
-          .select('*')
-          .gte('created_at', reportFilters.dataInicio)
-          .lte('created_at', reportFilters.dataFim);
-        dados = leads || [];
-        break;
-      
-      // ... demais casos
-    }
-
-    if (reportFilters.formato === 'pdf') {
-      gerarPDF(selectedReport?.titulo || '', dados);
-    } else if (reportFilters.formato === 'excel' || reportFilters.formato === 'csv') {
-      gerarCSV(selectedReport?.titulo || '', dados);
-    }
-
-    toast.dismiss();
-    toast.success('Relatorio gerado!');
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    // 1. Upload do PDF para o Storage
+    const timestamp = Date.now();
+    const nomeUnico = `gerados/${associadoId}/${timestamp}-${arquivoNome}`;
+    
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('documentos')
+      .upload(nomeUnico, new Blob([pdfBytes], { type: 'application/pdf' }), {
+        contentType: 'application/pdf',
+      });
+    
+    if (uploadError) throw uploadError;
+    
+    // 2. Obter URL publica
+    const { data: urlData } = supabase.storage
+      .from('documentos')
+      .getPublicUrl(uploadData.path);
+    
+    // 3. Gerar numero do documento
+    const numeroDoc = `DOC-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}-${timestamp.toString().slice(-6)}`;
+    
+    // 4. Inserir na tabela documento_gerados
+    const { data, error } = await supabase
+      .from('documento_gerados')
+      .insert({
+        template_id: templateId,
+        associado_id: associadoId,
+        numero_documento: numeroDoc,
+        dados_utilizados: dados,
+        arquivo_url: urlData.publicUrl,
+        arquivo_nome: arquivoNome,
+        gerado_por: user?.id,
+        gerado_em: new Date().toISOString(),
+        assinado: false,
+      })
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data as DocumentoGerado;
   } catch (error) {
-    toast.dismiss();
-    toast.error('Erro ao gerar relatorio');
+    console.error('Erro ao salvar historico:', error);
+    return null;
   }
-  
-  setSelectedReport(null);
 };
 ```
 
-### 3. TabelaPrecos - Implementar Import/Export e Delete
+### 2. Criar hook useDocumentoGerados
 
-**Arquivo**: `src/pages/diretoria/TabelaPrecos.tsx`
+**Novo arquivo**: `src/hooks/useDocumentoGerados.ts`
 
-#### Exportar
+Hook para gerenciar o historico de documentos gerados:
+
 ```typescript
-const handleExportar = () => {
-  if (!precos?.length) return;
-  
-  const csv = [
-    ['Plano', 'FIPE De', 'FIPE Ate', 'Valor Cota', 'Taxa Admin', 'Rastreamento', 'Assistencia', 'Vigencia Inicio', 'Vigencia Fim', 'Ativo'].join(';'),
-    ...precos.map(p => [
-      p.plano?.nome || '',
-      p.fipe_de,
-      p.fipe_ate,
-      p.valor_cota,
-      p.taxa_administrativa || '',
-      p.valor_rastreamento || '',
-      p.valor_assistencia || '',
-      p.vigencia_inicio || '',
-      p.vigencia_fim || '',
-      p.ativo ? 'Sim' : 'Nao'
-    ].join(';'))
-  ].join('\n');
+export function useDocumentoGerados(filtros?: {
+  periodo?: string;
+  categoria?: string;
+  busca?: string;
+}) {
+  return useQuery({
+    queryKey: ['documento-gerados', filtros],
+    queryFn: async () => {
+      let query = supabase
+        .from('documento_gerados')
+        .select(`
+          *,
+          template:documento_templates(id, nome, codigo, categoria:documento_categorias(id, nome, cor)),
+          associado:associados(id, nome, cpf),
+          gerado_por_profile:profiles!documento_gerados_gerado_por_fkey(id, nome)
+        `)
+        .order('gerado_em', { ascending: false });
+      
+      // Aplicar filtros de periodo
+      if (filtros?.periodo === 'hoje') {
+        const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0);
+        query = query.gte('gerado_em', hoje.toISOString());
+      } else if (filtros?.periodo === '7dias') {
+        const seteDias = new Date();
+        seteDias.setDate(seteDias.getDate() - 7);
+        query = query.gte('gerado_em', seteDias.toISOString());
+      }
+      // ... demais filtros
+      
+      const { data, error } = await query;
+      if (error) throw error;
+      return data;
+    },
+  });
+}
 
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `tabela-precos-${format(new Date(), 'yyyy-MM-dd')}.csv`;
-  a.click();
-  toast.success('Exportado!');
+export function useEstatisticasDocumentos() {
+  return useQuery({
+    queryKey: ['documento-estatisticas'],
+    queryFn: async () => {
+      const inicioMes = new Date();
+      inicioMes.setDate(1);
+      inicioMes.setHours(0, 0, 0, 0);
+      
+      const { data, error } = await supabase
+        .from('documento_gerados')
+        .select('id, gerado_em, assinado');
+      
+      if (error) throw error;
+      
+      const total = data.length;
+      const esteMes = data.filter(d => new Date(d.gerado_em) >= inicioMes).length;
+      const assinados = data.filter(d => d.assinado).length;
+      const pendentes = data.filter(d => !d.assinado).length;
+      
+      return { total, esteMes, assinados, pendentes };
+    },
+  });
+}
+```
+
+### 3. Refatorar DocumentosHistorico.tsx
+
+**Arquivo**: `src/pages/documentos/DocumentosHistorico.tsx`
+
+Remover mocks e conectar aos hooks reais:
+
+```typescript
+// REMOVER estas linhas:
+const mockHistorico = [...];
+const mockEstatisticas = {...};
+
+// ADICIONAR:
+import { useDocumentoGerados, useEstatisticasDocumentos } from '@/hooks/useDocumentoGerados';
+import { useDocumentoStorage } from '@/hooks/useDocumentoStorage';
+
+// No componente:
+const [busca, setBusca] = useState('');
+const [periodo, setPeriodo] = useState('todos');
+const [categoria, setCategoria] = useState('todos');
+
+const { data: historico, isLoading } = useDocumentoGerados({ busca, periodo, categoria });
+const { data: estatisticas } = useEstatisticasDocumentos();
+const { downloadDocumento } = useDocumentoStorage();
+
+// Implementar acoes reais:
+const handleVerPDF = (arquivoUrl: string) => {
+  window.open(arquivoUrl, '_blank');
+};
+
+const handleBaixar = async (path: string, nomeArquivo: string) => {
+  await downloadDocumento(path, nomeArquivo);
+};
+
+const handleReemitir = (templateId: string, associadoId: string) => {
+  navigate(`/documentos/gerar?template=${templateId}&associado=${associadoId}`);
+};
+
+const handleEnviarWhatsApp = (item: DocumentoGerado) => {
+  // Abrir modal de envio WhatsApp
+  setSelectedDoc(item);
+  setShowWhatsAppModal(true);
 };
 ```
 
-#### Importar (upload de CSV)
+### 4. Atualizar GerarDocumento.tsx para persistir
+
+**Arquivo**: `src/pages/documentos/GerarDocumento.tsx`
+
+Atualizar a funcao `handleGerarDocumento` para usar o novo salvarHistorico:
+
 ```typescript
-const handleImportar = (event: React.ChangeEvent<HTMLInputElement>) => {
-  const file = event.target.files?.[0];
-  if (!file) return;
-  
-  const reader = new FileReader();
-  reader.onload = async (e) => {
-    try {
-      // Parsear CSV e inserir no banco
-      toast.success('Importacao concluida!');
-      queryClient.invalidateQueries({ queryKey: ['tabela-precos'] });
-    } catch (error) {
-      toast.error('Erro na importacao');
+const handleGerarDocumento = async (modo: 'baixar' | 'abrir') => {
+  if (!associadoSelecionado || !templateSelecionado) return;
+
+  const resultado = await gerarDocumento(
+    convertToDocumentoTemplate(templateSelecionado),
+    associadoSelecionado.id,
+    { 
+      modo, 
+      salvarHistorico,
+      retornarBytes: salvarHistorico // Para poder salvar no storage
     }
-  };
-  reader.readAsText(file);
+  );
+  
+  // Se salvou historico, exibir mensagem de sucesso
+  if (salvarHistorico && resultado?.documentoGeradoId) {
+    toast.success('Documento salvo no historico!');
+  }
 };
-```
-
-#### Delete com confirmacao
-```typescript
-const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
-
-const deletarFaixa = useMutation({
-  mutationFn: async (id: string) => {
-    const { error } = await supabase
-      .from('tabelas_preco')
-      .delete()
-      .eq('id', id);
-    if (error) throw error;
-  },
-  onSuccess: () => {
-    toast.success('Faixa excluida!');
-    queryClient.invalidateQueries({ queryKey: ['tabela-precos'] });
-    setDeleteConfirm(null);
-  },
-});
-```
-
-#### Historico de alteracoes
-Criar modal `HistoricoPrecoModal` que busca de uma tabela de historico (se existir) ou exibe mensagem que nao ha historico.
-
-### 4. IndicadoresAtuariais - Habilitar Recalcular
-
-**Arquivo**: `src/pages/diretoria/IndicadoresAtuariais.tsx`
-
-```typescript
-// Adicionar mutation para recalcular
-const recalcularMutation = useMutation({
-  mutationFn: async () => {
-    // Buscar dados do periodo
-    const mesAtual = new Date().getMonth() + 1;
-    const anoAtual = new Date().getFullYear();
-    
-    const [receita, sinistros, associados, novos, cancelados] = await Promise.all([
-      supabase.from('cobrancas')
-        .select('valor_pago')
-        .eq('status', 'pago')
-        .gte('data_pagamento', `${anoAtual}-${String(mesAtual).padStart(2, '0')}-01`),
-      supabase.from('sinistros')
-        .select('valor_indenizacao')
-        .in('status', ['aprovado', 'indenizado'])
-        .gte('data_ocorrencia', `${anoAtual}-${String(mesAtual).padStart(2, '0')}-01`),
-      supabase.from('associados')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'ativo'),
-      supabase.from('associados')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'ativo')
-        .gte('created_at', `${anoAtual}-${String(mesAtual).padStart(2, '0')}-01`),
-      supabase.from('associados')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'cancelado')
-        .gte('updated_at', `${anoAtual}-${String(mesAtual).padStart(2, '0')}-01`),
-    ]);
-    
-    const receitaBruta = receita.data?.reduce((s, r) => s + (r.valor_pago || 0), 0) || 0;
-    const despesasSinistros = sinistros.data?.reduce((s, r) => s + (r.valor_indenizacao || 0), 0) || 0;
-    const totalAssociados = associados.count || 0;
-    const qtdSinistros = sinistros.data?.length || 0;
-    
-    const sinistralidade = receitaBruta > 0 ? (despesasSinistros / receitaBruta) * 100 : 0;
-    const frequencia = totalAssociados > 0 ? qtdSinistros / totalAssociados : 0;
-    const ticketMedio = qtdSinistros > 0 ? despesasSinistros / qtdSinistros : 0;
-    const resultado = receitaBruta - despesasSinistros;
-    const margem = receitaBruta > 0 ? (resultado / receitaBruta) * 100 : 0;
-    
-    const { error } = await supabase
-      .from('indicadores_atuariais')
-      .upsert({
-        mes: mesAtual,
-        ano: anoAtual,
-        receita_bruta: receitaBruta,
-        despesas_sinistros: despesasSinistros,
-        sinistralidade_bruta: sinistralidade,
-        frequencia_sinistros: frequencia,
-        ticket_medio_sinistro: ticketMedio,
-        resultado_operacional: resultado,
-        margem_operacional: margem,
-        total_associados: totalAssociados,
-        novos_associados: novos.count || 0,
-        cancelamentos: cancelados.count || 0,
-      }, { onConflict: 'mes,ano' });
-    
-    if (error) throw error;
-  },
-  onSuccess: () => {
-    toast.success('Indicadores recalculados!');
-    queryClient.invalidateQueries({ queryKey: ['indicadores-atuariais'] });
-    queryClient.invalidateQueries({ queryKey: ['indicador-atual'] });
-  },
-});
-
-// No botao:
-<Button 
-  variant="outline" 
-  onClick={() => recalcularMutation.mutate()}
-  disabled={recalcularMutation.isPending}
->
-  <RefreshCw className={cn("h-4 w-4 mr-2", recalcularMutation.isPending && "animate-spin")} />
-  Recalcular
-</Button>
 ```
 
 ---
@@ -335,25 +264,23 @@ const recalcularMutation = useMutation({
 
 | Arquivo | Tipo | Descricao |
 |---------|------|-----------|
-| `src/pages/diretoria/DiretoriaDashboard.tsx` | Modificar | Implementar exportacao PDF |
-| `src/pages/diretoria/RelatoriosGerenciais.tsx` | Modificar | Implementar geracao real de relatorios |
-| `src/pages/diretoria/TabelaPrecos.tsx` | Modificar | Implementar import/export/delete/historico |
-| `src/components/diretoria/HistoricoPrecoModal.tsx` | **Novo** | Modal de historico de alteracoes |
-| `src/pages/diretoria/IndicadoresAtuariais.tsx` | Modificar | Habilitar e implementar recalculo |
+| `src/hooks/useGerarDocumento.ts` | Modificar | Implementar salvarHistorico com upload para Storage |
+| `src/hooks/useDocumentoGerados.ts` | **Novo** | Hook para buscar historico e estatisticas |
+| `src/pages/documentos/DocumentosHistorico.tsx` | Modificar | Remover mocks, usar hooks reais, implementar acoes |
+| `src/pages/documentos/GerarDocumento.tsx` | Modificar | Integrar com novo salvarHistorico |
 
 ---
 
 ## Integracoes Existentes (NAO MEXER)
 
-A area Diretoria ja possui integracao correta com:
+A area Documentos ja possui integracao correta com:
 
-1. **Associados**: Dashboard busca KPIs de associados ativos/inadimplentes
-2. **Leads**: Dashboard busca leads e conversoes
-3. **Cobrancas**: Dashboard e Indicadores buscam receita
-4. **Sinistros**: Dashboard, Rateio e Indicadores buscam sinistros
-5. **Instalacoes/Chamados**: Dashboard busca indicadores operacionais
-6. **Profiles/UserRoles**: Usuarios e PerfisAcesso gerenciam roles
-7. **Rastreadores**: Dashboard exibe metricas de tempo
+1. **Associados**: Busca para selecao no wizard
+2. **Veiculos**: Dados para merge de variaveis
+3. **Contratos**: Dados para merge de variaveis
+4. **Planos**: Nome do plano para merge
+5. **Profiles**: Identificacao de quem gerou
+6. **Storage (bucket documentos)**: Ja existe e e usado pelo UploadLogo
 
 **Nao e necessario alterar outras areas do sistema.**
 
@@ -361,12 +288,16 @@ A area Diretoria ja possui integracao correta com:
 
 ## Verificacao Pos-Implementacao
 
-1. Acessar Dashboard e clicar em Exportar - deve baixar PDF
-2. Acessar Relatorios Gerenciais e gerar cada tipo - deve baixar arquivo
-3. Acessar Tabela de Precos:
-   - Clicar Exportar - deve baixar CSV
-   - Clicar Importar - deve permitir upload
-   - Clicar Delete em uma faixa - deve pedir confirmacao
-   - Clicar History em uma faixa - deve mostrar historico
-4. Acessar Indicadores Atuariais e clicar Recalcular - deve calcular e salvar
-5. Verificar se dados persistem apos refresh
+1. Acessar Gerar Documento
+2. Selecionar associado real
+3. Selecionar template
+4. Gerar PDF com "Salvar no historico" marcado
+5. Verificar se PDF foi salvo no bucket 'documentos/gerados'
+6. Verificar se registro aparece na tabela documento_gerados
+7. Acessar Historico de Documentos
+8. Verificar se documento gerado aparece na lista
+9. Testar acao "Ver PDF" - deve abrir em nova aba
+10. Testar acao "Baixar" - deve baixar arquivo
+11. Testar filtros de periodo e categoria
+12. Verificar estatisticas atualizadas
+
