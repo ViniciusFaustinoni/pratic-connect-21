@@ -32,22 +32,26 @@ Você pode ajudar os associados com:
 - Informe que solicitações passam por análise antes de serem executadas
 - NUNCA invente informações - use apenas os dados disponíveis nas tools
 
-## ⚠️ FLUXO SINISTRO + ASSISTÊNCIA (MUITO IMPORTANTE!)
+## ⚠️ REGRAS DE COBERTURA (MUITO IMPORTANTE - VERIFICAR SEMPRE!)
+Antes de criar qualquer solicitação, verifique a COBERTURA do veículo no contexto:
+
+1. **Se o veículo tem apenas cobertura "Roubo/Furto":**
+   - ✅ PERMITIDO: Sinistros de roubo ou furto APENAS
+   - ❌ BLOQUEADO: Assistência 24h (guincho, chaveiro, pane, etc.)
+   - ❌ BLOQUEADO: Sinistros de colisão, incêndio, fenômenos naturais, vandalismo
+   - RESPOSTA OBRIGATÓRIA quando pedir algo bloqueado:
+     "Entendo sua necessidade, mas sua cobertura atual é apenas para roubo e furto. 
+     Após a instalação do rastreador, você terá acesso à cobertura total que inclui 
+     assistência 24h, colisão, e outros tipos de sinistro. Posso ajudar com algo 
+     relacionado a roubo ou furto?"
+
+2. **Se o veículo tem cobertura "Total":**
+   - ✅ TUDO LIBERADO: Assistência 24h, todos tipos de sinistro, rastreamento
+
+## ⚠️ FLUXO SINISTRO + ASSISTÊNCIA (IMPORTANTE!)
+**ATENÇÃO: Só pergunte sobre guincho se a cobertura for TOTAL!**
+
 Após coletar os dados de um sinistro de COLISÃO, PANE ou situação onde o veículo pode estar danificado:
-
-1. **PERGUNTE SEMPRE**: "O veículo está em condições de rodar? Você precisa de guincho ou alguma assistência agora?"
-
-2. **Se o usuário responder que PRECISA de guincho/assistência:**
-   - Crie DUAS solicitações usando as tools:
-     a) \`criar_solicitacao_sinistro\` - com os dados do sinistro
-     b) \`criar_solicitacao_assistencia\` - tipo "guincho" (ou outro serviço) com a mesma localização
-   - Informe: "Registrei tanto o sinistro quanto a solicitação de guincho. Ambos serão analisados em breve."
-
-3. **Se o usuário responder que NÃO precisa:**
-   - Crie apenas a solicitação de sinistro
-   - Pergunte se precisa de algo mais
-
-4. **NUNCA esqueça de perguntar sobre guincho** após sinistros de colisão, pane ou quando o veículo estiver parado!
 
 ## FLUXO DE COLETA DE ENDEREÇO (MUITO IMPORTANTE!)
 Quando precisar coletar o endereço para sinistro ou assistência:
@@ -584,10 +588,10 @@ serve(async (req) => {
 
     // Fetch all relevant data for context in parallel
     const [veiculosResult, boletosResult, sinistrosResult, assistenciasResult] = await Promise.all([
-      // Veículos do associado
+      // Veículos do associado COM COBERTURAS
       supabase
         .from("veiculos")
-        .select("id, placa, marca, modelo, ano_modelo, cor, status")
+        .select("id, placa, marca, modelo, ano_modelo, cor, status, cobertura_roubo_furto, cobertura_total")
         .eq("associado_id", associado.id),
       
       // Boletos pendentes
@@ -621,11 +625,17 @@ serve(async (req) => {
     const sinistrosAbertos = sinistrosResult.data || [];
     const assistenciasAbertas = assistenciasResult.data || [];
 
-    // Build rich context for the AI
+    // Build rich context for the AI - Incluindo informações de cobertura
     const veiculosTexto = veiculos.length > 0 
-      ? veiculos.map((v: any) => 
-          `- ${v.marca} ${v.modelo} ${v.ano_modelo || ''} (Placa: ${v.placa}, Cor: ${v.cor || 'N/I'}, Status: ${v.status}, ID: ${v.id})`
-        ).join('\n')
+      ? veiculos.map((v: any) => {
+          const coberturas = [];
+          if (v.cobertura_roubo_furto) coberturas.push('Roubo/Furto');
+          if (v.cobertura_total) coberturas.push('Total (inclui Assistência 24h)');
+          const coberturaInfo = coberturas.length > 0 
+            ? `Coberturas: ${coberturas.join(', ')}` 
+            : '⚠️ Aguardando ativação de cobertura';
+          return `- ${v.marca} ${v.modelo} ${v.ano_modelo || ''} (Placa: ${v.placa}, Cor: ${v.cor || 'N/I'}, Status: ${v.status}, ${coberturaInfo}, ID: ${v.id})`;
+        }).join('\n')
       : 'Nenhum veículo cadastrado';
 
     const boletosTexto = boletosPendentes.length > 0

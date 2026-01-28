@@ -2,12 +2,14 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Car, Receipt, MapPin, Phone, AlertTriangle, FileText, Loader2 } from 'lucide-react';
+import { Car, Receipt, MapPin, Phone, AlertTriangle, FileText, Loader2, Lock } from 'lucide-react';
 import { useAssociado } from '@/contexts/AssociadoContext';
 import { useResumoApp } from '@/hooks/useAppAssociado';
+import { useMinhasCoberturas } from '@/hooks/useMinhasCoberturasApp';
 import { RevistoriaBanner } from '@/components/app/RevistoriaBanner';
 import { AlertaCotacaoCancelada } from '@/components/app/AlertaCotacaoCancelada';
 import { useCotacaoCanceladaPorPagamento } from '@/hooks/useCotacaoCancelada';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 // ============================================
 // HELPERS
@@ -62,6 +64,7 @@ export default function AppHome() {
   const navigate = useNavigate();
   const { revistoria } = useAssociado();
   const { associado, veiculos, boletoPendente, isLoading } = useResumoApp();
+  const { temCoberturaTotal, podeAssistencia, mensagemCoberturaParcial } = useMinhasCoberturas();
   
   // Verificar se há cotação cancelada por falta de pagamento
   const { data: cotacaoCancelada } = useCotacaoCanceladaPorPagamento(associado?.id);
@@ -179,8 +182,8 @@ export default function AppHome() {
         </Card>
       )}
 
-      {/* CARD RASTREAMENTO RÁPIDO */}
-      {veiculoPrincipal?.rastreador_ativo && (
+      {/* CARD RASTREAMENTO RÁPIDO - Só mostra se tiver cobertura total */}
+      {temCoberturaTotal && veiculoPrincipal?.rastreador_ativo && (
         <Card className="bg-white shadow-sm">
           <CardContent className="p-4">
             <div className="flex items-start gap-4">
@@ -211,19 +214,43 @@ export default function AppHome() {
         </Card>
       )}
 
+      {/* ALERTA COBERTURA PARCIAL */}
+      {mensagemCoberturaParcial && (
+        <Alert className="border-blue-200 bg-blue-50">
+          <AlertDescription className="text-blue-800 text-sm">
+            {mensagemCoberturaParcial}
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* GRID DE ATALHOS RÁPIDOS 2x2 */}
       <div className="grid grid-cols-2 gap-3">
-        {/* Assistência 24h */}
-        <Link to="/app/assistencia">
-          <Card className="bg-white shadow-sm hover:bg-gray-50 transition-colors">
-            <CardContent className="p-4 flex flex-col items-center gap-2">
-              <div className="h-12 w-12 rounded-full bg-orange-100 flex items-center justify-center">
-                <Phone className="h-6 w-6 text-orange-600" />
+        {/* Assistência 24h - Desabilitado se não tiver cobertura total */}
+        {podeAssistencia ? (
+          <Link to="/app/assistencia">
+            <Card className="bg-white shadow-sm hover:bg-gray-50 transition-colors">
+              <CardContent className="p-4 flex flex-col items-center gap-2">
+                <div className="h-12 w-12 rounded-full bg-orange-100 flex items-center justify-center">
+                  <Phone className="h-6 w-6 text-orange-600" />
+                </div>
+                <span className="text-sm font-medium text-gray-700">Assistência 24h</span>
+              </CardContent>
+            </Card>
+          </Link>
+        ) : (
+          <Card className="bg-gray-100 opacity-70 cursor-not-allowed">
+            <CardContent className="p-4 flex flex-col items-center gap-2 relative">
+              <div className="h-12 w-12 rounded-full bg-gray-200 flex items-center justify-center">
+                <Phone className="h-6 w-6 text-gray-400" />
               </div>
-              <span className="text-sm font-medium text-gray-700">Assistência 24h</span>
+              <span className="text-sm font-medium text-gray-400">Assistência 24h</span>
+              <Badge variant="outline" className="text-[10px] mt-1 border-gray-300 text-gray-500">
+                <Lock className="h-2.5 w-2.5 mr-1" />
+                Requer instalação
+              </Badge>
             </CardContent>
           </Card>
-        </Link>
+        )}
         
         {/* Abrir Sinistro */}
         <Link to="/app/sinistros/novo">
