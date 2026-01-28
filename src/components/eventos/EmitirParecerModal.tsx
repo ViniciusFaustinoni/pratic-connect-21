@@ -109,6 +109,14 @@ export function EmitirParecerModal({ open, onClose, sinistro }: EmitirParecerMod
       if (!sinistro) throw new Error('Sinistro não encontrado');
 
       const novoStatus = resultado === 'aprovado' ? 'aprovado' : 'negado';
+      const valorIndenizacao = resultado === 'aprovado' ? getValorNumerico() : null;
+      
+      // Calcular tipo_dano automaticamente baseado na regra 75% FIPE
+      let tipoDano: 'parcial' | 'perda_total' | null = null;
+      if (resultado === 'aprovado' && valorIndenizacao && sinistro.valor_fipe) {
+        const limite75 = sinistro.valor_fipe * 0.75;
+        tipoDano = valorIndenizacao >= limite75 ? 'perda_total' : 'parcial';
+      }
 
       // 1. Atualizar sinistro com parecer
       const { error } = await supabase
@@ -118,7 +126,8 @@ export function EmitirParecerModal({ open, onClose, sinistro }: EmitirParecerMod
           parecer: parecer,
           data_parecer: new Date().toISOString(),
           analista_id: profile?.id,
-          valor_indenizacao: resultado === 'aprovado' ? getValorNumerico() : null,
+          valor_indenizacao: valorIndenizacao,
+          tipo_dano: tipoDano,
           updated_at: new Date().toISOString(),
         })
         .eq('id', sinistro.id);
@@ -131,7 +140,7 @@ export function EmitirParecerModal({ open, onClose, sinistro }: EmitirParecerMod
         status_anterior: sinistro.status,
         status_novo: novoStatus,
         usuario_id: user?.id,
-        observacao: `Parecer emitido: ${novoStatus.toUpperCase()}`,
+        observacao: `Parecer emitido: ${novoStatus.toUpperCase()}${tipoDano ? ` (${tipoDano === 'perda_total' ? 'Perda Total' : 'Dano Parcial'})` : ''}`,
       });
     },
     onSuccess: () => {
@@ -156,6 +165,16 @@ export function EmitirParecerModal({ open, onClose, sinistro }: EmitirParecerMod
   if (!sinistro) return null;
 
   const valorExcedeFipe = resultado === 'aprovado' && sinistro.valor_fipe && getValorNumerico() > sinistro.valor_fipe;
+  
+  // Preview da classificação automática de tipo de dano
+  const getClassificacaoDano = () => {
+    if (resultado !== 'aprovado' || !sinistro.valor_fipe) return null;
+    const valorNumerico = getValorNumerico();
+    if (!valorNumerico || valorNumerico <= 0) return null;
+    const limite75 = sinistro.valor_fipe * 0.75;
+    return valorNumerico >= limite75 ? 'perda_total' : 'parcial';
+  };
+  const classificacaoDano = getClassificacaoDano();
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
@@ -249,14 +268,33 @@ export function EmitirParecerModal({ open, onClose, sinistro }: EmitirParecerMod
                 placeholder="R$ 0,00"
               />
               {sinistro.valor_fipe && (
-                <p className={cn(
-                  'text-xs',
-                  valorExcedeFipe ? 'text-destructive' : 'text-muted-foreground'
-                )}>
-                  {valorExcedeFipe
-                    ? `Valor excede o limite FIPE de ${formatCurrency(sinistro.valor_fipe)}`
-                    : `Valor máximo: ${formatCurrency(sinistro.valor_fipe)}`}
-                </p>
+                <div className="space-y-1">
+                  <p className={cn(
+                    'text-xs',
+                    valorExcedeFipe ? 'text-destructive' : 'text-muted-foreground'
+                  )}>
+                    {valorExcedeFipe
+                      ? `Valor excede o limite FIPE de ${formatCurrency(sinistro.valor_fipe)}`
+                      : `Valor máximo: ${formatCurrency(sinistro.valor_fipe)}`}
+                  </p>
+                  {classificacaoDano && (
+                    <div className={cn(
+                      'text-xs font-medium flex items-center gap-1 p-2 rounded-md',
+                      classificacaoDano === 'perda_total' 
+                        ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' 
+                        : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
+                    )}>
+                      <span>Classificação automática:</span>
+                      <Badge variant="outline" className={cn(
+                        classificacaoDano === 'perda_total' 
+                          ? 'border-red-500 text-red-700' 
+                          : 'border-blue-500 text-blue-700'
+                      )}>
+                        {classificacaoDano === 'perda_total' ? '⚠️ Perda Total' : '🔧 Dano Parcial'}
+                      </Badge>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           )}
