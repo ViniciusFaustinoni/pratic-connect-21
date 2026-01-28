@@ -3,20 +3,23 @@ import { useNavigate } from 'react-router-dom';
 import { format, startOfDay, endOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
-  ClipboardList, Loader2, CheckCircle2, Car, Clock, ChevronRight 
+  ClipboardList, Loader2, CheckCircle2, Car, Clock, ChevronRight, Zap 
 } from 'lucide-react';
 import { useTarefaAtual, useTarefasHistorico } from '@/hooks/useTarefaAtual';
+import { useEncaixesUrgentes } from '@/hooks/useEncaixesUrgentes';
 import { TipoServico, TIPO_SERVICO_LABELS, isInstalacao } from '@/hooks/useServicos';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TarefaAtualCard } from '@/components/vistoriador/TarefaAtualCard';
 import { BotaoIniciarServico } from '@/components/vistoriador/BotaoIniciarServico';
+import { EncaixeUrgenteCard } from '@/components/vistoriador/EncaixeUrgenteCard';
 
 export default function InstaladorTarefas() {
   const navigate = useNavigate();
   const { data: tarefaAtual, isLoading: isLoadingAtual } = useTarefaAtual();
   const { data: historico, isLoading: isLoadingHistorico } = useTarefasHistorico(7);
+  const { data: encaixesUrgentes = [], isLoading: isLoadingEncaixes } = useEncaixesUrgentes();
 
   // Separar tarefas de hoje do histórico
   const { tarefasHoje, tarefasHistorico } = useMemo(() => {
@@ -39,7 +42,8 @@ export default function InstaladorTarefas() {
     };
   }, [historico]);
 
-  const isLoading = isLoadingAtual || isLoadingHistorico;
+  const isLoading = isLoadingAtual || isLoadingHistorico || isLoadingEncaixes;
+  const encaixesCount = encaixesUrgentes.length;
 
   if (isLoading) {
     return (
@@ -74,6 +78,12 @@ export default function InstaladorTarefas() {
             <TabsTrigger value="atual" className="flex-1 data-[state=active]:bg-blue-600">
               Atual
             </TabsTrigger>
+            {encaixesCount > 0 && (
+              <TabsTrigger value="encaixes" className="flex-1 data-[state=active]:bg-amber-600">
+                <Zap className="h-3 w-3 mr-1" />
+                Encaixes ({encaixesCount})
+              </TabsTrigger>
+            )}
             <TabsTrigger value="hoje" className="flex-1 data-[state=active]:bg-green-600">
               Hoje ({tarefasHoje.length})
             </TabsTrigger>
@@ -99,6 +109,31 @@ export default function InstaladorTarefas() {
                   </CardContent>
                 </Card>
               </div>
+            )}
+          </TabsContent>
+
+          {/* Tab: Encaixes Urgentes */}
+          <TabsContent value="encaixes" className="mt-4 space-y-3">
+            {encaixesCount > 0 ? (
+              <>
+                <div className="flex items-center gap-2 text-amber-400 text-sm">
+                  <Zap className="h-4 w-4" />
+                  <span>Horários vagos disponíveis para encaixe</span>
+                </div>
+                {encaixesUrgentes.map((encaixe) => (
+                  <EncaixeUrgenteCard key={encaixe.id} encaixe={encaixe} />
+                ))}
+              </>
+            ) : (
+              <Card className="border-slate-700 bg-slate-800">
+                <CardContent className="flex flex-col items-center justify-center py-12">
+                  <Zap className="h-12 w-12 text-slate-600" />
+                  <h3 className="mt-4 text-lg font-semibold text-white">Sem encaixes</h3>
+                  <p className="mt-1 text-center text-sm text-slate-400">
+                    Nenhum cliente reagendou recentemente.
+                  </p>
+                </CardContent>
+              </Card>
             )}
           </TabsContent>
 
