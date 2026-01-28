@@ -57,6 +57,7 @@ interface CotacaoAcoesProps {
   isExcluindo?: boolean;
   isGerando?: boolean;
   isDuplicando?: boolean;
+  canDelete?: boolean; // Apenas diretores podem excluir
 }
 
 export function CotacaoAcoes({
@@ -74,6 +75,7 @@ export function CotacaoAcoes({
   isExcluindo,
   isGerando,
   isDuplicando,
+  canDelete = true, // Por padrão exibe, mas CotacaoDetalhe passa false se não for diretor
 }: CotacaoAcoesProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   
@@ -233,45 +235,48 @@ export function CotacaoAcoes({
           </Select>
         </div>
 
-        <Separator className="my-3" />
-
-        {/* Excluir */}
-        <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-          <AlertDialogTrigger asChild>
-            <Button
-              variant="destructive"
-              className="w-full"
-              disabled={isExcluindo}
-            >
-              {isExcluindo ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Trash2 className="mr-2 h-4 w-4" />
-              )}
-              Excluir Cotação
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Excluir cotação?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Esta ação não pode ser desfeita. A cotação será permanentemente removida.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={() => {
-                  onExcluir();
-                  setShowDeleteDialog(false);
-                }}
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              >
-                Excluir
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        {/* Excluir - apenas para diretores */}
+        {canDelete && (
+          <>
+            <Separator className="my-3" />
+            <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="destructive"
+                  className="w-full"
+                  disabled={isExcluindo}
+                >
+                  {isExcluindo ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="mr-2 h-4 w-4" />
+                  )}
+                  Excluir Cotação
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Excluir cotação?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Esta ação não pode ser desfeita. A cotação e todos os registros vinculados (contratos, agendamentos, serviços) serão permanentemente removidos.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => {
+                      onExcluir();
+                      setShowDeleteDialog(false);
+                    }}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    Excluir
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </>
+        )}
       </CardContent>
     </Card>
   );

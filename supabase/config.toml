@@ -233,3 +233,6 @@ verify_jwt = false
 
 [functions.whatsapp-send-text]
 verify_jwt = false
+
+[functions.delete-cotacao]
+verify_jwt = false

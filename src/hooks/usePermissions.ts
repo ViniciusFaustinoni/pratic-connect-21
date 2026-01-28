@@ -155,7 +155,7 @@ export function usePermissions() {
     canCreate: isVendedorCotacao || isGestorCotacao || isSuperAdmin,
     canEdit: isVendedorCotacao || isGestorCotacao || isSuperAdmin,
     canEditOwnOnly: isVendedorCotacao && !isGestorCotacao && !isSuperAdmin,
-    canDelete: isGestorCotacao || isSuperAdmin,
+    canDelete: isDiretor || isSuperAdmin, // Apenas diretores e super admins podem excluir (cascata)
     
     // Ações
     canSend: isVendedorCotacao || isGestorCotacao || isSuperAdmin,

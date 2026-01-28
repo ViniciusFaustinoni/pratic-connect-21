@@ -398,98 +398,41 @@ export function useDuplicarCotacao() {
   });
 }
 
-// Hook para excluir cotação (exclui todos os registros dependentes)
+// Hook para excluir cotação (usa Edge Function para exclusão cascata completa)
 export function useExcluirCotacao() {
   const queryClient = useQueryClient();
   
   return useMutation({
     mutationFn: async (cotacaoId: string) => {
-      // 1. PRIMEIRO: Quebrar referência circular - nullificar vistoria_id na cotação
-      const { error: cotacaoVistError } = await supabase
-        .from('cotacoes')
-        .update({ vistoria_id: null })
-        .eq('id', cotacaoId);
+      const { data, error } = await supabase.functions.invoke('delete-cotacao', {
+        body: { cotacaoId },
+      });
       
-      if (cotacaoVistError) {
-        console.error('Erro ao limpar vistoria_id da cotação:', cotacaoVistError);
-        throw cotacaoVistError;
-      }
-
-      // 2. Nullificar vistoria_id nos contratos vinculados (evitar FK block)
-      const { error: contratoVistError } = await supabase
-        .from('contratos')
-        .update({ vistoria_id: null })
-        .eq('cotacao_id', cotacaoId);
-      
-      if (contratoVistError) {
-        console.error('Erro ao limpar vistoria_id dos contratos:', contratoVistError);
-        throw contratoVistError;
-      }
-
-      // 3. Excluir contratos vinculados
-      const { error: contratoError } = await supabase
-        .from('contratos')
-        .delete()
-        .eq('cotacao_id', cotacaoId);
-      
-      if (contratoError) {
-        console.error('Erro ao excluir contratos da cotação:', contratoError);
-        throw contratoError;
-      }
-
-      // 4. Excluir instalações vinculadas
-      const { error: instError } = await supabase
-        .from('instalacoes')
-        .delete()
-        .eq('cotacao_id', cotacaoId);
-      
-      if (instError) {
-        console.error('Erro ao excluir instalações da cotação:', instError);
-        throw instError;
-      }
-
-      // 5. Excluir vistorias vinculadas (agora sem referências bloqueando)
-      const { error: vistError } = await supabase
-        .from('vistorias')
-        .delete()
-        .eq('cotacao_id', cotacaoId);
-      
-      if (vistError) {
-        console.error('Erro ao excluir vistorias da cotação:', vistError);
-        throw vistError;
-      }
-
-      // 6. Limpar referência no lead (SET NULL)
-      const { error: leadError } = await supabase
-        .from('leads')
-        .update({ cotacao_id: null })
-        .eq('cotacao_id', cotacaoId);
-      
-      if (leadError) {
-        console.error('Erro ao limpar cotacao_id do lead:', leadError);
-        throw leadError;
+      if (error) {
+        console.error('Erro na Edge Function delete-cotacao:', error);
+        throw new Error(error.message || 'Erro ao excluir cotação');
       }
       
-      // 7. Finalmente excluir a cotação
-      const { error } = await supabase
-        .from('cotacoes')
-        .delete()
-        .eq('id', cotacaoId);
+      if (!data?.success) {
+        throw new Error(data?.error || 'Erro ao excluir cotação');
+      }
       
-      if (error) throw error;
+      return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
       queryClient.invalidateQueries({ queryKey: ['contratos'] });
       queryClient.invalidateQueries({ queryKey: ['vistorias'] });
       queryClient.invalidateQueries({ queryKey: ['vistorias-mapa'] });
       queryClient.invalidateQueries({ queryKey: ['instalacoes'] });
       queryClient.invalidateQueries({ queryKey: ['leads'] });
-      toast.success('Cotação excluída com sucesso!');
+      queryClient.invalidateQueries({ queryKey: ['agendamentos-base'] });
+      queryClient.invalidateQueries({ queryKey: ['servicos'] });
+      toast.success(data?.message || 'Cotação excluída com sucesso!');
     },
     onError: (error: Error) => {
       console.error('Erro ao excluir cotação:', error);
-      toast.error('Erro ao excluir cotação. Verifique se há registros dependentes.');
+      toast.error(error.message || 'Erro ao excluir cotação');
     },
   });
 }
