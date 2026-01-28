@@ -1,285 +1,148 @@
 
-# Plano: Sistema de Confirmacao de Agendamento via WhatsApp com IA
+# Revisao do Sistema de Confirmacao de Agendamento via WhatsApp
 
-## Visao Geral
+## Problemas Identificados
 
-Implementar um sistema automatizado que:
-1. 1 hora antes do horario agendado, envia mensagem WhatsApp para o cliente via Evolution API
-2. IA processa a resposta do cliente (confirmacao ou reagendamento)
-3. Atualiza status em tempo real no app do vistoriador e na area do cliente
+### 1. RPC Nao Retorna Campos de Confirmacao (CRITICO)
 
----
+A funcao `buscar_tarefa_atual_profissional` **NAO inclui** os campos `confirmacao_whatsapp` e `confirmado_via_whatsapp_em` na sua definicao. Isso significa que o hook `useTarefaAtual` nao recebe esses dados, mesmo que o codigo tente mapea-los (linhas 94-95 usam cast `as any` que retorna `null`).
 
-## Arquitetura do Sistema
-
-```text
-+------------------+     +----------------------+     +-----------------+
-|   CRON (1min)    | --> | confirmar-agendamento| --> | WhatsApp Client |
-| (pg_cron ou ext) |     |    Edge Function     |     |    (Cliente)    |
-+------------------+     +----------------------+     +-----------------+
-                                                              |
-                                                              v
-                                                    +-----------------+
-                                                    | whatsapp-webhook|
-                                                    | (processa resp) |
-                                                    +-----------------+
-                                                              |
-                         +------------------------------------+
-                         |                                    |
-                         v                                    v
-              +-------------------+               +---------------------+
-              | Confirmou         |               | Quer Reagendar      |
-              | - Atualiza servico|               | - IA oferece opcoes |
-              | - Notifica vist.  |               | - Cliente escolhe   |
-              | - Push + Realtime |               | - Cria novo agend.  |
-              +-------------------+               +---------------------+
-                         |                                    |
-                         v                                    v
-              +-------------------+               +-------------------+
-              | App Vistoriador   |               | Area do Cliente   |
-              | (Realtime update) |               | (Realtime update) |
-              +-------------------+               +-------------------+
-```
-
----
-
-## Banco de Dados
-
-### Nova Tabela: `confirmacoes_agendamento`
-
-| Coluna | Tipo | Descricao |
-|--------|------|-----------|
-| id | uuid | PK |
-| servico_id | uuid | FK -> servicos |
-| instalacao_id | uuid | FK -> instalacoes (legacy) |
-| telefone | text | Telefone do cliente |
-| status | text | 'pendente', 'enviada', 'confirmada', 'reagendando', 'cancelada' |
-| mensagem_enviada_em | timestamptz | Quando foi enviada a msg |
-| resposta_recebida_em | timestamptz | Quando cliente respondeu |
-| resposta_cliente | text | Texto da resposta |
-| contexto_ia | jsonb | Contexto da conversa de reagendamento |
-| novo_servico_id | uuid | Se reagendou, referencia ao novo |
-| created_at | timestamptz | |
-
-### Alteracao: Tabela `servicos`
-
-Adicionar colunas:
-| Coluna | Tipo | Descricao |
-|--------|------|-----------|
-| confirmacao_whatsapp | text | 'pendente', 'confirmado', 'reagendado' |
-| confirmado_via_whatsapp_em | timestamptz | Data/hora da confirmacao |
-
----
-
-## Edge Functions
-
-### 1. `confirmar-agendamento-cron` (Nova)
-
-**Funcao:** Executada via pg_cron a cada minuto, busca servicos com horario 1h a frente
-
-**Logica:**
-```
-1. Buscar servicos onde:
-   - status IN ('agendada', 'pendente')
-   - data_agendada = HOJE
-   - hora_agendada entre NOW()+55min e NOW()+65min
-   - confirmacao_whatsapp IS NULL ou = 'pendente'
-   
-2. Para cada servico:
-   a. Buscar telefone do cliente (associado ou cotacao)
-   b. Montar mensagem personalizada com IA
-   c. Enviar via whatsapp-send-text
-   d. Criar registro em confirmacoes_agendamento
-   e. Atualizar servicos.confirmacao_whatsapp = 'enviada'
-```
-
-**Mensagem Exemplo:**
-```
-Ola! Aqui e a PRATIC. Confirmamos sua instalacao de rastreador
-para HOJE as 10:00 no endereco [endereco].
-
-Pode confirmar sua presenca?
-- Responda SIM para confirmar
-- Ou diga se precisa reagendar
-
-Nosso tecnico [nome] esta a caminho!
-```
-
-### 2. `whatsapp-webhook` (Modificar)
-
-**Adicionar nova logica antes do fluxo de associado:**
-
-```typescript
-// NOVO: Verificar se e resposta de confirmacao de agendamento
-const confirmacaoPendente = await supabase
-  .from('confirmacoes_agendamento')
-  .select('*, servico:servicos(*)')
-  .eq('telefone', telefone)
-  .eq('status', 'enviada')
-  .or('status.eq.reagendando')
-  .order('created_at', { ascending: false })
-  .limit(1)
-  .maybeSingle();
-
-if (confirmacaoPendente) {
-  return await processarRespostaConfirmacao(
-    supabase, 
-    confirmacaoPendente, 
-    mensagemTexto,
-    instancia
-  );
-}
-
-// Se nao, continua fluxo normal de associado...
-```
-
-**Nova funcao `processarRespostaConfirmacao`:**
-
-Usa IA para entender a resposta:
-- Se confirmou: atualizar status, notificar vistoriador
-- Se quer reagendar: iniciar fluxo de reagendamento com opcoes
-- Se cancelou: marcar como cancelado
-
-### 3. `notificar-vistoriador-confirmacao` (Nova)
-
-**Funcao:** Envia push notification e atualiza realtime para o app do vistoriador
-
-```typescript
-// Enviar push notification
-await supabase.functions.invoke('send-push-profissional', {
-  body: {
-    profissional_id: servico.profissional_id,
-    notification: {
-      title: 'Cliente Confirmou!',
-      body: `${clienteNome} confirmou presenca para ${horario}`,
-      tag: `confirmacao-${servico.id}`,
-      data: { servico_id: servico.id, action: 'confirmacao' }
-    }
-  }
-});
-```
-
----
-
-## Fluxo de Reagendamento com IA
-
-### System Prompt para IA de Reagendamento
-
-```
-Voce e um assistente de reagendamento da PRATIC.
-
-O cliente quer reagendar sua instalacao. Colete as seguintes informacoes:
-1. Local: BASE (vem ate nos) ou CLIENTE (vamos ate voce)
-2. Data: ofereca proximas 5 datas uteis disponiveis
-3. Periodo: MANHA (08-12h) ou TARDE (14-18h)
-4. Horario especifico (se desejar)
-
-TOOLS disponiveis:
-- get_datas_disponiveis: retorna proximas datas com vagas
-- get_bases_disponiveis: retorna bases fisicas proximas
-- criar_novo_agendamento: cria o novo agendamento
-- cancelar_agendamento_anterior: cancela o atual
-
-Ao finalizar, informe o novo horario e confirme.
-```
-
-### Tools para Reagendamento
-
-| Tool | Descricao |
-|------|-----------|
-| `get_datas_disponiveis` | Retorna proximas 5 datas uteis com horarios |
-| `get_horarios_disponiveis` | Horarios livres para uma data |
-| `criar_novo_agendamento` | Cria servico e instalacao novos |
-| `cancelar_agendamento_antigo` | Cancela o servico atual |
-| `notificar_reagendamento` | Notifica vistoriador da mudanca |
-
----
-
-## Frontend
-
-### 1. App do Vistoriador (`TarefaAtualCard.tsx`)
-
-Adicionar indicador visual de confirmacao:
-
-```tsx
-// Badge de confirmacao do cliente
-{tarefa.confirmacao_whatsapp === 'confirmado' && (
-  <Badge className="bg-green-500">
-    <CheckCircle className="h-3 w-3 mr-1" />
-    Cliente confirmou via WhatsApp
-  </Badge>
-)}
-{tarefa.confirmacao_whatsapp === 'pendente' && (
-  <Badge variant="outline" className="text-amber-500">
-    <Clock className="h-3 w-3 mr-1" />
-    Aguardando confirmacao
-  </Badge>
-)}
-```
-
-### 2. Area do Cliente (`AcompanhamentoProposta.tsx`)
-
-Adicionar secao de confirmacao de agendamento:
-
-```tsx
-// Mostrar status da confirmacao
-{instalacao && (
-  <Card className="...">
-    <CardContent>
-      <h3>Seu Agendamento</h3>
-      <p>{format(instalacao.data_agendada, 'dd/MM')} as {instalacao.hora_agendada}</p>
-      
-      {confirmacaoStatus === 'confirmado' && (
-        <Badge className="bg-green-500">
-          Voce confirmou sua presenca
-        </Badge>
-      )}
-      
-      {confirmacaoStatus === 'reagendando' && (
-        <Alert>
-          Estamos reagendando sua instalacao via WhatsApp.
-          Verifique seu celular para escolher o novo horario.
-        </Alert>
-      )}
-    </CardContent>
-  </Card>
-)}
-```
-
-### 3. Realtime Subscriptions
-
-Adicionar subscription para tabela `confirmacoes_agendamento`:
-
-```tsx
-// Em AcompanhamentoProposta.tsx
-.on(
-  'postgres_changes',
-  {
-    event: '*',
-    schema: 'public',
-    table: 'confirmacoes_agendamento',
-    filter: `servico_id=eq.${servicoId}`,
-  },
-  () => {
-    queryClient.invalidateQueries({ queryKey: ['acompanhamento-proposta'] });
-  }
+**Evidencia:**
+```sql
+-- Campos retornados pela RPC atual (migracao 20260123222737):
+RETURNS TABLE (
+  id UUID,
+  tipo TEXT,
+  status TEXT,
+  ...
+  vistoria_origem_id UUID
+  -- FALTAM: confirmacao_whatsapp, confirmado_via_whatsapp_em
 )
 ```
 
+**Impacto:** O badge de confirmacao no `TarefaAtualCard.tsx` nunca exibe o status correto.
+
 ---
 
-## Cron Job (pg_cron)
+### 2. CRON Job NAO Configurado (CRITICO)
 
-Agendar execucao a cada minuto:
+A query no banco de dados retorna **vazio** para jobs cron relacionados a confirmacao:
+```sql
+SELECT * FROM cron.job WHERE jobname LIKE '%confirm%' OR '%agendamento%';
+-- Resultado: []
+```
+
+**Impacto:** A edge function `confirmar-agendamento-cron` **nunca e executada automaticamente**. Nenhuma mensagem de confirmacao esta sendo enviada.
+
+---
+
+### 3. Valor Incorreto no CHECK Constraint
+
+Na migracao, o campo `confirmacao_whatsapp` na tabela `servicos` aceita:
+```sql
+CHECK (confirmacao_whatsapp IN ('pendente', 'enviada', 'confirmada', 'reagendado', 'nao_respondeu'))
+```
+
+Mas no webhook, ao confirmar, o codigo atualiza para:
+```typescript
+confirmacao_whatsapp: 'confirmado'  // Deveria ser 'confirmada'
+```
+
+**Impacto:** Potencial erro de constraint violation ao processar confirmacoes.
+
+---
+
+### 4. Logs da Edge Function Vazios
+
+Nenhum log encontrado para `confirmar-agendamento-cron`, confirmando que a funcao nunca foi executada.
+
+---
+
+### 5. Pagina de Acompanhamento Usa Tabela Legacy
+
+A `AcompanhamentoProposta.tsx` busca `confirmacao_whatsapp` de forma indireta:
+```typescript
+// Busca na tabela 'instalacoes' (legacy)
+const { data: instalacoes } = await supabase.from('instalacoes').select(...)
+
+// Depois busca em 'servicos' via instalacao_origem_id
+const { data: servico } = await supabase
+  .from('servicos')
+  .select('confirmacao_whatsapp')
+  .eq('instalacao_origem_id', instalacoes[0].id)
+```
+
+Isso funciona, mas poderia ser simplificado para consultar diretamente a tabela `servicos`.
+
+---
+
+## Plano de Correcao
+
+### Fase 1: Corrigir RPC para Retornar Campos de Confirmacao
+
+**Arquivo:** Nova migracao SQL
+
+Atualizar a funcao `buscar_tarefa_atual_profissional` para incluir os campos:
+- `confirmacao_whatsapp TEXT`
+- `confirmado_via_whatsapp_em TIMESTAMPTZ`
+
+```sql
+DROP FUNCTION IF EXISTS public.buscar_tarefa_atual_profissional(UUID);
+
+CREATE OR REPLACE FUNCTION public.buscar_tarefa_atual_profissional(p_profissional_id UUID)
+RETURNS TABLE (
+  -- campos existentes...
+  confirmacao_whatsapp TEXT,
+  confirmado_via_whatsapp_em TIMESTAMPTZ
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    s.id,
+    -- campos existentes...
+    s.confirmacao_whatsapp,
+    s.confirmado_via_whatsapp_em
+  FROM servicos s 
+  -- resto da query...
+END;
+$$;
+```
+
+---
+
+### Fase 2: Corrigir Valor do Status no Webhook
+
+**Arquivo:** `supabase/functions/whatsapp-webhook/index.ts`
+
+Alterar linha 563:
+```typescript
+// De:
+confirmacao_whatsapp: 'confirmado'
+
+// Para:
+confirmacao_whatsapp: 'confirmada'
+```
+
+---
+
+### Fase 3: Configurar CRON Job
+
+**Metodo:** Executar SQL diretamente no Supabase SQL Editor
+
+O cron job deve ser configurado manualmente pelo usuario:
 
 ```sql
 SELECT cron.schedule(
   'confirmar-agendamentos-whatsapp',
-  '* * * * *', -- A cada minuto
+  '* * * * *',
   $$
   SELECT net.http_post(
     url := 'https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/confirmar-agendamento-cron',
-    headers := '{"Content-Type": "application/json", "Authorization": "Bearer eyJhbGc..."}'::jsonb
+    headers := '{"Content-Type": "application/json", "Authorization": "Bearer [SERVICE_ROLE_KEY]"}'::jsonb
   );
   $$
 );
@@ -287,56 +150,84 @@ SELECT cron.schedule(
 
 ---
 
-## Arquivos a Criar/Modificar
+### Fase 4: Atualizar Hook useTarefaAtual
 
-| Arquivo | Acao | Descricao |
+**Arquivo:** `src/hooks/useTarefaAtual.ts`
+
+O hook ja esta preparado para receber os campos (linhas 94-95), mas precisa garantir que nao use `as any`. Apos corrigir a RPC, os campos serao retornados corretamente.
+
+---
+
+### Fase 5: Atualizar TarefaAtualCard (Valor Correto)
+
+**Arquivo:** `src/components/vistoriador/TarefaAtualCard.tsx`
+
+Verificar se os badges estao usando o valor correto:
+```tsx
+// Atual: 'confirmado' (incorreto)
+{tarefa.confirmacao_whatsapp === 'confirmado' && ...}
+
+// Corrigido: 'confirmada' (para bater com o constraint)
+{tarefa.confirmacao_whatsapp === 'confirmada' && ...}
+```
+
+---
+
+## Resumo das Alteracoes
+
+| Arquivo | Tipo | Alteracao |
 |---------|------|-----------|
-| `supabase/functions/confirmar-agendamento-cron/index.ts` | **Criar** | Cron que envia confirmacoes |
-| `supabase/functions/whatsapp-webhook/index.ts` | Modificar | Adicionar logica de confirmacao |
-| `src/hooks/useTarefaAtual.ts` | Modificar | Incluir campo confirmacao_whatsapp |
-| `src/components/vistoriador/TarefaAtualCard.tsx` | Modificar | Badge de confirmacao |
-| `src/pages/public/AcompanhamentoProposta.tsx` | Modificar | Status confirmacao + realtime |
-| Migracao SQL | **Criar** | Tabela confirmacoes_agendamento + colunas |
+| Nova migracao SQL | Criar | Atualizar RPC para incluir campos de confirmacao |
+| `whatsapp-webhook/index.ts` | Modificar | Corrigir valor 'confirmado' para 'confirmada' |
+| `TarefaAtualCard.tsx` | Modificar | Corrigir valor do badge para 'confirmada' |
+| SQL Editor (manual) | Configurar | Criar cron job para execucao automatica |
 
 ---
 
-## Sequencia de Implementacao
+## Secao Tecnica
 
-### Fase 1: Banco de Dados
-1. Criar tabela `confirmacoes_agendamento`
-2. Adicionar colunas em `servicos`
-3. Habilitar realtime para nova tabela
+### Estrutura Final da RPC
 
-### Fase 2: Edge Functions
-4. Criar `confirmar-agendamento-cron`
-5. Modificar `whatsapp-webhook` para processar respostas
-6. Adicionar tools de reagendamento a IA
+```text
+buscar_tarefa_atual_profissional(p_profissional_id)
+    |
+    +-- id, tipo, status, data_agendada, hora_agendada, periodo
+    +-- associado_id, associado_nome, associado_telefone, associado_whatsapp
+    +-- veiculo_id, veiculo_placa, veiculo_marca, veiculo_modelo, veiculo_cor
+    +-- logradouro, numero, bairro, cidade, uf, cep, latitude, longitude
+    +-- cotacao_id, contrato_id, rastreador_id, imei_rastreador
+    +-- local_vistoria, observacoes, rota_id, iniciada_em, em_rota_em
+    +-- instalacao_origem_id, vistoria_origem_id
+    +-- confirmacao_whatsapp (NOVO)
+    +-- confirmado_via_whatsapp_em (NOVO)
+```
 
-### Fase 3: Frontend
-7. Atualizar `TarefaAtualCard` com badge de confirmacao
-8. Atualizar `AcompanhamentoProposta` com status
-9. Adicionar realtime subscriptions
+### Fluxo Esperado Apos Correcoes
 
-### Fase 4: Cron Job
-10. Configurar pg_cron para execucao automatica
-
----
-
-## Consideracoes Tecnicas
-
-### Timezone
-- Todas as comparacoes de horario usarao timezone 'America/Sao_Paulo'
-- Funcao `getHojeBrasilia()` ja existe em `src/lib/date-utils.ts`
-
-### Idempotencia
-- Verificar se confirmacao ja foi enviada antes de enviar novamente
-- Flag `confirmacao_whatsapp` no servico previne duplicatas
-
-### Fallback
-- Se cliente nao responder em 30min, marcar como 'nao_respondeu'
-- Vistoriador pode confirmar manualmente no app
-
-### Push Notifications
-- VAPID keys ja configuradas
-- Usar edge function `send-push-profissional` existente
-
+```text
+1. CRON executa a cada minuto
+   |
+   v
+2. confirmar-agendamento-cron busca servicos 1h a frente
+   |
+   v
+3. Envia mensagem via whatsapp-send-text
+   |
+   v
+4. Atualiza servicos.confirmacao_whatsapp = 'enviada'
+   |
+   v
+5. Cliente responde via WhatsApp
+   |
+   v
+6. whatsapp-webhook processa resposta com IA
+   |
+   v
+7. Se confirmou: atualiza para 'confirmada'
+   |
+   v
+8. useTarefaAtual recebe campo via RPC atualizada
+   |
+   v
+9. TarefaAtualCard exibe badge "Cliente confirmou"
+```
