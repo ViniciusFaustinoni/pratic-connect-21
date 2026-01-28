@@ -326,6 +326,32 @@ export default function AssociadoDetalhe() {
   const status = associado.status as StatusAssociado;
   const idade = calcularIdade(associado.data_nascimento);
   
+  // Verificar cobertura baseada nos veículos
+  const temCoberturaTotal = veiculos?.some(v => v.cobertura_total) ?? false;
+  const temCoberturaRouboFurto = veiculos?.some(v => v.cobertura_roubo_furto) ?? false;
+
+  // Label dinâmico para status ativo
+  const getStatusLabel = () => {
+    if (status !== 'ativo') return STATUS_ASSOCIADO_LABELS[status];
+    
+    if (temCoberturaTotal) {
+      return 'Ativo'; // Cobertura completa
+    }
+    if (temCoberturaRouboFurto) {
+      return 'Ativo Roubo e Furto'; // Apenas cobertura parcial
+    }
+    return 'Ativo'; // Fallback
+  };
+
+  // Cor diferenciada para cobertura parcial
+  const getStatusColor = () => {
+    if (status === 'ativo' && temCoberturaRouboFurto && !temCoberturaTotal) {
+      // Amarelo/dourado para indicar cobertura parcial
+      return 'bg-amber-100 text-amber-800 border-amber-200';
+    }
+    return STATUS_ASSOCIADO_COLORS[status];
+  };
+  
   // Combinar documentos das duas fontes
   // Se associado está ATIVO, todos os documentos pendentes são implicitamente aprovados
   const todosDocumentos = [
@@ -379,8 +405,8 @@ export default function AssociadoDetalhe() {
               <div className="space-y-1">
                 <div className="flex items-center gap-3">
                   <h1 className="text-2xl font-bold">{associado.nome}</h1>
-                  <Badge className={cn(STATUS_ASSOCIADO_COLORS[status])}>
-                    {STATUS_ASSOCIADO_LABELS[status]}
+                  <Badge className={cn(getStatusColor())}>
+                    {getStatusLabel()}
                   </Badge>
                 </div>
                 <div className="flex items-center gap-4 text-sm text-muted-foreground">
