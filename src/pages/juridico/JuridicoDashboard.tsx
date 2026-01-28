@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { 
@@ -14,6 +15,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { format, differenceInDays, isPast, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useProcessosPrazos } from '@/hooks/useProcessosPrazos';
+import { NovaConsultaModal } from '@/components/juridico/NovaConsultaModal';
 import { 
   PRIORIDADE_COLORS, 
   PRIORIDADE_LABELS,
@@ -23,6 +25,7 @@ import {
 
 export default function JuridicoDashboard() {
   const navigate = useNavigate();
+  const [novaConsultaOpen, setNovaConsultaOpen] = useState(false);
   const { cumprirPrazo, isCumprindo } = useProcessosPrazos();
 
   // Estatísticas gerais
@@ -163,7 +166,7 @@ export default function JuridicoDashboard() {
             <Plus className="mr-2 h-4 w-4" />
             Novo Processo
           </Button>
-          <Button variant="outline" onClick={() => navigate('/juridico/consultas/nova')}>
+          <Button variant="outline" onClick={() => setNovaConsultaOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />
             Nova Consulta
           </Button>
@@ -428,7 +431,7 @@ export default function JuridicoDashboard() {
                 <Plus className="mr-2 h-4 w-4" />
                 Novo Processo
               </Button>
-              <Button variant="outline" className="justify-start" onClick={() => navigate('/juridico/consultas/nova')}>
+              <Button variant="outline" className="justify-start" onClick={() => setNovaConsultaOpen(true)}>
                 <HelpCircle className="mr-2 h-4 w-4" />
                 Nova Consulta
               </Button>
@@ -481,6 +484,12 @@ export default function JuridicoDashboard() {
           </Card>
         </div>
       </div>
+
+      {/* Modal Nova Consulta */}
+      <NovaConsultaModal
+        open={novaConsultaOpen}
+        onClose={() => setNovaConsultaOpen(false)}
+      />
     </div>
   );
 }

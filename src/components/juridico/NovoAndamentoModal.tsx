@@ -140,9 +140,11 @@ export function NovoAndamentoModal({
       return andamento;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['processo', processoId] });
+      queryClient.invalidateQueries({ queryKey: ['processos', processoId, 'andamentos'] });
+      queryClient.invalidateQueries({ queryKey: ['processos', processoId] });
       queryClient.invalidateQueries({ queryKey: ['processos_prazos'] });
       queryClient.invalidateQueries({ queryKey: ['prazos-controle'] });
+      queryClient.invalidateQueries({ queryKey: ['juridico-stats'] });
       toast.success('Andamento registrado com sucesso!');
       handleClose();
     },
