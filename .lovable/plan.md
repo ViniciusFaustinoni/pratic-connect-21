@@ -1,228 +1,182 @@
 
-# Plano: Corrigir Fluxo de Cobertura Total Após Instalação
+# Plano: Reestruturar Tela de Cotações
 
-## Diagnóstico
+## Problemas Identificados
 
-### Cenário Atual (MARCUS VINICIUS)
-| Etapa | Status Associado | cobertura_roubo_furto | cobertura_total | Observação |
-|-------|------------------|----------------------|-----------------|------------|
-| Autovistoria aprovada (09:58) | ativo | ✅ true | ❌ false | OK - cobertura parcial |
-| Instalação concluída (10:17) | **em_analise** ⚠️ | ✅ true | ❌ false | PROBLEMA! |
+### 1. Aba "Finalizadas" Não Deveria Existir
+A tela atual separa cotações em duas abas:
+- **Em Andamento**: status `rascunho`, `enviada`, `visualizada`
+- **Finalizadas**: status `aceita`, `recusada`, `expirada`
 
-### Problemas Identificados
+O problema é que cotações com status `aceita` ainda estão em fluxo ativo (cliente pagando, agendando vistoria, etc.), então não deveriam ir para "Finalizadas".
 
-**1. Regressão de Status do Associado**
-- Arquivo: `src/hooks/useServicos.ts` (linhas 914-926)
-- O hook `useAprovarVeiculoServico` força o status para `em_analise` quando deveria **manter o status atual** se já for `ativo`
-- O associado MARCUS voltou de `ativo` → `em_analise` após a instalação
+### 2. Autovistoria Move Cotação para Finalizadas
+Quando autovistoria é realizada, a cotação assume status `aceita`, o que automaticamente a move para a aba "Finalizadas". Isso está incorreto pois o fluxo ainda está em andamento.
 
-**2. Falta de Visibilidade para Ativação**
-- O hook `useInstalacoesAguardandoAtivacao` existe em `useVistoriaCompletaAnalise.ts` mas **NÃO está sendo usado em nenhuma tela**
-- O analista não sabe que precisa ativar o rastreador
-- A página `/cadastro/instalacoes/:id/ativar` existe mas não há listagem que leve a ela
+### 3. Status "Realizando Vistoria" Incorreto
+Quando o cliente agenda vistoria sem autovistoria:
+- Edge Function define `status_contratacao: 'vistoria_ok'`
+- Função `getEtapaVenda` mapeia `vistoria_ok` → `realizando_pagamento`
+- Deveria mostrar `vistoria_agendada` para quem agendou presencial
 
-**3. Rastreador Instalado mas Não Ativado**
-- Rastreador: `imei: 12345678912345678`, `status: instalado`
-- `plataforma_device_id: null` (não ativado na Softruck)
-- `cobertura_total: false` (deveria ser ativado automaticamente ou ter ação clara)
+### 4. Clique Deveria Abrir Modal
+Atualmente, clicar na linha navega para `/vendas/cotacoes/:id`. O usuário prefere um modal de detalhes inline.
 
-## Solução
+---
 
-### 1. Corrigir Regressão de Status (Prioridade Alta)
+## Solução Proposta
 
-**Arquivo:** `src/hooks/useServicos.ts`
+### Parte 1: Remover Sistema de Abas
 
-Modificar a lógica de atualização do associado (linhas 914-926):
+**Arquivo:** `src/pages/vendas/Cotacoes.tsx`
+
+Alterações:
+- Remover separação em `emAndamento` e `fechadas`
+- Remover componente `Tabs` completamente
+- Exibir todas as cotações em uma única lista ordenada por status/data
+- Manter os filtros existentes (Status, Período, Busca) para o usuário filtrar
+
+```text
+ANTES:
+┌─────────────────────────────────────────────┐
+│  [Em Andamento (5)]  [Finalizadas (3)]      │
+├─────────────────────────────────────────────┤
+│  Lista de cotações da aba selecionada       │
+└─────────────────────────────────────────────┘
+
+DEPOIS:
+┌─────────────────────────────────────────────┐
+│  [Filtros: Status ▾] [Período ▾] [Buscar]   │
+├─────────────────────────────────────────────┤
+│  Cotação 1 - Status: Realizando Vistoria    │
+│  Cotação 2 - Status: Vistoria Agendada      │
+│  Cotação 3 - Status: Enviada                │
+│  Cotação 4 - Status: Rascunho               │
+└─────────────────────────────────────────────┘
+```
+
+### Parte 2: Corrigir Mapeamento de Etapa para Vistoria Agendada
+
+**Arquivo:** `src/components/cotacoes/CotacaoCard.tsx`
+
+A função `getEtapaVenda` precisa diferenciar:
+- `vistoria_ok` + `tipo_vistoria='autovistoria'` → `realizando_pagamento` (cliente precisa pagar)
+- `vistoria_ok` + `tipo_vistoria='agendada'` → `vistoria_agendada` (cliente agendou presencial, aguardando técnico)
 
 ```typescript
-// ANTES:
-const { error: associadoError } = await supabase
-  .from('associados')
-  .update({ 
-    status: 'em_analise',  // ← SEMPRE força para em_analise
-    updated_at: agora,
-  })
-  .eq('id', data.associadoId)
-  .in('status', ['pendente_vistoria', 'aguardando_instalacao']);
+// ANTES (linha 175):
+if (statusContratacao === 'vistoria_ok') return 'realizando_pagamento';
 
 // DEPOIS:
-// Só atualiza para em_analise se NÃO estava ativo
-// Se já estava ativo (aprovado antes), mantém ativo
-const { error: associadoError } = await supabase
-  .from('associados')
-  .update({ 
-    status: 'em_analise',
-    updated_at: agora,
-  })
-  .eq('id', data.associadoId)
-  .in('status', ['pendente_vistoria', 'aguardando_instalacao'])
-  .neq('status', 'ativo');  // ← NÃO REGREDIR se já estiver ativo!
-
-// OU melhor: Buscar status atual primeiro
-const { data: associadoAtual } = await supabase
-  .from('associados')
-  .select('status')
-  .eq('id', data.associadoId)
-  .single();
-
-if (associadoAtual?.status !== 'ativo') {
-  await supabase
-    .from('associados')
-    .update({ status: 'em_analise', updated_at: agora })
-    .eq('id', data.associadoId);
+if (statusContratacao === 'vistoria_ok') {
+  // Se agendou vistoria presencial, mostrar como "vistoria agendada"
+  if (cotacao.tipo_vistoria === 'agendada') return 'vistoria_agendada';
+  // Se fez autovistoria, cliente precisa pagar adesão
+  return 'realizando_pagamento';
 }
 ```
 
-### 2. Ativar Cobertura Total Automaticamente Quando Autovistoria Prévia
+### Parte 3: Adicionar Modal de Detalhes
 
-**Arquivo:** `src/hooks/useServicos.ts`
+**Novo componente:** `src/components/cotacoes/CotacaoDetalheModal.tsx`
 
-Adicionar lógica para verificar se a autovistoria já foi aprovada e ativar cobertura total imediatamente:
+Criar modal que:
+- Exibe informações resumidas da cotação (cliente, veículo, plano, valores)
+- Mostra timeline de eventos
+- Inclui ações principais (WhatsApp, PDF, Aceitar, Gerar Contrato)
+- Tem link "Ver página completa" para navegação detalhada
 
-```typescript
-// Após vincular rastreador...
+**Arquivo:** `src/pages/vendas/Cotacoes.tsx`
 
-// Verificar se veículo já tinha cobertura_roubo_furto (autovistoria aprovada)
-const { data: veiculoAtual } = await supabase
-  .from('veiculos')
-  .select('cobertura_roubo_furto, cobertura_total')
-  .eq('id', data.veiculoId)
-  .single();
+- Adicionar estado para cotação selecionada no modal
+- Trocar `onClick={() => navigate(...)}` por `onClick={() => setModalCotacao(cotacao)}`
+- Importar e renderizar o novo `CotacaoDetalheModal`
 
-// Se já tinha autovistoria aprovada, ativar cobertura total automaticamente
-if (veiculoAtual?.cobertura_roubo_furto && !veiculoAtual?.cobertura_total) {
-  const { error: veiculoError } = await supabase
-    .from('veiculos')
-    .update({
-      status: 'ativo',
-      cobertura_total: true,  // ← ATIVAR cobertura total
-      updated_at: agora,
-    })
-    .eq('id', data.veiculoId);
-
-  // Tentar ativar rastreador na plataforma (Softruck)
-  try {
-    await supabase.functions.invoke('softruck-ativar-dispositivo', {
-      body: {
-        imei: data.imeiRastreador,
-        veiculoId: data.veiculoId,
-        associadoId: data.associadoId,
-      },
-    });
-  } catch (err) {
-    console.warn('Ativação na plataforma falhou, requer ação manual:', err);
-    // Não bloquear fluxo - ativação pode ser feita manualmente depois
-  }
-} else {
-  // Fluxo normal sem autovistoria prévia
-  await supabase
-    .from('veiculos')
-    .update({ status: 'ativo', updated_at: agora })
-    .eq('id', data.veiculoId);
-}
-```
-
-### 3. Adicionar Seção de "Aguardando Ativação" na Tela de Propostas
-
-**Arquivo:** `src/pages/cadastro/PropostasPendentes.tsx`
-
-Adicionar KPI e seção para instalações aguardando ativação:
-
-```typescript
-import { useInstalacoesAguardandoAtivacao } from '@/hooks/useVistoriaCompletaAnalise';
-
-// Dentro do componente
-const { data: instalacoesPendentes } = useInstalacoesAguardandoAtivacao();
-
-// Novo KPI
-<KPICard
-  titulo="Aguard. Ativação"
-  valor={instalacoesPendentes?.length || 0}
-  icon={<Zap className="h-5 w-5 text-white" />}
-  cor="bg-purple-500"
-  loading={false}
-/>
-
-// Seção dedicada (se houver pendentes)
-{instalacoesPendentes && instalacoesPendentes.length > 0 && (
-  <Card className="border-2 border-purple-500">
-    <CardHeader>
-      <CardTitle className="flex items-center gap-2">
-        <Zap className="h-5 w-5 text-purple-500" />
-        Instalações Aguardando Ativação de Rastreador
-      </CardTitle>
-      <CardDescription>
-        Clique para ativar o rastreador na plataforma e liberar a cobertura total
-      </CardDescription>
-    </CardHeader>
-    <CardContent>
-      <Table>
-        {/* Lista de instalações com botão para /cadastro/instalacoes/:id/ativar */}
-      </Table>
-    </CardContent>
-  </Card>
-)}
-```
-
-### 4. Corrigir Dados Existentes (MARCUS)
-
-Executar SQL para corrigir o estado atual:
-
-```sql
--- 1. Restaurar status do associado para ativo
-UPDATE associados
-SET status = 'ativo',
-    updated_at = NOW()
-WHERE id = '9487e709-2154-4f44-b9bc-eb7a423cf98b';
-
--- 2. Ativar cobertura total do veículo (já tem rastreador instalado)
-UPDATE veiculos
-SET cobertura_total = true,
-    updated_at = NOW()
-WHERE id = 'e455066e-3b22-4d68-9e56-4ca9ffce4d93';
-```
+---
 
 ## Arquivos a Modificar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/hooks/useServicos.ts` | Não regredir status de `ativo`; Ativar `cobertura_total` automaticamente se autovistoria prévia |
-| `src/pages/cadastro/PropostasPendentes.tsx` | Adicionar seção/KPI para instalações aguardando ativação |
-| *Migração SQL* | Corrigir dados do MARCUS (status e cobertura) |
+| `src/pages/vendas/Cotacoes.tsx` | Remover tabs, lista única, adicionar modal |
+| `src/components/cotacoes/CotacaoCard.tsx` | Corrigir `getEtapaVenda` para `vistoria_agendada` |
+| `src/components/cotacoes/CotacaoDetalheModal.tsx` | **NOVO** - Modal de detalhes |
+
+---
 
 ## Seção Técnica
 
-### Fluxo Esperado Após Correção
+### Lógica de Ordenação da Lista Única
 
-```text
-1. Autovistoria aprovada pelo analista
-   └─ associado.status = 'ativo'
-   └─ veiculo.cobertura_roubo_furto = true
-   └─ veiculo.cobertura_total = false
-
-2. Instalação física concluída pelo técnico
-   └─ associado.status = 'ativo' (MANTÉM!)
-   └─ veiculo.cobertura_roubo_furto = true
-   └─ veiculo.cobertura_total = true (ATIVA AUTOMATICAMENTE!)
-   └─ Tenta ativar Softruck (não bloqueia se falhar)
-
-3. App do Associado
-   └─ Mostra todas as funcionalidades (Assistência 24h, todos sinistros, rastreamento)
+```typescript
+const sortedCotacoes = [...filteredCotacoes].sort((a, b) => {
+  // 1. Prioridade por status_contratacao ativo (cliente em fluxo)
+  const temFluxoA = a.status_contratacao && a.status_contratacao !== 'aguardando';
+  const temFluxoB = b.status_contratacao && b.status_contratacao !== 'aguardando';
+  if (temFluxoA && !temFluxoB) return -1;
+  if (!temFluxoA && temFluxoB) return 1;
+  
+  // 2. Prioridade por status da cotação
+  const statusOrder = {
+    rascunho: 1,
+    enviada: 2,
+    visualizada: 3,
+    aceita: 4,  // Continua em cima porque pode ter fluxo ativo
+    recusada: 5,
+    expirada: 6,
+  };
+  const statusDiff = (statusOrder[a.status] || 99) - (statusOrder[b.status] || 99);
+  if (statusDiff !== 0) return statusDiff;
+  
+  // 3. Mais recentes primeiro
+  return new Date(b.created_at) - new Date(a.created_at);
+});
 ```
 
-### Regras de Negócio
+### Mapeamento Completo de status_contratacao → Etapa Visual
 
-| Cenário | Comportamento |
-|---------|---------------|
-| Instalação após autovistoria aprovada | Ativa `cobertura_total` imediatamente |
-| Instalação SEM autovistoria prévia | Mantém `cobertura_total: false`, vai para fila de análise |
-| Falha na ativação Softruck | Não bloqueia, registra para ativação manual posterior |
+| status_contratacao | tipo_vistoria | Etapa Visual |
+|-------------------|---------------|--------------|
+| `aguardando` | - | (sem badge) |
+| `plano_escolhido` | - | Escolhendo Plano |
+| `dados_preenchidos` | - | Enviando Documentos |
+| `documentos_ok` | - | Escolha de Vistoria |
+| `vistoria_ok` | `autovistoria` | Realizando Pagamento |
+| `vistoria_ok` | `agendada` | **Vistoria Agendada** ← CORREÇÃO |
+| `pagamento_ok` | - | Assinando Contrato |
+| `contrato_assinado` | - | Vistoria Agendada |
+
+### Estrutura do Modal
+
+```typescript
+interface CotacaoDetalheModalProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  cotacao: CotacaoWithRelations | null;
+  onAcaoCompleta?: () => void; // Para invalidar queries após ação
+}
+```
+
+Conteúdo do modal:
+- Header: Status + Etapa da Venda + Número da cotação
+- Seção Cliente: Nome, telefone, email
+- Seção Veículo: Marca/Modelo/Ano, Placa, FIPE
+- Seção Valores: Plano escolhido, mensalidade, adesão
+- Seção Timeline: Últimos 5 eventos
+- Footer: Botões de ação contextuais + "Ver detalhes completos"
+
+---
 
 ## Resultado Esperado
 
-| Antes (Bug) | Depois (Corrigido) |
-|-------------|-------------------|
-| MARCUS vê "Sua cobertura atual é apenas para roubo e furto" | MARCUS vê todas as funcionalidades liberadas |
-| Status regrediu para `em_analise` | Status permanece `ativo` |
-| `cobertura_total: false` mesmo após instalação | `cobertura_total: true` ativado automaticamente |
-| Analista não vê instalações pendentes de ativação | KPI + Seção visível na tela de propostas |
+### Antes
+- 2 abas separando cotações
+- Autovistoria vai para "Finalizadas"
+- Agendamento presencial mostra "Realizando Vistoria"
+- Clique navega para outra página
+
+### Depois
+- Lista única com filtros
+- Todas as cotações na mesma visualização
+- Agendamento presencial mostra "Vistoria Agendada"
+- Clique abre modal inline com ações rápidas
