@@ -690,11 +690,17 @@ export default function CotacaoContratacao() {
                       <AgendamentoVistoriaCompleta
                         cotacaoId={cotacao.id}
                         tipoVistoria="autovistoria"
+                        clienteNome={cotacao?.vistoria_completa_responsavel_nome || cotacao?.nome_solicitante || ''}
+                        clienteTelefone={cotacao?.vistoria_completa_responsavel_telefone || cotacao?.telefone1_solicitante}
+                        clienteEmail={cotacao?.email_solicitante}
+                        veiculoPlaca={cotacao?.veiculo_placa}
+                        veiculoDescricao={`${cotacao?.veiculo_marca || ''} ${cotacao?.veiculo_modelo || ''}`.trim()}
                         onConfirmar={() => {
                           setAgendamentoConcluido(true);
                           queryClient.invalidateQueries({ queryKey: ['cotacao-contratacao'] });
                           queryClient.invalidateQueries({ queryKey: ['instalacao-existente'] });
                           queryClient.invalidateQueries({ queryKey: ['vistoria-existente'] });
+                          queryClient.invalidateQueries({ queryKey: ['agendamento-base-existente'] });
                           refetch();
                         }}
                       />
