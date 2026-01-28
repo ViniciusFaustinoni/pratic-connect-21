@@ -521,13 +521,46 @@ export default function SinistroDetalhe() {
             <CardHeader>
               <CardTitle>Valores</CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-3 gap-4">
+            <CardContent className="space-y-4">
+              {/* Tipo de Dano (Parcial / Perda Total) */}
+              {sinistro.valor_fipe && sinistro.valor_fipe > 0 && (
+                <div className="pb-4 border-b">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Classificação do Dano</p>
+                      <p className="font-medium">
+                        {sinistro.tipo_dano === 'perda_total' 
+                          ? 'Perda Total (≥75% do FIPE)' 
+                          : sinistro.tipo_dano === 'parcial' 
+                            ? 'Dano Parcial (<75% do FIPE)'
+                            : 'Não classificado'}
+                      </p>
+                    </div>
+                    <Badge variant={sinistro.tipo_dano === 'perda_total' ? 'destructive' : 'secondary'}>
+                      {sinistro.tipo_dano === 'perda_total' ? 'Perda Total' : sinistro.tipo_dano === 'parcial' ? 'Parcial' : 'Pendente'}
+                    </Badge>
+                  </div>
+                  {sinistro.valor_fipe && (
+                    <div className="mt-2 text-sm text-muted-foreground">
+                      Limite para Dano Parcial: {formatCurrency(sinistro.valor_fipe * 0.75)}
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
                   <p className="text-sm text-muted-foreground">Valor FIPE</p>
                   <p className="text-xl font-bold text-primary">
                     {formatCurrency(sinistro.valor_fipe)}
                   </p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Participação</p>
+                  <p className="text-xl font-bold text-orange-600">
+                    {formatCurrency(sinistro.valor_participacao)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Dedutível do associado</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Valor Indenização</p>

@@ -43,6 +43,9 @@ interface SinistroWithRelations {
   status: string;
   associado_id: string;
   veiculo_id: string;
+  tipo_dano?: string | null;
+  valor_fipe?: number | null;
+  valor_indenizacao?: number | null;
   associado: {
     id: string;
     nome: string;
@@ -101,6 +104,9 @@ export function NovaOSModal({ open, onClose, sinistroId }: NovaOSModalProps) {
           status,
           associado_id,
           veiculo_id,
+          tipo_dano,
+          valor_fipe,
+          valor_indenizacao,
           associado:associados(id, nome),
           veiculo:veiculos(id, placa, marca, modelo, ano_fabricacao, ano_modelo)
         `)
@@ -195,6 +201,13 @@ export function NovaOSModal({ open, onClose, sinistroId }: NovaOSModalProps) {
       toast.error('Selecione um sinistro');
       return;
     }
+    
+    // Validar se sinistro é Perda Total
+    if (selectedSinistro.tipo_dano === 'perda_total') {
+      toast.error('Não é possível criar OS para sinistros classificados como Perda Total. Este evento deve seguir para indenização.');
+      return;
+    }
+    
     createMutation.mutate(data);
   };
 
@@ -329,15 +342,31 @@ export function NovaOSModal({ open, onClose, sinistroId }: NovaOSModalProps) {
 
 // Componente interno para exibir dados do sinistro
 function SinistroInfoCard({ sinistro }: { sinistro: SinistroWithRelations }) {
+  const isPerdaTotal = sinistro.tipo_dano === 'perda_total';
+  
   return (
-    <div className="p-4 bg-muted rounded-lg space-y-3">
+    <div className={`p-4 rounded-lg space-y-3 ${isPerdaTotal ? 'bg-red-50 border border-red-200' : 'bg-muted'}`}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <AlertTriangle className="h-4 w-4 text-orange-500" />
+          <AlertTriangle className={`h-4 w-4 ${isPerdaTotal ? 'text-red-500' : 'text-orange-500'}`} />
           <span className="text-sm text-muted-foreground">Sinistro</span>
         </div>
-        <Badge variant="outline">{sinistro.protocolo}</Badge>
+        <div className="flex items-center gap-2">
+          <Badge variant="outline">{sinistro.protocolo}</Badge>
+          {sinistro.tipo_dano && (
+            <Badge variant={isPerdaTotal ? 'destructive' : 'secondary'}>
+              {isPerdaTotal ? 'Perda Total' : 'Dano Parcial'}
+            </Badge>
+          )}
+        </div>
       </div>
+      
+      {isPerdaTotal && (
+        <div className="flex items-start gap-2 p-2 bg-red-100 rounded text-sm text-red-800">
+          <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+          <span>Este sinistro está classificado como Perda Total e não pode ter OS criada. Deve seguir para indenização.</span>
+        </div>
+      )}
       
       {sinistro.veiculo && (
         <div className="flex items-center justify-between">
