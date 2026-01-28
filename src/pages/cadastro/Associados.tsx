@@ -7,6 +7,7 @@ import {
   MessageCircle, X, ChevronLeft, ChevronRight, Users, Download, Filter, DollarSign, Trash2
 } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
+import { BadgeCoberturaCompact } from '@/components/veiculos/BadgeCobertura';
 import { supabase } from '@/integrations/supabase/client';
 import * as XLSX from 'xlsx';
 import { Input } from '@/components/ui/input';
@@ -536,13 +537,17 @@ export default function Associados() {
                     </TableCell>
                     <TableCell onClick={() => navigate(`/cadastro/associados/${associado.id}`)}>
                       {associado.veiculos && associado.veiculos.length > 0 ? (
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-2">
                           <span>{associado.veiculos[0].placa} - {associado.veiculos[0].modelo}</span>
                           {associado.veiculos.length > 1 && (
                             <Badge variant="secondary" className="text-xs">
                               +{associado.veiculos.length - 1}
                             </Badge>
                           )}
+                          <BadgeCoberturaCompact
+                            coberturaTotal={associado.veiculos[0].cobertura_total}
+                            coberturaRouboFurto={associado.veiculos[0].cobertura_roubo_furto}
+                          />
                         </div>
                       ) : '—'}
                     </TableCell>
