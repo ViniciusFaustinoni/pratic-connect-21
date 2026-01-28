@@ -46,7 +46,7 @@ export default function OuvidoriaLista() {
   const navigate = useNavigate();
   const [tab, setTab] = useState('todas');
 
-  const manifestacoes = mockManifestacoes;
+  const { data: manifestacoes = [] } = useManifestacoes();
 
   const filteredManifestacoes = manifestacoes.filter(m => {
     if (tab === 'abertas') return m.status !== 'encerrado';
@@ -106,8 +106,8 @@ export default function OuvidoriaLista() {
                           <span className="text-xs text-muted-foreground font-mono">
                             {manifestacao.protocolo}
                           </span>
-                          {manifestacao.temRespostaNova && (
-                            <span className="w-2 h-2 rounded-full bg-red-500" />
+                          {manifestacao.status === 'aguardando_resposta' && (
+                            <span className="w-2 h-2 rounded-full bg-destructive" />
                           )}
                         </div>
                         
