@@ -5943,6 +5943,73 @@ export type Database = {
           },
         ]
       }
+      encaixes_urgentes: {
+        Row: {
+          created_at: string
+          dados_servico: Json
+          expira_em: string | null
+          id: string
+          motivo: string
+          nome_cliente: string
+          reservado_em: string | null
+          reservado_por: string | null
+          servico_id: string
+          status: string
+          telefone_cliente: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          dados_servico?: Json
+          expira_em?: string | null
+          id?: string
+          motivo?: string
+          nome_cliente: string
+          reservado_em?: string | null
+          reservado_por?: string | null
+          servico_id: string
+          status?: string
+          telefone_cliente: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          dados_servico?: Json
+          expira_em?: string | null
+          id?: string
+          motivo?: string
+          nome_cliente?: string
+          reservado_em?: string | null
+          reservado_por?: string | null
+          servico_id?: string
+          status?: string
+          telefone_cliente?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "encaixes_urgentes_reservado_por_fkey"
+            columns: ["reservado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "encaixes_urgentes_reservado_por_fkey"
+            columns: ["reservado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "encaixes_urgentes_servico_id_fkey"
+            columns: ["servico_id"]
+            isOneToOne: false
+            referencedRelation: "servicos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       estoque_movimentacoes: {
         Row: {
           created_at: string | null
@@ -15548,6 +15615,11 @@ export type Database = {
       can_manage_juridico: { Args: { _user_id: string }; Returns: boolean }
       can_manage_marketing: { Args: { _user_id: string }; Returns: boolean }
       can_manage_permissions: { Args: { _user_id: string }; Returns: boolean }
+      confirmar_encaixe_urgente: {
+        Args: { p_encaixe_id: string; p_profissional_id: string }
+        Returns: boolean
+      }
+      expirar_encaixes_urgentes: { Args: never; Returns: number }
       fn_calcular_custo_beneficio: {
         Args: { p_beneficio_id: string; p_tipo?: string }
         Returns: {
@@ -15701,6 +15773,10 @@ export type Database = {
       processar_template: {
         Args: { p_template_id: string; p_variaveis: Json }
         Returns: string
+      }
+      reservar_encaixe_urgente: {
+        Args: { p_encaixe_id: string; p_profissional_id: string }
+        Returns: boolean
       }
       resetar_contadores_distribuicao: { Args: never; Returns: undefined }
       show_limit: { Args: never; Returns: number }

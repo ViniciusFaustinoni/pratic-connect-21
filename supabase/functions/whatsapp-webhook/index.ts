@@ -596,10 +596,60 @@ async function processarRespostaConfirmacao(
     }
   }
 
-  // Se quer reagendar, atualizar status
+  // Se quer reagendar, criar encaixe urgente para outros vistoriadores
   if (resultado.intencao === 'REAGENDAR') {
+    // 1. Buscar dados completos do serviço
+    const { data: servico } = await supabase
+      .from('servicos')
+      .select(`
+        id, tipo, data_agendada, hora_agendada, periodo,
+        logradouro, numero, bairro, cidade, uf,
+        associado:associados!servicos_associado_id_fkey(nome, telefone, whatsapp),
+        veiculo:veiculos!servicos_veiculo_id_fkey(placa, marca, modelo)
+      `)
+      .eq('id', confirmacao.servico_id)
+      .single();
+
+    if (servico) {
+      const telefoneCliente = servico.associado?.whatsapp || servico.associado?.telefone || confirmacao.telefone;
+      const nomeCliente = servico.associado?.nome || 'Cliente';
+      const veiculoInfo = servico.veiculo 
+        ? `${servico.veiculo.marca} ${servico.veiculo.modelo} - ${servico.veiculo.placa}`
+        : 'Veículo não informado';
+      const enderecoInfo = [servico.logradouro, servico.numero, servico.bairro, servico.cidade]
+        .filter(Boolean)
+        .join(', ') || 'Endereço não informado';
+
+      // 2. Criar encaixe urgente para outros vistoriadores
+      const { error: encaixeError } = await supabase.from('encaixes_urgentes').insert({
+        servico_id: confirmacao.servico_id,
+        status: 'disponivel',
+        motivo: 'cliente_reagendou',
+        telefone_cliente: telefoneCliente,
+        nome_cliente: nomeCliente,
+        dados_servico: {
+          tipo: servico.tipo,
+          data: servico.data_agendada,
+          hora: servico.hora_agendada,
+          periodo: servico.periodo,
+          endereco: enderecoInfo,
+          veiculo: veiculoInfo,
+        },
+      });
+
+      if (encaixeError) {
+        console.error('[whatsapp-webhook] Erro ao criar encaixe urgente:', encaixeError);
+      } else {
+        console.log('[whatsapp-webhook] Encaixe urgente criado para serviço', confirmacao.servico_id);
+      }
+    }
+
+    // 3. Atualizar serviço: remover profissional e marcar como reagendado
     await supabase.from('servicos')
-      .update({ confirmacao_whatsapp: 'reagendado' })
+      .update({ 
+        confirmacao_whatsapp: 'reagendado',
+        profissional_id: null,  // Liberar para outro vistoriador
+      })
       .eq('id', confirmacao.servico_id);
   }
 

@@ -1,12 +1,14 @@
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { CalendarDays, Loader2, WifiOff, Phone, Map, MessageSquare } from 'lucide-react';
+import { CalendarDays, Loader2, WifiOff, Phone, Map, MessageSquare, Zap } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTarefaAtual } from '@/hooks/useTarefaAtual';
 import { BotaoIniciarServico } from '@/components/vistoriador/BotaoIniciarServico';
 import { TarefaAtualCard } from '@/components/vistoriador/TarefaAtualCard';
+import { EncaixeUrgenteCard } from '@/components/vistoriador/EncaixeUrgenteCard';
+import { useEncaixesUrgentes } from '@/hooks/useEncaixesUrgentes';
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
@@ -15,6 +17,7 @@ export default function InstaladorHome() {
   const { profile } = useAuth();
   const navigate = useNavigate();
   const { data: tarefaAtual, isLoading } = useTarefaAtual();
+  const { data: encaixesUrgentes = [], isLoading: isLoadingEncaixes } = useEncaixesUrgentes();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   // Monitorar status online/offline
@@ -91,6 +94,19 @@ export default function InstaladorHome() {
           <TarefaAtualCard tarefa={tarefaAtual} />
         ) : (
           <BotaoIniciarServico />
+        )}
+
+        {/* Encaixes Urgentes - Sistema Uber */}
+        {encaixesUrgentes.length > 0 && (
+          <div className="space-y-3">
+            <h2 className="text-sm font-medium text-slate-300 flex items-center gap-2">
+              <Zap className="h-4 w-4 text-amber-400" />
+              Encaixes Urgentes ({encaixesUrgentes.length})
+            </h2>
+            {encaixesUrgentes.map(encaixe => (
+              <EncaixeUrgenteCard key={encaixe.id} encaixe={encaixe} />
+            ))}
+          </div>
         )}
 
         {/* Ações Rápidas */}
