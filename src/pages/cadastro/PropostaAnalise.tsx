@@ -57,6 +57,7 @@ import { SolicitarDocumentosDialog } from '@/components/cadastro/SolicitarDocume
 import { DocumentosAnexadosCard } from '@/components/cadastro/DocumentosAnexadosCard';
 import { DocumentosSolicitadosCard } from '@/components/cadastro/DocumentosSolicitadosCard';
 import { VistoriaFotosCard } from '@/components/cadastro/VistoriaFotosCard';
+import { VistoriaObservacoesCard } from '@/components/cadastro/VistoriaObservacoesCard';
 import { AssinaturaClienteCard } from '@/components/cadastro/AssinaturaClienteCard';
 import { ReprovarPropostaDialog } from '@/components/cadastro/ReprovarPropostaDialog';
 import { format } from 'date-fns';
@@ -631,6 +632,14 @@ export default function PropostaAnalise() {
               fotos={proposta.vistoria.fotos || []} 
               vistoriaStatus={proposta.vistoria.status}
               modalidade={proposta.vistoria.modalidade}
+            />
+          )}
+
+          {/* Observações do Vistoriador */}
+          {proposta.vistoria && (proposta.vistoria.observacoes || proposta.vistoria.km_atual) && (
+            <VistoriaObservacoesCard 
+              observacoes={proposta.vistoria.observacoes}
+              kmAtual={proposta.vistoria.km_atual}
             />
           )}
 
