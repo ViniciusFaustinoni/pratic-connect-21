@@ -6,6 +6,17 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Normalizar base64 - garantir que tenha o prefixo correto
+function normalizeBase64(data: string | undefined): string | undefined {
+  if (!data) return undefined;
+  // Se já tem o prefixo data:image, retornar como está
+  if (data.startsWith('data:image')) {
+    return data;
+  }
+  // Se não tem, adicionar o prefixo
+  return `data:image/png;base64,${data}`;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -102,7 +113,7 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({
           success: true,
-          qrcode: createData.qrcode?.base64,
+          qrcode: normalizeBase64(createData.qrcode?.base64),
           code: createData.qrcode?.code,
           pairingCode: createData.qrcode?.pairingCode,
         }),
@@ -149,7 +160,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        qrcode: data.base64,
+        qrcode: normalizeBase64(data.base64),
         code: data.code,
         pairingCode: data.pairingCode,
       }),
