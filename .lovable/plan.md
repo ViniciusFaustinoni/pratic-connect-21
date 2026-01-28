@@ -1,235 +1,228 @@
 
-# Plano: Corrigir Geocodificação na Criação de Instalações
+# Plano: Corrigir Fluxo de Cobertura Total Após Instalação
 
-## Problema Identificado
+## Diagnóstico
 
-A instalação do associado MARCUS VINICIUS foi criada **sem coordenadas GPS** porque o código que cria instalações após aprovação de autovistoria (em `usePropostasPendentes.ts`) **não geocodifica o endereço**.
+### Cenário Atual (MARCUS VINICIUS)
+| Etapa | Status Associado | cobertura_roubo_furto | cobertura_total | Observação |
+|-------|------------------|----------------------|-----------------|------------|
+| Autovistoria aprovada (09:58) | ativo | ✅ true | ❌ false | OK - cobertura parcial |
+| Instalação concluída (10:17) | **em_analise** ⚠️ | ✅ true | ❌ false | PROBLEMA! |
 
-### Dados Atuais
+### Problemas Identificados
 
-| Tabela | Campo | Valor |
-|--------|-------|-------|
-| `servicos` | `latitude` | `null` |
-| `servicos` | `longitude` | `null` |
-| `instalacoes` | `endereco_latitude` | `null` |
-| `instalacoes` | `endereco_longitude` | `null` |
-| `servicos` | `logradouro` | EST CAFUNDA |
-| `servicos` | `bairro` | TANQUE |
-| `servicos` | `cidade` | RIO DE JANEIRO |
+**1. Regressão de Status do Associado**
+- Arquivo: `src/hooks/useServicos.ts` (linhas 914-926)
+- O hook `useAprovarVeiculoServico` força o status para `em_analise` quando deveria **manter o status atual** se já for `ativo`
+- O associado MARCUS voltou de `ativo` → `em_analise` após a instalação
 
-### Fluxo do Problema
+**2. Falta de Visibilidade para Ativação**
+- O hook `useInstalacoesAguardandoAtivacao` existe em `useVistoriaCompletaAnalise.ts` mas **NÃO está sendo usado em nenhuma tela**
+- O analista não sabe que precisa ativar o rastreador
+- A página `/cadastro/instalacoes/:id/ativar` existe mas não há listagem que leve a ela
 
-```text
-Analista aprova autovistoria
-        ↓
-Código cria instalação com endereço do associado
-        ↓
-❌ NÃO GEOCODIFICA o endereço (lat/lng ficam null)
-        ↓
-Trigger sincroniza para tabela servicos (também sem coords)
-        ↓
-Vistoriador inicia serviço
-        ↓
-Edge Function busca serviços disponíveis
-        ↓
-1 serviço encontrado
-        ↓
-Filtro remove serviços sem coordenadas
-        ↓
-0 serviços restantes
-        ↓
-"Aguardando tarefas..." (mas tem tarefa!)
-```
+**3. Rastreador Instalado mas Não Ativado**
+- Rastreador: `imei: 12345678912345678`, `status: instalado`
+- `plataforma_device_id: null` (não ativado na Softruck)
+- `cobertura_total: false` (deveria ser ativado automaticamente ou ter ação clara)
 
 ## Solução
 
-### 1. Adicionar Geocodificação na Aprovação de Autovistoria
+### 1. Corrigir Regressão de Status (Prioridade Alta)
 
-**Arquivo:** `src/hooks/usePropostasPendentes.ts` (linhas ~1403-1421)
+**Arquivo:** `src/hooks/useServicos.ts`
 
-Antes de criar a instalação, chamar a Edge Function `geocode-endereco` para obter as coordenadas:
+Modificar a lógica de atualização do associado (linhas 914-926):
 
 ```typescript
-// Geocodificar endereço do associado antes de criar instalação
-let endereco_latitude: number | null = null;
-let endereco_longitude: number | null = null;
+// ANTES:
+const { error: associadoError } = await supabase
+  .from('associados')
+  .update({ 
+    status: 'em_analise',  // ← SEMPRE força para em_analise
+    updated_at: agora,
+  })
+  .eq('id', data.associadoId)
+  .in('status', ['pendente_vistoria', 'aguardando_instalacao']);
 
-if (associadoData?.logradouro && associadoData?.cidade) {
+// DEPOIS:
+// Só atualiza para em_analise se NÃO estava ativo
+// Se já estava ativo (aprovado antes), mantém ativo
+const { error: associadoError } = await supabase
+  .from('associados')
+  .update({ 
+    status: 'em_analise',
+    updated_at: agora,
+  })
+  .eq('id', data.associadoId)
+  .in('status', ['pendente_vistoria', 'aguardando_instalacao'])
+  .neq('status', 'ativo');  // ← NÃO REGREDIR se já estiver ativo!
+
+// OU melhor: Buscar status atual primeiro
+const { data: associadoAtual } = await supabase
+  .from('associados')
+  .select('status')
+  .eq('id', data.associadoId)
+  .single();
+
+if (associadoAtual?.status !== 'ativo') {
+  await supabase
+    .from('associados')
+    .update({ status: 'em_analise', updated_at: agora })
+    .eq('id', data.associadoId);
+}
+```
+
+### 2. Ativar Cobertura Total Automaticamente Quando Autovistoria Prévia
+
+**Arquivo:** `src/hooks/useServicos.ts`
+
+Adicionar lógica para verificar se a autovistoria já foi aprovada e ativar cobertura total imediatamente:
+
+```typescript
+// Após vincular rastreador...
+
+// Verificar se veículo já tinha cobertura_roubo_furto (autovistoria aprovada)
+const { data: veiculoAtual } = await supabase
+  .from('veiculos')
+  .select('cobertura_roubo_furto, cobertura_total')
+  .eq('id', data.veiculoId)
+  .single();
+
+// Se já tinha autovistoria aprovada, ativar cobertura total automaticamente
+if (veiculoAtual?.cobertura_roubo_furto && !veiculoAtual?.cobertura_total) {
+  const { error: veiculoError } = await supabase
+    .from('veiculos')
+    .update({
+      status: 'ativo',
+      cobertura_total: true,  // ← ATIVAR cobertura total
+      updated_at: agora,
+    })
+    .eq('id', data.veiculoId);
+
+  // Tentar ativar rastreador na plataforma (Softruck)
   try {
-    const { data: geoResult } = await supabase.functions.invoke('geocode-endereco', {
+    await supabase.functions.invoke('softruck-ativar-dispositivo', {
       body: {
-        logradouro: associadoData.logradouro,
-        numero: associadoData.numero,
-        bairro: associadoData.bairro,
-        cidade: associadoData.cidade,
-        uf: associadoData.uf,
-        cep: associadoData.cep,
-      }
-    });
-    
-    if (geoResult?.latitude && geoResult?.longitude) {
-      endereco_latitude = geoResult.latitude;
-      endereco_longitude = geoResult.longitude;
-      console.log(`Geocodificação OK: (${endereco_latitude}, ${endereco_longitude})`);
-    }
-  } catch (geoError) {
-    console.warn('Geocodificação falhou, continuando sem coordenadas:', geoError);
-  }
-}
-
-// Criar instalação COM coordenadas
-const { error: instalacaoError } = await supabase
-  .from('instalacoes')
-  .insert({
-    associado_id: associadoId,
-    veiculo_id: veiculoId,
-    contrato_id: contratoId,
-    status: 'agendada',
-    data_agendada: dataAgendada,
-    periodo: 'manha',
-    logradouro: associadoData?.logradouro || null,
-    numero: associadoData?.numero || null,
-    bairro: associadoData?.bairro || null,
-    cidade: associadoData?.cidade || null,
-    uf: associadoData?.uf || null,
-    cep: associadoData?.cep || null,
-    endereco_latitude,     // ✅ NOVO
-    endereco_longitude,    // ✅ NOVO
-    local_vistoria: 'cliente',
-  } as any);
-```
-
-### 2. Corrigir Edge Function `criar-instalacao-pos-pagamento`
-
-**Arquivo:** `supabase/functions/criar-instalacao-pos-pagamento/index.ts` (linhas 205-222)
-
-O código atual tem um bug onde usa campos errados para autovistoria:
-
-```typescript
-// ANTES (BUG - linhas 216-217)
-latitude: cotacao.vistoria_endereco_latitude,  // ← Errado!
-longitude: cotacao.vistoria_endereco_longitude,
-
-// DEPOIS (CORREÇÃO)
-// Se for autovistoria, buscar vistoria_completa_endereco_* para coords
-// Como não existe essa coluna, fazer geocodificação do endereço
-```
-
-Adicionar geocodificação quando coordenadas estão ausentes:
-
-```typescript
-// 5.2 Se não tiver coordenadas, geocodificar
-if (!endereco.latitude || !endereco.longitude && endereco.logradouro && endereco.cidade) {
-  try {
-    const geoResponse = await fetch(`${supabaseUrl}/functions/v1/geocode-endereco`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${serviceRoleKey}`,
+        imei: data.imeiRastreador,
+        veiculoId: data.veiculoId,
+        associadoId: data.associadoId,
       },
-      body: JSON.stringify({
-        logradouro: endereco.logradouro,
-        numero: endereco.numero,
-        bairro: endereco.bairro,
-        cidade: endereco.cidade,
-        uf: endereco.estado,
-        cep: endereco.cep,
-      }),
     });
-    
-    if (geoResponse.ok) {
-      const geoData = await geoResponse.json();
-      if (geoData.latitude && geoData.longitude) {
-        endereco.latitude = geoData.latitude;
-        endereco.longitude = geoData.longitude;
-        console.log(`[CriarInstalacaoPosPagamento] Geocodificado: (${endereco.latitude}, ${endereco.longitude})`);
-      }
-    }
-  } catch (geoError) {
-    console.warn('[CriarInstalacaoPosPagamento] Geocodificação falhou:', geoError);
+  } catch (err) {
+    console.warn('Ativação na plataforma falhou, requer ação manual:', err);
+    // Não bloquear fluxo - ativação pode ser feita manualmente depois
   }
+} else {
+  // Fluxo normal sem autovistoria prévia
+  await supabase
+    .from('veiculos')
+    .update({ status: 'ativo', updated_at: agora })
+    .eq('id', data.veiculoId);
 }
 ```
 
-### 3. Corrigir Dados Existentes (Migração Pontual)
+### 3. Adicionar Seção de "Aguardando Ativação" na Tela de Propostas
 
-Executar SQL para geocodificar a instalação do MARCUS:
+**Arquivo:** `src/pages/cadastro/PropostasPendentes.tsx`
+
+Adicionar KPI e seção para instalações aguardando ativação:
+
+```typescript
+import { useInstalacoesAguardandoAtivacao } from '@/hooks/useVistoriaCompletaAnalise';
+
+// Dentro do componente
+const { data: instalacoesPendentes } = useInstalacoesAguardandoAtivacao();
+
+// Novo KPI
+<KPICard
+  titulo="Aguard. Ativação"
+  valor={instalacoesPendentes?.length || 0}
+  icon={<Zap className="h-5 w-5 text-white" />}
+  cor="bg-purple-500"
+  loading={false}
+/>
+
+// Seção dedicada (se houver pendentes)
+{instalacoesPendentes && instalacoesPendentes.length > 0 && (
+  <Card className="border-2 border-purple-500">
+    <CardHeader>
+      <CardTitle className="flex items-center gap-2">
+        <Zap className="h-5 w-5 text-purple-500" />
+        Instalações Aguardando Ativação de Rastreador
+      </CardTitle>
+      <CardDescription>
+        Clique para ativar o rastreador na plataforma e liberar a cobertura total
+      </CardDescription>
+    </CardHeader>
+    <CardContent>
+      <Table>
+        {/* Lista de instalações com botão para /cadastro/instalacoes/:id/ativar */}
+      </Table>
+    </CardContent>
+  </Card>
+)}
+```
+
+### 4. Corrigir Dados Existentes (MARCUS)
+
+Executar SQL para corrigir o estado atual:
 
 ```sql
--- Atualizar instalação existente com coordenadas aproximadas do endereço
--- EST CAFUNDA, 725, TANQUE, RIO DE JANEIRO, RJ
-UPDATE instalacoes
-SET endereco_latitude = -22.9208,  -- Aproximado para Tanque, RJ
-    endereco_longitude = -43.3589
-WHERE id = 'ca79d033-abbe-4767-8ad7-999d5c03130d';
+-- 1. Restaurar status do associado para ativo
+UPDATE associados
+SET status = 'ativo',
+    updated_at = NOW()
+WHERE id = '9487e709-2154-4f44-b9bc-eb7a423cf98b';
 
--- O trigger irá sincronizar para a tabela servicos automaticamente
+-- 2. Ativar cobertura total do veículo (já tem rastreador instalado)
+UPDATE veiculos
+SET cobertura_total = true,
+    updated_at = NOW()
+WHERE id = 'e455066e-3b22-4d68-9e56-4ca9ffce4d93';
 ```
 
-Ou chamar a função de geocodificação via SQL/Edge Function.
-
-## Arquivos a Serem Modificados
+## Arquivos a Modificar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/hooks/usePropostasPendentes.ts` | Adicionar geocodificação antes de criar instalação na aprovação de autovistoria |
-| `supabase/functions/criar-instalacao-pos-pagamento/index.ts` | Adicionar fallback de geocodificação quando coords ausentes |
+| `src/hooks/useServicos.ts` | Não regredir status de `ativo`; Ativar `cobertura_total` automaticamente se autovistoria prévia |
+| `src/pages/cadastro/PropostasPendentes.tsx` | Adicionar seção/KPI para instalações aguardando ativação |
+| *Migração SQL* | Corrigir dados do MARCUS (status e cobertura) |
 
 ## Seção Técnica
 
-### Trigger de Sincronização
+### Fluxo Esperado Após Correção
 
-A tabela `servicos` é populada via trigger SQL (`trigger_sync_instalacao_to_servicos`) que copia dados da `instalacoes`. Os campos mapeados incluem:
-- `latitude` ← `endereco_latitude`
-- `longitude` ← `endereco_longitude`
+```text
+1. Autovistoria aprovada pelo analista
+   └─ associado.status = 'ativo'
+   └─ veiculo.cobertura_roubo_furto = true
+   └─ veiculo.cobertura_total = false
 
-Portanto, corrigir a fonte (`instalacoes`) automaticamente corrige o destino (`servicos`).
+2. Instalação física concluída pelo técnico
+   └─ associado.status = 'ativo' (MANTÉM!)
+   └─ veiculo.cobertura_roubo_furto = true
+   └─ veiculo.cobertura_total = true (ATIVA AUTOMATICAMENTE!)
+   └─ Tenta ativar Softruck (não bloqueia se falhar)
 
-### Edge Function `geocode-endereco`
-
-Já existe e funciona corretamente. Usa a API Nominatim (OpenStreetMap) para geocodificação. Rate limit de 1 req/seg.
-
-### Fallback
-
-Se a geocodificação falhar:
-1. Logar warning no console
-2. Continuar criando instalação sem coordenadas
-3. O serviço ficará pendente de atribuição manual até coordenadas serem adicionadas
-
-### Correção Imediata do Caso Atual
-
-Para corrigir o caso do MARCUS imediatamente sem esperar deploy:
-
-```sql
--- 1. Atualizar instalação
-UPDATE instalacoes
-SET endereco_latitude = -22.9208,
-    endereco_longitude = -43.3589
-WHERE id = 'ca79d033-abbe-4767-8ad7-999d5c03130d';
-
--- 2. Forçar sync para servicos (trigger deve fazer automaticamente)
-UPDATE servicos
-SET latitude = -22.9208,
-    longitude = -43.3589
-WHERE id = 'bf662bc2-29f1-4de1-8d1e-17bf5c672854';
+3. App do Associado
+   └─ Mostra todas as funcionalidades (Assistência 24h, todos sinistros, rastreamento)
 ```
+
+### Regras de Negócio
+
+| Cenário | Comportamento |
+|---------|---------------|
+| Instalação após autovistoria aprovada | Ativa `cobertura_total` imediatamente |
+| Instalação SEM autovistoria prévia | Mantém `cobertura_total: false`, vai para fila de análise |
+| Falha na ativação Softruck | Não bloqueia, registra para ativação manual posterior |
 
 ## Resultado Esperado
 
-### Antes (Bug)
-- Instalação criada sem coordenadas
-- Serviço filtrado pelo algoritmo de atribuição
-- Vistoriador fica "Aguardando tarefas" mesmo com tarefa pendente
-
-### Depois (Corrigido)
-- Instalação criada COM coordenadas geocodificadas
-- Serviço passa pelo filtro de atribuição
-- Vistoriador recebe tarefa automaticamente
-
-### Logs Esperados
-```
-[atribuir-proxima-tarefa] Serviços encontrados: 1 normais + 0 encaixes futuros
-[atribuir-proxima-tarefa] 1 serviços disponíveis no total
-[atribuir-proxima-tarefa] 1 serviços após filtragem  ← CORRIGIDO!
-[atribuir-proxima-tarefa] Tentando atribuir instalacao bf662bc2-... (X.XX km)
-```
+| Antes (Bug) | Depois (Corrigido) |
+|-------------|-------------------|
+| MARCUS vê "Sua cobertura atual é apenas para roubo e furto" | MARCUS vê todas as funcionalidades liberadas |
+| Status regrediu para `em_analise` | Status permanece `ativo` |
+| `cobertura_total: false` mesmo após instalação | `cobertura_total: true` ativado automaticamente |
+| Analista não vê instalações pendentes de ativação | KPI + Seção visível na tela de propostas |
