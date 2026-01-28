@@ -11,18 +11,18 @@ export function ConfiguracoesLayout() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-6xl mx-auto flex">
+    <div className="h-full bg-background overflow-hidden">
+      <div className="max-w-6xl mx-auto flex h-full">
         {/* Sidebar Desktop */}
-        <aside className="w-60 shrink-0 hidden lg:block border-r min-h-screen">
-          <div className="sticky top-0 p-6 pt-8">
+        <aside className="w-60 shrink-0 hidden lg:block border-r h-full overflow-y-auto">
+          <div className="p-6 pt-8">
             <h1 className="text-lg font-semibold text-foreground mb-8">Configurações</h1>
             <ConfiguracoesSidebar />
           </div>
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 min-w-0">
+        <main className="flex-1 min-w-0 h-full overflow-y-auto">
           {/* Mobile Navigation */}
           <ConfiguracoesMobileNav />
           
