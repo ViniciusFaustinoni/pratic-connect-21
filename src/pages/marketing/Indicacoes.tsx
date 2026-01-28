@@ -9,11 +9,11 @@ import {
   DollarSign, Phone, Check, Settings, Trophy, Clock
 } from 'lucide-react';
 import { useIndicacoes, useProgramaIndicacao, useRecompensarIndicacao, useIndicacoesStats, useTopIndicadores } from '@/hooks/useMarketing';
-import { useNavigate } from 'react-router-dom';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { IndicacaoFormDialog } from '@/components/marketing/IndicacaoFormDialog';
+import { ConfigurarProgramaModal } from '@/components/marketing/ConfigurarProgramaModal';
 import {
   Table,
   TableBody,
@@ -44,10 +44,10 @@ const statusConfig: Record<string, { label: string; className: string }> = {
 };
 
 export default function Indicacoes() {
-  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState('todas');
   const [showForm, setShowForm] = useState(false);
+  const [showConfigModal, setShowConfigModal] = useState(false);
   const [recompensarId, setRecompensarId] = useState<string | null>(null);
 
   const { data: programa } = useProgramaIndicacao();
@@ -104,7 +104,7 @@ export default function Indicacoes() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => navigate('/marketing/programa')}>
+          <Button variant="outline" onClick={() => setShowConfigModal(true)}>
             <Settings className="mr-2 h-4 w-4" />
             Configurar Programa
           </Button>
@@ -505,6 +505,13 @@ export default function Indicacoes() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Modal Configurar Programa */}
+      <ConfigurarProgramaModal
+        open={showConfigModal}
+        onClose={() => setShowConfigModal(false)}
+        programa={programa}
+      />
     </div>
   );
 }

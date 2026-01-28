@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Building, Briefcase, Plus, Edit, Trash2, Users, Check, X } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,7 +8,26 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useState, useMemo } from 'react';
+import { DepartamentoFormModal } from '@/components/rh/DepartamentoFormModal';
+import { CargoFormModal } from '@/components/rh/CargoFormModal';
+
+interface Departamento {
+  id: string;
+  nome: string;
+  descricao: string | null;
+  ativo: boolean;
+}
+
+interface Cargo {
+  id: string;
+  nome: string;
+  departamento_id: string | null;
+  nivel: number | null;
+  cbo: string | null;
+  salario_base: number | null;
+  ativo: boolean;
+  departamento?: { nome: string } | null;
+}
 
 const nivelConfig: Record<number, { label: string; className: string }> = {
   1: { label: 'Junior', className: 'bg-gray-100 text-gray-800' },
@@ -25,6 +45,10 @@ const formatCurrency = (value: number | null) => {
 
 export default function DepartamentosCargos() {
   const [tabAtual, setTabAtual] = useState('departamentos');
+  const [deptModalOpen, setDeptModalOpen] = useState(false);
+  const [cargoModalOpen, setCargoModalOpen] = useState(false);
+  const [selectedDept, setSelectedDept] = useState<Departamento | null>(null);
+  const [selectedCargo, setSelectedCargo] = useState<Cargo | null>(null);
 
   const { data: departamentos, isLoading: loadingDepts } = useQuery({
     queryKey: ['departamentos'],
@@ -34,7 +58,7 @@ export default function DepartamentosCargos() {
         .select('*')
         .order('nome');
       if (error) throw error;
-      return data;
+      return data as Departamento[];
     }
   });
 
@@ -69,12 +93,32 @@ export default function DepartamentosCargos() {
         `)
         .order('nome');
       if (error) throw error;
-      return data;
+      return data as Cargo[];
     }
   });
 
   const totalDepartamentos = departamentos?.length || 0;
   const totalCargos = cargos?.length || 0;
+
+  const handleNewDept = () => {
+    setSelectedDept(null);
+    setDeptModalOpen(true);
+  };
+
+  const handleEditDept = (dept: Departamento) => {
+    setSelectedDept(dept);
+    setDeptModalOpen(true);
+  };
+
+  const handleNewCargo = () => {
+    setSelectedCargo(null);
+    setCargoModalOpen(true);
+  };
+
+  const handleEditCargo = (cargo: Cargo) => {
+    setSelectedCargo(cargo);
+    setCargoModalOpen(true);
+  };
 
   const isLoading = loadingDepts || loadingCargos;
 
@@ -130,7 +174,7 @@ export default function DepartamentosCargos() {
         {/* Tab Departamentos */}
         <TabsContent value="departamentos" className="space-y-4">
           <div className="flex justify-end">
-            <Button disabled>
+            <Button onClick={handleNewDept}>
               <Plus className="h-4 w-4 mr-2" />
               Novo Departamento
             </Button>
@@ -167,11 +211,8 @@ export default function DepartamentosCargos() {
                         <span>{funcionariosPorDept?.[dept.id] || 0} funcionários</span>
                       </div>
                       <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" disabled>
+                        <Button variant="ghost" size="icon" onClick={() => handleEditDept(dept)}>
                           <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" disabled>
-                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </div>
@@ -190,7 +231,7 @@ export default function DepartamentosCargos() {
         {/* Tab Cargos */}
         <TabsContent value="cargos" className="space-y-4">
           <div className="flex justify-end">
-            <Button disabled>
+            <Button onClick={handleNewCargo}>
               <Plus className="h-4 w-4 mr-2" />
               Novo Cargo
             </Button>
@@ -241,11 +282,8 @@ export default function DepartamentosCargos() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
-                          <Button variant="ghost" size="icon" disabled>
+                          <Button variant="ghost" size="icon" onClick={() => handleEditCargo(cargo)}>
                             <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" disabled>
-                            <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
                       </TableCell>
@@ -262,6 +300,18 @@ export default function DepartamentosCargos() {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Modais */}
+      <DepartamentoFormModal
+        open={deptModalOpen}
+        onClose={() => setDeptModalOpen(false)}
+        departamento={selectedDept}
+      />
+      <CargoFormModal
+        open={cargoModalOpen}
+        onClose={() => setCargoModalOpen(false)}
+        cargo={selectedCargo}
+      />
     </div>
   );
 }

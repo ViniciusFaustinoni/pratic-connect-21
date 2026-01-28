@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { 
   Gift, Plus, Edit, Bus, Utensils, ShoppingCart, Heart, Smile, Shield, Dumbbell, 
   Users, Eye, Check, X, DollarSign, Building, LucideIcon 
@@ -9,6 +10,17 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useMemo } from 'react';
+import { BeneficioFormModal } from '@/components/rh/BeneficioFormModal';
+
+interface Beneficio {
+  id: string;
+  nome: string;
+  tipo: string;
+  fornecedor: string | null;
+  valor_empresa: number | null;
+  valor_funcionario: number | null;
+  ativo: boolean;
+}
 
 const tipoConfig: Record<string, { icon: LucideIcon; cor: string; bgCor: string; label: string }> = {
   vale_transporte: { icon: Bus, cor: 'text-blue-600', bgCor: 'bg-blue-100', label: 'Vale Transporte' },
@@ -29,6 +41,10 @@ const formatCurrency = (value: number | null) => {
 };
 
 export default function Beneficios() {
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState<'create' | 'edit' | 'view'>('create');
+  const [selectedBeneficio, setSelectedBeneficio] = useState<Beneficio | null>(null);
+
   const { data: beneficios, isLoading } = useQuery({
     queryKey: ['beneficios'],
     queryFn: async () => {
@@ -37,7 +53,7 @@ export default function Beneficios() {
         .select('*')
         .order('nome');
       if (error) throw error;
-      return data;
+      return data as Beneficio[];
     }
   });
 
@@ -50,7 +66,6 @@ export default function Beneficios() {
         .eq('ativo', true);
       
       if (error) {
-        // Tabela pode não existir ainda
         console.warn('Tabela funcionarios_beneficios não encontrada');
         return {};
       }
@@ -77,6 +92,24 @@ export default function Beneficios() {
       funcionariosCobertos
     };
   }, [beneficios, utilizacao]);
+
+  const handleNew = () => {
+    setSelectedBeneficio(null);
+    setModalMode('create');
+    setModalOpen(true);
+  };
+
+  const handleEdit = (beneficio: Beneficio) => {
+    setSelectedBeneficio(beneficio);
+    setModalMode('edit');
+    setModalOpen(true);
+  };
+
+  const handleView = (beneficio: Beneficio) => {
+    setSelectedBeneficio(beneficio);
+    setModalMode('view');
+    setModalOpen(true);
+  };
 
   if (isLoading) {
     return (
@@ -107,7 +140,7 @@ export default function Beneficios() {
           <Gift className="h-6 w-6 text-primary" />
           <h1 className="text-2xl font-bold">Benefícios</h1>
         </div>
-        <Button disabled>
+        <Button onClick={handleNew}>
           <Plus className="h-4 w-4 mr-2" />
           Novo Benefício
         </Button>
@@ -228,10 +261,10 @@ export default function Beneficios() {
                       {qtdFuncionarios} funcionários
                     </Badge>
                     <div className="flex gap-1">
-                      <Button variant="ghost" size="icon" disabled>
+                      <Button variant="ghost" size="icon" onClick={() => handleEdit(beneficio)}>
                         <Edit className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="icon" disabled>
+                      <Button variant="ghost" size="icon" onClick={() => handleView(beneficio)}>
                         <Eye className="h-4 w-4" />
                       </Button>
                     </div>
@@ -247,6 +280,14 @@ export default function Beneficios() {
           <p>Nenhum benefício cadastrado</p>
         </div>
       )}
+
+      {/* Modal */}
+      <BeneficioFormModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        beneficio={selectedBeneficio}
+        mode={modalMode}
+      />
     </div>
   );
 }
