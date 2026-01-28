@@ -622,8 +622,15 @@ export default function PropostaAnalise() {
               {proposta.status === 'assinado' && !proposta.tem_documento_pendente ? (
                 <>
                   {(() => {
-                    // Autovistoria = tem fotos de vistoria mas ainda não tem instalação concluída
-                    const isAutovistoria = proposta.vistoria?.fotos?.length > 0 && !proposta.instalacao_info;
+                    // Vistoria na base NÃO é autovistoria (fotos são do vistoriador)
+                    const isVistoriaBase = !!proposta.vistoria_base_info;
+                    
+                    // Autovistoria = modalidade explícita 'autovistoria' E ainda não tem instalação
+                    // E não é vistoria na base
+                    const isAutovistoria = (
+                      proposta.vistoria?.modalidade === 'autovistoria' ||
+                      proposta.vistoria?.tipo === 'autovistoria'
+                    ) && !proposta.instalacao_info && !isVistoriaBase;
                     return (
                       <Button
                         className="w-full bg-success hover:bg-success/90 text-white"
@@ -773,8 +780,15 @@ export default function PropostaAnalise() {
 
       {/* Dialog de confirmação de aprovação */}
       {(() => {
-        // Autovistoria = tem fotos de vistoria mas ainda não tem instalação concluída
-        const isAutovistoria = proposta.vistoria?.fotos?.length > 0 && !proposta.instalacao_info;
+        // Vistoria na base NÃO é autovistoria (fotos são do vistoriador)
+        const isVistoriaBase = !!proposta.vistoria_base_info;
+        
+        // Autovistoria = modalidade explícita 'autovistoria' E ainda não tem instalação
+        // E não é vistoria na base
+        const isAutovistoria = (
+          proposta.vistoria?.modalidade === 'autovistoria' ||
+          proposta.vistoria?.tipo === 'autovistoria'
+        ) && !proposta.instalacao_info && !isVistoriaBase;
         
         return (
           <AlertDialog open={showConfirmAprovar} onOpenChange={setShowConfirmAprovar}>
