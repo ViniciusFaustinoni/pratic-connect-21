@@ -80,9 +80,35 @@ serve(async (req) => {
       case 'criar': {
         if (!dados) throw new Error('Dados da cobrança são obrigatórios');
 
+        // CORREÇÃO: Buscar asaas_id do cliente pelo associado_id se não fornecido
+        let customerAsaasId = dados.customer;
+        
+        if (!customerAsaasId && associado_id) {
+          const { data: clienteAsaas, error: clienteError } = await supabase
+            .from('asaas_clientes')
+            .select('asaas_id')
+            .eq('associado_id', associado_id)
+            .maybeSingle();
+          
+          if (clienteError) {
+            console.error('[asaas-cobrancas] Erro ao buscar cliente:', clienteError);
+          }
+          
+          if (!clienteAsaas?.asaas_id) {
+            throw new Error('Cliente não sincronizado com ASAAS. Sincronize o cliente primeiro.');
+          }
+          
+          customerAsaasId = clienteAsaas.asaas_id;
+          console.log(`[asaas-cobrancas] Cliente ASAAS encontrado: ${customerAsaasId}`);
+        }
+        
+        if (!customerAsaasId) {
+          throw new Error('customer ou associado_id é obrigatório para criar cobrança');
+        }
+
         // Criar cobrança no ASAAS
         const asaasCobranca = await asaasRequest('/payments', 'POST', {
-          customer: dados.customer,
+          customer: customerAsaasId,
           billingType: dados.billingType,
           value: dados.value,
           dueDate: dados.dueDate,

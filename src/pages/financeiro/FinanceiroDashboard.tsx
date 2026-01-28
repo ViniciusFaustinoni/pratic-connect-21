@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { 
   DollarSign, 
   TrendingUp, 
@@ -29,6 +30,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { NovaCobrancaModal } from '@/components/financeiro/NovaCobrancaModal';
+import { NovaContaPagarModal } from '@/components/financeiro/NovaContaPagarModal';
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -38,6 +41,9 @@ const formatDate = (date: string) =>
 
 export default function FinanceiroDashboard() {
   const navigate = useNavigate();
+  const [modalCobranca, setModalCobranca] = useState(false);
+  const [modalDespesa, setModalDespesa] = useState(false);
+  
   const mesAtual = new Date().getMonth() + 1;
   const anoAtual = new Date().getFullYear();
   const inicioMes = startOfMonth(new Date()).toISOString().split('T')[0];
@@ -167,15 +173,15 @@ export default function FinanceiroDashboard() {
           <p className="text-muted-foreground capitalize">{mesAnoLabel}</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline">
+          <Button variant="outline" onClick={() => navigate('/financeiro/faturamento')}>
             <FileText className="mr-2 h-4 w-4" />
             Gerar Faturamento
           </Button>
-          <Button variant="outline">
+          <Button variant="outline" onClick={() => setModalCobranca(true)}>
             <Receipt className="mr-2 h-4 w-4" />
             Nova Cobrança
           </Button>
-          <Button>
+          <Button onClick={() => setModalDespesa(true)}>
             <Plus className="mr-2 h-4 w-4" />
             Nova Despesa
           </Button>
@@ -314,7 +320,12 @@ export default function FinanceiroDashboard() {
                   <span className="font-medium text-yellow-800 dark:text-yellow-200">
                     {vencendoHoje.length} cobrança(s) vencendo hoje/amanhã
                   </span>
-                  <Button variant="link" size="sm" className="text-yellow-700">
+                  <Button 
+                    variant="link" 
+                    size="sm" 
+                    className="text-yellow-700"
+                    onClick={() => navigate('/financeiro/cobrancas?status=pendente')}
+                  >
                     Ver todas <ArrowRight className="ml-1 h-3 w-3" />
                   </Button>
                 </div>
@@ -339,7 +350,7 @@ export default function FinanceiroDashboard() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Últimas Movimentações</CardTitle>
-              <Button variant="ghost" size="sm">
+              <Button variant="ghost" size="sm" onClick={() => navigate('/financeiro/extrato')}>
                 Ver extrato completo <ArrowRight className="ml-1 h-4 w-4" />
               </Button>
             </CardHeader>
@@ -402,19 +413,35 @@ export default function FinanceiroDashboard() {
               <CardTitle>Ações Rápidas</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              <Button variant="outline" className="w-full justify-start">
+              <Button 
+                variant="outline" 
+                className="w-full justify-start"
+                onClick={() => navigate('/financeiro/faturamento')}
+              >
                 <FileText className="mr-2 h-4 w-4" />
                 Gerar Faturamento Mensal
               </Button>
-              <Button variant="outline" className="w-full justify-start">
+              <Button 
+                variant="outline" 
+                className="w-full justify-start"
+                onClick={() => navigate('/financeiro/cobrancas?status=pendente')}
+              >
                 <Receipt className="mr-2 h-4 w-4" />
                 Ver Cobranças Pendentes
               </Button>
-              <Button variant="outline" className="w-full justify-start">
+              <Button 
+                variant="outline" 
+                className="w-full justify-start"
+                onClick={() => navigate('/financeiro/contas-pagar')}
+              >
                 <CreditCard className="mr-2 h-4 w-4" />
                 Ver Contas a Pagar
               </Button>
-              <Button variant="outline" className="w-full justify-start">
+              <Button 
+                variant="outline" 
+                className="w-full justify-start"
+                onClick={() => navigate('/financeiro/extratos-bancarios')}
+              >
                 <List className="mr-2 h-4 w-4" />
                 Conciliação Bancária
               </Button>
@@ -468,7 +495,12 @@ export default function FinanceiroDashboard() {
                     <span className="text-sm text-muted-foreground">Valor Total</span>
                     <span className="font-bold">{formatCurrency(Number(faturamento.valor_total) || 0)}</span>
                   </div>
-                  <Button variant="outline" size="sm" className="w-full">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="w-full"
+                    onClick={() => navigate('/financeiro/faturamento')}
+                  >
                     Gerenciar
                   </Button>
                 </div>
@@ -477,7 +509,12 @@ export default function FinanceiroDashboard() {
                   <p className="text-sm text-muted-foreground">
                     Nenhum faturamento gerado para {format(new Date(), 'MMMM/yyyy', { locale: ptBR })}
                   </p>
-                  <Button variant="outline" size="sm" className="w-full">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="w-full"
+                    onClick={() => navigate('/financeiro/faturamento')}
+                  >
                     Gerar Faturamento
                   </Button>
                 </div>
@@ -486,6 +523,16 @@ export default function FinanceiroDashboard() {
           </Card>
         </div>
       </div>
+
+      {/* Modais */}
+      <NovaCobrancaModal 
+        open={modalCobranca} 
+        onClose={() => setModalCobranca(false)} 
+      />
+      <NovaContaPagarModal 
+        open={modalDespesa} 
+        onClose={() => setModalDespesa(false)} 
+      />
     </div>
   );
 }
