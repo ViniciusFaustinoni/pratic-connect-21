@@ -20,6 +20,7 @@ interface LandingPage {
   titulo_seo?: string;
   descricao_seo?: string;
   status: string;
+  ativo?: boolean;
   campanha_id?: string;
 }
 
@@ -39,6 +40,7 @@ export function LandingPageFormModal({ open, onClose, landingPage, onSuccess }: 
   const [descricaoSeo, setDescricaoSeo] = useState('');
   const [status, setStatus] = useState('rascunho');
   const [campanhaId, setCampanhaId] = useState('');
+  const [ativo, setAtivo] = useState(true);
 
   const { data: campanhas } = useCampanhas();
   const queryClient = useQueryClient();
