@@ -1443,6 +1443,7 @@ export type Database = {
           bloqueado: boolean | null
           cep: string | null
           cidade: string | null
+          codigo_hinova: number | null
           complemento: string | null
           contrato_id: string | null
           cpf: string
@@ -1467,6 +1468,8 @@ export type Database = {
           profissao: string | null
           rg: string | null
           sexo: string | null
+          sincronizado_hinova: boolean | null
+          sincronizado_hinova_em: string | null
           status: Database["public"]["Enums"]["status_associado"]
           telefone: string
           telefone_secundario: string | null
@@ -1483,6 +1486,7 @@ export type Database = {
           bloqueado?: boolean | null
           cep?: string | null
           cidade?: string | null
+          codigo_hinova?: number | null
           complemento?: string | null
           contrato_id?: string | null
           cpf: string
@@ -1507,6 +1511,8 @@ export type Database = {
           profissao?: string | null
           rg?: string | null
           sexo?: string | null
+          sincronizado_hinova?: boolean | null
+          sincronizado_hinova_em?: string | null
           status?: Database["public"]["Enums"]["status_associado"]
           telefone: string
           telefone_secundario?: string | null
@@ -1523,6 +1529,7 @@ export type Database = {
           bloqueado?: boolean | null
           cep?: string | null
           cidade?: string | null
+          codigo_hinova?: number | null
           complemento?: string | null
           contrato_id?: string | null
           cpf?: string
@@ -1547,6 +1554,8 @@ export type Database = {
           profissao?: string | null
           rg?: string | null
           sexo?: string | null
+          sincronizado_hinova?: boolean | null
+          sincronizado_hinova_em?: string | null
           status?: Database["public"]["Enums"]["status_associado"]
           telefone?: string
           telefone_secundario?: string | null
@@ -8154,6 +8163,36 @@ export type Database = {
           },
         ]
       }
+      hinova_mapeamentos: {
+        Row: {
+          ativo: boolean | null
+          codigo_hinova: number
+          codigo_local: string
+          created_at: string | null
+          descricao: string | null
+          id: string
+          tipo: string
+        }
+        Insert: {
+          ativo?: boolean | null
+          codigo_hinova: number
+          codigo_local: string
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          tipo: string
+        }
+        Update: {
+          ativo?: boolean | null
+          codigo_hinova?: number
+          codigo_local?: string
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          tipo?: string
+        }
+        Relationships: []
+      }
       indicacoes: {
         Row: {
           associado_id: string | null
@@ -14286,6 +14325,119 @@ export type Database = {
           },
         ]
       }
+      sga_sync_logs: {
+        Row: {
+          action: string
+          associado_id: string | null
+          created_at: string | null
+          duracao_ms: number | null
+          error_message: string | null
+          id: string
+          request_payload: Json | null
+          response_payload: Json | null
+          status: string
+          usuario_id: string | null
+          veiculo_id: string | null
+        }
+        Insert: {
+          action: string
+          associado_id?: string | null
+          created_at?: string | null
+          duracao_ms?: number | null
+          error_message?: string | null
+          id?: string
+          request_payload?: Json | null
+          response_payload?: Json | null
+          status: string
+          usuario_id?: string | null
+          veiculo_id?: string | null
+        }
+        Update: {
+          action?: string
+          associado_id?: string | null
+          created_at?: string | null
+          duracao_ms?: number | null
+          error_message?: string | null
+          id?: string
+          request_payload?: Json | null
+          response_payload?: Json | null
+          status?: string
+          usuario_id?: string | null
+          veiculo_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sga_sync_logs_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sga_sync_logs_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "sga_sync_logs_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "sga_sync_logs_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "sga_sync_logs_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "sga_sync_logs_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "sga_sync_logs_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "veiculos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sga_sync_logs_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "sga_sync_logs_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "sga_sync_logs_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["veiculo_id"]
+          },
+        ]
+      }
       sinistro_documentos: {
         Row: {
           arquivo_url: string
@@ -15500,6 +15652,7 @@ export type Database = {
           cobertura_roubo_furto: boolean | null
           cobertura_total: boolean | null
           codigo_fipe: string | null
+          codigo_hinova: number | null
           combustivel: string | null
           cor: string | null
           created_at: string
@@ -15514,8 +15667,11 @@ export type Database = {
           rede_veiculos_cliente_id: string | null
           rede_veiculos_veiculo_id: string | null
           renavam: string | null
+          sincronizado_hinova: boolean | null
+          sincronizado_hinova_em: string | null
           softruck_vehicle_id: string | null
           status: Database["public"]["Enums"]["status_veiculo"] | null
+          status_sga: string | null
           updated_at: string
           uso_aplicativo: boolean | null
           valor_fipe: number | null
@@ -15529,6 +15685,7 @@ export type Database = {
           cobertura_roubo_furto?: boolean | null
           cobertura_total?: boolean | null
           codigo_fipe?: string | null
+          codigo_hinova?: number | null
           combustivel?: string | null
           cor?: string | null
           created_at?: string
@@ -15543,8 +15700,11 @@ export type Database = {
           rede_veiculos_cliente_id?: string | null
           rede_veiculos_veiculo_id?: string | null
           renavam?: string | null
+          sincronizado_hinova?: boolean | null
+          sincronizado_hinova_em?: string | null
           softruck_vehicle_id?: string | null
           status?: Database["public"]["Enums"]["status_veiculo"] | null
+          status_sga?: string | null
           updated_at?: string
           uso_aplicativo?: boolean | null
           valor_fipe?: number | null
@@ -15558,6 +15718,7 @@ export type Database = {
           cobertura_roubo_furto?: boolean | null
           cobertura_total?: boolean | null
           codigo_fipe?: string | null
+          codigo_hinova?: number | null
           combustivel?: string | null
           cor?: string | null
           created_at?: string
@@ -15572,8 +15733,11 @@ export type Database = {
           rede_veiculos_cliente_id?: string | null
           rede_veiculos_veiculo_id?: string | null
           renavam?: string | null
+          sincronizado_hinova?: boolean | null
+          sincronizado_hinova_em?: string | null
           softruck_vehicle_id?: string | null
           status?: Database["public"]["Enums"]["status_veiculo"] | null
+          status_sga?: string | null
           updated_at?: string
           uso_aplicativo?: boolean | null
           valor_fipe?: number | null

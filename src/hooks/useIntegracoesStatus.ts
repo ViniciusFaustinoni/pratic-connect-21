@@ -8,6 +8,7 @@ interface SecretsStatus {
   email: { configurado: boolean };
   whatsapp: { api_configurada: boolean; url_configurada?: boolean };
   openai: { configurado: boolean };
+  hinova: { configurado: boolean };
 }
 
 export interface IntegracoesStatus {
@@ -16,6 +17,7 @@ export interface IntegracoesStatus {
   email: { configurado: boolean };
   whatsapp: { configurado: boolean; conectado: boolean };
   openai: { configurado: boolean };
+  hinova: { configurado: boolean };
   softruck: { configurado: boolean; testado: boolean; testado_em: string | null };
   rede_veiculos: { configurado: boolean; testado: boolean; testado_em: string | null };
   isLoading: boolean;
@@ -89,6 +91,9 @@ export function useIntegracoesStatus(): IntegracoesStatus {
     },
     openai: {
       configurado: secretsQuery.data?.openai?.configurado || false
+    },
+    hinova: {
+      configurado: secretsQuery.data?.hinova?.configurado || false
     },
     softruck: {
       configurado: softruck?.configurado || false,
