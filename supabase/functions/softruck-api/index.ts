@@ -65,9 +65,17 @@ type SoftruckOperation =
   | 'trajectories-geom'
   | 'trajectories-by-keys';
 
-// ========== AUTENTICAÇÃO ==========
+// ========== AUTENTICAÇÃO COM RETRY ==========
 
-async function getAuthToken(): Promise<string> {
+let cachedToken: string | null = null;
+let tokenExpiresAt: number | null = null;
+
+async function getAuthToken(forceRefresh = false): Promise<string> {
+  // Verificar cache local (evita chamadas desnecessárias)
+  if (!forceRefresh && cachedToken && tokenExpiresAt && Date.now() < tokenExpiresAt) {
+    return cachedToken;
+  }
+
   const publicKey = Deno.env.get('SOFTRUCK_PUBLIC_KEY');
   const username = Deno.env.get('SOFTRUCK_USERNAME');
   const password = Deno.env.get('SOFTRUCK_PASSWORD');
@@ -94,8 +102,19 @@ async function getAuthToken(): Promise<string> {
   }
 
   const data = await response.json();
+  const token = data.token || data.access_token || data.data?.token;
+  
+  if (!token) {
+    throw new Error('Token Softruck não retornado na resposta');
+  }
+  
   console.log('[Softruck Auth] Token obtido com sucesso');
-  return data.token || data.access_token || data.data?.token;
+  
+  // Cache local (6 dias)
+  cachedToken = token;
+  tokenExpiresAt = Date.now() + 6 * 24 * 60 * 60 * 1000;
+  
+  return token;
 }
 
 function getPublicKey(): string {
@@ -114,13 +133,14 @@ function getEnterpriseId(): string {
   return enterpriseId;
 }
 
-// ========== REQUISIÇÃO GENÉRICA ==========
+// ========== REQUISIÇÃO GENÉRICA COM RETRY EM 401 ==========
 
 async function softruckRequest(
   method: string,
   endpoint: string,
   token: string,
-  body?: unknown
+  body?: unknown,
+  retryCount = 0
 ): Promise<unknown> {
   const publicKey = getPublicKey();
   
@@ -140,9 +160,17 @@ async function softruckRequest(
   }
 
   const fullUrl = `${BASE_URL}${endpoint}`;
-  console.log(`[Softruck API] ${method} ${endpoint}`);
+  console.log(`[Softruck API] ${method} ${endpoint} (tentativa ${retryCount + 1})`);
   
   const response = await fetch(fullUrl, options);
+  
+  // Retry em erro 401
+  if (response.status === 401 && retryCount < 1) {
+    console.warn('[Softruck API] Erro 401, renovando token...');
+    const newToken = await getAuthToken(true);
+    return softruckRequest(method, endpoint, newToken, body, retryCount + 1);
+  }
+  
   const responseText = await response.text();
   
   console.log(`[Softruck API] Response status: ${response.status}`);

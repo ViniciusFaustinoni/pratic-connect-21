@@ -6,16 +6,113 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+/**
+ * Obtém token Softruck com suporte a retry
+ */
+async function getSoftruckToken(
+  supabaseUrl: string,
+  supabaseKey: string,
+  forceRefresh = false
+): Promise<string> {
+  const authResponse = await fetch(
+    `${supabaseUrl}/functions/v1/rastreador-auth`,
+    {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseKey}`,
+      },
+      body: JSON.stringify({ plataforma: 'softruck', force_refresh: forceRefresh })
+    }
+  );
+  
+  const authData = await authResponse.json();
+  if (!authData.success) {
+    throw new Error('Falha na autenticação: ' + (authData.error || 'Token não obtido'));
+  }
+  
+  return authData.token;
+}
+
+/**
+ * Busca trajeto Softruck com retry em erro 401
+ */
+async function buscarTrajetoSoftruckComRetry(
+  supabaseUrl: string,
+  supabaseKey: string,
+  vehicleId: string,
+  baseUrl: string,
+  inicio: string,
+  fim: string,
+  maxRetries = 2
+): Promise<any[]> {
+  let tokenRenovado = false;
+  const publicKey = Deno.env.get('SOFTRUCK_PUBLIC_KEY') || '';
+  
+  for (let tentativa = 1; tentativa <= maxRetries; tentativa++) {
+    try {
+      const token = await getSoftruckToken(supabaseUrl, supabaseKey, tokenRenovado);
+      
+      const url = new URL(`${baseUrl}/vehicles/${vehicleId}/trajectories/`);
+      url.searchParams.set('filters[start_date]', inicio);
+      url.searchParams.set('filters[end_date]', fim);
+      url.searchParams.set('limit', '500');
+
+      console.log(`[Softruck] Buscando trajeto (tentativa ${tentativa}/${maxRetries}):`, url.toString());
+
+      const response = await fetch(url.toString(), {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'public-key': publicKey,
+          'Content-Type': 'application/json',
+        }
+      });
+
+      // Erro 401 - tentar renovar token
+      if (response.status === 401) {
+        console.warn(`[Softruck] Erro 401 na tentativa ${tentativa}/${maxRetries}`);
+        
+        if (tentativa < maxRetries) {
+          console.log('[Softruck] Forçando renovação de token...');
+          tokenRenovado = true;
+          continue;
+        }
+        
+        const errorText = await response.text();
+        throw new Error(`Token inválido após ${maxRetries} tentativas: ${errorText}`);
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Erro Softruck:', response.status, errorText);
+        throw new Error(`Erro Softruck: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data.data || [];
+      
+    } catch (error) {
+      if (tentativa === maxRetries) {
+        throw error;
+      }
+      console.error(`[Softruck] Erro na tentativa ${tentativa}:`, error);
+    }
+  }
+  
+  return [];
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    );
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
     const { rastreador_id, data_inicio, data_fim } = await req.json();
 
@@ -71,24 +168,6 @@ serve(async (req) => {
       );
     }
 
-    // Obter token via rastreador-auth
-    const authResponse = await fetch(
-      `${Deno.env.get('SUPABASE_URL')}/functions/v1/rastreador-auth`,
-      {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-        },
-        body: JSON.stringify({ plataforma: plataforma.plataforma })
-      }
-    );
-    
-    const authData = await authResponse.json();
-    if (!authData.success) {
-      throw new Error('Falha na autenticação: ' + (authData.error || 'Token não obtido'));
-    }
-
     const baseUrl = plataforma.ambiente_atual === 'producao' 
       ? plataforma.api_url_producao 
       : plataforma.api_url_sandbox;
@@ -97,39 +176,24 @@ serve(async (req) => {
     const inicio = data_inicio || new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const fim = data_fim || new Date().toISOString();
 
-    // Buscar histórico Softruck
+    // Buscar histórico Softruck com retry
     const vehicleId = rastreador.plataforma_device_id || rastreador.id_plataforma;
     
     if (!vehicleId) {
       throw new Error('ID do veículo na plataforma não configurado');
     }
 
-    const url = new URL(`${baseUrl}/vehicles/${vehicleId}/trajectories/`);
-    url.searchParams.set('filters[start_date]', inicio);
-    url.searchParams.set('filters[end_date]', fim);
-    url.searchParams.set('limit', '500');
-
-    console.log('Buscando trajeto Softruck:', url.toString());
-
-    const response = await fetch(url.toString(), {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${authData.token}`,
-        'public-key': Deno.env.get('SOFTRUCK_PUBLIC_KEY') || '',
-        'Content-Type': 'application/json',
-      }
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Erro Softruck:', response.status, errorText);
-      throw new Error(`Erro Softruck: ${response.status}`);
-    }
-
-    const data = await response.json();
+    const dadosTrajeto = await buscarTrajetoSoftruckComRetry(
+      supabaseUrl,
+      supabaseKey,
+      vehicleId,
+      baseUrl,
+      inicio,
+      fim
+    );
 
     // Transformar dados
-    const trajeto = (data.data || []).map((item: any) => ({
+    const trajeto = dadosTrajeto.map((item: any) => ({
       latitude: item.attributes?.latitude || item.latitude,
       longitude: item.attributes?.longitude || item.longitude,
       velocidade: item.attributes?.speed || item.speed || 0,

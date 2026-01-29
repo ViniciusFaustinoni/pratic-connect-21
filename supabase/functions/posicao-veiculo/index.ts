@@ -92,52 +92,103 @@ async function reverseGeocode(lat: number, lng: number): Promise<string | null> 
   }
 }
 
-// Buscar posição Softruck
-async function getPosicaoSoftruck(
-  token: string,
+// Buscar posição Softruck com retry em erro 401
+async function getPosicaoSoftruckComRetry(
+  supabaseUrl: string,
+  supabaseKey: string,
   vehicleId: string,
   deviceId: string,
   baseUrl: string,
-  publicKey: string
+  publicKey: string,
+  maxRetries = 2
 ): Promise<PosicaoPadrao> {
-  const url = `${baseUrl}/vehicles/${vehicleId}/tracking/${deviceId}?format=JSON`;
+  let tokenRenovado = false;
+  
+  for (let tentativa = 1; tentativa <= maxRetries; tentativa++) {
+    try {
+      // Obter token (força refresh se já teve erro 401)
+      const authResponse = await fetch(
+        `${supabaseUrl}/functions/v1/rastreador-auth`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseKey}`,
+          },
+          body: JSON.stringify({ plataforma: 'softruck', force_refresh: tokenRenovado })
+        }
+      );
 
-  const response = await fetch(url, {
-    method: 'GET',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'public-key': publicKey,
-      'Content-Type': 'application/json',
+      const authData = await authResponse.json();
+      if (!authData.success) {
+        throw new Error('Falha na autenticação Softruck: ' + authData.error);
+      }
+
+      const token = authData.token;
+      const url = `${baseUrl}/vehicles/${vehicleId}/tracking/${deviceId}?format=JSON`;
+
+      console.log(`[Softruck] Buscando posição (tentativa ${tentativa}/${maxRetries})`);
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'public-key': publicKey,
+          'Content-Type': 'application/json',
+        }
+      });
+
+      // Erro 401 - tentar renovar token
+      if (response.status === 401) {
+        console.warn(`[Softruck] Erro 401 na tentativa ${tentativa}/${maxRetries}`);
+        
+        if (tentativa < maxRetries) {
+          console.log('[Softruck] Forçando renovação de token...');
+          tokenRenovado = true;
+          continue;
+        }
+        
+        const errorText = await response.text();
+        throw new Error(`Token inválido após ${maxRetries} tentativas: ${errorText}`);
+      }
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`Erro Softruck ${response.status}: ${error}`);
+      }
+
+      const data = await response.json();
+
+      if (!data.data?.attributes) {
+        throw new Error('Resposta Softruck inválida');
+      }
+
+      const attrs = data.data.attributes;
+
+      return {
+        latitude: attrs.latitude,
+        longitude: attrs.longitude,
+        velocidade: attrs.speed || 0,
+        direcao: attrs.course,
+        ignicao: attrs.ignition || false,
+        data_posicao: attrs.timestamp || new Date().toISOString(),
+        dados_extras: {
+          altitude: attrs.altitude,
+          satellites: attrs.satellites,
+          odometer: attrs.odometer,
+          battery: attrs.battery,
+        }
+      };
+
+    } catch (error) {
+      if (tentativa === maxRetries) {
+        throw error;
+      }
+      console.error(`[Softruck] Erro na tentativa ${tentativa}:`, error);
     }
-  });
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Erro Softruck ${response.status}: ${error}`);
   }
 
-  const data = await response.json();
-
-  if (!data.data?.attributes) {
-    throw new Error('Resposta Softruck inválida');
-  }
-
-  const attrs = data.data.attributes;
-
-  return {
-    latitude: attrs.latitude,
-    longitude: attrs.longitude,
-    velocidade: attrs.speed || 0,
-    direcao: attrs.course,
-    ignicao: attrs.ignition || false,
-    data_posicao: attrs.timestamp || new Date().toISOString(),
-    dados_extras: {
-      altitude: attrs.altitude,
-      satellites: attrs.satellites,
-      odometer: attrs.odometer,
-      battery: attrs.battery,
-    }
-  };
+  throw new Error('Erro inesperado ao buscar posição');
 }
 
 // Buscar posição Rede Veículos
@@ -342,25 +393,7 @@ serve(async (req) => {
           baseUrl
         );
       } else {
-        // Softruck (padrão)
-        // Obter token via rastreador-auth
-        const authResponse = await fetch(
-          `${supabaseUrl}/functions/v1/rastreador-auth`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${supabaseKey}`,
-            },
-            body: JSON.stringify({ plataforma: 'softruck' })
-          }
-        );
-
-        const authData = await authResponse.json();
-        if (!authData.success) {
-          throw new Error('Falha na autenticação Softruck: ' + authData.error);
-        }
-
+        // Softruck (padrão) - com retry automático em erro 401
         if (!rastreador.plataforma_veiculo_id || !rastreador.plataforma_device_id) {
           throw new Error('Rastreador não configurado com IDs da plataforma');
         }
@@ -371,8 +404,9 @@ serve(async (req) => {
 
         const publicKey = Deno.env.get('SOFTRUCK_PUBLIC_KEY') || '';
 
-        posicao = await getPosicaoSoftruck(
-          authData.token,
+        posicao = await getPosicaoSoftruckComRetry(
+          supabaseUrl,
+          supabaseKey,
           rastreador.plataforma_veiculo_id,
           rastreador.plataforma_device_id,
           baseUrl,

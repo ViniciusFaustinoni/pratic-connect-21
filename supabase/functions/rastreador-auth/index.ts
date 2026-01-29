@@ -10,16 +10,17 @@ interface AuthResult {
   token: string;
   refresh_token?: string;
   expires_at: Date;
+  renovado_via?: 'cache' | 'refresh_token' | 'login_completo';
 }
-
-// Credenciais não são mais armazenadas localmente
-// Tudo vem dos Supabase Secrets
 
 /**
  * Autenticação Softruck (OAuth JWT)
+ * Tenta usar refresh_token primeiro, depois faz login completo
  */
-async function authSoftruck(baseUrl: string): Promise<AuthResult> {
-  // Usar apenas secrets (fonte segura)
+async function authSoftruck(
+  baseUrl: string, 
+  existingRefreshToken?: string | null
+): Promise<AuthResult> {
   const publicKey = Deno.env.get('SOFTRUCK_PUBLIC_KEY');
   const username = Deno.env.get('SOFTRUCK_USERNAME');
   const password = Deno.env.get('SOFTRUCK_PASSWORD');
@@ -28,6 +29,47 @@ async function authSoftruck(baseUrl: string): Promise<AuthResult> {
     throw new Error('Credenciais Softruck não configuradas. Configure em Monitoramento > Credenciais API.');
   }
 
+  // Tentar usar refresh_token primeiro (se disponível)
+  if (existingRefreshToken) {
+    try {
+      console.log('[Softruck Auth] Tentando renovar via refresh_token...');
+      
+      const refreshResponse = await fetch(`${baseUrl}/auth/refresh`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'public-key': publicKey,
+        },
+        body: JSON.stringify({ refresh_token: existingRefreshToken })
+      });
+
+      if (refreshResponse.ok) {
+        const data = await refreshResponse.json();
+        
+        if (data.data?.token) {
+          console.log('[Softruck Auth] Token renovado via refresh_token');
+          
+          // Token renovado expira em ~7 dias
+          const expires_at = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+          
+          return {
+            token: data.data.token,
+            refresh_token: data.data.refresh_token || existingRefreshToken,
+            expires_at,
+            renovado_via: 'refresh_token',
+          };
+        }
+      } else {
+        console.log('[Softruck Auth] Refresh falhou, fazendo login completo');
+      }
+    } catch (e) {
+      console.log('[Softruck Auth] Erro no refresh, fazendo login completo:', e);
+    }
+  }
+
+  // Login completo
+  console.log('[Softruck Auth] Autenticando via login...');
+  
   const response = await fetch(`${baseUrl}/auth/login`, {
     method: 'POST',
     headers: { 
@@ -39,6 +81,7 @@ async function authSoftruck(baseUrl: string): Promise<AuthResult> {
   
   if (!response.ok) {
     const errorText = await response.text();
+    console.error('[Softruck Auth] Erro login:', response.status, errorText);
     throw new Error(`Falha auth Softruck: ${response.status} - ${errorText}`);
   }
   
@@ -48,6 +91,8 @@ async function authSoftruck(baseUrl: string): Promise<AuthResult> {
     throw new Error('Token Softruck não retornado na resposta');
   }
   
+  console.log('[Softruck Auth] Login completo com sucesso');
+  
   // Token Softruck expira em ~7 dias (604800 segundos)
   const expires_at = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
   
@@ -55,6 +100,7 @@ async function authSoftruck(baseUrl: string): Promise<AuthResult> {
     token: data.data.token,
     refresh_token: data.data.refresh_token,
     expires_at,
+    renovado_via: 'login_completo',
   };
 }
 
@@ -62,7 +108,6 @@ async function authSoftruck(baseUrl: string): Promise<AuthResult> {
  * RedeVeículos usa token fixo (Bearer)
  */
 function authRedeVeiculos(): AuthResult {
-  // Usar apenas secrets (fonte segura)
   const token = Deno.env.get('REDE_VEICULOS_TOKEN');
   
   if (!token) {
@@ -72,7 +117,7 @@ function authRedeVeiculos(): AuthResult {
   // Token fixo - expiração longa (1 ano)
   const expires_at = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
   
-  return { token, expires_at };
+  return { token, expires_at, renovado_via: 'cache' };
 }
 
 serve(async (req) => {
@@ -106,16 +151,34 @@ serve(async (req) => {
         .single();
 
       if (cached) {
+        console.log(`[Auth] Token ${plataforma} retornado do cache`);
         return new Response(
           JSON.stringify({ 
             success: true, 
             token: cached.token,
+            refresh_token: cached.refresh_token,
             from_cache: true,
             expires_at: cached.expires_at,
+            renovado_via: 'cache',
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
+    }
+
+    // Buscar refresh_token existente para tentar renovação (Softruck)
+    let existingRefreshToken: string | null = null;
+    if (plataforma === 'softruck') {
+      const { data: tokenWithRefresh } = await supabase
+        .from('rastreadores_tokens_cache')
+        .select('refresh_token')
+        .eq('plataforma', 'softruck')
+        .not('refresh_token', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+      
+      existingRefreshToken = tokenWithRefresh?.refresh_token || null;
     }
 
     // Buscar configuração da plataforma
@@ -137,11 +200,11 @@ serve(async (req) => {
       ? config.api_url_producao 
       : config.api_url_sandbox;
 
-    // Autenticar usando secrets
+    // Autenticar
     let authResult: AuthResult;
     
     if (plataforma === 'softruck') {
-      authResult = await authSoftruck(baseUrl);
+      authResult = await authSoftruck(baseUrl, existingRefreshToken);
     } else {
       authResult = authRedeVeiculos();
     }
@@ -163,18 +226,51 @@ serve(async (req) => {
       .eq('plataforma', plataforma)
       .lt('expires_at', new Date().toISOString());
 
+    // Registrar log de sucesso
+    await supabase
+      .from('rastreadores_logs')
+      .insert({
+        plataforma,
+        operacao: 'autenticacao',
+        status: 'sucesso',
+        request: { force_refresh, renovado_via: authResult.renovado_via },
+      });
+
+    console.log(`[Auth] Token ${plataforma} obtido via: ${authResult.renovado_via}`);
+
     return new Response(
       JSON.stringify({ 
         success: true, 
         token: authResult.token,
+        refresh_token: authResult.refresh_token,
         from_cache: false,
         expires_at: authResult.expires_at.toISOString(),
+        renovado_via: authResult.renovado_via,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
     console.error('Erro auth rastreador:', error);
+    
+    // Registrar log de erro
+    try {
+      const supabase = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      );
+      
+      await supabase
+        .from('rastreadores_logs')
+        .insert({
+          plataforma: 'softruck',
+          operacao: 'autenticacao',
+          status: 'erro',
+          erro_mensagem: error instanceof Error ? error.message : 'Erro desconhecido',
+        });
+    } catch (logError) {
+      console.error('Falha ao registrar log de erro:', logError);
+    }
     
     return new Response(
       JSON.stringify({ 
