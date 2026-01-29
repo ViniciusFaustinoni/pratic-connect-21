@@ -8765,6 +8765,63 @@ export type Database = {
           },
         ]
       }
+      integracoes_credenciais: {
+        Row: {
+          configurado: boolean | null
+          created_at: string | null
+          credenciais_encrypted: string
+          id: string
+          integracao: string
+          iv: string
+          testado_em: string | null
+          teste_mensagem: string | null
+          teste_sucesso: boolean | null
+          updated_at: string | null
+          updated_by: string | null
+        }
+        Insert: {
+          configurado?: boolean | null
+          created_at?: string | null
+          credenciais_encrypted: string
+          id?: string
+          integracao: string
+          iv: string
+          testado_em?: string | null
+          teste_mensagem?: string | null
+          teste_sucesso?: boolean | null
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Update: {
+          configurado?: boolean | null
+          created_at?: string | null
+          credenciais_encrypted?: string
+          id?: string
+          integracao?: string
+          iv?: string
+          testado_em?: string | null
+          teste_mensagem?: string | null
+          teste_sucesso?: boolean | null
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integracoes_credenciais_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "integracoes_credenciais_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+        ]
+      }
       lancamentos_contabeis: {
         Row: {
           complemento: string | null

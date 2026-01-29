@@ -4,7 +4,9 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ConfigurarRastreadorSheet } from './ConfigurarRastreadorSheet';
+import { ConfigurarIntegracaoSheet } from './ConfigurarIntegracaoSheet';
 import { useIntegracoesStatus } from '@/hooks/useIntegracoesStatus';
+import { useTodasIntegracoesCredenciais, IntegracaoTipo } from '@/hooks/useIntegracaoCredenciais';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -16,6 +18,7 @@ interface Servico {
   color: string;
   bgColor: string;
   integracaoId?: string;
+  integracaoTipo?: IntegracaoTipo;
   plataformaCodigo?: 'softruck' | 'rede_veiculos';
   configuravel?: boolean;
   sempreAtivo?: boolean;
@@ -40,6 +43,8 @@ const categoriasBase: CategoriaServicos[] = [
         color: 'text-green-500',
         bgColor: 'bg-green-500/10',
         integracaoId: 'asaas',
+        integracaoTipo: 'asaas',
+        configuravel: true,
       },
     ],
   },
@@ -55,6 +60,8 @@ const categoriasBase: CategoriaServicos[] = [
         color: 'text-emerald-500',
         bgColor: 'bg-emerald-500/10',
         integracaoId: 'whatsapp',
+        integracaoTipo: 'whatsapp',
+        configuravel: true,
       },
       {
         id: 'email',
@@ -64,6 +71,8 @@ const categoriasBase: CategoriaServicos[] = [
         color: 'text-blue-500',
         bgColor: 'bg-blue-500/10',
         integracaoId: 'email',
+        integracaoTipo: 'resend',
+        configuravel: true,
       },
     ],
   },
@@ -79,6 +88,7 @@ const categoriasBase: CategoriaServicos[] = [
         color: 'text-blue-500',
         bgColor: 'bg-blue-500/10',
         plataformaCodigo: 'rede_veiculos',
+        integracaoTipo: 'rede_veiculos',
         configuravel: true,
       },
       {
@@ -89,6 +99,7 @@ const categoriasBase: CategoriaServicos[] = [
         color: 'text-orange-500',
         bgColor: 'bg-orange-500/10',
         plataformaCodigo: 'softruck',
+        integracaoTipo: 'softruck',
         configuravel: true,
       },
       {
@@ -114,6 +125,8 @@ const categoriasBase: CategoriaServicos[] = [
         color: 'text-purple-500',
         bgColor: 'bg-purple-500/10',
         integracaoId: 'autentique',
+        integracaoTipo: 'autentique',
+        configuravel: true,
       },
     ],
   },
@@ -144,6 +157,8 @@ const categoriasBase: CategoriaServicos[] = [
         color: 'text-cyan-500',
         bgColor: 'bg-cyan-500/10',
         integracaoId: 'hinova',
+        integracaoTipo: 'hinova',
+        configuravel: true,
       },
     ],
   },
@@ -244,16 +259,34 @@ function ServicoCard({ servico, status, onConfigurar, isLoading }: ServicoCardPr
 }
 
 export function ServicosTab() {
-  const [sheetOpen, setSheetOpen] = useState(false);
+  // Sheets
+  const [rastreadorSheetOpen, setRastreadorSheetOpen] = useState(false);
+  const [integracaoSheetOpen, setIntegracaoSheetOpen] = useState(false);
+  
+  // Seleções
   const [plataformaSelecionada, setPlataformaSelecionada] = useState<'softruck' | 'rede_veiculos'>('softruck');
+  const [integracaoSelecionada, setIntegracaoSelecionada] = useState<IntegracaoTipo>('hinova');
+  const [nomeIntegracao, setNomeIntegracao] = useState('');
   
   const integracoes = useIntegracoesStatus();
+  const { data: credenciaisBanco } = useTodasIntegracoesCredenciais();
 
   // Função para obter status de cada serviço
   function getServicoStatus(servico: Servico): { ativo: boolean; ultimaExecucao?: string } {
     // Serviços sempre ativos
     if (servico.sempreAtivo) {
       return { ativo: true };
+    }
+
+    // Verificar primeiro se tem credenciais no banco
+    const credencialBanco = credenciaisBanco?.find(c => c.integracao === servico.integracaoTipo);
+    if (credencialBanco?.configurado) {
+      return {
+        ativo: true,
+        ultimaExecucao: credencialBanco.testado_em 
+          ? formatDistanceToNow(new Date(credencialBanco.testado_em), { addSuffix: true, locale: ptBR })
+          : undefined
+      };
     }
 
     // Rastreadores (usam teste de conexão)
@@ -292,14 +325,30 @@ export function ServicosTab() {
     }
   }
 
-  function handleConfigurar(plataforma: 'softruck' | 'rede_veiculos') {
-    setPlataformaSelecionada(plataforma);
-    setSheetOpen(true);
+  function handleConfigurar(servico: Servico) {
+    // Para rastreadores, usar o sheet específico
+    if (servico.plataformaCodigo) {
+      setPlataformaSelecionada(servico.plataformaCodigo);
+      setRastreadorSheetOpen(true);
+      return;
+    }
+
+    // Para outras integrações, usar o sheet genérico
+    if (servico.integracaoTipo) {
+      setIntegracaoSelecionada(servico.integracaoTipo);
+      setNomeIntegracao(servico.nome);
+      setIntegracaoSheetOpen(true);
+    }
   }
 
-  function handleSheetSuccess() {
+  function handleRastreadorSuccess() {
     integracoes.refetch();
-    setSheetOpen(false);
+    setRastreadorSheetOpen(false);
+  }
+
+  function handleIntegracaoSuccess() {
+    integracoes.refetch();
+    setIntegracaoSheetOpen(false);
   }
 
   return (
@@ -321,7 +370,7 @@ export function ServicosTab() {
                   servico={servico}
                   status={getServicoStatus(servico)}
                   isLoading={integracoes.isLoading}
-                  onConfigurar={servico.plataformaCodigo ? () => handleConfigurar(servico.plataformaCodigo!) : undefined}
+                  onConfigurar={servico.configuravel ? () => handleConfigurar(servico) : undefined}
                 />
               ))}
             </div>
@@ -329,11 +378,21 @@ export function ServicosTab() {
         ))}
       </div>
 
+      {/* Sheet para rastreadores (mantido para compatibilidade) */}
       <ConfigurarRastreadorSheet
-        open={sheetOpen}
-        onOpenChange={setSheetOpen}
+        open={rastreadorSheetOpen}
+        onOpenChange={setRastreadorSheetOpen}
         plataforma={plataformaSelecionada}
-        onSuccess={handleSheetSuccess}
+        onSuccess={handleRastreadorSuccess}
+      />
+
+      {/* Sheet para outras integrações */}
+      <ConfigurarIntegracaoSheet
+        open={integracaoSheetOpen}
+        onOpenChange={setIntegracaoSheetOpen}
+        integracao={integracaoSelecionada}
+        nomeExibicao={nomeIntegracao}
+        onSuccess={handleIntegracaoSuccess}
       />
     </>
   );
