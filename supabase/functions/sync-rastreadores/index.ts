@@ -73,26 +73,29 @@ interface SyncResult {
 }
 
 // =====================================================
-// AUTENTICAÇÃO SOFTRUCK
+// AUTENTICAÇÃO SOFTRUCK COM RETRY
 // =====================================================
 
 async function getSoftruckToken(
   supabase: any,
-  config: PlataformaConfig
+  config: PlataformaConfig,
+  forceRefresh = false
 ): Promise<string> {
-  // Verificar cache
-  const { data: cached } = await supabase
-    .from("rastreadores_tokens_cache")
-    .select("token, expires_at")
-    .eq("plataforma", "softruck")
-    .gt("expires_at", new Date().toISOString())
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .single();
+  // Verificar cache (se não forçar refresh)
+  if (!forceRefresh) {
+    const { data: cached } = await supabase
+      .from("rastreadores_tokens_cache")
+      .select("token, expires_at")
+      .eq("plataforma", "softruck")
+      .gt("expires_at", new Date().toISOString())
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single();
 
-  if (cached?.token) {
-    console.log("[Softruck] Usando token do cache");
-    return cached.token;
+    if (cached?.token) {
+      console.log("[Softruck] Usando token do cache");
+      return cached.token;
+    }
   }
 
   // Obter novo token
@@ -167,61 +170,90 @@ async function syncSoftruck(
     return { posicoes, result };
   }
 
+  let tokenRenovado = false;
+  let token: string;
+
   try {
-    // Obter token
-    const token = await getSoftruckToken(supabase, config);
+    // Obter token inicial
+    token = await getSoftruckToken(supabase, config, false);
 
-    // Para cada rastreador, buscar posição
+    // Para cada rastreador, buscar posição com retry em 401
     for (const rast of rastreadores) {
-      try {
-        // Usar device_id ou id_plataforma
-        const deviceId = rast.plataforma_device_id || rast.id_plataforma;
+      let tentativas = 0;
+      const maxTentativas = 2;
+      
+      while (tentativas < maxTentativas) {
+        tentativas++;
         
-        const response = await fetch(
-          `${config.baseUrl}/tracking/gps-data?device_id=${deviceId}`,
-          {
-            method: "GET",
-            headers: {
-              "Authorization": `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
+        try {
+          const deviceId = rast.plataforma_device_id || rast.id_plataforma;
+          
+          const response = await fetch(
+            `${config.baseUrl}/tracking/gps-data?device_id=${deviceId}`,
+            {
+              method: "GET",
+              headers: {
+                "Authorization": `Bearer ${token}`,
+                "Content-Type": "application/json",
+              },
+            }
+          );
+
+          // Erro 401 - renovar token e tentar novamente
+          if (response.status === 401) {
+            console.warn(`[Softruck] Erro 401 para ${rast.codigo}, tentativa ${tentativas}/${maxTentativas}`);
+            
+            if (tentativas < maxTentativas) {
+              token = await getSoftruckToken(supabase, config, true);
+              tokenRenovado = true;
+              continue;
+            }
+            
+            throw new Error(`Token inválido após ${maxTentativas} tentativas`);
           }
-        );
 
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+
+          const data = await response.json();
+          const gpsData = Array.isArray(data.data) ? data.data[0] : data.data;
+
+          if (gpsData && gpsData.latitude && gpsData.longitude) {
+            posicoes.push({
+              rastreador_id: rast.id,
+              latitude: parseFloat(gpsData.latitude),
+              longitude: parseFloat(gpsData.longitude),
+              velocidade: parseInt(gpsData.speed || gpsData.velocidade || 0),
+              ignicao: Boolean(gpsData.ignition || gpsData.ignicao),
+              data_posicao: gpsData.timestamp || gpsData.datetime || new Date().toISOString(),
+              odometro: gpsData.odometer || undefined,
+              direcao: gpsData.heading || gpsData.direction || undefined,
+            });
+            result.sucesso++;
+          } else {
+            result.falhas++;
+            result.erros.push(`${rast.codigo}: Sem dados de posição`);
+          }
+          
+          break; // Sucesso, sair do loop de tentativas
+          
+        } catch (error: unknown) {
+          if (tentativas >= maxTentativas) {
+            result.falhas++;
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            result.erros.push(`${rast.codigo}: ${errorMessage}`);
+            console.error(`[Softruck] Erro no rastreador ${rast.codigo}:`, error);
+          }
         }
-
-        const data = await response.json();
-
-        // A resposta da Softruck pode ser um objeto ou array
-        const gpsData = Array.isArray(data.data) ? data.data[0] : data.data;
-
-        if (gpsData && gpsData.latitude && gpsData.longitude) {
-          posicoes.push({
-            rastreador_id: rast.id,
-            latitude: parseFloat(gpsData.latitude),
-            longitude: parseFloat(gpsData.longitude),
-            velocidade: parseInt(gpsData.speed || gpsData.velocidade || 0),
-            ignicao: Boolean(gpsData.ignition || gpsData.ignicao),
-            data_posicao: gpsData.timestamp || gpsData.datetime || new Date().toISOString(),
-            odometro: gpsData.odometer || undefined,
-            direcao: gpsData.heading || gpsData.direction || undefined,
-          });
-          result.sucesso++;
-        } else {
-          result.falhas++;
-          result.erros.push(`${rast.codigo}: Sem dados de posição`);
-        }
-      } catch (error: unknown) {
-        result.falhas++;
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        result.erros.push(`${rast.codigo}: ${errorMessage}`);
-        console.error(`[Softruck] Erro no rastreador ${rast.codigo}:`, error);
       }
     }
+    
+    if (tokenRenovado) {
+      console.log("[Softruck] Token foi renovado durante a sincronização");
+    }
+    
   } catch (error: unknown) {
-    // Erro geral (ex: falha na autenticação)
     const errorMessage = error instanceof Error ? error.message : String(error);
     result.erros.push(`Erro geral: ${errorMessage}`);
     result.falhas = rastreadores.length;
