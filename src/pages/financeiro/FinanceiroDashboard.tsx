@@ -12,6 +12,7 @@ import {
   Receipt,
   CreditCard,
   List,
+  Building2,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -32,6 +33,8 @@ import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { NovaCobrancaModal } from '@/components/financeiro/NovaCobrancaModal';
 import { NovaContaPagarModal } from '@/components/financeiro/NovaContaPagarModal';
+import { SaldoContasModal } from '@/components/financeiro/SaldoContasModal';
+import { FluxoCaixaChart } from '@/components/financeiro/FluxoCaixaChart';
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -43,6 +46,7 @@ export default function FinanceiroDashboard() {
   const navigate = useNavigate();
   const [modalCobranca, setModalCobranca] = useState(false);
   const [modalDespesa, setModalDespesa] = useState(false);
+  const [modalSaldoContas, setModalSaldoContas] = useState(false);
   
   const mesAtual = new Date().getMonth() + 1;
   const anoAtual = new Date().getFullYear();
@@ -250,9 +254,15 @@ export default function FinanceiroDashboard() {
           </CardContent>
         </Card>
 
-        <Card className={`border-l-4 ${(estatisticas?.saldo || 0) >= 0 ? 'border-l-green-500' : 'border-l-red-500'}`}>
+        <Card 
+          className={`border-l-4 cursor-pointer transition-colors hover:bg-muted/50 ${(estatisticas?.saldo || 0) >= 0 ? 'border-l-green-500' : 'border-l-red-500'}`}
+          onClick={() => setModalSaldoContas(true)}
+        >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Saldo</CardTitle>
+            <CardTitle className="text-sm font-medium flex items-center gap-1">
+              Saldo
+              <Building2 className="h-3 w-3 text-muted-foreground" />
+            </CardTitle>
             <Wallet className={`h-4 w-4 ${(estatisticas?.saldo || 0) >= 0 ? 'text-green-500' : 'text-red-500'}`} />
           </CardHeader>
           <CardContent>
@@ -260,7 +270,7 @@ export default function FinanceiroDashboard() {
               {formatCurrency(estatisticas?.saldo || 0)}
             </div>
             <p className="text-xs text-muted-foreground">
-              Receitas - Despesas
+              Clique para ver por conta
             </p>
           </CardContent>
         </Card>
@@ -390,17 +400,13 @@ export default function FinanceiroDashboard() {
             </CardContent>
           </Card>
 
-          {/* Gráfico Placeholder */}
+          {/* Gráfico de Fluxo de Caixa */}
           <Card>
             <CardHeader>
-              <CardTitle>Gráfico de Recebimentos</CardTitle>
+              <CardTitle>Fluxo de Caixa (30 dias)</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex h-48 items-center justify-center rounded-lg border border-dashed bg-muted/50">
-                <p className="text-sm text-muted-foreground">
-                  Gráfico de recebimentos por dia (em breve)
-                </p>
-              </div>
+              <FluxoCaixaChart dias={30} />
             </CardContent>
           </Card>
         </div>
@@ -532,6 +538,10 @@ export default function FinanceiroDashboard() {
       <NovaContaPagarModal 
         open={modalDespesa} 
         onClose={() => setModalDespesa(false)} 
+      />
+      <SaldoContasModal 
+        open={modalSaldoContas} 
+        onClose={() => setModalSaldoContas(false)} 
       />
     </div>
   );

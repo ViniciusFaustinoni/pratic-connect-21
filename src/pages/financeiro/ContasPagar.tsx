@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Plus, DollarSign, AlertTriangle, CheckCircle, Calendar, Search, 
-         X, Eye, MoreHorizontal, Clock, Banknote } from 'lucide-react';
+         X, Eye, MoreHorizontal, Clock, Banknote, Trash2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
@@ -18,6 +19,7 @@ import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { NovaContaPagarModal } from '@/components/financeiro/NovaContaPagarModal';
 import { PagarContaModal } from '@/components/financeiro/PagarContaModal';
+import { BatchActionsBar } from '@/components/financeiro/BatchActionsBar';
 
 const categorias = [
   { value: 'todos', label: 'Todas as categorias' },
@@ -83,6 +85,9 @@ export default function ContasPagar() {
   const [modalNovaConta, setModalNovaConta] = useState(false);
   const [modalPagar, setModalPagar] = useState(false);
   const [contaSelecionada, setContaSelecionada] = useState<any>(null);
+
+  // Estado para seleção em lote
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const hoje = new Date().toISOString().split('T')[0];
 
@@ -224,6 +229,63 @@ export default function ContasPagar() {
   const limparFiltros = () => {
     setFilters({ status: 'todos', categoria: 'todos', busca: '' });
     setActiveTab('todas');
+  };
+
+  // Funções de seleção em lote
+  const handleSelectAll = () => {
+    if (selectedIds.size === filteredContas.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredContas.map(c => c.id)));
+    }
+  };
+
+  const handleSelectItem = (id: string) => {
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedIds(newSelected);
+  };
+
+  const clearSelection = () => setSelectedIds(new Set());
+
+  // Ações em lote
+  const handlePagarSelecionadas = () => {
+    // Se apenas uma selecionada, abre modal de pagamento individual
+    if (selectedIds.size === 1) {
+      const contaId = Array.from(selectedIds)[0];
+      const conta = filteredContas.find(c => c.id === contaId);
+      if (conta) {
+        setContaSelecionada(conta);
+        setModalPagar(true);
+      }
+    } else {
+      toast.info(`Pagamento em lote de ${selectedIds.size} conta(s) - funcionalidade em desenvolvimento`);
+    }
+    clearSelection();
+  };
+
+  const handleCancelarSelecionadas = async () => {
+    if (!confirm(`Tem certeza que deseja cancelar ${selectedIds.size} conta(s)?`)) return;
+    
+    const idsToCancel = Array.from(selectedIds);
+    try {
+      const { error } = await supabase
+        .from('contas_pagar')
+        .update({ status: 'cancelado', updated_at: new Date().toISOString() })
+        .in('id', idsToCancel);
+      
+      if (error) throw error;
+      toast.success(`${idsToCancel.length} conta(s) cancelada(s)`);
+      queryClient.invalidateQueries({ queryKey: ['contas-pagar'] });
+      queryClient.invalidateQueries({ queryKey: ['contas-pagar-kpis'] });
+    } catch (error) {
+      toast.error('Erro ao cancelar contas');
+    }
+    clearSelection();
   };
 
   return (
@@ -518,6 +580,25 @@ export default function ContasPagar() {
           setContaSelecionada(null);
         }}
         conta={contaSelecionada}
+      />
+
+      {/* Barra de Ações em Lote */}
+      <BatchActionsBar
+        selectedCount={selectedIds.size}
+        onClear={clearSelection}
+        actions={[
+          {
+            label: 'Pagar Selecionadas',
+            icon: <DollarSign className="h-4 w-4" />,
+            onClick: handlePagarSelecionadas,
+          },
+          {
+            label: 'Cancelar',
+            icon: <Trash2 className="h-4 w-4" />,
+            onClick: handleCancelarSelecionadas,
+            variant: 'destructive',
+          },
+        ]}
       />
     </div>
   );
