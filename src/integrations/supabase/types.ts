@@ -14628,6 +14628,112 @@ export type Database = {
           },
         ]
       }
+      softruck_eventos: {
+        Row: {
+          alerta_gerado: boolean | null
+          alerta_id: string | null
+          created_at: string | null
+          device_id: string | null
+          erro_processamento: string | null
+          evento_acao: string | null
+          evento_tipo: string
+          headers_recebidos: Json | null
+          id: string
+          imei: string | null
+          ip_origem: string | null
+          payload: Json
+          placa: string | null
+          processado: boolean | null
+          processado_em: string | null
+          rastreador_id: string | null
+          vehicle_id: string | null
+          veiculo_id: string | null
+        }
+        Insert: {
+          alerta_gerado?: boolean | null
+          alerta_id?: string | null
+          created_at?: string | null
+          device_id?: string | null
+          erro_processamento?: string | null
+          evento_acao?: string | null
+          evento_tipo: string
+          headers_recebidos?: Json | null
+          id?: string
+          imei?: string | null
+          ip_origem?: string | null
+          payload: Json
+          placa?: string | null
+          processado?: boolean | null
+          processado_em?: string | null
+          rastreador_id?: string | null
+          vehicle_id?: string | null
+          veiculo_id?: string | null
+        }
+        Update: {
+          alerta_gerado?: boolean | null
+          alerta_id?: string | null
+          created_at?: string | null
+          device_id?: string | null
+          erro_processamento?: string | null
+          evento_acao?: string | null
+          evento_tipo?: string
+          headers_recebidos?: Json | null
+          id?: string
+          imei?: string | null
+          ip_origem?: string | null
+          payload?: Json
+          placa?: string | null
+          processado?: boolean | null
+          processado_em?: string | null
+          rastreador_id?: string | null
+          vehicle_id?: string | null
+          veiculo_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "softruck_eventos_rastreador_id_fkey"
+            columns: ["rastreador_id"]
+            isOneToOne: false
+            referencedRelation: "rastreadores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "softruck_eventos_rastreador_id_fkey"
+            columns: ["rastreador_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["rastreador_id"]
+          },
+          {
+            foreignKeyName: "softruck_eventos_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "veiculos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "softruck_eventos_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "softruck_eventos_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "softruck_eventos_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["veiculo_id"]
+          },
+        ]
+      }
       solicitacoes_permissao: {
         Row: {
           aprovado_em: string | null
