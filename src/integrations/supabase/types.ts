@@ -3150,6 +3150,10 @@ export type Database = {
           prestador_nome: string | null
           prestador_telefone: string | null
           protocolo: string
+          rastreador_endereco: string | null
+          rastreador_lat: number | null
+          rastreador_lng: number | null
+          rastreador_posicao_capturada_em: string | null
           status: Database["public"]["Enums"]["status_chamado"]
           tipo_servico: string
           updated_at: string
@@ -3184,6 +3188,10 @@ export type Database = {
           prestador_nome?: string | null
           prestador_telefone?: string | null
           protocolo: string
+          rastreador_endereco?: string | null
+          rastreador_lat?: number | null
+          rastreador_lng?: number | null
+          rastreador_posicao_capturada_em?: string | null
           status?: Database["public"]["Enums"]["status_chamado"]
           tipo_servico: string
           updated_at?: string
@@ -3218,6 +3226,10 @@ export type Database = {
           prestador_nome?: string | null
           prestador_telefone?: string | null
           protocolo?: string
+          rastreador_endereco?: string | null
+          rastreador_lat?: number | null
+          rastreador_lng?: number | null
+          rastreador_posicao_capturada_em?: string | null
           status?: Database["public"]["Enums"]["status_chamado"]
           tipo_servico?: string
           updated_at?: string
@@ -3394,7 +3406,10 @@ export type Database = {
           chamado_id: string
           created_at: string | null
           id: string
+          latitude: number | null
+          longitude: number | null
           observacao: string | null
+          posicao_fonte: string | null
           status_anterior: string | null
           status_novo: string
           usuario_id: string | null
@@ -3403,7 +3418,10 @@ export type Database = {
           chamado_id: string
           created_at?: string | null
           id?: string
+          latitude?: number | null
+          longitude?: number | null
           observacao?: string | null
+          posicao_fonte?: string | null
           status_anterior?: string | null
           status_novo: string
           usuario_id?: string | null
@@ -3412,7 +3430,10 @@ export type Database = {
           chamado_id?: string
           created_at?: string | null
           id?: string
+          latitude?: number | null
+          longitude?: number | null
           observacao?: string | null
+          posicao_fonte?: string | null
           status_anterior?: string | null
           status_novo?: string
           usuario_id?: string | null

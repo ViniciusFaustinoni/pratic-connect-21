@@ -198,6 +198,67 @@ serve(async (req) => {
       );
     }
 
+    // 4.1 Buscar rastreador do veículo e capturar posição
+    let rastreadorLat: number | null = null;
+    let rastreadorLng: number | null = null;
+    let rastreadorPosicaoCapturadaEm: string | null = null;
+    let rastreadorEndereco: string | null = null;
+
+    const { data: rastreador } = await supabaseAdmin
+      .from("rastreadores")
+      .select("id, plataforma, plataforma_veiculo_id, ultima_posicao_lat, ultima_posicao_lng, ultima_comunicacao")
+      .eq("veiculo_id", veiculo.id)
+      .eq("status", "instalado")
+      .maybeSingle();
+
+    if (rastreador) {
+      console.log("[criar-chamado] Rastreador encontrado:", rastreador.id);
+      
+      // Tentar buscar posição em tempo real via API
+      if (rastreador.plataforma === 'softruck' && rastreador.plataforma_veiculo_id) {
+        try {
+          const posicaoResult = await fetch(
+            `${supabaseUrl}/functions/v1/posicao-veiculo`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${supabaseServiceKey}`,
+              },
+              body: JSON.stringify({ veiculo_id: veiculo.id }),
+            }
+          );
+          
+          const posicaoData = await posicaoResult.json();
+          
+          if (posicaoData.success && posicaoData.posicao) {
+            rastreadorLat = posicaoData.posicao.latitude;
+            rastreadorLng = posicaoData.posicao.longitude;
+            rastreadorPosicaoCapturadaEm = posicaoData.posicao.data_posicao || new Date().toISOString();
+            rastreadorEndereco = posicaoData.posicao.endereco || null;
+            console.log("[criar-chamado] Posição do rastreador obtida via API:", rastreadorLat, rastreadorLng);
+          }
+        } catch (err) {
+          console.error("[criar-chamado] Erro ao buscar posição via API:", err);
+        }
+      }
+      
+      // Fallback: usar última posição do banco
+      if (!rastreadorLat && rastreador.ultima_posicao_lat && rastreador.ultima_posicao_lng) {
+        rastreadorLat = rastreador.ultima_posicao_lat;
+        rastreadorLng = rastreador.ultima_posicao_lng;
+        rastreadorPosicaoCapturadaEm = rastreador.ultima_comunicacao;
+        console.log("[criar-chamado] Usando última posição do banco:", rastreadorLat, rastreadorLng);
+      }
+    }
+
+    // 4.2 Se associado não informou localização, usar rastreador como fallback
+    if ((!payload.latitude || !payload.longitude) && rastreadorLat && rastreadorLng) {
+      console.log("[criar-chamado] Usando posição do rastreador como fallback");
+      payload.latitude = rastreadorLat;
+      payload.longitude = rastreadorLng;
+    }
+
     // 5. Verificar se já existe chamado em aberto
     const { data: chamadoExistente } = await supabaseAdmin
       .from("chamados_assistencia")
@@ -247,6 +308,11 @@ serve(async (req) => {
         canal: 'app',
         status: 'aberto',
         data_abertura: dataAbertura,
+        // Campos do rastreador
+        rastreador_lat: rastreadorLat,
+        rastreador_lng: rastreadorLng,
+        rastreador_posicao_capturada_em: rastreadorPosicaoCapturadaEm,
+        rastreador_endereco: rastreadorEndereco,
       })
       .select()
       .single();
