@@ -172,6 +172,10 @@ import Canais from "./pages/marketing/Canais";
 import Indicacoes from "./pages/marketing/Indicacoes";
 import UTMs from "./pages/marketing/UTMs";
 import RelatoriosMarketing from "./pages/marketing/RelatoriosMarketing";
+import LandingPages from "./pages/marketing/LandingPages";
+import Materiais from "./pages/marketing/Materiais";
+import ComunicacaoMassa from "./pages/marketing/ComunicacaoMassa";
+import RedesSociais from "./pages/marketing/RedesSociais";
 import DistribuicaoConfig from "./pages/vendas/DistribuicaoConfig";
 import PlanosBeneficios from "./pages/vendas/PlanosBeneficios";
 import VendasConfig from "./pages/vendas/VendasConfig";
@@ -448,6 +452,10 @@ const App = () => (
               <Route path="/marketing/utms" element={<UTMs />} />
               <Route path="/marketing/distribuicao" element={<DistribuicaoConfig />} />
               <Route path="/marketing/relatorios" element={<RelatoriosMarketing />} />
+              <Route path="/marketing/landing-pages" element={<LandingPages />} />
+              <Route path="/marketing/materiais" element={<Materiais />} />
+              <Route path="/marketing/comunicacao" element={<ComunicacaoMassa />} />
+              <Route path="/marketing/redes-sociais" element={<RedesSociais />} />
               
               {/* Admin */}
               <Route path="/admin/planos" element={<PlanosAdmin />} />
