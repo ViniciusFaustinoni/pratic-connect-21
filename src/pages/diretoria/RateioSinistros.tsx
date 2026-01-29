@@ -76,6 +76,43 @@ export default function RateioSinistros() {
     }
   });
 
+  // Rateio do mês anterior para comparativo
+  const { data: rateioAnterior } = useQuery({
+    queryKey: ['rateio-anterior'],
+    queryFn: async () => {
+      const hoje = new Date();
+      let mesAnterior = hoje.getMonth(); // getMonth() já retorna 0-11, então mês atual - 1
+      let anoAnterior = hoje.getFullYear();
+      if (mesAnterior === 0) {
+        mesAnterior = 12;
+        anoAnterior -= 1;
+      }
+      const { data, error } = await supabase
+        .from('rateios')
+        .select('*')
+        .eq('ano', anoAnterior)
+        .eq('mes', mesAnterior)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    }
+  });
+
+  // Calcular variação entre rateios
+  const variacaoRateio = (() => {
+    if (!rateioAtual || !rateioAnterior) return null;
+    const valorAtual = rateioAtual.valor_rateio_por_cota || rateioAtual.valor_rateio_por_associado || 0;
+    const valorAnterior = rateioAnterior.valor_rateio_por_cota || rateioAnterior.valor_rateio_por_associado || 0;
+    if (valorAnterior === 0) return null;
+    const variacao = ((valorAtual - valorAnterior) / valorAnterior) * 100;
+    return {
+      percentual: variacao,
+      valorAtual,
+      valorAnterior,
+      alerta: Math.abs(variacao) > 5
+    };
+  })();
+
   // Mutation - Calcular Rateio (CORRIGIDO: usando fn_calcular_rateio_por_cotas)
   const calcularRateio = useMutation({
     mutationFn: async ({ mes, ano }: { mes: number; ano: number }) => {
@@ -254,6 +291,53 @@ export default function RateioSinistros() {
             Nenhum rateio calculado para o mês atual. Clique em "Calcular Novo Rateio" para iniciar.
           </AlertDescription>
         </Alert>
+      )}
+
+      {/* Alerta de Variação > 5% */}
+      {variacaoRateio?.alerta && (
+        <Alert variant={variacaoRateio.percentual > 0 ? "destructive" : "default"}>
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription className="flex items-center gap-2">
+            <span>
+              Variação significativa no rateio: <strong>{variacaoRateio.percentual > 0 ? '+' : ''}{variacaoRateio.percentual.toFixed(1)}%</strong> em relação ao mês anterior
+              ({formatCurrency(variacaoRateio.valorAnterior)} → {formatCurrency(variacaoRateio.valorAtual)})
+            </span>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Card Comparativo com Mês Anterior */}
+      {rateioAtual && rateioAnterior && (
+        <Card className="border-info/30 bg-info/5">
+          <CardContent className="pt-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Comparativo com Mês Anterior</p>
+                <div className="flex items-center gap-4 mt-2">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Anterior</p>
+                    <p className="text-lg font-semibold">{formatCurrency(variacaoRateio?.valorAnterior || 0)}</p>
+                  </div>
+                  <div className="text-2xl">→</div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Atual</p>
+                    <p className="text-lg font-semibold">{formatCurrency(variacaoRateio?.valorAtual || 0)}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-sm text-muted-foreground">Variação</p>
+                <p className={`text-2xl font-bold ${
+                  (variacaoRateio?.percentual || 0) > 0 ? 'text-red-600' : 
+                  (variacaoRateio?.percentual || 0) < 0 ? 'text-green-600' : ''
+                }`}>
+                  {(variacaoRateio?.percentual || 0) > 0 ? '+' : ''}
+                  {variacaoRateio?.percentual?.toFixed(1) || 0}%
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Card Rateio Atual */}

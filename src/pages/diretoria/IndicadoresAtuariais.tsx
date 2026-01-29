@@ -15,6 +15,7 @@ import { ptBR } from 'date-fns/locale';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { SinistrosPorTipoTable, SinistrosPorFaixaFipeTable } from '@/components/diretoria';
 
 const formatCurrency = (value: number | null) => {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
@@ -350,6 +351,26 @@ export default function IndicadoresAtuariais() {
                   <Line type="monotone" dataKey="sinistralidade_liquida" stroke="#f97316" name="Líquida" />
                 </LineChart>
               </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          {/* Tabela Sinistralidade por Tipo de Evento - NOVO */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Sinistralidade por Tipo de Evento</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <SinistrosPorTipoTable ano={ano} />
+            </CardContent>
+          </Card>
+
+          {/* Tabela Sinistralidade por Faixa FIPE - NOVO */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Sinistralidade por Faixa FIPE</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <SinistrosPorFaixaFipeTable ano={ano} />
             </CardContent>
           </Card>
 
