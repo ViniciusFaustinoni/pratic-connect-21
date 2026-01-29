@@ -607,11 +607,36 @@ export function useAssociadoActions() {
 
   const atualizarDados = useMutation({
     mutationFn: async ({ id, dados }: { id: string; dados: AssociadoUpdate }) => {
+      // 1. Atualizar banco local
       const { error } = await supabase.from('associados').update({
         ...dados,
         updated_at: new Date().toISOString(),
       }).eq('id', id);
       if (error) throw error;
+
+      // 2. Verificar se associado tem veículo com rastreador Rede Veículos
+      const { data: veiculos } = await supabase
+        .from('veiculos')
+        .select('id, rede_veiculos_cliente_id')
+        .eq('associado_id', id);
+
+      const temRedeVeiculos = veiculos?.some(v => v.rede_veiculos_cliente_id);
+
+      // 3. Se tem, sincronizar com plataforma
+      if (temRedeVeiculos) {
+        try {
+          await supabase.functions.invoke('rede-veiculos-atualizar-cliente', {
+            body: {
+              associadoId: id,
+              camposAlterados: dados,
+            },
+          });
+          console.log('[atualizarDados] Dados sincronizados com Rede Veículos');
+        } catch (err) {
+          console.warn('[atualizarDados] Erro ao sincronizar com Rede Veículos:', err);
+          // Não bloqueia o fluxo
+        }
+      }
     },
     onSuccess: () => {
       invalidateAll();
@@ -714,6 +739,7 @@ export function useUpdateAssociado() {
 
   return useMutation({
     mutationFn: async ({ id, ...updates }: AssociadoUpdate & { id: string }) => {
+      // 1. Atualizar banco local
       const { data, error } = await supabase
         .from('associados')
         .update(updates)
@@ -722,6 +748,31 @@ export function useUpdateAssociado() {
         .single();
 
       if (error) throw error;
+
+      // 2. Verificar se associado tem veículo com rastreador Rede Veículos
+      const { data: veiculos } = await supabase
+        .from('veiculos')
+        .select('id, rede_veiculos_cliente_id')
+        .eq('associado_id', id);
+
+      const temRedeVeiculos = veiculos?.some(v => v.rede_veiculos_cliente_id);
+
+      // 3. Se tem, sincronizar com plataforma
+      if (temRedeVeiculos) {
+        try {
+          await supabase.functions.invoke('rede-veiculos-atualizar-cliente', {
+            body: {
+              associadoId: id,
+              camposAlterados: updates,
+            },
+          });
+          console.log('[useUpdateAssociado] Dados sincronizados com Rede Veículos');
+        } catch (err) {
+          console.warn('[useUpdateAssociado] Erro ao sincronizar com Rede Veículos:', err);
+          // Não bloqueia o fluxo
+        }
+      }
+
       return data as Associado;
     },
     onSuccess: (data) => {

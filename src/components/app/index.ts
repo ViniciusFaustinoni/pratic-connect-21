@@ -21,3 +21,6 @@ export type {
   QRCodeSize,
   QRCodeStatus 
 } from './QRCodePix/types';
+
+// Configuração de alertas do rastreador
+export { ConfiguracaoAlertasCard } from './ConfiguracaoAlertasCard';

@@ -497,12 +497,46 @@ export function useUpdateAssociado() {
     mutationFn: async (data: Partial<Associado>) => {
       if (!user?.id) throw new Error('Não autenticado');
 
+      // 1. Atualizar banco local
       const { error } = await supabase
         .from('associados')
         .update(data)
         .eq('user_id', user.id);
 
       if (error) throw error;
+
+      // 2. Verificar se associado tem veículo com rastreador Rede Veículos
+      const { data: associadoData } = await supabase
+        .from('associados')
+        .select(`
+          id,
+          veiculos (
+            id,
+            rede_veiculos_cliente_id
+          )
+        `)
+        .eq('user_id', user.id)
+        .single();
+
+      const temRedeVeiculos = associadoData?.veiculos?.some(
+        (v: { rede_veiculos_cliente_id: string | null }) => v.rede_veiculos_cliente_id
+      );
+
+      // 3. Se tem, sincronizar com plataforma Rede Veículos
+      if (temRedeVeiculos && associadoData?.id) {
+        try {
+          await supabase.functions.invoke('rede-veiculos-atualizar-cliente', {
+            body: {
+              associadoId: associadoData.id,
+              camposAlterados: data,
+            },
+          });
+          console.log('[useUpdateAssociado] Dados sincronizados com Rede Veículos');
+        } catch (err) {
+          console.warn('[useUpdateAssociado] Erro ao sincronizar com Rede Veículos:', err);
+          // Não bloqueia o fluxo - atualização local já foi feita
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-associado'] });
