@@ -1,432 +1,322 @@
 
-# Revisao Completa - Fluxo de Envio de Contatos via Evolution API
+
+# Revisao Completa - Configuracao de Webhooks para Evolution API
 
 ## Resumo Executivo
 
-| Cenario | Status | Implementacao Atual | Problema |
-|---------|--------|---------------------|----------|
-| Associado solicita contato do guincho/prestador | **NAO IMPLEMENTADO** | Nenhum | Contato nao e enviado como cartao VCard |
-| Passar contato da central de atendimento | **NAO IMPLEMENTADO** | Nenhum | Central informada apenas como texto |
-| IA envia contato do prestador | **NAO IMPLEMENTADO** | Nenhum | Tool nao existe |
-| Tracking exibe contato do prestador | **PARCIAL** | Mostra nome/telefone | Nao permite salvar diretamente |
-
-**Conclusao:** O endpoint `POST /message/sendContact/{instanceName}` da Evolution API **NAO esta sendo utilizado**. Contatos sao compartilhados apenas como texto, perdendo o beneficio de permitir que o destinatario salve o contato diretamente no celular.
+| Aspecto | Status | Observacao |
+|---------|--------|------------|
+| URL do webhook acessivel externamente | **OK** | `https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/whatsapp-webhook` |
+| Evento MESSAGES_UPSERT (mensagens recebidas) | **OK** | Configurado |
+| Evento MESSAGES_UPDATE (status entrega) | **CONFIGURADO MAS NAO PROCESSADO** | Evento registrado mas sem handler |
+| Evento CONNECTION_UPDATE (desconexoes) | **OK** | Funcionando com alertas para diretores |
+| Headers de autorizacao | **OK** | apikey enviada pela Evolution API |
+| byEvents configurado | **NAO** | `webhook_by_events: false` (envia todos eventos para mesma URL) |
+| Processamento de status de entrega | **NAO IMPLEMENTADO** | Falta handler para atualizar delivered_at e read_at |
+| Resposta rapida do webhook | **OK** | Responde em menos de 200ms |
 
 ---
 
-## Formato do Endpoint Evolution API
+## Analise Detalhada
 
-Baseado na documentacao oficial da Evolution API:
+### 1. Configuracao do Webhook (whatsapp-set-webhook)
 
-### Request
+**Configuracao atual:**
 
-```
-POST /message/sendContact/{instanceName}
-```
-
-### Payload
-
-```json
-{
-  "number": "5599999999999",
-  "contact": [
-    {
-      "fullName": "Guilherme Gomes",
-      "wuid": "5531982960001",
-      "phoneNumber": "+55 31 98296-0001",
-      "organization": "Guincho 24h",
-      "email": "contato@guincho.com.br",
-      "url": ""
-    }
+```typescript
+const webhookPayload = {
+  url: WEBHOOK_URL,  // https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/whatsapp-webhook
+  enabled: true,
+  webhook_by_events: false,  // Todos eventos vao para mesma URL
+  webhook_base64: false,
+  events: [
+    'MESSAGES_UPSERT',    // ✅ Mensagens recebidas
+    'MESSAGES_UPDATE',    // ⚠️ Configurado mas nao processado
+    'CONNECTION_UPDATE'   // ✅ Desconexoes
   ]
+};
+```
+
+**Status no banco:**
+- `webhook_enabled: true`
+- `webhook_url: https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/whatsapp-webhook`
+- `webhook_events: [MESSAGES_UPSERT, MESSAGES_UPDATE, CONNECTION_UPDATE]`
+
+### 2. Processamento de Eventos no Webhook
+
+**MESSAGES_UPSERT (mensagens recebidas):** FUNCIONANDO
+
+```typescript
+if (payload.event === "messages.upsert") {
+  // ✅ Processa mensagens de entrada
+  // ✅ Identifica associado pelo telefone
+  // ✅ Responde via IA
+  // ✅ Registra em whatsapp_mensagens
 }
 ```
 
-### Campos
+**CONNECTION_UPDATE (desconexoes):** FUNCIONANDO
 
-| Campo | Tipo | Obrigatorio | Descricao |
-|-------|------|-------------|-----------|
-| `fullName` | string | Sim | Nome completo do contato (aparece no cartao) |
-| `wuid` | string | Sim | WhatsApp User ID (numero no formato 5511999999999) |
-| `phoneNumber` | string | Nao | Numero formatado para exibicao (+55 11 99999-9999) |
-| `organization` | string | Nao | Empresa/organizacao |
-| `email` | string | Nao | Email do contato |
-| `url` | string | Nao | Site/URL do contato |
-
-### Resposta Esperada
-
-```json
-{
-  "key": {
-    "remoteJid": "5531982960001@s.whatsapp.net",
-    "fromMe": true,
-    "id": "BAE58DA6CBC941BC"
-  },
-  "message": {
-    "contactMessage": {
-      "displayName": "Guilherme Gomes",
-      "vcard": "BEGIN:VCARD\nVERSION:3.0\nN:Guilherme Gomes\nFN:Guilherme Gomes\nORG:Guincho 24h;\nEMAIL:contato@guincho.com.br\nTEL;waid=5531982960001:+55 31 98296-0001\nEND:VCARD"
-    }
-  }
+```typescript
+if (payload.event === "connection.update") {
+  // ✅ Detecta state: open, close, connecting
+  // ✅ Atualiza status no banco
+  // ✅ Cria notificacao para diretores se desconectar
+  // ✅ Registra log da desconexao
 }
 ```
 
----
+**MESSAGES_UPDATE (status de entrega):** NAO IMPLEMENTADO
 
-## Gaps Identificados
+O evento `MESSAGES_UPDATE` e recebido pela Evolution API quando:
+- Mensagem foi **enviada** (status: DELIVERY_ACK)
+- Mensagem foi **entregue** (status: DELIVERY_ACK)
+- Mensagem foi **lida** (status: READ)
 
-### Gap 1: Associado Solicita Contato do Prestador
+Atualmente, este evento e **ignorado** no webhook:
 
-Quando um chamado de assistencia e criado e um prestador e atribuido, o associado deveria poder receber o contato do prestador como cartao VCard para salvar diretamente no celular.
+```typescript
+// Linha 1399
+if (payload.event !== "messages.upsert") {
+  console.log(`[whatsapp-webhook] Evento ignorado: ${payload.event}`);
+  return new Response(JSON.stringify({ ok: true, ignored: true, event: payload.event }), ...);
+}
+```
 
-**Fluxo atual:** Apenas texto com nome e telefone.
-**Fluxo ideal:** Enviar cartao VCard que permite "Adicionar aos Contatos".
+### 3. Gaps Identificados
 
-### Gap 2: Central de Atendimento como Contato
+#### Gap 1: Status de Entrega Nao Atualizado
 
-Ao criar chamados ou em situacoes de emergencia, o sistema deveria enviar o contato da central (0800 ou numero fixo) como cartao salvavel.
+A tabela `whatsapp_mensagens` possui campos para rastrear status:
+- `sent_at` (timestamp quando enviada)
+- `delivered_at` (timestamp quando entregue) - NUNCA PREENCHIDO
+- `read_at` (timestamp quando lida) - NUNCA PREENCHIDO
+- `status` (pendente, enviando, enviada, entregue, lida, erro) - SO USA "enviada" e "entregue"
 
-**Fluxo atual:** Apenas texto com numero.
-**Fluxo ideal:** Cartao VCard da "Central PRATICCAR 24h".
+#### Gap 2: Nao Ha Log de Eventos MESSAGES_UPDATE
 
-### Gap 3: IA Nao Pode Enviar Contatos
-
-A IA no WhatsApp Webhook nao possui tool para enviar contatos quando o associado pergunta "qual o telefone do guincho?" ou "como falo com a central?".
-
-### Gap 4: Tracking Publico Nao Envia Contato
-
-A pagina `TrackingAssistencia.tsx` exibe nome e telefone do prestador, mas nao oferece opcao de salvar como contato via WhatsApp.
+Os logs mostram apenas eventos `connection.update`. Eventos de status de mensagens nao estao sendo registrados.
 
 ---
 
 ## Plano de Implementacao
 
-### Fase 1: Criar Edge Function whatsapp-send-contact
-
-**Novo arquivo:** `supabase/functions/whatsapp-send-contact/index.ts`
-
-```typescript
-interface SendContactPayload {
-  telefone: string;              // Destinatario
-  contato: {
-    fullName: string;            // Nome completo (obrigatorio)
-    wuid?: string;               // WhatsApp ID (se nao informado, usa phoneNumber)
-    phoneNumber: string;         // Telefone formatado
-    organization?: string;       // Empresa
-    email?: string;              // Email
-  };
-  instancia_id?: string;
-  referencia_tipo?: string;
-  referencia_id?: string;
-}
-
-serve(async (req) => {
-  // 1. Validar payload
-  // 2. Buscar instancia ativa
-  // 3. Verificar status da conexao
-  // 4. Formatar wuid (remover caracteres, garantir formato 5599999999999)
-  // 5. Chamar Evolution API: POST /message/sendContact/{instanceName}
-  // 6. Registrar em whatsapp_mensagens com tipo 'contact'
-  // 7. Retornar resultado
-});
-```
-
-**Validacoes:**
-- `fullName`: Obrigatorio, max 200 caracteres
-- `phoneNumber`: Obrigatorio, sera convertido para wuid se nao informado
-- `wuid`: Formato 55 + DDD + numero (sem caracteres especiais)
-
----
-
-### Fase 2: Adicionar Tool na IA (WhatsApp Webhook)
+### Adicionar Handler para MESSAGES_UPDATE
 
 **Modificar:** `supabase/functions/whatsapp-webhook/index.ts`
 
-Adicionar nova tool para IA enviar contatos:
+Adicionar processamento de eventos de status apos o handler de CONNECTION_UPDATE:
 
 ```typescript
-// Na lista de tools
-{
-  type: "function",
-  function: {
-    name: "enviar_contato_central",
-    description: "Envia o cartão de contato da Central de Atendimento PRATICCAR. Use quando o associado perguntar o telefone da central ou como entrar em contato.",
-    parameters: { type: "object", properties: {}, required: [] },
-  },
-},
-{
-  type: "function",
-  function: {
-    name: "enviar_contato_prestador",
-    description: "Envia o cartão de contato do prestador de serviço (guincho, chaveiro, etc.) do chamado de assistência ativo. Use quando o associado quiser o contato do guincho/prestador.",
-    parameters: { type: "object", properties: {}, required: [] },
-  },
-},
-```
-
-**Implementacao das tools:**
-
-```typescript
-case "enviar_contato_central": {
-  // Buscar telefone da central nas configuracoes
-  const { data: config } = await supabase
-    .from("configuracoes")
-    .select("valor")
-    .eq("chave", "assistencia_telefone_central")
-    .maybeSingle();
-
-  const telefoneCentral = config?.valor || "08001234567";
-  const wuid = telefoneCentral.replace(/\D/g, '');
-
-  // Enviar contato
-  await supabase.functions.invoke('whatsapp-send-contact', {
-    body: {
-      telefone: telefone,
-      contato: {
-        fullName: "Central PRATICCAR 24h",
-        wuid: wuid.startsWith('55') ? wuid : `55${wuid}`,
-        phoneNumber: telefoneCentral,
-        organization: "PRATICCAR Proteção Veicular",
-      },
-    },
-  });
-
-  return JSON.stringify({
-    success: true,
-    message: "Pronto! O cartão de contato da Central foi enviado. Você pode salvá-lo diretamente no seu celular! 📇"
-  });
-}
-
-case "enviar_contato_prestador": {
-  // Buscar chamado ativo com prestador
-  const { data: chamados } = await supabase
-    .from("chamados_assistencia")
-    .select("id, protocolo, prestador_nome, prestador_telefone, tipo_servico")
-    .eq("associado_id", associadoId)
-    .in("status", ["aguardando_prestador", "prestador_despachado", "prestador_a_caminho", "em_atendimento"])
-    .order("created_at", { ascending: false })
-    .limit(1);
-
-  const chamado = chamados?.[0];
-
-  if (!chamado) {
-    return JSON.stringify({
-      success: false,
-      message: "Você não tem chamados de assistência ativos no momento."
-    });
-  }
-
-  if (!chamado.prestador_nome || !chamado.prestador_telefone) {
-    return JSON.stringify({
-      success: false,
-      message: "O prestador ainda não foi atribuído ao seu chamado. Aguarde alguns minutos."
-    });
-  }
-
-  const wuid = chamado.prestador_telefone.replace(/\D/g, '');
-
-  await supabase.functions.invoke('whatsapp-send-contact', {
-    body: {
-      telefone: telefone,
-      contato: {
-        fullName: chamado.prestador_nome,
-        wuid: wuid.startsWith('55') ? wuid : `55${wuid}`,
-        phoneNumber: chamado.prestador_telefone,
-        organization: "Prestador PRATICCAR",
-      },
-      referencia_tipo: "chamado_assistencia",
-      referencia_id: chamado.id,
-    },
-  });
-
-  return JSON.stringify({
-    success: true,
-    message: `Pronto! O cartão de contato do ${chamado.prestador_nome} foi enviado. Você pode salvá-lo e ligar diretamente! 📇`
-  });
-}
-```
-
----
-
-### Fase 3: Enviar Contato do Prestador ao Associado Automaticamente
-
-**Modificar:** `supabase/functions/criar-chamado-assistencia/index.ts` (ou criar trigger)
-
-Quando um prestador for atribuido ao chamado, enviar automaticamente seu contato:
-
-```typescript
-// Quando prestador for atribuido (evento de update do chamado)
-if (prestadorNome && prestadorTelefone && associadoWhatsApp) {
-  // Enviar texto informando
-  await supabase.functions.invoke('whatsapp-send-text', {
-    body: {
-      telefone: associadoWhatsApp.replace(/\D/g, ''),
-      mensagem: `✅ *Prestador a Caminho!*\n\n${prestadorNome} foi acionado e está a caminho do local.\n\nEstamos enviando o contato dele para você.`,
-    },
-  });
-
-  // Enviar cartao de contato
-  await supabase.functions.invoke('whatsapp-send-contact', {
-    body: {
-      telefone: associadoWhatsApp.replace(/\D/g, ''),
-      contato: {
-        fullName: prestadorNome,
-        phoneNumber: prestadorTelefone,
-        organization: "Prestador PRATICCAR",
-      },
-      referencia_tipo: "chamado_assistencia",
-      referencia_id: chamadoId,
-    },
-  });
-}
-```
-
----
-
-### Fase 4: Adicionar Botao no EnviarLinkPrestadorButton
-
-**Modificar:** `src/components/assistencia/EnviarLinkPrestadorButton.tsx`
-
-Adicionar opcao para enviar contato do prestador como VCard:
-
-```typescript
-// Novo botao para enviar contato
-const handleEnviarContato = async () => {
-  if (!prestadorNome || !prestadorTelefone) {
-    toast.error('Dados do prestador incompletos');
-    return;
-  }
-
-  setEnviandoContato(true);
+// PROCESSAR EVENTOS DE STATUS DE MENSAGEM (MESSAGES_UPDATE)
+if (payload.event === "messages.update") {
+  console.log('[whatsapp-webhook] MESSAGES_UPDATE recebido');
   
-  try {
-    const { error } = await supabase.functions.invoke('whatsapp-send-contact', {
-      body: {
-        telefone: associadoTelefone.replace(/\D/g, ''),
-        contato: {
-          fullName: prestadorNome,
-          phoneNumber: prestadorTelefone,
-          organization: "Prestador PRATICCAR",
-        },
-        referencia_tipo: "chamado_assistencia",
-        referencia_id: chamadoId,
-      },
-    });
-
-    if (error) throw error;
-    toast.success('📇 Contato do prestador enviado!');
-  } catch (err: any) {
-    toast.error(`Erro: ${err.message}`);
-  } finally {
-    setEnviandoContato(false);
+  const updates = payload.data?.messages || payload.data || [];
+  
+  for (const update of Array.isArray(updates) ? updates : [updates]) {
+    const messageId = update.key?.id;
+    const status = update.status || update.update?.status;
+    
+    if (!messageId) continue;
+    
+    console.log(`[whatsapp-webhook] Status update: ${messageId} -> ${status}`);
+    
+    // Mapear status da Evolution para nosso status
+    const statusMap: Record<number, { status: string; field: string }> = {
+      0: { status: 'erro', field: '' },
+      1: { status: 'pendente', field: '' },
+      2: { status: 'enviada', field: 'sent_at' },
+      3: { status: 'entregue', field: 'delivered_at' },
+      4: { status: 'lida', field: 'read_at' },
+      5: { status: 'reproduzida', field: 'read_at' }, // Para audio/video
+    };
+    
+    const statusInfo = statusMap[status];
+    
+    if (statusInfo) {
+      const updateData: Record<string, any> = {
+        status: statusInfo.status,
+        updated_at: new Date().toISOString(),
+      };
+      
+      if (statusInfo.field) {
+        updateData[statusInfo.field] = new Date().toISOString();
+      }
+      
+      // Atualizar mensagem no banco
+      const { error } = await supabase
+        .from('whatsapp_mensagens')
+        .update(updateData)
+        .eq('message_id', messageId);
+      
+      if (error) {
+        console.error(`[whatsapp-webhook] Erro ao atualizar status: ${error.message}`);
+      } else {
+        console.log(`[whatsapp-webhook] Status atualizado: ${messageId} -> ${statusInfo.status}`);
+      }
+    }
   }
-};
+  
+  return new Response(JSON.stringify({ ok: true, event: 'messages.update' }), { headers: corsHeaders });
+}
+```
+
+### Corrigir Salvamento do message_id
+
+Atualmente, algumas mensagens nao salvam o `message_id` retornado pela Evolution API, dificultando a atualizacao de status.
+
+**Arquivo:** `supabase/functions/whatsapp-webhook/index.ts` (funcao sendWhatsAppMessage)
+
+Atualizar para retornar o message_id:
+
+```typescript
+async function sendWhatsAppMessage(apiUrl: string, instanceName: string, telefone: string, texto: string): Promise<{ ok: boolean; messageId?: string }> {
+  const EVOLUTION_API_KEY = Deno.env.get("EVOLUTION_API_KEY");
+  if (!EVOLUTION_API_KEY) throw new Error("EVOLUTION_API_KEY não configurada");
+
+  const response = await fetch(`${apiUrl}/message/sendText/${instanceName}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: EVOLUTION_API_KEY,
+    },
+    body: JSON.stringify({
+      number: telefone,
+      text: texto,
+    }),
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    console.error(`[whatsapp-webhook] Erro ao enviar: ${err}`);
+    return { ok: false };
+  }
+
+  const result = await response.json();
+  return { ok: true, messageId: result?.key?.id };
+}
+```
+
+E atualizar a funcao `saveWhatsAppLog` para receber e salvar o message_id:
+
+```typescript
+async function saveWhatsAppLog(
+  supabase: any, 
+  instanciaId: string, 
+  telefone: string, 
+  mensagem: string, 
+  direcao: string,
+  messageId?: string
+) {
+  await supabase.from("whatsapp_mensagens").insert({
+    instancia_id: instanciaId,
+    telefone,
+    tipo: "text",
+    mensagem,
+    direcao,
+    status: direcao === "saida" ? "enviada" : "entregue",
+    message_id: messageId || null,
+    sent_at: direcao === "saida" ? new Date().toISOString() : null,
+  });
+}
 ```
 
 ---
-
-## Arquivos a Criar
-
-| Arquivo | Descricao |
-|---------|-----------|
-| `supabase/functions/whatsapp-send-contact/index.ts` | Edge function para envio de contatos VCard |
 
 ## Arquivos a Modificar
 
 | Arquivo | Alteracoes |
 |---------|------------|
-| `supabase/config.toml` | Adicionar configuracao da nova function |
-| `supabase/functions/whatsapp-webhook/index.ts` | Adicionar tools `enviar_contato_central` e `enviar_contato_prestador` |
-| `src/components/assistencia/EnviarLinkPrestadorButton.tsx` | Adicionar botao "Enviar Contato" |
+| `supabase/functions/whatsapp-webhook/index.ts` | Adicionar handler MESSAGES_UPDATE e melhorar salvamento de message_id |
+
+---
+
+## Verificacoes Pos-Implementacao
+
+### Checklist de Testes
+
+- [ ] Enviar mensagem de teste e verificar se `sent_at` e preenchido
+- [ ] Verificar se status muda para "entregue" quando destinatario recebe
+- [ ] Verificar se status muda para "lida" quando destinatario abre
+- [ ] Confirmar que desconexoes geram alerta para diretores
+- [ ] Verificar tempo de resposta do webhook (deve ser <500ms)
+- [ ] Testar reconexao automatica do webhook
+
+### Consulta para Verificar Status
+
+```sql
+SELECT 
+  telefone,
+  mensagem,
+  status,
+  sent_at,
+  delivered_at,
+  read_at,
+  message_id
+FROM whatsapp_mensagens 
+WHERE direcao = 'saida' 
+ORDER BY created_at DESC 
+LIMIT 10;
+```
 
 ---
 
 ## Detalhes Tecnicos
 
-### Formatacao do wuid
+### Formato do Evento MESSAGES_UPDATE da Evolution API
 
-O campo `wuid` (WhatsApp User ID) deve seguir o formato:
-- Apenas numeros
-- Prefixo 55 (Brasil)
-- DDD + numero
-
-```typescript
-function formatarWuid(telefone: string): string {
-  let limpo = telefone.replace(/\D/g, '');
-  if (!limpo.startsWith('55')) {
-    limpo = '55' + limpo;
+```json
+{
+  "event": "messages.update",
+  "instance": "sga-pratic",
+  "data": {
+    "key": {
+      "remoteJid": "5599999999999@s.whatsapp.net",
+      "fromMe": true,
+      "id": "BAE5B1234567890"
+    },
+    "update": {
+      "status": 3  // 2=enviada, 3=entregue, 4=lida
+    }
   }
-  return limpo;
 }
 ```
 
-### Formatacao do phoneNumber
+### Mapeamento de Status
 
-O campo `phoneNumber` e para exibicao no cartao:
-
-```typescript
-function formatarPhoneNumber(telefone: string): string {
-  const limpo = telefone.replace(/\D/g, '');
-  if (limpo.length === 11) {
-    return `+55 ${limpo.slice(0, 2)} ${limpo.slice(2, 7)}-${limpo.slice(7)}`;
-  }
-  return telefone;
-}
-```
+| Codigo | Status Evolution | Status Sistema |
+|--------|------------------|----------------|
+| 0 | ERROR | erro |
+| 1 | PENDING | pendente |
+| 2 | SERVER_ACK | enviada |
+| 3 | DELIVERY_ACK | entregue |
+| 4 | READ | lida |
+| 5 | PLAYED | reproduzida |
 
 ---
 
-## Checklist Pos-Implementacao
+## Nota sobre Configuracoes Adicionais
 
-- [ ] Edge function `whatsapp-send-contact` criada e deployada
-- [ ] `fullName` preenchido corretamente em todos os fluxos
-- [ ] `wuid` no formato correto (55 + DDD + numero, sem caracteres especiais)
-- [ ] `phoneNumber` formatado para exibicao legivel
-- [ ] `organization` preenchido quando relevante (Central, Prestador)
-- [ ] Contato pode ser salvo diretamente pelo destinatario
-- [ ] IA pode enviar contato da central quando solicitado
-- [ ] IA pode enviar contato do prestador quando solicitado
-- [ ] Botao "Enviar Contato" funciona no painel de assistencia
-- [ ] Logs registrados em `whatsapp_mensagens` com tipo `contact`
+### webhook_by_events
 
----
+Atualmente `webhook_by_events: false`, o que significa que todos os eventos vao para a mesma URL. Isso e o recomendado para simplificar.
 
-## Teste Recomendado: Envio de Contato
+Se preferir separar endpoints por tipo de evento, seria necessario:
+1. Criar edge functions separadas (ex: `whatsapp-webhook-messages`, `whatsapp-webhook-status`)
+2. Configurar `webhook_by_events: true`
+3. A Evolution API enviara para endpoints especificos por evento
 
-### Pre-requisitos
+### Eventos Adicionais Opcionais
 
-1. WhatsApp conectado via QR Code
-2. Chamado de assistencia com prestador atribuido
-3. Numero de teste cadastrado
+A Evolution API suporta outros eventos que podem ser uteis:
 
-### Passos do Teste
+| Evento | Descricao | Recomendacao |
+|--------|-----------|--------------|
+| `QRCODE_UPDATED` | Novo QR code gerado | Util para exibir QR code em tempo real |
+| `CALL` | Chamadas recebidas | Opcional |
+| `PRESENCE_UPDATE` | Online/Offline/Digitando | Util para UX avancada |
+| `CHATS_UPDATE` | Atualizacoes de conversas | Opcional |
+| `GROUPS_UPSERT` | Atualizacoes de grupos | Ignorar se nao usa grupos |
 
-1. Acessar Assistencia > Chamados
-2. Abrir chamado com prestador atribuido
-3. Clicar em "Enviar Contato"
-4. Verificar no WhatsApp do destinatario:
-   - Cartao de contato recebido
-   - Nome do prestador visivel
-   - Telefone formatado
-   - Botao "Adicionar aos Contatos" funcional
-5. Clicar em adicionar e confirmar que salva no celular
 
-### Resultado Esperado
-
-- Cartao VCard nativo do WhatsApp
-- Nome: Nome do prestador
-- Telefone: Numero formatado
-- Organizacao: "Prestador PRATICCAR"
-- Botao "Adicionar" funciona corretamente
-- Registro em `whatsapp_mensagens` com tipo `contact`
-
----
-
-## Nota sobre Limite de Edge Functions
-
-O projeto pode ter atingido o limite de Edge Functions do Supabase. Se o deploy falhar, sera necessario:
-1. Fazer upgrade do plano Supabase, OU
-2. Remover uma edge function nao utilizada, OU
-3. Consolidar funcionalidades em edge functions existentes
-
-A funcao `whatsapp-send-contact` pode ser adicionada como handler adicional dentro de uma edge function existente (por exemplo, dentro do `whatsapp-webhook` como funcao interna) se necessario.
