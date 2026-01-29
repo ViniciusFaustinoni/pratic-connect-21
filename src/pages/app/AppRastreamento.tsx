@@ -31,10 +31,12 @@ import {
   Radio,
   Navigation,
   Signal,
-  History
+  History,
+  ShieldAlert,
+  CreditCard
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useMyVehicleWithTracker, useMyVehicles, useVeiculoPosicao } from '@/hooks/useMyData';
+import { useMyVehicleWithTracker, useMyVehicles, useVeiculoPosicao, useMyAssociado } from '@/hooks/useMyData';
 import { cn } from '@/lib/utils';
 import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
 import L from 'leaflet';
@@ -117,6 +119,7 @@ function getMarkerIcon(ignicao: boolean, emMovimento: boolean) {
 
 export default function AppRastreamento() {
   const navigate = useNavigate();
+  const { data: associado, isLoading: associadoLoading } = useMyAssociado();
   const { data: vehicles, isLoading: vehiclesLoading } = useMyVehicles();
   const { data: tracker, isLoading: trackerLoading, refetch } = useMyVehicleWithTracker();
   
@@ -124,7 +127,7 @@ export default function AppRastreamento() {
   const [veiculoSelecionado, setVeiculoSelecionado] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(true);
   
-  const isLoading = vehiclesLoading || trackerLoading;
+  const isLoading = vehiclesLoading || trackerLoading || associadoLoading;
   const vehicle = veiculoSelecionado 
     ? vehicles?.find(v => v.id === veiculoSelecionado) 
     : vehicles?.[0];
@@ -216,6 +219,67 @@ export default function AppRastreamento() {
           <Skeleton className="h-8 w-8 rounded-full" />
         </header>
         <Skeleton className="flex-1" />
+      </div>
+    );
+  }
+
+  // Estado de Bloqueio por Inadimplência
+  const associadoBloqueado = associado?.status === 'suspenso' || 
+                              associado?.status === 'inadimplente' || 
+                              associado?.bloqueado === true;
+
+  if (associadoBloqueado) {
+    return (
+      <div className="flex h-screen flex-col bg-background">
+        <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b bg-background px-4">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={() => navigate('/app/home')}
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <h1 className="text-lg font-semibold">Rastreamento</h1>
+          <div className="w-10" />
+        </header>
+
+        <div className="flex flex-1 items-center justify-center p-4">
+          <Card className="w-full max-w-sm border-destructive/20 shadow-lg">
+            <CardContent className="flex flex-col items-center justify-center py-10 text-center">
+              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-destructive/10">
+                <ShieldAlert className="h-10 w-10 text-destructive" />
+              </div>
+              <h3 className="mt-6 text-xl font-bold text-destructive">
+                Acesso Bloqueado
+              </h3>
+              <p className="mt-3 text-sm text-muted-foreground leading-relaxed">
+                Seu acesso ao rastreamento está temporariamente suspenso 
+                devido a pendências financeiras.
+              </p>
+              {associado?.motivo_bloqueio && (
+                <p className="mt-2 text-xs text-muted-foreground italic">
+                  Motivo: {associado.motivo_bloqueio}
+                </p>
+              )}
+              <div className="mt-6 flex flex-col gap-3 w-full">
+                <Button 
+                  className="w-full"
+                  onClick={() => navigate('/app/boletos')}
+                >
+                  <CreditCard className="mr-2 h-4 w-4" />
+                  Ver Boletos Pendentes
+                </Button>
+                <Button 
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => navigate('/app/home')}
+                >
+                  Voltar ao Início
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     );
   }

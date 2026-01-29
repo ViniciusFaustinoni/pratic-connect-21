@@ -144,6 +144,60 @@ export function RegistrarPagamentoModal({ open, onClose, cobranca }: RegistrarPa
       } catch (errContabil) {
         console.error('Erro ao criar lançamento contábil:', errContabil);
       }
+
+      // 4. Verificar se associado suspenso deve ser reativado e notificar Rede Veículos
+      if (cobranca?.associado?.id) {
+        try {
+          const { data: associadoStatus } = await supabase
+            .from('associados')
+            .select('status')
+            .eq('id', cobranca.associado.id)
+            .single();
+
+          if (associadoStatus?.status === 'suspenso') {
+            // Verificar se não há mais cobranças pendentes/vencidas
+            const { count: pendentes } = await supabase
+              .from('asaas_cobrancas')
+              .select('*', { count: 'exact', head: true })
+              .eq('associado_id', cobranca.associado.id)
+              .in('status', ['PENDING', 'OVERDUE'])
+              .neq('id', cobranca.id); // Excluir a cobrança que acabou de ser paga
+
+            if (pendentes === 0) {
+              // Reativar associado
+              await supabase.from('associados').update({
+                status: 'ativo',
+                bloqueado: false,
+                motivo_bloqueio: null,
+                data_bloqueio: null,
+                updated_at: new Date().toISOString(),
+              }).eq('id', cobranca.associado.id);
+
+              // Registrar histórico
+              await supabase.from('associados_historico').insert({
+                associado_id: cobranca.associado.id,
+                tipo: 'status_alterado',
+                descricao: 'Associado reativado após baixa manual de pagamento',
+                dados_anteriores: { status: 'suspenso' },
+                dados_novos: { status: 'ativo' },
+                usuario_id: user?.id,
+              });
+
+              // Notificar Rede Veículos sobre adimplência
+              await supabase.functions.invoke('rede-veiculos-informar-adimplente', {
+                body: {
+                  associadoId: cobranca.associado.id,
+                  motivo: 'baixa_manual',
+                },
+              });
+
+              toast.success('Associado reativado automaticamente!');
+            }
+          }
+        } catch (errReativar) {
+          console.error('Erro ao verificar reativação:', errReativar);
+        }
+      }
     },
     onSuccess: () => {
       toast.success('Pagamento registrado com sucesso!');
