@@ -208,7 +208,22 @@ export default function DiretoriaDashboard() {
         .select('*')
         .eq('ano', mesAtual.getFullYear())
         .eq('mes', mesAtual.getMonth() + 1)
-        .single();
+        .maybeSingle();
+      return data;
+    },
+  });
+
+  // Query do rateio atual
+  const { data: rateioAtual, isLoading: loadingRateio } = useQuery({
+    queryKey: ['rateio-atual-dashboard'],
+    queryFn: async () => {
+      const hoje = new Date();
+      const { data } = await supabase
+        .from('rateios')
+        .select('*')
+        .eq('ano', hoje.getFullYear())
+        .eq('mes', hoje.getMonth() + 1)
+        .maybeSingle();
       return data;
     },
   });
@@ -332,8 +347,8 @@ export default function DiretoriaDashboard() {
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
+      {/* KPI Cards - Primeira linha */}
+      <div className="grid gap-4 md:grid-cols-4 lg:grid-cols-7">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -467,6 +482,34 @@ export default function DiretoriaDashboard() {
                 >
                   {formatCurrency(stats?.resultado || 0)}
                 </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Card Rateio Atual - NOVO */}
+        <Card className="border-primary/30 bg-primary/5">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="rounded-lg bg-primary/10 p-2">
+                <PieChart className="h-5 w-5 text-primary" />
+              </div>
+            </div>
+            <div className="mt-3">
+              <p className="text-sm text-muted-foreground">Rateio/Cota</p>
+              {loadingRateio ? (
+                <Skeleton className="mt-1 h-7 w-24" />
+              ) : rateioAtual ? (
+                <p className="text-2xl font-bold text-primary">
+                  {formatCurrency(rateioAtual.valor_rateio_por_cota || rateioAtual.valor_rateio_por_associado || 0)}
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground">Sem rateio</p>
+              )}
+              {rateioAtual && (
+                <Badge variant="outline" className="mt-1 text-xs">
+                  {rateioAtual.status}
+                </Badge>
               )}
             </div>
           </CardContent>

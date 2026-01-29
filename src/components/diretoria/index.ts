@@ -5,3 +5,6 @@ export { CalcularRateioModal } from './CalcularRateioModal';
 export { KPICard } from './KPICard';
 export { GaugeSinistralidade } from './GaugeSinistralidade';
 export { HistoricoPrecoModal } from './HistoricoPrecoModal';
+export { SinistrosPorTipoTable } from './SinistrosPorTipoTable';
+export { SinistrosPorFaixaFipeTable } from './SinistrosPorFaixaFipeTable';
+export { IntegracoesStatusCard } from './IntegracoesStatusCard';
