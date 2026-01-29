@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CreditCard, MessageSquare, MapPin, FileSignature, Zap, CheckCircle, Mail, Search, Settings, Loader2 } from 'lucide-react';
+import { CreditCard, MessageSquare, MapPin, FileSignature, Zap, CheckCircle, Mail, Search, Settings, Loader2, Building2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -129,6 +129,21 @@ const categoriasBase: CategoriaServicos[] = [
         color: 'text-orange-500',
         bgColor: 'bg-orange-500/10',
         sempreAtivo: true,
+      },
+    ],
+  },
+  {
+    titulo: 'Gestão',
+    emoji: '🏢',
+    servicos: [
+      {
+        id: 'hinova',
+        nome: 'SGA Hinova',
+        desc: 'Sistema de gestão de associados',
+        icon: Building2,
+        color: 'text-cyan-500',
+        bgColor: 'bg-cyan-500/10',
+        integracaoId: 'hinova',
       },
     ],
   },
@@ -270,6 +285,8 @@ export function ServicosTab() {
       case 'whatsapp':
         // WhatsApp precisa estar conectado (não apenas ter a API configurada)
         return { ativo: integracoes.whatsapp.conectado };
+      case 'hinova':
+        return { ativo: integracoes.hinova.configurado };
       default:
         return { ativo: false };
     }

@@ -32,6 +32,9 @@ serve(async (req) => {
       },
       openai: {
         configurado: !!(Deno.env.get('OPENAI_API_KEY')?.length)
+      },
+      hinova: {
+        configurado: !!(Deno.env.get('HINOVA_TOKEN')?.length)
       }
     };
 
