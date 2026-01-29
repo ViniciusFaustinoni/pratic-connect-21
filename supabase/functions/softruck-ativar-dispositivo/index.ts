@@ -212,22 +212,43 @@ serve(async (req) => {
       }
     }
 
-    // ===== 5. Vincular dispositivo ao veículo na Softruck =====
-    console.log('[Softruck Ativar] Vinculando device ao veículo...');
+    // ===== 5. Associar dispositivo ao veículo na Softruck (via POST formal) =====
+    console.log('[Softruck Ativar] Associando device ao veículo via POST /v2/vehicles/associations/devices...');
     
-    const vincularResult = await callSoftruckApi(
+    const associarResult = await callSoftruckApi(
       supabaseUrl,
       supabaseAnonKey,
-      'vincular-device-veiculo',
+      'associar-device-veiculo',
       {
         deviceId: softruckDeviceId,
-        veiculoId: softruckVehicleId,
+        vehicleId: softruckVehicleId,
+        isPrincipal: true,
       }
     );
 
-    if (!vincularResult.success) {
-      console.warn('[Softruck Ativar] Aviso ao vincular:', vincularResult.error);
-      // Continuar mesmo com erro (pode já estar vinculado)
+    if (!associarResult.success) {
+      console.warn('[Softruck Ativar] Aviso ao associar:', associarResult.error);
+      // Se falhou, tentar via PATCH (fallback)
+      if (associarResult.error?.includes('Already Exists') || associarResult.error?.includes('already associated')) {
+        console.log('[Softruck Ativar] Device já associado, continuando...');
+      } else {
+        // Tentar fallback com vincular-device-veiculo
+        console.log('[Softruck Ativar] Tentando fallback com PATCH...');
+        const vincularResult = await callSoftruckApi(
+          supabaseUrl,
+          supabaseAnonKey,
+          'vincular-device-veiculo',
+          {
+            deviceId: softruckDeviceId,
+            veiculoId: softruckVehicleId,
+          }
+        );
+        if (!vincularResult.success) {
+          console.warn('[Softruck Ativar] Fallback também falhou:', vincularResult.error);
+        }
+      }
+    } else {
+      console.log('[Softruck Ativar] Device associado com sucesso via POST formal');
     }
 
     // ===== 6. Ativar dispositivo na Softruck =====
@@ -245,7 +266,67 @@ serve(async (req) => {
       // Continuar mesmo com erro (pode já estar ativo)
     }
 
-    // ===== 7. Atualizar rastreador local com IDs da plataforma =====
+    // ===== 6.5. Verificar primeira posição (polling curto) =====
+    console.log('[Softruck Ativar] Verificando primeira posição GPS...');
+    
+    let primeiraPos = null;
+    const MAX_TENTATIVAS = 3;
+    const INTERVALO_MS = 10000; // 10 segundos
+    
+    for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
+      console.log(`[Softruck Ativar] Tentativa ${tentativa}/${MAX_TENTATIVAS} de buscar posição...`);
+      
+      const trackingResult = await callSoftruckApi(
+        supabaseUrl,
+        supabaseAnonKey,
+        'tracking',
+        { veiculoId: softruckVehicleId, deviceId: softruckDeviceId }
+      );
+      
+      if (trackingResult.success && trackingResult.data) {
+        const trackingData = trackingResult.data as { 
+          latitude?: number; 
+          longitude?: number; 
+          speed?: number;
+          ignition?: boolean;
+          last_gps_time?: string;
+        };
+        
+        if (trackingData.latitude && trackingData.longitude) {
+          primeiraPos = {
+            latitude: trackingData.latitude,
+            longitude: trackingData.longitude,
+            velocidade: trackingData.speed || 0,
+            ignicao: trackingData.ignition || false,
+            data_posicao: trackingData.last_gps_time || new Date().toISOString(),
+          };
+          console.log('[Softruck Ativar] Primeira posição recebida!', primeiraPos);
+          break;
+        }
+      }
+      
+      if (tentativa < MAX_TENTATIVAS) {
+        console.log(`[Softruck Ativar] Aguardando ${INTERVALO_MS/1000}s antes da próxima tentativa...`);
+        await new Promise(r => setTimeout(r, INTERVALO_MS));
+      }
+    }
+    
+    // Atualizar rastreador com posição se recebida
+    if (primeiraPos) {
+      await supabase
+        .from('rastreadores')
+        .update({
+          ultima_comunicacao: primeiraPos.data_posicao,
+          ultima_posicao_lat: primeiraPos.latitude,
+          ultima_posicao_lng: primeiraPos.longitude,
+          ultima_velocidade: primeiraPos.velocidade,
+          ultima_ignicao: primeiraPos.ignicao,
+        })
+        .eq('id', rastreador.id);
+      console.log('[Softruck Ativar] Posição atualizada no rastreador');
+    } else {
+      console.warn('[Softruck Ativar] Primeira posição não recebida após 30s - verificação assíncrona será necessária');
+    }
     console.log('[Softruck Ativar] Atualizando rastreador local com IDs Softruck...');
     
     // Só atualizar campos de vínculo se não estiver já instalado
