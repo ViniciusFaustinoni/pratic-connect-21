@@ -16,6 +16,15 @@ interface PontoPosicao {
   direcao?: number;
 }
 
+interface PontoParada {
+  latitude: number;
+  longitude: number;
+  inicio: string;
+  fim: string;
+  duracao_minutos: number;
+  endereco?: string;
+}
+
 interface Resumo {
   distancia_total_km: number;
   tempo_movimento_minutos: number;
@@ -23,6 +32,7 @@ interface Resumo {
   velocidade_media_kmh: number;
   velocidade_maxima_kmh: number;
   total_pontos: number;
+  total_paradas: number;
   periodo: {
     inicio: string;
     fim: string;
@@ -58,6 +68,7 @@ function calcularResumo(pontos: PontoPosicao[]): Resumo {
       velocidade_media_kmh: 0,
       velocidade_maxima_kmh: 0,
       total_pontos: 0,
+      total_paradas: 0,
       periodo: { inicio: '', fim: '' },
     };
   }
@@ -108,6 +119,7 @@ function calcularResumo(pontos: PontoPosicao[]): Resumo {
       : 0,
     velocidade_maxima_kmh: Math.round(velocidadeMaxima),
     total_pontos: pontos.length,
+    total_paradas: 0, // Será preenchido após identificar paradas
     periodo: {
       inicio: pontos[0].data_hora,
       fim: pontos[pontos.length - 1].data_hora,
@@ -142,6 +154,62 @@ function aplicarIntervalo(
   }
 
   return resultado;
+}
+
+/**
+ * Identifica pontos de parada no trajeto (velocidade = 0 por mais de 5 minutos)
+ */
+function identificarParadas(pontos: PontoPosicao[]): PontoParada[] {
+  const paradas: PontoParada[] = [];
+  let inicioParada: number | null = null;
+  
+  for (let i = 0; i < pontos.length; i++) {
+    const ponto = pontos[i];
+    const estaParado = ponto.velocidade === 0 && !ponto.ignicao;
+    
+    if (estaParado && inicioParada === null) {
+      inicioParada = i;
+    } else if (!estaParado && inicioParada !== null) {
+      const pontoInicio = pontos[inicioParada];
+      const pontoFim = pontos[i - 1];
+      const duracao = (new Date(pontoFim.data_hora).getTime() - 
+                       new Date(pontoInicio.data_hora).getTime()) / 60000;
+      
+      // Só considera paradas maiores que 5 minutos
+      if (duracao >= 5) {
+        paradas.push({
+          latitude: pontoInicio.latitude,
+          longitude: pontoInicio.longitude,
+          inicio: pontoInicio.data_hora,
+          fim: pontoFim.data_hora,
+          duracao_minutos: Math.round(duracao),
+          endereco: pontoInicio.endereco,
+        });
+      }
+      inicioParada = null;
+    }
+  }
+  
+  // Verificar se terminou em uma parada
+  if (inicioParada !== null && pontos.length > 0) {
+    const pontoInicio = pontos[inicioParada];
+    const pontoFim = pontos[pontos.length - 1];
+    const duracao = (new Date(pontoFim.data_hora).getTime() - 
+                     new Date(pontoInicio.data_hora).getTime()) / 60000;
+    
+    if (duracao >= 5) {
+      paradas.push({
+        latitude: pontoInicio.latitude,
+        longitude: pontoInicio.longitude,
+        inicio: pontoInicio.data_hora,
+        fim: pontoFim.data_hora,
+        duracao_minutos: Math.round(duracao),
+        endereco: pontoInicio.endereco,
+      });
+    }
+  }
+  
+  return paradas;
 }
 
 // Buscar histórico local do banco
@@ -418,10 +486,14 @@ serve(async (req) => {
     // Aplicar intervalo (downsampling)
     const trajetoFiltrado = aplicarIntervalo(trajeto, intervalo_minutos);
 
-    // Calcular resumo
-    const resumo = calcularResumo(trajeto); // Usar trajeto completo para cálculos precisos
+    // Identificar paradas (usar trajeto completo para melhor precisão)
+    const paradas = identificarParadas(trajeto);
 
-    console.log(`[Historico] ${fonte}: ${trajeto.length} pontos, filtrado: ${trajetoFiltrado.length}`);
+    // Calcular resumo
+    const resumo = calcularResumo(trajeto);
+    resumo.total_paradas = paradas.length;
+
+    console.log(`[Historico] ${fonte}: ${trajeto.length} pontos, filtrado: ${trajetoFiltrado.length}, paradas: ${paradas.length}`);
 
     return new Response(
       JSON.stringify({
@@ -429,6 +501,7 @@ serve(async (req) => {
         plataforma: plataforma?.plataforma || 'local',
         fonte,
         trajeto: trajetoFiltrado,
+        paradas,
         resumo,
         veiculo: {
           id: veiculo.id,

@@ -245,3 +245,6 @@ verify_jwt = false
 
 [functions.acionar-roubo-furto]
 verify_jwt = false
+
+[functions.relatorio-quilometragem]
+verify_jwt = false

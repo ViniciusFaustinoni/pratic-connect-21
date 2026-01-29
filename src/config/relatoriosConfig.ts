@@ -136,6 +136,14 @@ export const relatoriosQueryConfig: Record<string, RelatorioQueryConfig> = {
     cabecalhos: ['Status', 'Modelo', 'Quantidade'],
     descricao: 'Posição atual de estoque',
   },
+  'quilometragem-mensal': {
+    id: 'quilometragem-mensal',
+    titulo: 'Quilometragem Mensal',
+    tabela: 'custom',
+    select: '',
+    cabecalhos: ['Placa', 'Veículo', 'Associado', 'KM Calculado', 'Dias'],
+    descricao: 'Distância percorrida por veículo no mês',
+  },
   'chamados-tipo': {
     id: 'chamados-tipo',
     titulo: 'Chamados por Tipo',

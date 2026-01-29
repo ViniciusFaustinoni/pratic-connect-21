@@ -10,13 +10,24 @@ interface TrajetoPonto {
   endereco?: string;
 }
 
+interface PontoParada {
+  latitude: number;
+  longitude: number;
+  inicio: string;
+  fim: string;
+  duracao_minutos: number;
+  endereco?: string;
+}
+
 interface HistoricoResponse {
   success: boolean;
   fonte: 'api' | 'local';
   mensagem?: string;
   trajeto: TrajetoPonto[];
+  paradas: PontoParada[];
   periodo?: { inicio: string; fim: string };
   total: number;
+  total_paradas: number;
 }
 
 interface UseHistoricoParams {
@@ -53,4 +64,4 @@ export function useRastreadorHistoricoAPI({
   });
 }
 
-export type { TrajetoPonto, HistoricoResponse };
+export type { TrajetoPonto, PontoParada, HistoricoResponse };
