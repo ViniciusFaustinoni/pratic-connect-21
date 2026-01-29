@@ -355,6 +355,44 @@ serve(async (req) => {
         .eq('id', veiculoId);
     }
 
+    // ===== 8.1 Ativar veículo na plataforma após vinculação =====
+    if (apiResult.idVeiculo) {
+      try {
+        const ativarPayload = { idVeiculo: apiResult.idVeiculo };
+        const ativarFormData = new URLSearchParams();
+        ativarFormData.append('json', JSON.stringify(ativarPayload));
+
+        const ativarResponse = await fetch(`${baseUrl}/ativarVeiculo/`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: ativarFormData,
+        });
+
+        const ativarText = await ativarResponse.text();
+        console.log('[RedeVeiculos Vincular] Resposta ativarVeiculo:', ativarText);
+
+        try {
+          const ativarResult = JSON.parse(ativarText);
+          await supabase.from('rastreadores_api_logs').insert({
+            rastreador_id: rastreador.id,
+            plataforma: 'rede_veiculos',
+            operacao: 'ativarVeiculo',
+            request: ativarPayload,
+            response: ativarResult,
+            status: ativarResult.codigo === 1 ? 'sucesso' : 'erro',
+            erro_mensagem: ativarResult.codigo !== 1 ? ativarResult.msg : null,
+          });
+        } catch {
+          console.warn('[RedeVeiculos Vincular] Resposta inválida do ativarVeiculo:', ativarText);
+        }
+      } catch (ativarError) {
+        console.warn('[RedeVeiculos Vincular] Erro ao ativar veículo (não crítico):', ativarError);
+      }
+    }
+
     // ===== 9. Registrar log de sucesso =====
     await supabase.from('rastreadores_api_logs').insert({
       rastreador_id: rastreador.id,
