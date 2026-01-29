@@ -1,179 +1,78 @@
 
 
-# Revisao Completa - Fluxo de Ativacao e Inativacao de Cliente na Rede Veiculos
+# Revisao Completa - Fluxo de Consulta de Status na Rede Veiculos
 
 ## Resumo Executivo
 
 | Item | Status | Detalhes |
 |------|--------|----------|
-| Endpoint POST /ativarCliente | **NAO EXISTE NA API** | A API Rede Veiculos trabalha com ativacao por **VEICULO**, nao por cliente |
-| Endpoint POST /inativarCliente | **NAO EXISTE NA API** | A API Rede Veiculos trabalha com inativacao por **VEICULO**, nao por cliente |
-| Associado aprovado no cadastro | **PARCIAL** | Aprovacao ativa associado localmente, vinculacao ocorre na instalacao |
-| Reativacao de associado que cancelou | **IMPLEMENTADO** | Usa `informarAdimplente` + revincular veiculos |
-| Associado regulariza pendencias | **IMPLEMENTADO** | Webhook ASAAS e baixa manual notificam adimplencia |
-| Cancelamento definitivo | **IMPLEMENTADO** | Usa `desvincularClienteVeiculo` para cada veiculo |
-| Exclusao por fraude | **NAO EXISTE** | Funcionalidade especifica nao implementada |
-| Todos os veiculos desvinculados | **PARCIAL** | Nao ha logica especifica para inativar cliente |
-| Cliente inativo perde acesso ao App | **IMPLEMENTADO** | AppRastreamento bloqueia se status = suspenso/inadimplente |
-| Reativacao restaura acesso | **IMPLEMENTADO** | Muda status para ativo e notifica adimplencia |
-| Historico preservado | **IMPLEMENTADO** | Tabela `associados_historico` mantem registros |
+| Endpoint POST /obterStatusCliente | **NAO EXISTE** | Nenhuma edge function para consultar status do cliente na plataforma |
+| Endpoint POST /obterStatusVeiculo | **NAO EXISTE** | Nenhuma edge function para consultar status do veiculo na plataforma |
+| Consulta ao abrir ficha do associado | **NAO** | Usa apenas dados do banco local |
+| Verificacao de elegibilidade para servicos | **PARCIAL** | Apenas status local, nao consulta plataforma |
+| Validacao se cliente esta ativo | **PARCIAL** | Usa `associado.status` local |
+| Consulta situacao do rastreador | **PARCIAL** | Busca posicao, nao status na plataforma |
+| Abertura de chamado Assistencia 24h | **LOCAL** | Valida `associado.status` e `veiculo.status` locais |
+| Comunicado de sinistro | **LOCAL** | Valida `veiculo.status` local |
+| Status "ativo" e "inativo" diferenciados | **SIM** | Badges com cores distintas nas telas |
+| Sistema bloqueia acoes se inativo | **PARCIAL** | Bloqueia rastreamento, mas nao consulta plataforma |
+| Consulta em tempo real (nao cache) | **NAO** | Sempre usa dados do banco local |
 
 ---
 
-## Analise Conceitual: Cliente vs Veiculo na API Rede Veiculos
+## Analise Detalhada
 
-### Descoberta Importante
+### 1. Estado Atual - Nenhum Endpoint de Consulta de Status
 
-A API da Rede Veiculos **NAO POSSUI** endpoints especificos para ativar/inativar CLIENTES. O modelo de negocio e baseado em **VEICULOS**, nao em clientes. Os endpoints disponiveis sao:
+A API Rede Veiculos deveria ter endpoints para consultar status em tempo real:
 
-| Nivel | Endpoints Disponiveis |
-|-------|----------------------|
-| **Cliente** | vincularClienteVeiculo, desvincularClienteVeiculo, atualizarDadosCliente |
-| **Veiculo** | ativarVeiculo, inativarVeiculo, atualizarDadosVeiculo |
-| **Financeiro** | informarVeiculoAdimplente, informarVeiculoInadimplente |
+| Endpoint Esperado | Edge Function | Status |
+|-------------------|---------------|--------|
+| POST /obterStatusCliente | **NAO EXISTE** | Gap |
+| POST /obterStatusVeiculo | **NAO EXISTE** | Gap |
+| GET /veiculos/{codigo}/posicao | posicao-veiculo | Implementado |
 
-**Implicacao:** Para "inativar um cliente" na Rede Veiculos, deve-se:
-1. Inativar/desvincular TODOS os seus veiculos
-2. Informar inadimplencia em TODOS os veiculos
+### 2. Cenarios que Deveriam Consultar Status do Cliente
 
----
+#### 2.1 Quando Atendente Abre Ficha do Associado
 
-## Estado Atual da Implementacao
+**Arquivo:** `src/pages/cadastro/AssociadoDetalhe.tsx`
 
-### Edge Functions Existentes
-
-| Edge Function | Operacao | Status |
-|---------------|----------|--------|
-| `rede-veiculos-vincular-cliente` | vincularClienteVeiculo | Implementado |
-| `rede-veiculos-desvincular-cliente` | desvincularClienteVeiculo | Implementado |
-| `rede-veiculos-atualizar-cliente` | atualizarDadosCliente | Implementado |
-| `rede-veiculos-ativar-veiculo` | ativarVeiculo | Implementado |
-| `rede-veiculos-inativar-veiculo` | inativarVeiculo | Implementado |
-| `rede-veiculos-informar-adimplente` | informarVeiculoAdimplente | Implementado |
-| `rede-veiculos-informar-inadimplente` | informarVeiculoInadimplente | Implementado |
-
-### Cenarios de Ativacao de Cliente
-
-#### 1. Associado Aprovado no Cadastro
-
-**Arquivo:** `src/hooks/usePropostasPendentes.ts` (linhas 1356-1382)
+O componente usa apenas dados do banco local:
 
 ```typescript
-// Status do associado definido como 'ativo' imediatamente na aprovacao
-const statusAssociado = 'ativo';
-
-const { data: associadoAtualizado } = await supabase
-  .from('associados')
-  .update({
-    status: statusAssociado,
-    data_adesao: agora.split('T')[0],
-    aprovado_por: profile.id,
-    aprovado_em: agora,
-  })
-  .eq('id', associadoId);
+const { data: associado, isLoading, refetch } = useAssociado(id);
+// Mostra associado.status do banco, NAO consulta Rede Veiculos
 ```
 
-**Status:** Apenas atualiza banco local. Vinculacao na Rede Veiculos ocorre posteriormente quando instalador executa a instalacao e chama `rede-veiculos-vincular-cliente`.
+**Gap:** Nao ha consulta em tempo real a plataforma Rede Veiculos para verificar se o status esta sincronizado.
 
-**Fluxo Completo:**
-1. Analista aprova proposta -> associado.status = 'ativo'
-2. Instalador conclui instalacao -> chama `rede-veiculos-vincular-cliente`
-3. Vinculacao cria cliente e veiculo na Rede Veiculos
-4. Automaticamente ativa veiculo via `ativarVeiculo`
+#### 2.2 Quando Ha Verificacao de Elegibilidade para Servicos
 
-#### 2. Reativacao de Associado que Havia Cancelado
+**Arquivos:**
+- `supabase/functions/criar-chamado-assistencia/index.ts`
+- `supabase/functions/criar-sinistro/index.ts`
 
-**Arquivo:** `src/hooks/useAssociados.ts` (linhas 479-545)
+Ambos validam apenas status local:
 
 ```typescript
-const reativarAssociado = useMutation({
-  mutationFn: async (id: string) => {
-    // 1. Atualizar status local
-    await supabase.from('associados').update({ status: 'ativo', ... });
+// criar-chamado-assistencia (linha 138)
+if (associado.status !== 'ativo') {
+  return Response({ error: "Seu cadastro não está ativo..." });
+}
 
-    // 2. Notificar Rede Veiculos sobre adimplencia
-    await supabase.functions.invoke('rede-veiculos-informar-adimplente', {
-      body: { associadoId: id, motivo: 'reativacao_manual' },
-    });
-
-    // 3. Revincular veiculos se necessario
-    for (const veiculo of veiculos) {
-      if (rastreador?.plataforma === 'rede_veiculos') {
-        await supabase.functions.invoke('rede-veiculos-vincular-cliente', { ... });
-      }
-    }
-  },
-});
+// Verifica veiculo (linha 191)
+if (veiculo.status !== 'ativo') {
+  return Response({ error: "Este veículo não está ativo..." });
+}
+// NAO CONSULTA REDE VEICULOS
 ```
 
-**Status:** IMPLEMENTADO - Notifica adimplencia e revincular cada veiculo individualmente.
+**Gap:** Sistema aceita base local como verdade, sem validar na plataforma.
 
-#### 3. Associado Regulariza Pendencias
+#### 2.3 Quando Sistema Precisa Validar se Cliente Esta Ativo
 
-**Coberto por:**
-- Webhook ASAAS (`PAYMENT_RECEIVED`) - chama `rede-veiculos-informar-adimplente`
-- Baixa manual (`RegistrarPagamentoModal.tsx`) - chama `rede-veiculos-informar-adimplente`
-
-**Status:** IMPLEMENTADO
-
-### Cenarios de Inativacao de Cliente
-
-#### 1. Cancelamento Definitivo
-
-**Arquivo:** `src/hooks/useAssociados.ts` (linhas 590-656)
-
-```typescript
-const cancelarAssociado = useMutation({
-  mutationFn: async ({ id, motivo }) => {
-    // Para cada rastreador Rede Veiculos, desvincular na plataforma
-    for (const rastreador of rastreadores || []) {
-      if (rastreador.plataforma === 'rede_veiculos') {
-        await supabase.functions.invoke('rede-veiculos-desvincular-cliente', {
-          body: {
-            rastreadorId: rastreador.id,
-            motivo: 'cancelamento_contrato',
-            atualizarBancoLocal: true,
-          },
-        });
-      }
-    }
-    
-    // Atualizar status do associado
-    await supabase.from('associados').update({ status: 'cancelado', ... });
-  },
-});
-```
-
-**Status:** IMPLEMENTADO - Desvincula cada veiculo individualmente.
-
-**Gap Identificado:** A funcao deveria tambem chamar `inativarVeiculo` antes de `desvincularClienteVeiculo` para garantir que o veiculo seja desativado corretamente na plataforma.
-
-#### 2. Exclusao por Fraude Comprovada
-
-**Arquivo:** `supabase/functions/delete-associado/index.ts`
-
-Esta funcao exclui permanentemente o associado do banco local, mas **NAO** notifica a Rede Veiculos:
-- Nao chama `inativarVeiculo`
-- Nao chama `desvincularClienteVeiculo`
-- Nao chama `informarInadimplente`
-
-**Status:** GAP CRITICO - Exclusao por fraude nao inativa/desvincula na plataforma Rede Veiculos.
-
-#### 3. Todos os Veiculos Desvinculados
-
-**Nao existe logica automatica para:**
-- Detectar quando o ultimo veiculo foi desvinculado
-- Marcar cliente como inativo na plataforma
-
-**Status:** GAP - Nao ha logica para tratar este cenario.
-
----
-
-## Controle de Acesso ao App
-
-### Implementacao Atual (CORRETA)
-
-**Arquivo:** `src/pages/app/AppRastreamento.tsx` (linhas 227-260)
+**Arquivo:** `src/pages/app/AppRastreamento.tsx` (linhas 226-230)
 
 ```typescript
 const associadoBloqueado = associado?.status === 'suspenso' || 
@@ -181,174 +80,326 @@ const associadoBloqueado = associado?.status === 'suspenso' ||
                             associado?.bloqueado === true;
 
 if (associadoBloqueado) {
-  return (
-    <div className="flex h-screen flex-col bg-background">
-      // Tela de Acesso Bloqueado
-      <h3>Acesso Bloqueado</h3>
-      <p>Seu acesso esta suspenso devido a pendencias financeiras.</p>
-      <Button onClick={() => navigate('/app/boletos')}>Ver Boletos</Button>
-    </div>
-  );
+  // Exibe tela de bloqueio
 }
 ```
 
-**Status:** IMPLEMENTADO - Cliente com status suspenso/inadimplente nao consegue acessar rastreamento.
+**Status:** Funciona com base local. Nao ha discrepancia se o status local estiver correto, mas se houver dessincronizacao com a Rede Veiculos, o sistema nao detecta.
+
+### 3. Cenarios que Deveriam Consultar Status do Veiculo
+
+#### 3.1 Quando Analista Consulta Situacao do Rastreador
+
+**Arquivo:** `src/pages/cadastro/AssociadoDetalhe.tsx`
+
+Na aba de veiculos, exibe status do rastreador do banco local:
+
+```typescript
+const { data: veiculos } = useVeiculosDoAssociado(id);
+// Mostra veiculo.ativo e rastreador.status do banco
+// NAO consulta Rede Veiculos
+```
+
+#### 3.2 Quando Ha Abertura de Chamado de Assistencia 24h
+
+**Arquivo:** `supabase/functions/criar-chamado-assistencia/index.ts` (linhas 175-199)
+
+```typescript
+const { data: veiculo } = await supabaseAdmin
+  .from("veiculos")
+  .select("id, placa, marca, modelo, ano_modelo, cor, status")
+  .eq("id", payload.veiculo_id)
+  .eq("associado_id", associado.id)
+  .single();
+
+// Verificar se veículo está ativo
+if (veiculo.status !== 'ativo') {
+  return Response({ error: "Este veículo não está ativo..." });
+}
+// NAO CONSULTA REDE VEICULOS
+```
+
+#### 3.3 Quando Ha Comunicado de Sinistro
+
+**Arquivo:** `supabase/functions/criar-sinistro/index.ts` (linhas 225-300)
+
+```typescript
+const { data: veiculo } = await supabaseAdmin
+  .from('veiculos')
+  .select('id, placa, marca, modelo, ano_modelo, cor, status')
+  .eq('id', payload.veiculo_id)
+  .eq('associado_id', associado.id)
+  .single();
+
+if (veiculo.status !== 'ativo') {
+  return Response({ error: "Este veículo não está ativo..." });
+}
+// NAO CONSULTA REDE VEICULOS
+```
 
 ---
 
-## Gaps Identificados
+## Exibicao de Status nas Telas
 
-### Gap 1: `delete-associado` Nao Notifica Rede Veiculos
+### Status Diferenciados Corretamente
 
-A edge function de exclusao permanente **nao** inativa/desvincula na plataforma:
+**Arquivo:** `src/types/cadastro.ts` e `src/types/database.ts`
 
-```typescript
-// FALTANDO em delete-associado/index.ts:
-// 1. Para cada veiculo do associado com rede_veiculos_veiculo_id:
-//    - Chamar rede-veiculos-inativar-veiculo
-//    - Chamar rede-veiculos-desvincular-cliente
-// 2. Registrar log da operacao
-```
+| Status | Cor | Exibicao |
+|--------|-----|----------|
+| ativo | verde | Badge verde |
+| em_analise | azul | Badge azul |
+| aguardando_instalacao | amarelo | Badge amarelo |
+| suspenso | laranja | Badge laranja |
+| inadimplente | vermelho | Badge vermelho |
+| cancelado | cinza | Badge cinza |
+| bloqueado | vermelho escuro | Badge vermelho |
 
-### Gap 2: `cancelarAssociado` Deveria Inativar Antes de Desvincular
+**Status:** IMPLEMENTADO - Cores e labels bem diferenciados.
 
-Atualmente, cancela apenas desvincula. Deveria:
-1. Chamar `rede-veiculos-inativar-veiculo` para cada veiculo
-2. Depois chamar `rede-veiculos-desvincular-cliente`
+### Bloqueio de Acoes Baseado em Status
 
-### Gap 3: Nao Ha Funcionalidade Especifica para Fraude
+| Acao | Verifica Status | Bloqueia se Inativo |
+|------|-----------------|---------------------|
+| Abrir chamado assistencia | associado.status e veiculo.status | Sim |
+| Comunicar sinistro | veiculo.status | Sim |
+| Acessar rastreamento | associado.status e bloqueado | Sim |
+| Ver boletos | Nao | Nao (sempre permite) |
+| Atualizar dados | Nao | Nao |
 
-Exclusao por fraude deveria ter fluxo especifico:
-1. Bloquear imediatamente na Rede Veiculos
-2. Desativar todos os alertas
-3. Registrar motivo especial
+**Status:** PARCIAL - Bloqueia baseado em status local, mas nao sincroniza com plataforma.
 
-### Gap 4: Falta Orquestrador de Inativacao de Cliente
+---
 
-Nao ha funcao que coordene a inativacao completa de um cliente:
-- Inativar todos os veiculos
-- Informar inadimplencia em todos
-- Atualizar status local
-- Registrar historico
+## Problema: Dessincronizacao de Status
+
+### Cenario de Risco
+
+1. Sistema local marca associado como `ativo`
+2. Rede Veiculos tem cliente como `inativo` (por exemplo, bloqueio manual no portal)
+3. Sistema permite abertura de chamado/sinistro
+4. Rede Veiculos nao processa porque cliente esta inativo na plataforma
+
+### Impacto
+
+- Cliente pode solicitar servicos que nao serao atendidos
+- Descompasso entre SGA e Rede Veiculos
+- Falha de comunicacao com associado
 
 ---
 
 ## Plano de Implementacao
 
-### Fase 1: Criar Edge Function Orquestradora
+### Fase 1: Criar Edge Functions de Consulta de Status
 
-**Novo arquivo:** `supabase/functions/rede-veiculos-inativar-cliente-completo/index.ts`
-
-```typescript
-interface RequestBody {
-  associadoId: string;
-  motivo: 'cancelamento' | 'fraude' | 'inadimplencia' | 'exclusao';
-  observacoes?: string;
-  atualizarBancoLocal?: boolean;
-}
-
-// Fluxo:
-// 1. Buscar todos os veiculos do associado com rastreador Rede Veiculos
-// 2. Para cada veiculo:
-//    a. Chamar POST /inativarVeiculo
-//    b. Chamar POST /informarVeiculoInadimplente (se aplicavel)
-//    c. Chamar POST /desvincularClienteVeiculo (se cancelamento/exclusao)
-// 3. Atualizar banco local
-// 4. Registrar historico
-```
-
-### Fase 2: Criar Edge Function de Ativacao de Cliente Completo
-
-**Novo arquivo:** `supabase/functions/rede-veiculos-ativar-cliente-completo/index.ts`
+**Novo arquivo:** `supabase/functions/rede-veiculos-obter-status-cliente/index.ts`
 
 ```typescript
 interface RequestBody {
   associadoId: string;
-  motivo?: string;
+  cpfCnpj?: string;
+}
+
+interface StatusClienteResponse {
+  success: boolean;
+  status: 'ativo' | 'inativo' | 'suspenso' | 'bloqueado';
+  sincronizado: boolean;
+  dados: {
+    idCliente?: number;
+    statusPlataforma: string;
+    dataUltimaAtualizacao: string;
+    veiculosVinculados: number;
+  };
 }
 
 // Fluxo:
-// 1. Buscar todos os veiculos do associado com rastreador Rede Veiculos
-// 2. Para cada veiculo:
-//    a. Se nao vinculado, chamar vincularClienteVeiculo
-//    b. Chamar POST /ativarVeiculo
-//    c. Chamar POST /informarVeiculoAdimplente
-// 3. Atualizar banco local (veiculos ativos)
-// 4. Registrar historico
+// 1. Buscar associado e seu ID na Rede Veiculos
+// 2. Chamar POST /obterStatusCliente (ou GET /clientes/{id}/status)
+// 3. Comparar com status local
+// 4. Retornar status da plataforma + flag de sincronizacao
 ```
 
-### Fase 3: Integrar em `cancelarAssociado`
-
-**Modificar:** `src/hooks/useAssociados.ts`
+**Novo arquivo:** `supabase/functions/rede-veiculos-obter-status-veiculo/index.ts`
 
 ```typescript
-const cancelarAssociado = useMutation({
-  mutationFn: async ({ id, motivo }) => {
-    // NOVO: Usar orquestrador para inativar completamente
-    await supabase.functions.invoke('rede-veiculos-inativar-cliente-completo', {
-      body: {
-        associadoId: id,
-        motivo: 'cancelamento',
-        observacoes: motivo,
-      },
-    });
-    
-    // Atualizar status do associado (ja existe)
-    await supabase.from('associados').update({ status: 'cancelado', ... });
-  },
-});
+interface RequestBody {
+  veiculoId: string;
+  placa?: string;
+}
+
+interface StatusVeiculoResponse {
+  success: boolean;
+  status: 'ativo' | 'inativo' | 'bloqueado';
+  sincronizado: boolean;
+  dados: {
+    idVeiculo?: number;
+    statusPlataforma: string;
+    adimplente: boolean;
+    ultimaPosicao?: string;
+    rastreadorAtivo: boolean;
+  };
+}
+
+// Fluxo:
+// 1. Buscar veiculo com rede_veiculos_veiculo_id
+// 2. Chamar POST /obterStatusVeiculo (ou GET /veiculos/{id}/status)
+// 3. Comparar com status local
+// 4. Retornar status da plataforma + flag de sincronizacao
 ```
 
-### Fase 4: Integrar em `delete-associado`
+### Fase 2: Criar Hook de Consulta de Status
 
-**Modificar:** `supabase/functions/delete-associado/index.ts`
-
-Antes de excluir, chamar a edge function orquestradora:
+**Novo arquivo:** `src/hooks/useRedeVeiculosStatus.ts`
 
 ```typescript
-// Antes de deletar veiculos (linha ~196)
-await fetch(`${supabaseUrl}/functions/v1/rede-veiculos-inativar-cliente-completo`, {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${supabaseServiceKey}`,
-  },
-  body: JSON.stringify({
-    associadoId,
-    motivo: 'exclusao',
-    observacoes: 'Exclusao permanente por diretor',
-  }),
-});
+export function useStatusClienteRedeVeiculos(associadoId: string | undefined) {
+  return useQuery({
+    queryKey: ['rede-veiculos-status-cliente', associadoId],
+    enabled: !!associadoId,
+    staleTime: 30000, // 30 segundos
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke(
+        'rede-veiculos-obter-status-cliente',
+        { body: { associadoId } }
+      );
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useStatusVeiculoRedeVeiculos(veiculoId: string | undefined) {
+  return useQuery({
+    queryKey: ['rede-veiculos-status-veiculo', veiculoId],
+    enabled: !!veiculoId,
+    staleTime: 30000,
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke(
+        'rede-veiculos-obter-status-veiculo',
+        { body: { veiculoId } }
+      );
+      if (error) throw error;
+      return data;
+    },
+  });
+}
 ```
 
-### Fase 5: Adicionar Opcao de Exclusao por Fraude
+### Fase 3: Integrar na Ficha do Associado
 
 **Modificar:** `src/pages/cadastro/AssociadoDetalhe.tsx`
 
-Adicionar dialog especifico para exclusao por fraude com:
-- Motivo detalhado
-- Confirmacao dupla
-- Chamada a `rede-veiculos-inativar-cliente-completo` com motivo 'fraude'
-
-### Fase 6: Integrar em `reativarAssociado`
-
-**Modificar:** `src/hooks/useAssociados.ts`
+Adicionar badge de sincronizacao de status:
 
 ```typescript
-const reativarAssociado = useMutation({
-  mutationFn: async (id: string) => {
-    // Atualizar status local (ja existe)
-    await supabase.from('associados').update({ status: 'ativo', ... });
+const { data: statusPlataforma, isLoading: isLoadingStatus } = 
+  useStatusClienteRedeVeiculos(id);
+
+// No header, ao lado do status local
+{statusPlataforma && !statusPlataforma.sincronizado && (
+  <Badge variant="destructive" className="ml-2">
+    <AlertTriangle className="h-3 w-3 mr-1" />
+    Dessincronizado
+  </Badge>
+)}
+
+// Tooltip ou card com detalhes
+{statusPlataforma && (
+  <Card className="mt-4">
+    <CardTitle>Status na Rede Veiculos</CardTitle>
+    <CardContent>
+      <p>Status: {statusPlataforma.dados.statusPlataforma}</p>
+      <p>Ultima atualizacao: {statusPlataforma.dados.dataUltimaAtualizacao}</p>
+      {!statusPlataforma.sincronizado && (
+        <Button onClick={sincronizarStatus}>Sincronizar</Button>
+      )}
+    </CardContent>
+  </Card>
+)}
+```
+
+### Fase 4: Validar Status na Plataforma Antes de Servicos
+
+**Modificar:** `supabase/functions/criar-chamado-assistencia/index.ts`
+
+Antes de criar chamado, consultar status na plataforma:
+
+```typescript
+// Apos validar status local (linha 147)
+// NOVO: Consultar status na Rede Veiculos
+if (rastreador?.plataforma === 'rede_veiculos') {
+  try {
+    const statusResponse = await fetch(
+      `${supabaseUrl}/functions/v1/rede-veiculos-obter-status-veiculo`,
+      {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabaseServiceKey}`,
+        },
+        body: JSON.stringify({ veiculoId: veiculo.id }),
+      }
+    );
     
-    // NOVO: Usar orquestrador para ativar completamente
-    await supabase.functions.invoke('rede-veiculos-ativar-cliente-completo', {
-      body: {
-        associadoId: id,
-        motivo: 'reativacao_manual',
-      },
-    });
+    const statusData = await statusResponse.json();
+    
+    if (statusData.success && statusData.dados.statusPlataforma !== 'ativo') {
+      return Response({
+        success: false,
+        error: `Veículo inativo na plataforma de rastreamento. Status: ${statusData.dados.statusPlataforma}`,
+      });
+    }
+  } catch (err) {
+    console.warn('[criar-chamado] Erro ao consultar status plataforma:', err);
+    // Continua com status local (nao bloqueia se API falhar)
+  }
+}
+```
+
+### Fase 5: Adicionar Botao de Sincronizacao
+
+**Modificar:** `src/pages/cadastro/AssociadoDetalhe.tsx`
+
+Adicionar botao para sincronizar status manualmente:
+
+```typescript
+const sincronizarStatusMutation = useMutation({
+  mutationFn: async () => {
+    const { data, error } = await supabase.functions.invoke(
+      'rede-veiculos-sincronizar-status',
+      { body: { associadoId: id } }
+    );
+    if (error) throw error;
+    return data;
+  },
+  onSuccess: () => {
+    toast.success('Status sincronizado com a plataforma');
+    refetch();
   },
 });
+
+// No header do associado
+<Button 
+  variant="outline" 
+  onClick={() => sincronizarStatusMutation.mutate()}
+  disabled={sincronizarStatusMutation.isPending}
+>
+  <RefreshCw className="h-4 w-4 mr-2" />
+  Sincronizar Plataforma
+</Button>
+```
+
+### Fase 6: Criar Edge Function de Sincronizacao
+
+**Novo arquivo:** `supabase/functions/rede-veiculos-sincronizar-status/index.ts`
+
+```typescript
+// Fluxo:
+// 1. Consultar status do cliente na Rede Veiculos
+// 2. Consultar status de todos os veiculos na Rede Veiculos
+// 3. Atualizar banco local para refletir status da plataforma
+// 4. Registrar historico de sincronizacao
+// 5. Retornar diferencas encontradas
 ```
 
 ---
@@ -357,74 +408,140 @@ const reativarAssociado = useMutation({
 
 | Arquivo | Descricao |
 |---------|-----------|
-| `supabase/functions/rede-veiculos-inativar-cliente-completo/index.ts` | Orquestrador de inativacao |
-| `supabase/functions/rede-veiculos-ativar-cliente-completo/index.ts` | Orquestrador de ativacao |
+| `supabase/functions/rede-veiculos-obter-status-cliente/index.ts` | Consultar status cliente |
+| `supabase/functions/rede-veiculos-obter-status-veiculo/index.ts` | Consultar status veiculo |
+| `supabase/functions/rede-veiculos-sincronizar-status/index.ts` | Sincronizar status local com plataforma |
+| `src/hooks/useRedeVeiculosStatus.ts` | Hooks de consulta de status |
 
 ## Arquivos a Modificar
 
 | Arquivo | Alteracoes |
 |---------|------------|
-| `supabase/functions/delete-associado/index.ts` | Chamar orquestrador antes de excluir |
-| `src/hooks/useAssociados.ts` | Usar orquestradores em cancelar/reativar |
-| `src/pages/cadastro/AssociadoDetalhe.tsx` | Adicionar opcao de exclusao por fraude |
+| `src/pages/cadastro/AssociadoDetalhe.tsx` | Exibir status plataforma e botao sincronizar |
+| `supabase/functions/criar-chamado-assistencia/index.ts` | Validar status na plataforma |
+| `supabase/functions/criar-sinistro/index.ts` | Validar status na plataforma |
 | `supabase/config.toml` | Registrar novas edge functions |
 
 ---
 
-## Checklist de Verificacao
+## Payload Esperado para Endpoints
 
-- [x] Aprovacao de proposta cria associado ativo localmente
-- [x] Vinculacao na instalacao cria cliente na Rede Veiculos
-- [x] Reativacao notifica adimplencia na Rede Veiculos
-- [x] Regularizacao de pendencias notifica adimplencia
-- [x] Cancelamento desvincula veiculos da plataforma
-- [x] Cliente suspenso/inadimplente nao acessa App
-- [x] Historico de mudancas preservado
-- [ ] Edge function orquestradora de inativacao
-- [ ] Edge function orquestradora de ativacao
-- [ ] Exclusao notifica Rede Veiculos antes de deletar
-- [ ] Cancelamento inativa antes de desvincular
-- [ ] Opcao especifica para exclusao por fraude
+### POST /obterStatusCliente (Hipotetico)
+
+**Request:**
+```json
+{
+  "cpfCnpj": "12345678901"
+}
+```
+
+**Response:**
+```json
+{
+  "codigo": 1,
+  "idCliente": 12345,
+  "status": "ativo",
+  "dataUltimaAtualizacao": "2025-01-29T10:30:00",
+  "veiculosVinculados": 2
+}
+```
+
+### POST /obterStatusVeiculo (Hipotetico)
+
+**Request:**
+```json
+{
+  "idVeiculo": 12345
+}
+```
+
+**Response:**
+```json
+{
+  "codigo": 1,
+  "idVeiculo": 12345,
+  "status": "ativo",
+  "adimplente": true,
+  "ultimaPosicao": "2025-01-29T12:00:00",
+  "rastreadorAtivo": true
+}
+```
 
 ---
 
-## Teste Recomendado: Ciclo Completo
+## Consideracoes Finais
+
+**IMPORTANTE:** Antes de implementar, confirmar com documentacao da API Rede Veiculos:
+
+1. **Existencia dos endpoints:**
+   - `POST /obterStatusCliente` existe?
+   - `POST /obterStatusVeiculo` existe?
+   - Ou o status vem junto com outros endpoints (ex: `/clientes/{id}`)?
+
+2. **Campos retornados:**
+   - Quais campos indicam status ativo/inativo?
+   - Ha campo de adimplencia?
+   - Ha campo de data ultima atualizacao?
+
+3. **Limites de requisicao:**
+   - Quantas consultas por minuto/hora sao permitidas?
+   - Deve-se implementar cache?
+
+4. **Comportamento esperado:**
+   - Se status na plataforma for diferente do local, qual prevalece?
+   - Sistema deve atualizar automaticamente ou aguardar acao manual?
+
+**Recomendacao:** Solicitar documentacao oficial da API Rede Veiculos para esclarecer estes pontos antes de implementar.
+
+---
+
+## Checklist de Verificacao Pos-Implementacao
+
+- [ ] Edge function `rede-veiculos-obter-status-cliente` criada
+- [ ] Edge function `rede-veiculos-obter-status-veiculo` criada
+- [ ] Edge function `rede-veiculos-sincronizar-status` criada
+- [ ] Hook `useStatusClienteRedeVeiculos` criado
+- [ ] Hook `useStatusVeiculoRedeVeiculos` criado
+- [ ] Ficha do associado exibe status da plataforma
+- [ ] Badge de dessincronizacao visivel quando houver diferenca
+- [ ] Botao de sincronizar funciona
+- [ ] Chamado de assistencia valida status na plataforma
+- [ ] Sinistro valida status na plataforma
+- [ ] Logs registrados em `rastreadores_api_logs`
+- [ ] Status ativo/inativo claramente diferenciados
+- [ ] Consulta em tempo real (nao cache de longa duracao)
+
+---
+
+## Teste Recomendado: Consultar Status
 
 ### Pre-requisitos
 
-1. Associado ativo com veiculo e rastreador Rede Veiculos
+1. Associado com veiculo e rastreador Rede Veiculos
 2. `REDE_VEICULOS_TOKEN` valido
-3. Acesso ao App do Associado
+3. Acesso ao painel Rede Veiculos para comparar
 
 ### Passos do Teste
 
-**Parte 1: Inativar Cliente (Cancelamento)**
+**Parte 1: Consultar Status**
 
-1. Acessar sistema como diretor (admin@teste.com)
+1. Acessar sistema como atendente
 2. Navegar para Cadastro > Associados > [Associado teste]
-3. Clicar em "Cancelar Associado"
-4. Informar motivo: "Teste de cancelamento"
-5. Confirmar
-6. Verificar no banco:
-   - `associados.status = 'cancelado'`
-   - `rastreadores_api_logs` com operacoes `inativarVeiculo` e `desvincularClienteVeiculo`
-   - `veiculos.ativo = false`
-7. Verificar no App do Associado:
-   - Nao consegue fazer login ou acessa tela de bloqueio
+3. Verificar se status na plataforma e exibido
+4. Comparar com painel Rede Veiculos
+5. Confirmar que status esta sincronizado
 
-**Parte 2: Reativar Cliente**
+**Parte 2: Simular Dessincronizacao**
 
-8. Voltar ao painel administrativo
-9. Clicar em "Reativar Associado"
-10. Verificar no banco:
-    - `associados.status = 'ativo'`
-    - `rastreadores_api_logs` com operacoes `vincularClienteVeiculo` e `ativarVeiculo`
-11. Verificar no App do Associado:
-    - Consegue fazer login e ver rastreamento
+6. Alterar status do cliente diretamente no painel Rede Veiculos
+7. Atualizar pagina no SGA
+8. Verificar que badge "Dessincronizado" aparece
+9. Clicar em "Sincronizar"
+10. Verificar que status local foi atualizado
 
 ### Resultado Esperado
 
-- Inativacao bloqueia acesso e desvincula na Rede Veiculos
-- Reativacao restaura acesso e revincula na Rede Veiculos
-- Todo o historico registrado em `associados_historico` e `rastreadores_api_logs`
+- Status da plataforma exibido em tempo real
+- Dessincronizacoes detectadas e sinalizadas
+- Sincronizacao manual funciona corretamente
 
