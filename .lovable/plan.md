@@ -1,289 +1,315 @@
 
-# Revisao Completa - Dados do Rastreador Softruck no Modulo de Eventos (Sinistros)
+# Revisao Completa - Dados do Rastreador Softruck no Modulo de Assistencia 24h
 
 ## Resumo Executivo
 
 | Item | Status | Detalhes |
 |------|--------|----------|
-| Buscar ultima posicao ao comunicar evento | **NAO IMPLEMENTADO** | Edge function `criar-sinistro` recebe lat/lng mas NAO grava |
-| Buscar historico de trajeto na analise | **IMPLEMENTADO** | `TrajetoSinistroCard` busca 24h antes do sinistro |
-| Buscar posicoes para suspeita de fraude | **NAO IMPLEMENTADO** | Nao ha fluxo para consultas ampliadas |
-| Confirmar posicao na recuperacao | **IMPLEMENTADO** | `acionar-roubo-furto` grava ultima posicao |
-| Historico anexado ao dossie | **NAO IMPLEMENTADO** | Trajeto apenas exibido, nao salvo |
-| Posicao gravada como evidencia | **NAO IMPLEMENTADO** | Tabela `sinistros` nao tem campos lat/lng |
-| Exportar relatorio de trajeto | **NAO IMPLEMENTADO** | Nao existe funcionalidade de exportacao |
-| Dados do rastreador na decisao | **NAO IMPLEMENTADO** | `EmitirParecerModal` nao exibe dados do rastreador |
+| Buscar posicao atual quando chamado entra | **NAO IMPLEMENTADO** | Usa apenas GPS do celular do associado |
+| Enviar localizacao para prestador | **PARCIALMENTE** | Envia link Google Maps apenas com coordenadas informadas |
+| Atualizar posicao em tempo real | **NAO IMPLEMENTADO** | Nao ha atualizacao durante acompanhamento |
+| Registrar posicao final ao encerrar | **NAO IMPLEMENTADO** | Historico nao possui campo de posicao |
+| Posicao exibida no mapa para atendente | **PARCIALMENTE** | Exibe coordenadas informadas, nao do rastreador |
+| Prestador recebe link com localizacao | **PARCIALMENTE** | Recebe posicao estatica, nao atualizada |
+| Historico inclui posicoes durante atendimento | **NAO IMPLEMENTADO** | Tabela historico sem campos lat/lng |
+| Rastreador fornece posicao se associado nao sabe | **NAO IMPLEMENTADO** | Nao ha fallback para rastreador |
 
 ---
 
 ## Analise Detalhada
 
-### 1. Quando um Evento e Comunicado - Buscar Ultima Posicao Conhecida
+### 1. Quando o Chamado Entra no Sistema - Buscar Posicao Atual
 
-**Arquivo:** `supabase/functions/criar-sinistro/index.ts`
-**Arquivo Frontend:** `src/pages/app/NovoSinistro.tsx`
+**Arquivos Analisados:**
+- `supabase/functions/criar-chamado-assistencia/index.ts`
+- `src/pages/app/AppAssistenciaNova.tsx`
 
 **Situacao Atual:**
-- O formulario do app coleta latitude/longitude via mapa interativo (linhas 357-358)
-- O payload e enviado para a edge function com os campos `latitude` e `longitude`
-- **PROBLEMA:** A edge function recebe mas NAO grava esses dados
+
+O fluxo de criacao de chamado:
+1. Associado abre o app e solicita assistencia
+2. App captura GPS do celular via `navigator.geolocation.getCurrentPosition`
+3. Edge function `criar-chamado-assistencia` recebe `latitude` e `longitude`
+4. Grava na tabela `chamados_assistencia` nos campos `origem_lat` e `origem_lng`
 
 ```typescript
-// NovoSinistro.tsx - ENVIA lat/lng
-const resultado = await createSinistro.mutateAsync({
-  ...
-  latitude: coordenadas?.[0],    // Enviado
-  longitude: coordenadas?.[1],   // Enviado
-});
-
-// criar-sinistro/index.ts - NAO GRAVA lat/lng
-const { data: sinistro } = await supabaseAdmin
-  .from('sinistros')
-  .insert({
-    // NÃO POSSUI:
-    // latitude: payload.latitude,
-    // longitude: payload.longitude,
-  })
-```
-
-**Gap Critico:** A tabela `sinistros` **nao possui** colunas `latitude`, `longitude` para gravar a posicao do evento como evidencia.
-
-**Alem disso:** O sistema **NAO** busca a ultima posicao conhecida do rastreador ao comunicar o sinistro, perdendo uma evidencia crucial de onde o veiculo estava antes/durante o evento.
-
----
-
-### 2. Quando Ha Analise de Sinistro - Buscar Historico de Trajeto
-
-**Arquivo:** `src/components/sinistros/TrajetoSinistroCard.tsx`
-**Edge Function:** `supabase/functions/rastreador-historico/index.ts`
-
-**Situacao Atual - IMPLEMENTADO:**
-- O componente `TrajetoSinistroCard` e exibido na pagina `SinistroDetalhe.tsx` (linha 835-841)
-- Busca automaticamente o trajeto das 24h anteriores ao sinistro
-- Usa a edge function `rastreador-historico` que chama API Softruck `/vehicles/{id}/trajectories/`
-- Exibe mapa com trajeto, paradas e marcador do local do sinistro
-
-```typescript
-// TrajetoSinistroCard.tsx - Busca 24h antes
-const dataFim = dataOcorrencia ? new Date(dataOcorrencia) : new Date();
-const dataInicio = subHours(dataFim, 24);
-
-const { data: historico } = useQuery({
-  queryFn: async () => {
-    const { data } = await supabase.functions.invoke('rastreador-historico', {
-      body: {
-        rastreador_id: rastreador!.id,
-        data_inicio: dataInicio.toISOString(),
-        data_fim: dataFim.toISOString(),
-      },
+// AppAssistenciaNova.tsx - linha 216-260
+const handleGetGPS = async () => {
+  const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(resolve, reject, {
+      enableHighAccuracy: true,
+      timeout: 10000,
+      maximumAge: 0,
     });
-    return data;
-  },
-});
-```
-
-**Funcionalidades Presentes:**
-- Mapa visual com trajeto
-- Identificacao de paradas (>5 minutos)
-- Marcador do local do sinistro (ultima posicao)
-- Indicador de fonte (API ou local)
-- Modo fullscreen para analise detalhada
-
-**Limitacoes:**
-- Dados NAO sao salvos/anexados ao dossie
-- Periodo fixo de 24h (nao personalizavel)
-- Sem opcao de exportar
-
----
-
-### 3. Quando Ha Suspeita de Fraude - Buscar Posicoes Anteriores e Posteriores
-
-**Situacao Atual - NAO IMPLEMENTADO:**
-
-O sistema possui o status `em_sindicancia` para investigacoes especiais, mas:
-
-- Nao ha interface para consultar periodos personalizados de trajeto
-- Nao ha comparacao automatica de posicoes (antes/depois do evento)
-- Nao ha analise de padroes suspeitos (ex: veiculo parado no local de "roubo" por horas)
-- Nao ha integracao com o fluxo de sindicancia
-
-**Workflow Existente:**
-```typescript
-// types/sinistros.ts
-WORKFLOW_SINISTRO = {
-  comunicado: ['em_analise', 'em_sindicancia', 'cancelado'],
-  em_sindicancia: ['em_analise', 'aprovado', 'negado', 'cancelado'],
+  });
+  // Usa GPS do celular, NAO do rastreador
 };
 ```
 
-O analista pode marcar como "Em Sindicancia", mas nao ha ferramentas de investigacao do rastreador.
+**Gap Critico:** O sistema **NAO** busca a posicao do rastreador Softruck quando o chamado entra. Isso e problematico porque:
+- Associado pode estar em local sem sinal de celular
+- GPS do celular pode ser impreciso (dentro de edificios)
+- O rastreador ja possui posicao precisa do veiculo
 
 ---
 
-### 4. Quando o Veiculo e Recuperado - Confirmar Posicao Atual
+### 2. Quando o Prestador e Acionado - Enviar Localizacao
 
-**Arquivo:** `supabase/functions/acionar-roubo-furto/index.ts`
+**Arquivos Analisados:**
+- `src/components/assistencia/AtribuirPrestadorModal.tsx`
+- `supabase/functions/criar-chamado-assistencia/index.ts`
 
-**Situacao Atual - PARCIALMENTE IMPLEMENTADO:**
+**Situacao Atual:**
 
-No acionamento de recuperacao:
-- Busca ultima posicao do rastreador do banco local (linhas 172-180)
-- Grava posicao no registro de acionamento (linhas 196-198)
-- Envia posicao via WhatsApp para central de monitoramento (linhas 450-452)
+Ao criar chamado, envia WhatsApp para central com link do Google Maps:
 
 ```typescript
-// acionar-roubo-furto/index.ts
-let ultimaPosicao = null;
-if (rastreador.ultima_posicao_lat && rastreador.ultima_posicao_lng) {
-  ultimaPosicao = {
-    lat: rastreador.ultima_posicao_lat,
-    lng: rastreador.ultima_posicao_lng,
-    data: rastreador.ultima_comunicacao,
-  };
-}
+// criar-chamado-assistencia/index.ts - linha 283-316
+const linkMapa = `https://www.google.com/maps?q=${payload.latitude},${payload.longitude}`;
 
-// Grava no acionamento
-await supabaseAdmin.from("acionamentos_roubo_furto").insert({
-  ultima_posicao_lat: ultimaPosicao?.lat,
-  ultima_posicao_lng: ultimaPosicao?.lng,
-  ultima_posicao_data: ultimaPosicao?.data,
-});
+const mensagemCentral = `🚨 *NOVO CHAMADO DE ASSISTÊNCIA*
+...
+🗺️ *Ver no Mapa:* ${linkMapa}`;
 ```
 
-**Gap:** Nao ha funcionalidade para confirmar recuperacao e gravar posicao final quando o veiculo e localizado.
+**Gap:** Quando o atendente atribui o prestador (`AtribuirPrestadorModal`):
+- **NAO** envia automaticamente WhatsApp para o prestador
+- **NAO** compartilha link com localizacao
+- Prestador recebe apenas ligacao manual do atendente
+
+Nao existe funcionalidade para:
+- Enviar link atualizado de posicao do rastreador
+- Compartilhar localizacao em tempo real
+- Usar posicao do rastreador em vez do GPS do celular
+
+---
+
+### 3. Quando Ha Acompanhamento do Chamado - Atualizar Posicao
+
+**Arquivos Analisados:**
+- `src/pages/app/AcompanharChamado.tsx`
+- `src/pages/assistencia/ChamadoDetalhe.tsx`
+
+**Situacao Atual:**
+
+No app do associado (`AcompanharChamado.tsx`):
+- Exibe mapa com marcador **ESTATICO** na posicao original
+- Nao atualiza posicao durante acompanhamento
+- Usa coordenadas salvas em `origem_lat` e `origem_lng`
+
+```typescript
+// AcompanharChamado.tsx - linha 460-474
+<Marker 
+  position={[chamado.origem_lat, chamado.origem_lng]}
+  icon={origemIcon}
+>
+  <Popup>Sua localização</Popup>
+</Marker>
+```
+
+Na central (`ChamadoDetalhe.tsx`):
+- Exibe placeholder "Visualização de mapa (em breve)" - **linha 359-364**
+- Mapa nao esta implementado para o atendente
+
+**Gap Critico:**
+- Nenhuma atualizacao de posicao durante o atendimento
+- Nao consulta API Softruck para posicao em tempo real
+- Nao registra movimentacao do veiculo
+
+---
+
+### 4. Quando o Chamado e Encerrado - Registrar Posicao Final
+
+**Tabela Analisada:**
+- `chamados_assistencia_historico`
+
+**Colunas disponiveis:**
+| Campo | Tipo |
+|-------|------|
+| id | uuid |
+| chamado_id | uuid |
+| status_anterior | varchar |
+| status_novo | varchar |
+| usuario_id | uuid |
+| observacao | text |
+| created_at | timestamp |
+
+**Gap:** A tabela historico **NAO possui** campos para:
+- `latitude` / `longitude` do momento da mudanca de status
+- `posicao_rastreador_lat` / `posicao_rastreador_lng`
+- `posicao_capturada_em` - timestamp da posicao
+
+Ao encerrar chamado:
+- Nao grava posicao final do veiculo
+- Nao consulta rastreador para confirmar localizacao
+- Perde auditoria de onde o veiculo estava
 
 ---
 
 ## Gaps Identificados e Impacto
 
-### Gap 1: Posicao Nao Gravada Como Evidencia
+### Gap 1: Nao Utiliza Posicao do Rastreador
 
 **Impacto: ALTO**
-- Posicao enviada pelo usuario no app e perdida
-- Posicao do rastreador no momento do sinistro nao e capturada
-- Auditoria comprometida em caso de questionamento
 
-**Campos Ausentes na Tabela `sinistros`:**
-- `latitude_informada` - Posicao informada pelo usuario
-- `longitude_informada`
-- `rastreador_lat_momento` - Posicao do rastreador no momento
-- `rastreador_lng_momento`
-- `rastreador_posicao_capturada_em`
-- `snapshot_trajeto_json` - Trajeto 24h para auditoria
+Cenario problematico:
+1. Associado sofre pane em estrada sem sinal de celular
+2. App nao consegue capturar GPS
+3. Associado informa endereco aproximado por texto
+4. Prestador vai para local errado
 
----
+Se o sistema consultasse o rastreador:
+- Teria posicao precisa independente do celular
+- Poderia sugerir endereco ao associado
+- Prestador chegaria mais rapido
 
-### Gap 2: Trajeto Nao Anexado ao Dossie
+### Gap 2: Prestador Nao Recebe Link de Localizacao
 
 **Impacto: MEDIO**
-- Dados de trajeto sao efemeros (buscados sob demanda)
-- Se API Softruck ficar indisponivel, perde-se evidencia
-- Nao ha snapshot historico para auditoria futura
 
----
+Fluxo atual:
+1. Central recebe chamado com link
+2. Atendente liga para prestador
+3. Repassa endereco verbalmente ou por WhatsApp manual
+4. Prestador digita endereco no GPS
 
-### Gap 3: Sem Exportacao de Relatorio de Trajeto
+Fluxo ideal:
+1. Ao despachar prestador, sistema envia automaticamente
+2. WhatsApp com link de localizacao atualizada
+3. Link consulta rastreador em tempo real
+4. Prestador abre e vai direto
+
+### Gap 3: Sem Atualizacao em Tempo Real
 
 **Impacto: MEDIO**
-- Nao e possivel gerar PDF com trajeto para anexar a processos juridicos
-- Nao ha como compartilhar dados de forma documental
+
+Se veiculo estiver sendo rebocado:
+- Posicao inicial fica desatualizada
+- Prestador pode ir para lugar errado
+- Sem tracking do deslocamento
+
+### Gap 4: Historico Sem Posicoes
+
+**Impacto: BAIXO**
+
+Para auditoria e analise:
+- Nao sabe onde prestador estava ao aceitar
+- Nao sabe onde estava ao concluir
+- Perde metricas de deslocamento
 
 ---
 
-### Gap 4: Dados do Rastreador Nao Considerados na Decisao
+## Plano de Implementacao
 
-**Impacto: MEDIO**
-- `EmitirParecerModal` nao exibe informacoes do rastreador
-- Analista nao ve trajeto/posicoes ao emitir parecer
-- Decisao baseada apenas em documentos, sem validacao GPS
-
----
-
-## Plano de Correcoes Recomendado
-
-### Fase 1: Adicionar Campos de Posicao na Tabela Sinistros
+### Fase 1: Adicionar Campos de Rastreador na Tabela
 
 **SQL Migration:**
 ```sql
-ALTER TABLE sinistros ADD COLUMN latitude_informada DECIMAL(10,8);
-ALTER TABLE sinistros ADD COLUMN longitude_informada DECIMAL(11,8);
-ALTER TABLE sinistros ADD COLUMN rastreador_lat_momento DECIMAL(10,8);
-ALTER TABLE sinistros ADD COLUMN rastreador_lng_momento DECIMAL(11,8);
-ALTER TABLE sinistros ADD COLUMN rastreador_posicao_capturada_em TIMESTAMPTZ;
-ALTER TABLE sinistros ADD COLUMN snapshot_trajeto_json JSONB;
+-- Campos na tabela chamados_assistencia
+ALTER TABLE chamados_assistencia 
+  ADD COLUMN rastreador_lat DECIMAL(10,8),
+  ADD COLUMN rastreador_lng DECIMAL(11,8),
+  ADD COLUMN rastreador_posicao_capturada_em TIMESTAMPTZ,
+  ADD COLUMN rastreador_endereco TEXT;
+
+-- Campos na tabela chamados_assistencia_historico  
+ALTER TABLE chamados_assistencia_historico
+  ADD COLUMN latitude DECIMAL(10,8),
+  ADD COLUMN longitude DECIMAL(11,8),
+  ADD COLUMN posicao_fonte VARCHAR(20); -- 'rastreador', 'gps', 'manual'
 ```
 
-### Fase 2: Atualizar Edge Function criar-sinistro
+### Fase 2: Modificar Edge Function criar-chamado-assistencia
 
-**Modificar:** `supabase/functions/criar-sinistro/index.ts`
+**Alteracoes:**
 
-1. Gravar latitude/longitude informadas pelo usuario
-2. Buscar rastreador do veiculo
-3. Buscar ultima posicao do rastreador via API ou banco
-4. Gravar posicao do rastreador como evidencia
-5. Opcionalmente: buscar e gravar snapshot do trajeto 24h
+1. Buscar rastreador do veiculo
+2. Consultar posicao via API Softruck
+3. Gravar posicao do rastreador como alternativa/complemento
+4. Se GPS do celular nao disponivel, usar rastreador
 
 ```typescript
-// Buscar rastreador e posicao
+// Buscar rastreador do veiculo
 const { data: rastreador } = await supabaseAdmin
   .from('rastreadores')
-  .select('id, ultima_posicao_lat, ultima_posicao_lng, ultima_comunicacao')
-  .eq('veiculo_id', payload.veiculo_id)
+  .select('id, plataforma, plataforma_device_id, plataforma_veiculo_id, ultima_posicao_lat, ultima_posicao_lng')
+  .eq('veiculo_id', veiculo.id)
   .eq('status', 'instalado')
   .maybeSingle();
 
-// Inserir com posicoes
-const { data: sinistro } = await supabaseAdmin
-  .from('sinistros')
-  .insert({
-    // ... campos existentes ...
-    latitude_informada: payload.latitude,
-    longitude_informada: payload.longitude,
-    rastreador_lat_momento: rastreador?.ultima_posicao_lat,
-    rastreador_lng_momento: rastreador?.ultima_posicao_lng,
-    rastreador_posicao_capturada_em: rastreador?.ultima_comunicacao,
+// Se tem rastreador, buscar posicao atualizada
+if (rastreador?.plataforma === 'softruck' && rastreador.plataforma_veiculo_id) {
+  const posicaoResult = await supabaseAdmin.functions.invoke('posicao-veiculo', {
+    body: { veiculo_id: veiculo.id }
   });
+  
+  if (posicaoResult.data?.posicao) {
+    // Gravar posicao do rastreador
+    rastreadorLat = posicaoResult.data.posicao.latitude;
+    rastreadorLng = posicaoResult.data.posicao.longitude;
+  }
+}
+
+// Se associado nao informou localizacao, usar rastreador
+if (!payload.latitude || !payload.longitude) {
+  payload.latitude = rastreadorLat || rastreador?.ultima_posicao_lat;
+  payload.longitude = rastreadorLng || rastreador?.ultima_posicao_lng;
+}
 ```
 
-### Fase 3: Funcionalidade de Snapshot de Trajeto
+### Fase 3: Enviar Link Automatico para Prestador
 
-**Novo componente:** `src/components/sinistros/SalvarTrajetoButton.tsx`
+**Novo arquivo:** `src/components/assistencia/EnviarLinkPrestadorButton.tsx`
 
-Botao para o analista:
-1. Buscar trajeto via API
-2. Gravar JSON no campo `snapshot_trajeto_json`
-3. Confirmar salvamento
+Botao que:
+1. Gera link para pagina publica de tracking
+2. Envia WhatsApp automatico para prestador
+3. Link consulta posicao atualizada do rastreador
 
-### Fase 4: Exportar Relatorio de Trajeto em PDF
+**Novo arquivo:** `src/pages/public/TrackingAssistencia.tsx`
 
-**Novo arquivo:** `src/components/sinistros/ExportarTrajetoPDF.tsx`
+Pagina publica (sem login) que:
+1. Recebe token de chamado
+2. Exibe mapa com posicao em tempo real
+3. Atualiza automaticamente a cada 30 segundos
+4. Consulta rastreador via API
 
-Gerar PDF contendo:
-- Mapa estatico do trajeto (via API de mapas)
-- Lista de paradas
-- Dados de velocidade media
-- Posicao no momento do sinistro
-- Comparacao posicao informada vs rastreador
+### Fase 4: Atualizar Posicao Durante Acompanhamento
 
-### Fase 5: Consulta de Periodos Personalizados (Sindicancia)
+**Modificar:** `src/pages/app/AcompanharChamado.tsx`
 
-**Novo componente:** `src/components/sinistros/ConsultaTrajetoAvancada.tsx`
+Adicionar:
+1. Polling de posicao do rastreador a cada 30s
+2. Atualizar marcador no mapa
+3. Exibir status do rastreador (online/offline)
+4. Mostrar ultima atualizacao
 
-Para analise de fraude:
-- Selector de data inicio/fim
-- Buscar trajeto de qualquer periodo
-- Comparar posicoes antes e depois do evento
-- Identificar inconsistencias
+**Modificar:** `src/pages/assistencia/ChamadoDetalhe.tsx`
 
-### Fase 6: Exibir Dados do Rastreador no Parecer
+Implementar:
+1. Mapa real (nao placeholder)
+2. Marcador com posicao do rastreador
+3. Botao "Atualizar Posicao"
+4. Historico de posicoes
 
-**Modificar:** `src/components/eventos/EmitirParecerModal.tsx`
+### Fase 5: Registrar Posicoes no Historico
 
-Adicionar secao com:
-- Posicao informada vs posicao do rastreador
-- Distancia entre as posicoes
-- Ultima comunicacao do rastreador
-- Link para ver trajeto completo
+**Modificar:** `src/components/assistencia/AtualizarStatusChamadoModal.tsx`
+
+Ao mudar status:
+1. Buscar posicao atual do rastreador
+2. Gravar no historico
+3. Registrar fonte (rastreador/gps)
+
+### Fase 6: Exibir Opcao "Usar Posicao do Rastreador"
+
+**Modificar:** `src/pages/app/AppAssistenciaNova.tsx`
+
+Adicionar:
+1. Botao "Usar posicao do rastreador"
+2. Consultar API e exibir endereco
+3. Fallback se GPS do celular falhar
+4. Badge indicando fonte da posicao
 
 ---
 
@@ -291,55 +317,75 @@ Adicionar secao com:
 
 | Arquivo | Descricao |
 |---------|-----------|
-| `src/components/sinistros/SalvarTrajetoButton.tsx` | Botao para anexar trajeto ao dossie |
-| `src/components/sinistros/ExportarTrajetoPDF.tsx` | Exportar trajeto para PDF |
-| `src/components/sinistros/ConsultaTrajetoAvancada.tsx` | Consulta periodos personalizados |
-| `src/components/sinistros/ComparacaoPosicoes.tsx` | Comparar posicao informada vs rastreador |
+| `src/components/assistencia/EnviarLinkPrestadorButton.tsx` | Botao para enviar WhatsApp com link |
+| `src/pages/public/TrackingAssistencia.tsx` | Pagina publica de tracking |
+| `src/components/assistencia/MapaChamado.tsx` | Mapa do chamado com rastreador |
+| `src/hooks/useChamadoPosicaoTempoReal.ts` | Hook para posicao em tempo real |
 
 ## Arquivos a Modificar
 
 | Arquivo | Alteracoes |
 |---------|------------|
-| `supabase/functions/criar-sinistro/index.ts` | Gravar lat/lng e buscar posicao rastreador |
-| `src/components/eventos/EmitirParecerModal.tsx` | Adicionar dados do rastreador |
-| `src/pages/eventos/SinistroDetalhe.tsx` | Adicionar opcoes de exportacao |
-| `src/components/sinistros/TrajetoSinistroCard.tsx` | Adicionar botoes de salvar/exportar |
+| `supabase/functions/criar-chamado-assistencia/index.ts` | Buscar e gravar posicao do rastreador |
+| `src/pages/app/AppAssistenciaNova.tsx` | Adicionar opcao "usar rastreador" |
+| `src/pages/app/AcompanharChamado.tsx` | Atualizar posicao em tempo real |
+| `src/pages/assistencia/ChamadoDetalhe.tsx` | Implementar mapa real |
+| `src/components/assistencia/AtribuirPrestadorModal.tsx` | Adicionar envio de link |
+| `src/components/assistencia/AtualizarStatusChamadoModal.tsx` | Gravar posicao ao mudar status |
 
-## Migracao SQL
+## SQL Migrations
 
-Necessaria para adicionar campos de posicao na tabela `sinistros`.
+Necessarias para adicionar campos de posicao do rastreador.
 
 ---
 
 ## Checklist de Verificacao Pos-Implementacao
 
-- [ ] Ao comunicar sinistro, posicao do usuario e gravada
-- [ ] Ao comunicar sinistro, posicao do rastreador e capturada automaticamente
-- [ ] Trajeto de 24h disponivel na tela de analise
-- [ ] Analista pode salvar snapshot do trajeto no dossie
-- [ ] Analista pode exportar trajeto para PDF
-- [ ] Para sindicancia, e possivel consultar periodos personalizados
-- [ ] Ao emitir parecer, dados do rastreador sao exibidos
-- [ ] Ao recuperar veiculo, posicao final e gravada
-- [ ] Comparacao posicao informada vs rastreador esta visivel
+- [ ] Ao abrir chamado, posicao do rastreador e capturada
+- [ ] Se GPS do celular falhar, rastreador e usado como fallback
+- [ ] Central ve mapa com posicao do rastreador em tempo real
+- [ ] Ao despachar prestador, WhatsApp com link e enviado automaticamente
+- [ ] Link do prestador abre mapa com posicao atualizada
+- [ ] Durante acompanhamento, posicao atualiza a cada 30s
+- [ ] Ao mudar status, posicao e registrada no historico
+- [ ] Ao encerrar chamado, posicao final e gravada
+- [ ] Associado pode escolher "usar posicao do rastreador"
+- [ ] Card de veiculo no chamado mostra status do rastreador
 
 ---
 
-## Teste Recomendado
+## Teste Recomendado: Chamado de Guincho
 
-1. **Login como associado** no app
-2. **Comunicar sinistro de colisao**:
-   - Selecionar local no mapa
-   - Preencher descricao
-   - Enviar
-3. **Login como analista**
-4. **Abrir sinistro comunicado**
-5. **Verificar:**
-   - Posicao informada pelo usuario aparece
-   - Posicao do rastreador no momento aparece
-   - Trajeto de 24h esta carregando
-   - Mapa exibe rota e local do sinistro
-6. **Emitir parecer:**
-   - Verificar se dados do rastreador estao visiveis
-   - Confirmar distancia entre posicao informada e rastreador
-7. **Exportar relatorio PDF** (apos implementacao)
+### Pre-requisitos
+
+1. Associado com veiculo que possui rastreador Softruck instalado
+2. Rastreador comunicando (posicao disponivel)
+3. `SOFTRUCK_PUBLIC_KEY` valida
+
+### Passos do Teste
+
+1. **Login como associado** no app (`/app/login`)
+2. **Solicitar assistencia de guincho**
+   - Verificar se botao "Usar posicao do rastreador" aparece
+   - Clicar e confirmar que endereco e preenchido automaticamente
+3. **Enviar solicitacao**
+4. **Login como atendente** (`/assistencia`)
+5. **Abrir chamado**
+   - Verificar se mapa exibe posicao do rastreador
+   - Confirmar que coordenadas sao do rastreador (nao do GPS)
+6. **Atribuir prestador**
+   - Verificar se opcao "Enviar Link" aparece
+   - Clicar e confirmar que WhatsApp abre com link
+7. **Abrir link enviado ao prestador**
+   - Confirmar que mapa exibe posicao atualizada
+   - Aguardar 30s e verificar se atualiza
+8. **Mudar status para "A caminho"**
+   - Verificar se posicao foi registrada no historico
+9. **Concluir chamado**
+   - Confirmar posicao final gravada
+
+### Resultado Esperado
+
+- Posicao do rastreador aparece em todas as etapas
+- Prestador recebe link funcional com mapa
+- Historico mostra posicoes de cada mudanca de status
