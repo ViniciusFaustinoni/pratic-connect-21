@@ -45,6 +45,8 @@ interface Associado {
   cpf: string;
   dia_vencimento: number | null;
   plano_id: string | null;
+  whatsapp: string | null;
+  telefone: string | null;
   planos: {
     valor_mensalidade: number;
   } | null;
@@ -79,6 +81,8 @@ serve(async (req) => {
         cpf,
         dia_vencimento,
         plano_id,
+        whatsapp,
+        telefone,
         planos:plano_id (
           valor_mensalidade
         ),
@@ -100,6 +104,7 @@ serve(async (req) => {
       geradas: 0,
       jaExistentes: 0,
       erros: 0,
+      whatsappEnviados: 0,
       detalhes: [] as any[],
     };
 
@@ -132,7 +137,7 @@ serve(async (req) => {
         const asaasClienteId = associado.asaas_clientes?.[0]?.asaas_id;
 
         // Criar cobrança no ASAAS se tiver cliente cadastrado
-        let asaasCobranca = null;
+        let asaasCobranca: any = null;
         if (asaasClienteId && ASAAS_API_KEY) {
           const asaasResponse = await fetch(`${ASAAS_API_URL}/payments`, {
             method: 'POST',
@@ -153,6 +158,28 @@ serve(async (req) => {
           if (asaasResponse.ok) {
             asaasCobranca = await asaasResponse.json();
             console.log(`[gerar-cobrancas] Cobrança ASAAS criada: ${asaasCobranca.id}`);
+            
+            // Buscar dados do PIX (endpoint separado)
+            try {
+              const pixResponse = await fetch(`${ASAAS_API_URL}/payments/${asaasCobranca.id}/pixQrCode`, {
+                method: 'GET',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'access_token': ASAAS_API_KEY,
+                },
+              });
+
+              if (pixResponse.ok) {
+                const pixData = await pixResponse.json();
+                asaasCobranca.pixPayload = pixData.payload;
+                asaasCobranca.pixEncodedImage = pixData.encodedImage;
+                console.log(`[gerar-cobrancas] PIX obtido para ${asaasCobranca.id}`);
+              } else {
+                console.warn(`[gerar-cobrancas] PIX não disponível para ${asaasCobranca.id}`);
+              }
+            } catch (pixError) {
+              console.warn(`[gerar-cobrancas] Erro ao buscar PIX:`, pixError);
+            }
           } else {
             const errorText = await asaasResponse.text();
             console.error(`[gerar-cobrancas] Erro ASAAS: ${errorText}`);
@@ -173,11 +200,55 @@ serve(async (req) => {
             status: 'PENDING',
             boleto_url: asaasCobranca?.bankSlipUrl,
             linha_digitavel: asaasCobranca?.nossoNumero,
-            pix_copia_cola: asaasCobranca?.pixQrCodeUrl ? null : null, // PIX precisa de request separado
+            pix_copia_cola: asaasCobranca?.pixPayload || null,
+            pix_qrcode: asaasCobranca?.pixEncodedImage ? `data:image/png;base64,${asaasCobranca.pixEncodedImage}` : null,
           });
 
         if (insertError) {
           throw new Error(`Erro ao inserir: ${insertError.message}`);
+        }
+
+        // Enviar WhatsApp com PIX para o associado
+        let whatsappEnviado = false;
+        const telefone = associado.whatsapp || associado.telefone;
+        if (telefone && asaasCobranca?.pixPayload) {
+          try {
+            const valorFormatado = valorMensalidade.toLocaleString('pt-BR', { 
+              style: 'currency', 
+              currency: 'BRL' 
+            });
+            const dataFormatada = dataVencimento.toLocaleDateString('pt-BR');
+            const nomeAbreviado = associado.nome.split(' ')[0];
+            
+            const mensagem = `📄 *Nova Fatura Disponível*
+
+Olá ${nomeAbreviado}! 👋
+
+Sua mensalidade de *${valorFormatado}* está disponível.
+
+📅 Vencimento: *${dataFormatada}*
+
+💠 *PIX Copia e Cola:*
+\`${asaasCobranca.pixPayload}\`
+
+📱 Basta copiar o código acima e colar no seu banco!
+
+${asaasCobranca.nossoNumero ? `📊 *Linha Digitável:*\n${asaasCobranca.nossoNumero}\n\n` : ''}Pague agora e evite atrasos! 😊`;
+
+            await supabase.functions.invoke('whatsapp-send-text', {
+              body: {
+                telefone: telefone.replace(/\D/g, ''),
+                mensagem,
+                delay_ms: 500,
+              },
+            });
+            
+            whatsappEnviado = true;
+            resultados.whatsappEnviados++;
+            console.log(`[gerar-cobrancas] WhatsApp enviado para ${associado.nome}`);
+          } catch (whatsError) {
+            console.error(`[gerar-cobrancas] Erro WhatsApp para ${associado.nome}:`, whatsError);
+          }
         }
 
         resultados.geradas++;
@@ -186,6 +257,8 @@ serve(async (req) => {
           valor: valorMensalidade,
           vencimento: dataVencimento.toISOString().split('T')[0],
           asaas_id: asaasCobranca?.id,
+          pix_disponivel: !!asaasCobranca?.pixPayload,
+          whatsapp_enviado: whatsappEnviado,
         });
 
       } catch (error: any) {
@@ -198,7 +271,7 @@ serve(async (req) => {
       }
     }
 
-    console.log(`[gerar-cobrancas] Resultado: ${resultados.geradas} geradas, ${resultados.jaExistentes} já existentes, ${resultados.erros} erros`);
+    console.log(`[gerar-cobrancas] Resultado: ${resultados.geradas} geradas, ${resultados.jaExistentes} já existentes, ${resultados.whatsappEnviados} WhatsApp enviados, ${resultados.erros} erros`);
 
     return new Response(JSON.stringify(resultados), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
