@@ -6,6 +6,115 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Vincular mídia recebida a documento de SINISTRO pendente
+async function vincularMidiaASinistroPendente(
+  supabase: any,
+  telefonesBusca: string[],
+  mediaArmazenada: string,
+  instancia: { api_url: string; instance_name: string; id: string }
+): Promise<{ vinculado: boolean; mensagem?: string }> {
+  try {
+    // Buscar associado pelo telefone
+    const { data: associado } = await supabase
+      .from("associados")
+      .select("id, nome")
+      .or(`whatsapp.in.(${telefonesBusca.join(",")}),telefone.in.(${telefonesBusca.join(",")})`)
+      .maybeSingle();
+
+    if (!associado) {
+      console.log("[whatsapp-webhook] Nenhum associado encontrado para vincular sinistro");
+      return { vinculado: false };
+    }
+
+    // Buscar sinistro com status documentacao_pendente
+    const { data: sinistros } = await supabase
+      .from("sinistros")
+      .select("id, protocolo, status")
+      .eq("associado_id", associado.id)
+      .eq("status", "documentacao_pendente")
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (!sinistros?.length) {
+      console.log("[whatsapp-webhook] Nenhum sinistro com documentos pendentes");
+      return { vinculado: false };
+    }
+
+    const sinistro = sinistros[0];
+    console.log(`[whatsapp-webhook] Sinistro encontrado: ${sinistro.protocolo}`);
+
+    // Buscar documento pendente mais antigo
+    const { data: docsPendentes } = await supabase
+      .from("sinistro_documentos")
+      .select("id, tipo, nome_arquivo")
+      .eq("sinistro_id", sinistro.id)
+      .eq("status", "pendente")
+      .order("created_at", { ascending: true })
+      .limit(1);
+
+    if (!docsPendentes?.length) {
+      console.log("[whatsapp-webhook] Nenhum documento pendente no sinistro");
+      return { vinculado: false };
+    }
+
+    const doc = docsPendentes[0];
+
+    // Atualizar documento com arquivo recebido
+    const { error: updateError } = await supabase
+      .from("sinistro_documentos")
+      .update({
+        arquivo_url: mediaArmazenada,
+        status: "enviado",
+        enviado_em: new Date().toISOString(),
+      })
+      .eq("id", doc.id);
+
+    if (updateError) {
+      console.error("[whatsapp-webhook] Erro ao atualizar documento sinistro:", updateError);
+      return { vinculado: false };
+    }
+
+    // Contar documentos ainda pendentes
+    const { count: pendentesCount } = await supabase
+      .from("sinistro_documentos")
+      .select("id", { count: "exact", head: true })
+      .eq("sinistro_id", sinistro.id)
+      .eq("status", "pendente");
+
+    const documentosRestantes = pendentesCount || 0;
+
+    // Se todos enviados, atualizar status do sinistro para em_analise
+    if (documentosRestantes === 0) {
+      await supabase
+        .from("sinistros")
+        .update({ 
+          status: "em_analise", 
+          updated_at: new Date().toISOString() 
+        })
+        .eq("id", sinistro.id);
+
+      await supabase.from("sinistro_historico").insert({
+        sinistro_id: sinistro.id,
+        status_anterior: "documentacao_pendente",
+        status_novo: "em_analise",
+        observacao: "Todos os documentos foram enviados via WhatsApp",
+      });
+    }
+
+    const tipoFormatado = doc.nome_arquivo || doc.tipo.replace(/_/g, " ");
+    console.log(`[whatsapp-webhook] Documento de sinistro vinculado: ${tipoFormatado}`);
+
+    const mensagem = documentosRestantes > 0
+      ? `✅ Recebemos sua foto para o sinistro *${sinistro.protocolo}*!\n\n📄 Documento: ${tipoFormatado}\n\n📋 Ainda faltam *${documentosRestantes} documento(s)*.\n\nEnvie os demais para dar continuidade.`
+      : `✅ *Todos os Documentos Recebidos*\n\nRecebemos todos os documentos do sinistro *${sinistro.protocolo}*!\n\n🔍 Seu sinistro entrou em análise.\n\n⏰ Prazo estimado: até 5 dias úteis.`;
+
+    return { vinculado: true, mensagem };
+  } catch (err) {
+    console.error("[whatsapp-webhook] Erro ao vincular mídia a sinistro:", err);
+    return { vinculado: false };
+  }
+}
+
 // Formatar tipo de documento para exibição
 function formatarTipoDocumento(tipo: string): string {
   const tipos: Record<string, string> = {
@@ -23,7 +132,7 @@ function formatarTipoDocumento(tipo: string): string {
   return tipos[tipo] || tipo;
 }
 
-// Vincular mídia recebida a documento pendente
+// Vincular mídia recebida a documento pendente de CADASTRO
 async function vincularMidiaADocumentoPendente(
   supabase: any,
   telefonesBusca: string[],
@@ -2017,9 +2126,45 @@ serve(async (req) => {
     }
 
     // ========================================
-    // VINCULAR MÍDIA A DOCUMENTOS PENDENTES (CADASTRO)
+    // VINCULAR MÍDIA A DOCUMENTOS PENDENTES
+    // Primeiro tenta sinistro, depois cadastro
     // ========================================
     if (mediaArmazenada && (tipoPrincipal === 'imagem' || tipoPrincipal === 'documento')) {
+      // 1. Tentar vincular a SINISTRO primeiro
+      const resultadoSinistro = await vincularMidiaASinistroPendente(
+        supabase,
+        telefonesBusca,
+        mediaArmazenada,
+        instancia
+      );
+      
+      if (resultadoSinistro.vinculado) {
+        // Enviar confirmação
+        const EVOLUTION_API_KEY = Deno.env.get("EVOLUTION_API_KEY");
+        if (EVOLUTION_API_KEY && resultadoSinistro.mensagem) {
+          try {
+            await fetch(`${instancia.api_url}/message/sendText/${instancia.instance_name}`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                apikey: EVOLUTION_API_KEY,
+              },
+              body: JSON.stringify({
+                number: telefone,
+                text: resultadoSinistro.mensagem,
+              }),
+            });
+            console.log(`[whatsapp-webhook] Confirmação de documento sinistro enviada para ${telefone}`);
+          } catch (e) {
+            console.error("[whatsapp-webhook] Erro ao enviar confirmação:", e);
+          }
+        }
+        
+        await saveWhatsAppLog(supabase, instancia.id, telefone, mensagemTexto, "entrada", messageId, tipoPrincipal, mediaArmazenada, mediaMimetype || undefined, mediaFilename || undefined);
+        return new Response(JSON.stringify({ ok: true, sinistro_documento_vinculado: true }), { headers: corsHeaders });
+      }
+
+      // 2. Se não vinculou a sinistro, tentar CADASTRO
       const resultadoVinculo = await vincularMidiaADocumentoPendente(
         supabase,
         telefonesBusca,

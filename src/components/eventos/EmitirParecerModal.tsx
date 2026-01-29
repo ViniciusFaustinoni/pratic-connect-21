@@ -172,9 +172,30 @@ export function EmitirParecerModal({ open, onClose, sinistro }: EmitirParecerMod
             .eq('id', sinistro.veiculo_id);
         }
       }
+
+      // 4. Notificar associado via WhatsApp
+      try {
+        await supabase.functions.invoke('notificar-sinistro', {
+          body: {
+            sinistro_id: sinistro.id,
+            status: novoStatus,
+            dados_extras: {
+              valor_indenizacao: valorIndenizacao,
+              tipo_dano: tipoDano,
+              parecer: parecer.substring(0, 200),
+            }
+          }
+        });
+        console.log('[EmitirParecer] Notificação enviada ao associado');
+      } catch (notifErr) {
+        console.error('[EmitirParecer] Erro ao notificar:', notifErr);
+        // Não falhar a operação por erro de notificação
+      }
     },
     onSuccess: () => {
-      toast.success('Parecer registrado com sucesso!');
+      toast.success('Parecer registrado com sucesso!', {
+        description: 'O associado foi notificado via WhatsApp.'
+      });
       queryClient.invalidateQueries({ queryKey: ['sinistro', sinistro?.id] });
       queryClient.invalidateQueries({ queryKey: ['sinistro-historico', sinistro?.id] });
       queryClient.invalidateQueries({ queryKey: ['sinistros'] });

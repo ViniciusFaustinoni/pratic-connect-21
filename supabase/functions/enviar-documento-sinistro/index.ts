@@ -299,9 +299,42 @@ Deno.serve(async (req) => {
             });
         }
       } catch (notifError) {
-        console.error('[EnviarDocumento] Erro ao notificar:', notifError);
-        // Não falha a operação principal
+        console.error('[EnviarDocumento] Erro ao notificar analista:', notifError);
       }
+    }
+
+    // ========================================
+    // NOTIFICAR ASSOCIADO VIA WHATSAPP
+    // ========================================
+    try {
+      // Buscar telefone do associado
+      const { data: associadoData } = await supabaseAdmin
+        .from('associados')
+        .select('telefone, whatsapp')
+        .eq('id', associado.id)
+        .single();
+
+      const telefoneAssociado = associadoData?.whatsapp || associadoData?.telefone;
+      
+      if (telefoneAssociado) {
+        const tipoDocFormatado = tipo_documento.replace(/_/g, ' ').toUpperCase();
+        
+        const mensagem = documentosRestantes > 0
+          ? `✅ *Documento Recebido*\n\nRecebemos seu documento "${tipoDocFormatado}".\n\n📋 Ainda faltam *${documentosRestantes} documento(s)*.\n\nEnvie os demais para dar continuidade ao sinistro ${sinistro.protocolo}.`
+          : `✅ *Todos os Documentos Recebidos*\n\nRecebemos todos os documentos solicitados!\n\n🔍 Seu sinistro *${sinistro.protocolo}* entrou em análise.\n\n⏰ *Prazo estimado:* até 5 dias úteis.\n\nVocê será notificado sobre o resultado.`;
+
+        await supabaseAdmin.functions.invoke('whatsapp-send-text', {
+          body: { 
+            telefone: telefoneAssociado.replace(/\D/g, ''), 
+            mensagem 
+          }
+        });
+        
+        console.log(`[EnviarDocumento] WhatsApp de confirmação enviado para ${telefoneAssociado}`);
+      }
+    } catch (whatsErr) {
+      console.error('[EnviarDocumento] Erro ao enviar WhatsApp:', whatsErr);
+      // Não falhar a operação principal
     }
 
     console.log('[EnviarDocumento] Sucesso! Documento ID:', documentoId);

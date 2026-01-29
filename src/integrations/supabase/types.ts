@@ -14489,6 +14489,9 @@ export type Database = {
         Row: {
           analista_id: string | null
           associado_id: string
+          avaliacao_comentario: string | null
+          avaliacao_data: string | null
+          avaliacao_nota: number | null
           bo_arquivo_url: string | null
           bo_numero: string | null
           canal: string
@@ -14525,6 +14528,9 @@ export type Database = {
         Insert: {
           analista_id?: string | null
           associado_id: string
+          avaliacao_comentario?: string | null
+          avaliacao_data?: string | null
+          avaliacao_nota?: number | null
           bo_arquivo_url?: string | null
           bo_numero?: string | null
           canal?: string
@@ -14561,6 +14567,9 @@ export type Database = {
         Update: {
           analista_id?: string | null
           associado_id?: string
+          avaliacao_comentario?: string | null
+          avaliacao_data?: string | null
+          avaliacao_nota?: number | null
           bo_arquivo_url?: string | null
           bo_numero?: string | null
           canal?: string

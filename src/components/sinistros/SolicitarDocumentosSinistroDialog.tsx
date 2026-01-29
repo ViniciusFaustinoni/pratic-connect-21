@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { FileText, Loader2, Camera, FileCheck, AlertCircle } from 'lucide-react';
 import {
   Dialog,
@@ -19,7 +19,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 
 // Tipos de documentos para sinistros
-const TIPOS_DOCUMENTOS_SINISTRO = [
+export const TIPOS_DOCUMENTOS_SINISTRO = [
   { id: 'bo', label: 'Boletim de Ocorrência (B.O.)', icon: FileText, categoria: 'documentos' },
   { id: 'cnh', label: 'CNH do Condutor', icon: FileCheck, categoria: 'documentos' },
   { id: 'crlv', label: 'CRLV do Veículo', icon: FileCheck, categoria: 'documentos' },
@@ -41,6 +41,7 @@ interface SolicitarDocumentosSinistroDialogProps {
   sinistroId: string;
   protocolo: string;
   statusAtual: string;
+  associadoId?: string;
 }
 
 export function SolicitarDocumentosSinistroDialog({
@@ -49,11 +50,27 @@ export function SolicitarDocumentosSinistroDialog({
   sinistroId,
   protocolo,
   statusAtual,
+  associadoId,
 }: SolicitarDocumentosSinistroDialogProps) {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const [documentosSelecionados, setDocumentosSelecionados] = useState<string[]>([]);
   const [observacoes, setObservacoes] = useState('');
+
+  // Buscar dados do associado para enviar WhatsApp
+  const { data: associado } = useQuery({
+    queryKey: ['associado-sinistro', associadoId],
+    queryFn: async () => {
+      if (!associadoId) return null;
+      const { data } = await supabase
+        .from('associados')
+        .select('id, nome, telefone, whatsapp')
+        .eq('id', associadoId)
+        .single();
+      return data;
+    },
+    enabled: !!associadoId,
+  });
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -103,10 +120,33 @@ export function SolicitarDocumentosSinistroDialog({
         });
 
       if (histError) console.error('Erro ao registrar histórico:', histError);
+
+      // 4. ENVIAR WHATSAPP COM LISTA DE DOCUMENTOS
+      const telefone = associado?.whatsapp || associado?.telefone;
+      if (telefone) {
+        const documentosFormatados = documentosSelecionados
+          .map(id => TIPOS_DOCUMENTOS_SINISTRO.find(d => d.id === id)?.label || id)
+          .join('\n• ');
+
+        const mensagem = `📄 *Documentos Solicitados*\n\nPara dar continuidade ao seu sinistro *${protocolo}*, precisamos dos seguintes documentos:\n\n• ${documentosFormatados}${observacoes ? `\n\n📝 *Observação:* ${observacoes}` : ''}\n\n⏰ *Prazo:* 48 horas\n\nEnvie pelo app ou responda esta mensagem com as fotos.`;
+
+        try {
+          await supabase.functions.invoke('whatsapp-send-text', {
+            body: {
+              telefone: telefone.replace(/\D/g, ''),
+              mensagem,
+            },
+          });
+          console.log('[SolicitarDocumentos] WhatsApp enviado com sucesso');
+        } catch (whatsErr) {
+          console.error('[SolicitarDocumentos] Erro ao enviar WhatsApp:', whatsErr);
+          // Não falhar a operação por erro de WhatsApp
+        }
+      }
     },
     onSuccess: () => {
       toast.success('Documentos solicitados com sucesso!', {
-        description: 'O associado será notificado sobre a pendência.',
+        description: 'O associado foi notificado via WhatsApp sobre a pendência.',
       });
       queryClient.invalidateQueries({ queryKey: ['sinistro', sinistroId] });
       queryClient.invalidateQueries({ queryKey: ['sinistro-documentos', sinistroId] });

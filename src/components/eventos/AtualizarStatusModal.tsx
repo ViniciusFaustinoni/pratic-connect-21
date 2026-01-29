@@ -101,9 +101,25 @@ export function AtualizarStatusModal({ open, onClose, sinistro }: AtualizarStatu
         });
       
       if (histError) throw histError;
+
+      // 3. Notificar associado via WhatsApp
+      try {
+        await supabase.functions.invoke('notificar-sinistro', {
+          body: {
+            sinistro_id: sinistro.id,
+            status: novoStatus,
+          }
+        });
+        console.log('[AtualizarStatus] Notificação enviada');
+      } catch (notifErr) {
+        console.error('[AtualizarStatus] Erro ao notificar:', notifErr);
+        // Não falhar a operação por erro de notificação
+      }
     },
     onSuccess: () => {
-      toast.success('Status atualizado com sucesso!');
+      toast.success('Status atualizado com sucesso!', {
+        description: 'O associado foi notificado via WhatsApp.'
+      });
       queryClient.invalidateQueries({ queryKey: ['sinistro', sinistro?.id] });
       queryClient.invalidateQueries({ queryKey: ['sinistro-historico', sinistro?.id] });
       queryClient.invalidateQueries({ queryKey: ['sinistros'] });
