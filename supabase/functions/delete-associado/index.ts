@@ -93,6 +93,33 @@ Deno.serve(async (req) => {
 
     console.log(`[delete-associado] Excluindo associado: ${associado.nome} (${associado.cpf})`);
 
+    // 0. NOVO: Inativar e desvincular todos os veículos na Rede Veículos ANTES de excluir
+    try {
+      console.log(`[delete-associado] Inativando cliente na Rede Veículos...`);
+      const inativarResponse = await fetch(
+        `${supabaseUrl}/functions/v1/rede-veiculos-inativar-cliente-completo`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseServiceKey}`,
+          },
+          body: JSON.stringify({
+            associadoId,
+            motivo: 'exclusao',
+            observacoes: 'Exclusão permanente por diretor',
+            atualizarBancoLocal: false, // Não atualizar banco, vamos excluir tudo
+            desvincular: true,
+          }),
+        }
+      );
+      const inativarResult = await inativarResponse.json();
+      console.log(`[delete-associado] Resultado Rede Veículos:`, inativarResult);
+    } catch (redeErr) {
+      console.warn(`[delete-associado] Erro ao inativar na Rede Veículos (continuando):`, redeErr);
+      // Não bloquear exclusão por erro na plataforma externa
+    }
+
     // 1. Fetch all contracts for this associate
     const { data: contratos } = await supabaseAdmin
       .from("contratos")
