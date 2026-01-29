@@ -260,6 +260,22 @@ const tools = [
     },
   },
 },
+{
+  type: "function",
+  function: {
+    name: "enviar_contato_central",
+    description: "Envia o cartão de contato da Central de Atendimento PRATICCAR. Use quando o associado perguntar o telefone da central ou como entrar em contato com a associação.",
+    parameters: { type: "object", properties: {}, required: [] },
+  },
+},
+{
+  type: "function",
+  function: {
+    name: "enviar_contato_prestador",
+    description: "Envia o cartão de contato do prestador de serviço (guincho, chaveiro, etc.) do chamado de assistência ativo. Use quando o associado quiser o contato do guincho ou prestador.",
+    parameters: { type: "object", properties: {}, required: [] },
+  },
+},
 ];
 
 // Executa tools
@@ -752,6 +768,188 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
         return JSON.stringify({ 
           success: false, 
           message: "Erro ao enviar localização. Tente novamente mais tarde." 
+        });
+      }
+    }
+
+    case "enviar_contato_central": {
+      // Enviar cartão de contato da Central PRATICCAR
+      if (!telefone || !instancia) {
+        return JSON.stringify({ success: false, message: "Erro de contexto: telefone ou instância não disponíveis" });
+      }
+
+      // Buscar telefone da central nas configurações
+      const { data: config } = await supabase
+        .from("configuracoes")
+        .select("valor")
+        .eq("chave", "assistencia_telefone_central")
+        .maybeSingle();
+
+      const telefoneCentral = config?.valor || "08001234567";
+      const wuid = telefoneCentral.replace(/\D/g, '');
+
+      try {
+        const EVOLUTION_API_KEY = Deno.env.get("EVOLUTION_API_KEY");
+
+        const contactBody = {
+          number: telefone,
+          contact: [{
+            fullName: "Central PRATICCAR 24h",
+            wuid: wuid.startsWith('55') ? wuid : `55${wuid}`,
+            phoneNumber: telefoneCentral,
+            organization: "PRATICCAR Proteção Veicular",
+            email: "",
+            url: "",
+          }],
+        };
+
+        console.log(`[whatsapp-webhook] Enviando contato da central para ${telefone}`);
+
+        const response = await fetch(
+          `${instancia.api_url}/message/sendContact/${instancia.instance_name}`,
+          {
+            method: "POST",
+            headers: {
+              "apikey": EVOLUTION_API_KEY || "",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(contactBody),
+          }
+        );
+
+        const result = await response.json();
+
+        if (result.key?.id || result.message?.contactMessage) {
+          // Registrar mensagem no banco
+          await supabase.from("whatsapp_mensagens").insert({
+            instancia_id: instancia.id,
+            telefone: telefone,
+            tipo: "contact",
+            mensagem: `📇 Contato: Central PRATICCAR 24h`,
+            status: "enviada",
+            message_id: result.key?.id || `contact_${Date.now()}`,
+            referencia_tipo: "central",
+            direcao: "saida",
+            sent_at: new Date().toISOString(),
+          });
+
+          console.log(`[whatsapp-webhook] Contato da central enviado com sucesso`);
+          return JSON.stringify({
+            success: true,
+            message: "Pronto! O cartão de contato da Central PRATICCAR foi enviado. Você pode salvá-lo diretamente no seu celular! 📇"
+          });
+        } else {
+          console.error(`[whatsapp-webhook] Erro ao enviar contato da central:`, result);
+          return JSON.stringify({
+            success: false,
+            message: "Não foi possível enviar o contato. Tente novamente mais tarde."
+          });
+        }
+      } catch (err) {
+        console.error(`[whatsapp-webhook] Erro ao enviar contato da central:`, err);
+        return JSON.stringify({
+          success: false,
+          message: "Erro ao enviar contato. Tente novamente mais tarde."
+        });
+      }
+    }
+
+    case "enviar_contato_prestador": {
+      // Enviar cartão de contato do prestador do chamado ativo
+      if (!telefone || !instancia) {
+        return JSON.stringify({ success: false, message: "Erro de contexto: telefone ou instância não disponíveis" });
+      }
+
+      // Buscar chamado ativo com prestador
+      const { data: chamados } = await supabase
+        .from("chamados_assistencia")
+        .select("id, protocolo, prestador_nome, prestador_telefone, tipo_servico")
+        .eq("associado_id", associadoId)
+        .in("status", ["aguardando_prestador", "prestador_despachado", "prestador_a_caminho", "em_atendimento"])
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      const chamado = chamados?.[0];
+
+      if (!chamado) {
+        return JSON.stringify({
+          success: false,
+          message: "Você não tem chamados de assistência ativos no momento."
+        });
+      }
+
+      if (!chamado.prestador_nome || !chamado.prestador_telefone) {
+        return JSON.stringify({
+          success: false,
+          message: "O prestador ainda não foi atribuído ao seu chamado. Aguarde alguns minutos."
+        });
+      }
+
+      const wuid = chamado.prestador_telefone.replace(/\D/g, '');
+
+      try {
+        const EVOLUTION_API_KEY = Deno.env.get("EVOLUTION_API_KEY");
+
+        const contactBody = {
+          number: telefone,
+          contact: [{
+            fullName: chamado.prestador_nome,
+            wuid: wuid.startsWith('55') ? wuid : `55${wuid}`,
+            phoneNumber: chamado.prestador_telefone,
+            organization: "Prestador PRATICCAR",
+            email: "",
+            url: "",
+          }],
+        };
+
+        console.log(`[whatsapp-webhook] Enviando contato do prestador para ${telefone}`);
+
+        const response = await fetch(
+          `${instancia.api_url}/message/sendContact/${instancia.instance_name}`,
+          {
+            method: "POST",
+            headers: {
+              "apikey": EVOLUTION_API_KEY || "",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(contactBody),
+          }
+        );
+
+        const result = await response.json();
+
+        if (result.key?.id || result.message?.contactMessage) {
+          // Registrar mensagem no banco
+          await supabase.from("whatsapp_mensagens").insert({
+            instancia_id: instancia.id,
+            telefone: telefone,
+            tipo: "contact",
+            mensagem: `📇 Contato: ${chamado.prestador_nome}`,
+            status: "enviada",
+            message_id: result.key?.id || `contact_${Date.now()}`,
+            referencia_tipo: "chamado_assistencia",
+            referencia_id: chamado.id,
+            direcao: "saida",
+            sent_at: new Date().toISOString(),
+          });
+
+          console.log(`[whatsapp-webhook] Contato do prestador enviado com sucesso`);
+          return JSON.stringify({
+            success: true,
+            message: `Pronto! O cartão de contato do ${chamado.prestador_nome} foi enviado. Você pode salvá-lo e ligar diretamente! 📇`
+          });
+        } else {
+          console.error(`[whatsapp-webhook] Erro ao enviar contato do prestador:`, result);
+          return JSON.stringify({
+            success: false,
+            message: "Não foi possível enviar o contato. Tente novamente mais tarde."
+          });
+        }
+      } catch (err) {
+        console.error(`[whatsapp-webhook] Erro ao enviar contato do prestador:`, err);
+        return JSON.stringify({
+          success: false,
+          message: "Erro ao enviar contato. Tente novamente mais tarde."
         });
       }
     }

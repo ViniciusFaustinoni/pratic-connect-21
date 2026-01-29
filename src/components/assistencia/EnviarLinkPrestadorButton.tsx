@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Send, MapPin, Copy, Check, ExternalLink, Loader2, Navigation } from 'lucide-react';
+import { Send, MapPin, Copy, Check, ExternalLink, Loader2, Navigation, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -26,6 +26,7 @@ interface EnviarLinkPrestadorButtonProps {
   rastreadorLat?: number | null;
   rastreadorLng?: number | null;
   tipoServico?: string;
+  associadoTelefone?: string;
 }
 
 const TIPO_LABELS: Record<string, string> = {
@@ -49,11 +50,13 @@ export function EnviarLinkPrestadorButton({
   rastreadorLat,
   rastreadorLng,
   tipoServico,
+  associadoTelefone,
 }: EnviarLinkPrestadorButtonProps) {
   const [open, setOpen] = useState(false);
   const [copiado, setCopiado] = useState(false);
   const [enviandoEvolution, setEnviandoEvolution] = useState(false);
   const [enviandoPin, setEnviandoPin] = useState(false);
+  const [enviandoContato, setEnviandoContato] = useState(false);
 
   // Usar posição do rastreador se disponível, senão usar origem
   const lat = rastreadorLat ?? origemLat;
@@ -171,6 +174,42 @@ Por favor, dirija-se ao local o mais rápido possível.`;
       toast.error(`Erro ao enviar: ${err.message}`);
     } finally {
       setEnviandoEvolution(false);
+    }
+  };
+
+  // Enviar cartão de contato do prestador para o associado
+  const handleEnviarContatoPrestador = async () => {
+    if (!prestadorNome || !prestadorTelefone || !associadoTelefone) {
+      toast.error('Dados do prestador ou telefone do associado incompletos');
+      return;
+    }
+
+    setEnviandoContato(true);
+    
+    try {
+      const telefoneFormatado = associadoTelefone.replace(/\D/g, '');
+      
+      const { error } = await supabase.functions.invoke('whatsapp-send-contact', {
+        body: {
+          telefone: telefoneFormatado,
+          contato: {
+            fullName: prestadorNome,
+            phoneNumber: prestadorTelefone,
+            organization: 'Prestador PRATICCAR',
+          },
+          referencia_tipo: 'chamado_assistencia',
+          referencia_id: chamadoId,
+        },
+      });
+
+      if (error) throw error;
+
+      toast.success('📇 Contato do prestador enviado ao associado!');
+    } catch (err: any) {
+      console.error('[EnviarLinkPrestadorButton] Erro ao enviar contato:', err);
+      toast.error(`Erro ao enviar contato: ${err.message}`);
+    } finally {
+      setEnviandoContato(false);
     }
   };
 
@@ -320,6 +359,21 @@ Por favor, dirija-se ao local o mais rápido possível.`;
             )}
             {enviandoEvolution ? 'Enviando...' : 'Enviar Texto'}
           </Button>
+          {associadoTelefone && prestadorNome && prestadorTelefone && (
+            <Button
+              variant="outline"
+              className="border-purple-500 text-purple-600 hover:bg-purple-50"
+              onClick={handleEnviarContatoPrestador}
+              disabled={enviandoContato}
+            >
+              {enviandoContato ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <User className="h-4 w-4 mr-2" />
+              )}
+              {enviandoContato ? 'Enviando...' : 'Enviar Contato ao Associado'}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
