@@ -1,328 +1,199 @@
 
-# Revisao Completa - Fluxo de Envio de Comandos para Rastreadores Softruck
+
+# Revisao Completa - Configuracao de Webhooks Softruck
 
 ## Resumo Executivo
 
 | Item | Status | Detalhes |
 |------|--------|----------|
-| Botao "Bloquear veiculo" no monitoramento | NAO IMPLEMENTADO | Nao existe na interface |
-| Botao "Desbloquear veiculo" | NAO IMPLEMENTADO | Nao existe na interface |
-| Comando em confirmacao de sinistro roubo/furto | PARCIALMENTE | Edge function `acionar-roubo-furto` apenas notifica |
-| Comando via Assistencia 24h com autorizacao | NAO IMPLEMENTADO | Nao existe integracao |
-| Historico de comandos antes de enviar | NAO IMPLEMENTADO | Nao ha tabela de comandos |
-| Confirmacao do usuario antes da acao | NAO IMPLEMENTADO | Nao ha dialogs de confirmacao |
-| Status do comando (pendente → enviado → confirmado) | NAO IMPLEMENTADO | Nao ha fluxo de status |
-| Gravacao de motivo e solicitante para auditoria | PARCIALMENTE | Apenas em acionamentos de roubo |
-| API Softruck para bloqueio | NAO DISPONIVEL | API publica nao suporta comandos |
+| Endpoint de webhook SGA | NAO EXISTE | Nenhuma Edge Function para receber webhooks Softruck |
+| Eventos DEVICES.ASSOCIATED | NAO IMPLEMENTADO | Nao ha handler para este evento |
+| Eventos DEVICES.DISASSOCIATED | NAO IMPLEMENTADO | Nao ha handler para este evento |
+| Eventos VEHICLES.CREATED | NAO IMPLEMENTADO | Nao ha handler para este evento |
+| Eventos VEHICLES.DELETED | NAO IMPLEMENTADO | Nao ha handler para este evento |
+| Eventos device-events | NAO IMPLEMENTADO | Nao ha handler para este evento |
+| Flag suporta_webhooks | TRUE | Configurado no banco mas nao implementado |
+| Tabela de logs webhook | NAO EXISTE | Nao ha tabela dedicada para webhooks Softruck |
+| Notificacoes para analista | NAO IMPLEMENTADO | Nao ha fluxo de notificacao |
+| Teste com evento simulado | NAO POSSIVEL | Sem endpoint para receber |
 
 ---
 
-## Analise Critica: API Softruck NAO Suporta Comandos de Bloqueio
+## Analise da Documentacao Softruck
 
-Apos analise da documentacao oficial da Softruck (`docs.apiary.softruck.com`), constatei que:
+Consultando a documentacao oficial `docs.apiary.softruck.com`, a API Softruck v2 suporta os seguintes webhooks:
 
-1. A **API publica v2** nao possui endpoints para comandos de bloqueio/desbloqueio
-2. Os comandos disponíveis na API sao apenas:
-   - Gestao de veiculos (CRUD)
-   - Gestao de dispositivos (CRUD)
-   - Rastreamento (tracking, trajectories)
-   - Usuarios e associacoes
-   - Service Orders
+### Eventos Disponiveis
 
-3. Segundo a documentacao de suporte Softruck, comandos de bloqueio sao enviados via **SMS direto ao dispositivo**:
-   - `RELAY,1#` - Bloquear veiculo
-   - `RELAY,0#` - Desbloquear veiculo
+| Categoria | Eventos | Descricao |
+|-----------|---------|-----------|
+| **service-orders-events** | Service order, Provider, Section, Custom fields, Completion, Acknowledgement | Eventos de ordens de servico |
+| **device-events** | Device association | Eventos quando device e associado/desassociado |
+| **vehicle-events** | Vehicles | Eventos de criacao/remocao de veiculos |
 
-4. A tabela `rastreadores_config_plataformas` ja reflete essa limitacao:
+### Estrutura de Webhooks na API
 
-```sql
-SELECT suporta_bloqueio FROM rastreadores_config_plataformas 
-WHERE plataforma = 'softruck';
--- Resultado: false
-```
+Os webhooks Softruck seguem o padrao de **Event Subscriptions**:
+- Configurados no painel Softruck ou via API
+- Enviam payloads para uma URL callback
+- Requerem resposta HTTP 200 para confirmar recebimento
 
 ---
 
 ## Situacao Atual no Sistema
 
-### 1. Interface de Monitoramento
-
-O arquivo `src/components/rastreadores/RastreadorDetailDrawer.tsx` nao possui botoes de bloquear/desbloquear:
-
-```text
-Acoes Rapidas disponiveis:
-- Manutencao (mudar status para manutencao)
-- Voltar Estoque (mudar status para estoque)
-- Desinstalar (mudar status para estoque)
-- Baixar (mudar status para baixado)
-- Redefinir Senha (para associado)
-
-NAO HA: Bloquear Veiculo / Desbloquear Veiculo
-```
-
-### 2. Edge Function de Acionamento de Roubo
-
-A `acionar-roubo-furto` **tenta** chamar endpoint de alertas, mas nao comandos:
-
-```typescript
-// Linhas 326-340 de acionar-roubo-furto/index.ts
-const response = await fetch(`${baseUrl}/alerts/theft`, {
-  method: "POST",
-  headers: { ... },
-  body: JSON.stringify({
-    vehicle_id: rastreador.plataforma_veiculo_id,
-    alert_type: "theft",
-    priority: "critical",
-  }),
-});
-```
-
-**NOTA:** O endpoint `/alerts/theft` nao existe na documentacao publica da Softruck.
-
-### 3. Tabela de Logs
-
-Existe `rastreadores_logs` com campos:
-- id, rastreador_id, plataforma, operacao
-- request, response, status
-- tempo_resposta_ms, erro_mensagem, created_at
-
-**Mas nao e usada para comandos** - apenas para sincronizacao e autenticacao.
-
-### 4. Tabela de Acionamentos
-
-Existe `acionamentos_roubo_furto` com fluxo completo de status:
-- status: solicitado → autorizado → enviado → confirmado/erro
-- solicitado_por, solicitado_por_nome, autorizado_por
-- observacoes, motivo_encerramento
-
----
-
-## Opcoes de Implementacao
-
-### Opcao A: Comando via SMS (Requer Integracao SMS)
-
-Para enviar comandos de bloqueio, seria necessario:
-1. Criar edge function `enviar-comando-rastreador`
-2. Integrar com servico de envio de SMS (Twilio, Vonage, etc.)
-3. Armazenar numero do chip em `rastreadores.chip_numero`
-4. Enviar comandos SMS padrao do dispositivo:
-   - `RELAY,1#` para bloquear
-   - `RELAY,0#` para desbloquear
-
-### Opcao B: API Proprietaria (Requer Contato Softruck)
-
-Verificar com suporte comercial Softruck se existe:
-1. API de comandos nao documentada publicamente
-2. Endpoint de outputs para dispositivos especificos
-3. Contrato enterprise com acesso a recursos adicionais
-
-### Opcao C: Implementar Fluxo Sem Integracao
-
-Criar interface de registro de comandos para:
-1. Registrar solicitacao de bloqueio manualmente
-2. Operador executa comando externamente (painel Softruck)
-3. Registrar confirmacao no sistema
-
----
-
-## Plano de Implementacao Recomendado
-
-Dado que a API Softruck nao suporta comandos de bloqueio, proponho implementar:
-
-### Fase 1: Criar Estrutura de Comandos no Banco
-
-**Nova tabela: `rastreadores_comandos`**
+### 1. Configuracao de Plataforma
 
 ```sql
-CREATE TABLE rastreadores_comandos (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  rastreador_id UUID REFERENCES rastreadores(id),
-  veiculo_id UUID REFERENCES veiculos(id),
-  plataforma VARCHAR(50),
-  tipo_comando VARCHAR(50), -- 'bloquear', 'desbloquear', 'localizar_agora'
-  origem VARCHAR(50), -- 'monitoramento', 'sinistro', 'assistencia', 'diretoria'
-  origem_id UUID, -- ID do sinistro ou chamado
-  solicitado_por UUID REFERENCES profiles(id),
-  solicitado_por_nome VARCHAR(255),
-  solicitado_em TIMESTAMPTZ DEFAULT NOW(),
-  autorizado_por UUID REFERENCES profiles(id),
-  autorizado_por_nome VARCHAR(255),
-  autorizado_em TIMESTAMPTZ,
-  status VARCHAR(50) DEFAULT 'pendente', -- 'pendente', 'autorizado', 'enviado', 'confirmado', 'erro', 'cancelado'
-  metodo_envio VARCHAR(50), -- 'api', 'sms', 'manual'
-  telefone_destino VARCHAR(20),
-  comando_enviado TEXT,
-  api_request JSONB,
-  api_response JSONB,
-  erro_mensagem TEXT,
-  confirmado_em TIMESTAMPTZ,
-  observacoes TEXT,
-  motivo TEXT NOT NULL, -- Obrigatorio para auditoria
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
+SELECT plataforma, suporta_webhooks FROM rastreadores_config_plataformas 
+WHERE plataforma = 'softruck';
+-- Resultado: suporta_webhooks = true
 ```
 
-### Fase 2: Criar Edge Function para Comandos
+A flag esta habilitada, mas nao ha implementacao correspondente.
 
-**Novo arquivo: `supabase/functions/enviar-comando-rastreador/index.ts`**
+### 2. Edge Functions Existentes
 
-Funcoes:
-- Validar autenticacao e permissoes
-- Verificar se plataforma suporta_bloqueio
-- Registrar comando na tabela antes de enviar
-- Para Softruck: registrar como "manual" (operador executa no painel)
-- Para plataformas com API: chamar endpoint
-- Atualizar status apos resposta
-- Criar alerta no sistema
-- Notificar equipe de monitoramento
+Nao existe nenhuma Edge Function para receber webhooks Softruck:
+- `softruck-api` - apenas chamadas outbound
+- `softruck-ativar-dispositivo` - apenas chamadas outbound
+- `sync-rastreadores` - apenas polling
 
-### Fase 3: Adicionar Botoes na Interface
+### 3. Tabelas de Log
 
-**Modificar: `src/components/rastreadores/RastreadorDetailDrawer.tsx`**
+A tabela `rastreadores_logs` existe mas nao e usada para webhooks:
+- Campos: rastreador_id, plataforma, operacao, request, response, status
+- Usada apenas para logs de sincronizacao e autenticacao
 
-```tsx
-// Adicionar na secao "Acoes Rapidas"
-{isInstalled && plataforma?.suporta_bloqueio && (
-  <>
-    <Button
-      variant="destructive"
-      size="sm"
-      onClick={() => setConfirmDialogOpen({ type: 'bloquear', open: true })}
-    >
-      <Lock className="mr-2 h-4 w-4" />
-      Bloquear Veiculo
-    </Button>
-    <Button
-      variant="outline"
-      size="sm"
-      onClick={() => setConfirmDialogOpen({ type: 'desbloquear', open: true })}
-    >
-      <Unlock className="mr-2 h-4 w-4" />
-      Desbloquear
-    </Button>
-  </>
-)}
-```
+### 4. Webhooks Similares no Sistema
 
-### Fase 4: Dialogo de Confirmacao com Motivo
-
-**Novo componente: `src/components/rastreadores/ComandoRastreadorDialog.tsx`**
-
-```tsx
-interface Props {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  tipoComando: 'bloquear' | 'desbloquear';
-  rastreador: Rastreador;
-  veiculo?: Veiculo;
-  onConfirm: (motivo: string) => Promise<void>;
-}
-
-// Campos:
-// - Tipo de comando (apenas exibicao)
-// - Placa do veiculo (apenas exibicao)
-// - Nome do associado (apenas exibicao)
-// - Motivo (obrigatorio, textarea)
-// - Checkbox de confirmacao
-// - Botoes: Cancelar / Confirmar
-```
-
-### Fase 5: Hook de Comandos
-
-**Novo arquivo: `src/hooks/useComandosRastreador.ts`**
-
-```typescript
-export function useEnviarComando() {
-  return useMutation({
-    mutationFn: async (data: {
-      rastreador_id: string;
-      tipo_comando: 'bloquear' | 'desbloquear';
-      motivo: string;
-      origem?: 'monitoramento' | 'sinistro' | 'assistencia';
-      origem_id?: string;
-    }) => {
-      const { data: response, error } = await supabase.functions.invoke(
-        'enviar-comando-rastreador',
-        { body: data }
-      );
-      if (error) throw error;
-      return response;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['comandos-rastreador'] });
-      toast({ title: 'Comando registrado' });
-    },
-  });
-}
-
-export function useHistoricoComandos(rastreadorId: string) {
-  return useQuery({
-    queryKey: ['comandos-rastreador', rastreadorId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('rastreadores_comandos')
-        .select('*, solicitante:profiles!solicitado_por(nome)')
-        .eq('rastreador_id', rastreadorId)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return data;
-    },
-  });
-}
-```
-
-### Fase 6: Integrar com Sinistro de Roubo
-
-**Modificar: `src/pages/eventos/SinistroDetalhe.tsx`**
-
-Adicionar botao "Bloquear Veiculo" na sidebar quando:
-- Tipo do sinistro = roubo ou furto
-- Veiculo possui rastreador instalado
-- Status do sinistro permite acao
-
-### Fase 7: Integrar com Assistencia 24h
-
-**Modificar pagina de chamados de assistencia** para:
-- Permitir solicitar bloqueio mediante autorizacao
-- Registrar fluxo de aprovacao
+O sistema ja possui webhooks implementados para outras integracoes:
+- `asaas-webhook` - Recebe eventos de pagamento do ASAAS
+- `autentique-webhook` - Recebe eventos de assinatura do Autentique
+- `leads-webhook` - Recebe leads via API
+- `whatsapp-webhook` - Recebe mensagens do WhatsApp
 
 ---
 
-## Fluxo Completo Proposto
+## Plano de Implementacao
 
-```text
-1. Analista clica "Bloquear Veiculo"
-   |
-   v
-2. Dialog de confirmacao abre
-   - Exibe dados do veiculo/associado
-   - Campo OBRIGATORIO de motivo
-   - Checkbox de confirmacao
-   |
-   v
-3. Registro ANTES de enviar
-   - Insere em rastreadores_comandos
-   - Status = 'pendente'
-   - Grava solicitante + motivo
-   |
-   v
-4. Verificacao de plataforma
-   - Se suporta_bloqueio = true → Envia via API
-   - Se suporta_bloqueio = false → Marca como 'manual'
-   |
-   v
-5. Atualizacao de status
-   - 'enviado' → Comando em processamento
-   - 'confirmado' → API retornou sucesso
-   - 'erro' → Falha no envio
-   |
-   v
-6. Notificacoes
-   - Alerta no sistema
-   - Notificacao para monitoramento
-   - Log de auditoria
+### Fase 1: Criar Tabela de Eventos Softruck
+
+**Nova tabela: `softruck_eventos`**
+
+```sql
+CREATE TABLE softruck_eventos (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  evento_tipo VARCHAR(100) NOT NULL,
+  evento_acao VARCHAR(50),
+  payload JSONB NOT NULL,
+  device_id VARCHAR(50),
+  vehicle_id VARCHAR(50),
+  rastreador_id UUID REFERENCES rastreadores(id),
+  veiculo_id UUID REFERENCES veiculos(id),
+  processado BOOLEAN DEFAULT FALSE,
+  processado_em TIMESTAMPTZ,
+  erro_processamento TEXT,
+  ip_origem VARCHAR(50),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_softruck_eventos_tipo ON softruck_eventos(evento_tipo);
+CREATE INDEX idx_softruck_eventos_created ON softruck_eventos(created_at DESC);
+CREATE INDEX idx_softruck_eventos_rastreador ON softruck_eventos(rastreador_id);
 ```
+
+### Fase 2: Criar Edge Function de Webhook
+
+**Novo arquivo: `supabase/functions/softruck-webhook/index.ts`**
+
+```typescript
+// Funcionalidades:
+// - Validar origem do webhook (IP ou token)
+// - Parsear payload conforme tipo de evento
+// - Registrar na tabela softruck_eventos
+// - Processar evento e atualizar entidades
+// - Gerar alertas para eventos criticos
+// - Notificar analistas quando necessario
+```
+
+### Fase 3: Handlers por Tipo de Evento
+
+**DEVICES.ASSOCIATED** - Quando device e associado a veiculo:
+```typescript
+async function handleDeviceAssociated(payload) {
+  // 1. Buscar rastreador pelo device_id
+  // 2. Atualizar plataforma_veiculo_id no rastreador
+  // 3. Registrar historico
+  // 4. Notificar equipe se necessario
+}
+```
+
+**DEVICES.DISASSOCIATED** - Quando device e removido:
+```typescript
+async function handleDeviceDisassociated(payload) {
+  // 1. Buscar rastreador pelo device_id
+  // 2. Limpar plataforma_veiculo_id
+  // 3. Gerar alerta CRITICO (desinstalacao nao autorizada?)
+  // 4. Notificar monitoramento IMEDIATAMENTE
+}
+```
+
+**VEHICLES.CREATED** - Quando veiculo e criado:
+```typescript
+async function handleVehicleCreated(payload) {
+  // 1. Verificar se existe veiculo local com mesma placa
+  // 2. Atualizar id_plataforma_veiculo se encontrar
+  // 3. Registrar log
+}
+```
+
+**VEHICLES.DELETED** - Quando veiculo e removido:
+```typescript
+async function handleVehicleDeleted(payload) {
+  // 1. Buscar veiculos com este id_plataforma
+  // 2. Gerar alerta CRITICO
+  // 3. Notificar equipe de operacoes
+}
+```
+
+**device-events** - Eventos de status do device:
+```typescript
+async function handleDeviceEvent(payload) {
+  // 1. Atualizar status do rastreador
+  // 2. Registrar mudanca de status
+  // 3. Alertar se status critico (offline, bateria baixa, etc)
+}
+```
+
+### Fase 4: Sistema de Alertas
+
+Para eventos criticos, gerar alertas automaticos:
+
+| Evento | Severidade | Acao |
+|--------|------------|------|
+| DEVICES.DISASSOCIATED | CRITICA | Notificar monitoramento + push + email |
+| VEHICLES.DELETED | ALTA | Notificar operacoes + registrar auditoria |
+| device-events (offline) | MEDIA | Registrar + incluir em dashboard |
+| device-events (bateria < 20%) | MEDIA | Notificar monitoramento |
+
+### Fase 5: Log Completo de Webhooks
+
+Todos os webhooks recebidos serao registrados:
+1. Payload completo em JSONB
+2. IP de origem
+3. Timestamp
+4. Status de processamento
+5. Erro (se houver)
+
+### Fase 6: Interface de Visualizacao
+
+Adicionar na pagina de configuracao de plataformas:
+- Card mostrando "Webhooks Softruck"
+- Lista dos ultimos eventos recebidos
+- Filtros por tipo de evento
+- Status de processamento
+- Botao para reprocessar eventos com erro
 
 ---
 
@@ -330,33 +201,120 @@ Adicionar botao "Bloquear Veiculo" na sidebar quando:
 
 | Arquivo | Descricao |
 |---------|-----------|
-| `supabase/functions/enviar-comando-rastreador/index.ts` | Edge function de comandos |
-| `src/hooks/useComandosRastreador.ts` | Hooks React Query |
-| `src/components/rastreadores/ComandoRastreadorDialog.tsx` | Dialogo de confirmacao |
-| `src/components/rastreadores/HistoricoComandos.tsx` | Lista de comandos enviados |
+| `supabase/functions/softruck-webhook/index.ts` | Edge Function para receber webhooks |
+| `src/components/rastreadores/SoftruckWebhooksPanel.tsx` | Painel de visualizacao de eventos |
+| `src/hooks/useSoftruckEventos.ts` | Hook para listar eventos |
 
 ## Arquivos a Modificar
 
 | Arquivo | Alteracoes |
 |---------|------------|
-| `src/components/rastreadores/RastreadorDetailDrawer.tsx` | Adicionar botoes Bloquear/Desbloquear |
-| `src/pages/eventos/SinistroDetalhe.tsx` | Adicionar botao de bloqueio em sinistros de roubo |
-| `supabase/config.toml` | Registrar nova edge function |
+| `supabase/config.toml` | Adicionar config da nova edge function |
+| `src/pages/monitoramento/ConfigPlataformas.tsx` | Adicionar painel de webhooks |
 
-## Migracao SQL
+## SQL Migration
 
-Uma migracao sera necessaria para criar a tabela `rastreadores_comandos`.
+Criar tabela `softruck_eventos` com indices.
 
 ---
 
-## Consideracao Importante
+## Configuracao no Painel Softruck
 
-Para a plataforma Softruck especificamente, como a API publica nao suporta comandos de bloqueio:
+Apos implementacao no SGA, sera necessario configurar no painel Softruck:
 
-1. Os botoes serao exibidos apenas se `suporta_bloqueio = true` na config da plataforma
-2. Atualmente Softruck esta com `suporta_bloqueio = false`
-3. Para habilitar, e necessario:
-   - Verificar com Softruck se existe API de comandos (contrato enterprise)
-   - Ou implementar envio de comandos via SMS (requer servico SMS)
+1. **Acessar**: Painel Softruck > Configuracoes > Webhooks
+2. **URL do Webhook**: 
+   ```
+   https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/softruck-webhook
+   ```
+3. **Eventos a Assinar**:
+   - [x] DEVICES.ASSOCIATED
+   - [x] DEVICES.DISASSOCIATED
+   - [x] VEHICLES.CREATED
+   - [x] VEHICLES.DELETED
+   - [x] device-events
+4. **Autenticacao**: Configurar header `x-webhook-secret` (opcional)
 
-Se desejar, posso implementar o fluxo completo de forma que esteja pronto para quando a integracao de comandos estiver disponivel.
+---
+
+## Estrutura do Webhook Endpoint
+
+```
+URL: https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/softruck-webhook
+
+Metodo: POST
+
+Headers:
+- Content-Type: application/json
+- x-webhook-secret: (opcional, para validacao)
+
+Body (exemplo DEVICES.ASSOCIATED):
+{
+  "event": "DEVICES.ASSOCIATED",
+  "timestamp": "2026-01-29T12:00:00Z",
+  "data": {
+    "device": {
+      "id": "abc123",
+      "imei": "123456789012345"
+    },
+    "vehicle": {
+      "id": "xyz789",
+      "plate": "ABC1234"
+    }
+  }
+}
+
+Response esperada:
+- 200 OK: Evento processado
+- 400 Bad Request: Payload invalido
+- 401 Unauthorized: Token invalido
+- 500 Internal Error: Erro de processamento
+```
+
+---
+
+## Teste com Evento Simulado
+
+Apos implementacao, testar com curl:
+
+```bash
+curl -X POST \
+  'https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/softruck-webhook' \
+  -H 'Content-Type: application/json' \
+  -H 'x-webhook-secret: SEU_SECRET' \
+  -d '{
+    "event": "DEVICES.ASSOCIATED",
+    "timestamp": "2026-01-29T12:00:00Z",
+    "data": {
+      "device": { "id": "abc123", "imei": "123456789012345" },
+      "vehicle": { "id": "xyz789", "plate": "ABC1234" }
+    }
+  }'
+```
+
+---
+
+## Checklist de Implementacao
+
+- [ ] Criar tabela `softruck_eventos`
+- [ ] Criar Edge Function `softruck-webhook`
+- [ ] Implementar handler para DEVICES.ASSOCIATED
+- [ ] Implementar handler para DEVICES.DISASSOCIATED
+- [ ] Implementar handler para VEHICLES.CREATED
+- [ ] Implementar handler para VEHICLES.DELETED
+- [ ] Implementar handler para device-events
+- [ ] Registrar todos eventos em log
+- [ ] Gerar alertas para eventos criticos
+- [ ] Notificar analistas quando necessario
+- [ ] Testar com evento simulado
+- [ ] Configurar webhook no painel Softruck
+
+---
+
+## Bloqueador
+
+Antes de configurar o webhook no painel Softruck:
+1. A `SOFTRUCK_PUBLIC_KEY` deve estar valida (problema identificado anteriormente)
+2. A Edge Function deve estar deployada e acessivel
+3. O secret de validacao (se usado) deve ser configurado em ambos os lados
+
