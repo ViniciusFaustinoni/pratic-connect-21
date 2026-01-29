@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { Save, Server, Check, AlertCircle, Loader2 } from 'lucide-react';
+import { Save, Server, Check, AlertCircle, Loader2, Webhook, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,6 +12,8 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -20,10 +22,18 @@ interface FormData {
   instance_name: string;
 }
 
+interface WebhookStatus {
+  enabled: boolean;
+  url: string | null;
+}
+
 export function ConfiguracaoEvolutionURL() {
   const [loading, setLoading] = useState(false);
   const [loadingConfig, setLoadingConfig] = useState(true);
+  const [loadingWebhook, setLoadingWebhook] = useState(false);
   const [urlAtual, setUrlAtual] = useState('');
+  const [webhookStatus, setWebhookStatus] = useState<WebhookStatus>({ enabled: false, url: null });
+  const [instanciaId, setInstanciaId] = useState<string | null>(null);
   
   const { register, handleSubmit, setValue, formState: { errors } } = useForm<FormData>({
     defaultValues: {
@@ -37,7 +47,7 @@ export function ConfiguracaoEvolutionURL() {
       try {
         const { data } = await supabase
           .from('whatsapp_instancias')
-          .select('api_url, instance_name')
+          .select('id, api_url, instance_name, webhook_enabled, webhook_url')
           .eq('principal', true)
           .maybeSingle();
         
@@ -45,6 +55,11 @@ export function ConfiguracaoEvolutionURL() {
           setValue('api_url', data.api_url || '');
           setValue('instance_name', data.instance_name || 'sga-pratic');
           setUrlAtual(data.api_url || '');
+          setInstanciaId(data.id);
+          setWebhookStatus({
+            enabled: data.webhook_enabled || false,
+            url: data.webhook_url || null
+          });
         }
       } catch (error) {
         console.error('Erro ao carregar config:', error);
@@ -81,8 +96,9 @@ export function ConfiguracaoEvolutionURL() {
           .eq('id', existente.id);
         
         if (error) throw error;
+        setInstanciaId(existente.id);
       } else {
-        const { error } = await supabase
+        const { data: newData, error } = await supabase
           .from('whatsapp_instancias')
           .insert({
             nome: 'Principal',
@@ -93,9 +109,12 @@ export function ConfiguracaoEvolutionURL() {
             status: 'disconnected',
             webhook_enabled: false,
             webhook_events: [],
-          });
+          })
+          .select('id')
+          .single();
         
         if (error) throw error;
+        if (newData) setInstanciaId(newData.id);
       }
 
       setUrlAtual(urlLimpa);
@@ -104,6 +123,35 @@ export function ConfiguracaoEvolutionURL() {
       toast.error(error.message || 'Erro ao salvar configuração');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const configurarWebhook = async () => {
+    if (!instanciaId) {
+      toast.error('Configure a URL da Evolution API primeiro');
+      return;
+    }
+
+    setLoadingWebhook(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('whatsapp-set-webhook', {
+        body: { instancia_id: instanciaId }
+      });
+
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error || 'Erro ao configurar webhook');
+
+      setWebhookStatus({
+        enabled: true,
+        url: data.webhook_url
+      });
+
+      toast.success('Webhook configurado com sucesso!');
+    } catch (error: any) {
+      console.error('Erro ao configurar webhook:', error);
+      toast.error(error.message || 'Erro ao configurar webhook');
+    } finally {
+      setLoadingWebhook(false);
     }
   };
 
@@ -128,7 +176,7 @@ export function ConfiguracaoEvolutionURL() {
           Configure a URL da sua instância Evolution API
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-6">
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="api_url">URL da Evolution API *</Label>
@@ -161,18 +209,18 @@ export function ConfiguracaoEvolutionURL() {
           </div>
 
           {urlAtual && (
-            <Alert className="border-green-500/50 bg-green-500/10">
-              <Check className="h-4 w-4 text-green-600" />
-              <AlertDescription className="text-green-700 dark:text-green-400">
+            <Alert className="border-primary/50 bg-primary/10">
+              <Check className="h-4 w-4 text-primary" />
+              <AlertDescription className="text-foreground">
                 URL configurada: {urlAtual}
               </AlertDescription>
             </Alert>
           )}
 
           {!urlAtual && (
-            <Alert variant="destructive" className="border-amber-500/50 bg-amber-500/10">
-              <AlertCircle className="h-4 w-4 text-amber-600" />
-              <AlertDescription className="text-amber-700 dark:text-amber-400">
+            <Alert variant="destructive" className="border-destructive/50 bg-destructive/10">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
                 URL não configurada. Configure para habilitar o WhatsApp.
               </AlertDescription>
             </Alert>
@@ -187,6 +235,53 @@ export function ConfiguracaoEvolutionURL() {
             {loading ? 'Salvando...' : 'Salvar Configuração'}
           </Button>
         </form>
+
+        {urlAtual && (
+          <>
+            <Separator />
+
+            {/* Seção do Webhook */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Webhook className="h-4 w-4 text-muted-foreground" />
+                  <span className="font-medium text-sm">Status do Webhook</span>
+                </div>
+                <Badge variant={webhookStatus.enabled ? 'default' : 'secondary'}>
+                  {webhookStatus.enabled ? 'Configurado' : 'Não Configurado'}
+                </Badge>
+              </div>
+
+              {webhookStatus.enabled && webhookStatus.url && (
+                <div className="p-3 rounded-md bg-muted/50 space-y-1">
+                  <p className="text-xs text-muted-foreground">URL do Webhook:</p>
+                  <p className="text-xs font-mono break-all">{webhookStatus.url}</p>
+                </div>
+              )}
+
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Button 
+                  variant={webhookStatus.enabled ? 'outline' : 'default'}
+                  size="sm"
+                  onClick={configurarWebhook}
+                  disabled={loadingWebhook}
+                >
+                  {loadingWebhook ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                  )}
+                  {webhookStatus.enabled ? 'Reconfigurar Webhook' : 'Configurar Webhook'}
+                </Button>
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                O webhook é configurado automaticamente ao conectar o WhatsApp. 
+                Use o botão acima caso precise reconfigurar manualmente.
+              </p>
+            </div>
+          </>
+        )}
       </CardContent>
     </Card>
   );

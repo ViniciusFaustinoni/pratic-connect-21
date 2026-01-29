@@ -231,6 +231,9 @@ verify_jwt = false
 [functions.whatsapp-webhook]
 verify_jwt = false
 
+[functions.whatsapp-set-webhook]
+verify_jwt = false
+
 [functions.whatsapp-send-text]
 verify_jwt = false
 
