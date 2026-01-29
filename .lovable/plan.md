@@ -1,150 +1,71 @@
 
-
-# Revisao Completa - Fluxo de Envio de Localizacao via Evolution API
+# Revisao Completa - Fluxo de Envio de Contatos via Evolution API
 
 ## Resumo Executivo
 
 | Cenario | Status | Implementacao Atual | Problema |
 |---------|--------|---------------------|----------|
-| Prestador precisa da localizacao do veiculo | **NAO IMPLEMENTADO** | Envia texto com link Google Maps | NAO usa sendLocation |
-| Associado solicita guincho e informa localizacao | **NAO IMPLEMENTADO** | Envia texto com link Google Maps | NAO usa sendLocation |
-| Compartilhamento de posicao do rastreador | **NAO IMPLEMENTADO** | Nenhum | Funcionalidade nao existe |
-| Instalador precisa do endereco de instalacao | **NAO IMPLEMENTADO** | Usa wa.me com texto | NAO usa sendLocation |
+| Associado solicita contato do guincho/prestador | **NAO IMPLEMENTADO** | Nenhum | Contato nao e enviado como cartao VCard |
+| Passar contato da central de atendimento | **NAO IMPLEMENTADO** | Nenhum | Central informada apenas como texto |
+| IA envia contato do prestador | **NAO IMPLEMENTADO** | Nenhum | Tool nao existe |
+| Tracking exibe contato do prestador | **PARCIAL** | Mostra nome/telefone | Nao permite salvar diretamente |
 
-**Conclusao:** O endpoint `POST /message/sendLocation/{instanceName}` da Evolution API **NAO esta sendo utilizado em nenhum momento** no sistema. Todas as localizacoes sao enviadas como texto contendo links do Google Maps, perdendo os beneficios do pin nativo do WhatsApp.
+**Conclusao:** O endpoint `POST /message/sendContact/{instanceName}` da Evolution API **NAO esta sendo utilizado**. Contatos sao compartilhados apenas como texto, perdendo o beneficio de permitir que o destinatario salve o contato diretamente no celular.
 
 ---
 
-## Analise Detalhada
+## Formato do Endpoint Evolution API
 
-### 1. Prestador de Assistencia 24h Precisa da Localizacao do Veiculo
+Baseado na documentacao oficial da Evolution API:
 
-**STATUS: NAO IMPLEMENTADO**
+### Request
 
-**Arquivo:** `src/components/assistencia/EnviarLinkPrestadorButton.tsx`
-
-O componente atual envia apenas texto com link do Google Maps:
-
-```typescript
-// Linhas 69-82
-const mensagem = `🚨 *CHAMADO DE ASSISTÊNCIA*
-...
-🗺️ *Ver no Mapa:*
-${linkGoogleMaps || 'Link não disponível'}
-...`;
-
-// Linha 96-101 - Envia via whatsapp-send-text (apenas texto)
-const { data, error } = await supabase.functions.invoke('whatsapp-send-text', {
-  body: {
-    telefone: telefoneFormatado,
-    mensagem: mensagem,  // TEXTO com link, nao localizacao nativa
-  },
-});
+```
+POST /message/sendContact/{instanceName}
 ```
 
-**Gap:** Deveria usar `sendLocation` para enviar pin interativo + texto com detalhes.
-
----
-
-### 2. Associado Solicita Guincho e Informa Localizacao
-
-**STATUS: NAO IMPLEMENTADO**
-
-**Arquivo:** `supabase/functions/criar-chamado-assistencia/index.ts`
-
-Ao criar chamado, o sistema envia WhatsApp para a central apenas com texto:
-
-```typescript
-// Linhas 351-370
-const mensagemCentral = `🚨 *NOVO CHAMADO DE ASSISTÊNCIA*
-...
-📍 *Local:* ${payload.endereco || enderecoData.endereco}
-🗺️ *Ver no Mapa:* ${linkMapa}
-...`;
-
-// Linha 373-381 - Usa whatsapp-send-media com tipo 'text' (incorreto)
-await supabaseAdmin.functions.invoke('whatsapp-send-media', {
-  body: {
-    telefone: telefoneCentral.replace(/\D/g, ''),
-    tipo: 'text',  // TEXTO, nao localizacao
-    mensagem: mensagemCentral,
-    ...
-  },
-});
-```
-
-**Gap:** A central recebe apenas texto com link. Deveria receber pin nativo do WhatsApp para facilitar navegacao.
-
----
-
-### 3. Compartilhamento de Posicao do Rastreador
-
-**STATUS: NAO IMPLEMENTADO**
-
-Nao existe funcionalidade no sistema para compartilhar a posicao do rastreador via WhatsApp com pin nativo. As opcoes atuais sao:
-
-- Ver posicao no mapa interno do app
-- Ver link no Google Maps (texto)
-
-**Gap:** Deveria permitir enviar posicao do rastreador como pin nativo do WhatsApp para:
-- Associado acompanhar veiculo
-- Prestador localizar veiculo
-- Central monitorar em tempo real
-
----
-
-### 4. Instalador Precisa do Endereco de Instalacao
-
-**STATUS: NAO IMPLEMENTADO**
-
-**Arquivo:** `src/components/instalador/InstalacaoCard.tsx`
-
-O componente abre wa.me com mensagem de texto:
-
-```typescript
-// Linhas 38-45
-const handleWhatsApp = () => {
-  if (!telefone) return;
-  const numero = telefone.replace(/\D/g, '');
-  const mensagem = encodeURIComponent(
-    `Olá ${instalacao.associados?.nome}, sou o instalador da PRATIC...`
-  );
-  window.open(`https://wa.me/55${numero}?text=${mensagem}`, '_blank');
-};
-```
-
-**Gap:** O instalador nao recebe endereco como pin. Abre apenas Google Maps via link separado.
-
----
-
-## Edge Function Necessaria: whatsapp-send-location
-
-A Evolution API suporta o endpoint `POST /message/sendLocation/{instanceName}` com o seguinte payload:
+### Payload
 
 ```json
 {
   "number": "5599999999999",
-  "name": "Palácio da Liberdade",
-  "address": "Praça da Liberdade, Belo Horizonte, MG 30140-050",
-  "latitude": -19.93359,
-  "longitude": -43.93851
+  "contact": [
+    {
+      "fullName": "Guilherme Gomes",
+      "wuid": "5531982960001",
+      "phoneNumber": "+55 31 98296-0001",
+      "organization": "Guincho 24h",
+      "email": "contato@guincho.com.br",
+      "url": ""
+    }
+  ]
 }
 ```
 
-**Resposta esperada:**
+### Campos
+
+| Campo | Tipo | Obrigatorio | Descricao |
+|-------|------|-------------|-----------|
+| `fullName` | string | Sim | Nome completo do contato (aparece no cartao) |
+| `wuid` | string | Sim | WhatsApp User ID (numero no formato 5511999999999) |
+| `phoneNumber` | string | Nao | Numero formatado para exibicao (+55 11 99999-9999) |
+| `organization` | string | Nao | Empresa/organizacao |
+| `email` | string | Nao | Email do contato |
+| `url` | string | Nao | Site/URL do contato |
+
+### Resposta Esperada
+
 ```json
 {
   "key": {
-    "remoteJid": "553198296801@s.whatsapp.net",
+    "remoteJid": "5531982960001@s.whatsapp.net",
     "fromMe": true,
-    "id": "BAE51B6FF4470AF9"
+    "id": "BAE58DA6CBC941BC"
   },
   "message": {
-    "locationMessage": {
-      "degreesLatitude": -19.93359,
-      "degreesLongitude": -43.93851,
-      "name": "Palácio da Liberdade",
-      "address": "Praça da Liberdade, Belo Horizonte, MG 30140-050"
+    "contactMessage": {
+      "displayName": "Guilherme Gomes",
+      "vcard": "BEGIN:VCARD\nVERSION:3.0\nN:Guilherme Gomes\nFN:Guilherme Gomes\nORG:Guincho 24h;\nEMAIL:contato@guincho.com.br\nTEL;waid=5531982960001:+55 31 98296-0001\nEND:VCARD"
     }
   }
 }
@@ -152,247 +73,252 @@ A Evolution API suporta o endpoint `POST /message/sendLocation/{instanceName}` c
 
 ---
 
+## Gaps Identificados
+
+### Gap 1: Associado Solicita Contato do Prestador
+
+Quando um chamado de assistencia e criado e um prestador e atribuido, o associado deveria poder receber o contato do prestador como cartao VCard para salvar diretamente no celular.
+
+**Fluxo atual:** Apenas texto com nome e telefone.
+**Fluxo ideal:** Enviar cartao VCard que permite "Adicionar aos Contatos".
+
+### Gap 2: Central de Atendimento como Contato
+
+Ao criar chamados ou em situacoes de emergencia, o sistema deveria enviar o contato da central (0800 ou numero fixo) como cartao salvavel.
+
+**Fluxo atual:** Apenas texto com numero.
+**Fluxo ideal:** Cartao VCard da "Central PRATICCAR 24h".
+
+### Gap 3: IA Nao Pode Enviar Contatos
+
+A IA no WhatsApp Webhook nao possui tool para enviar contatos quando o associado pergunta "qual o telefone do guincho?" ou "como falo com a central?".
+
+### Gap 4: Tracking Publico Nao Envia Contato
+
+A pagina `TrackingAssistencia.tsx` exibe nome e telefone do prestador, mas nao oferece opcao de salvar como contato via WhatsApp.
+
+---
+
 ## Plano de Implementacao
 
-### Fase 1: Criar Edge Function whatsapp-send-location
+### Fase 1: Criar Edge Function whatsapp-send-contact
 
-**Novo arquivo:** `supabase/functions/whatsapp-send-location/index.ts`
+**Novo arquivo:** `supabase/functions/whatsapp-send-contact/index.ts`
 
 ```typescript
-interface SendLocationPayload {
-  telefone: string;
-  latitude: number;
-  longitude: number;
-  name?: string;        // Nome do local (aparece em negrito)
-  address?: string;     // Endereco (aparece abaixo do nome)
+interface SendContactPayload {
+  telefone: string;              // Destinatario
+  contato: {
+    fullName: string;            // Nome completo (obrigatorio)
+    wuid?: string;               // WhatsApp ID (se nao informado, usa phoneNumber)
+    phoneNumber: string;         // Telefone formatado
+    organization?: string;       // Empresa
+    email?: string;              // Email
+  };
   instancia_id?: string;
   referencia_tipo?: string;
   referencia_id?: string;
 }
 
-// Handler principal
 serve(async (req) => {
   // 1. Validar payload
   // 2. Buscar instancia ativa
   // 3. Verificar status da conexao
-  // 4. Formatar telefone (55 + numero)
-  // 5. Chamar Evolution API: POST /message/sendLocation/{instanceName}
-  // 6. Registrar em whatsapp_mensagens com tipo 'location'
+  // 4. Formatar wuid (remover caracteres, garantir formato 5599999999999)
+  // 5. Chamar Evolution API: POST /message/sendContact/{instanceName}
+  // 6. Registrar em whatsapp_mensagens com tipo 'contact'
   // 7. Retornar resultado
 });
 ```
 
-**Parametros obrigatorios:**
-- `telefone`: Numero do destinatario
-- `latitude`: Latitude (float)
-- `longitude`: Longitude (float)
-
-**Parametros opcionais:**
-- `name`: Nome do local (se nao informado, buscar via reverse geocoding)
-- `address`: Endereco formatado (se nao informado, buscar via reverse geocoding)
+**Validacoes:**
+- `fullName`: Obrigatorio, max 200 caracteres
+- `phoneNumber`: Obrigatorio, sera convertido para wuid se nao informado
+- `wuid`: Formato 55 + DDD + numero (sem caracteres especiais)
 
 ---
 
-### Fase 2: Integrar no EnviarLinkPrestadorButton
+### Fase 2: Adicionar Tool na IA (WhatsApp Webhook)
+
+**Modificar:** `supabase/functions/whatsapp-webhook/index.ts`
+
+Adicionar nova tool para IA enviar contatos:
+
+```typescript
+// Na lista de tools
+{
+  type: "function",
+  function: {
+    name: "enviar_contato_central",
+    description: "Envia o cartão de contato da Central de Atendimento PRATICCAR. Use quando o associado perguntar o telefone da central ou como entrar em contato.",
+    parameters: { type: "object", properties: {}, required: [] },
+  },
+},
+{
+  type: "function",
+  function: {
+    name: "enviar_contato_prestador",
+    description: "Envia o cartão de contato do prestador de serviço (guincho, chaveiro, etc.) do chamado de assistência ativo. Use quando o associado quiser o contato do guincho/prestador.",
+    parameters: { type: "object", properties: {}, required: [] },
+  },
+},
+```
+
+**Implementacao das tools:**
+
+```typescript
+case "enviar_contato_central": {
+  // Buscar telefone da central nas configuracoes
+  const { data: config } = await supabase
+    .from("configuracoes")
+    .select("valor")
+    .eq("chave", "assistencia_telefone_central")
+    .maybeSingle();
+
+  const telefoneCentral = config?.valor || "08001234567";
+  const wuid = telefoneCentral.replace(/\D/g, '');
+
+  // Enviar contato
+  await supabase.functions.invoke('whatsapp-send-contact', {
+    body: {
+      telefone: telefone,
+      contato: {
+        fullName: "Central PRATICCAR 24h",
+        wuid: wuid.startsWith('55') ? wuid : `55${wuid}`,
+        phoneNumber: telefoneCentral,
+        organization: "PRATICCAR Proteção Veicular",
+      },
+    },
+  });
+
+  return JSON.stringify({
+    success: true,
+    message: "Pronto! O cartão de contato da Central foi enviado. Você pode salvá-lo diretamente no seu celular! 📇"
+  });
+}
+
+case "enviar_contato_prestador": {
+  // Buscar chamado ativo com prestador
+  const { data: chamados } = await supabase
+    .from("chamados_assistencia")
+    .select("id, protocolo, prestador_nome, prestador_telefone, tipo_servico")
+    .eq("associado_id", associadoId)
+    .in("status", ["aguardando_prestador", "prestador_despachado", "prestador_a_caminho", "em_atendimento"])
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  const chamado = chamados?.[0];
+
+  if (!chamado) {
+    return JSON.stringify({
+      success: false,
+      message: "Você não tem chamados de assistência ativos no momento."
+    });
+  }
+
+  if (!chamado.prestador_nome || !chamado.prestador_telefone) {
+    return JSON.stringify({
+      success: false,
+      message: "O prestador ainda não foi atribuído ao seu chamado. Aguarde alguns minutos."
+    });
+  }
+
+  const wuid = chamado.prestador_telefone.replace(/\D/g, '');
+
+  await supabase.functions.invoke('whatsapp-send-contact', {
+    body: {
+      telefone: telefone,
+      contato: {
+        fullName: chamado.prestador_nome,
+        wuid: wuid.startsWith('55') ? wuid : `55${wuid}`,
+        phoneNumber: chamado.prestador_telefone,
+        organization: "Prestador PRATICCAR",
+      },
+      referencia_tipo: "chamado_assistencia",
+      referencia_id: chamado.id,
+    },
+  });
+
+  return JSON.stringify({
+    success: true,
+    message: `Pronto! O cartão de contato do ${chamado.prestador_nome} foi enviado. Você pode salvá-lo e ligar diretamente! 📇`
+  });
+}
+```
+
+---
+
+### Fase 3: Enviar Contato do Prestador ao Associado Automaticamente
+
+**Modificar:** `supabase/functions/criar-chamado-assistencia/index.ts` (ou criar trigger)
+
+Quando um prestador for atribuido ao chamado, enviar automaticamente seu contato:
+
+```typescript
+// Quando prestador for atribuido (evento de update do chamado)
+if (prestadorNome && prestadorTelefone && associadoWhatsApp) {
+  // Enviar texto informando
+  await supabase.functions.invoke('whatsapp-send-text', {
+    body: {
+      telefone: associadoWhatsApp.replace(/\D/g, ''),
+      mensagem: `✅ *Prestador a Caminho!*\n\n${prestadorNome} foi acionado e está a caminho do local.\n\nEstamos enviando o contato dele para você.`,
+    },
+  });
+
+  // Enviar cartao de contato
+  await supabase.functions.invoke('whatsapp-send-contact', {
+    body: {
+      telefone: associadoWhatsApp.replace(/\D/g, ''),
+      contato: {
+        fullName: prestadorNome,
+        phoneNumber: prestadorTelefone,
+        organization: "Prestador PRATICCAR",
+      },
+      referencia_tipo: "chamado_assistencia",
+      referencia_id: chamadoId,
+    },
+  });
+}
+```
+
+---
+
+### Fase 4: Adicionar Botao no EnviarLinkPrestadorButton
 
 **Modificar:** `src/components/assistencia/EnviarLinkPrestadorButton.tsx`
 
-Adicionar botao "Enviar Pin" que usa a nova edge function:
+Adicionar opcao para enviar contato do prestador como VCard:
 
 ```typescript
-const handleEnviarPinLocation = async () => {
-  if (!prestadorTelefone || !lat || !lng) {
-    toast.error('Dados insuficientes');
+// Novo botao para enviar contato
+const handleEnviarContato = async () => {
+  if (!prestadorNome || !prestadorTelefone) {
+    toast.error('Dados do prestador incompletos');
     return;
   }
 
-  setEnviandoEvolution(true);
+  setEnviandoContato(true);
   
   try {
-    // 1. Primeiro enviar o PIN de localizacao
-    const { error: locationError } = await supabase.functions.invoke('whatsapp-send-location', {
+    const { error } = await supabase.functions.invoke('whatsapp-send-contact', {
       body: {
-        telefone: prestadorTelefone.replace(/\D/g, ''),
-        latitude: lat,
-        longitude: lng,
-        name: `Chamado #${protocolo}`,
-        address: origemEndereco || 'Localização do veículo',
-        referencia_tipo: 'chamado_assistencia',
+        telefone: associadoTelefone.replace(/\D/g, ''),
+        contato: {
+          fullName: prestadorNome,
+          phoneNumber: prestadorTelefone,
+          organization: "Prestador PRATICCAR",
+        },
+        referencia_tipo: "chamado_assistencia",
         referencia_id: chamadoId,
       },
     });
 
-    if (locationError) throw locationError;
-
-    // 2. Depois enviar mensagem com detalhes (opcional)
-    await supabase.functions.invoke('whatsapp-send-text', {
-      body: {
-        telefone: prestadorTelefone.replace(/\D/g, ''),
-        mensagem: mensagem.replace(/🗺️.*\n/g, ''), // Remove link do Maps
-      },
-    });
-
-    toast.success('📍 Localização enviada!');
-    setOpen(false);
-  } catch (err: any) {
-    toast.error(`Erro: ${err.message}`);
-  } finally {
-    setEnviandoEvolution(false);
-  }
-};
-```
-
----
-
-### Fase 3: Integrar no Chamado de Assistencia
-
-**Modificar:** `supabase/functions/criar-chamado-assistencia/index.ts`
-
-Apos criar chamado, enviar localizacao como pin + mensagem de texto:
-
-```typescript
-// Apos inserir chamado (linha ~386)
-if (telefoneCentral) {
-  // 1. Enviar PIN de localização nativo
-  try {
-    await supabaseAdmin.functions.invoke('whatsapp-send-location', {
-      body: {
-        telefone: telefoneCentral.replace(/\D/g, ''),
-        latitude: payload.latitude,
-        longitude: payload.longitude,
-        name: `Chamado ${protocolo}`,
-        address: payload.endereco || enderecoData.endereco,
-        referencia_tipo: 'chamado_assistencia',
-        referencia_id: chamado.id,
-      },
-    });
-  } catch (locErr) {
-    console.error('[criar-chamado] Erro ao enviar pin:', locErr);
-  }
-
-  // 2. Enviar mensagem de texto com detalhes
-  const mensagemCentral = `🚨 *NOVO CHAMADO*
-📋 Protocolo: ${protocolo}
-🔧 Tipo: ${TIPO_LABELS[payload.tipo_assistencia]}
-👤 ${associado.nome}
-📱 ${associado.whatsapp || associado.telefone}
-🚗 ${veiculo.placa} - ${veiculo.marca} ${veiculo.modelo}`;
-
-  await supabaseAdmin.functions.invoke('whatsapp-send-text', {
-    body: {
-      telefone: telefoneCentral.replace(/\D/g, ''),
-      mensagem: mensagemCentral,
-    },
-  });
-}
-```
-
----
-
-### Fase 4: Adicionar Tool de Localizacao na IA (WhatsApp Webhook)
-
-**Modificar:** `supabase/functions/whatsapp-webhook/index.ts`
-
-Adicionar nova tool para IA enviar localizacao quando solicitado:
-
-```typescript
-// Na lista de tools (apos enviar_boleto_pdf)
-{
-  type: "function",
-  function: {
-    name: "enviar_localizacao_veiculo",
-    description: "Envia a localização atual do veículo via pin do WhatsApp. Use quando o associado pedir para ver onde está o carro.",
-    parameters: {
-      type: "object",
-      properties: {
-        veiculo_id: { type: "string", description: "ID do veículo (opcional, usa o primeiro se não informado)" },
-      },
-      required: [],
-    },
-  },
-},
-
-// No switch de execucao de tools
-case "enviar_localizacao_veiculo": {
-  // Buscar veiculo do associado
-  const { data: veiculos } = await supabase
-    .from("veiculos")
-    .select("id, placa")
-    .eq("associado_id", associadoId)
-    .eq("status", "ativo")
-    .limit(1);
-
-  const veiculo = veiculos?.[0];
-  if (!veiculo) {
-    return JSON.stringify({ success: false, message: "Nenhum veículo ativo encontrado" });
-  }
-
-  // Buscar posicao do rastreador
-  const { data: rastreador } = await supabase
-    .from("rastreadores")
-    .select("ultima_posicao_lat, ultima_posicao_lng")
-    .eq("veiculo_id", veiculo.id)
-    .eq("status", "instalado")
-    .single();
-
-  if (!rastreador?.ultima_posicao_lat || !rastreador?.ultima_posicao_lng) {
-    return JSON.stringify({ success: false, message: "Posição do veículo não disponível" });
-  }
-
-  // Enviar pin via whatsapp-send-location
-  await supabase.functions.invoke('whatsapp-send-location', {
-    body: {
-      telefone: telefone,
-      latitude: rastreador.ultima_posicao_lat,
-      longitude: rastreador.ultima_posicao_lng,
-      name: `Veículo ${veiculo.placa}`,
-      address: "Última posição conhecida",
-    },
-  });
-
-  return JSON.stringify({ 
-    success: true, 
-    message: "Pronto! A localização do seu veículo foi enviada. Verifique o mapa na conversa! 📍" 
-  });
-}
-```
-
----
-
-### Fase 5: Integrar no App do Instalador
-
-**Modificar:** `src/components/instalador/InstalacaoCard.tsx`
-
-Adicionar botao para enviar endereco de instalacao via Evolution:
-
-```typescript
-const [enviandoLocalizacao, setEnviandoLocalizacao] = useState(false);
-
-const handleEnviarLocalizacao = async () => {
-  if (!telefone || !instalacao.latitude || !instalacao.longitude) {
-    toast.error('Dados insuficientes');
-    return;
-  }
-
-  setEnviandoLocalizacao(true);
-  
-  try {
-    const { error } = await supabase.functions.invoke('whatsapp-send-location', {
-      body: {
-        telefone: telefone.replace(/\D/g, ''),
-        latitude: instalacao.latitude,
-        longitude: instalacao.longitude,
-        name: `Instalação - ${instalacao.associados?.nome}`,
-        address: endereco,
-      },
-    });
-
     if (error) throw error;
-    toast.success('Localização enviada ao cliente!');
+    toast.success('📇 Contato do prestador enviado!');
   } catch (err: any) {
     toast.error(`Erro: ${err.message}`);
   } finally {
-    setEnviandoLocalizacao(false);
+    setEnviandoContato(false);
   }
 };
 ```
@@ -403,106 +329,104 @@ const handleEnviarLocalizacao = async () => {
 
 | Arquivo | Descricao |
 |---------|-----------|
-| `supabase/functions/whatsapp-send-location/index.ts` | Nova edge function para envio de localizacao |
+| `supabase/functions/whatsapp-send-contact/index.ts` | Edge function para envio de contatos VCard |
 
 ## Arquivos a Modificar
 
 | Arquivo | Alteracoes |
 |---------|------------|
 | `supabase/config.toml` | Adicionar configuracao da nova function |
-| `src/components/assistencia/EnviarLinkPrestadorButton.tsx` | Adicionar envio de pin nativo |
-| `supabase/functions/criar-chamado-assistencia/index.ts` | Enviar pin ao criar chamado |
-| `supabase/functions/whatsapp-webhook/index.ts` | Adicionar tool `enviar_localizacao_veiculo` |
-| `src/components/instalador/InstalacaoCard.tsx` | Adicionar botao para enviar localizacao |
+| `supabase/functions/whatsapp-webhook/index.ts` | Adicionar tools `enviar_contato_central` e `enviar_contato_prestador` |
+| `src/components/assistencia/EnviarLinkPrestadorButton.tsx` | Adicionar botao "Enviar Contato" |
 
 ---
 
 ## Detalhes Tecnicos
 
-### Payload Evolution API sendLocation
+### Formatacao do wuid
 
-```json
-{
-  "number": "5599999999999",
-  "name": "Nome do Local (negrito)",
-  "address": "Endereco formatado",
-  "latitude": -23.550520,
-  "longitude": -46.633308
-}
-```
+O campo `wuid` (WhatsApp User ID) deve seguir o formato:
+- Apenas numeros
+- Prefixo 55 (Brasil)
+- DDD + numero
 
-### Resposta Esperada
-
-```json
-{
-  "key": {
-    "remoteJid": "5599999999999@s.whatsapp.net",
-    "fromMe": true,
-    "id": "ABCD1234"
-  },
-  "message": {
-    "locationMessage": {
-      "degreesLatitude": -23.550520,
-      "degreesLongitude": -46.633308,
-      "name": "Nome do Local",
-      "address": "Endereco formatado"
-    }
+```typescript
+function formatarWuid(telefone: string): string {
+  let limpo = telefone.replace(/\D/g, '');
+  if (!limpo.startsWith('55')) {
+    limpo = '55' + limpo;
   }
+  return limpo;
 }
 ```
 
-### Validacoes Necessarias
+### Formatacao do phoneNumber
 
-| Campo | Validacao |
-|-------|-----------|
-| `latitude` | Deve ser numero entre -90 e 90 |
-| `longitude` | Deve ser numero entre -180 e 180 |
-| `name` | Maximo 200 caracteres |
-| `address` | Maximo 500 caracteres |
+O campo `phoneNumber` e para exibicao no cartao:
+
+```typescript
+function formatarPhoneNumber(telefone: string): string {
+  const limpo = telefone.replace(/\D/g, '');
+  if (limpo.length === 11) {
+    return `+55 ${limpo.slice(0, 2)} ${limpo.slice(2, 7)}-${limpo.slice(7)}`;
+  }
+  return telefone;
+}
+```
 
 ---
 
 ## Checklist Pos-Implementacao
 
-- [ ] Edge function `whatsapp-send-location` criada e deployada
-- [ ] Latitude e longitude validados corretamente
-- [ ] Name (nome do local) preenchido automaticamente via geocoding quando nao informado
-- [ ] Address (endereco) formatado corretamente
-- [ ] Pin de localizacao aparece corretamente no WhatsApp
-- [ ] Mensagens de texto complementares enviadas apos o pin
-- [ ] IA pode enviar localizacao do rastreador via tool
-- [ ] Prestador de assistencia recebe pin + detalhes
-- [ ] Central de assistencia recebe pin + dados do chamado
-- [ ] Instalador pode enviar localizacao ao cliente
-- [ ] Logs registrados em `whatsapp_mensagens` com tipo `location`
+- [ ] Edge function `whatsapp-send-contact` criada e deployada
+- [ ] `fullName` preenchido corretamente em todos os fluxos
+- [ ] `wuid` no formato correto (55 + DDD + numero, sem caracteres especiais)
+- [ ] `phoneNumber` formatado para exibicao legivel
+- [ ] `organization` preenchido quando relevante (Central, Prestador)
+- [ ] Contato pode ser salvo diretamente pelo destinatario
+- [ ] IA pode enviar contato da central quando solicitado
+- [ ] IA pode enviar contato do prestador quando solicitado
+- [ ] Botao "Enviar Contato" funciona no painel de assistencia
+- [ ] Logs registrados em `whatsapp_mensagens` com tipo `contact`
 
 ---
 
-## Teste Recomendado: Envio de Localizacao
+## Teste Recomendado: Envio de Contato
 
 ### Pre-requisitos
 
 1. WhatsApp conectado via QR Code
-2. Numero de teste cadastrado
-3. Chamado de assistencia com coordenadas
+2. Chamado de assistencia com prestador atribuido
+3. Numero de teste cadastrado
 
 ### Passos do Teste
 
 1. Acessar Assistencia > Chamados
 2. Abrir chamado com prestador atribuido
-3. Clicar em "Enviar Localizacao" (apos implementacao)
+3. Clicar em "Enviar Contato"
 4. Verificar no WhatsApp do destinatario:
-   - Pin de localizacao recebido
-   - Nome do local visivel
-   - Endereco formatado
-   - Botao "Ver no Maps" funcional
-5. Tocar no pin e confirmar que abre navegacao
+   - Cartao de contato recebido
+   - Nome do prestador visivel
+   - Telefone formatado
+   - Botao "Adicionar aos Contatos" funcional
+5. Clicar em adicionar e confirmar que salva no celular
 
 ### Resultado Esperado
 
-- Pin de localizacao nativo do WhatsApp
-- Nome: "Chamado #ASS-XXXXXXXX-XXXX"
-- Endereco: Endereco completo formatado
-- Clique no pin abre Google Maps ou Waze
-- Registro em `whatsapp_mensagens` com tipo `location`
+- Cartao VCard nativo do WhatsApp
+- Nome: Nome do prestador
+- Telefone: Numero formatado
+- Organizacao: "Prestador PRATICCAR"
+- Botao "Adicionar" funciona corretamente
+- Registro em `whatsapp_mensagens` com tipo `contact`
 
+---
+
+## Nota sobre Limite de Edge Functions
+
+O projeto pode ter atingido o limite de Edge Functions do Supabase. Se o deploy falhar, sera necessario:
+1. Fazer upgrade do plano Supabase, OU
+2. Remover uma edge function nao utilizada, OU
+3. Consolidar funcionalidades em edge functions existentes
+
+A funcao `whatsapp-send-contact` pode ser adicionada como handler adicional dentro de uma edge function existente (por exemplo, dentro do `whatsapp-webhook` como funcao interna) se necessario.
