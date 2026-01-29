@@ -1,484 +1,403 @@
 
-# Revisao Completa - Fluxo de Busca de Posicao em Tempo Real Softruck
+# Revisao Completa - Fluxo de Consulta de Historico de Trajetos Softruck
 
 ## Resumo Executivo
 
-Apos analise detalhada do sistema de busca de posicao em tempo real dos rastreadores Softruck, identifiquei a seguinte situacao:
+Apos analise detalhada do sistema de consulta de historico de trajetos Softruck, identifiquei a seguinte situacao:
 
 | Item | Status | Detalhes |
 |------|--------|----------|
-| Endpoint GET `/vehicles/{id}/tracking/{device_id}` | IMPLEMENTADO CORRETAMENTE | Presente em 3 edge functions |
-| Header Authorization Bearer | IMPLEMENTADO | Com retry em erro 401 |
-| Chamada na abertura do App | OK | Via hook `useVeiculoPosicao` |
-| Chamada no mapa interno | OK | Via hook `useRastreadorTempoReal` |
-| Polling automatico a cada X segundos | OK | 30 segundos via `refetchInterval` |
-| Botao "Atualizar Posicao" | OK | Via mutation `atualizarManual` |
-| Parse de latitude/longitude | OK | Extraido de `data.data.attributes` |
-| Exibicao no mapa | OK | Leaflet com marcadores customizados |
-| **PROBLEMA CRITICO** | **PUBLIC KEY INVALIDA** | `401 - Public key does not exist` |
-| **PROBLEMA** | **IDS NAO CONFIGURADOS** | `plataforma_veiculo_id` e `plataforma_device_id` = NULL |
-
----
-
-## Problemas Criticos Identificados
-
-### 1. Public Key Softruck Invalida
-
-Os logs do banco mostram erros consecutivos de autenticacao:
-
-```
-Falha auth Softruck: 401 - {"error":{"message":"Public key does not exist"}}
-```
-
-**Causa:** A secret `SOFTRUCK_PUBLIC_KEY` configurada no Supabase nao e reconhecida pela API Softruck.
-
-**Impacto:** NENHUMA chamada ao endpoint de posicao consegue ser realizada porque a autenticacao falha antes.
-
----
-
-### 2. Rastreadores Sem IDs de Plataforma
-
-Consultando o banco de dados, TODOS os rastreadores Softruck instalados tem:
-
-| Campo | Valor |
-|-------|-------|
-| `plataforma_veiculo_id` | NULL |
-| `plataforma_device_id` | NULL |
-
-**Impacto:** Mesmo que a autenticacao funcionasse, o endpoint seria chamado incorretamente:
-
-```
-GET /v2/vehicles/NULL/tracking/NULL?format=JSON
-```
-
-Os rastreadores possuem apenas `id_plataforma` populado (ex: "54321"), mas as edge functions esperam `plataforma_veiculo_id` e `plataforma_device_id`.
+| Endpoint GET `/vehicles/{id}/trajectories/` | IMPLEMENTADO | Usado em `rastreador-historico` e `historico-posicoes` |
+| Endpoint GET `/vehicles/{id}/trajectories/geom` | PARCIALMENTE IMPLEMENTADO | Existe em `softruck-api` mas nao e usado |
+| Filtros de data (start_date, end_date) | IMPLEMENTADO | Presentes corretamente |
+| Atributos SEGMENT, DETAILED, ALARM, STOP | NAO IMPLEMENTADOS | Nao solicitados na query |
+| Renderizacao no mapa | IMPLEMENTADO | Leaflet com Polyline |
+| Pontos de parada destacados | NAO IMPLEMENTADOS | Apenas inicio/fim marcados |
+| Calculo tempo parado/movimento | IMPLEMENTADO | Em `historico-posicoes` |
+| Integracao com auditoria de sinistros | NAO IMPLEMENTADA | Nao ha consulta de trajeto em sinistros |
+| Relatorio mensal quilometragem | NAO IMPLEMENTADO | Nao existe relatorio dedicado |
 
 ---
 
 ## Analise Detalhada dos Pontos de Chamada
 
-### 1. Quando o associado abre a tela de rastreamento no App
+### 1. Quando o associado solicita "Ver trajeto" de data especifica
 
-**Arquivo:** `src/pages/app/AppRastreamento.tsx`
-**Hook utilizado:** `useVeiculoPosicao` (de `useMyData.ts`)
-**Edge Function:** `posicao-veiculo`
+**Arquivos:** `src/pages/app/AppRastreamentoHistorico.tsx`, `src/hooks/useMyData.ts`
+**Edge Function:** `historico-posicoes`
 
 ```typescript
-// AppRastreamento.tsx (linha 133-139)
-const { 
-  posicao, 
-  tempoReal, 
-  offline, 
-  refetch: refetchPosicao,
-  atualizarManual 
-} = useVeiculoPosicao(vehicle?.id);
+// useVeiculoHistorico (useMyData.ts linha 349-386)
+const { data, error } = await supabase.functions.invoke('historico-posicoes', {
+  body: {
+    veiculo_id: veiculoId,
+    data_inicio: dataInicio.toISOString(),
+    data_fim: dataFim.toISOString(),
+    intervalo_minutos: intervaloMinutos,
+  }
+});
 ```
 
-**Fluxo:**
-1. Usuario abre `/app/rastreamento`
-2. Hook `useVeiculoPosicao` e ativado
-3. Chama `posicao-veiculo` com `{ veiculo_id }`
-4. Edge function busca rastreador do veiculo
-5. Verifica `plataforma_veiculo_id` e `plataforma_device_id` -> **FALHA: campos NULL**
-6. Lanca erro: "Rastreador nao configurado com IDs da plataforma"
+**Interface do App:**
+- Seletor de periodo (24h, 3 dias, 7 dias)
+- DatePicker com range customizado
+- Seletor de intervalo (5, 15, 30, 60 min)
+- Playback com controles de reproducao
 
-**Status:** NAO FUNCIONA devido a falta de IDs
+**Status:** FUNCIONAL (dependendo da autenticacao)
 
 ---
 
-### 2. Quando o analista visualiza o mapa de monitoramento interno
+### 2. Quando o analista visualiza historico no painel interno
 
-**Arquivo:** `src/components/rastreadores/MapaRastreador.tsx`
-**Hook utilizado:** `useRastreadorTempoReal` (de `useRastreadorPosicao.ts`)
-**Edge Function:** `rastreador-posicao`
+**Arquivo:** `src/components/rastreadores/MapaHistorico.tsx`
+**Hook:** `useRastreadorHistoricoAPI` (de `useRastreadorHistoricoAPI.ts`)
+**Edge Function:** `rastreador-historico`
 
 ```typescript
-// MapaRastreador.tsx (linha 78-86)
-const {
-  posicao,
-  veiculo,
-  tempoReal,
-  mensagem,
-  isLoading,
-  isRefetching,
-  atualizarManual
-} = useRastreadorTempoReal(rastreadorId);
+// useRastreadorHistoricoAPI (linha 35-48)
+const { data, error } = await supabase.functions.invoke('rastreador-historico', {
+  body: { 
+    rastreador_id: rastreadorId,
+    data_inicio: dataInicio?.toISOString(),
+    data_fim: dataFim?.toISOString(),
+  },
+});
 ```
 
-**Fluxo:**
-1. Analista abre detalhe do rastreador
-2. Hook `useRastreadorTempoReal` e ativado
-3. Chama `rastreador-posicao` com `{ rastreador_id }`
-4. Edge function verifica `plataforma_veiculo_id` e `plataforma_device_id` -> **FALHA: campos NULL**
-5. Lanca erro: "Rastreador nao configurado com IDs da plataforma"
-
-**Status:** NAO FUNCIONA devido a falta de IDs
+**Status:** FUNCIONAL (dependendo da autenticacao)
 
 ---
 
-### 3. Atualizacao automatica a cada X segundos (polling)
+### 3. Quando ha auditoria de posicao em caso de sinistro
 
-**Implementado corretamente em ambos os hooks:**
+**Status:** NAO IMPLEMENTADO
 
-```typescript
-// useVeiculoPosicao (useMyData.ts linha 269)
-refetchInterval: 30000,  // 30 segundos
-
-// useRastreadorTempoReal (useRastreadorPosicao.ts linha 103)
-refetchInterval: autoRefresh ? 30000 : false,  // 30 segundos se autoRefresh = true
-staleTime: 15000,  // Considera dados "frescos" por 15 segundos
-```
-
-**Status:** IMPLEMENTADO, mas nao funciona devido aos problemas anteriores.
+Ao analisar `SinistroDetalhe.tsx`, nao existe integracao com o historico de trajetos do rastreador. A pagina de sinistro nao oferece:
+- Botao "Ver trajeto do veiculo" na data do sinistro
+- Mapa com posicoes do veiculo no momento do evento
+- Consulta automatica ao historico para auditoria
 
 ---
 
-### 4. Quando o associado clica em "Atualizar posicao"
+### 4. Quando e gerado o relatorio mensal de quilometragem
 
-**Arquivo:** `src/pages/app/AppRastreamento.tsx` (linha 468-475)
+**Status:** NAO IMPLEMENTADO
+
+Analisando `relatoriosConfig.ts`, nao existe configuracao para relatorio de quilometragem. Os relatorios existentes sao:
+- Operacional: instalacoes, tempo instalacao, estoque rastreadores, chamados
+- NAO HA: quilometragem mensal por veiculo, distancia percorrida por associado
+
+---
+
+## Verificacao do Endpoint e Parametros
+
+### Endpoint Atual
+
+As edge functions usam:
+```
+GET /v2/vehicles/{id}/trajectories/?filters[start_date]=X&filters[end_date]=Y&limit=1000
+```
+
+### Endpoint Disponivel Mas Nao Utilizado
+
+O `softruck-api/index.ts` possui suporte para `trajectories-geom`:
+```typescript
+case 'trajectories-geom': {
+  let endpoint = `/v2/vehicles/${veiculoId}/trajectories/geom`;
+  if (dataInicio && dataFim) {
+    endpoint += `?filters[fromAcc]=${encodeURIComponent(dataInicio)}&filters[toAcc]=${encodeURIComponent(dataFim)}`;
+  }
+}
+```
+
+**Observacao:** O endpoint `/trajectories/geom` retorna geometria GeoJSON otimizada para renderizacao no mapa.
+
+---
+
+## GAP: Atributos SEGMENT, DETAILED, ALARM, STOP
+
+### Problema
+
+A API Softruck suporta atributos especiais para enriquecer os dados de trajeto:
+- **SEGMENT**: Agrupa trajeto em segmentos de viagem
+- **DETAILED**: Retorna todos os pontos sem simplificacao
+- **ALARM**: Inclui eventos de alarme (velocidade, cerca, etc.)
+- **STOP**: Inclui pontos de parada com duracao
+
+### Situacao Atual
+
+Nenhum desses atributos e solicitado nas chamadas atuais. As edge functions usam apenas os parametros basicos:
+```typescript
+url.searchParams.set('filters[start_date]', inicio);
+url.searchParams.set('filters[end_date]', fim);
+url.searchParams.set('limit', '500');  // ou 1000
+```
+
+### Correcao Necessaria
+
+Adicionar parametros para solicitar atributos extras quando necessario:
+```typescript
+// Para trajeto detalhado
+url.searchParams.set('attributes[]', 'DETAILED');
+url.searchParams.set('attributes[]', 'STOP');
+// OU
+url.searchParams.set('includes[stops]', 'true');
+```
+
+---
+
+## GAP: Pontos de Parada Nao Destacados
+
+### Problema
+
+Os mapas de historico (`MapaHistorico.tsx` e `AppRastreamentoHistorico.tsx`) apenas mostram:
+- Marcador verde no inicio
+- Marcador vermelho no fim
+- Marcador azul na posicao atual do playback
+- Polyline conectando todos os pontos
+
+**NAO mostram:**
+- Marcadores nos pontos de parada (velocidade = 0)
+- Cor diferente para segmentos parados vs em movimento
+- Pop-up com duracao da parada
+
+### Dados Disponiveis
+
+O sistema ja calcula tempo parado em `historico-posicoes`:
+```typescript
+if (anterior.velocidade > 0 || anterior.ignicao) {
+  tempoMovimento += diffMin;
+} else {
+  tempoParado += diffMin;
+}
+```
+
+Porem nao identifica os pontos especificos de parada para exibicao no mapa.
+
+---
+
+## Plano de Correcoes
+
+### Fase 1: Adicionar Atributos STOP nas Consultas
+
+**Arquivos a modificar:**
+- `supabase/functions/rastreador-historico/index.ts`
+- `supabase/functions/historico-posicoes/index.ts`
+
+```typescript
+// Adicionar parametro para incluir paradas
+const url = new URL(`${baseUrl}/vehicles/${vehicleId}/trajectories/`);
+url.searchParams.set('filters[start_date]', inicio);
+url.searchParams.set('filters[end_date]', fim);
+url.searchParams.set('includes[stops]', 'true');  // NOVO
+url.searchParams.set('limit', '1000');
+```
+
+---
+
+### Fase 2: Identificar e Retornar Pontos de Parada
+
+**Modificar edge functions para extrair paradas:**
+
+```typescript
+interface PontoParada {
+  latitude: number;
+  longitude: number;
+  inicio: string;
+  fim: string;
+  duracao_minutos: number;
+  endereco?: string;
+}
+
+function identificarParadas(pontos: PontoPosicao[]): PontoParada[] {
+  const paradas: PontoParada[] = [];
+  let inicioParada: number | null = null;
+  
+  for (let i = 0; i < pontos.length; i++) {
+    const ponto = pontos[i];
+    const estaParado = ponto.velocidade === 0 && !ponto.ignicao;
+    
+    if (estaParado && inicioParada === null) {
+      inicioParada = i;
+    } else if (!estaParado && inicioParada !== null) {
+      const pontoInicio = pontos[inicioParada];
+      const duracao = (new Date(ponto.data_hora).getTime() - 
+                       new Date(pontoInicio.data_hora).getTime()) / 60000;
+      
+      if (duracao >= 5) { // Paradas > 5 minutos
+        paradas.push({
+          latitude: pontoInicio.latitude,
+          longitude: pontoInicio.longitude,
+          inicio: pontoInicio.data_hora,
+          fim: pontos[i - 1].data_hora,
+          duracao_minutos: Math.round(duracao),
+          endereco: pontoInicio.endereco,
+        });
+      }
+      inicioParada = null;
+    }
+  }
+  
+  return paradas;
+}
+```
+
+---
+
+### Fase 3: Renderizar Pontos de Parada no Mapa
+
+**Arquivos a modificar:**
+- `src/components/rastreadores/MapaHistorico.tsx`
+- `src/pages/app/AppRastreamentoHistorico.tsx`
 
 ```tsx
-<Button 
-  className="w-full gap-2" 
-  onClick={handleRefresh}
-  disabled={isRefreshing}
->
-  <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
-  Atualizar Posição
-</Button>
-```
+// Adicionar marcadores de parada
+const stopIcon = L.divIcon({
+  className: 'stop-marker',
+  html: `<div style="width: 10px; height: 10px; background: #f59e0b; border-radius: 50%; border: 2px solid white;"></div>`,
+  iconSize: [10, 10],
+  iconAnchor: [5, 5],
+});
 
-**Funcao `handleRefresh`:**
-
-```typescript
-const handleRefresh = async () => {
-  setIsRefreshing(true);
-  await Promise.all([refetch(), refetchPosicao()]);
-  // ...
-};
-```
-
-**Status:** IMPLEMENTADO, mas nao funciona devido aos problemas anteriores.
-
----
-
-## Verificacao do Endpoint
-
-### Endpoint Correto
-
-| Requisito | Implementacao | Status |
-|-----------|---------------|--------|
-| Endpoint | `GET /v2/vehicles/{vehicleId}/tracking/{deviceId}` | OK |
-| Query param | `?format=JSON` | OK |
-| Alternativa | `?includes[geocoder][]=address&includes[geocoder][]=display_name&format=JSON` | OK (em softruck-api) |
-
-### Locais de implementacao
-
-**1. rastreador-posicao/index.ts (linha 72):**
-```typescript
-const url = `${baseUrl}/vehicles/${vehicleId}/tracking/${deviceId}?format=JSON`;
-```
-
-**2. posicao-veiculo/index.ts (linha 128):**
-```typescript
-const url = `${baseUrl}/vehicles/${vehicleId}/tracking/${deviceId}?format=JSON`;
-```
-
-**3. softruck-api/index.ts (linha 930):**
-```typescript
-const endpoint = `/v2/vehicles/${veiculoId}/tracking/${deviceId}?includes[geocoder][]=address&includes[geocoder][]=display_name&format=JSON`;
-```
-
----
-
-## Verificacao de Headers
-
-### Authorization Bearer
-
-| Arquivo | Linha | Implementacao |
-|---------|-------|---------------|
-| `rastreador-posicao/index.ts` | 79 | `'Authorization': Bearer ${token}` |
-| `posicao-veiculo/index.ts` | 135 | `'Authorization': Bearer ${token}` |
-| `sync-rastreadores/index.ts` | 196 | `'Authorization': Bearer ${token}` |
-
-### Header public-key
-
-| Arquivo | Linha | Implementacao |
-|---------|-------|---------------|
-| `rastreador-posicao/index.ts` | 80 | `'public-key': publicKey` |
-| `posicao-veiculo/index.ts` | 136 | `'public-key': publicKey` |
-
-**Status:** Ambos headers implementados corretamente.
-
----
-
-## Parse de Resposta Softruck
-
-### Formato esperado da API
-
-```json
-{
-  "data": {
-    "attributes": {
-      "latitude": -23.5505,
-      "longitude": -46.6333,
-      "speed": 45,
-      "course": 180,
-      "ignition": true,
-      "timestamp": "2026-01-29T12:00:00Z",
-      "address": "Av. Paulista, 1000",
-      "altitude": 750,
-      "satellites": 8,
-      "odometer": 15234,
-      "battery": 95
-    }
-  }
-}
-```
-
-### Implementacao do parse
-
-```typescript
-// rastreador-posicao/index.ts (linhas 104-126)
-const data = await response.json();
-
-if (!data.data?.attributes) {
-  throw new Error('Resposta Softruck inválida');
-}
-
-const attrs = data.data.attributes;
-
-return {
-  latitude: attrs.latitude,
-  longitude: attrs.longitude,
-  velocidade: attrs.speed || 0,
-  direcao: attrs.course,
-  ignicao: attrs.ignition || false,
-  data_posicao: attrs.timestamp || new Date().toISOString(),
-  endereco: attrs.address,
-  dados_extras: {
-    altitude: attrs.altitude,
-    satellites: attrs.satellites,
-    odometer: attrs.odometer,
-    battery: attrs.battery,
-  }
-};
-```
-
-**Status:** Parse implementado corretamente.
-
----
-
-## Exibicao no Mapa
-
-### Mapa do App do Associado
-
-**Arquivo:** `src/pages/app/AppRastreamento.tsx`
-
-```typescript
-// Extrai latitude/longitude (linhas 142-147)
-const latitude = posicao?.latitude ?? tracker?.ultima_posicao_lat ?? -18.9186;
-const longitude = posicao?.longitude ?? tracker?.ultima_posicao_lng ?? -48.2772;
-
-// Exibe no mapa Leaflet (linhas 314-330)
-<MapContainer center={[latitude, longitude]} zoom={15}>
-  <TileLayer ... />
-  <Marker 
-    position={[latitude, longitude]} 
-    icon={getMarkerIcon(ignicao, emMovimento)}
-  />
-  <FlyToPosition position={[latitude, longitude]} zoom={15} />
-</MapContainer>
-```
-
-### Mapa do Painel Interno
-
-**Arquivo:** `src/components/rastreadores/MapaRastreador.tsx`
-
-```typescript
-// Extrai posicao (linhas 94-97)
-const hasPosition = posicao?.latitude && posicao?.longitude;
-const position: [number, number] = hasPosition
-  ? [posicao.latitude, posicao.longitude]
-  : [-15.7801, -47.9292]; // Brazil center
-
-// Exibe no mapa (linhas 152-180)
-<MapContainer center={position} zoom={15}>
-  <TileLayer ... />
-  <Marker position={position} icon={getMarkerIcon(posicao.ignicao)}>
+// Renderizar paradas
+{paradas.map((parada, idx) => (
+  <Marker
+    key={`stop-${idx}`}
+    position={[parada.latitude, parada.longitude]}
+    icon={stopIcon}
+  >
     <Popup>
-      <p>Velocidade: {posicao.velocidade} km/h</p>
-      <p>Ignição: {posicao.ignicao ? 'Ligada' : 'Desligada'}</p>
-      {posicao.endereco && <p>{posicao.endereco}</p>}
+      <div className="text-sm">
+        <strong>Parada</strong>
+        <p>{parada.duracao_minutos} minutos</p>
+        <p>{format(new Date(parada.inicio), 'HH:mm')} - {format(new Date(parada.fim), 'HH:mm')}</p>
+        {parada.endereco && <p className="text-xs">{parada.endereco}</p>}
+      </div>
     </Popup>
   </Marker>
-</MapContainer>
-```
-
-**Status:** Exibicao no mapa implementada corretamente.
-
----
-
-## Teste com 3 Veiculos Diferentes
-
-### Resultado da consulta ao banco
-
-```sql
-SELECT id, codigo, plataforma_veiculo_id, plataforma_device_id 
-FROM rastreadores WHERE plataforma = 'softruck' LIMIT 5;
-```
-
-| codigo | plataforma_veiculo_id | plataforma_device_id |
-|--------|-----------------------|---------------------|
-| 123456 | NULL | NULL |
-| 12345678 | NULL | NULL |
-| 132458 | NULL | NULL |
-| 123654 | NULL | NULL |
-| 231546 | NULL | NULL |
-
-**CONCLUSAO:** NAO E POSSIVEL TESTAR porque nenhum rastreador tem os IDs configurados.
-
----
-
-## Diagrama do Fluxo Atual vs Esperado
-
-```text
-FLUXO ATUAL (BLOQUEADO)
-=======================
-
-App/Painel → useVeiculoPosicao/useRastreadorTempoReal
-    |
-    v
-Edge Function (posicao-veiculo ou rastreador-posicao)
-    |
-    v
-Busca rastreador no banco
-    |
-    v
-Verifica plataforma_veiculo_id e plataforma_device_id
-    |
-    v
-❌ ERRO: "Rastreador não configurado com IDs da plataforma"
-
-
-FLUXO ESPERADO (SE CORRIGIDO)
-=============================
-
-App/Painel → useVeiculoPosicao/useRastreadorTempoReal
-    |
-    v
-Edge Function (posicao-veiculo ou rastreador-posicao)
-    |
-    v
-rastreador-auth → Obtem token Softruck
-    |
-    v
-❌ ERRO: "Public key does not exist"  (Bloqueio atual)
-    |
-    v (se corrigido)
-GET /vehicles/{id}/tracking/{device_id}?format=JSON
-    Headers: Authorization: Bearer {token}
-             public-key: {publicKey}
-    |
-    v
-Parse resposta GeoJSON
-    |
-    v
-Atualiza banco (rastreadores + rastreador_posicoes)
-    |
-    v
-Retorna posicao para frontend
-    |
-    v
-Exibe no mapa Leaflet
+))}
 ```
 
 ---
 
-## Plano de Correcao
+### Fase 4: Integracao com Auditoria de Sinistros
 
-### Fase 1: Corrigir Public Key (BLOQUEADOR PRINCIPAL)
+**Novo componente:** `src/components/sinistros/TrajetoSinistroCard.tsx`
 
-**Acao necessaria pelo usuario:**
-1. Acessar painel Softruck
-2. Obter a Public Key correta
-3. Atualizar secret `SOFTRUCK_PUBLIC_KEY` no Supabase
+Adicionar na pagina `SinistroDetalhe.tsx`:
+- Card com mapa do trajeto nas 24h anteriores ao sinistro
+- Automaticamente buscar historico pela data_ocorrencia
+- Destacar localizacao do sinistro no mapa
+- Botao "Ver trajeto completo" que abre em tela cheia
 
-### Fase 2: Corrigir Mapeamento de IDs
+**Modificar:** `src/pages/eventos/SinistroDetalhe.tsx`
+```tsx
+// Importar componente de trajeto
+import { TrajetoSinistroCard } from '@/components/sinistros/TrajetoSinistroCard';
 
-**Problema:** Os rastreadores tem `id_plataforma` populado, mas as edge functions esperam `plataforma_veiculo_id` e `plataforma_device_id`.
+// Renderizar na sidebar
+{sinistro.veiculo_id && (
+  <TrajetoSinistroCard
+    veiculoId={sinistro.veiculo_id}
+    dataOcorrencia={sinistro.data_ocorrencia}
+    localOcorrencia={sinistro.local_ocorrencia}
+  />
+)}
+```
 
-**Opcao A - Usar campo existente:**
+---
 
-Modificar edge functions para usar `id_plataforma` como fallback:
+### Fase 5: Relatorio Mensal de Quilometragem
 
+**Novo arquivo:** `src/config/relatoriosQuilometragem.ts`
+
+Adicionar configuracao no `relatoriosConfig.ts`:
 ```typescript
-// Em rastreador-posicao/index.ts e posicao-veiculo/index.ts
-
-const vehicleId = rastreador.plataforma_veiculo_id || rastreador.id_plataforma;
-const deviceId = rastreador.plataforma_device_id || rastreador.id_plataforma;
-
-if (!vehicleId || !deviceId) {
-  throw new Error('Rastreador não configurado com IDs da plataforma');
-}
+'quilometragem-mensal': {
+  id: 'quilometragem-mensal',
+  titulo: 'Quilometragem Mensal',
+  tabela: 'custom', // Requer query customizada
+  select: '', // Calculado via edge function
+  cabecalhos: ['Veiculo', 'Placa', 'KM Inicial', 'KM Final', 'Total'],
+  descricao: 'Distancia percorrida no periodo',
+},
 ```
 
-**Opcao B - Popular campos corretos:**
+**Nova edge function:** `supabase/functions/relatorio-quilometragem/index.ts`
 
-Criar script de migracao ou funcao que busque os IDs corretos na API Softruck e popule os campos.
+Consolidar dados de `rastreador_posicoes` para calcular quilometragem acumulada.
 
-### Fase 3: Verificar Formato de Resposta
+---
 
-Apos correcoes, validar que a API Softruck retorna no formato esperado:
+## Arquivos a Criar
 
-```json
-{
-  "data": {
-    "attributes": {
-      "latitude": ...,
-      "longitude": ...,
-      ...
-    }
-  }
-}
-```
-
-Caso retorne em formato diferente (ex: GeoJSON), ajustar o parse.
+| Arquivo | Descricao |
+|---------|-----------|
+| `src/components/sinistros/TrajetoSinistroCard.tsx` | Card com mapa de trajeto no sinistro |
+| `supabase/functions/relatorio-quilometragem/index.ts` | Edge function para relatorio mensal |
 
 ---
 
 ## Arquivos a Modificar
 
-| Arquivo | Alteracao |
-|---------|-----------|
-| `supabase/functions/rastreador-posicao/index.ts` | Adicionar fallback para `id_plataforma` |
-| `supabase/functions/posicao-veiculo/index.ts` | Adicionar fallback para `id_plataforma` |
-| `supabase/functions/sync-rastreadores/index.ts` | Ja usa fallback, manter |
+| Arquivo | Alteracoes |
+|---------|------------|
+| `supabase/functions/rastreador-historico/index.ts` | Adicionar includes[stops] e retornar paradas |
+| `supabase/functions/historico-posicoes/index.ts` | Adicionar identificacao de paradas |
+| `src/components/rastreadores/MapaHistorico.tsx` | Renderizar marcadores de parada |
+| `src/pages/app/AppRastreamentoHistorico.tsx` | Renderizar marcadores de parada |
+| `src/pages/eventos/SinistroDetalhe.tsx` | Adicionar card de trajeto para auditoria |
+| `src/config/relatoriosConfig.ts` | Adicionar config de relatorio quilometragem |
 
 ---
 
 ## Checklist de Verificacao Final
 
-Apos correcoes, confirmar:
+Apos implementacao, confirmar:
 
-- [ ] Secret `SOFTRUCK_PUBLIC_KEY` atualizada com valor correto
-- [ ] Autenticacao retorna token valido (sem erro 401)
-- [ ] Campos `plataforma_veiculo_id` ou `id_plataforma` populados
-- [ ] Endpoint `GET /vehicles/{id}/tracking/{device_id}` retorna dados
-- [ ] Parse de resposta extrai latitude/longitude corretamente
-- [ ] Mapa exibe posicao com marcador
-- [ ] Polling a cada 30s atualiza posicao
-- [ ] Botao "Atualizar Posicao" funciona
-- [ ] Teste com 3+ veiculos mostra posicoes distintas
+- [ ] Filtros de data (start_date, end_date) aplicados corretamente
+- [ ] Atributos STOP solicitados e parseados
+- [ ] Pontos de parada (velocidade = 0 por > 5 min) identificados
+- [ ] Marcadores amarelos de parada exibidos no mapa
+- [ ] Pop-up com duracao da parada funcional
+- [ ] Card de trajeto na pagina de sinistro funcionando
+- [ ] Trajeto das 24h antes do sinistro carregando
+- [ ] Relatorio de quilometragem disponivel na Central
+- [ ] Teste com trajeto de 24h mostra pontos em sequencia
+- [ ] Teste com 3 veiculos diferentes confirma posicoes distintas
 
 ---
 
-## Resumo dos Problemas
+## Teste Recomendado
 
-| # | Problema | Severidade | Solucao |
-|---|----------|------------|---------|
-| 1 | `SOFTRUCK_PUBLIC_KEY` invalida | CRITICO | Usuario deve atualizar secret |
-| 2 | `plataforma_veiculo_id` NULL | ALTO | Adicionar fallback para `id_plataforma` |
-| 3 | `plataforma_device_id` NULL | ALTO | Adicionar fallback para `id_plataforma` |
+### Teste de 24 horas com pontos em sequencia
 
-Sem a correcao do item 1 (Public Key), o sistema continuara completamente bloqueado.
+1. Acessar App do Associado > Rastreamento > Historico
+2. Selecionar periodo de 24h (botao preset)
+3. Verificar que trajeto carrega com todos os pontos
+4. Iniciar reproducao e confirmar sequencia cronologica
+5. Verificar que paradas (marcadores amarelos) aparecem
+6. Clicar em parada e confirmar pop-up com duracao
+
+### Teste com 3 veiculos diferentes
+
+Requer que:
+1. `SOFTRUCK_PUBLIC_KEY` esteja correta (bloqueador atual)
+2. Rastreadores tenham `id_plataforma` populado
+3. Veiculos diferentes estejam em localizacoes distintas
+
+---
+
+## Resumo dos Gaps
+
+| # | Gap | Severidade | Fase |
+|---|-----|------------|------|
+| 1 | Atributos STOP nao solicitados | MEDIA | Fase 1 |
+| 2 | Pontos de parada nao identificados | MEDIA | Fase 2 |
+| 3 | Marcadores de parada nao renderizados | MEDIA | Fase 3 |
+| 4 | Auditoria de trajeto em sinistros inexistente | ALTA | Fase 4 |
+| 5 | Relatorio de quilometragem inexistente | MEDIA | Fase 5 |
+| 6 | `SOFTRUCK_PUBLIC_KEY` invalida | CRITICO | Configuracao |
+
+A correcao do item 6 (Public Key) continua sendo pre-requisito para todas as funcionalidades que dependem da API Softruck.
