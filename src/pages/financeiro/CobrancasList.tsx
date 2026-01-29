@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Search, Plus, Download, Send, X, Eye, MoreHorizontal, DollarSign, MessageSquare } from 'lucide-react';
+import { Search, Plus, Download, Send, X, Eye, MoreHorizontal, DollarSign, MessageSquare, Mail, FileText, RefreshCw } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
@@ -17,6 +18,7 @@ import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { NovaCobrancaModal } from '@/components/financeiro/NovaCobrancaModal';
 import { RegistrarPagamentoModal } from '@/components/financeiro/RegistrarPagamentoModal';
+import { BatchActionsBar } from '@/components/financeiro/BatchActionsBar';
 
 const statusConfig: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
   'PENDING': { label: 'Pendente', variant: 'secondary' },
@@ -118,10 +120,61 @@ export default function CobrancasList() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 25;
 
+  // Estado para seleção em lote
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
   // Estados dos modais
   const [modalNovaCobranca, setModalNovaCobranca] = useState(false);
   const [modalPagamento, setModalPagamento] = useState(false);
   const [cobrancaSelecionada, setCobrancaSelecionada] = useState<any>(null);
+
+  // Funções de seleção em lote
+  const handleSelectAll = () => {
+    if (selectedIds.size === paginatedCobrancas.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(paginatedCobrancas.map(c => c.id)));
+    }
+  };
+
+  const handleSelectItem = (id: string) => {
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedIds(newSelected);
+  };
+
+  const clearSelection = () => setSelectedIds(new Set());
+
+  // Ações em lote
+  const handleEnviarBoletosLote = () => {
+    toast.info(`Enviando ${selectedIds.size} boleto(s)...`);
+    // TODO: Implementar lógica de envio em lote
+    clearSelection();
+  };
+
+  const handleEnviarWhatsAppLote = () => {
+    const selecionadas = paginatedCobrancas.filter(c => selectedIds.has(c.id));
+    selecionadas.forEach(cobranca => {
+      handleEnviarWhatsApp(cobranca);
+    });
+    clearSelection();
+  };
+
+  const handleEnviarEmailLote = () => {
+    toast.info(`Enviando e-mail para ${selectedIds.size} cobrança(s)...`);
+    // TODO: Implementar lógica de envio de email
+    clearSelection();
+  };
+
+  const handleReemitirLote = () => {
+    toast.info(`Reemitindo ${selectedIds.size} cobrança(s)...`);
+    // TODO: Implementar lógica de reemissão
+    clearSelection();
+  };
 
   // Mutation para cancelar cobrança
   const cancelarCobranca = useMutation({
@@ -484,6 +537,12 @@ export default function CobrancasList() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-[50px]">
+                  <Checkbox
+                    checked={paginatedCobrancas.length > 0 && selectedIds.size === paginatedCobrancas.length}
+                    onCheckedChange={handleSelectAll}
+                  />
+                </TableHead>
                 <TableHead>Associado</TableHead>
                 <TableHead>Tipo</TableHead>
                 <TableHead>Referência</TableHead>
@@ -497,6 +556,7 @@ export default function CobrancasList() {
               {isLoading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <TableRow key={i}>
+                    <TableCell><Skeleton className="h-4 w-4" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-32" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-20" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-16" /></TableCell>
@@ -508,13 +568,19 @@ export default function CobrancasList() {
                 ))
               ) : paginatedCobrancas.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                     Nenhuma cobrança encontrada
                   </TableCell>
                 </TableRow>
               ) : (
                 paginatedCobrancas.map((cobranca) => (
                   <TableRow key={cobranca.id} className={getRowClass(cobranca)}>
+                    <TableCell>
+                      <Checkbox
+                        checked={selectedIds.has(cobranca.id)}
+                        onCheckedChange={() => handleSelectItem(cobranca.id)}
+                      />
+                    </TableCell>
                     <TableCell>
                       <div>
                         <p className="font-medium">{cobranca.associado?.nome || 'N/A'}</p>
@@ -648,6 +714,34 @@ export default function CobrancasList() {
           setCobrancaSelecionada(null);
         }}
         cobranca={cobrancaSelecionada}
+      />
+
+      {/* Barra de Ações em Lote */}
+      <BatchActionsBar
+        selectedCount={selectedIds.size}
+        onClear={clearSelection}
+        actions={[
+          {
+            label: 'Enviar Boletos',
+            icon: <Send className="h-4 w-4" />,
+            onClick: handleEnviarBoletosLote,
+          },
+          {
+            label: 'WhatsApp',
+            icon: <MessageSquare className="h-4 w-4" />,
+            onClick: handleEnviarWhatsAppLote,
+          },
+          {
+            label: 'E-mail',
+            icon: <Mail className="h-4 w-4" />,
+            onClick: handleEnviarEmailLote,
+          },
+          {
+            label: 'Reemitir',
+            icon: <RefreshCw className="h-4 w-4" />,
+            onClick: handleReemitirLote,
+          },
+        ]}
       />
     </div>
   );
