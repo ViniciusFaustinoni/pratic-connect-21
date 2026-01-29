@@ -7,9 +7,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { 
   Users, TrendingUp, Target, DollarSign, Calculator, UserPlus,
-  Plus, Link, BarChart3, ChevronRight, Megaphone
+  Plus, Link, BarChart3, ChevronRight, Megaphone, Percent, Activity
 } from 'lucide-react';
-import { useMarketingStats, useCampanhas } from '@/hooks/useMarketing';
+import { useMarketingStats, useEvolucaoLeads, useFunilConversao } from '@/hooks/useMarketing';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -18,6 +18,7 @@ import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { CampanhaFormDialog } from '@/components/marketing/CampanhaFormDialog';
 import { IndicacaoFormDialog } from '@/components/marketing/IndicacaoFormDialog';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, Legend } from 'recharts';
 
 export default function MarketingDashboard() {
   const navigate = useNavigate();
@@ -25,6 +26,8 @@ export default function MarketingDashboard() {
   const [showIndicacaoModal, setShowIndicacaoModal] = useState(false);
   
   const { data: stats, isLoading: loadingStats } = useMarketingStats();
+  const { data: evolucaoLeads, isLoading: loadingEvolucao } = useEvolucaoLeads();
+  const { data: funilData, isLoading: loadingFunil } = useFunilConversao();
 
   // Query: Leads por origem (do mês)
   const { data: leadsPorOrigem, isLoading: loadingOrigem } = useQuery({
@@ -128,8 +131,8 @@ export default function MarketingDashboard() {
         </div>
       </div>
 
-      {/* KPIs - 6 colunas */}
-      <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+      {/* KPIs - 8 cards em 2 linhas */}
+      <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
         {/* Card 1: Leads do Mês */}
         <Card className="bg-blue-50 border-blue-200 dark:bg-blue-950/30 dark:border-blue-800">
           <CardHeader className="pb-2">
@@ -190,7 +193,31 @@ export default function MarketingDashboard() {
           </CardContent>
         </Card>
 
-        {/* Card 4: Investimento */}
+        {/* Card 4: ROI */}
+        <Card className="bg-emerald-50 border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-800">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-medium text-emerald-700 dark:text-emerald-300">ROI</CardTitle>
+              <Percent className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            {loadingStats ? (
+              <Skeleton className="h-8 w-16" />
+            ) : (
+              <>
+                <div className="text-2xl font-bold text-emerald-900 dark:text-emerald-100">
+                  {stats?.investimentoMes > 0 
+                    ? `${(((stats?.conversoesMes || 0) * 150 - (stats?.investimentoMes || 0)) / (stats?.investimentoMes || 1) * 100).toFixed(0)}%` 
+                    : '—'}
+                </div>
+                <p className="text-xs text-emerald-600 dark:text-emerald-400">Retorno sobre investimento</p>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Card 5: Investimento */}
         <Card className="bg-yellow-50 border-yellow-200 dark:bg-yellow-950/30 dark:border-yellow-800">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
@@ -212,7 +239,7 @@ export default function MarketingDashboard() {
           </CardContent>
         </Card>
 
-        {/* Card 5: CPL Médio */}
+        {/* Card 6: CPL Médio */}
         <Card className="bg-orange-50 border-orange-200 dark:bg-orange-950/30 dark:border-orange-800">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
@@ -234,7 +261,7 @@ export default function MarketingDashboard() {
           </CardContent>
         </Card>
 
-        {/* Card 6: Indicações */}
+        {/* Card 7: Indicações */}
         <Card className="bg-pink-50 border-pink-200 dark:bg-pink-950/30 dark:border-pink-800">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
@@ -250,6 +277,119 @@ export default function MarketingDashboard() {
                 <div className="text-2xl font-bold text-pink-900 dark:text-pink-100">{stats?.indicacoesMes || 0}</div>
                 <p className="text-xs text-pink-600 dark:text-pink-400">Este mês</p>
               </>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Card 8: Campanhas Ativas */}
+        <Card className="bg-cyan-50 border-cyan-200 dark:bg-cyan-950/30 dark:border-cyan-800">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-medium text-cyan-700 dark:text-cyan-300">Campanhas</CardTitle>
+              <Megaphone className="h-4 w-4 text-cyan-600 dark:text-cyan-400" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            {loadingStats ? (
+              <Skeleton className="h-8 w-16" />
+            ) : (
+              <>
+                <div className="text-2xl font-bold text-cyan-900 dark:text-cyan-100">{stats?.campanhasAtivas || 0}</div>
+                <p className="text-xs text-cyan-600 dark:text-cyan-400">Ativas</p>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Gráficos de Evolução e Funil */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Gráfico: Evolução de Leads (12 meses) */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Activity className="h-5 w-5" />
+              Evolução de Leads (12 meses)
+            </CardTitle>
+            <CardDescription>Leads e conversões por mês</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loadingEvolucao ? (
+              <Skeleton className="h-64 w-full" />
+            ) : !evolucaoLeads?.length ? (
+              <p className="text-center text-muted-foreground py-12">Sem dados disponíveis</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={280}>
+                <LineChart data={evolucaoLeads}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <XAxis dataKey="mesLabel" className="text-xs" />
+                  <YAxis className="text-xs" />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: 'hsl(var(--card))',
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '8px'
+                    }}
+                  />
+                  <Legend />
+                  <Line 
+                    type="monotone" 
+                    dataKey="leads" 
+                    name="Leads"
+                    stroke="#3b82f6" 
+                    strokeWidth={2}
+                    dot={{ fill: '#3b82f6' }}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="conversoes" 
+                    name="Conversões"
+                    stroke="#22c55e" 
+                    strokeWidth={2}
+                    dot={{ fill: '#22c55e' }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Gráfico: Funil de Conversão */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5" />
+              Funil de Conversão
+            </CardTitle>
+            <CardDescription>Distribuição de leads por etapa (mês atual)</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loadingFunil ? (
+              <Skeleton className="h-64 w-full" />
+            ) : !funilData?.length ? (
+              <p className="text-center text-muted-foreground py-12">Sem dados disponíveis</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={funilData} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <XAxis type="number" className="text-xs" />
+                  <YAxis dataKey="label" type="category" width={100} className="text-xs" />
+                  <Tooltip 
+                    formatter={(value: number, name: string) => [`${value} leads`, name]}
+                    contentStyle={{ 
+                      backgroundColor: 'hsl(var(--card))',
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '8px'
+                    }}
+                  />
+                  <Bar dataKey="total" name="Leads" radius={[0, 4, 4, 0]}>
+                    {funilData.map((entry, index) => {
+                      const colors = ['#3b82f6', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4', '#22c55e'];
+                      return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />;
+                    })}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
             )}
           </CardContent>
         </Card>

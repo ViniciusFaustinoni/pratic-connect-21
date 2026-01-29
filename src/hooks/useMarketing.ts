@@ -802,3 +802,97 @@ export function useMarketing() {
     registrarMetricas: registrarMetricasMutation.mutate,
   };
 }
+
+// ========== EVOLUÇÃO DE LEADS (12 MESES) ==========
+export interface EvolucaoLeads {
+  mes: string;
+  mesLabel: string;
+  leads: number;
+  conversoes: number;
+}
+
+export function useEvolucaoLeads() {
+  return useQuery({
+    queryKey: ['evolucao-leads-12-meses'],
+    queryFn: async () => {
+      const hoje = new Date();
+      const resultado: EvolucaoLeads[] = [];
+      
+      // Gerar últimos 12 meses
+      for (let i = 11; i >= 0; i--) {
+        const data = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+        const mesInicio = data.toISOString();
+        const mesFim = new Date(data.getFullYear(), data.getMonth() + 1, 0, 23, 59, 59).toISOString();
+        
+        const [leadsResp, conversoesResp] = await Promise.all([
+          supabase.from('leads').select('*', { count: 'exact', head: true })
+            .gte('created_at', mesInicio)
+            .lt('created_at', mesFim),
+          supabase.from('leads').select('*', { count: 'exact', head: true })
+            .eq('etapa', 'ganho')
+            .gte('updated_at', mesInicio)
+            .lt('updated_at', mesFim)
+        ]);
+        
+        const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+        
+        resultado.push({
+          mes: `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}`,
+          mesLabel: meses[data.getMonth()],
+          leads: leadsResp.count || 0,
+          conversoes: conversoesResp.count || 0,
+        });
+      }
+      
+      return resultado;
+    },
+    staleTime: 1000 * 60 * 5, // 5 minutos cache
+  });
+}
+
+// ========== FUNIL DE CONVERSÃO ==========
+export interface FunilEtapa {
+  etapa: string;
+  label: string;
+  total: number;
+  percentual: number;
+}
+
+export function useFunilConversao() {
+  return useQuery({
+    queryKey: ['funil-conversao-marketing'],
+    queryFn: async () => {
+      const inicioMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+      
+      // Buscar leads do mês por etapa
+      const { data } = await supabase
+        .from('leads')
+        .select('etapa')
+        .gte('created_at', inicioMes.toISOString());
+      
+      const contagem: Record<string, number> = {};
+      data?.forEach(lead => {
+        const etapa = lead.etapa || 'novo';
+        contagem[etapa] = (contagem[etapa] || 0) + 1;
+      });
+      
+      const etapasOrdenadas = [
+        { key: 'novo', label: 'Novos' },
+        { key: 'contato', label: 'Contatados' },
+        { key: 'qualificado', label: 'Qualificados' },
+        { key: 'proposta', label: 'Proposta' },
+        { key: 'negociacao', label: 'Negociação' },
+        { key: 'ganho', label: 'Convertidos' },
+      ];
+      
+      const totalGeral = data?.length || 0;
+      
+      return etapasOrdenadas.map(e => ({
+        etapa: e.key,
+        label: e.label,
+        total: contagem[e.key] || 0,
+        percentual: totalGeral > 0 ? ((contagem[e.key] || 0) / totalGeral) * 100 : 0,
+      })) as FunilEtapa[];
+    },
+  });
+}
