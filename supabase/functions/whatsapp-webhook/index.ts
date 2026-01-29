@@ -6,6 +6,145 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Formatar tipo de documento para exibição
+function formatarTipoDocumento(tipo: string): string {
+  const tipos: Record<string, string> = {
+    cnh: 'CNH',
+    cpf: 'CPF',
+    rg: 'RG',
+    crlv: 'CRLV',
+    comprovante_residencia: 'Comprovante de Residência',
+    contrato_assinado: 'Contrato Assinado',
+    foto_veiculo: 'Foto do Veículo',
+    foto_hodometro: 'Foto do Hodômetro',
+    nota_fiscal: 'Nota Fiscal',
+    outro: 'Outro',
+  };
+  return tipos[tipo] || tipo;
+}
+
+// Vincular mídia recebida a documento pendente
+async function vincularMidiaADocumentoPendente(
+  supabase: any,
+  telefonesBusca: string[],
+  mediaArmazenada: string,
+  tipoMidia: 'imagem' | 'documento',
+  mediaFilename: string | null,
+  instancia: { api_url: string; instance_name: string }
+): Promise<{ vinculado: boolean; mensagem?: string }> {
+  try {
+    // Buscar associado pelo telefone que tenha documentos pendentes
+    const { data: associado } = await supabase
+      .from("associados")
+      .select("id, nome, status, whatsapp, telefone")
+      .or(`whatsapp.in.(${telefonesBusca.join(",")}),telefone.in.(${telefonesBusca.join(",")})`)
+      .in("status", ["documentacao_pendente", "pendente_documentos", "pre_cadastro", "aguardando_vistoria"])
+      .maybeSingle();
+
+    if (!associado) {
+      console.log("[whatsapp-webhook] Nenhum associado com documentos pendentes encontrado");
+      return { vinculado: false };
+    }
+
+    console.log(`[whatsapp-webhook] Associado encontrado: ${associado.nome} (status: ${associado.status})`);
+
+    // Buscar documento_solicitado pendente mais antigo
+    const { data: docsPendentes } = await supabase
+      .from("documentos_solicitados")
+      .select("id, tipo_documento, contrato_id, associado_id")
+      .eq("associado_id", associado.id)
+      .eq("status", "pendente")
+      .order("created_at", { ascending: true })
+      .limit(1);
+
+    if (!docsPendentes || docsPendentes.length === 0) {
+      // Tentar buscar em contratos_documentos
+      const { data: contratosDocsPendentes } = await supabase
+        .from("contratos_documentos")
+        .select(`
+          id, 
+          tipo,
+          contrato:contratos!inner(id, associado_id)
+        `)
+        .eq("status", "pendente")
+        .eq("contratos.associado_id", associado.id)
+        .order("created_at", { ascending: true })
+        .limit(1);
+
+      if (!contratosDocsPendentes || contratosDocsPendentes.length === 0) {
+        console.log("[whatsapp-webhook] Nenhum documento pendente encontrado para o associado");
+        return { vinculado: false };
+      }
+
+      const docPendente = contratosDocsPendentes[0];
+      
+      // Atualizar contratos_documentos com o arquivo
+      const { error: updateError } = await supabase
+        .from("contratos_documentos")
+        .update({
+          arquivo_url: mediaArmazenada,
+          status: "enviado",
+          enviado_em: new Date().toISOString(),
+        })
+        .eq("id", docPendente.id);
+
+      if (updateError) {
+        console.error("[whatsapp-webhook] Erro ao atualizar documento:", updateError);
+        return { vinculado: false };
+      }
+
+      const tipoFormatado = formatarTipoDocumento(docPendente.tipo);
+      console.log(`[whatsapp-webhook] Documento vinculado ao contrato: ${tipoFormatado}`);
+      
+      return {
+        vinculado: true,
+        mensagem: `✅ Documento "${tipoFormatado}" recebido com sucesso! Aguarde a análise do nosso time.`,
+      };
+    }
+
+    const docSolicitado = docsPendentes[0];
+
+    // Criar registro em documentos
+    const { data: novoDoc, error: insertError } = await supabase
+      .from("documentos")
+      .insert({
+        associado_id: associado.id,
+        tipo: docSolicitado.tipo_documento || "outro",
+        arquivo_url: mediaArmazenada,
+        nome_arquivo: mediaFilename || `documento_whatsapp_${Date.now()}`,
+        status: "pendente",
+      })
+      .select()
+      .single();
+
+    if (insertError) {
+      console.error("[whatsapp-webhook] Erro ao criar documento:", insertError);
+      return { vinculado: false };
+    }
+
+    // Atualizar documento_solicitado
+    await supabase
+      .from("documentos_solicitados")
+      .update({
+        status: "enviado",
+        enviado_em: new Date().toISOString(),
+        documento_id: novoDoc.id,
+      })
+      .eq("id", docSolicitado.id);
+
+    const tipoFormatado = formatarTipoDocumento(docSolicitado.tipo_documento);
+    console.log(`[whatsapp-webhook] Documento vinculado: ${tipoFormatado} -> ${novoDoc.id}`);
+
+    return {
+      vinculado: true,
+      mensagem: `✅ Documento "${tipoFormatado}" recebido com sucesso! Aguarde a análise do nosso time.`,
+    };
+  } catch (err) {
+    console.error("[whatsapp-webhook] Erro ao vincular mídia:", err);
+    return { vinculado: false };
+  }
+}
+
 // System prompt adaptado para WhatsApp (mais conciso) - ALINHADO COM APP
 const WHATSAPP_SYSTEM_PROMPT = `Você é o Assistente Virtual PRATIC via WhatsApp.
 
@@ -1875,6 +2014,47 @@ serve(async (req) => {
     }
     if (!telefoneLimpo.startsWith("55")) {
       telefonesBusca.push("55" + telefoneLimpo); // com DDI
+    }
+
+    // ========================================
+    // VINCULAR MÍDIA A DOCUMENTOS PENDENTES (CADASTRO)
+    // ========================================
+    if (mediaArmazenada && (tipoPrincipal === 'imagem' || tipoPrincipal === 'documento')) {
+      const resultadoVinculo = await vincularMidiaADocumentoPendente(
+        supabase,
+        telefonesBusca,
+        mediaArmazenada,
+        tipoPrincipal as 'imagem' | 'documento',
+        mediaFilename,
+        instancia
+      );
+      
+      if (resultadoVinculo.vinculado && resultadoVinculo.mensagem) {
+        // Enviar confirmação ao cliente
+        const EVOLUTION_API_KEY = Deno.env.get("EVOLUTION_API_KEY");
+        if (EVOLUTION_API_KEY) {
+          try {
+            await fetch(`${instancia.api_url}/message/sendText/${instancia.instance_name}`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                apikey: EVOLUTION_API_KEY,
+              },
+              body: JSON.stringify({
+                number: telefone,
+                text: resultadoVinculo.mensagem,
+              }),
+            });
+            console.log(`[whatsapp-webhook] Confirmação de documento enviada para ${telefone}`);
+          } catch (e) {
+            console.error("[whatsapp-webhook] Erro ao enviar confirmação:", e);
+          }
+        }
+        
+        // Salvar log e retornar
+        await saveWhatsAppLog(supabase, instancia.id, telefone, mensagemTexto, "entrada", messageId, tipoPrincipal, mediaArmazenada, mediaMimetype || undefined, mediaFilename || undefined);
+        return new Response(JSON.stringify({ ok: true, documento_vinculado: true }), { headers: corsHeaders });
+      }
     }
 
     // ========================================
