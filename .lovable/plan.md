@@ -1,320 +1,416 @@
 
-
-# Revisao Completa - Configuracao de Webhooks Softruck
+# Revisao Completa - Fluxo de Instalacao Fisica ate Ativacao na Plataforma Softruck
 
 ## Resumo Executivo
 
 | Item | Status | Detalhes |
 |------|--------|----------|
-| Endpoint de webhook SGA | NAO EXISTE | Nenhuma Edge Function para receber webhooks Softruck |
-| Eventos DEVICES.ASSOCIATED | NAO IMPLEMENTADO | Nao ha handler para este evento |
-| Eventos DEVICES.DISASSOCIATED | NAO IMPLEMENTADO | Nao ha handler para este evento |
-| Eventos VEHICLES.CREATED | NAO IMPLEMENTADO | Nao ha handler para este evento |
-| Eventos VEHICLES.DELETED | NAO IMPLEMENTADO | Nao ha handler para este evento |
-| Eventos device-events | NAO IMPLEMENTADO | Nao ha handler para este evento |
-| Flag suporta_webhooks | TRUE | Configurado no banco mas nao implementado |
-| Tabela de logs webhook | NAO EXISTE | Nao ha tabela dedicada para webhooks Softruck |
-| Notificacoes para analista | NAO IMPLEMENTADO | Nao ha fluxo de notificacao |
-| Teste com evento simulado | NAO POSSIVEL | Sem endpoint para receber |
+| Instalador finaliza checklist | **IMPLEMENTADO** | `InstaladorChecklist.tsx` + `useAprovarVeiculoServico` |
+| Rastreador marcado como "instalado" no estoque | **IMPLEMENTADO** | Status muda de `estoque` para `instalado` |
+| Device buscado via GET /v2/devices (IMEI) | **IMPLEMENTADO** | Operacao `buscar-device-imei` em `softruck-api` |
+| Vehicle criado via POST /v2/vehicles | **IMPLEMENTADO** | Operacao `criar-veiculo` em `softruck-api` |
+| Associacao device-vehicle via POST | **PARCIALMENTE** | Usa PATCH em vez de POST /v2/vehicles/associations/devices |
+| Aguardar primeira posicao | **NAO IMPLEMENTADO** | Sistema nao valida se rastreador comunicou |
+| Veiculo aparece no mapa | **DEPENDE** | Funciona se rastreador comunicar e API autenticar |
 
 ---
 
-## Analise da Documentacao Softruck
+## Analise Detalhada dos Pontos de Integracao
 
-Consultando a documentacao oficial `docs.apiary.softruck.com`, a API Softruck v2 suporta os seguintes webhooks:
+### 1. Quando o instalador finaliza o checklist no App Instalador
 
-### Eventos Disponiveis
+**Arquivo:** `src/pages/instalador/InstaladorChecklist.tsx`
+**Hook:** `useAprovarVeiculoServico` (em `useServicos.ts`)
 
-| Categoria | Eventos | Descricao |
-|-----------|---------|-----------|
-| **service-orders-events** | Service order, Provider, Section, Custom fields, Completion, Acknowledgement | Eventos de ordens de servico |
-| **device-events** | Device association | Eventos quando device e associado/desassociado |
-| **vehicle-events** | Vehicles | Eventos de criacao/remocao de veiculos |
+**Fluxo atual:**
+1. Instalador completa 5 etapas: Dados → Checklist → Fotos → Assinatura → Decisao
+2. Na etapa 5, seleciona rastreador do inventario em porte OU digita IMEI manualmente
+3. Sistema valida IMEI em tempo real (linha 316-361)
+4. Ao clicar "Aprovar Instalacao", chama `aprovarVeiculoMutation`
 
-### Estrutura de Webhooks na API
-
-Os webhooks Softruck seguem o padrao de **Event Subscriptions**:
-- Configurados no painel Softruck ou via API
-- Enviam payloads para uma URL callback
-- Requerem resposta HTTP 200 para confirmar recebimento
-
----
-
-## Situacao Atual no Sistema
-
-### 1. Configuracao de Plataforma
-
-```sql
-SELECT plataforma, suporta_webhooks FROM rastreadores_config_plataformas 
-WHERE plataforma = 'softruck';
--- Resultado: suporta_webhooks = true
+```typescript
+// InstaladorChecklist.tsx linha 377-386
+await aprovarVeiculoMutation.mutateAsync({
+  servicoId: id,
+  veiculoId: servico.veiculos.id,
+  associadoId: servico.associados.id,
+  imeiRastreador,
+});
 ```
 
-A flag esta habilitada, mas nao ha implementacao correspondente.
-
-### 2. Edge Functions Existentes
-
-Nao existe nenhuma Edge Function para receber webhooks Softruck:
-- `softruck-api` - apenas chamadas outbound
-- `softruck-ativar-dispositivo` - apenas chamadas outbound
-- `sync-rastreadores` - apenas polling
-
-### 3. Tabelas de Log
-
-A tabela `rastreadores_logs` existe mas nao e usada para webhooks:
-- Campos: rastreador_id, plataforma, operacao, request, response, status
-- Usada apenas para logs de sincronizacao e autenticacao
-
-### 4. Webhooks Similares no Sistema
-
-O sistema ja possui webhooks implementados para outras integracoes:
-- `asaas-webhook` - Recebe eventos de pagamento do ASAAS
-- `autentique-webhook` - Recebe eventos de assinatura do Autentique
-- `leads-webhook` - Recebe leads via API
-- `whatsapp-webhook` - Recebe mensagens do WhatsApp
+**Status:** FUNCIONAL
 
 ---
 
-## Plano de Implementacao
+### 2. Quando o rastreador e marcado como "instalado" no estoque
 
-### Fase 1: Criar Tabela de Eventos Softruck
+**Arquivo:** `src/hooks/useServicos.ts` (linha 878-889)
 
-**Nova tabela: `softruck_eventos`**
+```typescript
+// useAprovarVeiculoServico
+const { error: rastreadorUpdateError } = await supabase
+  .from('rastreadores')
+  .update({
+    status: 'instalado',      // MUDA DE 'estoque' PARA 'instalado'
+    veiculo_id: data.veiculoId,
+    portador_id: null,        // Remove do porte do instalador
+    updated_at: agora,
+  })
+  .eq('id', rastreador.id);
+```
 
-```sql
-CREATE TABLE softruck_eventos (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  evento_tipo VARCHAR(100) NOT NULL,
-  evento_acao VARCHAR(50),
-  payload JSONB NOT NULL,
-  device_id VARCHAR(50),
-  vehicle_id VARCHAR(50),
-  rastreador_id UUID REFERENCES rastreadores(id),
-  veiculo_id UUID REFERENCES veiculos(id),
-  processado BOOLEAN DEFAULT FALSE,
-  processado_em TIMESTAMPTZ,
-  erro_processamento TEXT,
-  ip_origem VARCHAR(50),
-  created_at TIMESTAMPTZ DEFAULT NOW()
+E registra movimentacao de estoque (linha 891-901):
+```typescript
+await supabase.from('estoque_movimentacoes').insert({
+  rastreador_id: rastreador.id,
+  tipo: 'instalacao',
+  quantidade: 1,
+  status_anterior: 'estoque',
+  status_novo: 'instalado',
+  veiculo_id: data.veiculoId,
+});
+```
+
+**Status:** FUNCIONAL
+
+---
+
+### 3. Quando o veiculo e associado ao device na Softruck
+
+A integracao com Softruck ocorre em momentos DIFERENTES dependendo do fluxo:
+
+#### Fluxo A: Instalador com autovistoria previa aprovada
+
+Se `veiculo.cobertura_roubo_furto = true`, a integracao Softruck e chamada **automaticamente** apos a instalacao:
+
+```typescript
+// useServicos.ts linha 933-944
+await supabase.functions.invoke('softruck-ativar-dispositivo', {
+  body: {
+    imei: data.imeiRastreador,
+    veiculoId: data.veiculoId,
+    associadoId: data.associadoId,
+    associadoEmail: associadoData?.email,
+  },
+});
+```
+
+#### Fluxo B: Vistoria padrao (analista processa depois)
+
+Se nao tinha autovistoria previa:
+1. `processar-vistoria` e chamado pelo analista
+2. Se rastreador ja vinculado, marca `cobertura_roubo_furto = true`
+3. Analista deve clicar **manualmente** em "Ativar Rastreador" na tela de analise
+4. Isso chama `useAtivarRastreadorPlataforma` que invoca `softruck-ativar-dispositivo`
+
+```typescript
+// useVistoriaCompletaAnalise.ts linha 158-171
+if (rastreador.plataforma === 'softruck') {
+  const { data: result, error } = await supabase.functions.invoke('softruck-ativar-dispositivo', {
+    body: { imei, veiculoId, associadoId, associadoEmail },
+  });
+}
+```
+
+**Status:** FUNCIONAL (depende de SOFTRUCK_PUBLIC_KEY valida)
+
+---
+
+## Verificacao dos Endpoints Softruck
+
+### Endpoints Utilizados na Edge Function `softruck-ativar-dispositivo`
+
+| Passo | Endpoint Esperado | Endpoint Implementado | Status |
+|-------|-------------------|----------------------|--------|
+| 1. Buscar veiculo por placa | GET /v2/vehicles?filters[plate] | ✅ `buscar-veiculo-placa` | OK |
+| 2. Criar veiculo | POST /v2/vehicles | ✅ `criar-veiculo` | OK |
+| 3. Buscar device por IMEI | GET /v2/devices?filters[imei] | ✅ `buscar-device-imei` | OK |
+| 4. Vincular device ao veiculo | POST /v2/vehicles/associations/devices | ❌ USA PATCH /v2/devices/{id} | **GAP** |
+| 5. Ativar device | PATCH /v2/devices/{id}/status/activation | ✅ `ativar-device` | OK |
+
+---
+
+## GAP IDENTIFICADO: Metodo de Vinculacao Device-Veiculo
+
+### Problema
+
+A funcao `softruck-ativar-dispositivo` usa a operacao `vincular-device-veiculo` que faz:
+
+```typescript
+// softruck-api/index.ts linha 536-553
+case 'vincular-device-veiculo': {
+  const updateData = {
+    data: {
+      relationships: {
+        vehicle: { type: 'vehicle', id: veiculoId },
+      },
+    },
+  };
+  // USA PATCH NO DEVICE
+  result = await softruckRequest('PATCH', `/v2/devices/${deviceId}`, token, updateData);
+  break;
+}
+```
+
+### Endpoint Correto (conforme documentacao)
+
+Deveria usar `POST /v2/vehicles/associations/devices` para criar associacao formal:
+
+```typescript
+// softruck-api/index.ts linha 814-834 (JA EXISTE MAS NAO E USADO!)
+case 'associar-device-veiculo': {
+  const associationData = {
+    data: [{
+      device_id: deviceId,
+      vehicle_id: vehicleId,
+      is_main_device: isPrincipal,
+    }],
+  };
+  result = await softruckRequest('POST', '/v2/vehicles/associations/devices', token, associationData);
+  break;
+}
+```
+
+### Impacto
+
+O PATCH no device pode nao criar a associacao formal na plataforma Softruck, resultando em:
+- Veiculo nao aparece na lista de tracking do device
+- Historico de trajetos pode nao vincular corretamente
+- Webhooks de associacao podem nao ser disparados
+
+---
+
+## GAP IDENTIFICADO: Aguardar Primeira Posicao
+
+### Problema
+
+O sistema **NAO** valida se o rastreador comunicou a primeira posicao apos a instalacao.
+
+**Fluxo Atual:**
+1. Instalador aprova → Rastreador status = `instalado`
+2. Integracao Softruck → Device vinculado ao vehicle
+3. **NENHUMA VERIFICACAO** → Servico marcado como `concluida`
+
+**Fluxo Ideal:**
+1. Instalador aprova → Rastreador status = `instalado`
+2. Integracao Softruck → Device vinculado ao vehicle
+3. **AGUARDAR** primeira posicao (tracking API retornar dados)
+4. Quando `ultima_comunicacao` for preenchida → Instalacao `concluida`
+
+### Dados Disponiveis
+
+A tabela `rastreadores` possui:
+- `ultima_comunicacao TIMESTAMPTZ` - preenchido pelo sync ou API
+- `ultima_posicao_lat`, `ultima_posicao_lng`
+
+Mas nao ha logica que:
+1. Verifique se `ultima_comunicacao` e posterior a `data_instalacao`
+2. Bloqueie conclusao ate receber posicao
+3. Alerte se rastreador nao comunicar em X horas
+
+---
+
+## Verificacao: Veiculo Aparece no Mapa
+
+### Quando Aparece
+
+O veiculo aparece no mapa do associado quando:
+
+1. **Rastreador vinculado localmente:** `rastreadores.veiculo_id` preenchido
+2. **IDs da plataforma preenchidos:** `plataforma_device_id` e `plataforma_veiculo_id`
+3. **API retorna posicao:** `posicao-veiculo` chama tracking API com sucesso
+4. **Autenticacao valida:** `SOFTRUCK_PUBLIC_KEY` funcionando
+
+### Arquivos Envolvidos
+
+- `src/pages/app/AppRastreamento.tsx` - Tela do app do associado
+- `supabase/functions/posicao-veiculo/index.ts` - Busca posicao na API
+- `src/components/app/CardVeiculo.tsx` - Exibe dados de posicao
+
+### Bloqueador Atual
+
+Se `SOFTRUCK_PUBLIC_KEY` esta invalida, a API retorna 401 e:
+- Posicao atual nao carrega
+- Fallback para `ultima_comunicacao` do banco (pode estar desatualizada)
+- Usuario ve "Sem sinal GPS" ou dados antigos
+
+---
+
+## Plano de Correcoes
+
+### Fase 1: Corrigir Metodo de Associacao Device-Veiculo
+
+**Modificar:** `supabase/functions/softruck-ativar-dispositivo/index.ts`
+
+Trocar:
+```typescript
+// ERRADO - usa PATCH no device
+const vincularResult = await callSoftruckApi(
+  supabaseUrl, supabaseAnonKey,
+  'vincular-device-veiculo',  // <- PATCH
+  { deviceId, veiculoId: softruckVehicleId }
 );
-
-CREATE INDEX idx_softruck_eventos_tipo ON softruck_eventos(evento_tipo);
-CREATE INDEX idx_softruck_eventos_created ON softruck_eventos(created_at DESC);
-CREATE INDEX idx_softruck_eventos_rastreador ON softruck_eventos(rastreador_id);
 ```
 
-### Fase 2: Criar Edge Function de Webhook
-
-**Novo arquivo: `supabase/functions/softruck-webhook/index.ts`**
-
+Por:
 ```typescript
-// Funcionalidades:
-// - Validar origem do webhook (IP ou token)
-// - Parsear payload conforme tipo de evento
-// - Registrar na tabela softruck_eventos
-// - Processar evento e atualizar entidades
-// - Gerar alertas para eventos criticos
-// - Notificar analistas quando necessario
+// CORRETO - usa POST na associacao
+const vincularResult = await callSoftruckApi(
+  supabaseUrl, supabaseAnonKey,
+  'associar-device-veiculo',  // <- POST /v2/vehicles/associations/devices
+  { 
+    deviceId: softruckDeviceId, 
+    vehicleId: softruckVehicleId,
+    isPrincipal: true 
+  }
+);
 ```
-
-### Fase 3: Handlers por Tipo de Evento
-
-**DEVICES.ASSOCIATED** - Quando device e associado a veiculo:
-```typescript
-async function handleDeviceAssociated(payload) {
-  // 1. Buscar rastreador pelo device_id
-  // 2. Atualizar plataforma_veiculo_id no rastreador
-  // 3. Registrar historico
-  // 4. Notificar equipe se necessario
-}
-```
-
-**DEVICES.DISASSOCIATED** - Quando device e removido:
-```typescript
-async function handleDeviceDisassociated(payload) {
-  // 1. Buscar rastreador pelo device_id
-  // 2. Limpar plataforma_veiculo_id
-  // 3. Gerar alerta CRITICO (desinstalacao nao autorizada?)
-  // 4. Notificar monitoramento IMEDIATAMENTE
-}
-```
-
-**VEHICLES.CREATED** - Quando veiculo e criado:
-```typescript
-async function handleVehicleCreated(payload) {
-  // 1. Verificar se existe veiculo local com mesma placa
-  // 2. Atualizar id_plataforma_veiculo se encontrar
-  // 3. Registrar log
-}
-```
-
-**VEHICLES.DELETED** - Quando veiculo e removido:
-```typescript
-async function handleVehicleDeleted(payload) {
-  // 1. Buscar veiculos com este id_plataforma
-  // 2. Gerar alerta CRITICO
-  // 3. Notificar equipe de operacoes
-}
-```
-
-**device-events** - Eventos de status do device:
-```typescript
-async function handleDeviceEvent(payload) {
-  // 1. Atualizar status do rastreador
-  // 2. Registrar mudanca de status
-  // 3. Alertar se status critico (offline, bateria baixa, etc)
-}
-```
-
-### Fase 4: Sistema de Alertas
-
-Para eventos criticos, gerar alertas automaticos:
-
-| Evento | Severidade | Acao |
-|--------|------------|------|
-| DEVICES.DISASSOCIATED | CRITICA | Notificar monitoramento + push + email |
-| VEHICLES.DELETED | ALTA | Notificar operacoes + registrar auditoria |
-| device-events (offline) | MEDIA | Registrar + incluir em dashboard |
-| device-events (bateria < 20%) | MEDIA | Notificar monitoramento |
-
-### Fase 5: Log Completo de Webhooks
-
-Todos os webhooks recebidos serao registrados:
-1. Payload completo em JSONB
-2. IP de origem
-3. Timestamp
-4. Status de processamento
-5. Erro (se houver)
-
-### Fase 6: Interface de Visualizacao
-
-Adicionar na pagina de configuracao de plataformas:
-- Card mostrando "Webhooks Softruck"
-- Lista dos ultimos eventos recebidos
-- Filtros por tipo de evento
-- Status de processamento
-- Botao para reprocessar eventos com erro
 
 ---
 
-## Arquivos a Criar
+### Fase 2: Implementar Aguardo de Primeira Posicao
 
-| Arquivo | Descricao |
-|---------|-----------|
-| `supabase/functions/softruck-webhook/index.ts` | Edge Function para receber webhooks |
-| `src/components/rastreadores/SoftruckWebhooksPanel.tsx` | Painel de visualizacao de eventos |
-| `src/hooks/useSoftruckEventos.ts` | Hook para listar eventos |
+#### Opcao A: Verificacao Sincrona (Bloqueia conclusao)
+
+**Modificar:** `softruck-ativar-dispositivo`
+
+Apos vincular, tentar buscar posicao:
+```typescript
+// Aguardar ate 3 tentativas em 30 segundos
+for (let i = 0; i < 3; i++) {
+  const trackingResult = await callSoftruckApi(
+    supabaseUrl, supabaseAnonKey,
+    'tracking',
+    { veiculoId: softruckVehicleId, deviceId: softruckDeviceId }
+  );
+  
+  if (trackingResult.success && trackingResult.data?.latitude) {
+    console.log('[Softruck Ativar] Primeira posicao recebida!');
+    // Atualizar rastreador com posicao
+    await supabase.from('rastreadores').update({
+      ultima_comunicacao: new Date().toISOString(),
+      ultima_posicao_lat: trackingResult.data.latitude,
+      ultima_posicao_lng: trackingResult.data.longitude,
+    }).eq('id', rastreadorId);
+    break;
+  }
+  
+  await new Promise(r => setTimeout(r, 10000)); // Espera 10s
+}
+```
+
+#### Opcao B: Verificacao Assincrona (Nao bloqueia)
+
+**Criar:** `supabase/functions/verificar-instalacao-completa/index.ts`
+
+Job agendado (cron) que verifica instalacoes recentes:
+1. Busca rastreadores com `status = 'instalado'` e `ultima_comunicacao IS NULL`
+2. Tenta buscar posicao via API
+3. Se recebeu → Marca como ok
+4. Se > 4h sem posicao → Cria alerta para equipe
+
+---
+
+### Fase 3: Melhorar Feedback Visual
+
+**Modificar:** `src/pages/app/AppRastreamento.tsx`
+
+Adicionar estados visuais:
+- "Rastreador ativado - Aguardando primeira posicao GPS"
+- "Rastreador comunicando normalmente"
+- "Sem comunicacao ha X horas - Verifique o dispositivo"
+
+---
 
 ## Arquivos a Modificar
 
 | Arquivo | Alteracoes |
 |---------|------------|
-| `supabase/config.toml` | Adicionar config da nova edge function |
-| `src/pages/monitoramento/ConfigPlataformas.tsx` | Adicionar painel de webhooks |
+| `supabase/functions/softruck-ativar-dispositivo/index.ts` | Trocar `vincular-device-veiculo` por `associar-device-veiculo` |
+| `supabase/functions/softruck-ativar-dispositivo/index.ts` | Adicionar verificacao de primeira posicao (opcional) |
+| `src/pages/app/AppRastreamento.tsx` | Melhorar feedback de status pos-instalacao |
 
-## SQL Migration
+## Arquivos a Criar (Opcional)
 
-Criar tabela `softruck_eventos` com indices.
-
----
-
-## Configuracao no Painel Softruck
-
-Apos implementacao no SGA, sera necessario configurar no painel Softruck:
-
-1. **Acessar**: Painel Softruck > Configuracoes > Webhooks
-2. **URL do Webhook**: 
-   ```
-   https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/softruck-webhook
-   ```
-3. **Eventos a Assinar**:
-   - [x] DEVICES.ASSOCIATED
-   - [x] DEVICES.DISASSOCIATED
-   - [x] VEHICLES.CREATED
-   - [x] VEHICLES.DELETED
-   - [x] device-events
-4. **Autenticacao**: Configurar header `x-webhook-secret` (opcional)
+| Arquivo | Descricao |
+|---------|-----------|
+| `supabase/functions/verificar-instalacao-completa/index.ts` | Job para verificar primeira posicao assincronamente |
 
 ---
 
-## Estrutura do Webhook Endpoint
+## Teste Recomendado: Instalacao Completa do Inicio ao Fim
 
-```
-URL: https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/softruck-webhook
+### Pre-requisitos
 
-Metodo: POST
+1. `SOFTRUCK_PUBLIC_KEY` valida (bloqueador atual)
+2. Rastreador cadastrado no estoque com IMEI
+3. Device pre-cadastrado na Softruck com mesmo IMEI
+4. Associado e veiculo cadastrados no sistema
 
-Headers:
-- Content-Type: application/json
-- x-webhook-secret: (opcional, para validacao)
+### Passos do Teste
 
-Body (exemplo DEVICES.ASSOCIATED):
-{
-  "event": "DEVICES.ASSOCIATED",
-  "timestamp": "2026-01-29T12:00:00Z",
-  "data": {
-    "device": {
-      "id": "abc123",
-      "imei": "123456789012345"
-    },
-    "vehicle": {
-      "id": "xyz789",
-      "plate": "ABC1234"
-    }
-  }
-}
+1. **Login como Instalador** (`/instalador/login`)
+2. **Aceitar tarefa de instalacao** atribuida
+3. **Completar checklist** (5 etapas)
+   - Dados do veiculo
+   - Checklist de itens
+   - Fotos obrigatorias + video 360
+   - Assinatura do cliente
+   - Selecionar rastreador por IMEI
+4. **Clicar "Aprovar Instalacao"**
+5. **Verificar:**
+   - `rastreadores.status` = `instalado`
+   - `rastreadores.veiculo_id` = ID do veiculo
+   - `rastreadores.plataforma_device_id` preenchido
+   - `rastreadores.plataforma_veiculo_id` preenchido
+   - `veiculos.softruck_vehicle_id` preenchido
+6. **Se autovistoria previa aprovada:**
+   - `veiculos.cobertura_total` = true
+   - `associados.status` = `ativo`
+7. **Se fluxo padrao:**
+   - Analista deve processar vistoria
+   - Analista clica "Ativar Rastreador"
+   - Verificar mesmos campos acima
+8. **Abrir App do Associado**
+   - Veiculo deve aparecer no mapa
+   - Posicao deve carregar (se rastreador comunicando)
 
-Response esperada:
-- 200 OK: Evento processado
-- 400 Bad Request: Payload invalido
-- 401 Unauthorized: Token invalido
-- 500 Internal Error: Erro de processamento
-```
+### Resultado Esperado
 
----
+- Veiculo aparece no mapa em `/app/rastreamento`
+- Marcador mostra ultima posicao
+- Status mostra "Online" ou "Ultima atualizacao: X min atras"
 
-## Teste com Evento Simulado
+### Possivel Bloqueador
 
-Apos implementacao, testar com curl:
-
-```bash
-curl -X POST \
-  'https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/softruck-webhook' \
-  -H 'Content-Type: application/json' \
-  -H 'x-webhook-secret: SEU_SECRET' \
-  -d '{
-    "event": "DEVICES.ASSOCIATED",
-    "timestamp": "2026-01-29T12:00:00Z",
-    "data": {
-      "device": { "id": "abc123", "imei": "123456789012345" },
-      "vehicle": { "id": "xyz789", "plate": "ABC1234" }
-    }
-  }'
-```
+Se API retornar 401:
+- Veiculo aparece mas sem posicao atual
+- Mostra "Sem sinal GPS" ou dados do fallback local
 
 ---
 
-## Checklist de Implementacao
+## Checklist de Verificacao
 
-- [ ] Criar tabela `softruck_eventos`
-- [ ] Criar Edge Function `softruck-webhook`
-- [ ] Implementar handler para DEVICES.ASSOCIATED
-- [ ] Implementar handler para DEVICES.DISASSOCIATED
-- [ ] Implementar handler para VEHICLES.CREATED
-- [ ] Implementar handler para VEHICLES.DELETED
-- [ ] Implementar handler para device-events
-- [ ] Registrar todos eventos em log
-- [ ] Gerar alertas para eventos criticos
-- [ ] Notificar analistas quando necessario
-- [ ] Testar com evento simulado
-- [ ] Configurar webhook no painel Softruck
+- [ ] Endpoint `associar-device-veiculo` usado em vez de `vincular-device-veiculo`
+- [ ] Device buscado via GET /v2/devices?filters[imei]
+- [ ] Vehicle criado via POST /v2/vehicles (ou encontrado por placa)
+- [ ] Associacao via POST /v2/vehicles/associations/devices
+- [ ] Device ativado via PATCH /v2/devices/{id}/status/activation
+- [ ] IDs da plataforma salvos no banco local
+- [ ] Rastreador status alterado para `instalado`
+- [ ] Movimentacao de estoque registrada
+- [ ] Primeira posicao verificada apos instalacao (opcional)
+- [ ] Veiculo aparece no mapa do associado
 
 ---
 
-## Bloqueador
+## Resumo dos Gaps
 
-Antes de configurar o webhook no painel Softruck:
-1. A `SOFTRUCK_PUBLIC_KEY` deve estar valida (problema identificado anteriormente)
-2. A Edge Function deve estar deployada e acessivel
-3. O secret de validacao (se usado) deve ser configurado em ambos os lados
+| # | Gap | Severidade | Recomendacao |
+|---|-----|------------|--------------|
+| 1 | Usa PATCH em vez de POST para associacao | MEDIA | Corrigir para usar `associar-device-veiculo` |
+| 2 | Nao aguarda primeira posicao | BAIXA | Implementar verificacao assincrona |
+| 3 | Feedback visual pos-instalacao limitado | BAIXA | Adicionar estados na UI do app |
+| 4 | `SOFTRUCK_PUBLIC_KEY` invalida | CRITICO | Atualizar no painel Supabase |
 
+O item 4 continua sendo o bloqueador principal para todas as funcionalidades de integracao Softruck.
