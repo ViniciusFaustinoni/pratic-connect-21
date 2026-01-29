@@ -2502,6 +2502,163 @@ export type Database = {
         }
         Relationships: []
       }
+      candidatos: {
+        Row: {
+          avaliacao_gestor: string | null
+          avaliacao_rh: string | null
+          avaliacao_tecnica: string | null
+          cpf: string | null
+          created_at: string | null
+          curriculo_url: string | null
+          data_contratacao: string | null
+          disponibilidade_inicio: string | null
+          email: string | null
+          etapa: string | null
+          feedback_final: string | null
+          funcionario_id: string | null
+          id: string
+          indicado_por: string | null
+          linkedin_url: string | null
+          motivo_reprovacao: string | null
+          nome: string
+          nota_gestor: number | null
+          nota_rh: number | null
+          nota_tecnica: number | null
+          origem: string | null
+          portfolio_url: string | null
+          pretensao_salarial: number | null
+          status_candidato: string | null
+          telefone: string | null
+          updated_at: string | null
+          vaga_id: string
+        }
+        Insert: {
+          avaliacao_gestor?: string | null
+          avaliacao_rh?: string | null
+          avaliacao_tecnica?: string | null
+          cpf?: string | null
+          created_at?: string | null
+          curriculo_url?: string | null
+          data_contratacao?: string | null
+          disponibilidade_inicio?: string | null
+          email?: string | null
+          etapa?: string | null
+          feedback_final?: string | null
+          funcionario_id?: string | null
+          id?: string
+          indicado_por?: string | null
+          linkedin_url?: string | null
+          motivo_reprovacao?: string | null
+          nome: string
+          nota_gestor?: number | null
+          nota_rh?: number | null
+          nota_tecnica?: number | null
+          origem?: string | null
+          portfolio_url?: string | null
+          pretensao_salarial?: number | null
+          status_candidato?: string | null
+          telefone?: string | null
+          updated_at?: string | null
+          vaga_id: string
+        }
+        Update: {
+          avaliacao_gestor?: string | null
+          avaliacao_rh?: string | null
+          avaliacao_tecnica?: string | null
+          cpf?: string | null
+          created_at?: string | null
+          curriculo_url?: string | null
+          data_contratacao?: string | null
+          disponibilidade_inicio?: string | null
+          email?: string | null
+          etapa?: string | null
+          feedback_final?: string | null
+          funcionario_id?: string | null
+          id?: string
+          indicado_por?: string | null
+          linkedin_url?: string | null
+          motivo_reprovacao?: string | null
+          nome?: string
+          nota_gestor?: number | null
+          nota_rh?: number | null
+          nota_tecnica?: number | null
+          origem?: string | null
+          portfolio_url?: string | null
+          pretensao_salarial?: number | null
+          status_candidato?: string | null
+          telefone?: string | null
+          updated_at?: string | null
+          vaga_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "candidatos_funcionario_id_fkey"
+            columns: ["funcionario_id"]
+            isOneToOne: false
+            referencedRelation: "funcionarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "candidatos_funcionario_id_fkey"
+            columns: ["funcionario_id"]
+            isOneToOne: false
+            referencedRelation: "view_aniversariantes_mes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "candidatos_funcionario_id_fkey"
+            columns: ["funcionario_id"]
+            isOneToOne: false
+            referencedRelation: "view_funcionarios_ativos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "candidatos_vaga_id_fkey"
+            columns: ["vaga_id"]
+            isOneToOne: false
+            referencedRelation: "vagas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      candidatos_historico: {
+        Row: {
+          candidato_id: string
+          created_at: string | null
+          etapa_anterior: string | null
+          etapa_nova: string
+          id: string
+          observacao: string | null
+          responsavel_id: string | null
+        }
+        Insert: {
+          candidato_id: string
+          created_at?: string | null
+          etapa_anterior?: string | null
+          etapa_nova: string
+          id?: string
+          observacao?: string | null
+          responsavel_id?: string | null
+        }
+        Update: {
+          candidato_id?: string
+          created_at?: string | null
+          etapa_anterior?: string | null
+          etapa_nova?: string
+          id?: string
+          observacao?: string | null
+          responsavel_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "candidatos_historico_candidato_id_fkey"
+            columns: ["candidato_id"]
+            isOneToOne: false
+            referencedRelation: "candidatos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cargos: {
         Row: {
           ativo: boolean | null
@@ -6010,6 +6167,89 @@ export type Database = {
           },
         ]
       }
+      entrevistas: {
+        Row: {
+          avaliacao: string | null
+          candidato_id: string
+          created_at: string | null
+          data_hora: string
+          duracao_minutos: number | null
+          entrevistador_id: string | null
+          entrevistador_nome: string | null
+          id: string
+          link_online: string | null
+          local_entrevista: string | null
+          nota: number | null
+          observacoes: string | null
+          status_entrevista: string | null
+          tipo_entrevista: string
+          updated_at: string | null
+        }
+        Insert: {
+          avaliacao?: string | null
+          candidato_id: string
+          created_at?: string | null
+          data_hora: string
+          duracao_minutos?: number | null
+          entrevistador_id?: string | null
+          entrevistador_nome?: string | null
+          id?: string
+          link_online?: string | null
+          local_entrevista?: string | null
+          nota?: number | null
+          observacoes?: string | null
+          status_entrevista?: string | null
+          tipo_entrevista: string
+          updated_at?: string | null
+        }
+        Update: {
+          avaliacao?: string | null
+          candidato_id?: string
+          created_at?: string | null
+          data_hora?: string
+          duracao_minutos?: number | null
+          entrevistador_id?: string | null
+          entrevistador_nome?: string | null
+          id?: string
+          link_online?: string | null
+          local_entrevista?: string | null
+          nota?: number | null
+          observacoes?: string | null
+          status_entrevista?: string | null
+          tipo_entrevista?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "entrevistas_candidato_id_fkey"
+            columns: ["candidato_id"]
+            isOneToOne: false
+            referencedRelation: "candidatos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "entrevistas_entrevistador_id_fkey"
+            columns: ["entrevistador_id"]
+            isOneToOne: false
+            referencedRelation: "funcionarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "entrevistas_entrevistador_id_fkey"
+            columns: ["entrevistador_id"]
+            isOneToOne: false
+            referencedRelation: "view_aniversariantes_mes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "entrevistas_entrevistador_id_fkey"
+            columns: ["entrevistador_id"]
+            isOneToOne: false
+            referencedRelation: "view_funcionarios_ativos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       estoque_movimentacoes: {
         Row: {
           created_at: string | null
@@ -7312,13 +7552,6 @@ export type Database = {
             columns: ["funcionario_id"]
             isOneToOne: false
             referencedRelation: "view_funcionarios_ativos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "funcionarios_treinamentos_treinamento_id_fkey"
-            columns: ["treinamento_id"]
-            isOneToOne: false
-            referencedRelation: "treinamentos"
             referencedColumns: ["id"]
           },
         ]
@@ -13940,54 +14173,168 @@ export type Database = {
       }
       treinamentos: {
         Row: {
-          ativo: boolean | null
           carga_horaria: number | null
+          certificado_template: string | null
+          codigo: string | null
+          conteudo: string | null
           created_at: string | null
-          custo_por_pessoa: number | null
           data_fim: string | null
           data_inicio: string | null
-          descricao: string | null
           id: string
-          instituicao: string | null
-          instrutor: string | null
-          modalidade: string | null
+          instrutor_id: string | null
+          instrutor_nome: string | null
+          instrutor_tipo: string | null
+          link_online: string | null
+          local_treinamento: string | null
+          modalidade: string
           nome: string
-          tipo: string | null
-          vagas: number | null
+          objetivo: string | null
+          pre_requisitos: string | null
+          publico_alvo: string | null
+          status_treinamento: string | null
+          tipo: string
+          updated_at: string | null
+          valor_investimento: number | null
         }
         Insert: {
-          ativo?: boolean | null
           carga_horaria?: number | null
+          certificado_template?: string | null
+          codigo?: string | null
+          conteudo?: string | null
           created_at?: string | null
-          custo_por_pessoa?: number | null
           data_fim?: string | null
           data_inicio?: string | null
-          descricao?: string | null
           id?: string
-          instituicao?: string | null
-          instrutor?: string | null
-          modalidade?: string | null
+          instrutor_id?: string | null
+          instrutor_nome?: string | null
+          instrutor_tipo?: string | null
+          link_online?: string | null
+          local_treinamento?: string | null
+          modalidade: string
           nome: string
-          tipo?: string | null
-          vagas?: number | null
+          objetivo?: string | null
+          pre_requisitos?: string | null
+          publico_alvo?: string | null
+          status_treinamento?: string | null
+          tipo: string
+          updated_at?: string | null
+          valor_investimento?: number | null
         }
         Update: {
-          ativo?: boolean | null
           carga_horaria?: number | null
+          certificado_template?: string | null
+          codigo?: string | null
+          conteudo?: string | null
           created_at?: string | null
-          custo_por_pessoa?: number | null
           data_fim?: string | null
           data_inicio?: string | null
-          descricao?: string | null
           id?: string
-          instituicao?: string | null
-          instrutor?: string | null
-          modalidade?: string | null
+          instrutor_id?: string | null
+          instrutor_nome?: string | null
+          instrutor_tipo?: string | null
+          link_online?: string | null
+          local_treinamento?: string | null
+          modalidade?: string
           nome?: string
-          tipo?: string | null
-          vagas?: number | null
+          objetivo?: string | null
+          pre_requisitos?: string | null
+          publico_alvo?: string | null
+          status_treinamento?: string | null
+          tipo?: string
+          updated_at?: string | null
+          valor_investimento?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "treinamentos_instrutor_id_fkey"
+            columns: ["instrutor_id"]
+            isOneToOne: false
+            referencedRelation: "funcionarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "treinamentos_instrutor_id_fkey"
+            columns: ["instrutor_id"]
+            isOneToOne: false
+            referencedRelation: "view_aniversariantes_mes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "treinamentos_instrutor_id_fkey"
+            columns: ["instrutor_id"]
+            isOneToOne: false
+            referencedRelation: "view_funcionarios_ativos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      treinamentos_participantes: {
+        Row: {
+          certificado_emitido_em: string | null
+          certificado_url: string | null
+          created_at: string | null
+          funcionario_id: string
+          id: string
+          nota: number | null
+          observacoes: string | null
+          presenca_percentual: number | null
+          status_participante: string | null
+          treinamento_id: string
+        }
+        Insert: {
+          certificado_emitido_em?: string | null
+          certificado_url?: string | null
+          created_at?: string | null
+          funcionario_id: string
+          id?: string
+          nota?: number | null
+          observacoes?: string | null
+          presenca_percentual?: number | null
+          status_participante?: string | null
+          treinamento_id: string
+        }
+        Update: {
+          certificado_emitido_em?: string | null
+          certificado_url?: string | null
+          created_at?: string | null
+          funcionario_id?: string
+          id?: string
+          nota?: number | null
+          observacoes?: string | null
+          presenca_percentual?: number | null
+          status_participante?: string | null
+          treinamento_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "treinamentos_participantes_funcionario_id_fkey"
+            columns: ["funcionario_id"]
+            isOneToOne: false
+            referencedRelation: "funcionarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "treinamentos_participantes_funcionario_id_fkey"
+            columns: ["funcionario_id"]
+            isOneToOne: false
+            referencedRelation: "view_aniversariantes_mes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "treinamentos_participantes_funcionario_id_fkey"
+            columns: ["funcionario_id"]
+            isOneToOne: false
+            referencedRelation: "view_funcionarios_ativos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "treinamentos_participantes_treinamento_id_fkey"
+            columns: ["treinamento_id"]
+            isOneToOne: false
+            referencedRelation: "treinamentos"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
@@ -14083,6 +14430,126 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
             referencedColumns: ["vendedor_id"]
+          },
+        ]
+      }
+      vagas: {
+        Row: {
+          atividades: string | null
+          beneficios_vaga: string | null
+          cargo_id: string | null
+          codigo: string | null
+          created_at: string | null
+          created_by: string | null
+          departamento_id: string | null
+          encerrado_em: string | null
+          gestor_id: string | null
+          id: string
+          jornada: string | null
+          local_trabalho: string | null
+          motivo_encerramento: string | null
+          publicado_em: string | null
+          quantidade: number | null
+          requisitos: string | null
+          requisitos_desejaveis: string | null
+          salario_max: number | null
+          salario_min: number | null
+          salario_publico: boolean | null
+          status_vaga: string | null
+          tipo_contrato: string | null
+          titulo: string
+          updated_at: string | null
+          urgencia: string | null
+        }
+        Insert: {
+          atividades?: string | null
+          beneficios_vaga?: string | null
+          cargo_id?: string | null
+          codigo?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          departamento_id?: string | null
+          encerrado_em?: string | null
+          gestor_id?: string | null
+          id?: string
+          jornada?: string | null
+          local_trabalho?: string | null
+          motivo_encerramento?: string | null
+          publicado_em?: string | null
+          quantidade?: number | null
+          requisitos?: string | null
+          requisitos_desejaveis?: string | null
+          salario_max?: number | null
+          salario_min?: number | null
+          salario_publico?: boolean | null
+          status_vaga?: string | null
+          tipo_contrato?: string | null
+          titulo: string
+          updated_at?: string | null
+          urgencia?: string | null
+        }
+        Update: {
+          atividades?: string | null
+          beneficios_vaga?: string | null
+          cargo_id?: string | null
+          codigo?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          departamento_id?: string | null
+          encerrado_em?: string | null
+          gestor_id?: string | null
+          id?: string
+          jornada?: string | null
+          local_trabalho?: string | null
+          motivo_encerramento?: string | null
+          publicado_em?: string | null
+          quantidade?: number | null
+          requisitos?: string | null
+          requisitos_desejaveis?: string | null
+          salario_max?: number | null
+          salario_min?: number | null
+          salario_publico?: boolean | null
+          status_vaga?: string | null
+          tipo_contrato?: string | null
+          titulo?: string
+          updated_at?: string | null
+          urgencia?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vagas_cargo_id_fkey"
+            columns: ["cargo_id"]
+            isOneToOne: false
+            referencedRelation: "cargos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vagas_departamento_id_fkey"
+            columns: ["departamento_id"]
+            isOneToOne: false
+            referencedRelation: "departamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vagas_gestor_id_fkey"
+            columns: ["gestor_id"]
+            isOneToOne: false
+            referencedRelation: "funcionarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vagas_gestor_id_fkey"
+            columns: ["gestor_id"]
+            isOneToOne: false
+            referencedRelation: "view_aniversariantes_mes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vagas_gestor_id_fkey"
+            columns: ["gestor_id"]
+            isOneToOne: false
+            referencedRelation: "view_funcionarios_ativos"
+            referencedColumns: ["id"]
           },
         ]
       }
