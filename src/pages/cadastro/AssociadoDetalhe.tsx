@@ -5,7 +5,7 @@ import {
   FileCheck, FileText, Clock, Edit, AlertTriangle, Loader2,
   Receipt, MoreHorizontal, CheckCircle, XCircle, Pause, Play, Plus,
   CreditCard, Shield, Eye, ExternalLink, Wifi, WifiOff, Send, History,
-  TrendingUp, DollarSign, Camera, Image, Radio
+  TrendingUp, DollarSign, Camera, Image, Radio, RefreshCw
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -43,6 +43,12 @@ import {
   Dialog,
   DialogContent,
 } from '@/components/ui/dialog';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { 
   STATUS_ASSOCIADO_LABELS, 
   STATUS_VEICULO_LABELS,
@@ -62,6 +68,7 @@ import { useAssociadoHistoricoCompleto } from '@/hooks/useAssociadoHistoricoComp
 import { VeiculoDetalhesModal } from '@/components/cadastro/VeiculoDetalhesModal';
 import { VeiculoEditDialog } from '@/components/veiculos/VeiculoEditDialog';
 import { useAtivarRastreadorPlataforma } from '@/hooks/useVistoriaCompletaAnalise';
+import { useStatusClienteRedeVeiculos, useSincronizarStatusRedeVeiculos, getStatusPlataformaLabel, getStatusSincronizacaoCor } from '@/hooks/useRedeVeiculosStatus';
 import { cn } from '@/lib/utils';
 
 // ============================================
@@ -261,6 +268,10 @@ export default function AssociadoDetalhe() {
   
   // Ativação de rastreador na plataforma
   const ativarRastreadorMutation = useAtivarRastreadorPlataforma();
+  
+  // Status na plataforma Rede Veículos
+  const { data: statusPlataforma, isLoading: isLoadingStatusPlataforma, refetch: refetchStatusPlataforma } = useStatusClienteRedeVeiculos(id);
+  const sincronizarStatusMutation = useSincronizarStatusRedeVeiculos();
 
   // Handlers
   const handleWhatsApp = () => {
@@ -405,11 +416,40 @@ export default function AssociadoDetalhe() {
                 </AvatarFallback>
               </Avatar>
               <div className="space-y-1">
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
                   <h1 className="text-2xl font-bold">{associado.nome}</h1>
                   <Badge className={cn(getStatusColor())}>
                     {getStatusLabel()}
                   </Badge>
+                  {/* Badge de sincronização com Rede Veículos */}
+                  {statusPlataforma && statusPlataforma.dados?.veiculosVinculados > 0 && (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Badge 
+                            className={cn(
+                              'cursor-pointer',
+                              statusPlataforma.sincronizado 
+                                ? 'bg-blue-100 text-blue-800 border-blue-200' 
+                                : 'bg-red-100 text-red-800 border-red-200'
+                            )}
+                          >
+                            <Radio className="h-3 w-3 mr-1" />
+                            {statusPlataforma.sincronizado ? 'Rede Veículos' : 'Dessincronizado'}
+                          </Badge>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <div className="text-xs space-y-1">
+                            <p><strong>Status Plataforma:</strong> {getStatusPlataformaLabel(statusPlataforma.statusPlataforma)}</p>
+                            <p><strong>Veículos:</strong> {statusPlataforma.dados.veiculosAtivos} ativos, {statusPlataforma.dados.veiculosInativos} inativos</p>
+                            {statusPlataforma.dados.adimplente !== null && (
+                              <p><strong>Adimplente:</strong> {statusPlataforma.dados.adimplente ? 'Sim' : 'Não'}</p>
+                            )}
+                          </div>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
                 </div>
                 <div className="flex items-center gap-4 text-sm text-muted-foreground">
                   <span>CPF: {formatCPFMasked(associado.cpf)}</span>
@@ -454,6 +494,34 @@ export default function AssociadoDetalhe() {
                   {isReativando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
                   Reativar
                 </Button>
+              )}
+              
+              {/* Botão de sincronização com Rede Veículos */}
+              {statusPlataforma && statusPlataforma.dados?.veiculosVinculados > 0 && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => sincronizarStatusMutation.mutate({ associadoId: id!, forcarAtualizacao: true })}
+                        disabled={sincronizarStatusMutation.isPending}
+                        className={cn(
+                          !statusPlataforma.sincronizado && 'border-red-300 text-red-600 hover:bg-red-50'
+                        )}
+                      >
+                        {sincronizarStatusMutation.isPending ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <RefreshCw className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Sincronizar com Rede Veículos</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               )}
 
               <DropdownMenu>

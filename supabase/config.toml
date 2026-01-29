@@ -290,3 +290,12 @@ verify_jwt = false
 
 [functions.rede-veiculos-ativar-cliente-completo]
 verify_jwt = false
+
+[functions.rede-veiculos-obter-status-cliente]
+verify_jwt = false
+
+[functions.rede-veiculos-obter-status-veiculo]
+verify_jwt = false
+
+[functions.rede-veiculos-sincronizar-status]
+verify_jwt = false
