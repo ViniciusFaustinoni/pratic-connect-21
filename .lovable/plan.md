@@ -1,350 +1,329 @@
 
-# Revisao Completa - Fluxo de Desvinculacao de Equipamento na Rede Veiculos
+# Revisao Completa - Fluxo de Atualizacao de Dados do Cliente na Rede Veiculos
 
 ## Resumo Executivo
 
 | Item | Status | Detalhes |
 |------|--------|----------|
-| Endpoint POST /desvincularClienteVeiculo | **NAO EXISTE** | Nao ha edge function para desvinculacao |
-| Desvinculacao ao cancelar contrato | **NAO IMPLEMENTADO** | Apenas atualiza banco local |
-| Desvinculacao ao substituir equipamento | **NAO IMPLEMENTADO** | Funcionalidade nao existe |
-| Desvinculacao ao vender veiculo | **NAO IMPLEMENTADO** | Funcionalidade nao existe |
-| Desvinculacao ao dar baixa no estoque | **NAO IMPLEMENTADO** | Apenas atualiza status local |
-| IMEI enviado corretamente | **NAO** | Nenhuma integracao ativa |
-| CPF/CNPJ do cliente enviado | **NAO** | Nenhuma integracao ativa |
-| Placa/Chassi enviado | **NAO** | Nenhuma integracao ativa |
-| Equipamento liberado apos desvinculacao | **PARCIAL** | Status atualizado localmente, mas nao na plataforma |
+| Endpoint POST /atualizarDadosCliente | **NAO EXISTE** | Nao ha edge function para atualizacao de dados |
+| Atualizacao quando associado edita no App | **NAO IMPLEMENTADO** | Apenas atualiza banco local |
+| Atualizacao quando atendimento corrige dados | **NAO IMPLEMENTADO** | Apenas atualiza banco local |
+| Atualizacao quando associado muda endereco | **NAO IMPLEMENTADO** | Apenas atualiza banco local |
+| Atualizacao de permissoes (alertas, acesso web) | **NAO IMPLEMENTADO** | Permissoes fixas na vinculacao |
+| Envio apenas de campos alterados | **NAO** | Nenhuma integracao ativa |
+| CPF/CNPJ como identificador imutavel | **NAO** | Nenhuma integracao ativa |
+| Sincronizacao imediata com plataforma | **NAO** | Dados ficam dessincronizados |
 
 ---
 
 ## Analise Detalhada
 
-### 1. Estado Atual - Nenhuma Integracao de Desvinculacao
+### 1. Estado Atual - Nenhuma Integracao de Atualizacao
 
-Diferentemente da Softruck que possui o endpoint `desassociar-device-veiculo` na edge function `softruck-api`, a Rede Veiculos **nao possui nenhuma implementacao de desvinculacao**.
+A plataforma Rede Veiculos possui apenas dois endpoints implementados para gestao de clientes:
 
-**Comparacao das Plataformas:**
+| Endpoint | Edge Function | Status |
+|----------|---------------|--------|
+| POST /vincularClienteVeiculo | `rede-veiculos-vincular-cliente` | Implementado |
+| POST /desvincularClienteVeiculo | `rede-veiculos-desvincular-cliente` | Implementado |
+| POST /atualizarDadosCliente | **NAO EXISTE** | **Gap critico** |
 
-| Funcionalidade | Softruck | Rede Veiculos |
-|----------------|----------|---------------|
-| Vincular equipamento | `softruck-ativar-dispositivo` | `rede-veiculos-vincular-cliente` |
-| Desvincular equipamento | `softruck-api` (desassociar-device-veiculo) | **NAO EXISTE** |
-| Retornar ao estoque | **PARCIAL** (apenas local) | **PARCIAL** (apenas local) |
+### 2. Cenarios Onde Deveria Chamar /atualizarDadosCliente
 
-### 2. Cenarios Onde Deveria Chamar /desvincularClienteVeiculo
+#### 2.1 Quando o Associado Atualiza Dados no App
 
-#### 2.1 Quando o Associado Cancela o Contrato
+**Arquivo:** `src/pages/app/AppPerfil.tsx` (linhas 686-743)
 
-**Arquivo:** `src/hooks/useAssociados.ts` (linha 540-554)
-
-```typescript
-const cancelarAssociado = useMutation({
-  mutationFn: async ({ id, motivo }: { id: string; motivo: string }) => {
-    // APENAS atualiza status local
-    const { error } = await supabase.from('associados').update({
-      status: 'cancelado',
-      motivo_bloqueio: motivo,
-    }).eq('id', id);
-  },
-});
-```
-
-**Gap:** Nao busca rastreadores vinculados e nao notifica a plataforma Rede Veiculos.
-
-#### 2.2 Quando Ha Substituicao de Equipamento por Defeito
-
-**Status:** Funcionalidade **NAO EXISTE** no sistema.
-
-Nao ha interface ou fluxo para:
-- Trocar um rastreador defeituoso por outro
-- Desvincular o equipamento antigo
-- Vincular o equipamento novo
-- Manter historico de substituicoes
-
-#### 2.3 Quando o Veiculo e Vendido
-
-**Status:** Funcionalidade **NAO EXISTE** no sistema.
-
-Nao ha processo para:
-- Marcar veiculo como vendido
-- Liberar o rastreador para nova instalacao
-- Desvincular na plataforma
-
-#### 2.4 Quando Ha Baixa do Rastreador no Estoque
-
-**Arquivo:** `src/components/rastreadores/RastreadorDetailDrawer.tsx` (linha 82-85)
+O modal `ModalEditarDadosPessoais` permite ao associado alterar:
+- Nome
+- Email
+- Telefone
+- WhatsApp
+- Data de Nascimento
 
 ```typescript
-const handleStatusChange = async (status: StatusRastreador) => {
-  if (!rastreadorId) return;
-  await updateStatus.mutateAsync({ id: rastreadorId, status });
+// AppPerfil.tsx - linha 727-735
+const handleSalvar = async () => {
+  await onSave({ 
+    nome, 
+    email, 
+    telefone, 
+    whatsapp,
+    data_nascimento: dataNascimento ? format(dataNascimento, 'yyyy-MM-dd') : null
+  });
+  // APENAS atualiza banco local via useUpdateAssociado
+  // NAO notifica plataforma Rede Veiculos
 };
 ```
 
-**Arquivo:** `src/hooks/useRastreadores.ts` (linha 224-258)
+**Hook utilizado:** `src/hooks/useMyData.ts` (linhas 492-510)
 
 ```typescript
-export function useUpdateRastreadorStatus() {
+export function useUpdateAssociado() {
   return useMutation({
-    mutationFn: async ({ id, status, veiculo_id }) => {
-      const updateData = { status };
-      
-      // If status is not 'instalado', clear vehicle association
-      if (status !== 'instalado') {
-        updateData.veiculo_id = null; // APENAS LOCAL!
-      }
-
-      const { data: result, error } = await supabase
-        .from('rastreadores')
-        .update(updateData)
-        .eq('id', id)
-        .select()
-        .single();
+    mutationFn: async (data: Partial<Associado>) => {
+      // APENAS atualiza Supabase local
+      await supabase.from('associados').update(data).eq('user_id', user.id);
+      // NAO chama API Rede Veiculos
     },
   });
 }
 ```
 
-**Gap Critico:** Ao mudar status para `estoque`, `manutencao` ou `baixado`:
-- Atualiza `veiculo_id = null` apenas localmente
-- **NAO** chama API da Rede Veiculos
-- **NAO** libera equipamento na plataforma
-- Equipamento continua vinculado na Rede Veiculos
+**Gap:** Associado pode atualizar telefone no app, mas na Rede Veiculos permanece o telefone antigo.
+
+#### 2.2 Quando o Atendimento Corrige Dados
+
+**Arquivo:** `src/components/associados/AssociadoEditDialog.tsx` (linhas 154-191)
+
+O atendente pode editar todos os campos do associado pelo painel administrativo:
+
+```typescript
+const handleSubmit = async (data: FormData) => {
+  await updateAssociado.mutateAsync({
+    id: associado.id,
+    ...data,  // Todos os campos
+  });
+  // APENAS atualiza banco local
+  // NAO sincroniza com Rede Veiculos
+};
+```
+
+**Hook utilizado:** `src/hooks/useAssociados.ts` (linhas 712-732)
+
+```typescript
+export function useUpdateAssociado() {
+  return useMutation({
+    mutationFn: async ({ id, ...updates }) => {
+      await supabase.from('associados').update(updates).eq('id', id);
+      // NAO chama API externa
+    },
+  });
+}
+```
+
+#### 2.3 Quando o Associado Muda de Endereco
+
+**Arquivo:** `src/pages/app/AppPerfil.tsx` (possui modal de endereco)
+
+O associado pode atualizar endereco pelo app, mas a alteracao nao e propagada para a plataforma Rede Veiculos.
+
+#### 2.4 Quando Ha Alteracao nas Permissoes
+
+**Estado atual das permissoes:**
+
+Na vinculacao (`rede-veiculos-vincular-cliente`), as permissoes sao enviadas **hardcoded**:
+
+```typescript
+// rede-veiculos-vincular-cliente/index.ts - linhas 273-279
+permissoes: {
+  acessoWeb: true,        // Fixo
+  pushNotifications: true, // Fixo
+  alertaVelocidade: true,  // Fixo
+  alertaCercaVirtual: true,// Fixo
+  alertaIgnicao: true,     // Fixo
+},
+```
+
+**Nao existe:**
+- Tela para o associado configurar preferencias de alertas
+- Tela para o atendente alterar permissoes
+- Endpoint para atualizar permissoes na Rede Veiculos
+
+---
+
+## Campos de Permissoes no Banco Local
+
+A tabela `veiculos` possui campos para alertas que **NAO estao sendo usados**:
+
+| Campo | Tipo | Uso Atual |
+|-------|------|-----------|
+| `alerta_velocidade_ativo` | boolean | Nao utilizado na integracao |
+| `alerta_cerca_ativo` | boolean | Nao utilizado na integracao |
+| `alerta_ignicao_ativo` | boolean | Nao utilizado na integracao |
+| `rede_veiculos_cliente_id` | varchar | ID do cliente na plataforma |
+| `rede_veiculos_veiculo_id` | varchar | ID do veiculo na plataforma |
 
 ---
 
 ## Impactos dos Gaps
 
-### Impacto 1: Equipamentos "Fantasma" na Plataforma
+### Impacto 1: Dados Dessincronizados
 
-Quando um rastreador e desvinculado localmente:
-- Na Rede Veiculos, o equipamento continua vinculado ao cliente/veiculo
-- Pode gerar cobrancas indevidas na plataforma
-- Cliente continua recebendo notificacoes de veiculo que nao possui mais
+Quando um associado atualiza o telefone no app:
+- Banco local: telefone atualizado
+- Rede Veiculos: telefone antigo
+- Consequencia: Central de monitoramento tem contato errado
 
-### Impacto 2: Impossibilidade de Reutilizar Equipamento
+### Impacto 2: Email de Recuperacao Incorreto
 
-Se o equipamento nao for desvinculado na plataforma:
-- Ao tentar vincular a outro cliente, pode dar erro de duplicidade
-- Historico fica poluido com dados de clientes anteriores
+Se o associado mudar o email no sistema:
+- Associado nao consegue acessar portal Rede Veiculos
+- Notificacoes da plataforma vao para email errado
 
-### Impacto 3: Problemas na Substituicao
+### Impacto 3: Endereco para Atendimento Errado
 
-Sem fluxo de substituicao:
-- Tecnico precisa manualmente:
-  1. Recolher equipamento defeituoso
-  2. Dar baixa no sistema
-  3. Instalar novo equipamento
-  4. Vincular manualmente
-- Perdas de historico e rastreabilidade
+Quando o associado muda de endereco:
+- Guincho/assistencia podem ir para endereco antigo
+- Analise de cercas virtuais fica incorreta
+
+### Impacto 4: Permissoes Nao Configuráveis
+
+Associado nao pode:
+- Desativar alertas indesejados
+- Configurar limite de velocidade personalizado
+- Gerenciar notificacoes push
 
 ---
 
 ## Plano de Implementacao
 
-### Fase 1: Criar Edge Function rede-veiculos-desvincular-cliente
+### Fase 1: Criar Edge Function rede-veiculos-atualizar-cliente
 
-**Novo arquivo:** `supabase/functions/rede-veiculos-desvincular-cliente/index.ts`
+**Novo arquivo:** `supabase/functions/rede-veiculos-atualizar-cliente/index.ts`
 
 ```typescript
 interface RequestBody {
-  imei: string;
-  cpfCnpj?: string;
-  placa?: string;
-  chassi?: string;
-  motivo?: string;
+  associadoId: string;
+  camposAlterados: {
+    nome?: string;
+    email?: string;
+    celular?: string;
+    endereco?: {
+      cep?: string;
+      logradouro?: string;
+      numero?: string;
+      bairro?: string;
+      cidade?: string;
+      uf?: string;
+    };
+    permissoes?: {
+      acessoWeb?: boolean;
+      pushNotifications?: boolean;
+      alertaVelocidade?: boolean;
+      alertaCercaVirtual?: boolean;
+      alertaIgnicao?: boolean;
+    };
+  };
 }
 
 // Fluxo:
-// 1. Buscar rastreador local pelo IMEI
-// 2. Validar que e plataforma rede_veiculos
-// 3. Buscar veiculo vinculado (para obter placa/chassi)
-// 4. Buscar associado vinculado (para obter CPF/CNPJ)
-// 5. Chamar POST /desvincularClienteVeiculo na API Rede Veiculos
-// 6. Atualizar banco local:
-//    - rastreador.status = 'estoque'
-//    - rastreador.veiculo_id = null
-//    - rastreador.plataforma_device_id = null (limpar vinculo)
-// 7. Registrar log de desvinculacao
+// 1. Buscar associado e veiculos com rastreador Rede Veiculos
+// 2. Validar que ha vinculo ativo (rede_veiculos_cliente_id)
+// 3. Montar payload apenas com campos alterados
+// 4. Usar CPF/CNPJ como identificador (nao pode ser alterado)
+// 5. Chamar POST /atualizarDadosCliente na API Rede Veiculos
+// 6. Registrar log de atualizacao
 ```
 
 **Payload esperado para API:**
 ```json
 {
-  "imei": "123456789012345",
   "cpfCnpj": "12345678901",
-  "placa": "ABC1234",
-  "motivo": "cancelamento_contrato"
+  "camposAlterados": {
+    "celular": "21999998888",
+    "email": "novo@email.com"
+  }
 }
 ```
 
-### Fase 2: Integrar nos Momentos Apropriados
+### Fase 2: Integrar nos Hooks de Atualizacao
 
-#### 2.1 Ao Cancelar Associado
+#### 2.1 No App do Associado
+
+**Modificar:** `src/hooks/useMyData.ts`
+
+```typescript
+export function useUpdateAssociado() {
+  return useMutation({
+    mutationFn: async (data: Partial<Associado>) => {
+      // 1. Atualizar banco local
+      await supabase.from('associados').update(data).eq('user_id', user.id);
+      
+      // 2. Verificar se associado tem veiculo com rastreador Rede Veiculos
+      const { data: associado } = await supabase
+        .from('associados')
+        .select('id, veiculos(rede_veiculos_cliente_id)')
+        .eq('user_id', user.id)
+        .single();
+      
+      const temRedeVeiculos = associado?.veiculos?.some(v => v.rede_veiculos_cliente_id);
+      
+      // 3. Se tem, sincronizar com plataforma
+      if (temRedeVeiculos) {
+        await supabase.functions.invoke('rede-veiculos-atualizar-cliente', {
+          body: {
+            associadoId: associado.id,
+            camposAlterados: data,
+          },
+        });
+      }
+    },
+  });
+}
+```
+
+#### 2.2 No Painel Administrativo
 
 **Modificar:** `src/hooks/useAssociados.ts`
 
 ```typescript
-const cancelarAssociado = useMutation({
-  mutationFn: async ({ id, motivo }) => {
-    // 1. Buscar veiculos do associado com rastreadores
-    const { data: veiculos } = await supabase
-      .from('veiculos')
-      .select('id, placa, chassi, rastreadores(*)')
-      .eq('associado_id', id);
-    
-    // 2. Para cada rastreador Rede Veiculos, desvincular
-    for (const veiculo of veiculos || []) {
-      const rastreador = veiculo.rastreadores?.[0];
-      if (rastreador?.plataforma === 'rede_veiculos') {
-        await supabase.functions.invoke('rede-veiculos-desvincular-cliente', {
-          body: {
-            imei: rastreador.imei,
-            motivo: 'cancelamento_contrato',
-          },
+export function useUpdateAssociado() {
+  return useMutation({
+    mutationFn: async ({ id, ...updates }) => {
+      // 1. Atualizar banco local
+      await supabase.from('associados').update(updates).eq('id', id);
+      
+      // 2. Verificar se tem vinculo Rede Veiculos
+      const { data: veiculos } = await supabase
+        .from('veiculos')
+        .select('rede_veiculos_cliente_id')
+        .eq('associado_id', id);
+      
+      const temRedeVeiculos = veiculos?.some(v => v.rede_veiculos_cliente_id);
+      
+      // 3. Se tem, sincronizar
+      if (temRedeVeiculos) {
+        await supabase.functions.invoke('rede-veiculos-atualizar-cliente', {
+          body: { associadoId: id, camposAlterados: updates },
         });
       }
-    }
-    
-    // 3. Atualizar status do associado
-    await supabase.from('associados').update({
-      status: 'cancelado',
-      motivo_bloqueio: motivo,
-    }).eq('id', id);
-  },
-});
-```
-
-#### 2.2 Ao Mudar Status do Rastreador
-
-**Modificar:** `src/hooks/useRastreadores.ts`
-
-```typescript
-export function useUpdateRastreadorStatus() {
-  return useMutation({
-    mutationFn: async ({ id, status }) => {
-      // 1. Buscar rastreador atual
-      const { data: rastreador } = await supabase
-        .from('rastreadores')
-        .select('*, veiculos(placa, chassi, associados(cpf))')
-        .eq('id', id)
-        .single();
-      
-      // 2. Se estava instalado e vai para outro status, desvincular
-      if (rastreador?.status === 'instalado' && status !== 'instalado') {
-        if (rastreador.plataforma === 'rede_veiculos' && rastreador.veiculo_id) {
-          await supabase.functions.invoke('rede-veiculos-desvincular-cliente', {
-            body: { imei: rastreador.imei, motivo: `status_${status}` },
-          });
-        } else if (rastreador.plataforma === 'softruck') {
-          // Softruck ja tem fluxo de desassociacao
-          await supabase.functions.invoke('softruck-api', {
-            body: {
-              operation: 'desassociar-device-veiculo',
-              data: { associationId: rastreador.softruck_association_id },
-            },
-          });
-        }
-      }
-      
-      // 3. Atualizar banco local
-      return await supabase.from('rastreadores').update({
-        status,
-        veiculo_id: status !== 'instalado' ? null : undefined,
-      }).eq('id', id).select().single();
     },
   });
 }
 ```
 
-### Fase 3: Criar Funcionalidade de Substituicao de Equipamento
+### Fase 3: Criar Tela de Configuracao de Alertas
 
-**Novo arquivo:** `src/hooks/useSubstituirEquipamento.ts`
+**Novo arquivo:** `src/components/app/ConfiguracaoAlertasCard.tsx`
+
+Card no app do associado para configurar:
+- Ativar/desativar alertas de velocidade
+- Ativar/desativar alertas de cerca virtual
+- Ativar/desativar alertas de ignicao
+- Ativar/desativar notificacoes push
+- Definir limite de velocidade personalizado
+
+**Novo arquivo:** `src/hooks/useAtualizarPermissoesRastreador.ts`
 
 ```typescript
-interface SubstituirEquipamentoParams {
-  rastreadorAntigoId: string;
-  rastreadorNovoImei: string;
-  motivoSubstituicao: string;
-}
-
-export function useSubstituirEquipamento() {
+export function useAtualizarPermissoesRastreador() {
   return useMutation({
-    mutationFn: async ({ rastreadorAntigoId, rastreadorNovoImei, motivoSubstituicao }) => {
-      // 1. Buscar rastreador antigo com veiculo/associado
-      const { data: antigo } = await supabase
-        .from('rastreadores')
-        .select('*, veiculos(*, associados(*))')
-        .eq('id', rastreadorAntigoId)
-        .single();
+    mutationFn: async ({ veiculoId, permissoes }) => {
+      // 1. Atualizar campos locais na tabela veiculos
+      await supabase.from('veiculos').update({
+        alerta_velocidade_ativo: permissoes.alertaVelocidade,
+        alerta_cerca_ativo: permissoes.alertaCercaVirtual,
+        alerta_ignicao_ativo: permissoes.alertaIgnicao,
+      }).eq('id', veiculoId);
       
-      // 2. Desvincular antigo na plataforma
-      if (antigo.plataforma === 'rede_veiculos') {
-        await supabase.functions.invoke('rede-veiculos-desvincular-cliente', {
-          body: { imei: antigo.imei, motivo: motivoSubstituicao },
-        });
-      }
-      
-      // 3. Vincular novo na plataforma
-      await supabase.functions.invoke('rede-veiculos-vincular-cliente', {
+      // 2. Sincronizar com Rede Veiculos
+      await supabase.functions.invoke('rede-veiculos-atualizar-cliente', {
         body: {
-          imei: rastreadorNovoImei,
-          veiculoId: antigo.veiculo_id,
-          associadoId: antigo.veiculos.associado_id,
+          veiculoId,
+          camposAlterados: { permissoes },
         },
       });
-      
-      // 4. Atualizar banco local
-      // - Antigo: status = 'manutencao', veiculo_id = null
-      // - Novo: status = 'instalado', veiculo_id = antigo.veiculo_id
-    },
-  });
-}
-```
-
-**Novo componente:** `src/components/rastreadores/SubstituirEquipamentoDialog.tsx`
-
-Modal com:
-- Campo para selecionar novo rastreador (do estoque)
-- Campo para motivo da substituicao (defeito, upgrade, etc)
-- Botao para confirmar substituicao
-
-### Fase 4: Criar Funcionalidade de Veiculo Vendido
-
-**Novo arquivo:** `src/hooks/useVenderVeiculo.ts`
-
-```typescript
-export function useVenderVeiculo() {
-  return useMutation({
-    mutationFn: async ({ veiculoId, dataVenda, compradorInfo }) => {
-      // 1. Buscar rastreador do veiculo
-      const { data: rastreador } = await supabase
-        .from('rastreadores')
-        .select('*')
-        .eq('veiculo_id', veiculoId)
-        .maybeSingle();
-      
-      // 2. Desvincular na plataforma
-      if (rastreador?.plataforma === 'rede_veiculos') {
-        await supabase.functions.invoke('rede-veiculos-desvincular-cliente', {
-          body: { imei: rastreador.imei, motivo: 'venda_veiculo' },
-        });
-      }
-      
-      // 3. Atualizar rastreador (retorna ao estoque)
-      if (rastreador) {
-        await supabase.from('rastreadores').update({
-          status: 'estoque',
-          veiculo_id: null,
-        }).eq('id', rastreador.id);
-      }
-      
-      // 4. Marcar veiculo como vendido
-      await supabase.from('veiculos').update({
-        status: 'vendido',
-        data_venda: dataVenda,
-        comprador_info: compradorInfo,
-      }).eq('id', veiculoId);
     },
   });
 }
@@ -356,41 +335,53 @@ export function useVenderVeiculo() {
 
 | Arquivo | Descricao |
 |---------|-----------|
-| `supabase/functions/rede-veiculos-desvincular-cliente/index.ts` | Edge Function para desvinculacao |
-| `src/hooks/useSubstituirEquipamento.ts` | Hook para substituicao |
-| `src/hooks/useVenderVeiculo.ts` | Hook para venda de veiculo |
-| `src/components/rastreadores/SubstituirEquipamentoDialog.tsx` | Modal de substituicao |
-| `src/components/veiculos/VenderVeiculoDialog.tsx` | Modal de venda |
+| `supabase/functions/rede-veiculos-atualizar-cliente/index.ts` | Edge Function principal |
+| `src/hooks/useAtualizarPermissoesRastreador.ts` | Hook para permissoes |
+| `src/components/app/ConfiguracaoAlertasCard.tsx` | Card de configuracao |
 
 ## Arquivos a Modificar
 
 | Arquivo | Alteracoes |
 |---------|------------|
-| `src/hooks/useRastreadores.ts` | Chamar desvinculacao ao mudar status |
-| `src/hooks/useAssociados.ts` | Desvincular rastreadores ao cancelar |
-| `src/components/rastreadores/RastreadorDetailDrawer.tsx` | Adicionar botao "Substituir" |
+| `src/hooks/useMyData.ts` | Integrar sincronizacao apos update |
+| `src/hooks/useAssociados.ts` | Integrar sincronizacao apos update |
+| `src/pages/app/AppPerfil.tsx` | Adicionar card de alertas |
 | `supabase/config.toml` | Registrar nova edge function |
 
 ---
 
-## Payload Esperado para POST /desvincularClienteVeiculo
+## Payload Esperado para POST /atualizarDadosCliente
 
 Baseado no padrao da API de vinculacao:
 
 ```typescript
-interface DesvincularRequest {
-  // Identificacao do equipamento (obrigatorio)
-  imei: string;
+interface AtualizarDadosClienteRequest {
+  // Identificador (obrigatorio, imutavel)
+  cpfCnpj: string;
   
-  // Identificacao do cliente (opcional, para validacao)
-  cpfCnpj?: string;
-  
-  // Identificacao do veiculo (opcional, para validacao)
-  placa?: string;
-  chassi?: string;
-  
-  // Motivo da desvinculacao (para auditoria)
-  motivo?: 'cancelamento_contrato' | 'substituicao_defeito' | 'venda_veiculo' | 'baixa_equipamento' | 'outros';
+  // Campos alterados (apenas os que mudaram)
+  camposAlterados: {
+    nome?: string;
+    email?: string;
+    celular?: string;
+    
+    endereco?: {
+      cep?: string;
+      logradouro?: string;
+      numero?: string;
+      bairro?: string;
+      cidade?: string;
+      uf?: string;
+    };
+    
+    permissoes?: {
+      acessoWeb?: boolean;
+      pushNotifications?: boolean;
+      alertaVelocidade?: boolean;
+      alertaCercaVirtual?: boolean;
+      alertaIgnicao?: boolean;
+    };
+  };
 }
 ```
 
@@ -398,21 +389,20 @@ interface DesvincularRequest {
 
 ## Checklist de Verificacao Pos-Implementacao
 
-- [ ] Edge function `rede-veiculos-desvincular-cliente` criada
-- [ ] Ao cancelar associado, rastreadores Rede Veiculos sao desvinculados
-- [ ] Ao mudar status para `estoque/manutencao/baixado`, equipamento e desvinculado
-- [ ] Funcionalidade de substituicao de equipamento implementada
-- [ ] Funcionalidade de venda de veiculo implementada
-- [ ] IMEI enviado corretamente na desvinculacao
-- [ ] CPF/CNPJ enviado na desvinculacao
-- [ ] Placa/Chassi enviado como identificador adicional
-- [ ] Apos desvinculacao, equipamento fica com status `estoque`
-- [ ] Equipamento aparece disponivel no estoque do SGA
-- [ ] Log de desvinculacao registrado em `rastreadores_api_logs`
+- [ ] Edge function `rede-veiculos-atualizar-cliente` criada
+- [ ] Ao atualizar dados no App, plataforma e sincronizada
+- [ ] Ao atualizar dados pelo painel, plataforma e sincronizada
+- [ ] Ao mudar endereco, plataforma e atualizada
+- [ ] Apenas campos alterados sao enviados (nao cadastro completo)
+- [ ] CPF/CNPJ e usado como identificador imutavel
+- [ ] Permissoes podem ser alteradas pelo associado
+- [ ] Campos locais de alerta funcionam (alerta_velocidade_ativo, etc)
+- [ ] Atualizacao reflete imediatamente na Rede Veiculos
+- [ ] Log de atualizacao registrado em `rastreadores_api_logs`
 
 ---
 
-## Teste Recomendado: Desvinculacao Completa
+## Teste Recomendado: Atualizacao de Telefone
 
 ### Pre-requisitos
 
@@ -422,24 +412,23 @@ interface DesvincularRequest {
 
 ### Passos do Teste
 
-1. **Acessar o sistema como administrador**
-2. **Navegar para Cadastro > Associados**
-3. **Localizar associado com veiculo/rastreador Rede Veiculos**
-4. **Clicar em "Cancelar Associado"**
-5. **Verificar no banco:**
-   - `rastreadores.status = 'estoque'`
-   - `rastreadores.veiculo_id = null`
-   - `rastreadores_api_logs` com registro de desvinculacao
-6. **Verificar na plataforma Rede Veiculos:**
-   - Equipamento nao mais vinculado ao cliente
-   - Cliente/veiculo desassociado
+1. **Login como associado no App** (`/app/login`)
+2. **Acessar Perfil** (`/app/perfil`)
+3. **Clicar em "Editar" nos Dados Pessoais**
+4. **Alterar apenas o telefone** para um novo numero
+5. **Salvar**
+6. **Verificar no banco:**
+   - `associados.telefone` atualizado
+   - `rastreadores_api_logs` com registro de atualizacao
+7. **Verificar na plataforma Rede Veiculos:**
+   - Cliente com telefone atualizado
+   - Outros dados inalterados
 
 ### Resultado Esperado
 
-- Equipamento aparece no estoque do SGA
-- Equipamento desvinculado na plataforma Rede Veiculos
+- Telefone atualizado no SGA e na Rede Veiculos simultaneamente
+- Apenas campo `celular` enviado para API (nao cadastro completo)
 - Log de auditoria registrado
-- Equipamento disponivel para nova instalacao
 
 ---
 
@@ -447,9 +436,10 @@ interface DesvincularRequest {
 
 **IMPORTANTE:** Antes de implementar, e necessario confirmar com a documentacao da API Rede Veiculos:
 
-1. **URL exata do endpoint:** `POST /desvincularClienteVeiculo` ou similar
-2. **Formato do payload:** Campos obrigatorios e opcionais
-3. **Codigos de resposta:** Sucesso, erros possiveis
-4. **Comportamento esperado:** O equipamento fica liberado ou precisa de acao adicional?
+1. **URL exata do endpoint:** `POST /atualizarDadosCliente` ou similar
+2. **Formato do payload:** Aceita campos parciais ou exige cadastro completo?
+3. **Campo identificador:** CPF/CNPJ ou ID interno da plataforma?
+4. **Restricoes:** Quais campos podem ser alterados via API?
+5. **Permissoes:** Endpoint de permissoes e separado ou junto com dados do cliente?
 
 **Recomendacao:** Solicitar documentacao oficial da API Rede Veiculos antes de iniciar a implementacao.
