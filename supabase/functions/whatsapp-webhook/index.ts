@@ -144,7 +144,7 @@ const tools = [
     type: "function",
     function: {
       name: "get_boletos_pendentes",
-      description: "Lista boletos pendentes do associado",
+      description: "Lista boletos pendentes do associado com URLs para envio de PDF",
       parameters: { type: "object", properties: {}, required: [] },
     },
   },
@@ -232,17 +232,32 @@ const tools = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "enviar_boleto_pdf",
+      description: "Envia boleto em PDF via WhatsApp para o associado. Use quando o cliente pedir para receber o boleto no WhatsApp.",
+      parameters: {
+        type: "object",
+        properties: {
+          boleto_id: { type: "string", description: "ID do boleto a ser enviado (obtido de get_boletos_pendentes)" },
+        },
+        required: ["boleto_id"],
+      },
+    },
+  },
 ];
 
 // Executa tools
-async function executeTool(supabase: any, associadoId: string, toolName: string, args: any): Promise<string> {
+async function executeTool(supabase: any, associadoId: string, toolName: string, args: any, telefone?: string, instancia?: any): Promise<string> {
   console.log(`[whatsapp-webhook] Tool: ${toolName}`, args);
 
   switch (toolName) {
     case "get_boletos_pendentes": {
+      // ATUALIZADO: Incluir boleto_url, pix_copia_cola e linha_digitavel
       const { data } = await supabase
         .from("cobrancas")
-        .select("valor, data_vencimento, status")
+        .select("id, valor, data_vencimento, status, boleto_url, pix_copia_cola, linha_digitavel")
         .eq("associado_id", associadoId)
         .in("status", ["pendente", "vencido", "em_aberto"])
         .order("data_vencimento");
@@ -252,11 +267,16 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
       const total = data.reduce((s: number, b: any) => s + (b.valor || 0), 0);
       return JSON.stringify({
         boletos: data.map((b: any) => ({
+          id: b.id,
           valor: `R$ ${b.valor?.toFixed(2)}`,
           vencimento: new Date(b.data_vencimento).toLocaleDateString("pt-BR"),
           status: b.status,
+          boleto_url: b.boleto_url || null,
+          pix: b.pix_copia_cola || null,
+          linha_digitavel: b.linha_digitavel || null,
         })),
         total: `R$ ${total.toFixed(2)}`,
+        instrucao: "Para receber o boleto em PDF no WhatsApp, use a tool enviar_boleto_pdf com o id do boleto.",
       });
     }
 
@@ -471,6 +491,109 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
         return JSON.stringify({
           sucesso: false,
           message: "Erro ao processar localização. Por favor, digite o endereço manualmente.",
+        });
+      }
+    }
+
+    case "enviar_boleto_pdf": {
+      // NOVA TOOL: Enviar boleto PDF via whatsapp-send-media
+      const { boleto_id } = args;
+      
+      if (!boleto_id) {
+        return JSON.stringify({ success: false, message: "ID do boleto não informado" });
+      }
+
+      // Buscar boleto do associado
+      const { data: boleto, error: boletoError } = await supabase
+        .from("cobrancas")
+        .select("id, valor, data_vencimento, boleto_url, associado_id")
+        .eq("id", boleto_id)
+        .eq("associado_id", associadoId)
+        .single();
+
+      if (boletoError || !boleto) {
+        console.log(`[whatsapp-webhook] Boleto não encontrado: ${boleto_id}`);
+        return JSON.stringify({ success: false, message: "Boleto não encontrado ou não pertence a você" });
+      }
+
+      if (!boleto.boleto_url) {
+        return JSON.stringify({ success: false, message: "Este boleto não possui PDF disponível. Tente gerar uma segunda via no portal." });
+      }
+
+      if (!telefone || !instancia) {
+        return JSON.stringify({ success: false, message: "Erro de contexto: telefone ou instância não disponíveis" });
+      }
+
+      // Formatar dados para caption
+      const valor = `R$ ${boleto.valor?.toFixed(2)}`;
+      const vencimento = boleto.data_vencimento 
+        ? new Date(boleto.data_vencimento).toLocaleDateString("pt-BR") 
+        : "";
+
+      try {
+        const EVOLUTION_API_KEY = Deno.env.get("EVOLUTION_API_KEY");
+        
+        // Enviar via Evolution API diretamente
+        const mediaBody = {
+          number: telefone,
+          mediatype: "document",
+          mimetype: "application/pdf",
+          caption: `📄 *Boleto PRATICCAR*\n💰 Valor: ${valor}\n📅 Vencimento: ${vencimento}`,
+          media: boleto.boleto_url,
+          fileName: `boleto_praticcar_${vencimento.replace(/\//g, "-")}.pdf`,
+        };
+
+        console.log(`[whatsapp-webhook] Enviando boleto PDF para ${telefone}`);
+
+        const response = await fetch(
+          `${instancia.api_url}/message/sendMedia/${instancia.instance_name}`,
+          {
+            method: "POST",
+            headers: {
+              "apikey": EVOLUTION_API_KEY || "",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(mediaBody),
+          }
+        );
+
+        const result = await response.json();
+
+        if (result.key?.id) {
+          // Registrar mensagem no banco
+          await supabase.from("whatsapp_mensagens").insert({
+            instancia_id: instancia.id,
+            telefone: telefone,
+            tipo: "document",
+            mensagem: mediaBody.caption,
+            media_url: boleto.boleto_url,
+            media_mimetype: "application/pdf",
+            media_filename: mediaBody.fileName,
+            status: "enviada",
+            message_id: result.key.id,
+            referencia_tipo: "cobranca",
+            referencia_id: boleto.id,
+            direcao: "saida",
+            sent_at: new Date().toISOString(),
+          });
+
+          console.log(`[whatsapp-webhook] Boleto PDF enviado com sucesso: ${result.key.id}`);
+          return JSON.stringify({ 
+            success: true, 
+            message: "Pronto! O boleto em PDF foi enviado. Verifique nossa conversa! 📄" 
+          });
+        } else {
+          console.error(`[whatsapp-webhook] Erro ao enviar boleto PDF:`, result);
+          return JSON.stringify({ 
+            success: false, 
+            message: "Não foi possível enviar o boleto. Tente novamente mais tarde." 
+          });
+        }
+      } catch (err) {
+        console.error(`[whatsapp-webhook] Erro ao enviar boleto PDF:`, err);
+        return JSON.stringify({ 
+          success: false, 
+          message: "Erro ao enviar boleto. Tente novamente mais tarde." 
         });
       }
     }

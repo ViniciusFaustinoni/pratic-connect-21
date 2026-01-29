@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   Search, FileText, CheckCircle, XCircle, Clock, Loader2, 
   Send, MoreHorizontal, Edit, Trash, RefreshCw, Link, 
-  ExternalLink, Pause, Eye, PlayCircle, Plus 
+  ExternalLink, Pause, Eye, PlayCircle, Plus, MessageSquare
 } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { supabase } from '@/integrations/supabase/client';
@@ -60,6 +60,7 @@ export default function Contratos() {
   const [formDialogOpen, setFormDialogOpen] = useState(false);
   const [drawerContratoId, setDrawerContratoId] = useState<string | null>(null);
   const [prefilledData, setPrefilledData] = useState<PrefilledCotacaoData | null>(null);
+  const [enviandoPDF, setEnviandoPDF] = useState<string | null>(null);
 
   const { isDiretor, isDesenvolvedor, isAdminMaster } = usePermissions();
   const canDeleteContratos = isDiretor || isDesenvolvedor || isAdminMaster;
@@ -234,6 +235,46 @@ export default function Contratos() {
     }
     const url = getWhatsAppLink(phone, contrato.autentique_url, client?.nome);
     window.open(url, '_blank');
+  };
+
+  // Enviar contrato PDF via Evolution API
+  const handleEnviarContratoPDF = async (contrato: typeof contratos[0]) => {
+    const client = contrato.associados || contrato.leads;
+    const phone = client?.telefone || (client as any)?.whatsapp;
+    const pdfUrl = (contrato as any).arquivo_assinado_url || contrato.autentique_url;
+
+    if (!phone) {
+      toast.error('Telefone não disponível');
+      return;
+    }
+    if (!pdfUrl) {
+      toast.error('Documento não disponível para envio');
+      return;
+    }
+
+    setEnviandoPDF(contrato.id);
+    try {
+      const { error } = await supabase.functions.invoke('whatsapp-send-media', {
+        body: {
+          telefone: phone.replace(/\D/g, ''),
+          media_url: pdfUrl,
+          media_type: 'document',
+          mimetype: 'application/pdf',
+          filename: `proposta_${contrato.numero}.pdf`,
+          caption: `📋 Proposta de Adesão PRATICCAR\n${client?.nome || ''}\n\nAcesse o link para assinar digitalmente.`,
+          referencia_tipo: 'contrato',
+          referencia_id: contrato.id,
+        },
+      });
+
+      if (error) throw error;
+      toast.success('Contrato PDF enviado por WhatsApp!');
+    } catch (err: any) {
+      console.error('Erro ao enviar contrato PDF:', err);
+      toast.error(`Erro ao enviar: ${err.message}`);
+    } finally {
+      setEnviandoPDF(null);
+    }
   };
 
   if (isLoading) {
@@ -438,6 +479,22 @@ export default function Contratos() {
                                 <DropdownMenuItem onClick={() => handleCopiarLink(contrato)}>
                                   <Link className="mr-2 h-4 w-4" /> Copiar Link
                                 </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleEnviarWhatsApp(contrato)}>
+                                  <MessageSquare className="mr-2 h-4 w-4" /> WhatsApp (link)
+                                </DropdownMenuItem>
+                                {contrato.autentique_url && (
+                                  <DropdownMenuItem 
+                                    onClick={() => handleEnviarContratoPDF(contrato)}
+                                    disabled={enviandoPDF === contrato.id}
+                                  >
+                                    {enviandoPDF === contrato.id ? (
+                                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <FileText className="mr-2 h-4 w-4" />
+                                    )}
+                                    Enviar PDF
+                                  </DropdownMenuItem>
+                                )}
                                 {contrato.autentique_url && (
                                   <DropdownMenuItem asChild>
                                     <a href={contrato.autentique_url} target="_blank" rel="noopener noreferrer">

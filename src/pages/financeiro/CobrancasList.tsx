@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Search, Plus, Download, Send, X, Eye, MoreHorizontal, DollarSign, MessageSquare, Mail, FileText, RefreshCw } from 'lucide-react';
+import { Search, Plus, Download, Send, X, Eye, MoreHorizontal, DollarSign, MessageSquare, Mail, FileText, RefreshCw, Loader2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -149,10 +149,97 @@ export default function CobrancasList() {
 
   const clearSelection = () => setSelectedIds(new Set());
 
-  // Ações em lote
-  const handleEnviarBoletosLote = () => {
-    toast.info(`Enviando ${selectedIds.size} boleto(s)...`);
-    // TODO: Implementar lógica de envio em lote
+  // Estado para envio em lote
+  const [enviandoLote, setEnviandoLote] = useState(false);
+  const [enviandoPDF, setEnviandoPDF] = useState<string | null>(null);
+
+  // Enviar boleto PDF via Evolution API
+  const handleEnviarBoletoPDF = async (cobranca: any) => {
+    const telefone = cobranca.associado?.whatsapp || cobranca.associado?.telefone;
+    if (!telefone) {
+      toast.error('Associado sem telefone cadastrado');
+      return;
+    }
+    if (!cobranca.boleto_url) {
+      toast.error('Boleto não disponível para envio');
+      return;
+    }
+
+    setEnviandoPDF(cobranca.id);
+    try {
+      const valor = formatCurrency(Number(cobranca.valor));
+      const vencimento = cobranca.data_vencimento 
+        ? format(parseISO(cobranca.data_vencimento), 'dd/MM/yyyy', { locale: ptBR })
+        : '';
+
+      const { error } = await supabase.functions.invoke('whatsapp-send-media', {
+        body: {
+          telefone: telefone.replace(/\D/g, ''),
+          media_url: cobranca.boleto_url,
+          media_type: 'document',
+          mimetype: 'application/pdf',
+          filename: `boleto_${cobranca.asaas_id || cobranca.id}.pdf`,
+          caption: `📄 Boleto PRATICCAR\n💰 Valor: ${valor}\n📅 Vencimento: ${vencimento}`,
+          referencia_tipo: 'cobranca',
+          referencia_id: cobranca.id,
+        },
+      });
+
+      if (error) throw error;
+      toast.success('Boleto PDF enviado por WhatsApp!');
+    } catch (err: any) {
+      console.error('Erro ao enviar boleto PDF:', err);
+      toast.error(`Erro ao enviar: ${err.message}`);
+    } finally {
+      setEnviandoPDF(null);
+    }
+  };
+
+  // Ações em lote - Enviar boletos PDF via Evolution API
+  const handleEnviarBoletosLote = async () => {
+    const selecionadas = paginatedCobrancas.filter(c => selectedIds.has(c.id));
+    const comBoleto = selecionadas.filter(c => c.boleto_url && (c.associado?.whatsapp || c.associado?.telefone));
+    
+    if (comBoleto.length === 0) {
+      toast.error('Nenhuma cobrança com boleto e telefone disponíveis');
+      return;
+    }
+
+    setEnviandoLote(true);
+    let enviados = 0;
+    let erros = 0;
+
+    for (const cobranca of comBoleto) {
+      try {
+        const telefone = cobranca.associado?.whatsapp || cobranca.associado?.telefone;
+        const valor = formatCurrency(Number(cobranca.valor));
+        const vencimento = cobranca.data_vencimento 
+          ? format(parseISO(cobranca.data_vencimento), 'dd/MM/yyyy', { locale: ptBR })
+          : '';
+
+        await supabase.functions.invoke('whatsapp-send-media', {
+          body: {
+            telefone: telefone.replace(/\D/g, ''),
+            media_url: cobranca.boleto_url,
+            media_type: 'document',
+            mimetype: 'application/pdf',
+            filename: `boleto_${cobranca.asaas_id || cobranca.id}.pdf`,
+            caption: `📄 Boleto PRATICCAR\n💰 Valor: ${valor}\n📅 Vencimento: ${vencimento}`,
+            referencia_tipo: 'cobranca',
+            referencia_id: cobranca.id,
+          },
+        });
+
+        enviados++;
+        // Delay entre envios para evitar bloqueio (1 segundo)
+        await new Promise(r => setTimeout(r, 1000));
+      } catch {
+        erros++;
+      }
+    }
+
+    setEnviandoLote(false);
+    toast.success(`${enviados} boleto(s) enviado(s)${erros > 0 ? `, ${erros} erro(s)` : ''}`);
     clearSelection();
   };
 
@@ -633,8 +720,21 @@ export default function CobrancasList() {
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => handleEnviarWhatsApp(cobranca)}>
                                 <MessageSquare className="mr-2 h-4 w-4" />
-                                Enviar WhatsApp
+                                WhatsApp (link)
                               </DropdownMenuItem>
+                              {cobranca.boleto_url && (
+                                <DropdownMenuItem 
+                                  onClick={() => handleEnviarBoletoPDF(cobranca)}
+                                  disabled={enviandoPDF === cobranca.id}
+                                >
+                                  {enviandoPDF === cobranca.id ? (
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <FileText className="mr-2 h-4 w-4" />
+                                  )}
+                                  Enviar Boleto PDF
+                                </DropdownMenuItem>
+                              )}
                               <DropdownMenuSeparator />
                               <DropdownMenuItem 
                                 className="text-destructive"
@@ -722,9 +822,10 @@ export default function CobrancasList() {
         onClear={clearSelection}
         actions={[
           {
-            label: 'Enviar Boletos',
-            icon: <Send className="h-4 w-4" />,
+            label: enviandoLote ? 'Enviando...' : 'Enviar Boletos PDF',
+            icon: enviandoLote ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />,
             onClick: handleEnviarBoletosLote,
+            disabled: enviandoLote,
           },
           {
             label: 'WhatsApp',
