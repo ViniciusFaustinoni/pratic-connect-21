@@ -1,332 +1,328 @@
 
-# Revisao Completa - Fluxo de Consulta de Historico de Trajetos Softruck
+# Revisao Completa - Fluxo de Envio de Comandos para Rastreadores Softruck
 
 ## Resumo Executivo
 
-Apos analise detalhada do sistema de consulta de historico de trajetos Softruck, identifiquei a seguinte situacao:
-
 | Item | Status | Detalhes |
 |------|--------|----------|
-| Endpoint GET `/vehicles/{id}/trajectories/` | IMPLEMENTADO | Usado em `rastreador-historico` e `historico-posicoes` |
-| Endpoint GET `/vehicles/{id}/trajectories/geom` | PARCIALMENTE IMPLEMENTADO | Existe em `softruck-api` mas nao e usado |
-| Filtros de data (start_date, end_date) | IMPLEMENTADO | Presentes corretamente |
-| Atributos SEGMENT, DETAILED, ALARM, STOP | NAO IMPLEMENTADOS | Nao solicitados na query |
-| Renderizacao no mapa | IMPLEMENTADO | Leaflet com Polyline |
-| Pontos de parada destacados | NAO IMPLEMENTADOS | Apenas inicio/fim marcados |
-| Calculo tempo parado/movimento | IMPLEMENTADO | Em `historico-posicoes` |
-| Integracao com auditoria de sinistros | NAO IMPLEMENTADA | Nao ha consulta de trajeto em sinistros |
-| Relatorio mensal quilometragem | NAO IMPLEMENTADO | Nao existe relatorio dedicado |
+| Botao "Bloquear veiculo" no monitoramento | NAO IMPLEMENTADO | Nao existe na interface |
+| Botao "Desbloquear veiculo" | NAO IMPLEMENTADO | Nao existe na interface |
+| Comando em confirmacao de sinistro roubo/furto | PARCIALMENTE | Edge function `acionar-roubo-furto` apenas notifica |
+| Comando via Assistencia 24h com autorizacao | NAO IMPLEMENTADO | Nao existe integracao |
+| Historico de comandos antes de enviar | NAO IMPLEMENTADO | Nao ha tabela de comandos |
+| Confirmacao do usuario antes da acao | NAO IMPLEMENTADO | Nao ha dialogs de confirmacao |
+| Status do comando (pendente → enviado → confirmado) | NAO IMPLEMENTADO | Nao ha fluxo de status |
+| Gravacao de motivo e solicitante para auditoria | PARCIALMENTE | Apenas em acionamentos de roubo |
+| API Softruck para bloqueio | NAO DISPONIVEL | API publica nao suporta comandos |
 
 ---
 
-## Analise Detalhada dos Pontos de Chamada
+## Analise Critica: API Softruck NAO Suporta Comandos de Bloqueio
 
-### 1. Quando o associado solicita "Ver trajeto" de data especifica
+Apos analise da documentacao oficial da Softruck (`docs.apiary.softruck.com`), constatei que:
 
-**Arquivos:** `src/pages/app/AppRastreamentoHistorico.tsx`, `src/hooks/useMyData.ts`
-**Edge Function:** `historico-posicoes`
+1. A **API publica v2** nao possui endpoints para comandos de bloqueio/desbloqueio
+2. Os comandos disponíveis na API sao apenas:
+   - Gestao de veiculos (CRUD)
+   - Gestao de dispositivos (CRUD)
+   - Rastreamento (tracking, trajectories)
+   - Usuarios e associacoes
+   - Service Orders
+
+3. Segundo a documentacao de suporte Softruck, comandos de bloqueio sao enviados via **SMS direto ao dispositivo**:
+   - `RELAY,1#` - Bloquear veiculo
+   - `RELAY,0#` - Desbloquear veiculo
+
+4. A tabela `rastreadores_config_plataformas` ja reflete essa limitacao:
+
+```sql
+SELECT suporta_bloqueio FROM rastreadores_config_plataformas 
+WHERE plataforma = 'softruck';
+-- Resultado: false
+```
+
+---
+
+## Situacao Atual no Sistema
+
+### 1. Interface de Monitoramento
+
+O arquivo `src/components/rastreadores/RastreadorDetailDrawer.tsx` nao possui botoes de bloquear/desbloquear:
+
+```text
+Acoes Rapidas disponiveis:
+- Manutencao (mudar status para manutencao)
+- Voltar Estoque (mudar status para estoque)
+- Desinstalar (mudar status para estoque)
+- Baixar (mudar status para baixado)
+- Redefinir Senha (para associado)
+
+NAO HA: Bloquear Veiculo / Desbloquear Veiculo
+```
+
+### 2. Edge Function de Acionamento de Roubo
+
+A `acionar-roubo-furto` **tenta** chamar endpoint de alertas, mas nao comandos:
 
 ```typescript
-// useVeiculoHistorico (useMyData.ts linha 349-386)
-const { data, error } = await supabase.functions.invoke('historico-posicoes', {
-  body: {
-    veiculo_id: veiculoId,
-    data_inicio: dataInicio.toISOString(),
-    data_fim: dataFim.toISOString(),
-    intervalo_minutos: intervaloMinutos,
-  }
+// Linhas 326-340 de acionar-roubo-furto/index.ts
+const response = await fetch(`${baseUrl}/alerts/theft`, {
+  method: "POST",
+  headers: { ... },
+  body: JSON.stringify({
+    vehicle_id: rastreador.plataforma_veiculo_id,
+    alert_type: "theft",
+    priority: "critical",
+  }),
 });
 ```
 
-**Interface do App:**
-- Seletor de periodo (24h, 3 dias, 7 dias)
-- DatePicker com range customizado
-- Seletor de intervalo (5, 15, 30, 60 min)
-- Playback com controles de reproducao
+**NOTA:** O endpoint `/alerts/theft` nao existe na documentacao publica da Softruck.
 
-**Status:** FUNCIONAL (dependendo da autenticacao)
+### 3. Tabela de Logs
 
----
+Existe `rastreadores_logs` com campos:
+- id, rastreador_id, plataforma, operacao
+- request, response, status
+- tempo_resposta_ms, erro_mensagem, created_at
 
-### 2. Quando o analista visualiza historico no painel interno
+**Mas nao e usada para comandos** - apenas para sincronizacao e autenticacao.
 
-**Arquivo:** `src/components/rastreadores/MapaHistorico.tsx`
-**Hook:** `useRastreadorHistoricoAPI` (de `useRastreadorHistoricoAPI.ts`)
-**Edge Function:** `rastreador-historico`
+### 4. Tabela de Acionamentos
 
-```typescript
-// useRastreadorHistoricoAPI (linha 35-48)
-const { data, error } = await supabase.functions.invoke('rastreador-historico', {
-  body: { 
-    rastreador_id: rastreadorId,
-    data_inicio: dataInicio?.toISOString(),
-    data_fim: dataFim?.toISOString(),
-  },
-});
-```
-
-**Status:** FUNCIONAL (dependendo da autenticacao)
+Existe `acionamentos_roubo_furto` com fluxo completo de status:
+- status: solicitado → autorizado → enviado → confirmado/erro
+- solicitado_por, solicitado_por_nome, autorizado_por
+- observacoes, motivo_encerramento
 
 ---
 
-### 3. Quando ha auditoria de posicao em caso de sinistro
+## Opcoes de Implementacao
 
-**Status:** NAO IMPLEMENTADO
+### Opcao A: Comando via SMS (Requer Integracao SMS)
 
-Ao analisar `SinistroDetalhe.tsx`, nao existe integracao com o historico de trajetos do rastreador. A pagina de sinistro nao oferece:
-- Botao "Ver trajeto do veiculo" na data do sinistro
-- Mapa com posicoes do veiculo no momento do evento
-- Consulta automatica ao historico para auditoria
+Para enviar comandos de bloqueio, seria necessario:
+1. Criar edge function `enviar-comando-rastreador`
+2. Integrar com servico de envio de SMS (Twilio, Vonage, etc.)
+3. Armazenar numero do chip em `rastreadores.chip_numero`
+4. Enviar comandos SMS padrao do dispositivo:
+   - `RELAY,1#` para bloquear
+   - `RELAY,0#` para desbloquear
 
----
+### Opcao B: API Proprietaria (Requer Contato Softruck)
 
-### 4. Quando e gerado o relatorio mensal de quilometragem
+Verificar com suporte comercial Softruck se existe:
+1. API de comandos nao documentada publicamente
+2. Endpoint de outputs para dispositivos especificos
+3. Contrato enterprise com acesso a recursos adicionais
 
-**Status:** NAO IMPLEMENTADO
+### Opcao C: Implementar Fluxo Sem Integracao
 
-Analisando `relatoriosConfig.ts`, nao existe configuracao para relatorio de quilometragem. Os relatorios existentes sao:
-- Operacional: instalacoes, tempo instalacao, estoque rastreadores, chamados
-- NAO HA: quilometragem mensal por veiculo, distancia percorrida por associado
-
----
-
-## Verificacao do Endpoint e Parametros
-
-### Endpoint Atual
-
-As edge functions usam:
-```
-GET /v2/vehicles/{id}/trajectories/?filters[start_date]=X&filters[end_date]=Y&limit=1000
-```
-
-### Endpoint Disponivel Mas Nao Utilizado
-
-O `softruck-api/index.ts` possui suporte para `trajectories-geom`:
-```typescript
-case 'trajectories-geom': {
-  let endpoint = `/v2/vehicles/${veiculoId}/trajectories/geom`;
-  if (dataInicio && dataFim) {
-    endpoint += `?filters[fromAcc]=${encodeURIComponent(dataInicio)}&filters[toAcc]=${encodeURIComponent(dataFim)}`;
-  }
-}
-```
-
-**Observacao:** O endpoint `/trajectories/geom` retorna geometria GeoJSON otimizada para renderizacao no mapa.
+Criar interface de registro de comandos para:
+1. Registrar solicitacao de bloqueio manualmente
+2. Operador executa comando externamente (painel Softruck)
+3. Registrar confirmacao no sistema
 
 ---
 
-## GAP: Atributos SEGMENT, DETAILED, ALARM, STOP
+## Plano de Implementacao Recomendado
 
-### Problema
+Dado que a API Softruck nao suporta comandos de bloqueio, proponho implementar:
 
-A API Softruck suporta atributos especiais para enriquecer os dados de trajeto:
-- **SEGMENT**: Agrupa trajeto em segmentos de viagem
-- **DETAILED**: Retorna todos os pontos sem simplificacao
-- **ALARM**: Inclui eventos de alarme (velocidade, cerca, etc.)
-- **STOP**: Inclui pontos de parada com duracao
+### Fase 1: Criar Estrutura de Comandos no Banco
 
-### Situacao Atual
+**Nova tabela: `rastreadores_comandos`**
 
-Nenhum desses atributos e solicitado nas chamadas atuais. As edge functions usam apenas os parametros basicos:
-```typescript
-url.searchParams.set('filters[start_date]', inicio);
-url.searchParams.set('filters[end_date]', fim);
-url.searchParams.set('limit', '500');  // ou 1000
+```sql
+CREATE TABLE rastreadores_comandos (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  rastreador_id UUID REFERENCES rastreadores(id),
+  veiculo_id UUID REFERENCES veiculos(id),
+  plataforma VARCHAR(50),
+  tipo_comando VARCHAR(50), -- 'bloquear', 'desbloquear', 'localizar_agora'
+  origem VARCHAR(50), -- 'monitoramento', 'sinistro', 'assistencia', 'diretoria'
+  origem_id UUID, -- ID do sinistro ou chamado
+  solicitado_por UUID REFERENCES profiles(id),
+  solicitado_por_nome VARCHAR(255),
+  solicitado_em TIMESTAMPTZ DEFAULT NOW(),
+  autorizado_por UUID REFERENCES profiles(id),
+  autorizado_por_nome VARCHAR(255),
+  autorizado_em TIMESTAMPTZ,
+  status VARCHAR(50) DEFAULT 'pendente', -- 'pendente', 'autorizado', 'enviado', 'confirmado', 'erro', 'cancelado'
+  metodo_envio VARCHAR(50), -- 'api', 'sms', 'manual'
+  telefone_destino VARCHAR(20),
+  comando_enviado TEXT,
+  api_request JSONB,
+  api_response JSONB,
+  erro_mensagem TEXT,
+  confirmado_em TIMESTAMPTZ,
+  observacoes TEXT,
+  motivo TEXT NOT NULL, -- Obrigatorio para auditoria
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
 ```
 
-### Correcao Necessaria
+### Fase 2: Criar Edge Function para Comandos
 
-Adicionar parametros para solicitar atributos extras quando necessario:
-```typescript
-// Para trajeto detalhado
-url.searchParams.set('attributes[]', 'DETAILED');
-url.searchParams.set('attributes[]', 'STOP');
-// OU
-url.searchParams.set('includes[stops]', 'true');
-```
+**Novo arquivo: `supabase/functions/enviar-comando-rastreador/index.ts`**
 
----
+Funcoes:
+- Validar autenticacao e permissoes
+- Verificar se plataforma suporta_bloqueio
+- Registrar comando na tabela antes de enviar
+- Para Softruck: registrar como "manual" (operador executa no painel)
+- Para plataformas com API: chamar endpoint
+- Atualizar status apos resposta
+- Criar alerta no sistema
+- Notificar equipe de monitoramento
 
-## GAP: Pontos de Parada Nao Destacados
+### Fase 3: Adicionar Botoes na Interface
 
-### Problema
-
-Os mapas de historico (`MapaHistorico.tsx` e `AppRastreamentoHistorico.tsx`) apenas mostram:
-- Marcador verde no inicio
-- Marcador vermelho no fim
-- Marcador azul na posicao atual do playback
-- Polyline conectando todos os pontos
-
-**NAO mostram:**
-- Marcadores nos pontos de parada (velocidade = 0)
-- Cor diferente para segmentos parados vs em movimento
-- Pop-up com duracao da parada
-
-### Dados Disponiveis
-
-O sistema ja calcula tempo parado em `historico-posicoes`:
-```typescript
-if (anterior.velocidade > 0 || anterior.ignicao) {
-  tempoMovimento += diffMin;
-} else {
-  tempoParado += diffMin;
-}
-```
-
-Porem nao identifica os pontos especificos de parada para exibicao no mapa.
-
----
-
-## Plano de Correcoes
-
-### Fase 1: Adicionar Atributos STOP nas Consultas
-
-**Arquivos a modificar:**
-- `supabase/functions/rastreador-historico/index.ts`
-- `supabase/functions/historico-posicoes/index.ts`
-
-```typescript
-// Adicionar parametro para incluir paradas
-const url = new URL(`${baseUrl}/vehicles/${vehicleId}/trajectories/`);
-url.searchParams.set('filters[start_date]', inicio);
-url.searchParams.set('filters[end_date]', fim);
-url.searchParams.set('includes[stops]', 'true');  // NOVO
-url.searchParams.set('limit', '1000');
-```
-
----
-
-### Fase 2: Identificar e Retornar Pontos de Parada
-
-**Modificar edge functions para extrair paradas:**
-
-```typescript
-interface PontoParada {
-  latitude: number;
-  longitude: number;
-  inicio: string;
-  fim: string;
-  duracao_minutos: number;
-  endereco?: string;
-}
-
-function identificarParadas(pontos: PontoPosicao[]): PontoParada[] {
-  const paradas: PontoParada[] = [];
-  let inicioParada: number | null = null;
-  
-  for (let i = 0; i < pontos.length; i++) {
-    const ponto = pontos[i];
-    const estaParado = ponto.velocidade === 0 && !ponto.ignicao;
-    
-    if (estaParado && inicioParada === null) {
-      inicioParada = i;
-    } else if (!estaParado && inicioParada !== null) {
-      const pontoInicio = pontos[inicioParada];
-      const duracao = (new Date(ponto.data_hora).getTime() - 
-                       new Date(pontoInicio.data_hora).getTime()) / 60000;
-      
-      if (duracao >= 5) { // Paradas > 5 minutos
-        paradas.push({
-          latitude: pontoInicio.latitude,
-          longitude: pontoInicio.longitude,
-          inicio: pontoInicio.data_hora,
-          fim: pontos[i - 1].data_hora,
-          duracao_minutos: Math.round(duracao),
-          endereco: pontoInicio.endereco,
-        });
-      }
-      inicioParada = null;
-    }
-  }
-  
-  return paradas;
-}
-```
-
----
-
-### Fase 3: Renderizar Pontos de Parada no Mapa
-
-**Arquivos a modificar:**
-- `src/components/rastreadores/MapaHistorico.tsx`
-- `src/pages/app/AppRastreamentoHistorico.tsx`
+**Modificar: `src/components/rastreadores/RastreadorDetailDrawer.tsx`**
 
 ```tsx
-// Adicionar marcadores de parada
-const stopIcon = L.divIcon({
-  className: 'stop-marker',
-  html: `<div style="width: 10px; height: 10px; background: #f59e0b; border-radius: 50%; border: 2px solid white;"></div>`,
-  iconSize: [10, 10],
-  iconAnchor: [5, 5],
-});
-
-// Renderizar paradas
-{paradas.map((parada, idx) => (
-  <Marker
-    key={`stop-${idx}`}
-    position={[parada.latitude, parada.longitude]}
-    icon={stopIcon}
-  >
-    <Popup>
-      <div className="text-sm">
-        <strong>Parada</strong>
-        <p>{parada.duracao_minutos} minutos</p>
-        <p>{format(new Date(parada.inicio), 'HH:mm')} - {format(new Date(parada.fim), 'HH:mm')}</p>
-        {parada.endereco && <p className="text-xs">{parada.endereco}</p>}
-      </div>
-    </Popup>
-  </Marker>
-))}
-```
-
----
-
-### Fase 4: Integracao com Auditoria de Sinistros
-
-**Novo componente:** `src/components/sinistros/TrajetoSinistroCard.tsx`
-
-Adicionar na pagina `SinistroDetalhe.tsx`:
-- Card com mapa do trajeto nas 24h anteriores ao sinistro
-- Automaticamente buscar historico pela data_ocorrencia
-- Destacar localizacao do sinistro no mapa
-- Botao "Ver trajeto completo" que abre em tela cheia
-
-**Modificar:** `src/pages/eventos/SinistroDetalhe.tsx`
-```tsx
-// Importar componente de trajeto
-import { TrajetoSinistroCard } from '@/components/sinistros/TrajetoSinistroCard';
-
-// Renderizar na sidebar
-{sinistro.veiculo_id && (
-  <TrajetoSinistroCard
-    veiculoId={sinistro.veiculo_id}
-    dataOcorrencia={sinistro.data_ocorrencia}
-    localOcorrencia={sinistro.local_ocorrencia}
-  />
+// Adicionar na secao "Acoes Rapidas"
+{isInstalled && plataforma?.suporta_bloqueio && (
+  <>
+    <Button
+      variant="destructive"
+      size="sm"
+      onClick={() => setConfirmDialogOpen({ type: 'bloquear', open: true })}
+    >
+      <Lock className="mr-2 h-4 w-4" />
+      Bloquear Veiculo
+    </Button>
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => setConfirmDialogOpen({ type: 'desbloquear', open: true })}
+    >
+      <Unlock className="mr-2 h-4 w-4" />
+      Desbloquear
+    </Button>
+  </>
 )}
 ```
 
----
+### Fase 4: Dialogo de Confirmacao com Motivo
 
-### Fase 5: Relatorio Mensal de Quilometragem
+**Novo componente: `src/components/rastreadores/ComandoRastreadorDialog.tsx`**
 
-**Novo arquivo:** `src/config/relatoriosQuilometragem.ts`
+```tsx
+interface Props {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  tipoComando: 'bloquear' | 'desbloquear';
+  rastreador: Rastreador;
+  veiculo?: Veiculo;
+  onConfirm: (motivo: string) => Promise<void>;
+}
 
-Adicionar configuracao no `relatoriosConfig.ts`:
-```typescript
-'quilometragem-mensal': {
-  id: 'quilometragem-mensal',
-  titulo: 'Quilometragem Mensal',
-  tabela: 'custom', // Requer query customizada
-  select: '', // Calculado via edge function
-  cabecalhos: ['Veiculo', 'Placa', 'KM Inicial', 'KM Final', 'Total'],
-  descricao: 'Distancia percorrida no periodo',
-},
+// Campos:
+// - Tipo de comando (apenas exibicao)
+// - Placa do veiculo (apenas exibicao)
+// - Nome do associado (apenas exibicao)
+// - Motivo (obrigatorio, textarea)
+// - Checkbox de confirmacao
+// - Botoes: Cancelar / Confirmar
 ```
 
-**Nova edge function:** `supabase/functions/relatorio-quilometragem/index.ts`
+### Fase 5: Hook de Comandos
 
-Consolidar dados de `rastreador_posicoes` para calcular quilometragem acumulada.
+**Novo arquivo: `src/hooks/useComandosRastreador.ts`**
+
+```typescript
+export function useEnviarComando() {
+  return useMutation({
+    mutationFn: async (data: {
+      rastreador_id: string;
+      tipo_comando: 'bloquear' | 'desbloquear';
+      motivo: string;
+      origem?: 'monitoramento' | 'sinistro' | 'assistencia';
+      origem_id?: string;
+    }) => {
+      const { data: response, error } = await supabase.functions.invoke(
+        'enviar-comando-rastreador',
+        { body: data }
+      );
+      if (error) throw error;
+      return response;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['comandos-rastreador'] });
+      toast({ title: 'Comando registrado' });
+    },
+  });
+}
+
+export function useHistoricoComandos(rastreadorId: string) {
+  return useQuery({
+    queryKey: ['comandos-rastreador', rastreadorId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('rastreadores_comandos')
+        .select('*, solicitante:profiles!solicitado_por(nome)')
+        .eq('rastreador_id', rastreadorId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+```
+
+### Fase 6: Integrar com Sinistro de Roubo
+
+**Modificar: `src/pages/eventos/SinistroDetalhe.tsx`**
+
+Adicionar botao "Bloquear Veiculo" na sidebar quando:
+- Tipo do sinistro = roubo ou furto
+- Veiculo possui rastreador instalado
+- Status do sinistro permite acao
+
+### Fase 7: Integrar com Assistencia 24h
+
+**Modificar pagina de chamados de assistencia** para:
+- Permitir solicitar bloqueio mediante autorizacao
+- Registrar fluxo de aprovacao
+
+---
+
+## Fluxo Completo Proposto
+
+```text
+1. Analista clica "Bloquear Veiculo"
+   |
+   v
+2. Dialog de confirmacao abre
+   - Exibe dados do veiculo/associado
+   - Campo OBRIGATORIO de motivo
+   - Checkbox de confirmacao
+   |
+   v
+3. Registro ANTES de enviar
+   - Insere em rastreadores_comandos
+   - Status = 'pendente'
+   - Grava solicitante + motivo
+   |
+   v
+4. Verificacao de plataforma
+   - Se suporta_bloqueio = true → Envia via API
+   - Se suporta_bloqueio = false → Marca como 'manual'
+   |
+   v
+5. Atualizacao de status
+   - 'enviado' → Comando em processamento
+   - 'confirmado' → API retornou sucesso
+   - 'erro' → Falha no envio
+   |
+   v
+6. Notificacoes
+   - Alerta no sistema
+   - Notificacao para monitoramento
+   - Log de auditoria
+```
 
 ---
 
@@ -334,70 +330,33 @@ Consolidar dados de `rastreador_posicoes` para calcular quilometragem acumulada.
 
 | Arquivo | Descricao |
 |---------|-----------|
-| `src/components/sinistros/TrajetoSinistroCard.tsx` | Card com mapa de trajeto no sinistro |
-| `supabase/functions/relatorio-quilometragem/index.ts` | Edge function para relatorio mensal |
-
----
+| `supabase/functions/enviar-comando-rastreador/index.ts` | Edge function de comandos |
+| `src/hooks/useComandosRastreador.ts` | Hooks React Query |
+| `src/components/rastreadores/ComandoRastreadorDialog.tsx` | Dialogo de confirmacao |
+| `src/components/rastreadores/HistoricoComandos.tsx` | Lista de comandos enviados |
 
 ## Arquivos a Modificar
 
 | Arquivo | Alteracoes |
 |---------|------------|
-| `supabase/functions/rastreador-historico/index.ts` | Adicionar includes[stops] e retornar paradas |
-| `supabase/functions/historico-posicoes/index.ts` | Adicionar identificacao de paradas |
-| `src/components/rastreadores/MapaHistorico.tsx` | Renderizar marcadores de parada |
-| `src/pages/app/AppRastreamentoHistorico.tsx` | Renderizar marcadores de parada |
-| `src/pages/eventos/SinistroDetalhe.tsx` | Adicionar card de trajeto para auditoria |
-| `src/config/relatoriosConfig.ts` | Adicionar config de relatorio quilometragem |
+| `src/components/rastreadores/RastreadorDetailDrawer.tsx` | Adicionar botoes Bloquear/Desbloquear |
+| `src/pages/eventos/SinistroDetalhe.tsx` | Adicionar botao de bloqueio em sinistros de roubo |
+| `supabase/config.toml` | Registrar nova edge function |
+
+## Migracao SQL
+
+Uma migracao sera necessaria para criar a tabela `rastreadores_comandos`.
 
 ---
 
-## Checklist de Verificacao Final
+## Consideracao Importante
 
-Apos implementacao, confirmar:
+Para a plataforma Softruck especificamente, como a API publica nao suporta comandos de bloqueio:
 
-- [ ] Filtros de data (start_date, end_date) aplicados corretamente
-- [ ] Atributos STOP solicitados e parseados
-- [ ] Pontos de parada (velocidade = 0 por > 5 min) identificados
-- [ ] Marcadores amarelos de parada exibidos no mapa
-- [ ] Pop-up com duracao da parada funcional
-- [ ] Card de trajeto na pagina de sinistro funcionando
-- [ ] Trajeto das 24h antes do sinistro carregando
-- [ ] Relatorio de quilometragem disponivel na Central
-- [ ] Teste com trajeto de 24h mostra pontos em sequencia
-- [ ] Teste com 3 veiculos diferentes confirma posicoes distintas
+1. Os botoes serao exibidos apenas se `suporta_bloqueio = true` na config da plataforma
+2. Atualmente Softruck esta com `suporta_bloqueio = false`
+3. Para habilitar, e necessario:
+   - Verificar com Softruck se existe API de comandos (contrato enterprise)
+   - Ou implementar envio de comandos via SMS (requer servico SMS)
 
----
-
-## Teste Recomendado
-
-### Teste de 24 horas com pontos em sequencia
-
-1. Acessar App do Associado > Rastreamento > Historico
-2. Selecionar periodo de 24h (botao preset)
-3. Verificar que trajeto carrega com todos os pontos
-4. Iniciar reproducao e confirmar sequencia cronologica
-5. Verificar que paradas (marcadores amarelos) aparecem
-6. Clicar em parada e confirmar pop-up com duracao
-
-### Teste com 3 veiculos diferentes
-
-Requer que:
-1. `SOFTRUCK_PUBLIC_KEY` esteja correta (bloqueador atual)
-2. Rastreadores tenham `id_plataforma` populado
-3. Veiculos diferentes estejam em localizacoes distintas
-
----
-
-## Resumo dos Gaps
-
-| # | Gap | Severidade | Fase |
-|---|-----|------------|------|
-| 1 | Atributos STOP nao solicitados | MEDIA | Fase 1 |
-| 2 | Pontos de parada nao identificados | MEDIA | Fase 2 |
-| 3 | Marcadores de parada nao renderizados | MEDIA | Fase 3 |
-| 4 | Auditoria de trajeto em sinistros inexistente | ALTA | Fase 4 |
-| 5 | Relatorio de quilometragem inexistente | MEDIA | Fase 5 |
-| 6 | `SOFTRUCK_PUBLIC_KEY` invalida | CRITICO | Configuracao |
-
-A correcao do item 6 (Public Key) continua sendo pre-requisito para todas as funcionalidades que dependem da API Softruck.
+Se desejar, posso implementar o fluxo completo de forma que esteja pronto para quando a integracao de comandos estiver disponivel.
