@@ -1,263 +1,499 @@
 
-# Plano: Mostrar Status Real das Integrações (ASAAS, WhatsApp, Email, Autentique)
+# Plano: Integracao SGA Pratic com API Hinova SGA
 
-## Problema Identificado
+## Resumo Executivo
 
-Os cards de integrações na página **Configurações > Integrações > Serviços** mostram status hardcoded (`ativo: false`), mesmo quando os secrets estão configurados:
-
-| Integração | Secret Configurado | Status Atual na UI |
-|------------|-------------------|-------------------|
-| WhatsApp | EVOLUTION_API_KEY | OFF (mas está conectado!) |
-| ASAAS | ASAAS_API_KEY | OFF |
-| Email SMTP | RESEND_API_KEY | OFF |
-| Autentique | AUTENTIQUE_API_KEY | OFF |
-| n8n | N/A (hardcoded) | ON |
+Implementar sincronizacao de associados e veiculos com o sistema SGA Hinova, incluindo:
+1. Edge Function para comunicacao com a API Hinova
+2. Botao "Ativar no SGA" na pagina de analise de proposta
+3. Hook customizado para gerenciar o estado da sincronizacao
+4. Tabelas auxiliares para logs e mapeamentos
+5. Campos adicionais nas tabelas existentes
 
 ---
 
-## Solução Proposta
-
-### Fase 1: Criar Edge Function para Verificar Secrets de Integrações
-
-**Criar:** `supabase/functions/integracoes-verificar-secrets/index.ts`
+## Arquitetura da Solucao
 
 ```text
-Verificar existência dos seguintes secrets (sem expor valores):
-- ASAAS_API_KEY → asaas.configurado
-- AUTENTIQUE_API_KEY → autentique.configurado
-- RESEND_API_KEY → email.configurado
-- EVOLUTION_API_KEY → whatsapp.api_configurada
+┌─────────────────────────────────────────────────────────────────────┐
+│                        FRONTEND (React)                              │
+├─────────────────────────────────────────────────────────────────────┤
+│  PropostaAnalise.tsx                                                 │
+│  ├── BotaoAtivarSGA.tsx (novo componente)                           │
+│  │   └── Dialog confirmacao                                          │
+│  │   └── Status visual (pendente/sincronizando/ativado/erro)        │
+│  └── useSGASync.ts (hook de estado)                                  │
+└─────────────────────────────────────────────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                      EDGE FUNCTION                                   │
+├─────────────────────────────────────────────────────────────────────┤
+│  sga-hinova-sync/index.ts                                            │
+│  ├── 1. Autenticar na API Hinova                                     │
+│  ├── 2. Cadastrar/buscar associado                                   │
+│  ├── 3. Cadastrar veiculo                                            │
+│  ├── 4. Enviar fotos/documentos                                      │
+│  └── 5. Atualizar registros locais                                   │
+└─────────────────────────────────────────────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                      API HINOVA SGA v2                               │
+├─────────────────────────────────────────────────────────────────────┤
+│  Base URL: https://api.hinova.com.br/api/sga/v2                      │
+│  ├── POST /usuario/autenticar                                        │
+│  ├── POST /associado/cadastrar                                       │
+│  ├── POST /veiculo/cadastrar                                         │
+│  └── POST /veiculo/foto/cadastrar                                    │
+└─────────────────────────────────────────────────────────────────────┘
+```
 
-Retorno:
+---
+
+## Fase 1: Configuracao de Secrets
+
+**Secrets necessarios no Supabase:**
+
+| Secret | Descricao | Obrigatorio |
+|--------|-----------|-------------|
+| `HINOVA_API_URL` | URL base da API (https://api.hinova.com.br/api/sga/v2) | Sim |
+| `HINOVA_TOKEN` | Token Bearer gerado no SGA Hinova | Sim |
+| `HINOVA_USUARIO` | Usuario para autenticacao | Sim |
+| `HINOVA_SENHA` | Senha para autenticacao | Sim |
+| `HINOVA_CODIGO_CONTA` | Codigo da conta padrao | Sim |
+| `HINOVA_CODIGO_REGIONAL` | Codigo regional padrao | Nao |
+| `HINOVA_CODIGO_COOPERATIVA` | Codigo cooperativa padrao | Nao |
+| `HINOVA_CODIGO_VOLUNTARIO` | Codigo voluntario padrao | Nao |
+
+---
+
+## Fase 2: Alteracoes no Banco de Dados
+
+### 2.1 Novos campos na tabela `associados`
+
+```sql
+ALTER TABLE associados 
+ADD COLUMN IF NOT EXISTS codigo_hinova INTEGER,
+ADD COLUMN IF NOT EXISTS sincronizado_hinova BOOLEAN DEFAULT FALSE,
+ADD COLUMN IF NOT EXISTS sincronizado_hinova_em TIMESTAMPTZ;
+```
+
+### 2.2 Novos campos na tabela `veiculos`
+
+```sql
+ALTER TABLE veiculos 
+ADD COLUMN IF NOT EXISTS codigo_hinova INTEGER,
+ADD COLUMN IF NOT EXISTS sincronizado_hinova BOOLEAN DEFAULT FALSE,
+ADD COLUMN IF NOT EXISTS sincronizado_hinova_em TIMESTAMPTZ,
+ADD COLUMN IF NOT EXISTS status_sga VARCHAR(50) DEFAULT 'pendente';
+-- status_sga: pendente | sincronizando | ativado_sga | erro_sincronizacao
+```
+
+### 2.3 Nova tabela `sga_sync_logs`
+
+```sql
+CREATE TABLE sga_sync_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  veiculo_id UUID REFERENCES veiculos(id),
+  associado_id UUID REFERENCES associados(id),
+  action VARCHAR(100) NOT NULL,
+  status VARCHAR(50) NOT NULL,
+  request_payload JSONB,
+  response_payload JSONB,
+  error_message TEXT,
+  usuario_id UUID,
+  duracao_ms INTEGER
+);
+
+CREATE INDEX idx_sync_logs_veiculo ON sga_sync_logs(veiculo_id);
+CREATE INDEX idx_sync_logs_associado ON sga_sync_logs(associado_id);
+CREATE INDEX idx_sync_logs_created ON sga_sync_logs(created_at DESC);
+
+-- RLS
+ALTER TABLE sga_sync_logs ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Funcionarios podem ver logs" ON sga_sync_logs
+FOR SELECT TO authenticated
+USING (public.am_i_funcionario());
+
+CREATE POLICY "Edge functions podem inserir logs" ON sga_sync_logs
+FOR INSERT TO authenticated
+WITH CHECK (true);
+```
+
+### 2.4 Nova tabela `hinova_mapeamentos`
+
+```sql
+CREATE TABLE hinova_mapeamentos (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tipo VARCHAR(50) NOT NULL,
+  codigo_local VARCHAR(100) NOT NULL,
+  codigo_hinova INTEGER NOT NULL,
+  descricao VARCHAR(255),
+  ativo BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(tipo, codigo_local)
+);
+
+-- Dados iniciais de mapeamento
+INSERT INTO hinova_mapeamentos (tipo, codigo_local, codigo_hinova, descricao) VALUES
+-- Cores
+('cor', 'preto', 1, 'PRETO'),
+('cor', 'branco', 2, 'BRANCO'),
+('cor', 'prata', 3, 'PRATA'),
+('cor', 'cinza', 4, 'CINZA'),
+('cor', 'vermelho', 5, 'VERMELHO'),
+('cor', 'azul', 6, 'AZUL'),
+('cor', 'verde', 7, 'VERDE'),
+('cor', 'amarelo', 8, 'AMARELO'),
+('cor', 'marrom', 9, 'MARROM'),
+('cor', 'bege', 10, 'BEGE'),
+-- Combustivel
+('combustivel', 'gasolina', 1, 'GASOLINA'),
+('combustivel', 'etanol', 2, 'ETANOL'),
+('combustivel', 'alcool', 2, 'ETANOL'),
+('combustivel', 'flex', 3, 'FLEX'),
+('combustivel', 'diesel', 4, 'DIESEL'),
+('combustivel', 'gnv', 5, 'GNV'),
+('combustivel', 'eletrico', 6, 'ELETRICO'),
+('combustivel', 'hibrido', 7, 'HIBRIDO'),
+-- Tipo de veiculo
+('tipo_veiculo', 'automovel', 1, 'AUTOMOVEL'),
+('tipo_veiculo', 'carro', 1, 'AUTOMOVEL'),
+('tipo_veiculo', 'motocicleta', 2, 'MOTOCICLETA'),
+('tipo_veiculo', 'moto', 2, 'MOTOCICLETA'),
+('tipo_veiculo', 'caminhao', 3, 'CAMINHAO'),
+('tipo_veiculo', 'utilitario', 4, 'UTILITARIO'),
+-- Tipos de foto/documento
+('tipo_foto', 'cnh', 1, 'CNH'),
+('tipo_foto', 'crlv', 2, 'CRLV'),
+('tipo_foto', 'comprovante_residencia', 3, 'COMPROVANTE RESIDENCIA'),
+('tipo_foto', 'foto_frontal_veiculo', 4, 'FOTO FRENTE'),
+('tipo_foto', 'foto_frente', 4, 'FOTO FRENTE'),
+('tipo_foto', 'foto_traseira_veiculo', 5, 'FOTO TRASEIRA'),
+('tipo_foto', 'foto_traseira', 5, 'FOTO TRASEIRA'),
+('tipo_foto', 'foto_lateral_esquerda', 6, 'FOTO LATERAL ESQUERDA'),
+('tipo_foto', 'foto_lateral_direita', 7, 'FOTO LATERAL DIREITA'),
+('tipo_foto', 'foto_motor', 8, 'FOTO MOTOR'),
+('tipo_foto', 'foto_chassi', 9, 'FOTO CHASSI'),
+('tipo_foto', 'foto_painel', 10, 'FOTO PAINEL'),
+('tipo_foto', 'foto_hodometro', 10, 'FOTO KM')
+ON CONFLICT (tipo, codigo_local) DO NOTHING;
+
+-- RLS
+ALTER TABLE hinova_mapeamentos ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Todos autenticados podem ler mapeamentos" ON hinova_mapeamentos
+FOR SELECT TO authenticated USING (true);
+```
+
+---
+
+## Fase 3: Edge Function `sga-hinova-sync`
+
+**Arquivo:** `supabase/functions/sga-hinova-sync/index.ts`
+
+### 3.1 Estrutura da Funcao
+
+```text
+Entrada:
+{
+  veiculo_id: string (UUID),
+  associado_id: string (UUID)
+}
+
+Fluxo:
+1. Validar entrada
+2. Buscar dados do associado (Supabase)
+3. Buscar dados do veiculo (Supabase)
+4. Buscar documentos/fotos do Storage
+5. Autenticar na API Hinova
+6. Verificar se associado ja existe (por CPF)
+   - Se existe: usar codigo_associado existente
+   - Se nao existe: cadastrar novo
+7. Cadastrar veiculo com codigo_associado
+8. Enviar fotos em lotes de 50
+9. Atualizar registros locais (codigo_hinova, status_sga)
+10. Registrar logs em sga_sync_logs
+11. Retornar resultado
+
+Saida (sucesso):
 {
   success: true,
-  status: {
-    asaas: { configurado: true },
-    autentique: { configurado: true },
-    email: { configurado: true },
-    whatsapp: { api_configurada: true }
+  data: {
+    codigo_associado_hinova: 12345,
+    codigo_veiculo_hinova: 67890,
+    fotos_enviadas: 8,
+    fotos_com_erro: []
   }
 }
-```
 
-### Fase 2: Criar Hook para Status de Integrações
-
-**Criar:** `src/hooks/useIntegracoesStatus.ts`
-
-Hook que combina múltiplas fontes:
-- Chama `integracoes-verificar-secrets` para verificar se secrets existem
-- Para WhatsApp: também verifica status da instância via `useWhatsAppStatus`
-- Para rastreadores: usa `useRastreadorStatus` existente
-
-```text
-interface IntegracoesStatus {
-  asaas: { configurado: boolean };
-  autentique: { configurado: boolean };
-  email: { configurado: boolean };
-  whatsapp: { configurado: boolean; conectado: boolean };
-  softruck: { configurado: boolean; testado: boolean };
-  rede_veiculos: { configurado: boolean; testado: boolean };
+Saida (erro):
+{
+  success: false,
+  error: "Descricao do erro",
+  step: "autenticar|associado|veiculo|fotos",
+  details: {...}
 }
 ```
 
-### Fase 3: Atualizar ServicosTab.tsx
+### 3.2 Mapeamento de Campos
 
-Modificar `categoriasBase` para:
-1. Remover status hardcoded (`ativo: false`)
-2. Adicionar propriedade `integracaoId` para mapear ao status dinâmico
-3. Usar o hook `useIntegracoesStatus` para determinar status real
+| Campo Supabase (associados) | Campo Hinova |
+|-----------------------------|--------------|
+| nome | nome |
+| cpf | cpf |
+| rg | rg |
+| data_nascimento | data_nascimento (dd/mm/yyyy) |
+| email | email |
+| telefone | telefone |
+| whatsapp | celular |
+| cep | cep |
+| logradouro | logradouro |
+| numero | numero |
+| complemento | complemento |
+| bairro | bairro |
+| cidade | cidade |
+| uf | estado |
+| sexo | sexo |
+| dia_vencimento | dia_vencimento |
 
-**Lógica de status por integração:**
+| Campo Supabase (veiculos) | Campo Hinova |
+|---------------------------|--------------|
+| placa | placa |
+| chassi | chassi |
+| renavam | renavam |
+| ano_fabricacao | ano_fabricacao |
+| ano_modelo | ano_modelo |
+| codigo_fipe | codigo_fipe |
+| valor_fipe | valor_fipe |
+| cor | codigo_cor (via mapeamento) |
+| combustivel | codigo_combustivel (via mapeamento) |
 
-| Integração | Lógica para "ON" |
-|------------|------------------|
-| ASAAS | Secret existe E não está vazio |
-| Autentique | Secret existe E não está vazio |
-| Email SMTP | Secret existe E não está vazio |
-| WhatsApp | Instância conectada (status = 'open') |
-| Rede Veículos | Credencial testada com sucesso |
-| Softruck | Credencial testada com sucesso |
-| Tabela FIPE | Sempre ON (API pública) |
-| n8n | Manter hardcoded ON (sem API key) |
+### 3.3 Tratamento de Erros e Retry
 
-### Fase 4: Criar Sheets de Configuração para Cada Serviço
+- Implementar retry com backoff exponencial (3 tentativas)
+- Delays: 1s, 2s, 4s
+- Registrar cada tentativa no log
+- Se associado ja existe (CPF duplicado): buscar codigo existente
+- Se foto falhar: continuar com proximas, retornar lista de falhas
 
-**Criar:** `src/components/integracoes/ConfigurarServicoSheet.tsx`
+---
 
-Sheet genérico que exibe:
-- Nome do secret necessário
-- Link para painel de secrets do Supabase
-- Botão "Testar Conexão" (quando aplicável)
-- Status do último teste
+## Fase 4: Componente `BotaoAtivarSGA`
 
-Reutilizar o padrão do `ConfigurarRastreadorSheet.tsx` existente.
+**Arquivo:** `src/components/cadastro/BotaoAtivarSGA.tsx`
+
+### 4.1 Interface do Componente
+
+```typescript
+interface BotaoAtivarSGAProps {
+  veiculoId: string;
+  associadoId: string;
+  statusAtual: 'pendente' | 'sincronizando' | 'ativado_sga' | 'erro_sincronizacao';
+  onSuccess?: () => void;
+  onError?: (error: string) => void;
+}
+```
+
+### 4.2 Estados Visuais
+
+| Status | Aparencia | Acao |
+|--------|-----------|------|
+| `pendente` | Botao azul, icone Upload | Abre dialog de confirmacao |
+| `sincronizando` | Botao cinza, spinner | Desabilitado |
+| `ativado_sga` | Botao verde, icone Check | Desabilitado, tooltip com data |
+| `erro_sincronizacao` | Botao vermelho/laranja | Permite retry |
+
+### 4.3 Fluxo de Interacao
+
+```text
+1. Usuario clica "Ativar no SGA"
+2. Dialog de confirmacao abre:
+   - Titulo: "Ativar Associado no SGA Hinova?"
+   - Mensagem: "Esta acao enviara todos os dados para o sistema SGA Hinova"
+   - Botoes: "Cancelar" | "Confirmar Ativacao"
+3. Ao confirmar:
+   - Status muda para "sincronizando"
+   - Chama Edge Function sga-hinova-sync
+4. Se sucesso:
+   - Status muda para "ativado_sga"
+   - Toast: "Associado ativado com sucesso no SGA!"
+   - Invalida queries relacionadas
+5. Se erro:
+   - Status muda para "erro_sincronizacao"
+   - Toast com mensagem de erro
+   - Permite nova tentativa
+```
+
+---
+
+## Fase 5: Hook `useSGASync`
+
+**Arquivo:** `src/hooks/useSGASync.ts`
+
+### 5.1 Interface do Hook
+
+```typescript
+interface UseSGASyncOptions {
+  veiculoId: string;
+  associadoId: string;
+  onSuccess?: (data: SyncResult) => void;
+  onError?: (error: Error) => void;
+}
+
+interface SyncResult {
+  success: boolean;
+  codigo_associado_hinova?: number;
+  codigo_veiculo_hinova?: number;
+  fotos_enviadas?: number;
+  fotos_com_erro?: string[];
+}
+
+// Retorno do hook
+const {
+  status,           // 'idle' | 'loading' | 'success' | 'error'
+  isLoading,
+  isSynced,         // true se ja sincronizado
+  canSync,          // true se pode sincronizar
+  error,
+  syncResult,
+  veiculoData,      // dados do veiculo com status_sga
+  logs,             // historico de tentativas
+  sync,             // funcao para sincronizar
+  retry,            // funcao para retry
+} = useSGASync(options);
+```
+
+### 5.2 Logica de `canSync`
+
+```typescript
+const canSync = useMemo(() => {
+  const veiculo = veiculoQuery.data;
+  if (!veiculo) return false;
+  if (veiculo.sincronizado_hinova) return false;
+  if (veiculo.status_sga === 'sincronizando') return false;
+  
+  // Veiculo deve estar aprovado ou ativo
+  const statusOk = ['aprovado', 'ativo'].includes(veiculo.status);
+  
+  return statusOk;
+}, [veiculoQuery.data]);
+```
+
+---
+
+## Fase 6: Integracao na Pagina PropostaAnalise
+
+**Arquivo:** `src/pages/cadastro/PropostaAnalise.tsx`
+
+### 6.1 Onde Adicionar o Botao
+
+Na secao de acoes (linha ~730), apos a aprovacao, adicionar:
+
+```typescript
+{/* Ativacao SGA Hinova */}
+{proposta.status === 'ativo' && proposta.veiculo_id && (
+  <div className="mt-4 pt-4 border-t">
+    <p className="text-sm text-muted-foreground mb-3">
+      Integracao SGA Hinova
+    </p>
+    <BotaoAtivarSGA
+      veiculoId={proposta.veiculo_id}
+      associadoId={proposta.associado_id}
+      statusAtual={proposta.veiculo_status_sga || 'pendente'}
+      onSuccess={() => {
+        queryClient.invalidateQueries({ queryKey: ['proposta', id] });
+      }}
+    />
+    
+    {/* Informacoes pos-sincronizacao */}
+    {proposta.veiculo_sincronizado_hinova && (
+      <div className="mt-3 p-3 bg-success/10 rounded-lg text-sm">
+        <p>Codigo Hinova: {proposta.veiculo_codigo_hinova}</p>
+        <p>Sincronizado em: {format(...)}</p>
+      </div>
+    )}
+  </div>
+)}
+```
+
+### 6.2 Condicoes para Exibir
+
+- Proposta com status `ativo`
+- Veiculo possui `veiculo_id`
+- Usuario tem perfil `analista_cadastro` ou superior
+
+---
+
+## Fase 7: Configuracao no Supabase
+
+### 7.1 config.toml
+
+```toml
+[functions.sga-hinova-sync]
+verify_jwt = false
+```
+
+### 7.2 Adicionar Integracao na Pagina de Servicos
+
+Na `ServicosTab.tsx`, adicionar card para SGA Hinova:
+
+```typescript
+{
+  id: 'hinova',
+  nome: 'SGA Hinova',
+  descricao: 'Sistema de gestao de associados',
+  icone: '🏢',
+  integracaoId: 'hinova',
+  secretName: 'HINOVA_TOKEN',
+}
+```
 
 ---
 
 ## Arquivos a Criar
 
-| Arquivo | Descrição |
+| Arquivo | Descricao |
 |---------|-----------|
-| `supabase/functions/integracoes-verificar-secrets/index.ts` | Edge function para verificar secrets |
-| `src/hooks/useIntegracoesStatus.ts` | Hook para status combinado de todas integrações |
-| `src/components/integracoes/ConfigurarServicoSheet.tsx` | Sheet genérico para configurar serviços |
+| `supabase/functions/sga-hinova-sync/index.ts` | Edge function principal |
+| `src/components/cadastro/BotaoAtivarSGA.tsx` | Componente do botao |
+| `src/hooks/useSGASync.ts` | Hook de gerenciamento de estado |
 
 ## Arquivos a Modificar
 
-| Arquivo | Alterações |
+| Arquivo | Alteracoes |
 |---------|------------|
-| `src/components/integracoes/ServicosTab.tsx` | Usar status dinâmico, adicionar ações de configurar |
-| `supabase/config.toml` | Adicionar nova edge function |
-| `src/components/integracoes/index.ts` | Exportar novo componente |
+| `supabase/config.toml` | Adicionar funcao sga-hinova-sync |
+| `src/pages/cadastro/PropostaAnalise.tsx` | Integrar BotaoAtivarSGA |
+| `src/pages/cadastro/AssociadoDetalhe.tsx` | Exibir status SGA |
+| `src/components/integracoes/ServicosTab.tsx` | Adicionar card Hinova |
+| `src/hooks/useIntegracoesStatus.ts` | Verificar secret HINOVA_TOKEN |
 
 ---
 
-## Detalhamento Técnico
+## Estimativa de Tempo
 
-### Edge Function `integracoes-verificar-secrets`
-
-```typescript
-serve(async (req) => {
-  const status = {
-    asaas: {
-      configurado: !!Deno.env.get('ASAAS_API_KEY')?.length,
-      ambiente: Deno.env.get('ASAAS_API_KEY')?.includes('_hmlg_') ? 'sandbox' : 'production'
-    },
-    autentique: {
-      configurado: !!Deno.env.get('AUTENTIQUE_API_KEY')?.length
-    },
-    email: {
-      configurado: !!Deno.env.get('RESEND_API_KEY')?.length
-    },
-    whatsapp: {
-      api_configurada: !!Deno.env.get('EVOLUTION_API_KEY')?.length
-    },
-    openai: {
-      configurado: !!Deno.env.get('OPENAI_API_KEY')?.length
-    }
-  };
-
-  return Response.json({ success: true, status });
-});
-```
-
-### Hook `useIntegracoesStatus`
-
-```typescript
-export function useIntegracoesStatus() {
-  // Buscar status dos secrets
-  const secretsQuery = useQuery({
-    queryKey: ['integracoes-secrets'],
-    queryFn: async () => {
-      const { data } = await supabase.functions.invoke('integracoes-verificar-secrets');
-      return data?.status;
-    },
-    refetchInterval: 60000 // Atualizar a cada 1 min
-  });
-
-  // Buscar status da instância WhatsApp
-  const whatsappQuery = useQuery({
-    queryKey: ['whatsapp-instancia-status'],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('whatsapp_instancias')
-        .select('status')
-        .eq('principal', true)
-        .single();
-      return data?.status === 'open';
-    }
-  });
-
-  // Buscar status dos rastreadores
-  const { data: rastreadores } = useRastreadorStatus();
-
-  return {
-    asaas: { configurado: secretsQuery.data?.asaas?.configurado || false },
-    autentique: { configurado: secretsQuery.data?.autentique?.configurado || false },
-    email: { configurado: secretsQuery.data?.email?.configurado || false },
-    whatsapp: { 
-      configurado: secretsQuery.data?.whatsapp?.api_configurada || false,
-      conectado: whatsappQuery.data || false 
-    },
-    softruck: rastreadores?.find(r => r.plataforma === 'softruck'),
-    rede_veiculos: rastreadores?.find(r => r.plataforma === 'rede_veiculos'),
-    isLoading: secretsQuery.isLoading,
-  };
-}
-```
-
-### ServicosTab Atualizada
-
-```typescript
-const categoriasBase = [
-  {
-    titulo: 'Pagamentos',
-    emoji: '💳',
-    servicos: [
-      {
-        id: 'asaas',
-        nome: 'ASAAS',
-        integracaoId: 'asaas', // Para mapear ao status
-        secretName: 'ASAAS_API_KEY',
-        // ... resto igual
-      },
-    ],
-  },
-  // ... outras categorias
-];
-
-// No componente:
-const { asaas, whatsapp, email, autentique } = useIntegracoesStatus();
-
-// Para cada serviço, determinar status:
-const getServicoStatus = (servico) => {
-  switch (servico.integracaoId) {
-    case 'asaas': return asaas.configurado;
-    case 'whatsapp': return whatsapp.conectado;
-    case 'email': return email.configurado;
-    case 'autentique': return autentique.configurado;
-    // ... rastreadores já têm lógica própria
-  }
-};
-```
+| Fase | Tempo |
+|------|-------|
+| Configurar secrets | 10 min |
+| Migracoes de banco | 15 min |
+| Edge Function sga-hinova-sync | 90 min |
+| Componente BotaoAtivarSGA | 45 min |
+| Hook useSGASync | 30 min |
+| Integracao PropostaAnalise | 30 min |
+| Integracao ServicosTab | 15 min |
+| Testes e ajustes | 45 min |
+| **Total** | **~4-5 horas** |
 
 ---
 
-## Fluxo do Usuário Atualizado
+## Proximos Passos Apos Implementacao
 
-```text
-1. Usuário acessa Configurações > Integrações
-2. Sistema carrega status real de todas as integrações
-3. Cards mostram:
-   - WhatsApp: ON (se conectado) ou OFF (se desconectado)
-   - ASAAS: ON (se ASAAS_API_KEY existe) ou OFF
-   - Email: ON (se RESEND_API_KEY existe) ou OFF
-   - Autentique: ON (se AUTENTIQUE_API_KEY existe) ou OFF
-4. Botão "Configurar" abre sheet com instruções
-5. Botão "Editar" disponível para serviços já configurados
-```
-
----
-
-## Resultado Esperado
-
-Após implementação, a tela mostrará:
-
-| Serviço | Status |
-|---------|--------|
-| ASAAS | **ON** (secret existe) |
-| WhatsApp | Depende da conexão atual |
-| Email SMTP | **ON** (secret existe) |
-| Rede Veículos | Conforme teste |
-| Softruck | Conforme teste |
-| Autentique | **ON** (secret existe) |
-| n8n | **ON** (hardcoded) |
-
----
-
-## Considerações
-
-1. **Segurança:** A edge function apenas verifica se secrets existem, nunca expõe valores
-2. **Performance:** Cache de 60s para evitar chamadas excessivas
-3. **WhatsApp especial:** Além do secret, precisa verificar conexão ativa
-4. **Compatibilidade:** Mantém comportamento atual dos rastreadores
+1. Obter credenciais da API Hinova com o cliente
+2. Configurar secrets no Supabase
+3. Testar com um associado/veiculo em ambiente de homologacao
+4. Ajustar mapeamentos de codigos conforme cadastros no Hinova
+5. Liberar para producao
