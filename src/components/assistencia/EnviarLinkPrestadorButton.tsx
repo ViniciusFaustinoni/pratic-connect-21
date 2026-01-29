@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Send, MapPin, Copy, Check, ExternalLink } from 'lucide-react';
+import { Send, MapPin, Copy, Check, ExternalLink, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -13,6 +13,7 @@ import {
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
+import { supabase } from '@/integrations/supabase/client';
 
 interface EnviarLinkPrestadorButtonProps {
   chamadoId: string;
@@ -51,6 +52,7 @@ export function EnviarLinkPrestadorButton({
 }: EnviarLinkPrestadorButtonProps) {
   const [open, setOpen] = useState(false);
   const [copiado, setCopiado] = useState(false);
+  const [enviandoEvolution, setEnviandoEvolution] = useState(false);
 
   // Usar posição do rastreador se disponível, senão usar origem
   const lat = rastreadorLat ?? origemLat;
@@ -79,7 +81,43 @@ ${rastreadorLat && rastreadorLng ? '📡 *Posição via rastreador (tempo real)*
 
 Por favor, dirija-se ao local o mais rápido possível.`;
 
-  const handleEnviarWhatsApp = () => {
+  // Enviar via Evolution API (envio direto sem abrir wa.me)
+  const handleEnviarViaEvolution = async () => {
+    if (!prestadorTelefone) {
+      toast.error('Telefone do prestador não informado');
+      return;
+    }
+
+    setEnviandoEvolution(true);
+    
+    try {
+      const telefoneFormatado = prestadorTelefone.replace(/\D/g, '');
+      
+      const { data, error } = await supabase.functions.invoke('whatsapp-send-text', {
+        body: {
+          telefone: telefoneFormatado,
+          mensagem: mensagem,
+        },
+      });
+
+      if (error) throw error;
+      
+      if (data?.success === false) {
+        throw new Error(data.error || 'Erro ao enviar mensagem');
+      }
+
+      toast.success('✅ Mensagem enviada diretamente via WhatsApp!');
+      setOpen(false);
+    } catch (err: any) {
+      console.error('[EnviarLinkPrestadorButton] Erro Evolution:', err);
+      toast.error(`Erro ao enviar: ${err.message}`);
+    } finally {
+      setEnviandoEvolution(false);
+    }
+  };
+
+  // Abrir WhatsApp Web (fallback)
+  const handleEnviarWhatsAppWeb = () => {
     if (!prestadorTelefone) {
       toast.error('Telefone do prestador não informado');
       return;
@@ -89,7 +127,7 @@ Por favor, dirija-se ao local o mais rápido possível.`;
     const mensagemCodificada = encodeURIComponent(mensagem);
     
     window.open(`https://wa.me/55${telefoneFormatado}?text=${mensagemCodificada}`, '_blank');
-    toast.success('WhatsApp aberto!');
+    toast.success('WhatsApp Web aberto!');
     setOpen(false);
   };
 
@@ -193,12 +231,24 @@ Por favor, dirija-se ao local o mais rápido possível.`;
             Cancelar
           </Button>
           <Button
-            className="bg-green-500 hover:bg-green-600"
-            onClick={handleEnviarWhatsApp}
+            variant="secondary"
+            onClick={handleEnviarWhatsAppWeb}
             disabled={!prestadorTelefone}
           >
-            <Send className="h-4 w-4 mr-2" />
-            Enviar via WhatsApp
+            <ExternalLink className="h-4 w-4 mr-2" />
+            Abrir WhatsApp Web
+          </Button>
+          <Button
+            className="bg-green-500 hover:bg-green-600"
+            onClick={handleEnviarViaEvolution}
+            disabled={!prestadorTelefone || enviandoEvolution}
+          >
+            {enviandoEvolution ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4 mr-2" />
+            )}
+            {enviandoEvolution ? 'Enviando...' : 'Enviar Direto'}
           </Button>
         </DialogFooter>
       </DialogContent>

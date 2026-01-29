@@ -1624,6 +1624,24 @@ export function useSolicitarDocumentos() {
         // Não falhar por causa do histórico
       }
 
+      // 4. NOVO: Enviar notificação via WhatsApp
+      try {
+        await supabase.functions.invoke('notificar-cliente', {
+          body: {
+            tipo: 'documentos_solicitados',
+            associado_id: associadoId,
+            dados: {
+              documentos: documentos.join(', '),
+              observacoes: observacoes || '',
+            },
+          },
+        });
+        console.log('[useSolicitarDocumentos] Notificação WhatsApp enviada');
+      } catch (notifError) {
+        console.warn('[useSolicitarDocumentos] Erro ao enviar notificação (não crítico):', notifError);
+        // Não falhar por causa da notificação
+      }
+
       return { contratoId, associadoId };
     },
     onSuccess: () => {
