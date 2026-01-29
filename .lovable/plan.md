@@ -1,328 +1,332 @@
 
-# Revisao Completa - WhatsApp via Evolution API no Modulo de Cadastro
+# Revisao Completa - WhatsApp via Evolution API no Modulo de Assistencia 24h
 
 ## Resumo Executivo
 
-| Momento do Fluxo | Status WhatsApp | Implementacao |
-|------------------|-----------------|---------------|
-| 1. Documentos solicitados ao cliente | **OK** | `notificar-cliente` com tipo `documentos_solicitados` |
-| 2. Documento aprovado | **NAO IMPLEMENTADO** | Sem notificacao |
-| 3. Documento reprovado | **NAO IMPLEMENTADO** | Sem notificacao |
-| 4. Cadastro aprovado (boas-vindas) | **PARCIAL** | Enviado apenas na ativacao do rastreador |
-| 5. Lembrete de pendencia documental | **NAO IMPLEMENTADO** | Sem cron/trigger |
-| 6. Instalacao agendada | **OK** | Template `instalacao_agendada` existe |
-| Cliente pode enviar documentos via WhatsApp | **NAO IMPLEMENTADO** | Fotos nao sao vinculadas |
-| Analista pode comunicar diretamente | **NAO IMPLEMENTADO** | Sem chat direto no cadastro |
+| Momento do Fluxo | Status WhatsApp | Implementacao Atual |
+|------------------|-----------------|---------------------|
+| 1. Chamado aberto - confirmacao com protocolo | **PARCIAL** | Envia apenas para central, NAO para associado |
+| 2. Prestador acionado - previsao | **NAO IMPLEMENTADO** | Apenas toast local, sem WhatsApp |
+| 3. Prestador a caminho - contato | **MANUAL** | Botao existe mas precisa ser clicado manualmente |
+| 4. Servico iniciado - confirmacao | **NAO IMPLEMENTADO** | Sem notificacao |
+| 5. Servico concluido - pesquisa satisfacao | **NAO IMPLEMENTADO** | Sem WhatsApp |
+| 6. Atualizacao de status - tempo real | **NAO IMPLEMENTADO** | Sem notificacao automatica |
+| Associado abre chamado via WhatsApp | **PARCIAL** | Cria solicitacao para aprovacao, nao chamado direto |
+| Localizacao do associado capturada | **OK** | Tool reverse_geocode funciona |
+| Contato do prestador compartilhado | **MANUAL** | Funciona via botao ou tool IA |
+| Historico registrado | **OK** | Tabela chamados_assistencia_historico |
 
 ---
 
 ## Analise Detalhada
 
-### 1. Documentos Solicitados ao Cliente - FUNCIONANDO
+### 1. Chamado Aberto - Confirmacao com Protocolo - PARCIAL
 
-**Arquivo:** `src/hooks/usePropostasPendentes.ts` (linha 1627-1638)
+**Situacao atual:** `criar-chamado-assistencia/index.ts` linha 352-386
+
+O sistema envia WhatsApp para a **central** quando chamado e aberto:
 
 ```typescript
-// 4. Enviar notificação via WhatsApp
-await supabase.functions.invoke('notificar-cliente', {
-  body: {
-    tipo: 'documentos_solicitados',
+// Linha 351-371 - Envia apenas para CENTRAL
+if (telefoneCentral) {
+  const mensagemCentral = `🚨 *NOVO CHAMADO DE ASSISTÊNCIA*...`;
+  await supabaseAdmin.functions.invoke('whatsapp-send-media', { ... });
+}
+```
+
+Porem, **NAO envia WhatsApp de confirmacao para o ASSOCIADO**. Apenas cria notificacao no sistema (linha 392-405).
+
+**Gap:** Associado nao recebe WhatsApp confirmando abertura do chamado com protocolo.
+
+### 2. Prestador Acionado - Previsao - NAO IMPLEMENTADO
+
+**Situacao atual:** `AtribuirPrestadorModal.tsx` linha 94-149
+
+Quando prestador e acionado:
+- Atualiza tabela `chamados_assistencia` com `prestador_nome` e `prestador_telefone`
+- Cria registro em `chamados_assistencia_atendimentos` com status `acionado`
+- Registra no historico
+
+**Gap:** NAO envia WhatsApp para associado informando que prestador foi acionado.
+
+O template existe em `notificar-cliente`:
+```typescript
+assistencia_prestador_acionado: {
+  titulo: '🚗 Prestador Acionado',
+  mensagem: 'Olá! O prestador {prestador_nome} foi acionado para atendê-lo...',
+}
+```
+
+Porem **nunca e chamado** no fluxo.
+
+### 3. Prestador a Caminho - Contato - MANUAL
+
+**Situacao atual:** `EnviarLinkPrestadorButton.tsx`
+
+Existe botao no painel para:
+- Enviar localizacao (PIN) para prestador
+- Enviar mensagem de texto com detalhes
+- Enviar contato do prestador para associado
+
+**Gap:** Tudo e **manual**. Quando status muda para `prestador_a_caminho`, deveria enviar automaticamente:
+- Notificacao para associado com previsao e contato
+- Localizacao atualizada para prestador (se rastreador disponivel)
+
+### 4. Servico Iniciado - Confirmacao - NAO IMPLEMENTADO
+
+**Situacao atual:** `AtualizarStatusChamadoModal.tsx`
+
+Quando status muda para `em_atendimento`:
+- Atualiza banco de dados
+- Registra no historico
+- **NAO envia WhatsApp**
+
+**Gap:** Associado nao recebe confirmacao de que atendimento iniciou.
+
+### 5. Servico Concluido - Pesquisa Satisfacao - NAO IMPLEMENTADO
+
+**Situacao atual:** `AtualizarStatusChamadoModal.tsx` linha 78-101
+
+Quando status muda para `concluido`:
+- Captura posicao final do rastreador
+- Atualiza `data_conclusao`
+- **NAO envia WhatsApp com pesquisa de satisfacao**
+
+**Gap:** 
+- Associado nao recebe confirmacao de conclusao
+- Nao ha link para avaliar o atendimento
+- Template `concluido` em `disparar-notificacao` nao inclui link de avaliacao
+
+O template existe mas e basico:
+```typescript
+concluido: {
+  titulo: 'Atendimento Concluído',
+  mensagem: 'Seu chamado foi concluído. Avalie o atendimento!',
+}
+```
+
+### 6. Atualizacao de Status - Tempo Real - NAO IMPLEMENTADO
+
+**Situacao atual:** Nao existe trigger ou funcao para notificar associado quando status muda.
+
+**Gap:** Associado precisa abrir o app para ver atualizacoes. Nao recebe notificacao push/WhatsApp.
+
+---
+
+## Abertura de Chamado via WhatsApp - PARCIAL
+
+**Situacao atual:** `whatsapp-webhook/index.ts` linha 573-613
+
+A IA do WhatsApp pode criar solicitacao de assistencia, mas:
+- Cria registro em `chat_solicitacoes_ia` (nao em `chamados_assistencia`)
+- Requer aprovacao de diretor
+- Nao abre chamado diretamente
+
+```typescript
+case "criar_solicitacao_assistencia": {
+  const { data } = await supabase.from("chat_solicitacoes_ia").insert({
     associado_id: associadoId,
-    dados: {
-      documentos: documentos.join(', '),
-      observacoes: observacoes || '',
-    },
-  },
-});
-```
-
-**Template em `notificar-cliente/index.ts`:**
-```
-Olá {nome}! Precisamos de alguns documentos para dar continuidade ao seu cadastro: {documentos}. Acesse o link de acompanhamento para enviar.
-```
-
-**Status:** Funcionando corretamente.
-
----
-
-### 2. Documento Aprovado - NAO IMPLEMENTADO
-
-**Arquivo:** `src/hooks/useDocumentos.ts` (linha 265-289)
-
-```typescript
-const aprovarDocumento = useMutation({
-  mutationFn: async (id: string) => {
-    await supabase
-      .from('documentos')
-      .update({
-        status: 'aprovado',
-        analista_id: user.id,
-        data_analise: new Date().toISOString(),
-      })
-      .eq('id', id);
-  },
-  onSuccess: () => {
-    toast.success('Documento aprovado!');
-    // ❌ NÃO ENVIA WHATSAPP
-  },
-});
-```
-
-**Gap:** Nao ha notificacao via WhatsApp quando documento e aprovado.
-
----
-
-### 3. Documento Reprovado - NAO IMPLEMENTADO
-
-**Arquivo:** `src/hooks/useDocumentos.ts` (linha 292-321)
-
-```typescript
-const reprovarDocumento = useMutation({
-  mutationFn: async ({ id, motivo, observacao }) => {
-    await supabase
-      .from('documentos')
-      .update({
-        status: 'reprovado',
-        motivo_reprovacao: motivoCompleto,
-      })
-      .eq('id', id);
-  },
-  onSuccess: () => {
-    toast.success('Documento reprovado');
-    // ❌ NÃO ENVIA WHATSAPP COM MOTIVO
-  },
-});
-```
-
-**Gap:** O cliente nao recebe notificacao com motivo da reprovacao e orientacao para reenvio.
-
----
-
-### 4. Cadastro Aprovado (Boas-Vindas) - PARCIAL
-
-**Situacao atual:** A mensagem de boas-vindas so e enviada quando o **rastreador e ativado** (nao quando cadastro e aprovado).
-
-**Arquivo:** `supabase/functions/ativar-associado/index.ts` (linha 210-223)
-
-```typescript
-// Enviar WhatsApp (se configurado)
-if (associado.whatsapp || associado.telefone) {
-  await supabaseAdmin.functions.invoke('whatsapp-send-media', {
-    body: {
-      telefone: telefoneWhatsapp,
-      mensagem: `Olá ${associado.nome}! 🚗\n\nSeu acesso ao App PRATIC está liberado!\n\n🔗 URL: ${appUrl}/app/login\n👤 Login: ${associado.cpf}\n🔑 Senha: ${senhaPadrao}`,
-    }
+    tipo: "assistencia",
+    dados: { ... },
+    status: "pendente",
+  });
+  return JSON.stringify({
+    message: "Solicitação de assistência registrada! Um diretor irá aprovar em breve.",
   });
 }
 ```
 
-**Gap:** Template `boas_vindas` existe em `disparar-notificacao` mas nao e usado no fluxo de aprovacao do cadastro.
+**Gap:** Nao ha fluxo para aprovar e criar chamado automaticamente. Diretor precisa aprovar manualmente.
 
 ---
 
-### 5. Lembrete de Pendencia Documental - NAO IMPLEMENTADO
+## Localizacao Enviada pelo Associado - OK
 
-**Existe:** Cron `enviar-lembretes-vencimento` apenas para **boletos vencendo**.
+**Situacao atual:** `whatsapp-webhook/index.ts` linha 615-665
 
-**Nao existe:** Cron ou trigger para lembrar cliente sobre documentos pendentes apos X dias.
+Tool `reverse_geocode` funciona corretamente:
+- Recebe latitude/longitude
+- Converte para endereco via Nominatim
+- Retorna endereco formatado para IA usar
 
-**Gap:** Tabela `documentos_solicitados` com status `pendente` nao dispara lembretes automaticos.
-
----
-
-### 6. Instalacao Agendada - OK
-
-**Template existe em `notificar-cliente/index.ts`:**
-
-```typescript
-instalacao_agendada: {
-  titulo: '📅 Instalação Agendada!',
-  mensagem: 'Olá {nome}! Sua instalação foi agendada para {data}. Nosso técnico entrará em contato.',
-}
-```
-
-**Status:** Template existe, precisa verificar se e chamado nos fluxos de agendamento.
+**Status:** Funcionando.
 
 ---
 
-### 7. Cliente Enviar Documentos via WhatsApp - NAO IMPLEMENTADO
+## Contato do Prestador Compartilhado - PARCIAL
 
-**Situacao atual:** O webhook `whatsapp-webhook` processa fotos recebidas, mas:
+**Situacao atual:** 
 
-- **NAO verifica** se o remetente tem documentos pendentes (`documentos_solicitados`)
-- **NAO vincula** a foto recebida ao documento solicitado
-- Apenas armazena no bucket `sinistros` (linha 1775 do webhook)
+1. **Via IA (tool):** `whatsapp-webhook/index.ts` linha 996-1093
+   - Tool `enviar_contato_prestador` funciona
+   - Envia cartao de contato via Evolution API
+   - Associado precisa pedir via chat
 
-**Arquivo:** `supabase/functions/whatsapp-webhook/index.ts` (linhas 1765-1778)
+2. **Via painel:** `EnviarLinkPrestadorButton.tsx`
+   - Botao "Enviar Contato ao Associado" funciona
+   - Atendente precisa clicar manualmente
 
-```typescript
-case 'imagem': {
-  mediaUrl = tipoMensagem.imagem.url;
-  mediaMimetype = tipoMensagem.imagem.mimetype;
-  
-  // Baixar e armazenar imagem
-  const mediaResult = await downloadMediaEvolution(...);
-  if (mediaResult.success && mediaResult.base64) {
-    mediaArmazenada = await storeMediaSupabase(supabase, mediaResult.base64, ...);
-    // ❌ NÃO VERIFICA documentos_solicitados
-    // ❌ NÃO CRIA registro em contratos_documentos
-    // ❌ NÃO ATUALIZA status do documento_solicitado
-  }
-  
-  mensagemTexto = captionImagem ? `[Imagem]: ${captionImagem}` : '[Imagem recebida]';
-}
-```
-
----
-
-### 8. Analista Comunicar Diretamente com Cliente - NAO IMPLEMENTADO
-
-**Situacao:** Chat direto so existe no modulo de **Sinistros** (`sinistros_mensagens`).
-
-**Gap:** Nao ha componente de chat no fluxo de cadastro para o analista enviar mensagens ao cliente.
+**Gap:** Nao e automatico. Deveria enviar quando prestador e despachado.
 
 ---
 
 ## Plano de Implementacao
 
-### Fase 1: Notificacoes de Documentos (Aprovado/Reprovado)
+### Fase 1: Notificacoes Automaticas por Status
 
-**Adicionar templates em `notificar-cliente/index.ts`:**
+**Criar edge function:** `supabase/functions/notificar-status-assistencia/index.ts`
 
-```typescript
-documento_aprovado: {
-  titulo: '✅ Documento Aprovado',
-  mensagem: 'Olá {nome}! O documento "{tipo_documento}" foi aprovado. {mensagem_adicional}',
-  emailTemplate: 'generico',
-},
-documento_reprovado: {
-  titulo: '⚠️ Documento Precisa de Ajuste',
-  mensagem: 'Olá {nome}! O documento "{tipo_documento}" precisa ser reenviado. Motivo: {motivo}. Acesse o link de acompanhamento para enviar novamente.',
-  emailTemplate: 'generico',
-},
-```
-
-**Modificar `src/hooks/useDocumentos.ts`:**
+Esta funcao sera chamada:
+- Via trigger no banco ao mudar status de chamado
+- Ou manualmente pelo frontend ao atualizar status
 
 ```typescript
-// Em aprovarDocumento.onSuccess
-await supabase.functions.invoke('notificar-cliente', {
-  body: {
-    tipo: 'documento_aprovado',
-    associado_id: documentoData.associado_id,
-    dados: { tipo_documento: documentoData.tipo },
+// Mapeamento de status para notificacao
+const NOTIFICACOES_POR_STATUS = {
+  aberto: {
+    titulo: '✅ Chamado Registrado!',
+    mensagem: 'Seu chamado de {tipo_servico} foi registrado. Protocolo: {protocolo}. Em breve um prestador será acionado.',
   },
-});
-
-// Em reprovarDocumento.onSuccess
-await supabase.functions.invoke('notificar-cliente', {
-  body: {
-    tipo: 'documento_reprovado',
-    associado_id: documentoData.associado_id,
-    dados: { tipo_documento: documentoData.tipo, motivo: motivoCompleto },
+  aguardando_prestador: {
+    titulo: '🚗 Prestador Acionado',
+    mensagem: 'O prestador {prestador_nome} foi acionado para atendê-lo. Previsão: 30-45 minutos.',
   },
-});
+  prestador_a_caminho: {
+    titulo: '🚚 Prestador a Caminho!',
+    mensagem: 'O prestador {prestador_nome} está a caminho. Telefone: {prestador_telefone}',
+    enviar_contato: true,
+  },
+  em_atendimento: {
+    titulo: '🔧 Atendimento Iniciado',
+    mensagem: 'O prestador chegou e iniciou o atendimento do seu chamado {protocolo}.',
+  },
+  concluido: {
+    titulo: '✅ Atendimento Concluído!',
+    mensagem: 'Seu chamado {protocolo} foi concluído. Como foi o atendimento? Avalie: {link_avaliacao}',
+    enviar_link_avaliacao: true,
+  },
+  cancelado_sistema: {
+    titulo: '❌ Chamado Cancelado',
+    mensagem: 'Seu chamado {protocolo} foi cancelado. Motivo: {motivo}',
+  },
+};
 ```
 
----
+### Fase 2: Enviar Confirmacao ao Associado na Abertura
 
-### Fase 2: Vincular Fotos Recebidas via WhatsApp ao Cadastro
+**Modificar:** `supabase/functions/criar-chamado-assistencia/index.ts`
 
-**Modificar `whatsapp-webhook/index.ts`:**
-
-Apos receber imagem/documento de associado com status `documentacao_pendente`:
+Adicionar apos criar chamado (linha 340):
 
 ```typescript
-case 'imagem':
-case 'documento': {
-  // Apos armazenar mídia...
-  
-  // Verificar se associado tem documentos pendentes
-  if (associado && associado.status === 'documentacao_pendente') {
-    const { data: docsPendentes } = await supabase
-      .from('documentos_solicitados')
-      .select('id, tipo_documento')
-      .eq('associado_id', associado.id)
-      .eq('status', 'pendente')
-      .order('created_at', { ascending: true })
-      .limit(1);
-    
-    if (docsPendentes && docsPendentes.length > 0) {
-      const docSolicitado = docsPendentes[0];
-      
-      // Criar documento
-      const { data: novoDoc } = await supabase
-        .from('documentos')
-        .insert({
-          associado_id: associado.id,
-          tipo: mapTipoParaEnum(docSolicitado.tipo_documento),
-          arquivo_url: mediaArmazenada,
-          nome_arquivo: mediaFilename || 'documento_whatsapp',
-          status: 'pendente',
-        })
-        .select()
-        .single();
-      
-      // Atualizar documento_solicitado
-      await supabase
-        .from('documentos_solicitados')
-        .update({
-          status: 'enviado',
-          enviado_em: new Date().toISOString(),
-          documento_id: novoDoc.id,
-        })
-        .eq('id', docSolicitado.id);
-      
-      // Responder ao cliente
-      mensagemTexto = `✅ Documento "${formatTipo(docSolicitado.tipo_documento)}" recebido! Aguarde a análise.`;
-    }
-  }
-}
-```
-
----
-
-### Fase 3: Lembrete de Pendencia Documental
-
-**Criar edge function:** `supabase/functions/cron-lembrete-documentos/index.ts`
-
-```typescript
-// Buscar documentos pendentes há mais de 3 dias
-const { data: pendentes } = await supabase
-  .from('documentos_solicitados')
-  .select(`
-    id, 
-    tipo_documento, 
-    created_at,
-    associado:associados(id, nome, whatsapp, telefone)
-  `)
-  .eq('status', 'pendente')
-  .lt('created_at', new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString());
-
-for (const doc of pendentes) {
-  await supabase.functions.invoke('whatsapp-send-text', {
+// Enviar confirmacao para ASSOCIADO
+if (associado.whatsapp || associado.telefone) {
+  await supabaseAdmin.functions.invoke('whatsapp-send-text', {
     body: {
-      telefone: doc.associado.whatsapp || doc.associado.telefone,
-      mensagem: `Olá ${doc.associado.nome}! 📋\n\nLembramos que ainda aguardamos o envio do documento: *${formatTipo(doc.tipo_documento)}*.\n\nAcesse o link de acompanhamento para enviar.`,
+      telefone: (associado.whatsapp || associado.telefone).replace(/\D/g, ''),
+      mensagem: `✅ *Chamado Registrado!*
+
+📋 Protocolo: ${protocolo}
+🔧 Tipo: ${TIPO_LABELS[payload.tipo_assistencia]}
+
+Em breve um prestador será acionado para atendê-lo.
+Aguarde nossa confirmação.`,
     },
   });
 }
 ```
 
----
+### Fase 3: Notificar ao Atribuir Prestador
 
-### Fase 4: Boas-Vindas na Aprovacao do Cadastro
+**Modificar:** `src/components/assistencia/AtribuirPrestadorModal.tsx`
 
-**Adicionar template de boas-vindas especifico:**
+Apos criar atendimento (linha 124), adicionar:
 
 ```typescript
-cadastro_aprovado: {
-  titulo: '🎉 Cadastro Aprovado!',
-  mensagem: 'Parabéns {nome}! Seu cadastro foi aprovado. Em breve entraremos em contato para agendar a instalação do rastreador e ativar sua proteção.',
+// Notificar associado via WhatsApp
+await supabase.functions.invoke('notificar-cliente', {
+  body: {
+    tipo: 'assistencia_prestador_acionado',
+    associado_id: chamado.associado_id,
+    dados: {
+      prestador_nome: prestador.nome_fantasia || prestador.razao_social,
+      previsao: '30-45 minutos',
+      protocolo: chamado.protocolo,
+    },
+  },
+});
+```
+
+### Fase 4: Notificar ao Mudar Status
+
+**Modificar:** `src/components/assistencia/AtualizarStatusChamadoModal.tsx`
+
+Adicionar chamada para notificacao apos atualizar status:
+
+```typescript
+// Buscar dados do chamado para notificacao
+const { data: chamadoCompleto } = await supabase
+  .from('chamados_assistencia')
+  .select('*, associado:associados(id, nome, whatsapp, telefone)')
+  .eq('id', chamado.id)
+  .single();
+
+// Notificar associado
+if (chamadoCompleto?.associado) {
+  await supabase.functions.invoke('notificar-status-assistencia', {
+    body: {
+      chamado_id: chamado.id,
+      status_novo: novoStatus,
+      associado_id: chamadoCompleto.associado.id,
+    },
+  });
 }
 ```
 
-**Chamar quando status mudar para `aprovado`** (na mutation de aprovacao de proposta).
+### Fase 5: Enviar Contato Automaticamente
+
+**Modificar:** `notificar-status-assistencia`
+
+Quando status for `prestador_a_caminho`:
+
+```typescript
+if (novoStatus === 'prestador_a_caminho' && chamado.prestador_nome && chamado.prestador_telefone) {
+  // Enviar cartao de contato
+  await supabase.functions.invoke('whatsapp-send-contact', {
+    body: {
+      telefone: associadoTelefone,
+      contato: {
+        fullName: chamado.prestador_nome,
+        phoneNumber: chamado.prestador_telefone,
+        organization: 'Prestador PRATICCAR',
+      },
+      referencia_tipo: 'chamado_assistencia',
+      referencia_id: chamado.id,
+    },
+  });
+}
+```
+
+### Fase 6: Pesquisa de Satisfacao na Conclusao
+
+**Criar rota publica:** `/avaliar/assistencia/:chamado_id`
+
+**Modificar template de conclusao:**
+
+```typescript
+concluido: {
+  titulo: '✅ Atendimento Concluído!',
+  mensagem: `Seu chamado {protocolo} foi concluído com sucesso!
+
+Como foi o atendimento do prestador {prestador_nome}?
+
+⭐ Avalie agora: {link_avaliacao}
+
+Sua opinião é muito importante para nós!`,
+}
+```
+
+O link seria: `https://pratic-connect-21.lovable.app/avaliar/assistencia/{chamado_id}`
 
 ---
 
@@ -330,82 +334,94 @@ cadastro_aprovado: {
 
 | Arquivo | Alteracoes |
 |---------|------------|
-| `supabase/functions/notificar-cliente/index.ts` | Adicionar templates `documento_aprovado`, `documento_reprovado`, `cadastro_aprovado` |
-| `src/hooks/useDocumentos.ts` | Adicionar envio de WhatsApp ao aprovar/reprovar |
-| `supabase/functions/whatsapp-webhook/index.ts` | Vincular fotos recebidas a documentos pendentes |
+| `supabase/functions/criar-chamado-assistencia/index.ts` | Adicionar envio de WhatsApp para associado na abertura |
+| `src/components/assistencia/AtribuirPrestadorModal.tsx` | Chamar `notificar-cliente` ao acionar prestador |
+| `src/components/assistencia/AtualizarStatusChamadoModal.tsx` | Chamar notificacao ao mudar status |
+| `supabase/functions/disparar-notificacao/index.ts` | Adicionar templates completos de assistencia |
 
 ## Arquivos a Criar
 
 | Arquivo | Descricao |
 |---------|-----------|
-| `supabase/functions/cron-lembrete-documentos/index.ts` | Lembrete automatico de documentos pendentes |
+| `supabase/functions/notificar-status-assistencia/index.ts` | Edge function dedicada para notificacoes de status |
+| `src/pages/avaliar/AvaliarAssistencia.tsx` | Pagina publica para avaliar atendimento |
+
+---
+
+## Templates de WhatsApp Necessarios
+
+| Template | Momento | Conteudo |
+|----------|---------|----------|
+| `assistencia_aberto` | Abertura | Protocolo, tipo, previsao |
+| `assistencia_prestador_acionado` | Prestador selecionado | Nome, previsao |
+| `assistencia_prestador_caminho` | Status = a_caminho | Nome, telefone, enviar contato |
+| `assistencia_em_atendimento` | Status = em_atendimento | Confirmacao |
+| `assistencia_concluido` | Status = concluido | Agradecimento + link avaliacao |
+| `assistencia_cancelado` | Status = cancelado | Motivo |
+
+---
+
+## Fluxo de Notificacoes Proposto
+
+```
+1. Associado abre chamado (App ou WhatsApp)
+   └── WhatsApp: "✅ Chamado registrado! Protocolo: ASS-..."
+
+2. Atendente aciona prestador
+   └── WhatsApp: "🚗 Prestador X foi acionado. Previsão: 30-45min"
+
+3. Prestador aceita e parte
+   └── WhatsApp: "🚚 Prestador a caminho!"
+   └── WhatsApp: [Cartao de Contato do Prestador]
+
+4. Prestador chega ao local
+   └── WhatsApp: "🔧 Atendimento iniciado"
+
+5. Atendimento concluido
+   └── WhatsApp: "✅ Concluído! Avalie: [link]"
+```
 
 ---
 
 ## Checklist Pos-Implementacao
 
-- [ ] Cliente recebe WhatsApp ao ter documento solicitado
-- [ ] Cliente recebe WhatsApp ao ter documento aprovado
-- [ ] Cliente recebe WhatsApp ao ter documento reprovado (com motivo)
-- [ ] Cliente recebe WhatsApp de boas-vindas ao ter cadastro aprovado
-- [ ] Cliente recebe lembrete apos 3 dias com documentos pendentes
-- [ ] Cliente recebe confirmacao ao ter instalacao agendada
-- [ ] Fotos enviadas via WhatsApp sao vinculadas ao documento pendente correto
-- [ ] Analista pode enviar mensagem direta ao cliente pelo painel
+- [ ] Associado recebe WhatsApp ao abrir chamado
+- [ ] Associado recebe WhatsApp quando prestador e acionado
+- [ ] Associado recebe WhatsApp e contato quando prestador esta a caminho
+- [ ] Associado recebe WhatsApp quando atendimento inicia
+- [ ] Associado recebe WhatsApp com link de avaliacao quando concluido
+- [ ] Abertura de chamado via WhatsApp cria registro diretamente (sem aprovacao)
+- [ ] Localizacao do associado e capturada e usada
+- [ ] Contato do prestador e enviado automaticamente
+- [ ] Historico completo mantido
 
 ---
 
 ## Testes Recomendados
 
-### Teste 1: Solicitacao de Documento
+### Teste 1: Abertura de Chamado via App
 
-1. Acessar Cadastro > Proposta
-2. Clicar em "Solicitar Documentos"
-3. Selecionar CNH
-4. Verificar se cliente recebe WhatsApp com lista de documentos
+1. Acessar app do associado
+2. Solicitar assistencia (guincho)
+3. Verificar:
+   - Chamado criado com protocolo
+   - Associado recebe WhatsApp de confirmacao
+   - Central recebe notificacao
 
-### Teste 2: Aprovacao de Documento
+### Teste 2: Fluxo Completo
 
-1. Acessar fila de documentos
-2. Aprovar um documento
-3. Verificar se cliente recebe WhatsApp de confirmacao
+1. Abrir chamado
+2. Acionar prestador
+3. Mudar status para "a caminho"
+4. Mudar status para "em atendimento"
+5. Concluir chamado
+6. Verificar: Associado recebeu 5 mensagens + contato do prestador
 
-### Teste 3: Reprovacao de Documento
+### Teste 3: Abertura via WhatsApp
 
-1. Reprovar documento com motivo "ilegivel"
-2. Verificar se cliente recebe WhatsApp com motivo e orientacao
-
-### Teste 4: Envio de Foto via WhatsApp
-
-1. Como cliente, enviar foto para numero da associacao
-2. Verificar se foto aparece vinculada na proposta
-3. Verificar se status do documento_solicitado muda para "enviado"
-
----
-
-## Detalhes Tecnicos
-
-### Mapeamento de Tipos de Documento
-
-Para vincular fotos recebidas via WhatsApp, usar contexto da conversa ou perguntar ao cliente:
-
-```typescript
-// Tool para IA perguntar qual documento
-{
-  type: "function",
-  function: {
-    name: "identificar_documento_enviado",
-    description: "Pergunta ao cliente qual tipo de documento está sendo enviado quando há múltiplos pendentes",
-    parameters: { type: "object", properties: {}, required: [] },
-  },
-}
-```
-
-### Prazo de Documentacao
-
-Comunicar prazos claramente nas mensagens:
-
-```
-Você tem 7 dias para enviar os documentos solicitados.
-Após esse prazo, sua proposta poderá ser cancelada automaticamente.
-```
+1. Enviar mensagem: "Preciso de um guincho"
+2. Fornecer localizacao
+3. Verificar:
+   - Solicitacao criada em `chat_solicitacoes_ia`
+   - Diretor recebe alerta
+   - Apos aprovacao, chamado e criado
