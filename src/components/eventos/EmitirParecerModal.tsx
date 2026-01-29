@@ -27,6 +27,7 @@ interface Sinistro {
   status: string;
   tipo: string;
   valor_fipe: number | null;
+  veiculo_id?: string | null;
   veiculo?: {
     placa: string;
     marca: string;
@@ -142,12 +143,42 @@ export function EmitirParecerModal({ open, onClose, sinistro }: EmitirParecerMod
         usuario_id: user?.id,
         observacao: `Parecer emitido: ${novoStatus.toUpperCase()}${tipoDano ? ` (${tipoDano === 'perda_total' ? 'Perda Total' : 'Dano Parcial'})` : ''}`,
       });
+
+      // 3. Se perda total, inativar veículo na plataforma e localmente
+      if (tipoDano === 'perda_total' && sinistro.veiculo_id) {
+        console.log('[EmitirParecer] Perda total detectada, inativando veículo:', sinistro.veiculo_id);
+        
+        try {
+          // Chamar edge function para inativar na Rede Veículos
+          await supabase.functions.invoke('rede-veiculos-inativar-veiculo', {
+            body: {
+              veiculoId: sinistro.veiculo_id,
+              motivo: 'perda_total',
+              observacoes: `Sinistro ${sinistro.protocolo} aprovado como perda total`,
+              atualizarBancoLocal: true,
+            },
+          });
+          console.log('[EmitirParecer] Veículo inativado com sucesso');
+        } catch (inativarError) {
+          console.error('[EmitirParecer] Erro ao inativar veículo:', inativarError);
+          // Mesmo se falhar na API, atualizar localmente
+          await supabase
+            .from('veiculos')
+            .update({
+              ativo: false,
+              observacoes: `Baixado por perda total - Sinistro ${sinistro.protocolo}`,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', sinistro.veiculo_id);
+        }
+      }
     },
     onSuccess: () => {
       toast.success('Parecer registrado com sucesso!');
       queryClient.invalidateQueries({ queryKey: ['sinistro', sinistro?.id] });
       queryClient.invalidateQueries({ queryKey: ['sinistro-historico', sinistro?.id] });
       queryClient.invalidateQueries({ queryKey: ['sinistros'] });
+      queryClient.invalidateQueries({ queryKey: ['veiculos'] });
       handleClose();
     },
     onError: (error) => {

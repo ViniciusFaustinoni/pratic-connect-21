@@ -278,3 +278,9 @@ verify_jwt = false
 
 [functions.cron-suspender-inadimplentes]
 verify_jwt = false
+
+[functions.rede-veiculos-ativar-veiculo]
+verify_jwt = false
+
+[functions.rede-veiculos-inativar-veiculo]
+verify_jwt = false

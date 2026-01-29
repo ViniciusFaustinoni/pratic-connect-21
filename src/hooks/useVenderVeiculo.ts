@@ -62,6 +62,18 @@ export function useVenderVeiculo() {
 
         if (rastreador.plataforma === 'rede_veiculos') {
           try {
+            // Primeiro inativar o veículo na plataforma
+            console.log('Inativando veículo na Rede Veículos antes de desvincular');
+            await supabase.functions.invoke('rede-veiculos-inativar-veiculo', {
+              body: {
+                veiculoId,
+                motivo: 'venda',
+                observacoes: observacoes || 'Veículo vendido',
+                atualizarBancoLocal: false, // Não atualizar aqui, será feito abaixo
+              },
+            });
+
+            // Depois desvincular completamente
             const { data: desvincularResult, error: desvincularError } = await supabase.functions.invoke(
               'rede-veiculos-desvincular-cliente',
               {
