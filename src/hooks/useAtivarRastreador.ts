@@ -15,6 +15,8 @@ interface AtivarRastreadorResult {
   isNew: boolean;
   softruckDeviceId?: string;
   softruckVehicleId?: string;
+  redeVeiculosClienteId?: string;
+  redeVeiculosVeiculoId?: string;
 }
 
 export function useAtivarRastreador() {
@@ -62,6 +64,32 @@ export function useAtivarRastreador() {
           isNew: false,
           softruckDeviceId: data.softruck_device_id,
           softruckVehicleId: data.softruck_vehicle_id,
+        };
+      }
+
+      // 2.1 Se for Rede Veículos, usar integração via edge function
+      if (rastreadorExistente.plataforma === 'rede_veiculos') {
+        console.log('[useAtivarRastreador] Plataforma Rede Veículos detectada, chamando integração...');
+        
+        const { data, error } = await supabase.functions.invoke('rede-veiculos-vincular-cliente', {
+          body: { imei, veiculoId, associadoId },
+        });
+
+        if (error) {
+          console.error('[useAtivarRastreador] Erro na integração Rede Veículos:', error);
+          throw new Error(error.message || 'Erro na integração com Rede Veículos');
+        }
+
+        if (!data?.success) {
+          throw new Error(data?.error || 'Erro ao vincular na Rede Veículos');
+        }
+
+        return {
+          success: true,
+          rastreadorId: data.rastreador_id,
+          isNew: false,
+          redeVeiculosClienteId: data.rede_veiculos_cliente_id,
+          redeVeiculosVeiculoId: data.rede_veiculos_veiculo_id,
         };
       }
 

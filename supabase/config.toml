@@ -257,3 +257,6 @@ verify_jwt = false
 
 [functions.verificar-instalacao-completa]
 verify_jwt = false
+
+[functions.rede-veiculos-vincular-cliente]
+verify_jwt = false

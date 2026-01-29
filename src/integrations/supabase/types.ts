@@ -15478,6 +15478,8 @@ export type Database = {
           plataforma_app: string | null
           recusado_em: string | null
           recusado_por: string | null
+          rede_veiculos_cliente_id: string | null
+          rede_veiculos_veiculo_id: string | null
           renavam: string | null
           softruck_vehicle_id: string | null
           status: Database["public"]["Enums"]["status_veiculo"] | null
@@ -15505,6 +15507,8 @@ export type Database = {
           plataforma_app?: string | null
           recusado_em?: string | null
           recusado_por?: string | null
+          rede_veiculos_cliente_id?: string | null
+          rede_veiculos_veiculo_id?: string | null
           renavam?: string | null
           softruck_vehicle_id?: string | null
           status?: Database["public"]["Enums"]["status_veiculo"] | null
@@ -15532,6 +15536,8 @@ export type Database = {
           plataforma_app?: string | null
           recusado_em?: string | null
           recusado_por?: string | null
+          rede_veiculos_cliente_id?: string | null
+          rede_veiculos_veiculo_id?: string | null
           renavam?: string | null
           softruck_vehicle_id?: string | null
           status?: Database["public"]["Enums"]["status_veiculo"] | null
