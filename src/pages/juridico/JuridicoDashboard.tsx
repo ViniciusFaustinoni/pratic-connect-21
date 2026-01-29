@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { 
   Scale, Clock, Calendar, HelpCircle, Plus, AlertTriangle, 
-  ChevronRight, FileText, Users, CheckCircle, Gavel
+  ChevronRight, FileText, Users, CheckCircle, Gavel, DollarSign
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -17,6 +17,11 @@ import { ptBR } from 'date-fns/locale';
 import { useProcessosPrazos } from '@/hooks/useProcessosPrazos';
 import { NovaConsultaModal } from '@/components/juridico/NovaConsultaModal';
 import { 
+  GraficoProcessosPorTipo, 
+  GraficoProcessosPorStatus,
+  ValorEmDisputaCard 
+} from '@/components/juridico/GraficosJuridico';
+import { 
   PRIORIDADE_COLORS, 
   PRIORIDADE_LABELS,
   TIPO_AUDIENCIA_LABELS,
@@ -28,11 +33,40 @@ export default function JuridicoDashboard() {
   const [novaConsultaOpen, setNovaConsultaOpen] = useState(false);
   const { cumprirPrazo, isCumprindo } = useProcessosPrazos();
 
+  // Buscar todos os processos para gráficos
+  const { data: todosProcessos = [] } = useQuery({
+    queryKey: ['processos-graficos'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('processos')
+        .select('id, tipo, status, natureza, valor_causa');
+      return data || [];
+    }
+  });
+
+  // Calcular valores em disputa
+  const valoresDisputa = {
+    valorRisco: todosProcessos
+      .filter(p => p.natureza === 'reu' && p.status === 'ativo')
+      .reduce((sum, p) => sum + (p.valor_causa || 0), 0),
+    valorAReceber: todosProcessos
+      .filter(p => p.natureza === 'autor' && p.status === 'ativo')
+      .reduce((sum, p) => sum + (p.valor_causa || 0), 0),
+    processosPassivos: todosProcessos.filter(p => p.natureza === 'reu' && p.status === 'ativo').length,
+    processosAtivos: todosProcessos.filter(p => p.natureza === 'autor' && p.status === 'ativo').length,
+  };
+
   // Estatísticas gerais
   const { data: stats, isLoading: loadingStats } = useQuery({
     queryKey: ['juridico-stats'],
     queryFn: async () => {
-      const [processosRes, prazosRes, audienciasRes, consultasRes] = await Promise.all([
+      const dataLimite = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const hoje = new Date().toISOString().split('T')[0];
+      const amanha = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const inicioMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+      const fimMes = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0);
+
+      const [processosRes, prazosRes, prazosHoje, prazosAmanha, prazosVencidos, audienciasRes, consultasRes] = await Promise.all([
         supabase
           .from('processos')
           .select('*', { count: 'exact', head: true })
@@ -41,16 +75,27 @@ export default function JuridicoDashboard() {
           .from('processos_prazos')
           .select('*', { count: 'exact', head: true })
           .eq('status', 'pendente')
-          .lte('data_fim', new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]),
-        (() => {
-          const inicioMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-          const fimMes = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0);
-          return supabase
-            .from('processos_audiencias')
-            .select('*', { count: 'exact', head: true })
-            .gte('data_hora', inicioMes.toISOString())
-            .lte('data_hora', fimMes.toISOString());
-        })(),
+          .lte('data_fim', dataLimite),
+        supabase
+          .from('processos_prazos')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'pendente')
+          .eq('data_fim', hoje),
+        supabase
+          .from('processos_prazos')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'pendente')
+          .eq('data_fim', amanha),
+        supabase
+          .from('processos_prazos')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'pendente')
+          .lt('data_fim', hoje),
+        supabase
+          .from('processos_audiencias')
+          .select('*', { count: 'exact', head: true })
+          .gte('data_hora', inicioMes.toISOString())
+          .lte('data_hora', fimMes.toISOString()),
         supabase
           .from('consultas_juridicas')
           .select('*', { count: 'exact', head: true })
@@ -60,6 +105,9 @@ export default function JuridicoDashboard() {
       return {
         processosAtivos: processosRes.count || 0,
         prazosProximos: prazosRes.count || 0,
+        prazosHoje: prazosHoje.count || 0,
+        prazosAmanha: prazosAmanha.count || 0,
+        prazosVencidos: prazosVencidos.count || 0,
         audienciasMes: audienciasRes.count || 0,
         consultasPendentes: consultasRes.count || 0
       };
@@ -189,8 +237,8 @@ export default function JuridicoDashboard() {
         </Alert>
       )}
 
-      {/* Cards KPI */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      {/* Cards KPI - Linha 1 */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
         <Card className="border-l-4 border-l-blue-500">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Processos Ativos</CardTitle>
@@ -200,9 +248,13 @@ export default function JuridicoDashboard() {
             {loadingStats ? (
               <Skeleton className="h-8 w-16" />
             ) : (
-              <div className="text-2xl font-bold">{stats?.processosAtivos || 0}</div>
+              <>
+                <div className="text-2xl font-bold">{stats?.processosAtivos || 0}</div>
+                <p className="text-xs text-muted-foreground">
+                  Passivos: {valoresDisputa.processosPassivos} | Ativos: {valoresDisputa.processosAtivos}
+                </p>
+              </>
             )}
-            <p className="text-xs text-muted-foreground">processos em andamento</p>
           </CardContent>
         </Card>
 
@@ -215,9 +267,16 @@ export default function JuridicoDashboard() {
             {loadingStats ? (
               <Skeleton className="h-8 w-16" />
             ) : (
-              <div className="text-2xl font-bold">{stats?.prazosProximos || 0}</div>
+              <>
+                <div className="text-2xl font-bold">{stats?.prazosProximos || 0}</div>
+                <p className="text-xs text-muted-foreground">
+                  Hoje: {stats?.prazosHoje || 0} | Amanhã: {stats?.prazosAmanha || 0}
+                  {(stats?.prazosVencidos || 0) > 0 && (
+                    <span className="text-destructive font-medium"> | {stats?.prazosVencidos} vencido(s)!</span>
+                  )}
+                </p>
+              </>
             )}
-            <p className="text-xs text-muted-foreground">prazos a vencer</p>
           </CardContent>
         </Card>
 
@@ -230,9 +289,11 @@ export default function JuridicoDashboard() {
             {loadingStats ? (
               <Skeleton className="h-8 w-16" />
             ) : (
-              <div className="text-2xl font-bold">{stats?.audienciasMes || 0}</div>
+              <>
+                <div className="text-2xl font-bold">{stats?.audienciasMes || 0}</div>
+                <p className="text-xs text-muted-foreground">audiências agendadas</p>
+              </>
             )}
-            <p className="text-xs text-muted-foreground">audiências agendadas</p>
           </CardContent>
         </Card>
 
@@ -245,11 +306,22 @@ export default function JuridicoDashboard() {
             {loadingStats ? (
               <Skeleton className="h-8 w-16" />
             ) : (
-              <div className="text-2xl font-bold">{stats?.consultasPendentes || 0}</div>
+              <>
+                <div className="text-2xl font-bold">{stats?.consultasPendentes || 0}</div>
+                <p className="text-xs text-muted-foreground">aguardando parecer</p>
+              </>
             )}
-            <p className="text-xs text-muted-foreground">aguardando parecer</p>
           </CardContent>
         </Card>
+
+        {/* Card Valor em Disputa */}
+        <ValorEmDisputaCard {...valoresDisputa} />
+      </div>
+
+      {/* Gráficos */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <GraficoProcessosPorTipo processos={todosProcessos} />
+        <GraficoProcessosPorStatus processos={todosProcessos} />
       </div>
 
       {/* Grid principal */}
