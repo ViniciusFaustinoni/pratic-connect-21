@@ -5,7 +5,7 @@ import {
   FileCheck, FileText, Clock, Edit, AlertTriangle, Loader2,
   Receipt, MoreHorizontal, CheckCircle, XCircle, Pause, Play, Plus,
   CreditCard, Shield, Eye, ExternalLink, Wifi, WifiOff, Send, History,
-  TrendingUp, DollarSign, Camera, Image, Radio, RefreshCw
+  TrendingUp, DollarSign, Camera, Image, Radio, RefreshCw, MessagesSquare
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -69,6 +69,7 @@ import { VeiculoDetalhesModal } from '@/components/cadastro/VeiculoDetalhesModal
 import { VeiculoEditDialog } from '@/components/veiculos/VeiculoEditDialog';
 import { useAtivarRastreadorPlataforma } from '@/hooks/useVistoriaCompletaAnalise';
 import { useStatusClienteRedeVeiculos, useSincronizarStatusRedeVeiculos, getStatusPlataformaLabel, getStatusSincronizacaoCor } from '@/hooks/useRedeVeiculosStatus';
+import { HistoricoConversaWhatsApp } from '@/components/whatsapp/HistoricoConversaWhatsApp';
 import { cn } from '@/lib/utils';
 
 // ============================================
@@ -572,6 +573,9 @@ export default function AssociadoDetalhe() {
           </TabsTrigger>
           <TabsTrigger value="historico">
             <History className="mr-2 h-4 w-4" /> Histórico
+          </TabsTrigger>
+          <TabsTrigger value="whatsapp">
+            <MessagesSquare className="mr-2 h-4 w-4" /> WhatsApp
           </TabsTrigger>
         </TabsList>
 
@@ -1417,6 +1421,20 @@ export default function AssociadoDetalhe() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* ============================================ */}
+        {/* TAB: WHATSAPP */}
+        {/* ============================================ */}
+        <TabsContent value="whatsapp" className="space-y-4">
+          <h3 className="text-lg font-semibold">Histórico de Conversas WhatsApp</h3>
+          
+          <HistoricoConversaWhatsApp 
+            telefone={associado.whatsapp || associado.telefone}
+            titulo="Mensagens"
+            altura="h-[500px]"
+            mostrarHeader={false}
+          />
         </TabsContent>
       </Tabs>
 

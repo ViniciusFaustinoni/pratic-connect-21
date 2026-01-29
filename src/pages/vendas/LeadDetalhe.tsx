@@ -4,7 +4,7 @@ import {
   ArrowLeft, Phone, Mail, Car, Edit, MessageSquare, Loader2, 
   FileText, ArrowRightLeft, Trash2, User, Clock, Calendar, 
   Tag, DollarSign, MoreVertical, MapPin, StickyNote, CalendarClock,
-  Link2, Copy, ExternalLink, CheckCircle2
+  Link2, Copy, ExternalLink, CheckCircle2, MessageCircle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -39,6 +39,7 @@ import { LeadQuickStats } from '@/components/leads/LeadQuickStats';
 import { MoverEtapaModal } from '@/components/vendas/MoverEtapaModal';
 import { AgendarFollowupDialog } from '@/components/leads/AgendarFollowupDialog';
 import { VeiculoPerfilAlert } from '@/components/leads/VeiculoPerfilAlert';
+import { HistoricoConversaWhatsApp } from '@/components/whatsapp/HistoricoConversaWhatsApp';
 import { useCriarCotacaoPublica } from '@/hooks/useCotacaoPublica';
 import { toast } from 'sonner';
 import { format, differenceInDays } from 'date-fns';
@@ -524,6 +525,13 @@ export default function LeadDetalhe() {
               )}
             </CardContent>
           </Card>
+
+          {/* Conversas WhatsApp */}
+          <HistoricoConversaWhatsApp 
+            telefone={lead.telefone} 
+            titulo="Conversas WhatsApp"
+            altura="h-[350px]"
+          />
 
           {/* Timeline/Histórico */}
           <Card className="shadow-sm bg-muted/30">
