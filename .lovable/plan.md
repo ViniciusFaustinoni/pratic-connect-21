@@ -1,32 +1,96 @@
 
-# Plano: Configurar API Keys de Rede Veículos e Softruck nas Integrações
+# Plano: Mostrar Status Real das Integrações (ASAAS, WhatsApp, Email, Autentique)
 
-## Objetivo
+## Problema Identificado
 
-Permitir que as credenciais das plataformas de rastreamento (Rede Veículos e Softruck) sejam configuráveis diretamente na página **Configurações > Integrações > Serviços**, tornando a experiência mais intuitiva.
+Os cards de integrações na página **Configurações > Integrações > Serviços** mostram status hardcoded (`ativo: false`), mesmo quando os secrets estão configurados:
 
----
-
-## Situação Atual
-
-| Item | Status |
-|------|--------|
-| Secrets no Supabase | REDE_VEICULOS_TOKEN, SOFTRUCK_PUBLIC_KEY/USERNAME/PASSWORD/ENTERPRISE_ID |
-| Tabela de config | `rastreadores_config_plataformas` (2 registros) |
-| Tabela de credenciais | `rastreadores_credenciais` (2 registros, sem senhas - apenas status) |
-| Página atual | `/monitoramento/credenciais` - funcional mas em outro módulo |
-| Botão "Configurar" na ServicosTab | Não faz nada (apenas visual) |
+| Integração | Secret Configurado | Status Atual na UI |
+|------------|-------------------|-------------------|
+| WhatsApp | EVOLUTION_API_KEY | OFF (mas está conectado!) |
+| ASAAS | ASAAS_API_KEY | OFF |
+| Email SMTP | RESEND_API_KEY | OFF |
+| Autentique | AUTENTIQUE_API_KEY | OFF |
+| n8n | N/A (hardcoded) | ON |
 
 ---
 
-## Proposta de Solução
+## Solução Proposta
 
-Ao invés de duplicar a funcionalidade, vamos:
+### Fase 1: Criar Edge Function para Verificar Secrets de Integrações
 
-1. **Modificar a ServicosTab** para que o botão "Configurar" dos cards de Rede Veículos e Softruck abra um modal/sheet com formulário de configuração
-2. **Criar uma edge function** para salvar credenciais nos secrets do Supabase
-3. **Mostrar status real de conexão** nos cards (usando dados do banco)
-4. **Manter compatibilidade** com a página existente `/monitoramento/credenciais`
+**Criar:** `supabase/functions/integracoes-verificar-secrets/index.ts`
+
+```text
+Verificar existência dos seguintes secrets (sem expor valores):
+- ASAAS_API_KEY → asaas.configurado
+- AUTENTIQUE_API_KEY → autentique.configurado
+- RESEND_API_KEY → email.configurado
+- EVOLUTION_API_KEY → whatsapp.api_configurada
+
+Retorno:
+{
+  success: true,
+  status: {
+    asaas: { configurado: true },
+    autentique: { configurado: true },
+    email: { configurado: true },
+    whatsapp: { api_configurada: true }
+  }
+}
+```
+
+### Fase 2: Criar Hook para Status de Integrações
+
+**Criar:** `src/hooks/useIntegracoesStatus.ts`
+
+Hook que combina múltiplas fontes:
+- Chama `integracoes-verificar-secrets` para verificar se secrets existem
+- Para WhatsApp: também verifica status da instância via `useWhatsAppStatus`
+- Para rastreadores: usa `useRastreadorStatus` existente
+
+```text
+interface IntegracoesStatus {
+  asaas: { configurado: boolean };
+  autentique: { configurado: boolean };
+  email: { configurado: boolean };
+  whatsapp: { configurado: boolean; conectado: boolean };
+  softruck: { configurado: boolean; testado: boolean };
+  rede_veiculos: { configurado: boolean; testado: boolean };
+}
+```
+
+### Fase 3: Atualizar ServicosTab.tsx
+
+Modificar `categoriasBase` para:
+1. Remover status hardcoded (`ativo: false`)
+2. Adicionar propriedade `integracaoId` para mapear ao status dinâmico
+3. Usar o hook `useIntegracoesStatus` para determinar status real
+
+**Lógica de status por integração:**
+
+| Integração | Lógica para "ON" |
+|------------|------------------|
+| ASAAS | Secret existe E não está vazio |
+| Autentique | Secret existe E não está vazio |
+| Email SMTP | Secret existe E não está vazio |
+| WhatsApp | Instância conectada (status = 'open') |
+| Rede Veículos | Credencial testada com sucesso |
+| Softruck | Credencial testada com sucesso |
+| Tabela FIPE | Sempre ON (API pública) |
+| n8n | Manter hardcoded ON (sem API key) |
+
+### Fase 4: Criar Sheets de Configuração para Cada Serviço
+
+**Criar:** `src/components/integracoes/ConfigurarServicoSheet.tsx`
+
+Sheet genérico que exibe:
+- Nome do secret necessário
+- Link para painel de secrets do Supabase
+- Botão "Testar Conexão" (quando aplicável)
+- Status do último teste
+
+Reutilizar o padrão do `ConfigurarRastreadorSheet.tsx` existente.
 
 ---
 
@@ -34,155 +98,166 @@ Ao invés de duplicar a funcionalidade, vamos:
 
 | Arquivo | Descrição |
 |---------|-----------|
-| `src/components/integracoes/ConfigurarRastreadorSheet.tsx` | Sheet/modal com formulário para configurar credenciais de cada plataforma |
-| `supabase/functions/rastreador-salvar-credenciais/index.ts` | Edge function para salvar credenciais nos secrets |
+| `supabase/functions/integracoes-verificar-secrets/index.ts` | Edge function para verificar secrets |
+| `src/hooks/useIntegracoesStatus.ts` | Hook para status combinado de todas integrações |
+| `src/components/integracoes/ConfigurarServicoSheet.tsx` | Sheet genérico para configurar serviços |
 
 ## Arquivos a Modificar
 
 | Arquivo | Alterações |
 |---------|------------|
-| `src/components/integracoes/ServicosTab.tsx` | Tornar dinâmico, buscar status do banco, adicionar modal de configuração |
+| `src/components/integracoes/ServicosTab.tsx` | Usar status dinâmico, adicionar ações de configurar |
 | `supabase/config.toml` | Adicionar nova edge function |
+| `src/components/integracoes/index.ts` | Exportar novo componente |
 
 ---
 
 ## Detalhamento Técnico
 
-### 1. ConfigurarRastreadorSheet.tsx
+### Edge Function `integracoes-verificar-secrets`
 
-Componente Sheet (slide-in lateral) com:
-- **Para Softruck:**
-  - Campo Public Key
-  - Campo Username
-  - Campo Password (com toggle mostrar/ocultar)
-  - Campo Enterprise ID (opcional, pode ser descoberto automaticamente)
-- **Para Rede Veículos:**
-  - Campo Token Bearer (com toggle mostrar/ocultar)
-- Botão "Testar Conexão" (usa `rastreador-testar-conexao`)
-- Botão "Salvar" (usa nova `rastreador-salvar-credenciais`)
-- Exibição de status do último teste
+```typescript
+serve(async (req) => {
+  const status = {
+    asaas: {
+      configurado: !!Deno.env.get('ASAAS_API_KEY')?.length,
+      ambiente: Deno.env.get('ASAAS_API_KEY')?.includes('_hmlg_') ? 'sandbox' : 'production'
+    },
+    autentique: {
+      configurado: !!Deno.env.get('AUTENTIQUE_API_KEY')?.length
+    },
+    email: {
+      configurado: !!Deno.env.get('RESEND_API_KEY')?.length
+    },
+    whatsapp: {
+      api_configurada: !!Deno.env.get('EVOLUTION_API_KEY')?.length
+    },
+    openai: {
+      configurado: !!Deno.env.get('OPENAI_API_KEY')?.length
+    }
+  };
 
-### 2. Edge Function rastreador-salvar-credenciais
+  return Response.json({ success: true, status });
+});
+```
 
-```text
-Entrada:
-{
-  plataforma_codigo: 'softruck' | 'rede_veiculos',
-  credenciais: {
-    public_key?: string,
-    username?: string,
-    password?: string,
-    enterprise_id?: string,
-    bearer_token?: string
-  }
-}
+### Hook `useIntegracoesStatus`
 
-Ações:
-1. Validar campos obrigatórios por plataforma
-2. Atualizar secrets no Supabase via API Management
-3. Atualizar tabela rastreadores_credenciais com status
-4. Retornar sucesso/erro
+```typescript
+export function useIntegracoesStatus() {
+  // Buscar status dos secrets
+  const secretsQuery = useQuery({
+    queryKey: ['integracoes-secrets'],
+    queryFn: async () => {
+      const { data } = await supabase.functions.invoke('integracoes-verificar-secrets');
+      return data?.status;
+    },
+    refetchInterval: 60000 // Atualizar a cada 1 min
+  });
 
-Saída:
-{
-  success: boolean,
-  mensagem: string
+  // Buscar status da instância WhatsApp
+  const whatsappQuery = useQuery({
+    queryKey: ['whatsapp-instancia-status'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('whatsapp_instancias')
+        .select('status')
+        .eq('principal', true)
+        .single();
+      return data?.status === 'open';
+    }
+  });
+
+  // Buscar status dos rastreadores
+  const { data: rastreadores } = useRastreadorStatus();
+
+  return {
+    asaas: { configurado: secretsQuery.data?.asaas?.configurado || false },
+    autentique: { configurado: secretsQuery.data?.autentique?.configurado || false },
+    email: { configurado: secretsQuery.data?.email?.configurado || false },
+    whatsapp: { 
+      configurado: secretsQuery.data?.whatsapp?.api_configurada || false,
+      conectado: whatsappQuery.data || false 
+    },
+    softruck: rastreadores?.find(r => r.plataforma === 'softruck'),
+    rede_veiculos: rastreadores?.find(r => r.plataforma === 'rede_veiculos'),
+    isLoading: secretsQuery.isLoading,
+  };
 }
 ```
 
-**Nota importante:** Como não é possível atualizar secrets via API diretamente do Edge Function, a função irá:
-- Salvar um registro em `rastreadores_credenciais` com hash das credenciais
-- Instruir o usuário a atualizar os secrets manualmente no painel Supabase
-- OU usar a tabela `vault.secrets` se disponível
+### ServicosTab Atualizada
 
-### 3. Modificações na ServicosTab
+```typescript
+const categoriasBase = [
+  {
+    titulo: 'Pagamentos',
+    emoji: '💳',
+    servicos: [
+      {
+        id: 'asaas',
+        nome: 'ASAAS',
+        integracaoId: 'asaas', // Para mapear ao status
+        secretName: 'ASAAS_API_KEY',
+        // ... resto igual
+      },
+    ],
+  },
+  // ... outras categorias
+];
 
-```text
-Antes (estático):
-- Lista fixa de serviços
-- Status hardcoded
-- Botão "Configurar" sem ação
+// No componente:
+const { asaas, whatsapp, email, autentique } = useIntegracoesStatus();
 
-Depois (dinâmico):
-- Busca status de rastreadores_credenciais
-- Status real: Conectado/Desconectado/Não configurado
-- Última execução/teste
-- Botão "Configurar" abre ConfigurarRastreadorSheet
-- Botão "Ver Logs" para serviços conectados
+// Para cada serviço, determinar status:
+const getServicoStatus = (servico) => {
+  switch (servico.integracaoId) {
+    case 'asaas': return asaas.configurado;
+    case 'whatsapp': return whatsapp.conectado;
+    case 'email': return email.configurado;
+    case 'autentique': return autentique.configurado;
+    // ... rastreadores já têm lógica própria
+  }
+};
 ```
 
 ---
 
-## Fluxo do Usuário
+## Fluxo do Usuário Atualizado
 
 ```text
 1. Usuário acessa Configurações > Integrações
-2. Na aba "Serviços", vê cards de Rede Veículos e Softruck
-3. Status mostra "OFF" ou "Não configurado"
-4. Clica em "Configurar"
-5. Sheet abre com formulário da plataforma
-6. Preenche credenciais
-7. Clica "Testar Conexão"
-8. Se sucesso, clica "Salvar"
-9. Card atualiza para mostrar "ON" e "Conectado"
+2. Sistema carrega status real de todas as integrações
+3. Cards mostram:
+   - WhatsApp: ON (se conectado) ou OFF (se desconectado)
+   - ASAAS: ON (se ASAAS_API_KEY existe) ou OFF
+   - Email: ON (se RESEND_API_KEY existe) ou OFF
+   - Autentique: ON (se AUTENTIQUE_API_KEY existe) ou OFF
+4. Botão "Configurar" abre sheet com instruções
+5. Botão "Editar" disponível para serviços já configurados
 ```
 
 ---
 
-## Interface do Sheet de Configuração
+## Resultado Esperado
 
-```text
-┌────────────────────────────────────────┐
-│ ✕  Configurar Rede Veículos            │
-├────────────────────────────────────────┤
-│                                        │
-│  Token Bearer *                        │
-│  ┌────────────────────────────────┐   │
-│  │ ●●●●●●●●●●●●●●●●        👁️    │   │
-│  └────────────────────────────────┘   │
-│  Token fornecido pela Rede Veículos    │
-│                                        │
-│  ─────────────────────────────────     │
-│                                        │
-│  ┌─────────────────────────────────┐  │
-│  │ ✅ Conexão testada com sucesso! │  │
-│  │    Último teste: há 2 min       │  │
-│  └─────────────────────────────────┘  │
-│                                        │
-│  ┌──────────────┐  ┌───────────────┐  │
-│  │ Testar       │  │   💾 Salvar   │  │
-│  └──────────────┘  └───────────────┘  │
-│                                        │
-└────────────────────────────────────────┘
-```
+Após implementação, a tela mostrará:
+
+| Serviço | Status |
+|---------|--------|
+| ASAAS | **ON** (secret existe) |
+| WhatsApp | Depende da conexão atual |
+| Email SMTP | **ON** (secret existe) |
+| Rede Veículos | Conforme teste |
+| Softruck | Conforme teste |
+| Autentique | **ON** (secret existe) |
+| n8n | **ON** (hardcoded) |
 
 ---
 
-## Considerações de Segurança
+## Considerações
 
-1. **Secrets não são expostos:** A edge function apenas verifica se existem, não retorna valores
-2. **Senhas mascaradas:** UI mostra ●●●● para tokens/senhas
-3. **Hash para auditoria:** Salvamos hash das credenciais para tracking de mudanças
-4. **Apenas gerência:** Verificação de permissão `isGerencia` antes de permitir acesso
-
----
-
-## Abordagem Alternativa (Recomendada)
-
-Como os secrets do Supabase não podem ser atualizados via Edge Function facilmente, uma abordagem mais prática seria:
-
-1. **Mostrar instruções claras** no sheet de como configurar os secrets no painel do Supabase
-2. **Fornecer link direto** para a página de secrets do Supabase
-3. **Usar "Testar Conexão"** para validar se os secrets foram configurados corretamente
-4. **Salvar status** na tabela `rastreadores_credenciais` após teste bem-sucedido
-
-Isso evita complexidade de gerenciamento de secrets e mantém a segurança.
-
----
-
-## Resumo das Entregas
-
-1. **Componente `ConfigurarRastreadorSheet.tsx`** - Formulário em sheet para configurar credenciais
-2. **Edge function `rastreador-salvar-credenciais`** - Salvar status e validar configuração
-3. **ServicosTab atualizada** - Cards dinâmicos com status real e ação de configurar
-4. **Integração completa** - Botões funcionais que abrem configuração específica de cada plataforma
+1. **Segurança:** A edge function apenas verifica se secrets existem, nunca expõe valores
+2. **Performance:** Cache de 60s para evitar chamadas excessivas
+3. **WhatsApp especial:** Além do secret, precisa verificar conexão ativa
+4. **Compatibilidade:** Mantém comportamento atual dos rastreadores
