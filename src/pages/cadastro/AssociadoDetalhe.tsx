@@ -60,6 +60,7 @@ import { useContratoDoAssociado, useDocumentosCotacao, useResumoFinanceiroAssoci
 import { useFotosAutovistoriaCotacao, agruparFotosPorCategoria, formatarTipoFoto } from '@/hooks/useFotosAutovistoria';
 import { useAssociadoHistoricoCompleto } from '@/hooks/useAssociadoHistoricoCompleto';
 import { VeiculoDetalhesModal } from '@/components/cadastro/VeiculoDetalhesModal';
+import { VeiculoEditDialog } from '@/components/veiculos/VeiculoEditDialog';
 import { useAtivarRastreadorPlataforma } from '@/hooks/useVistoriaCompletaAnalise';
 import { cn } from '@/lib/utils';
 
@@ -220,6 +221,7 @@ export default function AssociadoDetalhe() {
   const [cancelarDialogOpen, setCancelarDialogOpen] = useState(false);
   const [fotoModal, setFotoModal] = useState<{ open: boolean; url: string; tipo: string }>({ open: false, url: '', tipo: '' });
   const [veiculoDetalhesId, setVeiculoDetalhesId] = useState<string | null>(null);
+  const [veiculoEditar, setVeiculoEditar] = useState<typeof veiculos extends (infer T)[] ? T : never | null>(null);
 
   // Data fetching
   const { data: associado, isLoading, refetch } = useAssociado(id);
@@ -835,7 +837,11 @@ export default function AssociadoDetalhe() {
                         >
                           <Eye className="mr-2 h-4 w-4" /> Detalhes
                         </Button>
-                        <Button size="sm" variant="outline">
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={() => setVeiculoEditar(v)}
+                        >
                           <Edit className="mr-2 h-4 w-4" /> Editar
                         </Button>
                         <Button size="sm" variant="outline">
@@ -1389,6 +1395,13 @@ export default function AssociadoDetalhe() {
         onClose={() => setVeiculoDetalhesId(null)}
         veiculo={veiculos?.find(v => v.id === veiculoDetalhesId) || null}
         associadoId={id || ''}
+      />
+
+      {/* MODAL EDIÇÃO DE VEÍCULO */}
+      <VeiculoEditDialog
+        open={!!veiculoEditar}
+        onClose={() => setVeiculoEditar(null)}
+        veiculo={veiculoEditar}
       />
     </div>
   );
