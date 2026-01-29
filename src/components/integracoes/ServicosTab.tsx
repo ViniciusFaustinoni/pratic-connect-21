@@ -1,7 +1,12 @@
-import { CreditCard, MessageSquare, MapPin, FileSignature, Zap, CheckCircle, Mail, Search, ExternalLink } from 'lucide-react';
+import { useState } from 'react';
+import { CreditCard, MessageSquare, MapPin, FileSignature, Zap, CheckCircle, Mail, Search, ExternalLink, Settings } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { ConfigurarRastreadorSheet } from './ConfigurarRastreadorSheet';
+import { useRastreadorStatus } from '@/hooks/useRastreadorStatus';
+import { formatDistanceToNow } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 interface Servico {
   id: string;
@@ -12,6 +17,8 @@ interface Servico {
   bgColor: string;
   ativo: boolean;
   ultimaExecucao?: string;
+  plataformaCodigo?: 'softruck' | 'rede_veiculos';
+  configuravel?: boolean;
 }
 
 interface CategoriaServicos {
@@ -20,7 +27,7 @@ interface CategoriaServicos {
   servicos: Servico[];
 }
 
-const categorias: CategoriaServicos[] = [
+const categoriasBase: CategoriaServicos[] = [
   {
     titulo: 'Pagamentos',
     emoji: '💳',
@@ -65,13 +72,26 @@ const categorias: CategoriaServicos[] = [
     emoji: '🚗',
     servicos: [
       {
-        id: 'rastreadores',
+        id: 'rede_veiculos',
         nome: 'Rede Veículos',
         desc: 'Rastreamento em tempo real',
         icon: MapPin,
         color: 'text-blue-500',
         bgColor: 'bg-blue-500/10',
         ativo: false,
+        plataformaCodigo: 'rede_veiculos',
+        configuravel: true,
+      },
+      {
+        id: 'softruck',
+        nome: 'Softruck',
+        desc: 'Rastreamento e telemetria',
+        icon: MapPin,
+        color: 'text-orange-500',
+        bgColor: 'bg-orange-500/10',
+        ativo: false,
+        plataformaCodigo: 'softruck',
+        configuravel: true,
       },
       {
         id: 'fipe',
@@ -117,13 +137,30 @@ const categorias: CategoriaServicos[] = [
   },
 ];
 
-function ServicoCard({ servico }: { servico: Servico }) {
+function ServicoCard({ 
+  servico, 
+  onConfigurar 
+}: { 
+  servico: Servico & { statusRastreador?: { configurado: boolean; teste_sucesso: boolean; testado_em: string | null } };
+  onConfigurar?: () => void;
+}) {
   const Icon = servico.icon;
+  
+  // Determinar status real para plataformas rastreadores
+  const isRastreador = servico.configuravel && servico.plataformaCodigo;
+  const statusConfig = servico.statusRastreador;
+  const isAtivo = isRastreador 
+    ? (statusConfig?.configurado && statusConfig?.teste_sucesso) 
+    : servico.ativo;
+  
+  const ultimaExecucao = isRastreador && statusConfig?.testado_em
+    ? formatDistanceToNow(new Date(statusConfig.testado_em), { addSuffix: true, locale: ptBR })
+    : servico.ultimaExecucao;
 
   return (
     <Card className={cn(
       "border-border/50 min-h-[160px] transition-all duration-200 hover:shadow-md hover:border-primary/30",
-      servico.ativo && "ring-1 ring-green-500/20"
+      isAtivo && "ring-1 ring-green-500/20"
     )}>
       <CardContent className="p-5 h-full flex flex-col">
         {/* Header with Icon, Name and Status */}
@@ -140,15 +177,15 @@ function ServicoCard({ servico }: { servico: Servico }) {
           {/* Status Badge */}
           <div className={cn(
             "flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium",
-            servico.ativo 
+            isAtivo 
               ? "bg-green-500/10 text-green-500" 
               : "bg-red-500/10 text-red-500"
           )}>
             <span className={cn(
               "h-2 w-2 rounded-full",
-              servico.ativo ? "bg-green-500 animate-pulse" : "bg-red-500"
+              isAtivo ? "bg-green-500 animate-pulse" : "bg-red-500"
             )} />
-            {servico.ativo ? 'ON' : 'OFF'}
+            {isAtivo ? 'ON' : 'OFF'}
           </div>
         </div>
 
@@ -158,27 +195,35 @@ function ServicoCard({ servico }: { servico: Servico }) {
         </p>
 
         {/* Last execution if available */}
-        {servico.ultimaExecucao && (
+        {ultimaExecucao && (
           <p className="text-xs text-muted-foreground mt-1">
-            Última execução: {servico.ultimaExecucao}
+            {isRastreador ? 'Último teste:' : 'Última execução:'} {ultimaExecucao}
           </p>
         )}
 
         {/* Action Button */}
         <div className="mt-4 pt-4 border-t border-border/50">
-          {servico.ativo ? (
+          {isAtivo ? (
             <div className="flex items-center gap-2">
               <Button variant="ghost" size="sm" className="gap-2 text-green-500 hover:text-green-600 hover:bg-green-500/10">
                 <CheckCircle className="w-4 h-4" />
                 Configurado
               </Button>
-              <Button variant="outline" size="sm" className="gap-2">
-                Ver Logs
-              </Button>
+              {isRastreador && onConfigurar && (
+                <Button variant="outline" size="sm" className="gap-2" onClick={onConfigurar}>
+                  <Settings className="w-4 h-4" />
+                  Editar
+                </Button>
+              )}
             </div>
           ) : (
-            <Button variant="outline" size="sm" className="gap-2">
-              <ExternalLink className="w-4 h-4" />
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="gap-2"
+              onClick={isRastreador ? onConfigurar : undefined}
+            >
+              {isRastreador ? <Settings className="w-4 h-4" /> : <ExternalLink className="w-4 h-4" />}
               Configurar
             </Button>
           )}
@@ -189,24 +234,71 @@ function ServicoCard({ servico }: { servico: Servico }) {
 }
 
 export function ServicosTab() {
-  return (
-    <div className="space-y-8">
-      {categorias.map((categoria) => (
-        <div key={categoria.titulo} className="space-y-4">
-          {/* Section Title */}
-          <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
-            <span>{categoria.emoji}</span>
-            {categoria.titulo}
-          </h2>
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [plataformaSelecionada, setPlataformaSelecionada] = useState<'softruck' | 'rede_veiculos'>('softruck');
+  
+  const { data: statusRastreadores, refetch: refetchStatus } = useRastreadorStatus();
 
-          {/* Services Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {categoria.servicos.map((servico) => (
-              <ServicoCard key={servico.id} servico={servico} />
-            ))}
+  // Enriquecer serviços com status real dos rastreadores
+  const categoriasEnriquecidas = categoriasBase.map(cat => ({
+    ...cat,
+    servicos: cat.servicos.map(servico => {
+      if (servico.plataformaCodigo) {
+        const status = statusRastreadores?.find(s => s.plataforma === servico.plataformaCodigo);
+        return {
+          ...servico,
+          statusRastreador: status ? {
+            configurado: status.configurado,
+            teste_sucesso: status.teste_sucesso,
+            testado_em: status.testado_em,
+          } : undefined,
+        };
+      }
+      return servico;
+    }),
+  }));
+
+  function handleConfigurar(plataforma: 'softruck' | 'rede_veiculos') {
+    setPlataformaSelecionada(plataforma);
+    setSheetOpen(true);
+  }
+
+  function handleSheetSuccess() {
+    refetchStatus();
+    setSheetOpen(false);
+  }
+
+  return (
+    <>
+      <div className="space-y-8">
+        {categoriasEnriquecidas.map((categoria) => (
+          <div key={categoria.titulo} className="space-y-4">
+            {/* Section Title */}
+            <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+              <span>{categoria.emoji}</span>
+              {categoria.titulo}
+            </h2>
+
+            {/* Services Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {categoria.servicos.map((servico) => (
+                <ServicoCard 
+                  key={servico.id} 
+                  servico={servico}
+                  onConfigurar={servico.plataformaCodigo ? () => handleConfigurar(servico.plataformaCodigo!) : undefined}
+                />
+              ))}
+            </div>
           </div>
-        </div>
-      ))}
-    </div>
+        ))}
+      </div>
+
+      <ConfigurarRastreadorSheet
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        plataforma={plataformaSelecionada}
+        onSuccess={handleSheetSuccess}
+      />
+    </>
   );
 }
