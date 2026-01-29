@@ -12,7 +12,7 @@ serve(async (req) => {
   }
 
   try {
-    const { telefone, mensagem, instancia_id } = await req.json();
+    const { telefone, mensagem, instancia_id, delay_ms } = await req.json();
 
     if (!telefone || !mensagem) {
       return new Response(
@@ -65,8 +65,36 @@ serve(async (req) => {
       );
     }
 
-    // Formatar telefone (remover caracteres especiais)
-    const telefoneFormatado = telefone.replace(/\D/g, "");
+    // Formatar telefone: remover caracteres especiais E garantir prefixo 55
+    let telefoneFormatado = telefone.replace(/\D/g, "");
+    
+    // Garantir que tenha DDI do Brasil (55)
+    if (!telefoneFormatado.startsWith("55")) {
+      telefoneFormatado = "55" + telefoneFormatado;
+    }
+    
+    // Validar tamanho mínimo: 55 + DDD (2) + número (8 ou 9) = 12 ou 13 dígitos
+    if (telefoneFormatado.length < 12) {
+      console.error(`[whatsapp-send-text] Telefone inválido: ${telefoneFormatado}`);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: "Número de telefone inválido. Verifique o DDD e número." 
+        }),
+        { status: 400, headers: corsHeaders }
+      );
+    }
+
+    // Delay configurável para envios em lote (anti-bloqueio)
+    const delayGlobal = parseInt(Deno.env.get('WHATSAPP_SEND_DELAY_MS') || '0');
+    const delayFinal = delay_ms || delayGlobal;
+    
+    if (delayFinal > 0) {
+      console.log(`[whatsapp-send-text] Aplicando delay de ${delayFinal}ms`);
+      await new Promise(resolve => setTimeout(resolve, delayFinal));
+    }
+
+    console.log(`[whatsapp-send-text] Enviando para ${telefoneFormatado} via ${instancia.instance_name}`);
 
     // Enviar mensagem via Evolution API
     const response = await fetch(`${instancia.api_url}/message/sendText/${instancia.instance_name}`, {
@@ -85,6 +113,18 @@ serve(async (req) => {
 
     if (!response.ok) {
       console.error("[whatsapp-send-text] Erro Evolution:", result);
+      
+      // Registrar mensagem com erro
+      await supabase.from("whatsapp_mensagens").insert({
+        instancia_id: instancia.id,
+        telefone: telefoneFormatado,
+        tipo: "text",
+        mensagem,
+        direcao: "saida",
+        status: "erro",
+        erro_mensagem: result.message || result.error || "Erro desconhecido",
+      });
+      
       return new Response(
         JSON.stringify({ success: false, error: result.message || "Erro ao enviar" }),
         { status: response.status, headers: corsHeaders }
@@ -102,12 +142,13 @@ serve(async (req) => {
       message_id: result.key?.id,
     });
 
-    console.log(`[whatsapp-send-text] Mensagem enviada para ${telefoneFormatado}`);
+    console.log(`[whatsapp-send-text] ✓ Mensagem enviada para ${telefoneFormatado} - ID: ${result.key?.id}`);
 
     return new Response(
       JSON.stringify({
         success: true,
         message_id: result.key?.id,
+        telefone: telefoneFormatado,
       }),
       { headers: corsHeaders }
     );

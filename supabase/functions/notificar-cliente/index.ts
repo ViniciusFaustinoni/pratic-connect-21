@@ -48,6 +48,21 @@ const TEMPLATES: Record<string, {
     mensagem: 'Parabéns {nome}! Seu veículo {placa} agora está com COBERTURA TOTAL ativa. A instalação do rastreador e vistoria foram concluídas com sucesso. Bem-vindo à PRATIC!',
     emailTemplate: 'generico',
   },
+  documentos_solicitados: {
+    titulo: '📄 Documentos Pendentes',
+    mensagem: 'Olá {nome}! Precisamos de alguns documentos para dar continuidade ao seu cadastro: {documentos}. Acesse o link de acompanhamento para enviar.',
+    emailTemplate: 'generico',
+  },
+  status_atualizado: {
+    titulo: '📋 Atualização do seu Cadastro',
+    mensagem: 'Olá {nome}! Seu cadastro foi atualizado. Status: {status}. {observacao}',
+    emailTemplate: 'generico',
+  },
+  assistencia_prestador_acionado: {
+    titulo: '🚗 Prestador Acionado',
+    mensagem: 'Olá! O prestador {prestador_nome} foi acionado para atendê-lo. Previsão de chegada: {previsao}. Acompanhe pelo protocolo {protocolo}.',
+    emailTemplate: 'generico',
+  },
 };
 
 serve(async (req) => {
@@ -150,24 +165,30 @@ serve(async (req) => {
       }
     }
 
-    // 2. Enviar por WhatsApp
+    // 2. Enviar por WhatsApp usando whatsapp-send-text (correto para mensagens de texto)
     const telefone = associado.whatsapp || associado.telefone;
     if (telefone) {
       try {
         const whatsappMsg = `${titulo}\n\n${mensagem}`;
         
-        await supabase.functions.invoke('whatsapp-send-media', {
+        // Usar whatsapp-send-text para envio de mensagens de texto
+        const { data: whatsResult, error: whatsError } = await supabase.functions.invoke('whatsapp-send-text', {
           body: {
             telefone: telefone.replace(/\D/g, ''),
-            tipo: 'text',
             mensagem: whatsappMsg,
-            referencia_tipo: 'notificacao_cliente',
-            referencia_id: associado_id,
           },
         });
 
+        if (whatsError) {
+          throw whatsError;
+        }
+        
+        if (whatsResult?.success === false) {
+          throw new Error(whatsResult.error || 'Erro ao enviar WhatsApp');
+        }
+
         resultados.whatsapp = true;
-        console.log('[notificar-cliente] WhatsApp enviado');
+        console.log('[notificar-cliente] WhatsApp enviado via whatsapp-send-text');
       } catch (whatsappError) {
         console.error('[notificar-cliente] Erro ao enviar WhatsApp:', whatsappError);
         // Continua mesmo se falhar

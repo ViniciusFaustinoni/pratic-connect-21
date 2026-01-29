@@ -166,16 +166,56 @@ serve(async (req) => {
           }
         }
 
-        // Registrar mensagem WhatsApp (para envio manual ou via Evolution)
+        // Enviar mensagem via WhatsApp (Evolution API) E registrar
         const telefone = associado.whatsapp || associado.telefone;
         if (telefone) {
-          await supabase.from('whatsapp_mensagens').insert({
-            associado_id: associado.id,
-            telefone: telefone.replace(/\D/g, ''),
-            mensagem,
-            tipo: 'lembrete_vencimento',
-            status: 'pendente',
-          });
+          const telefoneFormatado = telefone.replace(/\D/g, '');
+          
+          try {
+            // Enviar via Evolution API usando whatsapp-send-text
+            const { data: sendResult, error: sendError } = await supabase.functions.invoke('whatsapp-send-text', {
+              body: {
+                telefone: telefoneFormatado,
+                mensagem,
+                delay_ms: 500, // Delay entre mensagens para evitar bloqueio
+              },
+            });
+            
+            if (sendError) {
+              throw sendError;
+            }
+            
+            if (sendResult?.success === false) {
+              throw new Error(sendResult.error || 'Erro ao enviar WhatsApp');
+            }
+            
+            console.log(`[enviar-lembretes] WhatsApp enviado para ${telefoneFormatado}`);
+            
+            // Registrar mensagem como enviada (o whatsapp-send-text já registra, mas mantemos backup)
+            await supabase.from('whatsapp_mensagens').insert({
+              associado_id: associado.id,
+              telefone: telefoneFormatado,
+              mensagem,
+              tipo: 'lembrete_vencimento',
+              direcao: 'saida',
+              status: 'enviada',
+              message_id: sendResult?.message_id,
+            });
+            
+          } catch (whatsError: any) {
+            console.error(`[enviar-lembretes] Erro WhatsApp para ${telefoneFormatado}:`, whatsError);
+            
+            // Registrar como erro
+            await supabase.from('whatsapp_mensagens').insert({
+              associado_id: associado.id,
+              telefone: telefoneFormatado,
+              mensagem,
+              tipo: 'lembrete_vencimento',
+              direcao: 'saida',
+              status: 'erro',
+              erro_mensagem: whatsError.message || 'Erro desconhecido',
+            });
+          }
         }
 
         // Marcar lembrete como enviado
