@@ -24,6 +24,31 @@ export type StatusCusta = 'pendente' | 'pago' | 'vencido' | 'cancelado';
 
 export type StatusConsultaJuridica = 'pendente' | 'em_analise' | 'respondida' | 'arquivada';
 
+// Tipos de Consulta Jurídica
+export type TipoConsulta = 
+  | 'parecer_cobertura'
+  | 'analise_contratual'
+  | 'orientacao_trabalhista'
+  | 'consulta_tributaria'
+  | 'analise_risco'
+  | 'outros';
+
+// Conclusão do Parecer
+export type ConclusaoParecer = 
+  | 'favoravel'
+  | 'desfavoravel'
+  | 'parcial'
+  | 'informativo';
+
+// Recomendações pré-definidas
+export type RecomendacaoConsulta =
+  | 'aprovar_cobertura'
+  | 'negar_cobertura'
+  | 'solicitar_laudo'
+  | 'encaminhar_diretoria'
+  | 'arquivar'
+  | 'outro';
+
 // Interfaces
 export interface Advogado {
   id: string;
@@ -398,6 +423,39 @@ export const STATUS_CONSULTA_COLORS: Record<StatusConsultaJuridica, string> = {
   em_analise: 'bg-blue-100 text-blue-800',
   respondida: 'bg-green-100 text-green-800',
   arquivada: 'bg-gray-100 text-gray-800',
+};
+
+// Labels para novos tipos de Consulta
+export const TIPO_CONSULTA_LABELS: Record<TipoConsulta, string> = {
+  parecer_cobertura: 'Parecer sobre Cobertura',
+  analise_contratual: 'Análise Contratual',
+  orientacao_trabalhista: 'Orientação Trabalhista',
+  consulta_tributaria: 'Consulta Tributária',
+  analise_risco: 'Análise de Risco',
+  outros: 'Outros',
+};
+
+export const CONCLUSAO_PARECER_LABELS: Record<ConclusaoParecer, string> = {
+  favoravel: 'Favorável',
+  desfavoravel: 'Desfavorável',
+  parcial: 'Parcialmente Favorável',
+  informativo: 'Apenas Informativo',
+};
+
+export const CONCLUSAO_PARECER_COLORS: Record<ConclusaoParecer, string> = {
+  favoravel: 'bg-green-100 text-green-800',
+  desfavoravel: 'bg-red-100 text-red-800',
+  parcial: 'bg-yellow-100 text-yellow-800',
+  informativo: 'bg-blue-100 text-blue-800',
+};
+
+export const RECOMENDACAO_CONSULTA_LABELS: Record<RecomendacaoConsulta, string> = {
+  aprovar_cobertura: 'Aprovar cobertura',
+  negar_cobertura: 'Negar cobertura',
+  solicitar_laudo: 'Solicitar laudo complementar',
+  encaminhar_diretoria: 'Encaminhar para diretoria',
+  arquivar: 'Arquivar',
+  outro: 'Outro',
 };
 
 // Especialidades disponíveis
