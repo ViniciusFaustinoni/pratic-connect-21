@@ -265,6 +265,7 @@ import CotacaoPublicaCompleta from "./pages/public/CotacaoPublicaCompleta";
 import CotacaoContratacao from "./pages/public/CotacaoContratacao";
 import AcompanhamentoProposta from "./pages/public/AcompanhamentoProposta";
 import TrackingAssistencia from "./pages/public/TrackingAssistencia";
+import AvaliarAssistencia from "./pages/avaliar/AvaliarAssistencia";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -320,6 +321,9 @@ const App = () => (
             
             {/* Public Tracking Assistência Page */}
             <Route path="/tracking/assistencia/:id" element={<TrackingAssistencia />} />
+            
+            {/* Public Avaliação Assistência Page */}
+            <Route path="/avaliar/assistencia/:chamado_id" element={<AvaliarAssistencia />} />
             
             {/* Redirect root to dashboard */}
             <Route path="/" element={<Navigate to="/dashboard" replace />} />

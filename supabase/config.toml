@@ -99,9 +99,6 @@ verify_jwt = false
 [functions.rastreador-redefinir-senha]
 verify_jwt = false
 
-[functions.rastreador-salvar-credenciais]
-verify_jwt = false
-
 [functions.rastreador-testar-conexao]
 verify_jwt = false
 
@@ -310,4 +307,7 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.cron-lembrete-documentos]
+verify_jwt = false
+
+[functions.notificar-status-assistencia]
 verify_jwt = false

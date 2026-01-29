@@ -132,6 +132,20 @@ export function AtualizarStatusChamadoModal({ open, onClose, chamado, veiculoId 
           .eq('chamado_id', chamado.id)
           .in('status', ['em_andamento', 'a_caminho', 'no_local', 'acionado', 'aceito']);
       }
+
+      // 5. Notificar associado via WhatsApp
+      try {
+        await supabase.functions.invoke('notificar-status-assistencia', {
+          body: {
+            chamado_id: chamado.id,
+            status_novo: novoStatus,
+            observacao: observacao || undefined,
+          },
+        });
+      } catch (notifError) {
+        console.error('Erro ao enviar notificação WhatsApp:', notifError);
+        // Não bloqueia o fluxo
+      }
     },
     onSuccess: () => {
       toast.success('Status atualizado com sucesso!');

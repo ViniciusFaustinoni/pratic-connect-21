@@ -388,6 +388,40 @@ serve(async (req) => {
       console.warn("[criar-chamado] Telefone da central não configurado");
     }
 
+    // 10.1 Enviar WhatsApp de confirmação para o ASSOCIADO
+    const telefoneAssociado = (associado.whatsapp || associado.telefone)?.replace(/\D/g, '');
+    if (telefoneAssociado) {
+      const mensagemAssociado = `✅ *Chamado Registrado!*
+
+Olá, ${associado.nome?.split(' ')[0] || 'Associado'}!
+
+Seu chamado de *${TIPO_LABELS[payload.tipo_assistencia]}* foi registrado com sucesso.
+
+📋 *Protocolo:* ${protocolo}
+📍 *Local:* ${payload.endereco || enderecoData.endereco}
+
+Em breve um prestador será acionado para atendê-lo.
+
+⏰ Previsão de atendimento: 30-45 minutos
+
+_Você receberá uma notificação quando o prestador for acionado._`;
+
+      try {
+        await supabaseAdmin.functions.invoke('whatsapp-send-text', {
+          body: {
+            telefone: telefoneAssociado,
+            mensagem: mensagemAssociado,
+            referencia_tipo: 'chamado_assistencia',
+            referencia_id: chamado.id,
+          },
+        });
+        console.log("[criar-chamado] WhatsApp de confirmação enviado para associado");
+      } catch (whatsappError) {
+        console.error("[criar-chamado] Erro ao enviar WhatsApp para associado:", whatsappError);
+        // Não bloqueia o fluxo - chamado foi criado com sucesso
+      }
+    }
+
     // 11. Criar notificação para o associado
     if (associado.user_id) {
       await supabaseAdmin.from("notificacoes").insert({
