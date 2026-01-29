@@ -1,383 +1,354 @@
 
-# Revisao Completa - Uso de Dados da Rede Veiculos no Modulo de Assistencia 24h
+# Revisao Completa - Sistema de Criacao e Gerenciamento de Instancia Evolution API
 
 ## Resumo Executivo
 
 | Cenario | Status | Detalhes |
 |---------|--------|----------|
-| Buscar posicao quando chamado entra | **IMPLEMENTADO** | `criar-chamado-assistencia` chama `posicao-veiculo` e grava campos `rastreador_lat/lng` |
-| Gerar link via /obterLinkCompartilhamento | **NAO IMPLEMENTADO** | Usa link Google Maps estatico, nao chama API Rede Veiculos |
-| Preparar acionamento de roubo no chamado | **IMPLEMENTADO** | Menu "Abrir Sinistro" no painel admin permite transicionar para fluxo de roubo |
-| Registrar posicao final ao encerrar | **NAO IMPLEMENTADO** | Encerramento apenas atualiza status, nao captura posicao final |
-| Posicao exibida no mapa para atendente | **PARCIAL** | Componente `MapaChamado` existe mas NAO e usado na tela `ChamadoDetalhe` |
-| Link de compartilhamento enviado ao prestador | **PARCIAL** | `EnviarLinkPrestadorButton` existe mas NAO e utilizado em nenhuma tela |
-| Chamados de emergencia por roubo | **IMPLEMENTADO** | Menu permite abrir sinistro diretamente do chamado |
-| Historico inclui posicoes consultadas | **PARCIAL** | Posicao inicial gravada, mas nao ha posicoes de acompanhamento |
+| POST /instance/create na inicializacao | **PARCIAL** | Nao ha criacao automatica na primeira execucao; criacao ocorre apenas via QR Code |
+| POST /instance/create para novo numero | **NAO IMPLEMENTADO** | Sistema suporta apenas 1 instancia principal; nao ha UI para multiplas instancias |
+| POST /instance/create apos deletar instancia | **IMPLEMENTADO** | `whatsapp-qrcode` verifica e recria se instancia nao existe na Evolution |
+| POST /instance/create na migracao de numero | **NAO IMPLEMENTADO** | Nao existe funcionalidade de migracao de numero |
+| instanceName definido corretamente | **SIM** | Campo `instance_name` da tabela usado no payload |
+| qrcode habilitado | **SIM** | Parametro `qrcode: true` enviado |
+| integration WHATSAPP-BAILEYS | **SIM** | Parametro `integration: 'WHATSAPP-BAILEYS'` enviado |
+| Webhook configurado na criacao | **NAO** | Webhook configurado separadamente apos conexao |
 
 ---
 
 ## Analise Detalhada
 
-### 1. Quando o Chamado Entra - Buscar Posicao via Rastreador
-
-**Arquivo:** `supabase/functions/criar-chamado-assistencia/index.ts` (linhas 201-264)
-
-**STATUS: IMPLEMENTADO**
-
-O sistema busca a posicao em tempo real quando o chamado e aberto:
-
-```typescript
-// Tentar buscar posição em tempo real via API (Softruck OU Rede Veículos)
-if (rastreador.plataforma === 'softruck' || rastreador.plataforma === 'rede_veiculos') {
-  try {
-    const posicaoResult = await fetch(
-      `${supabaseUrl}/functions/v1/posicao-veiculo`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${supabaseServiceKey}`,
-        },
-        body: JSON.stringify({ veiculo_id: veiculo.id }),
-      }
-    );
-    
-    const posicaoData = await posicaoResult.json();
-    
-    if (posicaoData.success && posicaoData.posicao) {
-      rastreadorLat = posicaoData.posicao.latitude;
-      rastreadorLng = posicaoData.posicao.longitude;
-      rastreadorPosicaoCapturadaEm = posicaoData.posicao.data_posicao || new Date().toISOString();
-      rastreadorEndereco = posicaoData.posicao.endereco || null;
-    }
-  } catch (err) {
-    console.error("[criar-chamado] Erro ao buscar posição via API:", err);
-  }
-}
-```
-
-**Campos Gravados na Tabela `chamados_assistencia`:**
-- `rastreador_lat` - Latitude do rastreador no momento da abertura
-- `rastreador_lng` - Longitude do rastreador no momento da abertura
-- `rastreador_posicao_capturada_em` - Data/hora da captura
-- `rastreador_endereco` - Endereco obtido via reverse geocoding
-
-**Observacao:** Tambem usa posicao do rastreador como fallback se associado nao informar localizacao.
-
----
-
-### 2. Quando Prestador e Acionado - Gerar Link de Compartilhamento
-
-**STATUS: PARCIALMENTE IMPLEMENTADO**
-
-#### Componente Existe mas Nao Esta Integrado
-
-**Arquivo:** `src/components/assistencia/EnviarLinkPrestadorButton.tsx`
-
-O componente esta implementado com:
-- Geracao de link Google Maps estatico: `https://www.google.com/maps?q=${lat},${lng}`
-- Mensagem formatada para WhatsApp com protocolo, tipo de servico e localizacao
-- Botao para copiar link
-- Botao para abrir mapa
-- Indicacao se posicao e via rastreador ou informada pelo associado
-
-**Props aceitas:**
-```typescript
-interface EnviarLinkPrestadorButtonProps {
-  chamadoId: string;
-  protocolo: string;
-  prestadorNome?: string;
-  prestadorTelefone?: string;
-  origemLat?: number | null;
-  origemLng?: number | null;
-  origemEndereco?: string;
-  rastreadorLat?: number | null;
-  rastreadorLng?: number | null;
-  tipoServico?: string;
-}
-```
-
-#### Gaps Identificados
-
-1. **Componente NAO utilizado:** Nao ha nenhuma tela que importe ou use `EnviarLinkPrestadorButton`
-
-2. **Nao usa API `/obterLinkCompartilhamento`:** O sistema gera um link estatico do Google Maps em vez de chamar a API da Rede Veiculos que poderia fornecer:
-   - Link de tracking em tempo real
-   - Atualizacao automatica da posicao
-   - Integracao com a plataforma de monitoramento
-
-3. **Tela ChamadoDetalhe nao integra mapa nem botao de envio:**
-   - O componente `MapaChamado.tsx` existe mas nao e usado em `ChamadoDetalhe.tsx`
-   - O placeholder "Visualização de mapa (em breve)" ainda esta presente
-
----
-
-### 3. Quando Ha Suspeita de Roubo no Chamado - Preparar Acionamento
-
-**STATUS: IMPLEMENTADO VIA FLUXO DE SINISTRO**
-
-**Arquivo:** `src/pages/assistencia/ChamadoDetalhe.tsx` (linhas 247-252)
-
-O menu de acoes permite abrir sinistro diretamente do chamado:
-
-```typescript
-<DropdownMenuItem 
-  onClick={() => navigate(
-    `/eventos/sinistros/novo?chamado_id=${chamado.id}&associado_id=${chamado.associado?.id}&veiculo_id=${chamado.veiculo?.id}`
-  )}
->
-  <AlertTriangle className="h-4 w-4 mr-2" />
-  Abrir Sinistro
-</DropdownMenuItem>
-```
-
-**Fluxo Completo:**
-1. Atendente identifica suspeita de roubo no chamado de assistencia
-2. Clica em "Abrir Sinistro" - navega para formulario de sinistro com dados pre-preenchidos
-3. No formulario de sinistro, seleciona tipo "roubo" ou "furto"
-4. Sinistro e criado e pode acionar recuperacao via `AcionarRecuperacaoModal`
-5. Acionamento chama `acionar-roubo-furto` que notifica Rede Veiculos
-
-**Integracao na Edge Function:**
-
-O hook `useAcionarRouboFurto` aceita `chamado_assistencia_id`:
-
-```typescript
-interface AcionamentoRequest {
-  veiculo_id: string;
-  sinistro_id?: string;
-  chamado_assistencia_id?: string; // <- Vinculo com assistencia
-  tipo_origem: 'sinistro' | 'assistencia' | 'diretoria' | 'manual';
-  observacoes?: string;
-  modo_rastreamento?: 'intensivo' | 'emergencia';
-}
-```
-
-A tabela `acionamentos_roubo_furto` possui campo `chamado_assistencia_id` para rastreabilidade.
-
----
-
-### 4. Quando o Chamado e Encerrado - Registrar Posicao Final
+### 1. Quando o Sistema e Inicializado pela Primeira Vez
 
 **STATUS: NAO IMPLEMENTADO**
 
-**Arquivo:** `src/components/assistencia/AtualizarStatusChamadoModal.tsx`
+Nao existe trigger automatico para criar instancia na Evolution API quando o sistema e instalado. O fluxo atual:
 
-O encerramento apenas atualiza o status, sem capturar posicao final:
+1. Diretor acessa Configuracoes > Integracoes > WhatsApp
+2. Insere URL da Evolution API manualmente em `ConfiguracaoEvolutionURL.tsx`
+3. Sistema salva registro em `whatsapp_instancias` (banco local apenas)
+4. Instancia na Evolution API **NAO e criada** neste momento
+5. Instancia so e criada quando usuario clica em "Conectar" (QR Code)
 
-```typescript
-const updateData: Record<string, any> = {
-  status: novoStatus,
-  updated_at: new Date().toISOString(),
-};
-
-// Se concluído, adicionar data de conclusão
-if (novoStatus === 'concluido') {
-  updateData.data_conclusao = new Date().toISOString();
-}
-// NAO CAPTURA POSICAO FINAL DO RASTREADOR
+**Evidencia no Banco:**
+```sql
+-- Instancia existe localmente mas pode nao existir na Evolution API
+id: b0c104d5-48fe-47a8-b03c-d305c2512ed2
+instance_name: sga-pratic
+api_url: https://evolution.praticcar.org
+status: open
 ```
-
-**Campos que deveriam ser preenchidos:**
-- `posicao_final_lat` / `posicao_final_lng`
-- `posicao_final_capturada_em`
-- `km_percorridos` (calculado entre posicao inicial e final)
 
 ---
 
-## Componentes e Hooks Existentes
+### 2. Quando Ha Necessidade de Criar Nova Instancia para Outro Numero
 
-### Hook de Posicao em Tempo Real
+**STATUS: NAO IMPLEMENTADO**
 
-**Arquivo:** `src/hooks/useChamadoPosicaoTempoReal.ts`
+O sistema atual suporta **apenas 1 instancia principal**:
 
 ```typescript
-export function useChamadoPosicaoTempoReal(
-  veiculoId: string | undefined,
-  { autoRefresh = true, refetchInterval = 30000 } = {}
-): UseChamadoPosicaoTempoRealResult
+// ConfiguracaoEvolutionURL.tsx (linha 82-86)
+const { data: existente } = await supabase
+  .from('whatsapp_instancias')
+  .select('id')
+  .eq('principal', true)  // <- Sempre busca a principal
+  .maybeSingle();
 ```
 
-**Funcionalidades:**
-- Busca rastreador do veiculo
-- Chama `posicao-veiculo` para posicao em tempo real
-- Fallback para ultima posicao do banco
-- Atualiza automaticamente a cada 30 segundos
-- Retorna flag `tempoReal` indicando fonte dos dados
+**Gaps:**
+- Nao existe UI para criar instancias adicionais
+- Nao existe funcionalidade para gerenciar multiplos numeros
+- Constraint `idx_whatsapp_principal` garante apenas 1 principal
 
-**Status:** Implementado mas NAO UTILIZADO em nenhuma tela
+---
 
-### Componente de Mapa
+### 3. Quando Instancia Foi Deletada e Precisa Ser Recriada
 
-**Arquivo:** `src/components/assistencia/MapaChamado.tsx`
+**STATUS: IMPLEMENTADO**
 
-**Funcionalidades:**
-- Exibe mapa com Leaflet
-- Mostra marcador do veiculo (rastreador) com icone animado
-- Mostra marcador da origem informada
-- Badge indicando "Tempo Real" ou "Ultima Posicao"
-- Botao para alternar entre rastreador e origem
-- Botao para atualizar posicao
-- Exibe velocidade e ignicao
+O arquivo `whatsapp-qrcode/index.ts` implementa esta logica corretamente:
 
-**Status:** Implementado mas NAO UTILIZADO em nenhuma tela
+```typescript
+// whatsapp-qrcode/index.ts (linhas 50-84)
+// Primeiro, verificar se a instância existe na Evolution API
+const checkResponse = await fetch(
+  `${instancia.api_url}/instance/fetchInstances`,
+  {
+    method: 'GET',
+    headers: { 'apikey': apiKey }
+  }
+);
+
+let instanceExists = false;
+if (checkResponse.ok) {
+  const instances = await checkResponse.json();
+  instanceExists = Array.isArray(instances) && 
+    instances.some((i: { name?: string }) => i.name === instancia.instance_name);
+}
+
+// Se não existe, criar a instância
+if (!instanceExists) {
+  console.log('Criando instância:', instancia.instance_name);
+  
+  const createResponse = await fetch(
+    `${instancia.api_url}/instance/create`,
+    {
+      method: 'POST',
+      headers: { 
+        'apikey': apiKey,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        instanceName: instancia.instance_name,
+        qrcode: true,
+        integration: 'WHATSAPP-BAILEYS',
+      })
+    }
+  );
+  // ...
+}
+```
+
+**Fluxo:**
+1. Usuario clica "Conectar" no `WhatsAppStatusCard`
+2. Sistema chama `whatsapp-qrcode`
+3. Edge function verifica via `GET /instance/fetchInstances`
+4. Se nao encontrar a instancia, chama `POST /instance/create`
+5. QR Code e retornado para conexao
+
+---
+
+### 4. Quando Ha Migracao de Numero de WhatsApp
+
+**STATUS: NAO IMPLEMENTADO**
+
+Nao existe funcionalidade para:
+- Migrar numero de um celular para outro
+- Trocar o numero associado a instancia
+- Processo de "logout + novo login" guiado
+
+O processo atual para trocar numero seria manual:
+1. Desconectar via `whatsapp-logout`
+2. Escanear QR Code com novo celular
+3. Conexao estabelecida com novo numero
+
+**Problema:** O sistema nao oferece UI orientada para este fluxo.
+
+---
+
+## Verificacao dos Parametros de Criacao
+
+### instanceName
+
+**STATUS: CORRETO**
+
+```typescript
+// whatsapp-qrcode/index.ts
+body: JSON.stringify({
+  instanceName: instancia.instance_name,  // <- Do banco de dados
+  // ...
+})
+```
+
+O campo `instance_name` e definido na configuracao inicial e armazenado na tabela `whatsapp_instancias`. Valor atual: `sga-pratic`.
+
+### qrcode
+
+**STATUS: CORRETO**
+
+```typescript
+body: JSON.stringify({
+  // ...
+  qrcode: true,  // <- Habilitado
+  // ...
+})
+```
+
+### integration
+
+**STATUS: CORRETO**
+
+```typescript
+body: JSON.stringify({
+  // ...
+  integration: 'WHATSAPP-BAILEYS',  // <- Tipo correto
+})
+```
+
+### Webhook na Criacao
+
+**STATUS: NAO IMPLEMENTADO NA CRIACAO**
+
+O webhook **NAO** e passado no payload de criacao da instancia:
+
+```typescript
+// Payload ATUAL de criação (whatsapp-qrcode/index.ts)
+body: JSON.stringify({
+  instanceName: instancia.instance_name,
+  qrcode: true,
+  integration: 'WHATSAPP-BAILEYS',
+  // FALTA: webhook, events, etc.
+})
+```
+
+**Como deveria ser:**
+```typescript
+body: JSON.stringify({
+  instanceName: instancia.instance_name,
+  qrcode: true,
+  integration: 'WHATSAPP-BAILEYS',
+  webhook: {
+    url: WEBHOOK_URL,
+    enabled: true,
+    webhook_by_events: false,
+    webhook_base64: false,
+    events: ['MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'CONNECTION_UPDATE']
+  }
+})
+```
+
+**Workaround Atual:**
+O `whatsapp-status` configura o webhook automaticamente apos conexao (linhas 119-145):
+
+```typescript
+// Auto-configurar webhook quando conectar
+if (novoStatus === 'open' && statusAnterior !== 'open' && !instancia.webhook_url) {
+  const setWebhookResponse = await fetch(
+    `${Deno.env.get('SUPABASE_URL')}/functions/v1/whatsapp-set-webhook`,
+    // ...
+  );
+}
+```
 
 ---
 
 ## Gaps Identificados
 
-### Gap 1: Mapa Nao Exibido na Tela do Atendente
+### Gap 1: Webhook Nao Configurado na Criacao
 
-A tela `ChamadoDetalhe.tsx` exibe apenas um placeholder:
+O webhook e configurado apenas APOS a conexao, via `whatsapp-set-webhook`. Isso cria uma janela onde mensagens podem ser perdidas.
 
-```typescript
-{/* Placeholder para mapa */}
-<div className="h-40 bg-muted rounded-lg flex items-center justify-center">
-  <div className="text-center text-muted-foreground">
-    <MapPin className="h-8 w-8 mx-auto mb-2" />
-    <p className="text-sm">Visualização de mapa (em breve)</p>
-  </div>
-</div>
-```
+### Gap 2: Nao Existe Inicializacao Automatica
 
-O componente `MapaChamado` ja esta pronto mas nao foi integrado.
+Quando o sistema e implantado, nao ha trigger para criar a instancia na Evolution API. Depende de acao manual.
 
-### Gap 2: Botao de Enviar Localizacao Nao Integrado
+### Gap 3: Suporte a Apenas 1 Instancia
 
-O componente `EnviarLinkPrestadorButton` existe mas nao e usado em nenhuma tela. Deveria estar visivel quando um prestador e atribuido ao chamado.
+O sistema assume apenas 1 numero de WhatsApp. Nao suporta multiplas linhas.
 
-### Gap 3: Nao Usa API de Compartilhamento da Rede Veiculos
+### Gap 4: Nao Existe Fluxo de Migracao
 
-O sistema gera link estatico do Google Maps. Deveria chamar `/obterLinkCompartilhamento` da API Rede Veiculos para:
-- Link de tracking em tempo real
-- Validade configuravel
-- Atualizacao automatica da posicao
+Trocar de numero requer processo manual nao documentado.
 
-### Gap 4: Posicao Final Nao Registrada
+### Gap 5: Logout Nao Deleta Instancia
 
-Quando chamado e concluido, nao ha captura da posicao final para:
-- Calcular distancia percorrida
-- Validar que servico foi realizado no local correto
-- Auditoria completa do atendimento
-
-### Gap 5: Posicoes de Acompanhamento Nao Registradas
-
-Durante o atendimento, posicoes intermediarias nao sao registradas no historico. Deveria haver:
-- Posicao quando prestador aceita
-- Posicao quando prestador chega ao local
-- Posicao durante o atendimento (opcional)
-- Posicao final ao concluir
+O `whatsapp-logout` usa `DELETE /instance/logout` que desconecta, mas mantem a instancia na Evolution API. Para recriar completamente, precisaria de `DELETE /instance/delete`.
 
 ---
 
 ## Plano de Implementacao
 
-### Fase 1: Integrar Mapa e Posicao em Tempo Real na Tela do Atendente
+### Fase 1: Incluir Webhook na Criacao da Instancia
 
-**Modificar:** `src/pages/assistencia/ChamadoDetalhe.tsx`
+**Modificar:** `supabase/functions/whatsapp-qrcode/index.ts`
+
+Adicionar configuracao de webhook no payload de criacao:
 
 ```typescript
-import { MapaChamado } from '@/components/assistencia/MapaChamado';
-import { useChamadoPosicaoTempoReal } from '@/hooks/useChamadoPosicaoTempoReal';
-import { EnviarLinkPrestadorButton } from '@/components/assistencia/EnviarLinkPrestadorButton';
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
+const WEBHOOK_URL = `${SUPABASE_URL}/functions/v1/whatsapp-webhook`;
 
-// No componente
-const { posicao, isLoading: posicaoLoading, tempoReal, refetch } = 
-  useChamadoPosicaoTempoReal(chamado?.veiculo?.id);
-
-// Substituir placeholder pelo mapa real
-<MapaChamado
-  origemLat={chamado.origem_lat}
-  origemLng={chamado.origem_lng}
-  origemEndereco={chamado.origem_endereco}
-  rastreadorLat={posicao?.latitude || chamado.rastreador_lat}
-  rastreadorLng={posicao?.longitude || chamado.rastreador_lng}
-  rastreadorDataPosicao={posicao?.data_posicao || chamado.rastreador_posicao_capturada_em}
-  velocidade={posicao?.velocidade}
-  ignicao={posicao?.ignicao}
-  tempoReal={tempoReal}
-  isLoading={posicaoLoading}
-  onRefresh={refetch}
-  height="h-64"
-/>
+// Na criacao da instancia
+const createResponse = await fetch(
+  `${instancia.api_url}/instance/create`,
+  {
+    method: 'POST',
+    headers: { 
+      'apikey': apiKey,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      instanceName: instancia.instance_name,
+      qrcode: true,
+      integration: 'WHATSAPP-BAILEYS',
+      webhook: {
+        url: WEBHOOK_URL,
+        enabled: true,
+        webhook_by_events: false,
+        webhook_base64: false,
+        events: ['MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'CONNECTION_UPDATE']
+      }
+    })
+  }
+);
 ```
 
-### Fase 2: Adicionar Botao de Enviar Localizacao
+### Fase 2: Adicionar Botao para Recriar Instancia
 
-**Modificar:** `src/pages/assistencia/ChamadoDetalhe.tsx`
+**Modificar:** `src/components/whatsapp/WhatsAppStatusCard.tsx`
 
-No card do prestador, adicionar o botao:
+Adicionar opcao para deletar e recriar instancia quando houver problemas:
 
 ```typescript
-{/* Card: Prestador */}
-{(chamado.prestador || chamado.prestador_nome) && (
-  <Card>
-    <CardContent className="space-y-4">
-      {/* ... dados do prestador ... */}
-      
-      {/* Adicionar botão de enviar localização */}
-      <EnviarLinkPrestadorButton
-        chamadoId={chamado.id}
-        protocolo={chamado.protocolo}
-        prestadorNome={chamado.prestador?.razao_social || chamado.prestador_nome}
-        prestadorTelefone={chamado.prestador?.whatsapp || chamado.prestador?.telefone || chamado.prestador_telefone}
-        origemLat={chamado.origem_lat}
-        origemLng={chamado.origem_lng}
-        origemEndereco={chamado.origem_endereco}
-        rastreadorLat={posicao?.latitude || chamado.rastreador_lat}
-        rastreadorLng={posicao?.longitude || chamado.rastreador_lng}
-        tipoServico={chamado.tipo_servico}
-      />
-    </CardContent>
-  </Card>
-)}
+// Novo botão no menu de ações
+<Button
+  variant="outline"
+  size="sm"
+  onClick={handleRecriarInstancia}
+>
+  <Trash2 className="h-4 w-4 mr-2" />
+  Recriar Instância
+</Button>
 ```
 
-### Fase 3: Capturar Posicao Final ao Encerrar Chamado
+### Fase 3: Criar Edge Function para Deletar Instancia
 
-**Modificar:** `src/components/assistencia/AtualizarStatusChamadoModal.tsx`
-
-Adicionar chamada para capturar posicao quando status = concluido:
+**Novo arquivo:** `supabase/functions/whatsapp-delete-instance/index.ts`
 
 ```typescript
-// Se concluído, capturar posição final
-if (novoStatus === 'concluido' && chamado.veiculo_id) {
-  try {
-    const { data: posicaoFinal } = await supabase.functions.invoke('posicao-veiculo', {
-      body: { veiculo_id: chamado.veiculo_id },
+// Deletar instância completamente da Evolution API
+const response = await fetch(
+  `${instancia.api_url}/instance/delete/${instancia.instance_name}`,
+  {
+    method: 'DELETE',
+    headers: { 'apikey': apiKey }
+  }
+);
+
+// Limpar dados locais
+await supabase
+  .from('whatsapp_instancias')
+  .update({
+    status: 'disconnected',
+    telefone: null,
+    webhook_url: null,
+    webhook_enabled: false,
+    // ...
+  })
+  .eq('id', instancia.id);
+```
+
+### Fase 4: Adicionar Validacao de Instancia na Inicializacao
+
+**Modificar:** `src/components/whatsapp/WhatsAppStatusCard.tsx`
+
+Verificar se instancia existe na Evolution ao carregar:
+
+```typescript
+useEffect(() => {
+  async function verificarInstancia() {
+    const { data } = await supabase.functions.invoke('whatsapp-status', {
+      body: {}
     });
     
-    if (posicaoFinal?.success && posicaoFinal?.posicao) {
-      updateData.posicao_final_lat = posicaoFinal.posicao.latitude;
-      updateData.posicao_final_lng = posicaoFinal.posicao.longitude;
-      updateData.posicao_final_capturada_em = posicaoFinal.posicao.data_posicao || new Date().toISOString();
+    // Se status 404, oferecer criar
+    if (data?.status === 'disconnected' && !data?.raw) {
+      setMostrarBotaoCriar(true);
     }
-  } catch (err) {
-    console.warn('Erro ao capturar posição final:', err);
   }
-}
-```
-
-### Fase 4: Criar Edge Function para Link de Compartilhamento (Opcional)
-
-**Novo arquivo:** `supabase/functions/rede-veiculos-link-compartilhamento/index.ts`
-
-```typescript
-// Chamar API Rede Veículos para gerar link de tracking temporário
-// POST /obterLinkCompartilhamento
-// - codigo_rastreador
-// - validade_minutos: 60
-// - tipo: 'assistencia'
-// Retorna URL de tracking em tempo real
-```
-
-### Fase 5: Adicionar Colunas para Posicao Final (Migration)
-
-```sql
-ALTER TABLE chamados_assistencia ADD COLUMN IF NOT EXISTS posicao_final_lat NUMERIC(10, 7);
-ALTER TABLE chamados_assistencia ADD COLUMN IF NOT EXISTS posicao_final_lng NUMERIC(10, 7);
-ALTER TABLE chamados_assistencia ADD COLUMN IF NOT EXISTS posicao_final_capturada_em TIMESTAMPTZ;
-ALTER TABLE chamados_assistencia ADD COLUMN IF NOT EXISTS distancia_percorrida_km NUMERIC(10, 2);
+  verificarInstancia();
+}, []);
 ```
 
 ---
@@ -386,82 +357,67 @@ ALTER TABLE chamados_assistencia ADD COLUMN IF NOT EXISTS distancia_percorrida_k
 
 | Arquivo | Alteracoes |
 |---------|------------|
-| `src/pages/assistencia/ChamadoDetalhe.tsx` | Integrar MapaChamado, useChamadoPosicaoTempoReal e EnviarLinkPrestadorButton |
-| `src/components/assistencia/AtualizarStatusChamadoModal.tsx` | Capturar posicao final ao concluir |
-| `src/components/assistencia/EnviarLinkPrestadorButton.tsx` | (Opcional) Adicionar chamada para API de link de compartilhamento |
+| `supabase/functions/whatsapp-qrcode/index.ts` | Incluir webhook no payload de criacao |
+| `src/components/whatsapp/WhatsAppStatusCard.tsx` | Adicionar botao "Recriar Instancia" |
 
-## Arquivos a Criar (Opcional)
+## Arquivos a Criar
 
 | Arquivo | Descricao |
 |---------|-----------|
-| `supabase/functions/rede-veiculos-link-compartilhamento/index.ts` | Gerar link de tracking via API |
+| `supabase/functions/whatsapp-delete-instance/index.ts` | Deletar instancia da Evolution API |
+
+---
+
+## Teste Recomendado: Criar Nova Instancia
+
+### Pre-requisitos
+
+1. Acesso a Evolution API configurada
+2. `EVOLUTION_API_KEY` no secrets do Supabase
+3. Celular com WhatsApp para escanear QR
+
+### Passos do Teste
+
+**Parte 1: Verificar Estado Atual**
+
+1. Acessar sistema como diretor
+2. Navegar para Configuracoes > Integracoes > WhatsApp
+3. Verificar status atual da conexao
+4. Consultar Evolution API via `GET /instance/fetchInstances`
+
+**Parte 2: Testar Criacao**
+
+5. Se instancia nao existe: Clicar em "Conectar"
+6. Sistema deve chamar `POST /instance/create` automaticamente
+7. QR Code deve aparecer
+8. Escanear com WhatsApp
+9. Verificar conexao estabelecida
+
+**Parte 3: Validar na Evolution**
+
+10. Chamar `GET /instance/fetchInstances` na Evolution API
+11. Confirmar que instancia `sga-pratic` aparece na lista
+12. Verificar status da instancia via `GET /instance/connectionState/sga-pratic`
+
+### Resultado Esperado
+
+- Instancia criada com `instanceName: sga-pratic`
+- `qrcode: true` habilitado
+- `integration: WHATSAPP-BAILEYS` definido
+- Webhook configurado apos conexao
+- Instancia visivel em `GET /instance/fetchInstances`
 
 ---
 
 ## Checklist de Verificacao Pos-Implementacao
 
-- [x] Posicao buscada em tempo real quando chamado e criado
-- [x] Campos `rastreador_lat/lng` gravados na abertura
-- [x] Hook `useChamadoPosicaoTempoReal` implementado
-- [x] Componente `MapaChamado` implementado
-- [x] Componente `EnviarLinkPrestadorButton` implementado
-- [x] Menu para abrir sinistro (roubo) a partir do chamado
-- [x] Integracao com `acionar-roubo-furto` via sinistro
-- [ ] Mapa exibido na tela do atendente (ChamadoDetalhe)
-- [ ] Botao de enviar localizacao integrado
-- [ ] Posicao final capturada ao encerrar chamado
-- [ ] Link de compartilhamento via API Rede Veiculos
-- [ ] Posicoes intermediarias registradas no historico
-
----
-
-## Teste Recomendado: Fluxo Completo de Guincho
-
-### Pre-requisitos
-
-1. Associado ativo com veiculo e rastreador Rede Veiculos
-2. Prestador de guincho cadastrado e disponivel
-3. `REDE_VEICULOS_TOKEN` configurado
-
-### Passos do Teste
-
-**Parte 1: Abrir Chamado**
-
-1. No App do Associado, solicitar guincho
-2. Permitir localizacao ou informar endereco
-3. Verificar que chamado foi criado
-4. Acessar painel administrativo > Assistencia > Chamados
-5. Abrir o chamado recente
-6. **Verificar:** Mapa exibe posicao do rastreador em tempo real
-7. **Verificar:** Badge indica "Tempo Real" ou "Ultima Posicao"
-
-**Parte 2: Atribuir Prestador**
-
-8. Clicar em "Atribuir Prestador"
-9. Selecionar um prestador de guincho
-10. Confirmar acionamento
-11. **Verificar:** Botao "Enviar Localizacao" aparece
-12. Clicar no botao e enviar via WhatsApp
-13. **Verificar:** Prestador recebe mensagem com link do mapa
-
-**Parte 3: Concluir Chamado**
-
-14. Atualizar status para "Concluido"
-15. **Verificar:** Posicao final foi capturada
-16. **Verificar:** Campos `posicao_final_lat/lng` preenchidos no banco
-
-**Parte 4: Testar Fluxo de Roubo (Opcional)**
-
-17. Abrir novo chamado de assistencia
-18. No menu Acoes, clicar em "Abrir Sinistro"
-19. Selecionar tipo "Roubo"
-20. Criar sinistro
-21. Acionar recuperacao via modal
-22. **Verificar:** Acionamento enviado para Rede Veiculos
-
-### Resultado Esperado
-
-- Atendente ve posicao do veiculo em tempo real no mapa
-- Prestador recebe link com localizacao atualizada
-- Posicao inicial e final registradas para auditoria
-- Fluxo de roubo integrado via sinistro funciona corretamente
+- [x] `POST /instance/create` chamado quando instancia nao existe
+- [x] `instanceName` usando valor do banco (`instance_name`)
+- [x] `qrcode: true` habilitado para conexao inicial
+- [x] `integration: 'WHATSAPP-BAILEYS'` definido corretamente
+- [ ] Webhook configurado na criacao (atualmente apenas apos conexao)
+- [x] Log de criacao registrado em `whatsapp_logs`
+- [x] Status atualizado para `qrcode` apos criacao
+- [ ] Funcionalidade de deletar/recriar instancia
+- [ ] Suporte a multiplas instancias
+- [ ] Fluxo de migracao de numero
