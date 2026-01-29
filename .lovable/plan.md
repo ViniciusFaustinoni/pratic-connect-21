@@ -1,204 +1,406 @@
 
 
-# Revisao Completa - Configuracao de Webhooks para Evolution API
+# Revisao Completa - Fluxo de Recebimento e Processamento de Mensagens via Webhook Evolution
 
 ## Resumo Executivo
 
-| Aspecto | Status | Observacao |
-|---------|--------|------------|
-| URL do webhook acessivel externamente | **OK** | `https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/whatsapp-webhook` |
-| Evento MESSAGES_UPSERT (mensagens recebidas) | **OK** | Configurado |
-| Evento MESSAGES_UPDATE (status entrega) | **CONFIGURADO MAS NAO PROCESSADO** | Evento registrado mas sem handler |
-| Evento CONNECTION_UPDATE (desconexoes) | **OK** | Funcionando com alertas para diretores |
-| Headers de autorizacao | **OK** | apikey enviada pela Evolution API |
-| byEvents configurado | **NAO** | `webhook_by_events: false` (envia todos eventos para mesma URL) |
-| Processamento de status de entrega | **NAO IMPLEMENTADO** | Falta handler para atualizar delivered_at e read_at |
-| Resposta rapida do webhook | **OK** | Responde em menos de 200ms |
+| Cenario | Status | Implementacao Atual | Problema |
+|---------|--------|---------------------|----------|
+| Mensagem de texto de associado | **OK** | Processada e vinculada ao associado | Funcionando |
+| Mensagem de lead respondendo proposta | **NAO IMPLEMENTADO** | Ignorada (lead nao e buscado) | Sistema so busca associados |
+| Mensagem com documento anexado (foto) | **NAO IMPLEMENTADO** | Ignorada (if "sem texto") | Linha 1531-1532 ignora |
+| Mensagem de audio do associado | **NAO IMPLEMENTADO** | Ignorada (if "sem texto") | Linha 1531-1532 ignora |
+| Anexos baixados e armazenados | **NAO IMPLEMENTADO** | Nenhuma logica de download | Falta implementar |
+| Historico de conversas mantido | **PARCIAL** | Apenas mensagens de texto | Media nao e registrada |
+| Numeros desconhecidos tratados | **OK** | Responde orientando contato | Funcionando |
 
 ---
 
 ## Analise Detalhada
 
-### 1. Configuracao do Webhook (whatsapp-set-webhook)
-
-**Configuracao atual:**
+### 1. Mensagens de Texto de Associado - FUNCIONANDO
 
 ```typescript
-const webhookPayload = {
-  url: WEBHOOK_URL,  // https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/whatsapp-webhook
-  enabled: true,
-  webhook_by_events: false,  // Todos eventos vao para mesma URL
-  webhook_base64: false,
-  events: [
-    'MESSAGES_UPSERT',    // ✅ Mensagens recebidas
-    'MESSAGES_UPDATE',    // ⚠️ Configurado mas nao processado
-    'CONNECTION_UPDATE'   // ✅ Desconexoes
-  ]
-};
-```
+// Linha 1529 - Extrai apenas texto
+const mensagemTexto = data.message?.conversation || data.message?.extendedTextMessage?.text || "";
 
-**Status no banco:**
-- `webhook_enabled: true`
-- `webhook_url: https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/whatsapp-webhook`
-- `webhook_events: [MESSAGES_UPSERT, MESSAGES_UPDATE, CONNECTION_UPDATE]`
-
-### 2. Processamento de Eventos no Webhook
-
-**MESSAGES_UPSERT (mensagens recebidas):** FUNCIONANDO
-
-```typescript
-if (payload.event === "messages.upsert") {
-  // ✅ Processa mensagens de entrada
-  // ✅ Identifica associado pelo telefone
-  // ✅ Responde via IA
-  // ✅ Registra em whatsapp_mensagens
+// Linha 1531-1532 - PROBLEMA: Ignora qualquer mensagem sem texto
+if (!mensagemTexto.trim()) {
+  return new Response(JSON.stringify({ ok: true, ignored: "sem texto" }), { headers: corsHeaders });
 }
 ```
 
-**CONNECTION_UPDATE (desconexoes):** FUNCIONANDO
+**Status:** Mensagens de texto sao vinculadas corretamente ao associado via busca por telefone.
+
+### 2. Mensagem de Lead Respondendo Proposta - NAO IMPLEMENTADO
 
 ```typescript
-if (payload.event === "connection.update") {
-  // ✅ Detecta state: open, close, connecting
-  // ✅ Atualiza status no banco
-  // ✅ Cria notificacao para diretores se desconectar
-  // ✅ Registra log da desconexao
+// Linha 1587-1593 - Busca APENAS associados
+const { data: associado } = await supabase
+  .from("associados")
+  .select("id, nome, status")
+  .or(`whatsapp.in.(${telefonesBusca.join(",")}),telefone.in.(${telefonesBusca.join(",")})`)
+  .eq("status", "ativo")
+  .maybeSingle();
+
+// Linha 1595-1604 - Se nao e associado, responde "nao cadastrado"
+if (!associado) {
+  await sendWhatsAppMessage(..., "Este número não está cadastrado como associado PRATIC...");
+  return ...;
 }
 ```
 
-**MESSAGES_UPDATE (status de entrega):** NAO IMPLEMENTADO
+**Gap:** O sistema nao verifica se o telefone pertence a um lead antes de responder que "nao e associado". Leads que respondem propostas comerciais recebem mensagem incorreta.
 
-O evento `MESSAGES_UPDATE` e recebido pela Evolution API quando:
-- Mensagem foi **enviada** (status: DELIVERY_ACK)
-- Mensagem foi **entregue** (status: DELIVERY_ACK)
-- Mensagem foi **lida** (status: READ)
+### 3. Mensagem com Documento/Foto Anexado - NAO IMPLEMENTADO
 
-Atualmente, este evento e **ignorado** no webhook:
+A Evolution API envia anexos com esta estrutura:
 
-```typescript
-// Linha 1399
-if (payload.event !== "messages.upsert") {
-  console.log(`[whatsapp-webhook] Evento ignorado: ${payload.event}`);
-  return new Response(JSON.stringify({ ok: true, ignored: true, event: payload.event }), ...);
+```json
+{
+  "event": "messages.upsert",
+  "data": {
+    "key": { "remoteJid": "...", "fromMe": false },
+    "message": {
+      "imageMessage": {
+        "url": "...",
+        "mimetype": "image/jpeg",
+        "caption": "Foto do documento"
+      }
+    }
+  }
 }
 ```
 
-### 3. Gaps Identificados
+**Gap:** O codigo atual nao trata `imageMessage`, `documentMessage`, `videoMessage`. A linha 1531-1532 ignora porque `mensagemTexto` esta vazio.
 
-#### Gap 1: Status de Entrega Nao Atualizado
+### 4. Mensagem de Audio do Associado - NAO IMPLEMENTADO
 
-A tabela `whatsapp_mensagens` possui campos para rastrear status:
-- `sent_at` (timestamp quando enviada)
-- `delivered_at` (timestamp quando entregue) - NUNCA PREENCHIDO
-- `read_at` (timestamp quando lida) - NUNCA PREENCHIDO
-- `status` (pendente, enviando, enviada, entregue, lida, erro) - SO USA "enviada" e "entregue"
+A Evolution API envia audios com esta estrutura:
 
-#### Gap 2: Nao Ha Log de Eventos MESSAGES_UPDATE
+```json
+{
+  "event": "messages.upsert",
+  "data": {
+    "message": {
+      "audioMessage": {
+        "url": "...",
+        "mimetype": "audio/ogg; codecs=opus",
+        "seconds": 15
+      }
+    }
+  }
+}
+```
 
-Os logs mostram apenas eventos `connection.update`. Eventos de status de mensagens nao estao sendo registrados.
+**Gap:** Mesma situacao - audio e ignorado porque `mensagemTexto` esta vazio. O sistema ja possui a edge function `transcrever-audio` pronta mas nao e utilizada no webhook.
 
 ---
 
 ## Plano de Implementacao
 
-### Adicionar Handler para MESSAGES_UPDATE
+### Fase 1: Processar Diferentes Tipos de Midia
 
 **Modificar:** `supabase/functions/whatsapp-webhook/index.ts`
 
-Adicionar processamento de eventos de status apos o handler de CONNECTION_UPDATE:
+Adicionar deteccao de tipo de mensagem antes da validacao de texto:
 
 ```typescript
-// PROCESSAR EVENTOS DE STATUS DE MENSAGEM (MESSAGES_UPDATE)
-if (payload.event === "messages.update") {
-  console.log('[whatsapp-webhook] MESSAGES_UPDATE recebido');
+// Detectar tipo de mensagem ANTES de validar texto
+const messageData = data.message;
+
+// Tipos de mensagem suportados pela Evolution API
+const tipoMensagem = {
+  texto: messageData?.conversation || messageData?.extendedTextMessage?.text,
+  imagem: messageData?.imageMessage,
+  documento: messageData?.documentMessage,
+  audio: messageData?.audioMessage,
+  video: messageData?.videoMessage,
+  localizacao: messageData?.locationMessage,
+  contato: messageData?.contactMessage,
+};
+
+// Determinar tipo principal
+let tipoPrincipal: 'texto' | 'imagem' | 'documento' | 'audio' | 'video' | 'localizacao' | 'contato' | 'desconhecido' = 'desconhecido';
+
+if (tipoMensagem.texto) tipoPrincipal = 'texto';
+else if (tipoMensagem.audio) tipoPrincipal = 'audio';
+else if (tipoMensagem.imagem) tipoPrincipal = 'imagem';
+else if (tipoMensagem.documento) tipoPrincipal = 'documento';
+else if (tipoMensagem.video) tipoPrincipal = 'video';
+else if (tipoMensagem.localizacao) tipoPrincipal = 'localizacao';
+else if (tipoMensagem.contato) tipoPrincipal = 'contato';
+
+// Extrair dados conforme tipo
+let mensagemTexto = '';
+let mediaUrl: string | null = null;
+let mediaMimetype: string | null = null;
+let mediaFilename: string | null = null;
+
+switch (tipoPrincipal) {
+  case 'texto':
+    mensagemTexto = tipoMensagem.texto || '';
+    break;
   
-  const updates = payload.data?.messages || payload.data || [];
+  case 'audio':
+    mediaUrl = tipoMensagem.audio.url;
+    mediaMimetype = tipoMensagem.audio.mimetype;
+    // Sera transcrito pela funcao transcrever-audio
+    break;
   
-  for (const update of Array.isArray(updates) ? updates : [updates]) {
-    const messageId = update.key?.id;
-    const status = update.status || update.update?.status;
-    
-    if (!messageId) continue;
-    
-    console.log(`[whatsapp-webhook] Status update: ${messageId} -> ${status}`);
-    
-    // Mapear status da Evolution para nosso status
-    const statusMap: Record<number, { status: string; field: string }> = {
-      0: { status: 'erro', field: '' },
-      1: { status: 'pendente', field: '' },
-      2: { status: 'enviada', field: 'sent_at' },
-      3: { status: 'entregue', field: 'delivered_at' },
-      4: { status: 'lida', field: 'read_at' },
-      5: { status: 'reproduzida', field: 'read_at' }, // Para audio/video
-    };
-    
-    const statusInfo = statusMap[status];
-    
-    if (statusInfo) {
-      const updateData: Record<string, any> = {
-        status: statusInfo.status,
-        updated_at: new Date().toISOString(),
-      };
-      
-      if (statusInfo.field) {
-        updateData[statusInfo.field] = new Date().toISOString();
-      }
-      
-      // Atualizar mensagem no banco
-      const { error } = await supabase
-        .from('whatsapp_mensagens')
-        .update(updateData)
-        .eq('message_id', messageId);
-      
-      if (error) {
-        console.error(`[whatsapp-webhook] Erro ao atualizar status: ${error.message}`);
-      } else {
-        console.log(`[whatsapp-webhook] Status atualizado: ${messageId} -> ${statusInfo.status}`);
-      }
-    }
-  }
+  case 'imagem':
+    mediaUrl = tipoMensagem.imagem.url;
+    mediaMimetype = tipoMensagem.imagem.mimetype;
+    mensagemTexto = tipoMensagem.imagem.caption || '[Imagem recebida]';
+    break;
   
-  return new Response(JSON.stringify({ ok: true, event: 'messages.update' }), { headers: corsHeaders });
+  case 'documento':
+    mediaUrl = tipoMensagem.documento.url;
+    mediaMimetype = tipoMensagem.documento.mimetype;
+    mediaFilename = tipoMensagem.documento.fileName;
+    mensagemTexto = tipoMensagem.documento.caption || `[Documento: ${mediaFilename}]`;
+    break;
+  
+  case 'localizacao':
+    const lat = tipoMensagem.localizacao.degreesLatitude;
+    const lng = tipoMensagem.localizacao.degreesLongitude;
+    mensagemTexto = `[Localização compartilhada: ${lat}, ${lng}]`;
+    // Processar com reverse_geocode tool
+    break;
+}
+
+// ATUALIZAR: Nao ignorar se tiver midia mesmo sem texto
+if (!mensagemTexto.trim() && !mediaUrl) {
+  return new Response(JSON.stringify({ ok: true, ignored: "sem conteudo" }), ...);
 }
 ```
 
-### Corrigir Salvamento do message_id
+### Fase 2: Download e Armazenamento de Anexos
 
-Atualmente, algumas mensagens nao salvam o `message_id` retornado pela Evolution API, dificultando a atualizacao de status.
-
-**Arquivo:** `supabase/functions/whatsapp-webhook/index.ts` (funcao sendWhatsAppMessage)
-
-Atualizar para retornar o message_id:
+Criar helper para baixar midia da Evolution API:
 
 ```typescript
-async function sendWhatsAppMessage(apiUrl: string, instanceName: string, telefone: string, texto: string): Promise<{ ok: boolean; messageId?: string }> {
+async function downloadMediaEvolution(
+  apiUrl: string, 
+  instanceName: string, 
+  messageId: string
+): Promise<{ success: boolean; base64?: string; mimetype?: string }> {
   const EVOLUTION_API_KEY = Deno.env.get("EVOLUTION_API_KEY");
-  if (!EVOLUTION_API_KEY) throw new Error("EVOLUTION_API_KEY não configurada");
+  
+  try {
+    const response = await fetch(
+      `${apiUrl}/chat/getBase64FromMediaMessage/${instanceName}`,
+      {
+        method: "POST",
+        headers: {
+          "apikey": EVOLUTION_API_KEY || "",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          message: { key: { id: messageId } },
+          convertToMp4: false,
+        }),
+      }
+    );
 
-  const response = await fetch(`${apiUrl}/message/sendText/${instanceName}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: EVOLUTION_API_KEY,
-    },
-    body: JSON.stringify({
-      number: telefone,
-      text: texto,
-    }),
-  });
+    if (!response.ok) {
+      console.error("[whatsapp-webhook] Erro ao baixar midia:", await response.text());
+      return { success: false };
+    }
 
-  if (!response.ok) {
-    const err = await response.text();
-    console.error(`[whatsapp-webhook] Erro ao enviar: ${err}`);
-    return { ok: false };
+    const result = await response.json();
+    return {
+      success: true,
+      base64: result.base64,
+      mimetype: result.mimetype,
+    };
+  } catch (err) {
+    console.error("[whatsapp-webhook] Erro download midia:", err);
+    return { success: false };
   }
+}
 
-  const result = await response.json();
-  return { ok: true, messageId: result?.key?.id };
+async function storeMediaSupabase(
+  supabase: any,
+  base64: string,
+  mimetype: string,
+  telefone: string
+): Promise<string | null> {
+  try {
+    // Converter base64 para Uint8Array
+    const binaryStr = atob(base64);
+    const bytes = new Uint8Array(binaryStr.length);
+    for (let i = 0; i < binaryStr.length; i++) {
+      bytes[i] = binaryStr.charCodeAt(i);
+    }
+
+    // Determinar extensao
+    const ext = mimetype.split('/')[1]?.split(';')[0] || 'bin';
+    const fileName = `whatsapp/${telefone}/${Date.now()}.${ext}`;
+
+    // Upload para bucket
+    const { error } = await supabase.storage
+      .from('sinistros')  // Reusar bucket existente
+      .upload(fileName, bytes, {
+        contentType: mimetype,
+        upsert: false,
+      });
+
+    if (error) throw error;
+
+    // Gerar URL publica
+    const { data: urlData } = supabase.storage
+      .from('sinistros')
+      .getPublicUrl(fileName);
+
+    return urlData?.publicUrl || null;
+  } catch (err) {
+    console.error("[whatsapp-webhook] Erro ao armazenar midia:", err);
+    return null;
+  }
 }
 ```
 
-E atualizar a funcao `saveWhatsAppLog` para receber e salvar o message_id:
+### Fase 3: Transcricao de Audio
+
+Integrar a funcao `transcrever-audio` existente:
+
+```typescript
+case 'audio': {
+  console.log(`[whatsapp-webhook] Audio recebido de ${telefone}, baixando...`);
+  
+  const messageId = data.key.id;
+  const mediaResult = await downloadMediaEvolution(instancia.api_url, instancia.instance_name, messageId);
+  
+  if (!mediaResult.success || !mediaResult.base64) {
+    mensagemTexto = "[Audio nao pode ser processado]";
+    break;
+  }
+  
+  // Converter base64 para Blob para enviar ao transcrever-audio
+  const binaryStr = atob(mediaResult.base64);
+  const bytes = new Uint8Array(binaryStr.length);
+  for (let i = 0; i < binaryStr.length; i++) {
+    bytes[i] = binaryStr.charCodeAt(i);
+  }
+  
+  const audioBlob = new Blob([bytes], { type: mediaResult.mimetype || 'audio/ogg' });
+  
+  // Chamar transcricao
+  try {
+    const formData = new FormData();
+    formData.append('audio', audioBlob, 'audio.ogg');
+    
+    const transcricaoResponse = await fetch(
+      `${Deno.env.get("SUPABASE_URL")}/functions/v1/transcrever-audio`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+        },
+        body: formData,
+      }
+    );
+    
+    if (transcricaoResponse.ok) {
+      const transcricao = await transcricaoResponse.json();
+      mensagemTexto = transcricao.text || "[Audio transcrito sem conteudo]";
+      console.log(`[whatsapp-webhook] Audio transcrito: ${mensagemTexto.substring(0, 50)}...`);
+    } else {
+      mensagemTexto = "[Audio nao pode ser transcrito]";
+    }
+  } catch (err) {
+    console.error("[whatsapp-webhook] Erro na transcricao:", err);
+    mensagemTexto = "[Erro ao processar audio]";
+  }
+  
+  break;
+}
+```
+
+### Fase 4: Vincular Mensagens a Leads
+
+Adicionar busca de lead apos nao encontrar associado:
+
+```typescript
+// Apos linha 1593 (associado nao encontrado)
+if (!associado) {
+  // NOVO: Verificar se e um lead
+  const { data: lead } = await supabase
+    .from("leads")
+    .select("id, nome, vendedor_id, etapa")
+    .or(`telefone.in.(${telefonesBusca.join(",")})`)
+    .maybeSingle();
+  
+  if (lead) {
+    console.log(`[whatsapp-webhook] Lead encontrado: ${lead.nome} (${lead.id})`);
+    
+    // Registrar mensagem no historico do lead
+    await supabase.from("leads_historico").insert({
+      lead_id: lead.id,
+      acao: "mensagem_whatsapp",
+      descricao: mensagemTexto.substring(0, 500),
+      dados: {
+        telefone,
+        tipo: tipoPrincipal,
+        media_url: mediaUrl,
+      },
+      usuario_id: lead.vendedor_id,
+    });
+    
+    // Atualizar data do ultimo contato
+    await supabase.from("leads")
+      .update({ data_ultimo_contato: new Date().toISOString() })
+      .eq("id", lead.id);
+    
+    // Salvar na tabela whatsapp_mensagens
+    await supabase.from("whatsapp_mensagens").insert({
+      instancia_id: instancia.id,
+      telefone,
+      nome_contato: lead.nome,
+      tipo: tipoPrincipal,
+      mensagem: mensagemTexto,
+      media_url: mediaUrl,
+      media_mimetype: mediaMimetype,
+      media_filename: mediaFilename,
+      referencia_tipo: "lead",
+      referencia_id: lead.id,
+      direcao: "entrada",
+      status: "entregue",
+    });
+    
+    // Responder ao lead
+    await sendWhatsAppMessage(
+      instancia.api_url,
+      instancia.instance_name,
+      telefone,
+      `Ola ${lead.nome.split(' ')[0]}! Recebemos sua mensagem. Nosso consultor entrara em contato em breve. 🙂`
+    );
+    
+    // Notificar vendedor do lead
+    if (lead.vendedor_id) {
+      await supabase.from("notificacoes").insert({
+        usuario_id: lead.vendedor_id,
+        titulo: "📱 Lead respondeu no WhatsApp",
+        mensagem: `${lead.nome}: "${mensagemTexto.substring(0, 100)}${mensagemTexto.length > 100 ? '...' : ''}"`,
+        tipo: "info",
+        dados: { lead_id: lead.id, telefone },
+      });
+    }
+    
+    return new Response(JSON.stringify({ ok: true, lead_id: lead.id }), { headers: corsHeaders });
+  }
+  
+  // Numero desconhecido (nem associado nem lead)
+  console.log(`[whatsapp-webhook] Numero desconhecido: ${telefone}`);
+  await sendWhatsAppMessage(..., "Olá! Este número não está cadastrado...");
+  return ...;
+}
+```
+
+### Fase 5: Salvar Mensagens de Midia no Historico
+
+Atualizar funcao `saveWhatsAppLog`:
 
 ```typescript
 async function saveWhatsAppLog(
@@ -206,18 +408,29 @@ async function saveWhatsAppLog(
   instanciaId: string, 
   telefone: string, 
   mensagem: string, 
-  direcao: string,
-  messageId?: string
+  direcao: string, 
+  messageId?: string,
+  tipo?: string,
+  mediaUrl?: string,
+  mediaMimetype?: string,
+  mediaFilename?: string,
+  referenciaId?: string,
+  referenciaTipo?: string
 ) {
   await supabase.from("whatsapp_mensagens").insert({
     instancia_id: instanciaId,
     telefone,
-    tipo: "text",
+    tipo: tipo || "text",
     mensagem,
+    media_url: mediaUrl || null,
+    media_mimetype: mediaMimetype || null,
+    media_filename: mediaFilename || null,
     direcao,
     status: direcao === "saida" ? "enviada" : "entregue",
     message_id: messageId || null,
     sent_at: direcao === "saida" ? new Date().toISOString() : null,
+    referencia_tipo: referenciaTipo || null,
+    referencia_id: referenciaId || null,
   });
 }
 ```
@@ -228,95 +441,94 @@ async function saveWhatsAppLog(
 
 | Arquivo | Alteracoes |
 |---------|------------|
-| `supabase/functions/whatsapp-webhook/index.ts` | Adicionar handler MESSAGES_UPDATE e melhorar salvamento de message_id |
-
----
-
-## Verificacoes Pos-Implementacao
-
-### Checklist de Testes
-
-- [ ] Enviar mensagem de teste e verificar se `sent_at` e preenchido
-- [ ] Verificar se status muda para "entregue" quando destinatario recebe
-- [ ] Verificar se status muda para "lida" quando destinatario abre
-- [ ] Confirmar que desconexoes geram alerta para diretores
-- [ ] Verificar tempo de resposta do webhook (deve ser <500ms)
-- [ ] Testar reconexao automatica do webhook
-
-### Consulta para Verificar Status
-
-```sql
-SELECT 
-  telefone,
-  mensagem,
-  status,
-  sent_at,
-  delivered_at,
-  read_at,
-  message_id
-FROM whatsapp_mensagens 
-WHERE direcao = 'saida' 
-ORDER BY created_at DESC 
-LIMIT 10;
-```
+| `supabase/functions/whatsapp-webhook/index.ts` | Adicionar processamento de midia, audio, imagem, documento; vincular leads; atualizar saveWhatsAppLog |
 
 ---
 
 ## Detalhes Tecnicos
 
-### Formato do Evento MESSAGES_UPDATE da Evolution API
+### Tipos de Mensagem da Evolution API
 
-```json
+| Tipo | Campo | Campos Relevantes |
+|------|-------|-------------------|
+| Texto | `conversation` ou `extendedTextMessage.text` | `text` |
+| Imagem | `imageMessage` | `url`, `mimetype`, `caption` |
+| Documento | `documentMessage` | `url`, `mimetype`, `fileName`, `caption` |
+| Audio | `audioMessage` | `url`, `mimetype`, `seconds` |
+| Video | `videoMessage` | `url`, `mimetype`, `caption` |
+| Localizacao | `locationMessage` | `degreesLatitude`, `degreesLongitude`, `name` |
+| Contato | `contactMessage` | `displayName`, `vcard` |
+
+### Endpoint para Download de Midia
+
+```
+POST /chat/getBase64FromMediaMessage/{instanceName}
+
+Body:
 {
-  "event": "messages.update",
-  "instance": "sga-pratic",
-  "data": {
-    "key": {
-      "remoteJid": "5599999999999@s.whatsapp.net",
-      "fromMe": true,
-      "id": "BAE5B1234567890"
-    },
-    "update": {
-      "status": 3  // 2=enviada, 3=entregue, 4=lida
-    }
-  }
+  "message": {
+    "key": { "id": "MESSAGE_ID" }
+  },
+  "convertToMp4": false
+}
+
+Response:
+{
+  "base64": "...",
+  "mimetype": "audio/ogg"
 }
 ```
 
-### Mapeamento de Status
+---
 
-| Codigo | Status Evolution | Status Sistema |
-|--------|------------------|----------------|
-| 0 | ERROR | erro |
-| 1 | PENDING | pendente |
-| 2 | SERVER_ACK | enviada |
-| 3 | DELIVERY_ACK | entregue |
-| 4 | READ | lida |
-| 5 | PLAYED | reproduzida |
+## Checklist Pos-Implementacao
+
+- [ ] Mensagem de texto de associado processada corretamente
+- [ ] Mensagem de texto de lead vinculada ao lead e vendedor notificado
+- [ ] Audio do associado transcrito via Whisper e processado pela IA
+- [ ] Imagem do associado baixada, armazenada e registrada no historico
+- [ ] Documento (PDF) do associado baixado e armazenado
+- [ ] Localizacao convertida em endereco via reverse_geocode
+- [ ] Historico completo mantido em `whatsapp_mensagens` com midia
+- [ ] Historico do lead atualizado em `leads_historico`
+- [ ] Numeros desconhecidos respondem orientando contato
 
 ---
 
-## Nota sobre Configuracoes Adicionais
+## Testes Recomendados
 
-### webhook_by_events
+### Teste 1: Mensagem de Lead
 
-Atualmente `webhook_by_events: false`, o que significa que todos os eventos vao para a mesma URL. Isso e o recomendado para simplificar.
+1. Cadastrar lead com telefone de teste
+2. Enviar mensagem de WhatsApp para numero da associacao
+3. Verificar:
+   - Lead nao recebe "nao cadastrado como associado"
+   - Lead recebe resposta de confirmacao
+   - `leads_historico` registra a mensagem
+   - Vendedor recebe notificacao
 
-Se preferir separar endpoints por tipo de evento, seria necessario:
-1. Criar edge functions separadas (ex: `whatsapp-webhook-messages`, `whatsapp-webhook-status`)
-2. Configurar `webhook_by_events: true`
-3. A Evolution API enviara para endpoints especificos por evento
+### Teste 2: Audio de Associado
 
-### Eventos Adicionais Opcionais
+1. Enviar audio para numero da associacao
+2. Verificar:
+   - Audio e baixado da Evolution API
+   - Audio e transcrito pelo Whisper
+   - Texto transcrito e processado pela IA
+   - Resposta enviada normalmente
 
-A Evolution API suporta outros eventos que podem ser uteis:
+### Teste 3: Foto de Documento
 
-| Evento | Descricao | Recomendacao |
-|--------|-----------|--------------|
-| `QRCODE_UPDATED` | Novo QR code gerado | Util para exibir QR code em tempo real |
-| `CALL` | Chamadas recebidas | Opcional |
-| `PRESENCE_UPDATE` | Online/Offline/Digitando | Util para UX avancada |
-| `CHATS_UPDATE` | Atualizacoes de conversas | Opcional |
-| `GROUPS_UPSERT` | Atualizacoes de grupos | Ignorar se nao usa grupos |
+1. Enviar foto com caption "Foto do RG"
+2. Verificar:
+   - Imagem baixada e armazenada no bucket
+   - `whatsapp_mensagens` registra com `media_url`
+   - IA recebe contexto da imagem
 
+### Teste 4: Localizacao
+
+1. Compartilhar localizacao via WhatsApp
+2. Verificar:
+   - Coordenadas extraidas corretamente
+   - Endereco obtido via reverse_geocode
+   - IA usa endereco no contexto
 
