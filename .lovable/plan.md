@@ -1,426 +1,389 @@
 
 
-# Revisao Completa - Fluxo de Controle de Adimplencia na Rede Veiculos
+# Revisao Completa - Fluxo de Ativacao e Inativacao de Veiculo na Rede Veiculos
 
 ## Resumo Executivo
 
 | Item | Status | Detalhes |
 |------|--------|----------|
-| Endpoint POST /informarVeiculoAdimplente | **NAO EXISTE** | Nao ha edge function para notificar adimplencia |
-| Endpoint POST /informarVeiculoInadimplente | **NAO EXISTE** | Nao ha edge function para notificar inadimplencia |
-| Webhook ASAAS notifica Rede Veiculos | **NAO** | Apenas atualiza banco local e reativa associado |
-| Baixa manual notifica Rede Veiculos | **NAO** | Apenas atualiza banco local |
-| Vencimento apos carencia bloqueia | **PARCIAL** | Suspende associado localmente, nao notifica plataforma |
-| Bloqueio por inadimplencia definido pela diretoria | **NAO** | Nao ha integracao com plataforma |
-| Cobranca judicial notifica Rede Veiculos | **NAO** | Funcionalidade nao existe |
-| Acesso ao rastreamento bloqueado quando inadimplente | **NAO** | AppRastreamento nao verifica status |
-| Historico de mudancas de status gravado | **PARCIAL** | Apenas via logs locais |
+| Endpoint POST /ativarVeiculo | **NAO IMPLEMENTADO** | Nenhuma edge function para ativar veiculo na plataforma |
+| Endpoint POST /inativarVeiculo | **NAO IMPLEMENTADO** | Nenhuma edge function para inativar veiculo na plataforma |
+| Ativacao quando instalacao concluida | **PARCIAL** | Apenas vincula via `/vincularClienteVeiculo`, nao ativa explicitamente |
+| Ativacao quando associado reativa apos suspensao | **PARCIAL** | Usa `/vincularClienteVeiculo` como fallback, nao `/ativarVeiculo` |
+| Ativacao quando liberado apos sinistro | **NAO IMPLEMENTADO** | Funcionalidade nao existe |
+| Inativacao quando associado solicita cancelamento | **NAO** | Usa apenas `/desvincularClienteVeiculo` |
+| Inativacao quando ha perda total (sinistro) | **NAO IMPLEMENTADO** | Nao ha automacao para isso |
+| Inativacao quando veiculo vendido | **NAO** | Usa apenas `/desvincularClienteVeiculo` |
+| Inativacao por suspensao temporaria | **NAO IMPLEMENTADO** | Usa `informarInadimplente`, nao `inativarVeiculo` |
+| Veiculo inativo nao aparece no mapa do associado | **SIM** | Filtro `ativo=true` em `useMyVehicles` |
+| Veiculo inativo nao gera alertas | **INDETERMINADO** | Depende da plataforma Rede Veiculos |
+| Reativacao restaura funcionalidades | **PARCIAL** | Revincular funciona, mas nao ha `/ativarVeiculo` |
+| Historico de ativacoes/inativacoes gravado | **PARCIAL** | Apenas via `associados_historico` |
 
 ---
 
 ## Analise Detalhada
 
-### 1. Estado Atual - Nenhuma Integracao de Adimplencia
+### 1. Estado Atual - Endpoints Rede Veiculos
 
-Os endpoints de controle de adimplencia da Rede Veiculos **NAO ESTAO IMPLEMENTADOS**:
+| Endpoint | Edge Function | Status | Uso |
+|----------|---------------|--------|-----|
+| POST /vincularClienteVeiculo | `rede-veiculos-vincular-cliente` | Implementado | Apos instalacao |
+| POST /desvincularClienteVeiculo | `rede-veiculos-desvincular-cliente` | Implementado | Venda/cancelamento |
+| POST /atualizarDadosCliente | `rede-veiculos-atualizar-cliente` | Implementado | Dados do associado |
+| POST /atualizarDadosVeiculo | `rede-veiculos-atualizar-veiculo` | Implementado | Dados do veiculo |
+| POST /informarVeiculoAdimplente | `rede-veiculos-informar-adimplente` | Implementado | Pagamento OK |
+| POST /informarVeiculoInadimplente | `rede-veiculos-informar-inadimplente` | Implementado | Inadimplencia |
+| **POST /ativarVeiculo** | **NAO EXISTE** | **Gap** | - |
+| **POST /inativarVeiculo** | **NAO EXISTE** | **Gap** | - |
 
-| Endpoint | Edge Function | Status |
-|----------|---------------|--------|
-| POST /vincularClienteVeiculo | `rede-veiculos-vincular-cliente` | Implementado |
-| POST /desvincularClienteVeiculo | `rede-veiculos-desvincular-cliente` | Implementado |
-| POST /atualizarDadosCliente | `rede-veiculos-atualizar-cliente` | Implementado |
-| POST /atualizarDadosVeiculo | `rede-veiculos-atualizar-veiculo` | Implementado |
-| **POST /informarVeiculoAdimplente** | **NAO EXISTE** | **Gap critico** |
-| **POST /informarVeiculoInadimplente** | **NAO EXISTE** | **Gap critico** |
+### 2. Comparacao com Softruck
 
-### 2. Cenarios de Adimplencia (Deveria Chamar /informarVeiculoAdimplente)
-
-#### 2.1 Quando Pagamento e Confirmado via Webhook ASAAS
-
-**Arquivo:** `supabase/functions/asaas-webhook/index.ts` (linhas 563-609)
+A plataforma Softruck possui operacoes de ativacao/desativacao na edge function `softruck-api`:
 
 ```typescript
-// CORREÇÃO 7.5.6: Verificar se associado suspenso deve ser reativado
-const { data: associadoStatus } = await supabase
-  .from('associados')
-  .select('id, status')
-  .eq('id', cobranca.associado_id)
-  .single();
+// supabase/functions/softruck-api/index.ts (linhas 403-414)
+case 'ativar-veiculo': {
+  const { veiculoId } = data as { veiculoId: string };
+  if (!veiculoId) throw new Error('veiculoId é obrigatório');
+  result = await softruckRequest('PATCH', `/v2/vehicles/${veiculoId}/status/activation`, token);
+  break;
+}
 
-if (associadoStatus?.status === 'suspenso') {
-  // Verificar se ainda há cobranças pendentes/vencidas
-  const { count: cobrancasPendentes } = await supabase
-    .from('asaas_cobrancas')
-    .select('*', { count: 'exact', head: true })
-    .eq('associado_id', cobranca.associado_id)
-    .in('status', ['PENDING', 'OVERDUE']);
-
-  if (cobrancasPendentes === 0) {
-    // Reativar associado APENAS LOCALMENTE
-    await supabase
-      .from('associados')
-      .update({ 
-        status: 'ativo',
-        bloqueado: false,
-        motivo_bloqueio: null,
-        data_bloqueio: null,
-      })
-      .eq('id', cobranca.associado_id);
-    
-    // NAO NOTIFICA REDE VEICULOS SOBRE ADIMPLENCIA
-  }
+case 'desativar-veiculo': {
+  const { veiculoId } = data as { veiculoId: string };
+  if (!veiculoId) throw new Error('veiculoId é obrigatório');
+  result = await softruckRequest('PATCH', `/v2/vehicles/${veiculoId}/status/deactivation`, token);
+  break;
 }
 ```
 
-**Gap:** Quando o associado volta a ficar adimplente, a Rede Veiculos **nao e notificada**.
+**Rede Veiculos: Nenhum equivalente implementado.**
 
-#### 2.2 Quando Ha Baixa Manual de Pagamento
+### 3. Cenarios de Ativacao (Deveria Chamar POST /ativarVeiculo)
 
-**Arquivo:** `src/components/financeiro/RegistrarPagamentoModal.tsx` (linhas 90-160)
+#### 3.1 Quando a Instalacao e Concluida pelo Instalador
 
-```typescript
-const registrarMutation = useMutation({
-  mutationFn: async () => {
-    // 1. Atualizar cobrança
-    await supabase.from('asaas_cobrancas').update({ status: 'RECEIVED', ... });
-    
-    // 2. Registrar movimentação financeira
-    await supabase.from('movimentacoes_financeiras').insert({ ... });
+**Fluxo atual:**
+1. Instalador conclui instalacao via `useAprovarVeiculo` (src/hooks/useInstaladorInstalacoes.ts:205-277)
+2. Analista ativa manualmente na plataforma via `softruck-ativar-dispositivo` (Softruck)
+3. Para Rede Veiculos: Usa `rede-veiculos-vincular-cliente` (vincula, nao ativa)
 
-    // 3. Criar lançamento contábil
-    await criarLancamentoAutomatico({ ... });
-    
-    // NAO VERIFICA SE ASSOCIADO DEVE SER REATIVADO
-    // NAO NOTIFICA REDE VEICULOS
-  },
-});
-```
+**Gap:** Nao existe chamada especifica para `/ativarVeiculo` apos vinculacao.
 
-**Gap:** Baixa manual nao verifica debitos pendentes nem notifica a plataforma.
+#### 3.2 Quando Associado Reativa Apos Periodo Suspenso
 
-#### 2.3 Quando Associado Quita Debitos Pendentes
-
-**Arquivo:** `src/hooks/useAssociados.ts` (linhas 450-500)
+**Arquivo:** `src/hooks/useAssociados.ts` (linhas 479-546)
 
 ```typescript
 const reativarAssociado = useMutation({
   mutationFn: async (id: string) => {
     // 1. Atualizar status local
-    await supabase.from('associados').update({
-      status: 'ativo',
-      bloqueado: false,
-    }).eq('id', id);
-
-    // 2. TENTA REVINCULAR na Rede Veículos
-    if (rastreador?.plataforma === 'rede_veiculos' && rastreador.imei) {
-      await supabase.functions.invoke('rede-veiculos-vincular-cliente', {
-        body: { imei, veiculoId, associadoId: id },
-      });
+    await supabase.from('associados').update({ status: 'ativo', ... });
+    
+    // 2. Notificar Rede Veículos sobre adimplência
+    await supabase.functions.invoke('rede-veiculos-informar-adimplente', { ... });
+    
+    // 3. Revincular veículos (usa vincularClienteVeiculo)
+    for (const veiculo of veiculos) {
+      if (rastreador?.plataforma === 'rede_veiculos') {
+        await supabase.functions.invoke('rede-veiculos-vincular-cliente', { ... });
+      }
     }
-    // MAS REVINCULAR != INFORMAR ADIMPLENCIA
-    // Se ja estava vinculado, nao precisa revincular
-    // Precisa apenas informar que voltou a ser adimplente
   },
 });
 ```
 
-**Gap:** Usa vinculacao em vez de endpoint especifico de adimplencia.
+**Gap:** Usa `informarAdimplente` + `vincularClienteVeiculo`, mas nao `/ativarVeiculo` especifico.
 
-### 3. Cenarios de Inadimplencia (Deveria Chamar /informarVeiculoInadimplente)
+#### 3.3 Quando Ha Liberacao Apos Sinistro Resolvido
 
-#### 3.1 Quando Boleto Vence Apos Periodo de Carencia
-
-**Arquivo:** `supabase/functions/asaas-webhook/index.ts` (linhas 613-698)
-
-```typescript
-case 'PAYMENT_OVERDUE':
-  // Disparar notificação de cobrança vencida
-  await supabase.functions.invoke('disparar-notificacao', { ... });
-
-  // Se for cobrança de adesão vencida, cancelar cotação
-  if (cobranca.tipo === 'adesao' && cobranca.contrato_id) {
-    await supabase.from('cotacoes').update({
-      status: 'expirada',
-      motivo_cancelamento: 'Pagamento de adesão não realizado',
-    }).eq('id', cotacao_id);
-  }
-  
-  // NAO SUSPENDE ASSOCIADO AUTOMATICAMENTE
-  // NAO NOTIFICA REDE VEICULOS SOBRE INADIMPLENCIA
-  break;
-```
-
-**Gap:** Boleto vencido apenas dispara notificacao, nao suspende associado nem notifica plataforma.
-
-**Nao existe:** Logica de "periodo de carencia" para suspensao automatica.
-
-#### 3.2 Quando Ha Bloqueio por Inadimplencia pela Diretoria
-
-**Arquivo:** `src/hooks/useAssociados.ts` (linhas 434-448)
-
-```typescript
-const suspenderAssociado = useMutation({
-  mutationFn: async ({ id, motivo }: { id: string; motivo?: string }) => {
-    await supabase.from('associados').update({
-      status: 'suspenso',
-      motivo_bloqueio: motivo || 'Suspenso pelo sistema',
-    }).eq('id', id);
-    // NAO NOTIFICA REDE VEICULOS
-    // NAO DESVINCULAR DA PLATAFORMA
-  },
-});
-```
-
-**Gap:** Suspensao manual nao notifica a Rede Veiculos sobre inadimplencia.
-
-#### 3.3 Quando Associado Entra em Cobranca Judicial
-
-**Status:** Funcionalidade **NAO EXISTE** no sistema.
+**Estado atual:** Funcionalidade **NAO EXISTE** no sistema.
 
 Nao ha processo para:
-- Marcar associado como "em cobranca judicial"
-- Bloquear rastreamento automaticamente
-- Notificar plataforma sobre inadimplencia judicial
+- Reativar veiculo apos sinistro parcial resolvido
+- Liberar rastreamento apos encerramento de sinistro
+- Chamar `/ativarVeiculo` na plataforma
 
-### 4. Controle de Acesso ao Rastreamento
+### 4. Cenarios de Inativacao (Deveria Chamar POST /inativarVeiculo)
 
-**Arquivo:** `src/pages/app/AppRastreamento.tsx`
+#### 4.1 Quando Associado Solicita Cancelamento
 
-O componente **NAO VERIFICA** o status do associado:
+**Arquivo:** `src/hooks/useAssociados.ts` (linhas 590-656)
 
 ```typescript
-export default function AppRastreamento() {
-  const { data: vehicles } = useMyVehicles();
-  const { data: tracker } = useMyVehicleWithTracker();
-  
-  // NAO VERIFICA:
-  // - if (associado.status === 'suspenso') return <AcessoBloqueado />
-  // - if (associado.status === 'inadimplente') return <AcessoBloqueado />
-  // - if (associado.bloqueado) return <AcessoBloqueado />
-  
-  // Exibe mapa normalmente mesmo se associado suspenso
+const cancelarAssociado = useMutation({
+  mutationFn: async ({ id, motivo }) => {
+    // 1. Buscar veículos do associado
+    const { data: veiculos } = await supabase.from('veiculos').select('id, placa');
+    
+    // 2. Para cada rastreador Rede Veículos
+    if (rastreador.plataforma === 'rede_veiculos') {
+      await supabase.functions.invoke('rede-veiculos-desvincular-cliente', { ... });
+      // USA DESVINCULAR, NÃO INATIVAR
+    }
+  },
+});
+```
+
+**Gap:** Usa `desvincularClienteVeiculo` (remove completamente) em vez de `inativarVeiculo` (desativa mantendo cadastro).
+
+#### 4.2 Quando Ha Perda Total do Veiculo (Sinistro)
+
+**Arquivo:** `src/components/eventos/EmitirParecerModal.tsx` (linhas 113-130)
+
+```typescript
+// Calcular tipo_dano automaticamente
+let tipoDano: 'parcial' | 'perda_total' | null = null;
+if (resultado === 'aprovado' && valorIndenizacao && sinistro.valor_fipe) {
+  const limite75 = sinistro.valor_fipe * 0.75;
+  tipoDano = valorIndenizacao >= limite75 ? 'perda_total' : 'parcial';
+}
+
+await supabase.from('sinistros').update({
+  tipo_dano: tipoDano,
+  valor_indenizacao: valorIndenizacao,
+  // NAO INATIVA VEICULO NA PLATAFORMA
+});
+```
+
+**Gap:** Quando sinistro e perda total, o veiculo deveria ser automaticamente inativado na plataforma.
+
+#### 4.3 Quando o Veiculo e Vendido
+
+**Arquivo:** `src/hooks/useVenderVeiculo.ts` (linhas 59-123)
+
+```typescript
+if (rastreador.plataforma === 'rede_veiculos') {
+  await supabase.functions.invoke('rede-veiculos-desvincular-cliente', {
+    body: {
+      rastreadorId: rastreador.id,
+      motivo: 'venda_veiculo',
+      atualizarBancoLocal: true,
+    },
+  });
 }
 ```
 
-**Gap:** Associado inadimplente/suspenso continua acessando o rastreamento normalmente.
+**Comportamento:** Usa desvinculacao completa, nao inativacao. Pode ser aceitavel dependendo do caso de uso.
+
+#### 4.4 Suspensao Temporaria por Solicitacao do Associado
+
+**Estado atual:** Funcionalidade **NAO EXISTE** no sistema.
+
+Hoje, suspensao apenas:
+- Atualiza status local para `suspenso`
+- Chama `rede-veiculos-informar-inadimplente`
+- **NAO** chama `/inativarVeiculo`
 
 ---
 
 ## Fluxo Esperado vs Fluxo Atual
 
-### Ciclo Adimplente - Inadimplente - Adimplente
-
 ```text
-FLUXO ESPERADO:
-                                                          
-[Associado Ativo] ---> [Boleto Vence] ---> [Carência 7d]
-       |                                          |
-       v                                          v
-[Rastreamento OK]                    [Sem pagamento?]
-       ^                                    |
-       |                             SIM    v    NAO
-       |                        [SUSPENDER]     [OK]
-       |                              |
-       |                              v
-       |                    [POST /informarVeiculoInadimplente]
-       |                              |
-       |                              v
-       |                    [Bloquear AppRastreamento]
-       |                              |
-       |                              v
-       |                    [Associado paga]
-       |                              |
-       |                              v
-       |                    [POST /informarVeiculoAdimplente]
-       |                              |
-       +------------------------------+
+FLUXO ESPERADO DE ATIVACAO:
+
+[Instalacao Concluida] --> [vincularClienteVeiculo]
+         |
+         v
+[Vincular OK] --> [POST /ativarVeiculo]
+         |
+         v
+[Veiculo ativo na plataforma]
+         |
+         v
+[Aparece no mapa do associado]
+
 
 FLUXO ATUAL:
-                                                          
-[Associado Ativo] ---> [Boleto Vence] ---> [Notificação]
-       |                                          |
-       v                                          v
-[Rastreamento OK]                        [Só notifica]
-       |                                          
-       | (Associado continua acessando)          
-       |                                          
-[Sem suspensão automática, sem bloqueio na Rede Veículos]
+
+[Instalacao Concluida] --> [vincularClienteVeiculo]
+         |
+         v
+[Vincular OK] --> [FIM - sem ativacao explicita]
 ```
+
+```text
+FLUXO ESPERADO DE INATIVACAO:
+
+[Perda Total Aprovada] --> [POST /inativarVeiculo]
+         |
+         v
+[Veiculo inativo na plataforma]
+         |
+         v
+[Some do mapa do associado]
+
+
+FLUXO ATUAL:
+
+[Perda Total Aprovada] --> [Atualiza banco local apenas]
+         |
+         v
+[Veiculo ainda ativo na plataforma!]
+```
+
+---
+
+## Impactos dos Gaps
+
+### Impacto 1: Veiculos Ficam em Estado Indefinido
+
+Apos vinculacao, o veiculo pode nao estar efetivamente "ativo" na plataforma Rede Veiculos ate que haja uma chamada explicita de ativacao.
+
+### Impacto 2: Perda Total Nao Bloqueia Acesso
+
+Quando um sinistro de perda total e aprovado, o veiculo continua ativo na plataforma, permitindo rastreamento mesmo quando deveria estar bloqueado.
+
+### Impacto 3: Suspensao Temporaria Nao Funciona Adequadamente
+
+A opcao de "pausar" o servico temporariamente (ferias, viagem longa, etc) nao existe. Apenas suspensao por inadimplencia.
+
+### Impacto 4: Historico Incompleto
+
+Nao ha registro especifico de ativacoes/inativacoes de veiculos, apenas historico de associado.
 
 ---
 
 ## Plano de Implementacao
 
-### Fase 1: Criar Edge Functions de Adimplencia
+### Fase 1: Criar Edge Functions de Ativacao/Inativacao
 
-**Novo arquivo:** `supabase/functions/rede-veiculos-informar-adimplente/index.ts`
+**Novo arquivo:** `supabase/functions/rede-veiculos-ativar-veiculo/index.ts`
 
 ```typescript
 interface RequestBody {
-  associadoId: string;
-  veiculoId?: string; // Se informado, apenas para este veiculo
+  veiculoId: string;
   motivo?: string;
 }
 
 // Fluxo:
-// 1. Buscar associado e veiculos com rede_veiculos_veiculo_id
-// 2. Para cada veiculo vinculado:
-//    - Chamar POST /informarVeiculoAdimplente
-//    - Registrar log
-// 3. Atualizar status local do associado se necessario
+// 1. Buscar veiculo com rede_veiculos_veiculo_id
+// 2. Validar que ha vinculo ativo na plataforma
+// 3. Chamar POST /ativarVeiculo com { idVeiculo: rede_veiculos_veiculo_id }
+// 4. Atualizar banco local (veiculo.ativo = true)
+// 5. Registrar log e historico
 ```
 
-**Novo arquivo:** `supabase/functions/rede-veiculos-informar-inadimplente/index.ts`
+**Novo arquivo:** `supabase/functions/rede-veiculos-inativar-veiculo/index.ts`
 
 ```typescript
 interface RequestBody {
-  associadoId: string;
-  veiculoId?: string;
-  motivo: string; // Obrigatorio: 'vencimento', 'bloqueio_diretoria', 'cobranca_judicial'
-  diasAtraso?: number;
+  veiculoId: string;
+  motivo: 'perda_total' | 'cancelamento' | 'suspensao_temporaria' | 'venda' | 'outro';
+  observacoes?: string;
 }
 
 // Fluxo:
-// 1. Buscar associado e veiculos com rede_veiculos_veiculo_id
-// 2. Para cada veiculo vinculado:
-//    - Chamar POST /informarVeiculoInadimplente
-//    - Registrar log
-// 3. Atualizar status local do associado
-// 4. Registrar historico de mudanca
+// 1. Buscar veiculo com rede_veiculos_veiculo_id
+// 2. Validar que ha vinculo ativo na plataforma
+// 3. Chamar POST /inativarVeiculo com { idVeiculo: rede_veiculos_veiculo_id, motivo }
+// 4. Atualizar banco local (veiculo.ativo = false)
+// 5. Registrar log e historico
 ```
 
-### Fase 2: Integrar no Webhook ASAAS
+### Fase 2: Integrar Apos Vinculacao
 
-**Modificar:** `supabase/functions/asaas-webhook/index.ts`
+**Modificar:** `supabase/functions/rede-veiculos-vincular-cliente/index.ts`
 
-Adicionar no evento PAYMENT_RECEIVED/CONFIRMED:
+Apos vinculacao bem-sucedida, chamar ativacao:
+
 ```typescript
-// Apos reativar associado localmente
-if (associadoStatus?.status === 'suspenso' && cobrancasPendentes === 0) {
-  // Reativar localmente (ja existe)
-  await supabase.from('associados').update({ status: 'ativo', ... });
+// Apos codigo 1 da API (sucesso)
+if (apiResult.codigo === 1) {
+  // ... codigo existente ...
   
-  // NOVO: Notificar Rede Veiculos
-  await supabase.functions.invoke('rede-veiculos-informar-adimplente', {
-    body: { associadoId: cobranca.associado_id, motivo: 'pagamento_confirmado' },
+  // NOVO: Ativar veiculo na plataforma
+  try {
+    const ativarPayload = { idVeiculo: apiResult.idVeiculo };
+    const ativarResponse = await fetch(`${baseUrl}/ativarVeiculo/`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, ... },
+      body: new URLSearchParams({ json: JSON.stringify(ativarPayload) }),
+    });
+    console.log('[RedeVeiculos Vincular] Veiculo ativado na plataforma');
+  } catch (ativarError) {
+    console.warn('[RedeVeiculos Vincular] Erro ao ativar:', ativarError);
+  }
+}
+```
+
+### Fase 3: Inativar em Perda Total
+
+**Modificar:** `src/components/eventos/EmitirParecerModal.tsx`
+
+Quando tipo_dano = 'perda_total', chamar inativacao:
+
+```typescript
+// Apos update do sinistro
+if (tipoDano === 'perda_total' && sinistro.veiculo_id) {
+  // Inativar veiculo na plataforma
+  await supabase.functions.invoke('rede-veiculos-inativar-veiculo', {
+    body: {
+      veiculoId: sinistro.veiculo_id,
+      motivo: 'perda_total',
+      observacoes: `Sinistro ${sinistro.id} aprovado como perda total`,
+    },
+  });
+  
+  // Atualizar veiculo local
+  await supabase.from('veiculos').update({
+    ativo: false,
+    status: 'baixado',
+    updated_at: new Date().toISOString(),
+  }).eq('id', sinistro.veiculo_id);
+}
+```
+
+### Fase 4: Ativar Apos Sinistro Resolvido
+
+**Criar hook:** `src/hooks/useReativarVeiculoPossinistro.ts`
+
+```typescript
+export function useReativarVeiculoPosSinistro() {
+  return useMutation({
+    mutationFn: async ({ veiculoId, sinistroId }) => {
+      // 1. Verificar se sinistro foi dano parcial (nao perda total)
+      // 2. Atualizar veiculo local (ativo = true)
+      // 3. Chamar rede-veiculos-ativar-veiculo
+      // 4. Registrar historico
+    },
   });
 }
 ```
 
-### Fase 3: Criar Cron de Suspensao Automatica
+### Fase 5: Adicionar Opcao de Suspensao Temporaria
 
-**Novo arquivo:** `supabase/functions/cron-suspender-inadimplentes/index.ts`
+**Criar modal:** `src/components/veiculos/SuspenderVeiculoDialog.tsx`
+
+Permitir suspensao temporaria com motivo:
+- Ferias / viagem longa
+- Manutencao prolongada
+- Outro motivo
+
+Chamara `/inativarVeiculo` com motivo apropriado.
+
+### Fase 6: Criar Hook de Historico de Ativacoes
+
+**Criar:** `src/hooks/useVeiculoHistoricoAtivacoes.ts`
+
+Buscar logs de ativacao/inativacao da tabela `rastreadores_api_logs`:
 
 ```typescript
-// Executar diariamente
-// 1. Buscar associados ativos com cobrancas vencidas > X dias (carencia)
-// 2. Para cada:
-//    - Atualizar status para 'suspenso'
-//    - Chamar rede-veiculos-informar-inadimplente
-//    - Enviar notificacao ao associado
-//    - Registrar log
-```
-
-### Fase 4: Integrar na Baixa Manual
-
-**Modificar:** `src/components/financeiro/RegistrarPagamentoModal.tsx`
-
-```typescript
-// Apos registrar pagamento
-if (cobranca?.associado?.id) {
-  // Verificar se associado estava suspenso e nao tem mais pendencias
-  const { data: associado } = await supabase
-    .from('associados')
-    .select('status')
-    .eq('id', cobranca.associado.id)
-    .single();
-  
-  if (associado?.status === 'suspenso') {
-    const { count } = await supabase
-      .from('asaas_cobrancas')
-      .select('*', { count: 'exact', head: true })
-      .eq('associado_id', cobranca.associado.id)
-      .in('status', ['PENDING', 'OVERDUE']);
-    
-    if (count === 0) {
-      // Reativar e notificar Rede Veiculos
-      await supabase.functions.invoke('rede-veiculos-informar-adimplente', {
-        body: { associadoId: cobranca.associado.id },
-      });
-    }
-  }
+export function useVeiculoHistoricoAtivacoes(veiculoId: string) {
+  return useQuery({
+    queryFn: async () => {
+      const { data: logs } = await supabase
+        .from('rastreadores_api_logs')
+        .select('*')
+        .eq('plataforma', 'rede_veiculos')
+        .in('operacao', ['ativarVeiculo', 'inativarVeiculo'])
+        .order('created_at', { ascending: false });
+      
+      return logs;
+    },
+  });
 }
-```
-
-### Fase 5: Bloquear Acesso ao Rastreamento
-
-**Modificar:** `src/pages/app/AppRastreamento.tsx`
-
-```typescript
-export default function AppRastreamento() {
-  const navigate = useNavigate();
-  const { data: myData, isLoading: associadoLoading } = useMyData();
-  const { data: vehicles } = useMyVehicles();
-  
-  // Verificar status do associado
-  const associadoBloqueado = myData?.status === 'suspenso' || 
-                              myData?.status === 'inadimplente' || 
-                              myData?.bloqueado === true;
-  
-  if (associadoBloqueado) {
-    return (
-      <div className="flex h-screen flex-col items-center justify-center p-4">
-        <ShieldAlert className="h-16 w-16 text-destructive" />
-        <h2 className="mt-4 text-xl font-bold">Acesso Bloqueado</h2>
-        <p className="mt-2 text-center text-muted-foreground">
-          Seu acesso ao rastreamento está temporariamente suspenso 
-          devido a pendências financeiras.
-        </p>
-        <Button 
-          className="mt-6" 
-          onClick={() => navigate('/app/boletos')}
-        >
-          Ver Boletos Pendentes
-        </Button>
-      </div>
-    );
-  }
-  
-  // Resto do componente...
-}
-```
-
-### Fase 6: Integrar Suspensao Manual
-
-**Modificar:** `src/hooks/useAssociados.ts`
-
-```typescript
-const suspenderAssociado = useMutation({
-  mutationFn: async ({ id, motivo }: { id: string; motivo?: string }) => {
-    // 1. Atualizar status local
-    await supabase.from('associados').update({
-      status: 'suspenso',
-      motivo_bloqueio: motivo || 'Suspenso pelo sistema',
-    }).eq('id', id);
-    
-    // 2. NOVO: Notificar Rede Veiculos
-    await supabase.functions.invoke('rede-veiculos-informar-inadimplente', {
-      body: { 
-        associadoId: id, 
-        motivo: motivo?.includes('judicial') ? 'cobranca_judicial' : 'bloqueio_diretoria',
-      },
-    });
-    
-    // 3. Registrar historico
-    await supabase.from('associados_historico').insert({
-      associado_id: id,
-      tipo: 'status_alterado',
-      descricao: `Associado suspenso. Motivo: ${motivo}`,
-      dados_anteriores: { status: 'ativo' },
-      dados_novos: { status: 'suspenso', motivo_bloqueio: motivo },
-    });
-  },
-});
 ```
 
 ---
@@ -429,117 +392,157 @@ const suspenderAssociado = useMutation({
 
 | Arquivo | Descricao |
 |---------|-----------|
-| `supabase/functions/rede-veiculos-informar-adimplente/index.ts` | Notifica adimplencia |
-| `supabase/functions/rede-veiculos-informar-inadimplente/index.ts` | Notifica inadimplencia |
-| `supabase/functions/cron-suspender-inadimplentes/index.ts` | Suspensao automatica |
+| `supabase/functions/rede-veiculos-ativar-veiculo/index.ts` | Ativar veiculo na plataforma |
+| `supabase/functions/rede-veiculos-inativar-veiculo/index.ts` | Inativar veiculo na plataforma |
+| `src/hooks/useReativarVeiculoPosSinistro.ts` | Reativar apos sinistro parcial |
+| `src/components/veiculos/SuspenderVeiculoDialog.tsx` | Modal de suspensao temporaria |
+| `src/hooks/useVeiculoHistoricoAtivacoes.ts` | Historico de ativacoes |
 
 ## Arquivos a Modificar
 
 | Arquivo | Alteracoes |
 |---------|------------|
-| `supabase/functions/asaas-webhook/index.ts` | Chamar informar-adimplente apos reativacao |
-| `src/components/financeiro/RegistrarPagamentoModal.tsx` | Verificar e reativar apos baixa manual |
-| `src/pages/app/AppRastreamento.tsx` | Bloquear acesso se suspenso/inadimplente |
-| `src/hooks/useAssociados.ts` | Integrar notificacao na suspensao manual |
+| `supabase/functions/rede-veiculos-vincular-cliente/index.ts` | Adicionar ativacao apos vinculacao |
+| `src/components/eventos/EmitirParecerModal.tsx` | Inativar em perda total |
+| `src/hooks/useVenderVeiculo.ts` | Chamar inativar antes de desvincular |
+| `src/hooks/useAssociados.ts` | Usar ativar/inativar em vez de vincular/desvincular |
 | `supabase/config.toml` | Registrar novas edge functions |
 
 ---
 
 ## Payload Esperado para Endpoints
 
-### POST /informarVeiculoAdimplente
+### POST /ativarVeiculo
 
 ```json
 {
-  "cpfCnpj": "12345678901",
-  "placa": "ABC1234",
-  "dataRegularizacao": "2024-01-15"
+  "idVeiculo": 12345
 }
 ```
 
-### POST /informarVeiculoInadimplente
+**Resposta esperada:**
+```json
+{
+  "codigo": 1,
+  "msg": "Veiculo ativado com sucesso"
+}
+```
+
+### POST /inativarVeiculo
 
 ```json
 {
-  "cpfCnpj": "12345678901",
-  "placa": "ABC1234",
-  "motivo": "vencimento_cobranca",
-  "diasAtraso": 15,
-  "valorPendente": 450.00
+  "idVeiculo": 12345,
+  "motivo": "perda_total",
+  "observacoes": "Sinistro aprovado em 15/01/2025"
+}
+```
+
+**Resposta esperada:**
+```json
+{
+  "codigo": 1,
+  "msg": "Veiculo inativado com sucesso"
 }
 ```
 
 ---
 
-## Configuracao de Carencia
+## Controle de Acesso ao Rastreamento
 
-Adicionar em `configuracoes`:
+### Estado Atual (CORRETO)
 
-| Chave | Valor | Descricao |
-|-------|-------|-----------|
-| `inadimplencia_dias_carencia` | `7` | Dias apos vencimento para suspender |
-| `inadimplencia_dias_bloqueio_total` | `30` | Dias para bloqueio definitivo |
-| `inadimplencia_notificar_rede_veiculos` | `true` | Se deve notificar plataforma |
+**Arquivo:** `src/hooks/useMyData.ts` (linhas 118-137)
+
+```typescript
+export function useMyVehicles() {
+  const { data: associado } = useMyAssociado();
+
+  return useQuery({
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('veiculos')
+        .select('*')
+        .eq('associado_id', associado.id)
+        .eq('ativo', true)  // FILTRO CORRETO - so veiculos ativos
+        .order('created_at', { ascending: false });
+
+      return data as Veiculo[];
+    },
+  });
+}
+```
+
+**Resultado:** Veiculos inativos (ativo=false) nao aparecem no App do Associado. Este comportamento esta correto.
+
+### Verificacao Adicional Necessaria
+
+Confirmar que quando `veiculo.ativo = false`:
+1. Nao aparece na lista de veiculos do associado no App
+2. Nao permite solicitar assistencia 24h
+3. Nao permite abrir sinistro (apenas se ja houver sinistro em andamento)
+4. Historico ainda acessivel
 
 ---
 
 ## Checklist de Verificacao
 
-- [ ] Edge function `rede-veiculos-informar-adimplente` criada
-- [ ] Edge function `rede-veiculos-informar-inadimplente` criada
-- [ ] Cron `cron-suspender-inadimplentes` criado e agendado
-- [ ] Webhook ASAAS notifica Rede Veiculos apos pagamento
-- [ ] Baixa manual notifica Rede Veiculos apos quitacao
-- [ ] Suspensao manual notifica Rede Veiculos
-- [ ] AppRastreamento bloqueado para inadimplentes
-- [ ] Historico de mudancas de status gravado
-- [ ] Status na Rede Veiculos reflete corretamente
+- [ ] Edge function `rede-veiculos-ativar-veiculo` criada
+- [ ] Edge function `rede-veiculos-inativar-veiculo` criada
+- [ ] Ativacao automatica apos vinculacao implementada
+- [ ] Inativacao em perda total implementada
+- [ ] Inativacao na venda do veiculo implementada
+- [ ] Opcao de suspensao temporaria criada
+- [ ] Reativacao apos sinistro parcial implementada
+- [ ] Historico de ativacoes/inativacoes disponivel
+- [ ] Veiculos inativos nao aparecem no mapa do associado (ja funciona)
+- [ ] Logs registrados em `rastreadores_api_logs`
 
 ---
 
-## Teste Recomendado: Ciclo Completo de Adimplencia
+## Teste Recomendado: Inativar Veiculo
 
 ### Pre-requisitos
 
-1. Associado ativo com veiculo e rastreador Rede Veiculos
-2. Cobranca pendente/vencida para este associado
-3. Acesso ao painel administrativo e app do associado
-4. Acesso ao painel Rede Veiculos para verificar
+1. Veiculo ativo com rastreador Rede Veiculos instalado
+2. `rede_veiculos_veiculo_id` preenchido no banco
+3. `REDE_VEICULOS_TOKEN` valido e configurado
+4. Acesso ao App do Associado para verificar
 
 ### Passos do Teste
 
-**Parte 1: Inadimplencia**
+**Parte 1: Inativar**
 
-1. **Acessar o sistema como administrador**
+1. **Acessar o sistema como diretor** (admin@teste.com)
 2. **Navegar para Cadastro > Associados > [Associado teste]**
-3. **Clicar em "Suspender"** e informar motivo "Inadimplencia"
-4. **Verificar no banco:**
-   - `associados.status = 'suspenso'`
-   - `rastreadores_api_logs` com registro de inadimplencia
-5. **Verificar no App do associado:**
-   - Ao acessar Rastreamento, deve ver tela de bloqueio
-6. **Verificar na Rede Veiculos:**
-   - Veiculo marcado como inadimplente
+3. **Na aba Veiculos, clicar em "Suspender Veiculo" (novo botao)**
+4. **Selecionar motivo: "Suspensao temporaria"**
+5. **Confirmar**
+6. **Verificar no banco:**
+   - `veiculos.ativo = false`
+   - `rastreadores_api_logs` com operacao `inativarVeiculo`
+7. **Verificar no App do Associado:**
+   - Veiculo **NAO** deve aparecer na lista
+   - Rastreamento deve mostrar "Nenhum veiculo ativo"
+8. **Verificar na plataforma Rede Veiculos:**
+   - Veiculo marcado como inativo
 
-**Parte 2: Adimplencia**
+**Parte 2: Reativar**
 
-7. **Registrar pagamento manual** para o associado
-8. **Ou aguardar pagamento via webhook ASAAS**
-9. **Verificar que associado foi reativado automaticamente**
-10. **Verificar no banco:**
-    - `associados.status = 'ativo'`
-    - `rastreadores_api_logs` com registro de adimplencia
-11. **Verificar no App do associado:**
-    - Rastreamento acessivel novamente
-12. **Verificar na Rede Veiculos:**
-    - Veiculo marcado como adimplente
+9. **Voltar ao painel administrativo**
+10. **Clicar em "Reativar Veiculo"**
+11. **Verificar no banco:**
+    - `veiculos.ativo = true`
+    - `rastreadores_api_logs` com operacao `ativarVeiculo`
+12. **Verificar no App do Associado:**
+    - Veiculo volta a aparecer na lista
+    - Rastreamento funciona normalmente
 
 ### Resultado Esperado
 
-- Status sincronizado entre SGA e Rede Veiculos em ambas direcoes
-- Acesso ao rastreamento bloqueado/liberado conforme status
-- Historico de todas as mudancas registrado
-- Notificacoes enviadas ao associado
+- Veiculo some/aparece do App conforme status de ativacao
+- Plataforma Rede Veiculos sincronizada
+- Historico de mudancas registrado
 
 ---
 
@@ -547,16 +550,26 @@ Adicionar em `configuracoes`:
 
 **IMPORTANTE:** Antes de implementar, confirmar com documentacao da API Rede Veiculos:
 
-1. **URL exata dos endpoints:**
-   - `POST /informarVeiculoAdimplente` ou similar
-   - `POST /informarVeiculoInadimplente` ou similar
-2. **Campos obrigatorios:** Quais dados devem ser enviados?
-3. **Identificador:** CPF/CNPJ + Placa, ou ID interno?
-4. **Efeito na plataforma:** O que acontece quando informamos inadimplencia?
-   - Bloqueia acesso do cliente ao portal?
-   - Desativa alertas?
-   - Bloqueia veiculo fisicamente?
-5. **Reversibilidade:** Informar adimplencia restaura tudo automaticamente?
+1. **Existencia dos endpoints:**
+   - `POST /ativarVeiculo` existe?
+   - `POST /inativarVeiculo` existe?
+   - Ou sao operacoes dentro de `/atualizarDadosVeiculo`?
 
-**Recomendacao:** Solicitar documentacao oficial da API Rede Veiculos antes de iniciar a implementacao.
+2. **Campos obrigatorios:**
+   - Qual identificador usar? `idVeiculo` (numerico) ou `placa/chassi`?
+   - `motivo` e obrigatorio para inativacao?
+
+3. **Efeito na plataforma:**
+   - O que acontece quando inativamos?
+     - Bloqueia acesso ao portal do cliente?
+     - Para de gerar alertas?
+     - Mantem historico de posicoes?
+   - E quando ativamos?
+     - Restaura tudo automaticamente?
+
+4. **Relacao com vincular/desvincular:**
+   - Ativar/inativar e diferente de vincular/desvincular?
+   - Ou ativar = vincular e inativar = desvincular?
+
+**Recomendacao:** Solicitar documentacao oficial da API Rede Veiculos para esclarecer estes pontos antes de implementar.
 
