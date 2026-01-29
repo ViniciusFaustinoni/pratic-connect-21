@@ -1,286 +1,348 @@
 
 
-# Revisão Completa - Fluxo de Acionamento de Roubo/Furto na Rede Veículos
+# Revisao Completa - Sistema de Autenticacao Softruck
 
 ## Resumo Executivo
 
-Após análise detalhada do sistema, identifiquei que **o fluxo de acionamento de roubo/furto na Rede Veículos NÃO está implementado**. A plataforma está configurada no banco de dados com `suporta_acionamento_roubo: true`, porém não existe nenhuma edge function ou lógica que faça a chamada ao endpoint `POST /acionamentoRouboFurto` da API Rede Veículos.
-
----
-
-## Status Atual
+Apos analise detalhada do sistema de autenticacao com a API Softruck, identifiquei a seguinte situacao:
 
 | Item | Status | Detalhes |
 |------|--------|----------|
-| Plataforma configurada no banco | OK | `rede_veiculos` com `suporta_acionamento_roubo: true` |
-| Token Bearer configurado | OK | `REDE_VEICULOS_TOKEN` nos secrets |
-| Endpoint `/acionamentoRouboFurto` | NÃO IMPLEMENTADO | Não existe edge function |
-| Integração sinistro → rastreador | NÃO IMPLEMENTADO | `criar-sinistro` não aciona rastreador |
-| Modo rastreamento intensivo | NÃO IMPLEMENTADO | Não existe lógica |
-| Histórico com maior frequência | PARCIAL | Existe `rastreador_posicoes` mas sem modo intensivo |
-| Registro com data/hora/responsável | NÃO IMPLEMENTADO | Não há tabela de acionamentos |
+| Endpoint de autenticacao | PARCIALMENTE CORRETO | Usa `/auth/login` mas baseUrl ja inclui `/v2` |
+| Header `public-key` | IMPLEMENTADO | Presente em todas chamadas |
+| Armazenamento `refresh_token` | IMPLEMENTADO | Salvo na tabela `rastreadores_tokens_cache` |
+| Token Bearer nas chamadas | IMPLEMENTADO | Presente corretamente |
+| Cache de token | IMPLEMENTADO | Verifica expiracao antes de usar |
+| Tratamento erro 401 | NAO IMPLEMENTADO | Nao ha retry automatico |
+| Alternancia sandbox/producao | IMPLEMENTADO | Busca da tabela `rastreadores_config_plataformas` |
+
+---
+
+## Problema Critico Detectado
+
+Ao testar a autenticacao em ambiente real, recebi o erro:
+
+```text
+Falha auth Softruck: 401 - {"error":{"message":"Public key does not exist"}}
+```
+
+**Causa:** A `SOFTRUCK_PUBLIC_KEY` configurada nos secrets pode estar incorreta ou a conta Softruck pode nao estar ativa/configurada corretamente.
+
+---
+
+## Analise Detalhada dos Pontos Solicitados
+
+### 1. Consulta de Posicao de Rastreador
+
+**Arquivos analisados:** `rastreador-posicao/index.ts`, `posicao-veiculo/index.ts`
+
+**Status:** CORRETO
+
+```typescript
+// posicao-veiculo/index.ts (linha 347-361)
+const authResponse = await fetch(
+  `${supabaseUrl}/functions/v1/rastreador-auth`,
+  {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${supabaseKey}`,
+    },
+    body: JSON.stringify({ plataforma: 'softruck' })
+  }
+);
+
+// Chamada com Bearer token (linha 105-112)
+const response = await fetch(url, {
+  method: 'GET',
+  headers: {
+    'Authorization': `Bearer ${token}`,
+    'public-key': publicKey,
+    'Content-Type': 'application/json',
+  }
+});
+```
+
+### 2. Envio de Comandos (bloquear/desbloquear)
+
+**Status:** NAO IMPLEMENTADO
+
+A plataforma Softruck esta configurada no banco com `suporta_bloqueio: false`. Nao existe edge function para comandos de bloqueio/desbloqueio.
+
+### 3. Tratamento de Token Expirado
+
+**Status:** PARCIALMENTE IMPLEMENTADO
+
+**Cache de token funciona:**
+```typescript
+// rastreador-auth/index.ts (linha 97-118)
+if (!force_refresh) {
+  const { data: cached } = await supabase
+    .from('rastreadores_tokens_cache')
+    .select('token, refresh_token, expires_at')
+    .eq('plataforma', plataforma)
+    .gt('expires_at', new Date().toISOString())  // Verifica expiracao
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single();
+
+  if (cached) {
+    return { success: true, token: cached.token, from_cache: true };
+  }
+}
+```
+
+**GAP:** Nao ha tratamento de erro 401 com retry automatico nas chamadas de API.
+
+### 4. Tratamento de Erro 401
+
+**Status:** NAO IMPLEMENTADO
+
+Quando uma chamada retorna 401, o sistema apenas lanca erro sem tentar renovar o token:
+
+```typescript
+// posicao-veiculo/index.ts (linha 114-117)
+if (!response.ok) {
+  const error = await response.text();
+  throw new Error(`Erro Softruck ${response.status}: ${error}`);
+  // NAO HA TENTATIVA DE RENOVAR TOKEN E RETRY
+}
+```
+
+---
+
+## Configuracao Atual no Banco
+
+```sql
+-- Tabela rastreadores_config_plataformas (softruck)
+ambiente_atual: sandbox
+api_url_sandbox: https://api.apiary.softruck.com/v2
+api_url_producao: https://api.softruck.com/v2
+auth_type: oauth_jwt
+suporta_posicao_tempo_real: true
+suporta_historico_trajeto: true
+suporta_acionamento_roubo: false
+suporta_bloqueio: false
+```
+
+---
+
+## Secrets Configurados
+
+Os seguintes secrets Softruck estao configurados:
+- `SOFTRUCK_PUBLIC_KEY`
+- `SOFTRUCK_USERNAME`
+- `SOFTRUCK_PASSWORD`
+- `SOFTRUCK_ENTERPRISE_ID`
 
 ---
 
 ## Gaps Identificados
 
-### 1. Ausência de Edge Function para Acionamento
+### Alta Prioridade
 
-**Problema:** Não existe edge function que chame o endpoint `POST /acionamentoRouboFurto` da API Rede Veículos.
+1. **Public Key Invalida:** O erro "Public key does not exist" indica que a chave publica configurada nao e reconhecida pela Softruck.
 
-**Momentos que deveria ser chamado (conforme requisitos):**
-1. Quando associado comunica roubo/furto pelo App ❌
-2. Quando setor de Eventos confirma sinistro tipo roubo/furto ❌
-3. Quando Assistência 24h recebe chamado de emergência ❌
-4. Quando diretoria autoriza acionamento de recuperação ❌
+2. **Ausencia de Retry em Erro 401:** Quando o token expira e uma chamada retorna 401, o sistema deveria:
+   - Detectar o erro 401
+   - Forcar refresh do token (`force_refresh: true`)
+   - Tentar a chamada novamente
 
----
+3. **Refresh Token Nao Utilizado:** O sistema armazena o `refresh_token` mas nunca o utiliza para renovar o token - sempre faz login completo.
 
-### 2. `criar-sinistro` Não Integra com Rastreador
+### Media Prioridade
 
-**Código atual (linha 295-333):**
-O sinistro é criado no banco, histórico registrado, documentos pendentes criados, notificações enviadas - mas **não há nenhuma chamada para acionar o rastreador**.
+4. **Logs de Autenticacao Incompletos:** Nao ha registro na tabela `rastreadores_logs` quando ocorre erro de autenticacao.
 
----
-
-### 3. Ausência de Tabela de Acionamentos
-
-Não existe tabela para registrar acionamentos de roubo/furto com:
-- Data/hora do acionamento
-- Responsável pelo acionamento
-- Status do acionamento (sucesso/erro)
-- Resposta da API
+5. **Ausencia de Comandos de Bloqueio:** A API Softruck suporta comandos, mas o sistema nao implementa.
 
 ---
 
-### 4. Ausência de Modo de Rastreamento Intensivo
+## Plano de Correcoes
 
-O sistema não possui lógica para:
-- Aumentar frequência de coleta de posições durante emergência
-- Mudar veículo para "modo rastreamento intensivo"
-- Preservar histórico com maior granularidade
+### Fase 1: Corrigir Erro de Public Key (Configuracao)
 
----
+O usuario deve verificar:
+1. Se a `SOFTRUCK_PUBLIC_KEY` esta correta no Supabase
+2. Se a conta Softruck esta ativa
+3. Se as credenciais `SOFTRUCK_USERNAME` e `SOFTRUCK_PASSWORD` estao corretas
 
-## Plano de Implementação
+### Fase 2: Implementar Retry em Erro 401
 
-### Fase 1: Infraestrutura de Banco de Dados
+**Arquivos a modificar:**
+- `supabase/functions/rastreador-posicao/index.ts`
+- `supabase/functions/posicao-veiculo/index.ts`
+- `supabase/functions/rastreador-historico/index.ts`
+- `supabase/functions/sync-rastreadores/index.ts`
 
-**Nova tabela: `acionamentos_roubo_furto`**
-
-```sql
-CREATE TABLE acionamentos_roubo_furto (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  
-  -- Referências
-  sinistro_id UUID REFERENCES sinistros(id),
-  chamado_assistencia_id UUID REFERENCES chamados_assistencia(id),
-  veiculo_id UUID NOT NULL REFERENCES veiculos(id),
-  rastreador_id UUID REFERENCES rastreadores(id),
-  
-  -- Dados do acionamento
-  tipo_origem VARCHAR(50) NOT NULL, -- 'sinistro', 'assistencia', 'diretoria', 'manual'
-  protocolo_externo VARCHAR(100), -- Protocolo retornado pela Rede Veículos
-  
-  -- Quem acionou
-  solicitado_por UUID REFERENCES profiles(id),
-  solicitado_por_nome VARCHAR(255),
-  solicitado_em TIMESTAMPTZ DEFAULT NOW(),
-  
-  -- Autorização (para acionamentos que requerem aprovação)
-  autorizado_por UUID REFERENCES profiles(id),
-  autorizado_em TIMESTAMPTZ,
-  
-  -- Status
-  status VARCHAR(30) DEFAULT 'solicitado',
-  -- (solicitado, autorizado, enviado, confirmado, erro, cancelado)
-  
-  -- Resposta da API
-  api_request JSONB,
-  api_response JSONB,
-  api_status_code INTEGER,
-  
-  -- Observações
-  observacoes TEXT,
-  
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Índices
-CREATE INDEX idx_acionamentos_sinistro ON acionamentos_roubo_furto(sinistro_id);
-CREATE INDEX idx_acionamentos_veiculo ON acionamentos_roubo_furto(veiculo_id);
-CREATE INDEX idx_acionamentos_status ON acionamentos_roubo_furto(status);
-```
-
----
-
-### Fase 2: Edge Function `acionar-roubo-furto`
-
-**Nova edge function em `supabase/functions/acionar-roubo-furto/index.ts`**
+**Logica proposta:**
 
 ```typescript
-// Endpoints da API Rede Veículos:
-// POST /acionamentoRouboFurto - Aciona alerta prioritário
-// POST /veiculos/{codigo}/rastreamentoIntensivo - Ativa modo intensivo
-
-// Fluxo:
-// 1. Validar autenticação e permissões
-// 2. Buscar dados do veículo e rastreador
-// 3. Verificar se rastreador é da plataforma Rede Veículos
-// 4. Chamar API /acionamentoRouboFurto
-// 5. Se sucesso, ativar rastreamento intensivo
-// 6. Registrar na tabela acionamentos_roubo_furto
-// 7. Criar alerta crítico na tabela rastreador_alertas
-// 8. Notificar equipe de monitoramento
+async function chamadaSoftruckComRetry(
+  supabaseUrl: string,
+  supabaseKey: string,
+  url: string,
+  options: RequestInit,
+  tentativas: number = 2
+): Promise<Response> {
+  for (let i = 0; i < tentativas; i++) {
+    const response = await fetch(url, options);
+    
+    if (response.status === 401) {
+      console.warn(`[Softruck] Erro 401, tentativa ${i + 1}/${tentativas}`);
+      
+      if (i === tentativas - 1) {
+        throw new Error('Token Softruck invalido apos renovacao');
+      }
+      
+      // Forcar refresh do token
+      const authResponse = await fetch(
+        `${supabaseUrl}/functions/v1/rastreador-auth`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseKey}`,
+          },
+          body: JSON.stringify({ plataforma: 'softruck', force_refresh: true })
+        }
+      );
+      
+      const authData = await authResponse.json();
+      if (!authData.success) {
+        throw new Error('Falha ao renovar token');
+      }
+      
+      // Atualizar token nas options
+      options.headers = {
+        ...options.headers,
+        'Authorization': `Bearer ${authData.token}`,
+      };
+      
+      continue;
+    }
+    
+    return response;
+  }
+  
+  throw new Error('Erro inesperado');
+}
 ```
 
----
+### Fase 3: Implementar Uso de Refresh Token
 
-### Fase 3: Integração nos Pontos de Entrada
+**Arquivo:** `supabase/functions/rastreador-auth/index.ts`
 
-**3.1. Sinistro tipo roubo/furto (`criar-sinistro/index.ts`)**
-- Adicionar verificação: se `tipo_sinistro` é `roubo` ou `furto`
-- Chamar `acionar-roubo-furto` automaticamente
-- Registrar no histórico do sinistro
+Adicionar logica para usar refresh_token antes de fazer login completo:
 
-**3.2. Atualização de status do sinistro (`SinistroDetalhe.tsx`)**
-- Adicionar botão "Acionar Recuperação" para analistas/diretoria
-- Disponível apenas para sinistros tipo roubo/furto
-- Requer confirmação antes de acionar
+```typescript
+// Verificar se tem refresh_token valido
+const { data: tokenComRefresh } = await supabase
+  .from('rastreadores_tokens_cache')
+  .select('refresh_token')
+  .eq('plataforma', 'softruck')
+  .not('refresh_token', 'is', null)
+  .order('created_at', { ascending: false })
+  .limit(1)
+  .single();
 
-**3.3. Assistência 24h emergencial (`criar-chamado-assistencia/index.ts`)**
-- Verificar se chamado é de tipo "roubo" ou marcado como emergência
-- Disparar acionamento automaticamente
+if (tokenComRefresh?.refresh_token) {
+  try {
+    // Tentar usar refresh_token primeiro
+    const refreshResponse = await fetch(`${baseUrl}/auth/refresh`, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'public-key': publicKey,
+      },
+      body: JSON.stringify({ refresh_token: tokenComRefresh.refresh_token })
+    });
+    
+    if (refreshResponse.ok) {
+      const data = await refreshResponse.json();
+      return { token: data.data.token, refresh_token: data.data.refresh_token };
+    }
+  } catch (e) {
+    console.log('Refresh falhou, fazendo login completo');
+  }
+}
 
-**3.4. Painel de Monitoramento (`AlertasWidget.tsx`)**
-- Adicionar tipo de alerta "acionamento_roubo"
-- Exibir com severidade "critica" e destaque visual
-- Ação rápida para "Ver Rastreamento"
-
----
-
-### Fase 4: Modo Rastreamento Intensivo
-
-**4.1. Adicionar campo na tabela `rastreadores`:**
-```sql
-ALTER TABLE rastreadores ADD COLUMN IF NOT EXISTS 
-  modo_rastreamento VARCHAR(20) DEFAULT 'normal'
-  CHECK (modo_rastreamento IN ('normal', 'intensivo', 'emergencia'));
-
-ALTER TABLE rastreadores ADD COLUMN IF NOT EXISTS 
-  modo_ativado_em TIMESTAMPTZ;
-
-ALTER TABLE rastreadores ADD COLUMN IF NOT EXISTS 
-  modo_ativado_por UUID REFERENCES profiles(id);
+// Fallback para login completo
+return await authSoftruck(baseUrl);
 ```
 
-**4.2. Lógica de coleta mais frequente:**
-- Modo normal: coleta a cada 5-10 minutos
-- Modo intensivo: coleta a cada 30 segundos (via API Rede Veículos)
-- Modo emergência: coleta contínua (tempo real se disponível)
+### Fase 4: Adicionar Logs de Erro de Autenticacao
 
----
+Registrar falhas de autenticacao na tabela `rastreadores_logs`:
 
-### Fase 5: Interface de Usuário
-
-**5.1. Botão no Detalhe do Sinistro:**
-- "🚨 Acionar Recuperação"
-- Só aparece para sinistros roubo/furto
-- Abre modal de confirmação
-- Registra quem acionou
-
-**5.2. Card de Acionamento no Sinistro:**
-- Mostra status do acionamento
-- Data/hora do acionamento
-- Responsável
-- Link para rastreamento ao vivo
-
-**5.3. Widget no Dashboard de Monitoramento:**
-- Lista de veículos em modo intensivo
-- Alertas prioritários de roubo/furto
-- Mapa com localização em tempo real
-
----
-
-## Arquivos a Criar
-
-| Arquivo | Descrição |
-|---------|-----------|
-| `supabase/functions/acionar-roubo-furto/index.ts` | Edge function principal |
-| `src/hooks/useAcionamentoRoubo.ts` | Hook para acionamento |
-| `src/components/sinistros/AcionarRecuperacaoModal.tsx` | Modal de confirmação |
-| `src/components/monitoramento/VeiculosEmergenciaWidget.tsx` | Widget de veículos em emergência |
+```typescript
+catch (error) {
+  // Log de erro de autenticacao
+  await supabase
+    .from('rastreadores_logs')
+    .insert({
+      plataforma: 'softruck',
+      operacao: 'autenticacao',
+      status: 'erro',
+      erro_mensagem: error.message,
+    });
+    
+  throw error;
+}
+```
 
 ---
 
 ## Arquivos a Modificar
 
-| Arquivo | Alterações |
+| Arquivo | Alteracoes |
 |---------|------------|
-| `supabase/functions/criar-sinistro/index.ts` | Integrar acionamento automático para roubo/furto |
-| `supabase/functions/criar-chamado-assistencia/index.ts` | Integrar acionamento para emergências |
-| `src/pages/eventos/SinistroDetalhe.tsx` | Adicionar botão e card de acionamento |
-| `src/components/monitoramento/AlertasWidget.tsx` | Adicionar tipo "acionamento_roubo" |
-| `supabase/config.toml` | Adicionar nova edge function |
+| `supabase/functions/rastreador-auth/index.ts` | Adicionar uso de refresh_token e logs de erro |
+| `supabase/functions/rastreador-posicao/index.ts` | Adicionar retry em erro 401 |
+| `supabase/functions/posicao-veiculo/index.ts` | Adicionar retry em erro 401 |
+| `supabase/functions/rastreador-historico/index.ts` | Adicionar retry em erro 401 |
+| `supabase/functions/softruck-api/index.ts` | Adicionar retry em erro 401 |
+| `supabase/functions/sync-rastreadores/index.ts` | Adicionar retry em erro 401 |
 
 ---
 
-## Fluxo Completo Após Implementação
+## Novo Arquivo a Criar
 
 ```text
-ASSOCIADO COMUNICA ROUBO (App ou WhatsApp)
-    │
-    ▼
-criar-sinistro detecta tipo = roubo/furto
-    │
-    ▼
-Chama acionar-roubo-furto automaticamente
-    │
-    ├──► POST /acionamentoRouboFurto (Rede Veículos)
-    │        │
-    │        ▼
-    │    Alerta gerado na central da Rede Veículos
-    │
-    ├──► Ativa modo rastreamento intensivo
-    │
-    ├──► Cria alerta crítico no SGA (rastreador_alertas)
-    │
-    ├──► Notifica equipe de monitoramento
-    │
-    └──► Registra em acionamentos_roubo_furto
-              │
-              ▼
-         Histórico completo:
-         - Data/hora
-         - Responsável
-         - Resposta API
-         - Status
+supabase/functions/_shared/softruck-utils.ts
 ```
+
+Modulo compartilhado com funcoes de retry e autenticacao para evitar duplicacao de codigo.
 
 ---
 
-## Requisitos Confirmados Após Implementação
+## Checklist de Verificacao
 
-| Requisito | Status |
-|-----------|--------|
-| Acionamento gera alerta prioritário na central | ✅ Via API Rede Veículos |
-| Veículo entra em modo rastreamento intensivo | ✅ Campo `modo_rastreamento` |
-| Histórico preservado com maior frequência | ✅ Coleta a cada 30s |
-| Registro com data/hora e responsável no SGA | ✅ Tabela `acionamentos_roubo_furto` |
+Apos implementacao, confirmar:
+
+- [ ] Endpoint `POST /v2/auth/login` chamado corretamente
+- [ ] Header `public-key` presente em todas requisicoes
+- [ ] `refresh_token` armazenado e utilizado para renovacao
+- [ ] Token Bearer repassado em todas chamadas subsequentes
+- [ ] Erro 401 dispara renovacao automatica com retry
+- [ ] Logs de erro de autenticacao registrados
+- [ ] Alternancia sandbox/producao funcionando
 
 ---
 
 ## Teste Recomendado
 
-Após implementação, testar em ambiente sandbox:
+Antes de implementar as correcoes, o usuario deve:
 
-```bash
-# 1. Criar sinistro tipo roubo via App
-# 2. Verificar se acionamento foi criado automaticamente
-# 3. Confirmar resposta da API Rede Veículos
-# 4. Verificar alerta crítico no widget de alertas
-# 5. Confirmar que rastreador entrou em modo intensivo
-# 6. Verificar registro na tabela acionamentos_roubo_furto
-```
+1. **Verificar credenciais no painel Softruck:**
+   - Confirmar que a Public Key esta correta
+   - Confirmar que username/password estao ativos
+   - Verificar se a conta nao esta bloqueada
+
+2. **Atualizar secrets no Supabase se necessario:**
+   - Navegar para Edge Functions > Secrets
+   - Atualizar `SOFTRUCK_PUBLIC_KEY` com valor correto
+
+3. **Testar conexao novamente:**
+   - Usar o botao "Testar Conexao" no painel de Monitoramento
 
