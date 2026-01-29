@@ -132,6 +132,19 @@ export function AtribuirPrestadorModal({ open, onClose, chamado }: AtribuirPrest
         observacao: `Prestador ${prestador.nome_fantasia || prestador.razao_social} acionado`
       });
 
+      // 4. Notificar associado via WhatsApp
+      try {
+        await supabase.functions.invoke('notificar-status-assistencia', {
+          body: {
+            chamado_id: chamado!.id,
+            status_novo: 'aguardando_prestador',
+          },
+        });
+      } catch (notifError) {
+        console.error('Erro ao enviar notificação:', notifError);
+        // Não bloqueia o fluxo
+      }
+
       return prestador;
     },
     onSuccess: (prestador) => {

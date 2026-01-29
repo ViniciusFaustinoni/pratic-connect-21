@@ -3125,6 +3125,7 @@ export type Database = {
           associado_id: string
           atendente_id: string | null
           avaliacao_comentario: string | null
+          avaliacao_data: string | null
           avaliacao_nota: number | null
           canal: string
           created_at: string
@@ -3167,6 +3168,7 @@ export type Database = {
           associado_id: string
           atendente_id?: string | null
           avaliacao_comentario?: string | null
+          avaliacao_data?: string | null
           avaliacao_nota?: number | null
           canal?: string
           created_at?: string
@@ -3209,6 +3211,7 @@ export type Database = {
           associado_id?: string
           atendente_id?: string | null
           avaliacao_comentario?: string | null
+          avaliacao_data?: string | null
           avaliacao_nota?: number | null
           canal?: string
           created_at?: string
