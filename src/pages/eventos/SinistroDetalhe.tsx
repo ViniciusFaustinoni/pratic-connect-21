@@ -24,6 +24,7 @@ import { ConversaIADialog } from '@/components/sinistros/ConversaIADialog';
 import { AcionarRecuperacaoModal } from '@/components/sinistros/AcionarRecuperacaoModal';
 import { CardAcionamentoRoubo } from '@/components/sinistros/CardAcionamentoRoubo';
 import { TrajetoSinistroCard } from '@/components/sinistros/TrajetoSinistroCard';
+import { ComparacaoPosicoes } from '@/components/sinistros/ComparacaoPosicoes';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -831,12 +832,24 @@ export default function SinistroDetalhe() {
             />
           )}
 
+          {/* Card Comparação de Posições GPS */}
+          <ComparacaoPosicoes
+            latitudeInformada={sinistro.latitude_informada}
+            longitudeInformada={sinistro.longitude_informada}
+            rastreadorLat={sinistro.rastreador_lat_momento}
+            rastreadorLng={sinistro.rastreador_lng_momento}
+            rastreadorCapturadoEm={sinistro.rastreador_posicao_capturada_em}
+            localOcorrencia={sinistro.local_ocorrencia}
+          />
+
           {/* Card Trajeto para Auditoria */}
           {sinistro.veiculo_id && (
             <TrajetoSinistroCard
               veiculoId={sinistro.veiculo_id}
               dataOcorrencia={sinistro.data_ocorrencia}
               localOcorrencia={sinistro.local_ocorrencia}
+              sinistroId={sinistro.id}
+              snapshotExistente={!!sinistro.snapshot_trajeto_json}
             />
           )}
         </div>

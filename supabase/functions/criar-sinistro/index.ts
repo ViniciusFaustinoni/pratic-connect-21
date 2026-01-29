@@ -229,6 +229,18 @@ Deno.serve(async (req) => {
       .eq('associado_id', associado.id)
       .single();
 
+    // ============================================
+    // 4.1 BUSCAR RASTREADOR E POSIÇÃO ATUAL (EVIDÊNCIA)
+    // ============================================
+    const { data: rastreador } = await supabaseAdmin
+      .from('rastreadores')
+      .select('id, codigo, plataforma, ultima_posicao_lat, ultima_posicao_lng, ultima_comunicacao')
+      .eq('veiculo_id', payload.veiculo_id)
+      .eq('status', 'instalado')
+      .maybeSingle();
+    
+    console.log('[criar-sinistro] Rastreador encontrado:', rastreador?.codigo || 'Nenhum');
+
     if (veicError || !veiculo) {
       console.error('[criar-sinistro] Veículo não encontrado:', veicError);
       return new Response(
@@ -307,9 +319,20 @@ Deno.serve(async (req) => {
         bo_numero: payload.numero_bo || null,
         status: 'comunicado',
         canal: 'app',
+        // ===== NOVOS CAMPOS DE POSIÇÃO (EVIDÊNCIA) =====
+        latitude_informada: payload.latitude || null,
+        longitude_informada: payload.longitude || null,
+        rastreador_lat_momento: rastreador?.ultima_posicao_lat || null,
+        rastreador_lng_momento: rastreador?.ultima_posicao_lng || null,
+        rastreador_posicao_capturada_em: rastreador?.ultima_comunicacao || null,
       })
       .select()
       .single();
+    
+    console.log('[criar-sinistro] Posições gravadas:', {
+      informada: payload.latitude && payload.longitude ? `${payload.latitude}, ${payload.longitude}` : 'N/A',
+      rastreador: rastreador?.ultima_posicao_lat ? `${rastreador.ultima_posicao_lat}, ${rastreador.ultima_posicao_lng}` : 'N/A',
+    });
 
     if (insertError) {
       console.error('[criar-sinistro] Erro ao inserir sinistro:', insertError);

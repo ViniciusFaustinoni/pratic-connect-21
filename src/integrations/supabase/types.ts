@@ -14464,10 +14464,18 @@ export type Database = {
           descricao: string | null
           estado_ocorrencia: string | null
           id: string
+          latitude_informada: number | null
           local_descricao: string | null
           local_ocorrencia: string | null
+          longitude_informada: number | null
           parecer: string | null
           protocolo: string
+          rastreador_lat_momento: number | null
+          rastreador_lng_momento: number | null
+          rastreador_posicao_capturada_em: string | null
+          snapshot_salvo_em: string | null
+          snapshot_salvo_por: string | null
+          snapshot_trajeto_json: Json | null
           status: Database["public"]["Enums"]["status_sinistro"]
           tipo: Database["public"]["Enums"]["tipo_sinistro"]
           tipo_dano: string | null
@@ -14492,10 +14500,18 @@ export type Database = {
           descricao?: string | null
           estado_ocorrencia?: string | null
           id?: string
+          latitude_informada?: number | null
           local_descricao?: string | null
           local_ocorrencia?: string | null
+          longitude_informada?: number | null
           parecer?: string | null
           protocolo: string
+          rastreador_lat_momento?: number | null
+          rastreador_lng_momento?: number | null
+          rastreador_posicao_capturada_em?: string | null
+          snapshot_salvo_em?: string | null
+          snapshot_salvo_por?: string | null
+          snapshot_trajeto_json?: Json | null
           status?: Database["public"]["Enums"]["status_sinistro"]
           tipo: Database["public"]["Enums"]["tipo_sinistro"]
           tipo_dano?: string | null
@@ -14520,10 +14536,18 @@ export type Database = {
           descricao?: string | null
           estado_ocorrencia?: string | null
           id?: string
+          latitude_informada?: number | null
           local_descricao?: string | null
           local_ocorrencia?: string | null
+          longitude_informada?: number | null
           parecer?: string | null
           protocolo?: string
+          rastreador_lat_momento?: number | null
+          rastreador_lng_momento?: number | null
+          rastreador_posicao_capturada_em?: string | null
+          snapshot_salvo_em?: string | null
+          snapshot_salvo_por?: string | null
+          snapshot_trajeto_json?: Json | null
           status?: Database["public"]["Enums"]["status_sinistro"]
           tipo?: Database["public"]["Enums"]["tipo_sinistro"]
           tipo_dano?: string | null
@@ -14597,6 +14621,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "chamados_assistencia"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sinistros_snapshot_salvo_por_fkey"
+            columns: ["snapshot_salvo_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sinistros_snapshot_salvo_por_fkey"
+            columns: ["snapshot_salvo_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
           },
           {
             foreignKeyName: "sinistros_veiculo_id_fkey"
