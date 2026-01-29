@@ -65,6 +65,27 @@ export function useWhatsAppStatus(instanciaId?: string) {
     },
   });
 
+  // Mutation para deletar instância completamente
+  const deletarInstancia = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke('whatsapp-delete-instance', {
+        body: { instancia_id: instanciaId },
+      });
+
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error || 'Erro ao deletar instância');
+      
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-status'] });
+      toast.success('Instância deletada com sucesso! Clique em Conectar para recriar.');
+    },
+    onError: (error: Error) => {
+      toast.error(`Erro ao deletar instância: ${error.message}`);
+    },
+  });
+
   // Função para forçar refresh
   const atualizarStatus = async () => {
     await queryClient.invalidateQueries({ queryKey: ['whatsapp-status', instanciaId] });
@@ -82,5 +103,6 @@ export function useWhatsAppStatus(instanciaId?: string) {
     atualizarStatus,
     obterQRCode,
     desconectar,
+    deletarInstancia,
   };
 }

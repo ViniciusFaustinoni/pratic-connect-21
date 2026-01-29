@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { 
   MessageCircle, Wifi, WifiOff, QrCode, 
-  RefreshCw, LogOut, Loader2, Phone
+  RefreshCw, LogOut, Loader2, Phone, RotateCcw
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -70,6 +70,7 @@ export function WhatsAppStatusCard() {
   const [qrCodeOpen, setQrCodeOpen] = useState(false);
   const [qrCodeData, setQrCodeData] = useState<string | null>(null);
   const [pairingCode, setPairingCode] = useState<string | null>(null);
+  const [isRecriando, setIsRecriando] = useState(false);
   
   const { 
     status, 
@@ -81,6 +82,7 @@ export function WhatsAppStatusCard() {
     refetch,
     obterQRCode,
     desconectar,
+    deletarInstancia,
   } = useWhatsAppStatus();
 
   // Polling mais frequente quando aguardando QR code
@@ -113,6 +115,15 @@ export function WhatsAppStatusCard() {
       }
     } catch {
       // Error já tratado no hook
+    }
+  };
+
+  const handleRecriarInstancia = async () => {
+    setIsRecriando(true);
+    try {
+      await deletarInstancia.mutateAsync();
+    } finally {
+      setIsRecriando(false);
     }
   };
 
@@ -196,6 +207,42 @@ export function WhatsAppStatusCard() {
                       className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                     >
                       Desconectar
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+
+            {/* Botão para recriar instância (mostrar quando desconectado ou com problemas) */}
+            {!connected && status !== 'connecting' && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    disabled={isRecriando}
+                  >
+                    <RotateCcw className={`h-4 w-4 mr-2 ${isRecriando ? 'animate-spin' : ''}`} />
+                    {isRecriando ? 'Recriando...' : 'Recriar Instância'}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Recriar Instância WhatsApp?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Isso irá deletar a instância atual na Evolution API e limpar todos os dados de conexão.
+                      Use esta opção se estiver tendo problemas de conexão persistentes.
+                      <br /><br />
+                      Após recriar, você precisará escanear o QR Code novamente para conectar.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleRecriarInstancia}
+                      className="bg-orange-600 text-white hover:bg-orange-700"
+                    >
+                      Recriar Instância
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
