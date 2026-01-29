@@ -12,7 +12,12 @@ import {
   FileWarning,
   ClipboardList,
   GraduationCap,
-  UserCheck
+  UserCheck,
+  Wallet,
+  TrendingUp,
+  ArrowUpRight,
+  ArrowDownRight,
+  History
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -50,6 +55,50 @@ export default function RHDashboard() {
         afastados: afastados.count || 0,
         admissoesMes: admissoesMes.count || 0
       };
+    }
+  });
+
+  // Folha do mês atual
+  const { data: folhaMes, isLoading: loadingFolha } = useQuery({
+    queryKey: ['folha-mes-atual'],
+    queryFn: async () => {
+      const mesAtual = new Date().getMonth() + 1;
+      const anoAtual = new Date().getFullYear();
+      
+      const { data } = await supabase
+        .from('folha_pagamento')
+        .select('total_proventos, total_descontos, salario_liquido, status')
+        .eq('mes', mesAtual)
+        .eq('ano', anoAtual);
+      
+      const totais = (data || []).reduce((acc, item) => ({
+        proventos: acc.proventos + (item.total_proventos || 0),
+        descontos: acc.descontos + (item.total_descontos || 0),
+        liquido: acc.liquido + (item.salario_liquido || 0),
+        funcionarios: acc.funcionarios + 1
+      }), { proventos: 0, descontos: 0, liquido: 0, funcionarios: 0 });
+      
+      const statusGeral = (data || []).every(f => f.status === 'pago') ? 'Pago' :
+                          (data || []).some(f => f.status === 'aprovado') ? 'Aprovado' :
+                          (data || []).some(f => f.status === 'calculado') ? 'Calculado' : 'Pendente';
+      
+      return { ...totais, statusGeral };
+    }
+  });
+
+  // Últimas movimentações
+  const { data: ultimasMovimentacoes, isLoading: loadingMovimentacoes } = useQuery({
+    queryKey: ['rh-movimentacoes-recentes'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('funcionarios_historico')
+        .select(`
+          id, tipo, motivo, data_vigencia, created_at,
+          funcionario:funcionarios(nome_completo, foto_url)
+        `)
+        .order('created_at', { ascending: false })
+        .limit(5);
+      return data || [];
     }
   });
 
@@ -185,7 +234,7 @@ export default function RHDashboard() {
       </div>
 
       {/* Cards KPI */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <Card className="bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
@@ -253,6 +302,35 @@ export default function RHDashboard() {
               </div>
               <div className="h-12 w-12 rounded-full bg-purple-100 dark:bg-purple-900 flex items-center justify-center">
                 <UserPlus className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Card Folha do Mês */}
+        <Card 
+          className="bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800 cursor-pointer hover:border-emerald-400 transition-colors"
+          onClick={() => navigate('/rh/folha-pagamento')}
+        >
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400">Folha do Mês</p>
+                {loadingFolha ? (
+                  <Skeleton className="h-8 w-24 mt-1" />
+                ) : (
+                  <>
+                    <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', notation: 'compact' }).format(folhaMes?.liquido || 0)}
+                    </p>
+                    <Badge variant="outline" className="mt-1 text-xs border-emerald-300 text-emerald-600">
+                      {folhaMes?.statusGeral || 'Pendente'}
+                    </Badge>
+                  </>
+                )}
+              </div>
+              <div className="h-12 w-12 rounded-full bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center">
+                <Wallet className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
               </div>
             </div>
           </CardContent>
@@ -503,6 +581,57 @@ export default function RHDashboard() {
                 <GraduationCap className="mr-2 h-4 w-4" />
                 Treinamentos
               </Button>
+            </CardContent>
+          </Card>
+
+          {/* Últimas Movimentações */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <History className="h-5 w-5" />
+                Últimas Movimentações
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {loadingMovimentacoes ? (
+                <div className="space-y-3">
+                  {[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full" />)}
+                </div>
+              ) : ultimasMovimentacoes?.length === 0 ? (
+                <p className="text-muted-foreground text-center py-4">Nenhuma movimentação recente</p>
+              ) : (
+                <div className="space-y-3">
+                  {ultimasMovimentacoes?.map((mov) => {
+                    const tipoLabel = {
+                      admissao: { label: 'Admissão', icon: UserPlus, color: 'text-green-600' },
+                      demissao: { label: 'Desligamento', icon: UserMinus, color: 'text-red-600' },
+                      promocao: { label: 'Promoção', icon: TrendingUp, color: 'text-blue-600' },
+                      transferencia: { label: 'Transferência', icon: ArrowUpRight, color: 'text-purple-600' },
+                      reajuste: { label: 'Reajuste', icon: Wallet, color: 'text-emerald-600' },
+                    }[mov.tipo] || { label: mov.tipo, icon: ArrowDownRight, color: 'text-muted-foreground' };
+                    const IconComponent = tipoLabel.icon;
+                    
+                    return (
+                      <div key={mov.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50">
+                        <div className={`h-8 w-8 rounded-full bg-muted flex items-center justify-center ${tipoLabel.color}`}>
+                          <IconComponent className="h-4 w-4" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">
+                            {(mov.funcionario as { nome_completo: string } | null)?.nome_completo || 'Funcionário'}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {tipoLabel.label} {mov.motivo && `- ${mov.motivo}`}
+                          </p>
+                        </div>
+                        <span className="text-xs text-muted-foreground">
+                          {mov.created_at && format(parseISO(mov.created_at), "dd/MM", { locale: ptBR })}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </CardContent>
           </Card>
 

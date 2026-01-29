@@ -1,4 +1,4 @@
-import { Calendar as CalendarIcon, Info, AlertCircle } from 'lucide-react';
+import { Calendar as CalendarIcon, Info, AlertCircle, Wallet } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -16,6 +16,10 @@ import { differenceInDays, differenceInMonths, format, parseISO } from 'date-fns
 import { ptBR } from 'date-fns/locale';
 import { useState, useMemo, useEffect } from 'react';
 import { cn } from '@/lib/utils';
+
+const formatCurrency = (value: number) => {
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+};
 
 interface SolicitarFeriasModalProps {
   open: boolean;
@@ -71,7 +75,7 @@ export function SolicitarFeriasModal({ open, onClose, funcionarioId }: Solicitar
     queryFn: async () => {
       const { data } = await supabase
         .from('funcionarios')
-        .select('id, nome_completo, data_admissao')
+        .select('id, nome_completo, data_admissao, salario_atual')
         .eq('id', funcionarioSelecionado)
         .single();
       return data;
@@ -128,6 +132,26 @@ export function SolicitarFeriasModal({ open, onClose, funcionarioId }: Solicitar
   }, [feriasAnteriores, periodoAquisitivo]);
 
   const saldoDias = 30 - diasJaGozados;
+
+  // Cálculo prévia de valores
+  const previaValores = useMemo(() => {
+    const salario = funcionarioInfo?.salario_atual || 0;
+    if (!salario || diasFerias <= 0) return null;
+    
+    const salarioDia = salario / 30;
+    const valorFerias = salarioDia * diasFerias;
+    const tercoFerias = valorFerias / 3;
+    const valorAbono = diasAbono > 0 ? (salarioDia * diasAbono) + (salarioDia * diasAbono / 3) : 0;
+    const adiantamento13Valor = adiantamento13 ? salario / 2 : 0;
+    
+    return {
+      valorFerias,
+      tercoFerias,
+      valorAbono,
+      adiantamento13Valor,
+      totalBruto: valorFerias + tercoFerias + valorAbono + adiantamento13Valor
+    };
+  }, [funcionarioInfo?.salario_atual, diasFerias, diasAbono, adiantamento13]);
 
   const validacoes = useMemo(() => {
     const erros: string[] = [];
@@ -321,6 +345,42 @@ export function SolicitarFeriasModal({ open, onClose, funcionarioId }: Solicitar
           {diasFerias > 0 && (
             <div className="text-sm text-muted-foreground text-center py-2 bg-muted rounded-md">
               Total: <span className="font-medium text-foreground">{diasFerias} dias</span> de férias
+            </div>
+          )}
+
+          {/* Prévia de Valores */}
+          {previaValores && previaValores.totalBruto > 0 && (
+            <div className="bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-lg p-3 space-y-2">
+              <div className="flex items-center gap-2 text-green-700 dark:text-green-300 font-medium text-sm">
+                <Wallet className="h-4 w-4" />
+                Prévia de Valores (Bruto)
+              </div>
+              <div className="text-xs space-y-1 text-green-600 dark:text-green-400">
+                <div className="flex justify-between">
+                  <span>Férias ({diasFerias} dias)</span>
+                  <span>{formatCurrency(previaValores.valorFerias)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>+ 1/3 Constitucional</span>
+                  <span>{formatCurrency(previaValores.tercoFerias)}</span>
+                </div>
+                {previaValores.valorAbono > 0 && (
+                  <div className="flex justify-between">
+                    <span>+ Abono Pecuniário ({diasAbono}d + 1/3)</span>
+                    <span>{formatCurrency(previaValores.valorAbono)}</span>
+                  </div>
+                )}
+                {previaValores.adiantamento13Valor > 0 && (
+                  <div className="flex justify-between">
+                    <span>+ Adiantamento 13º (50%)</span>
+                    <span>{formatCurrency(previaValores.adiantamento13Valor)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between pt-1 border-t border-green-300 dark:border-green-700 font-medium">
+                  <span>Total Bruto</span>
+                  <span>{formatCurrency(previaValores.totalBruto)}</span>
+                </div>
+              </div>
             </div>
           )}
 
