@@ -449,6 +449,7 @@ export function useAssociadoActions() {
 
   const reativarAssociado = useMutation({
     mutationFn: async (id: string) => {
+      // 1. Atualizar status local
       const { error } = await supabase.from('associados').update({
         status: 'ativo' as StatusAssociado,
         bloqueado: false,
@@ -456,6 +457,42 @@ export function useAssociadoActions() {
         updated_at: new Date().toISOString(),
       }).eq('id', id);
       if (error) throw error;
+
+      // 2. Buscar veículos do associado com rastreador Rede Veículos
+      const { data: veiculos } = await supabase
+        .from('veiculos')
+        .select('id')
+        .eq('associado_id', id)
+        .eq('ativo', true);
+
+      if (veiculos && veiculos.length > 0) {
+        for (const veiculo of veiculos) {
+          // Buscar rastreador do veículo
+          const { data: rastreador } = await supabase
+            .from('rastreadores')
+            .select('imei, plataforma, status')
+            .eq('veiculo_id', veiculo.id)
+            .eq('status', 'instalado')
+            .maybeSingle();
+
+          // Se tem rastreador Rede Veículos, revincular
+          if (rastreador?.plataforma === 'rede_veiculos' && rastreador.imei) {
+            try {
+              await supabase.functions.invoke('rede-veiculos-vincular-cliente', {
+                body: {
+                  imei: rastreador.imei,
+                  veiculoId: veiculo.id,
+                  associadoId: id,
+                },
+              });
+              console.log('[reativarAssociado] Veículo revinculado na Rede Veículos:', veiculo.id);
+            } catch (err) {
+              console.warn('[reativarAssociado] Erro ao revincular na Rede Veículos:', err);
+              // Não bloquear fluxo
+            }
+          }
+        }
+      }
     },
     onSuccess: () => {
       invalidateAll();

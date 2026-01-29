@@ -922,7 +922,7 @@ export function useAprovarVeiculoServico() {
 
         if (veiculoError) throw veiculoError;
 
-        // Tentar ativar rastreador na plataforma (Softruck) - não bloqueia se falhar
+        // Tentar ativar rastreador na plataforma - não bloqueia se falhar
         try {
           const { data: associadoData } = await supabase
             .from('associados')
@@ -930,17 +930,35 @@ export function useAprovarVeiculoServico() {
             .eq('id', data.associadoId)
             .single();
 
-          await supabase.functions.invoke('softruck-ativar-dispositivo', {
-            body: {
-              imei: data.imeiRastreador,
-              veiculoId: data.veiculoId,
-              associadoId: data.associadoId,
-              associadoEmail: associadoData?.email,
-            },
-          });
-          console.log('[useAprovarVeiculoServico] Rastreador ativado na Softruck com sucesso');
+          // Buscar plataforma do rastreador
+          const { data: rastreadorInfo } = await supabase
+            .from('rastreadores')
+            .select('plataforma')
+            .eq('imei', data.imeiRastreador)
+            .single();
+
+          if (rastreadorInfo?.plataforma === 'softruck') {
+            await supabase.functions.invoke('softruck-ativar-dispositivo', {
+              body: {
+                imei: data.imeiRastreador,
+                veiculoId: data.veiculoId,
+                associadoId: data.associadoId,
+                associadoEmail: associadoData?.email,
+              },
+            });
+            console.log('[useAprovarVeiculoServico] Rastreador ativado na Softruck com sucesso');
+          } else if (rastreadorInfo?.plataforma === 'rede_veiculos') {
+            await supabase.functions.invoke('rede-veiculos-vincular-cliente', {
+              body: {
+                imei: data.imeiRastreador,
+                veiculoId: data.veiculoId,
+                associadoId: data.associadoId,
+              },
+            });
+            console.log('[useAprovarVeiculoServico] Rastreador vinculado na Rede Veículos com sucesso');
+          }
         } catch (err) {
-          console.warn('[useAprovarVeiculoServico] Ativação na Softruck falhou, requer ação manual:', err);
+          console.warn('[useAprovarVeiculoServico] Ativação na plataforma falhou, requer ação manual:', err);
           // Não bloquear fluxo - ativação pode ser feita manualmente depois
         }
       } else {
