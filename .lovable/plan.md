@@ -1,345 +1,562 @@
 
 
-# Revisao Completa - Fluxo de Consulta de Posicao na Rede Veiculos
+# Revisao Completa - Fluxo de Controle de Adimplencia na Rede Veiculos
 
 ## Resumo Executivo
 
 | Item | Status | Detalhes |
 |------|--------|----------|
-| Endpoint POST /obterUltimaPosicaoValida | **NAO USADO** | Sistema usa GET /veiculos/{id}/posicao em vez disso |
-| Consulta quando associado abre tela de rastreamento | **IMPLEMENTADO** | Via `posicao-veiculo` Edge Function |
-| Consulta quando analista visualiza mapa | **PARCIAL** | Usa RPC `get_ultimas_posicoes` (dados locais, nao API em tempo real) |
-| Consulta quando ha solicitacao de Assistencia 24h | **IMPLEMENTADO** | Via `posicao-veiculo` na edge function `criar-chamado-assistencia` |
-| Consulta quando ha comunicado de sinistro | **PARCIAL** | Usa ultima posicao do banco, nao busca tempo real |
-| Identificador do veiculo enviado corretamente | **SIM** | Usa `rastreador.codigo` ou `id_plataforma` |
-| Latitude/longitude retornada e exibida no mapa | **SIM** | Mapeamento correto de campos |
-| Data/hora da posicao mostrada ao usuario | **SIM** | Via `data_hora` e calculo de tempo |
-| Posicoes antigas sinalizadas como desatualizada | **IMPLEMENTADO** | Via status `online/atencao/offline` |
+| Endpoint POST /informarVeiculoAdimplente | **NAO EXISTE** | Nao ha edge function para notificar adimplencia |
+| Endpoint POST /informarVeiculoInadimplente | **NAO EXISTE** | Nao ha edge function para notificar inadimplencia |
+| Webhook ASAAS notifica Rede Veiculos | **NAO** | Apenas atualiza banco local e reativa associado |
+| Baixa manual notifica Rede Veiculos | **NAO** | Apenas atualiza banco local |
+| Vencimento apos carencia bloqueia | **PARCIAL** | Suspende associado localmente, nao notifica plataforma |
+| Bloqueio por inadimplencia definido pela diretoria | **NAO** | Nao ha integracao com plataforma |
+| Cobranca judicial notifica Rede Veiculos | **NAO** | Funcionalidade nao existe |
+| Acesso ao rastreamento bloqueado quando inadimplente | **NAO** | AppRastreamento nao verifica status |
+| Historico de mudancas de status gravado | **PARCIAL** | Apenas via logs locais |
 
 ---
 
 ## Analise Detalhada
 
-### 1. Estado Atual da Integracao Rede Veiculos
+### 1. Estado Atual - Nenhuma Integracao de Adimplencia
 
-O sistema possui **duas Edge Functions** que consultam posicao:
+Os endpoints de controle de adimplencia da Rede Veiculos **NAO ESTAO IMPLEMENTADOS**:
 
-| Edge Function | Uso Principal | Suporte Rede Veiculos |
-|---------------|---------------|----------------------|
-| `posicao-veiculo` | App do Associado | **SIM** - linha 195-232 |
-| `rastreador-posicao` | Painel Administrativo | **PARCIAL** - apenas Softruck |
+| Endpoint | Edge Function | Status |
+|----------|---------------|--------|
+| POST /vincularClienteVeiculo | `rede-veiculos-vincular-cliente` | Implementado |
+| POST /desvincularClienteVeiculo | `rede-veiculos-desvincular-cliente` | Implementado |
+| POST /atualizarDadosCliente | `rede-veiculos-atualizar-cliente` | Implementado |
+| POST /atualizarDadosVeiculo | `rede-veiculos-atualizar-veiculo` | Implementado |
+| **POST /informarVeiculoAdimplente** | **NAO EXISTE** | **Gap critico** |
+| **POST /informarVeiculoInadimplente** | **NAO EXISTE** | **Gap critico** |
 
-#### 1.1 Implementacao em `posicao-veiculo` (CORRETO)
+### 2. Cenarios de Adimplencia (Deveria Chamar /informarVeiculoAdimplente)
+
+#### 2.1 Quando Pagamento e Confirmado via Webhook ASAAS
+
+**Arquivo:** `supabase/functions/asaas-webhook/index.ts` (linhas 563-609)
 
 ```typescript
-// supabase/functions/posicao-veiculo/index.ts - linhas 379-394
-if (plataformaCodigo === 'rede_veiculos') {
-  const redeToken = Deno.env.get('REDE_VEICULOS_TOKEN');
-  const baseUrl = plataforma?.ambiente_atual === 'producao'
-    ? plataforma?.api_url_producao
-    : plataforma?.api_url_sandbox;
+// CORREÇÃO 7.5.6: Verificar se associado suspenso deve ser reativado
+const { data: associadoStatus } = await supabase
+  .from('associados')
+  .select('id, status')
+  .eq('id', cobranca.associado_id)
+  .single();
 
-  posicao = await getPosicaoRedeVeiculos(
-    redeToken,
-    rastreador.codigo,  // Identificador do veiculo
-    baseUrl
-  );
+if (associadoStatus?.status === 'suspenso') {
+  // Verificar se ainda há cobranças pendentes/vencidas
+  const { count: cobrancasPendentes } = await supabase
+    .from('asaas_cobrancas')
+    .select('*', { count: 'exact', head: true })
+    .eq('associado_id', cobranca.associado_id)
+    .in('status', ['PENDING', 'OVERDUE']);
+
+  if (cobrancasPendentes === 0) {
+    // Reativar associado APENAS LOCALMENTE
+    await supabase
+      .from('associados')
+      .update({ 
+        status: 'ativo',
+        bloqueado: false,
+        motivo_bloqueio: null,
+        data_bloqueio: null,
+      })
+      .eq('id', cobranca.associado_id);
+    
+    // NAO NOTIFICA REDE VEICULOS SOBRE ADIMPLENCIA
+  }
 }
 ```
 
-**Endpoint chamado:** `GET /veiculos/{codigo}/posicao`
+**Gap:** Quando o associado volta a ficar adimplente, a Rede Veiculos **nao e notificada**.
 
-#### 1.2 Implementacao em `rastreador-posicao` (INCOMPLETO)
+#### 2.2 Quando Ha Baixa Manual de Pagamento
 
-Esta edge function **APENAS** suporta Softruck - nao tem suporte para Rede Veiculos:
+**Arquivo:** `src/components/financeiro/RegistrarPagamentoModal.tsx` (linhas 90-160)
 
 ```typescript
-// supabase/functions/rastreador-posicao/index.ts - linha 215
-// Buscar posicao com retry automatico em erro 401 (APENAS SOFTRUCK)
-const posicao = await getPosicaoSoftruckComRetry(...)
+const registrarMutation = useMutation({
+  mutationFn: async () => {
+    // 1. Atualizar cobrança
+    await supabase.from('asaas_cobrancas').update({ status: 'RECEIVED', ... });
+    
+    // 2. Registrar movimentação financeira
+    await supabase.from('movimentacoes_financeiras').insert({ ... });
+
+    // 3. Criar lançamento contábil
+    await criarLancamentoAutomatico({ ... });
+    
+    // NAO VERIFICA SE ASSOCIADO DEVE SER REATIVADO
+    // NAO NOTIFICA REDE VEICULOS
+  },
+});
 ```
 
-**Gap identificado:** Nenhum tratamento para `rede_veiculos` nesta edge function.
+**Gap:** Baixa manual nao verifica debitos pendentes nem notifica a plataforma.
 
-### 2. Cenarios de Consulta de Posicao
+#### 2.3 Quando Associado Quita Debitos Pendentes
 
-#### 2.1 Associado Abre Tela de Rastreamento no App
-
-**Arquivo:** `src/pages/app/AppRastreamento.tsx` (linha 139)
+**Arquivo:** `src/hooks/useAssociados.ts` (linhas 450-500)
 
 ```typescript
-const { posicao, tempoReal, offline, refetch, atualizarManual } = 
-  useVeiculoPosicao(vehicle?.id);
-```
+const reativarAssociado = useMutation({
+  mutationFn: async (id: string) => {
+    // 1. Atualizar status local
+    await supabase.from('associados').update({
+      status: 'ativo',
+      bloqueado: false,
+    }).eq('id', id);
 
-**Hook:** `src/hooks/useMyData.ts` (linhas 251-300)
-
-```typescript
-export function useVeiculoPosicao(veiculoId?: string) {
-  const query = useQuery({
-    queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke('posicao-veiculo', {
-        body: { veiculo_id: veiculoId }
+    // 2. TENTA REVINCULAR na Rede Veículos
+    if (rastreador?.plataforma === 'rede_veiculos' && rastreador.imei) {
+      await supabase.functions.invoke('rede-veiculos-vincular-cliente', {
+        body: { imei, veiculoId, associadoId: id },
       });
-      // ...
-    },
-    refetchInterval: 30000,  // Auto-refresh a cada 30s
-  });
-}
-```
-
-**Status:** IMPLEMENTADO - A edge function `posicao-veiculo` roteeia corretamente entre Softruck e Rede Veiculos.
-
-#### 2.2 Analista Visualiza Mapa de Monitoramento
-
-**Hook:** `src/hooks/useRastreadorPosicao.ts` (linhas 178-189)
-
-```typescript
-export function useTodasPosicoesAtuais() {
-  return useQuery({
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_ultimas_posicoes');
-      return data as PosicaoAtual[];
-    },
-    refetchInterval: 60000,  // A cada 60s
-  });
-}
-```
-
-**Status:** PARCIAL - Usa dados **locais** (RPC no banco), nao busca posicao em tempo real via API.
-
-**Gap:** O mapa do analista mostra posicoes sincronizadas pelo `sync-rastreadores` (cron a cada minuto), nao posicao em tempo real da plataforma.
-
-#### 2.3 Solicitacao de Assistencia 24h
-
-**Arquivo:** `supabase/functions/criar-chamado-assistencia/index.ts` (linhas 218-230)
-
-```typescript
-// Tentar buscar posicao em tempo real via API
-if (rastreador.plataforma === 'softruck' && rastreador.plataforma_veiculo_id) {
-  const posicaoResult = await fetch(
-    `${supabaseUrl}/functions/v1/posicao-veiculo`,
-    {
-      method: 'POST',
-      body: JSON.stringify({ veiculo_id: veiculo.id }),
     }
-  );
-  // ...
-}
+    // MAS REVINCULAR != INFORMAR ADIMPLENCIA
+    // Se ja estava vinculado, nao precisa revincular
+    // Precisa apenas informar que voltou a ser adimplente
+  },
+});
 ```
 
-**Gap Identificado:** Condicao `rastreador.plataforma === 'softruck'` - Nao busca posicao para Rede Veiculos!
+**Gap:** Usa vinculacao em vez de endpoint especifico de adimplencia.
 
-**Arquivo:** `src/pages/public/TrackingAssistencia.tsx` (linhas 85-96)
+### 3. Cenarios de Inadimplencia (Deveria Chamar /informarVeiculoInadimplente)
 
-```typescript
-if (chamadoData.veiculo?.id) {
-  const { data: posicaoResult } = await supabase.functions.invoke('posicao-veiculo', {
-    body: { veiculo_id: chamadoData.veiculo.id },
-  });
-}
-```
+#### 3.1 Quando Boleto Vence Apos Periodo de Carencia
 
-**Status:** IMPLEMENTADO - Esta pagina publica busca posicao sem filtrar plataforma.
-
-#### 2.4 Comunicado de Sinistro
-
-**Arquivo:** `supabase/functions/criar-sinistro/index.ts` (linhas 235-240)
+**Arquivo:** `supabase/functions/asaas-webhook/index.ts` (linhas 613-698)
 
 ```typescript
-// Buscar rastreador do veiculo
-const { data: rastreador } = await supabaseAdmin
-  .from('rastreadores')
-  .select('id, codigo, plataforma, ultima_posicao_lat, ultima_posicao_lng, ultima_comunicacao')
-  .eq('veiculo_id', payload.veiculo_id)
-  .eq('status', 'instalado')
-  .maybeSingle();
-```
+case 'PAYMENT_OVERDUE':
+  // Disparar notificação de cobrança vencida
+  await supabase.functions.invoke('disparar-notificacao', { ... });
 
-**Status:** PARCIAL - Usa ultima posicao **do banco** (campo `ultima_posicao_lat/lng`), nao busca em tempo real.
-
-**Implicacao:** Se o rastreador nao sincronizou recentemente, a posicao pode estar desatualizada.
-
-### 3. Sinalizacao de Posicoes Desatualizadas
-
-#### 3.1 Backend - Calculo de Status
-
-**Arquivo:** `supabase/functions/posicao-veiculo/index.ts` (linhas 51-61)
-
-```typescript
-function calcularStatusRastreador(ultimaComunicacao: string | null): 'online' | 'offline' | 'atencao' {
-  if (!ultimaComunicacao) return 'offline';
+  // Se for cobrança de adesão vencida, cancelar cotação
+  if (cobranca.tipo === 'adesao' && cobranca.contrato_id) {
+    await supabase.from('cotacoes').update({
+      status: 'expirada',
+      motivo_cancelamento: 'Pagamento de adesão não realizado',
+    }).eq('id', cotacao_id);
+  }
   
-  const diffMinutos = (agora.getTime() - ultima.getTime()) / 60000;
+  // NAO SUSPENDE ASSOCIADO AUTOMATICAMENTE
+  // NAO NOTIFICA REDE VEICULOS SOBRE INADIMPLENCIA
+  break;
+```
+
+**Gap:** Boleto vencido apenas dispara notificacao, nao suspende associado nem notifica plataforma.
+
+**Nao existe:** Logica de "periodo de carencia" para suspensao automatica.
+
+#### 3.2 Quando Ha Bloqueio por Inadimplencia pela Diretoria
+
+**Arquivo:** `src/hooks/useAssociados.ts` (linhas 434-448)
+
+```typescript
+const suspenderAssociado = useMutation({
+  mutationFn: async ({ id, motivo }: { id: string; motivo?: string }) => {
+    await supabase.from('associados').update({
+      status: 'suspenso',
+      motivo_bloqueio: motivo || 'Suspenso pelo sistema',
+    }).eq('id', id);
+    // NAO NOTIFICA REDE VEICULOS
+    // NAO DESVINCULAR DA PLATAFORMA
+  },
+});
+```
+
+**Gap:** Suspensao manual nao notifica a Rede Veiculos sobre inadimplencia.
+
+#### 3.3 Quando Associado Entra em Cobranca Judicial
+
+**Status:** Funcionalidade **NAO EXISTE** no sistema.
+
+Nao ha processo para:
+- Marcar associado como "em cobranca judicial"
+- Bloquear rastreamento automaticamente
+- Notificar plataforma sobre inadimplencia judicial
+
+### 4. Controle de Acesso ao Rastreamento
+
+**Arquivo:** `src/pages/app/AppRastreamento.tsx`
+
+O componente **NAO VERIFICA** o status do associado:
+
+```typescript
+export default function AppRastreamento() {
+  const { data: vehicles } = useMyVehicles();
+  const { data: tracker } = useMyVehicleWithTracker();
   
-  if (diffMinutos < 10) return 'online';     // < 10 min = online
-  if (diffMinutos < 60) return 'atencao';    // < 1h = atencao
-  return 'offline';                           // > 1h = offline
+  // NAO VERIFICA:
+  // - if (associado.status === 'suspenso') return <AcessoBloqueado />
+  // - if (associado.status === 'inadimplente') return <AcessoBloqueado />
+  // - if (associado.bloqueado) return <AcessoBloqueado />
+  
+  // Exibe mapa normalmente mesmo se associado suspenso
 }
 ```
 
-#### 3.2 Frontend - Exibicao do Status
-
-**Arquivo:** `src/pages/app/AppRastreamento.tsx` (linhas 157-181)
-
-```typescript
-// Calcular horas sem comunicacao
-const horasSemCom = ultimaCom 
-  ? Math.floor((Date.now() - new Date(ultimaCom).getTime()) / (1000 * 60 * 60)) 
-  : null;
-
-// Exibir tempo desde atualizacao
-if (diffMin < 1) setTempoDesdeAtualizacao('agora');
-else if (diffMin < 60) setTempoDesdeAtualizacao(`ha ${diffMin} min`);
-else if (diffMin < 1440) setTempoDesdeAtualizacao(`ha ${Math.floor(diffMin / 60)}h`);
-else setTempoDesdeAtualizacao(`ha ${Math.floor(diffMin / 1440)}d`);
-```
-
-**Overlays para estados especificos (linhas 329-362):**
-
-| Status | Overlay | Mensagem |
-|--------|---------|----------|
-| Aguardando primeira posicao | Azul pulsante | "Aguardando primeira posicao GPS" |
-| Sem comunicacao > 4h | Vermelho | "O rastreador nao comunica ha Xh" |
-| Offline curto periodo | Amarelo | "Rastreador offline - Ultima posicao: ha X" |
-
-**Status:** IMPLEMENTADO - Sistema sinaliza corretamente posicoes antigas.
+**Gap:** Associado inadimplente/suspenso continua acessando o rastreamento normalmente.
 
 ---
 
-## Gaps Identificados
+## Fluxo Esperado vs Fluxo Atual
 
-### Gap 1: `rastreador-posicao` nao suporta Rede Veiculos
+### Ciclo Adimplente - Inadimplente - Adimplente
 
-Esta edge function so funciona com Softruck. Precisamos adicionar:
+```text
+FLUXO ESPERADO:
+                                                          
+[Associado Ativo] ---> [Boleto Vence] ---> [Carência 7d]
+       |                                          |
+       v                                          v
+[Rastreamento OK]                    [Sem pagamento?]
+       ^                                    |
+       |                             SIM    v    NAO
+       |                        [SUSPENDER]     [OK]
+       |                              |
+       |                              v
+       |                    [POST /informarVeiculoInadimplente]
+       |                              |
+       |                              v
+       |                    [Bloquear AppRastreamento]
+       |                              |
+       |                              v
+       |                    [Associado paga]
+       |                              |
+       |                              v
+       |                    [POST /informarVeiculoAdimplente]
+       |                              |
+       +------------------------------+
+
+FLUXO ATUAL:
+                                                          
+[Associado Ativo] ---> [Boleto Vence] ---> [Notificação]
+       |                                          |
+       v                                          v
+[Rastreamento OK]                        [Só notifica]
+       |                                          
+       | (Associado continua acessando)          
+       |                                          
+[Sem suspensão automática, sem bloqueio na Rede Veículos]
+```
+
+---
+
+## Plano de Implementacao
+
+### Fase 1: Criar Edge Functions de Adimplencia
+
+**Novo arquivo:** `supabase/functions/rede-veiculos-informar-adimplente/index.ts`
 
 ```typescript
-// Adicionar em rastreador-posicao/index.ts
-if (plataformaCodigo === 'rede_veiculos') {
-  const redeToken = Deno.env.get('REDE_VEICULOS_TOKEN');
-  const baseUrl = plataforma.ambiente_atual === 'producao'
-    ? plataforma.api_url_producao
-    : plataforma.api_url_sandbox;
+interface RequestBody {
+  associadoId: string;
+  veiculoId?: string; // Se informado, apenas para este veiculo
+  motivo?: string;
+}
 
-  const url = `${baseUrl}/veiculos/${rastreador.codigo}/posicao`;
-  // ... fetch e mapear resposta
+// Fluxo:
+// 1. Buscar associado e veiculos com rede_veiculos_veiculo_id
+// 2. Para cada veiculo vinculado:
+//    - Chamar POST /informarVeiculoAdimplente
+//    - Registrar log
+// 3. Atualizar status local do associado se necessario
+```
+
+**Novo arquivo:** `supabase/functions/rede-veiculos-informar-inadimplente/index.ts`
+
+```typescript
+interface RequestBody {
+  associadoId: string;
+  veiculoId?: string;
+  motivo: string; // Obrigatorio: 'vencimento', 'bloqueio_diretoria', 'cobranca_judicial'
+  diasAtraso?: number;
+}
+
+// Fluxo:
+// 1. Buscar associado e veiculos com rede_veiculos_veiculo_id
+// 2. Para cada veiculo vinculado:
+//    - Chamar POST /informarVeiculoInadimplente
+//    - Registrar log
+// 3. Atualizar status local do associado
+// 4. Registrar historico de mudanca
+```
+
+### Fase 2: Integrar no Webhook ASAAS
+
+**Modificar:** `supabase/functions/asaas-webhook/index.ts`
+
+Adicionar no evento PAYMENT_RECEIVED/CONFIRMED:
+```typescript
+// Apos reativar associado localmente
+if (associadoStatus?.status === 'suspenso' && cobrancasPendentes === 0) {
+  // Reativar localmente (ja existe)
+  await supabase.from('associados').update({ status: 'ativo', ... });
+  
+  // NOVO: Notificar Rede Veiculos
+  await supabase.functions.invoke('rede-veiculos-informar-adimplente', {
+    body: { associadoId: cobranca.associado_id, motivo: 'pagamento_confirmado' },
+  });
 }
 ```
 
-### Gap 2: `criar-chamado-assistencia` filtra apenas Softruck
+### Fase 3: Criar Cron de Suspensao Automatica
 
-A condicao `if (rastreador.plataforma === 'softruck')` exclui Rede Veiculos:
+**Novo arquivo:** `supabase/functions/cron-suspender-inadimplentes/index.ts`
 
 ```typescript
-// ATUAL (incorreto)
-if (rastreador.plataforma === 'softruck' && rastreador.plataforma_veiculo_id) {
-
-// CORRIGIDO
-if (rastreador && (rastreador.plataforma === 'softruck' || rastreador.plataforma === 'rede_veiculos')) {
+// Executar diariamente
+// 1. Buscar associados ativos com cobrancas vencidas > X dias (carencia)
+// 2. Para cada:
+//    - Atualizar status para 'suspenso'
+//    - Chamar rede-veiculos-informar-inadimplente
+//    - Enviar notificacao ao associado
+//    - Registrar log
 ```
 
-### Gap 3: `criar-sinistro` nao busca posicao em tempo real
+### Fase 4: Integrar na Baixa Manual
 
-Atualmente usa apenas `ultima_posicao_lat/lng` do banco. Deveria:
+**Modificar:** `src/components/financeiro/RegistrarPagamentoModal.tsx`
 
 ```typescript
-// Tentar buscar posicao em tempo real para evidencia
-if (rastreador) {
-  try {
-    const { data: posicaoReal } = await supabase.functions.invoke('posicao-veiculo', {
-      body: { veiculo_id: payload.veiculo_id },
+// Apos registrar pagamento
+if (cobranca?.associado?.id) {
+  // Verificar se associado estava suspenso e nao tem mais pendencias
+  const { data: associado } = await supabase
+    .from('associados')
+    .select('status')
+    .eq('id', cobranca.associado.id)
+    .single();
+  
+  if (associado?.status === 'suspenso') {
+    const { count } = await supabase
+      .from('asaas_cobrancas')
+      .select('*', { count: 'exact', head: true })
+      .eq('associado_id', cobranca.associado.id)
+      .in('status', ['PENDING', 'OVERDUE']);
+    
+    if (count === 0) {
+      // Reativar e notificar Rede Veiculos
+      await supabase.functions.invoke('rede-veiculos-informar-adimplente', {
+        body: { associadoId: cobranca.associado.id },
+      });
+    }
+  }
+}
+```
+
+### Fase 5: Bloquear Acesso ao Rastreamento
+
+**Modificar:** `src/pages/app/AppRastreamento.tsx`
+
+```typescript
+export default function AppRastreamento() {
+  const navigate = useNavigate();
+  const { data: myData, isLoading: associadoLoading } = useMyData();
+  const { data: vehicles } = useMyVehicles();
+  
+  // Verificar status do associado
+  const associadoBloqueado = myData?.status === 'suspenso' || 
+                              myData?.status === 'inadimplente' || 
+                              myData?.bloqueado === true;
+  
+  if (associadoBloqueado) {
+    return (
+      <div className="flex h-screen flex-col items-center justify-center p-4">
+        <ShieldAlert className="h-16 w-16 text-destructive" />
+        <h2 className="mt-4 text-xl font-bold">Acesso Bloqueado</h2>
+        <p className="mt-2 text-center text-muted-foreground">
+          Seu acesso ao rastreamento está temporariamente suspenso 
+          devido a pendências financeiras.
+        </p>
+        <Button 
+          className="mt-6" 
+          onClick={() => navigate('/app/boletos')}
+        >
+          Ver Boletos Pendentes
+        </Button>
+      </div>
+    );
+  }
+  
+  // Resto do componente...
+}
+```
+
+### Fase 6: Integrar Suspensao Manual
+
+**Modificar:** `src/hooks/useAssociados.ts`
+
+```typescript
+const suspenderAssociado = useMutation({
+  mutationFn: async ({ id, motivo }: { id: string; motivo?: string }) => {
+    // 1. Atualizar status local
+    await supabase.from('associados').update({
+      status: 'suspenso',
+      motivo_bloqueio: motivo || 'Suspenso pelo sistema',
+    }).eq('id', id);
+    
+    // 2. NOVO: Notificar Rede Veiculos
+    await supabase.functions.invoke('rede-veiculos-informar-inadimplente', {
+      body: { 
+        associadoId: id, 
+        motivo: motivo?.includes('judicial') ? 'cobranca_judicial' : 'bloqueio_diretoria',
+      },
     });
-    if (posicaoReal?.success && posicaoReal?.posicao) {
-      rastreadorLat = posicaoReal.posicao.latitude;
-      rastreadorLng = posicaoReal.posicao.longitude;
-      rastreadorPosicaoCapturadaEm = posicaoReal.posicao.data_hora;
-    }
-  } catch { /* fallback para banco */ }
-}
+    
+    // 3. Registrar historico
+    await supabase.from('associados_historico').insert({
+      associado_id: id,
+      tipo: 'status_alterado',
+      descricao: `Associado suspenso. Motivo: ${motivo}`,
+      dados_anteriores: { status: 'ativo' },
+      dados_novos: { status: 'suspenso', motivo_bloqueio: motivo },
+    });
+  },
+});
 ```
 
-### Gap 4: Mapa do analista nao busca tempo real
-
-O hook `useTodasPosicoesAtuais` usa RPC local. Para tempo real, precisaria chamar a API para cada veiculo (pode ser custoso).
-
-**Recomendacao:** Manter como esta (sync via cron) mas adicionar botao "Atualizar Agora" que chama `sync-rastreadores`.
-
 ---
 
-## Plano de Correcao
+## Arquivos a Criar
 
-### Fase 1: Corrigir `rastreador-posicao` para suportar Rede Veiculos
-
-**Modificar:** `supabase/functions/rastreador-posicao/index.ts`
-
-Adicionar funcao `getPosicaoRedeVeiculos` e logica de roteamento por plataforma.
-
-### Fase 2: Corrigir `criar-chamado-assistencia`
-
-**Modificar:** `supabase/functions/criar-chamado-assistencia/index.ts`
-
-Remover filtro `plataforma === 'softruck'` e usar `posicao-veiculo` para ambas plataformas.
-
-### Fase 3: Corrigir `criar-sinistro`
-
-**Modificar:** `supabase/functions/criar-sinistro/index.ts`
-
-Adicionar chamada a `posicao-veiculo` para obter posicao em tempo real como evidencia.
-
-### Fase 4: (Opcional) Adicionar botao "Atualizar Posicoes" no mapa do analista
-
-**Modificar:** Componente do mapa de monitoramento
-
-Adicionar botao que chama `useSyncRastreadores` para forcar atualizacao.
-
----
+| Arquivo | Descricao |
+|---------|-----------|
+| `supabase/functions/rede-veiculos-informar-adimplente/index.ts` | Notifica adimplencia |
+| `supabase/functions/rede-veiculos-informar-inadimplente/index.ts` | Notifica inadimplencia |
+| `supabase/functions/cron-suspender-inadimplentes/index.ts` | Suspensao automatica |
 
 ## Arquivos a Modificar
 
 | Arquivo | Alteracoes |
 |---------|------------|
-| `supabase/functions/rastreador-posicao/index.ts` | Adicionar suporte Rede Veiculos |
-| `supabase/functions/criar-chamado-assistencia/index.ts` | Remover filtro de plataforma |
-| `supabase/functions/criar-sinistro/index.ts` | Buscar posicao tempo real |
+| `supabase/functions/asaas-webhook/index.ts` | Chamar informar-adimplente apos reativacao |
+| `src/components/financeiro/RegistrarPagamentoModal.tsx` | Verificar e reativar apos baixa manual |
+| `src/pages/app/AppRastreamento.tsx` | Bloquear acesso se suspenso/inadimplente |
+| `src/hooks/useAssociados.ts` | Integrar notificacao na suspensao manual |
+| `supabase/config.toml` | Registrar novas edge functions |
+
+---
+
+## Payload Esperado para Endpoints
+
+### POST /informarVeiculoAdimplente
+
+```json
+{
+  "cpfCnpj": "12345678901",
+  "placa": "ABC1234",
+  "dataRegularizacao": "2024-01-15"
+}
+```
+
+### POST /informarVeiculoInadimplente
+
+```json
+{
+  "cpfCnpj": "12345678901",
+  "placa": "ABC1234",
+  "motivo": "vencimento_cobranca",
+  "diasAtraso": 15,
+  "valorPendente": 450.00
+}
+```
+
+---
+
+## Configuracao de Carencia
+
+Adicionar em `configuracoes`:
+
+| Chave | Valor | Descricao |
+|-------|-------|-----------|
+| `inadimplencia_dias_carencia` | `7` | Dias apos vencimento para suspender |
+| `inadimplencia_dias_bloqueio_total` | `30` | Dias para bloqueio definitivo |
+| `inadimplencia_notificar_rede_veiculos` | `true` | Se deve notificar plataforma |
 
 ---
 
 ## Checklist de Verificacao
 
-- [x] Associado abre tela de rastreamento - posicao Rede Veiculos funciona
-- [x] Posicao retornada com latitude/longitude
-- [x] Data/hora da posicao exibida ao usuario
-- [x] Posicoes antigas sinalizadas como offline/atencao
-- [ ] `rastreador-posicao` suporta Rede Veiculos
-- [ ] Assistencia 24h busca posicao Rede Veiculos
-- [ ] Sinistro busca posicao em tempo real
+- [ ] Edge function `rede-veiculos-informar-adimplente` criada
+- [ ] Edge function `rede-veiculos-informar-inadimplente` criada
+- [ ] Cron `cron-suspender-inadimplentes` criado e agendado
+- [ ] Webhook ASAAS notifica Rede Veiculos apos pagamento
+- [ ] Baixa manual notifica Rede Veiculos apos quitacao
+- [ ] Suspensao manual notifica Rede Veiculos
+- [ ] AppRastreamento bloqueado para inadimplentes
+- [ ] Historico de mudancas de status gravado
+- [ ] Status na Rede Veiculos reflete corretamente
 
 ---
 
-## Teste Recomendado: Consulta de Posicao
+## Teste Recomendado: Ciclo Completo de Adimplencia
 
 ### Pre-requisitos
 
-1. 3 veiculos com rastreadores Rede Veiculos instalados
-2. `REDE_VEICULOS_TOKEN` valido e configurado
-3. Acesso ao app do associado
+1. Associado ativo com veiculo e rastreador Rede Veiculos
+2. Cobranca pendente/vencida para este associado
+3. Acesso ao painel administrativo e app do associado
+4. Acesso ao painel Rede Veiculos para verificar
 
 ### Passos do Teste
 
-1. **Login como associado no App** (`/app/login`)
-2. **Acessar Rastreamento** (`/app/rastreamento`)
-3. **Verificar posicao do veiculo:**
-   - Mapa exibe marcador na posicao correta
-   - Data/hora da ultima atualizacao visivel
-   - Status do rastreador (online/atencao/offline)
-4. **Clicar "Atualizar"**
-5. **Verificar que posicao e atualizada**
-6. **Repetir para os outros 2 veiculos**
+**Parte 1: Inadimplencia**
+
+1. **Acessar o sistema como administrador**
+2. **Navegar para Cadastro > Associados > [Associado teste]**
+3. **Clicar em "Suspender"** e informar motivo "Inadimplencia"
+4. **Verificar no banco:**
+   - `associados.status = 'suspenso'`
+   - `rastreadores_api_logs` com registro de inadimplencia
+5. **Verificar no App do associado:**
+   - Ao acessar Rastreamento, deve ver tela de bloqueio
+6. **Verificar na Rede Veiculos:**
+   - Veiculo marcado como inadimplente
+
+**Parte 2: Adimplencia**
+
+7. **Registrar pagamento manual** para o associado
+8. **Ou aguardar pagamento via webhook ASAAS**
+9. **Verificar que associado foi reativado automaticamente**
+10. **Verificar no banco:**
+    - `associados.status = 'ativo'`
+    - `rastreadores_api_logs` com registro de adimplencia
+11. **Verificar no App do associado:**
+    - Rastreamento acessivel novamente
+12. **Verificar na Rede Veiculos:**
+    - Veiculo marcado como adimplente
 
 ### Resultado Esperado
 
-- Todos os 3 veiculos exibem posicao no mapa
-- Data/hora da posicao e exibida (formato "agora", "ha X min", etc)
-- Posicoes antigas mostram status "atencao" ou "offline"
-- Atualizacao manual funciona
+- Status sincronizado entre SGA e Rede Veiculos em ambas direcoes
+- Acesso ao rastreamento bloqueado/liberado conforme status
+- Historico de todas as mudancas registrado
+- Notificacoes enviadas ao associado
+
+---
+
+## Consideracoes Finais
+
+**IMPORTANTE:** Antes de implementar, confirmar com documentacao da API Rede Veiculos:
+
+1. **URL exata dos endpoints:**
+   - `POST /informarVeiculoAdimplente` ou similar
+   - `POST /informarVeiculoInadimplente` ou similar
+2. **Campos obrigatorios:** Quais dados devem ser enviados?
+3. **Identificador:** CPF/CNPJ + Placa, ou ID interno?
+4. **Efeito na plataforma:** O que acontece quando informamos inadimplencia?
+   - Bloqueia acesso do cliente ao portal?
+   - Desativa alertas?
+   - Bloqueia veiculo fisicamente?
+5. **Reversibilidade:** Informar adimplencia restaura tudo automaticamente?
+
+**Recomendacao:** Solicitar documentacao oficial da API Rede Veiculos antes de iniciar a implementacao.
 
