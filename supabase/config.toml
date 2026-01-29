@@ -311,3 +311,9 @@ verify_jwt = false
 
 [functions.notificar-status-assistencia]
 verify_jwt = false
+
+[functions.whatsapp-find-messages]
+verify_jwt = false
+
+[functions.whatsapp-find-chats]
+verify_jwt = false
