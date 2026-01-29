@@ -212,11 +212,13 @@ serve(async (req) => {
       .maybeSingle();
 
     if (rastreador) {
-      console.log("[criar-chamado] Rastreador encontrado:", rastreador.id);
+      console.log("[criar-chamado] Rastreador encontrado:", rastreador.id, "Plataforma:", rastreador.plataforma);
       
-      // Tentar buscar posição em tempo real via API
-      if (rastreador.plataforma === 'softruck' && rastreador.plataforma_veiculo_id) {
+      // Tentar buscar posição em tempo real via API (Softruck OU Rede Veículos)
+      if (rastreador.plataforma === 'softruck' || rastreador.plataforma === 'rede_veiculos') {
         try {
+          console.log("[criar-chamado] Buscando posição via posicao-veiculo para:", rastreador.plataforma);
+          
           const posicaoResult = await fetch(
             `${supabaseUrl}/functions/v1/posicao-veiculo`,
             {
@@ -234,9 +236,11 @@ serve(async (req) => {
           if (posicaoData.success && posicaoData.posicao) {
             rastreadorLat = posicaoData.posicao.latitude;
             rastreadorLng = posicaoData.posicao.longitude;
-            rastreadorPosicaoCapturadaEm = posicaoData.posicao.data_posicao || new Date().toISOString();
+            rastreadorPosicaoCapturadaEm = posicaoData.posicao.data_posicao || posicaoData.posicao.data_hora || new Date().toISOString();
             rastreadorEndereco = posicaoData.posicao.endereco || null;
-            console.log("[criar-chamado] Posição do rastreador obtida via API:", rastreadorLat, rastreadorLng);
+            console.log("[criar-chamado] Posição do rastreador obtida via API:", rastreadorLat, rastreadorLng, "Plataforma:", rastreador.plataforma);
+          } else {
+            console.warn("[criar-chamado] API retornou sem posição:", posicaoData.error || posicaoData.mensagem);
           }
         } catch (err) {
           console.error("[criar-chamado] Erro ao buscar posição via API:", err);

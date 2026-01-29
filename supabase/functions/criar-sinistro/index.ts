@@ -240,6 +240,43 @@ Deno.serve(async (req) => {
       .maybeSingle();
     
     console.log('[criar-sinistro] Rastreador encontrado:', rastreador?.codigo || 'Nenhum');
+    
+    // Variáveis para posição do rastreador no momento do sinistro
+    let rastreadorLatMomento = rastreador?.ultima_posicao_lat || null;
+    let rastreadorLngMomento = rastreador?.ultima_posicao_lng || null;
+    let rastreadorPosicaoCapturadaEm = rastreador?.ultima_comunicacao || null;
+    
+    // Tentar buscar posição em tempo real para evidência (Softruck ou Rede Veículos)
+    if (rastreador && (rastreador.plataforma === 'softruck' || rastreador.plataforma === 'rede_veiculos')) {
+      try {
+        console.log('[criar-sinistro] Buscando posição em tempo real via posicao-veiculo para:', rastreador.plataforma);
+        
+        const posicaoResult = await fetch(
+          `${supabaseUrl}/functions/v1/posicao-veiculo`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${supabaseServiceKey}`,
+            },
+            body: JSON.stringify({ veiculo_id: payload.veiculo_id }),
+          }
+        );
+        
+        const posicaoData = await posicaoResult.json();
+        
+        if (posicaoData.success && posicaoData.posicao) {
+          rastreadorLatMomento = posicaoData.posicao.latitude;
+          rastreadorLngMomento = posicaoData.posicao.longitude;
+          rastreadorPosicaoCapturadaEm = posicaoData.posicao.data_posicao || posicaoData.posicao.data_hora || new Date().toISOString();
+          console.log('[criar-sinistro] Posição tempo real obtida:', rastreadorLatMomento, rastreadorLngMomento);
+        } else {
+          console.warn('[criar-sinistro] API retornou sem posição, usando cache do banco');
+        }
+      } catch (err) {
+        console.error('[criar-sinistro] Erro ao buscar posição tempo real (usando cache):', err);
+      }
+    }
 
     if (veicError || !veiculo) {
       console.error('[criar-sinistro] Veículo não encontrado:', veicError);
@@ -319,19 +356,20 @@ Deno.serve(async (req) => {
         bo_numero: payload.numero_bo || null,
         status: 'comunicado',
         canal: 'app',
-        // ===== NOVOS CAMPOS DE POSIÇÃO (EVIDÊNCIA) =====
+        // ===== CAMPOS DE POSIÇÃO (EVIDÊNCIA - TEMPO REAL QUANDO POSSÍVEL) =====
         latitude_informada: payload.latitude || null,
         longitude_informada: payload.longitude || null,
-        rastreador_lat_momento: rastreador?.ultima_posicao_lat || null,
-        rastreador_lng_momento: rastreador?.ultima_posicao_lng || null,
-        rastreador_posicao_capturada_em: rastreador?.ultima_comunicacao || null,
+        rastreador_lat_momento: rastreadorLatMomento,
+        rastreador_lng_momento: rastreadorLngMomento,
+        rastreador_posicao_capturada_em: rastreadorPosicaoCapturadaEm,
       })
       .select()
       .single();
     
     console.log('[criar-sinistro] Posições gravadas:', {
       informada: payload.latitude && payload.longitude ? `${payload.latitude}, ${payload.longitude}` : 'N/A',
-      rastreador: rastreador?.ultima_posicao_lat ? `${rastreador.ultima_posicao_lat}, ${rastreador.ultima_posicao_lng}` : 'N/A',
+      rastreador: rastreadorLatMomento ? `${rastreadorLatMomento}, ${rastreadorLngMomento}` : 'N/A',
+      tempo_real: rastreador ? (rastreador.plataforma === 'softruck' || rastreador.plataforma === 'rede_veiculos') : false,
     });
 
     if (insertError) {
