@@ -827,9 +827,99 @@ serve(async (req) => {
     const payload = await req.json();
     console.log("[whatsapp-webhook] Payload:", JSON.stringify(payload).substring(0, 500));
 
-    // Ignorar eventos que não são mensagens
+    // Criar cliente Supabase (necessário para eventos de conexão também)
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    );
+
+    // ========================================
+    // PROCESSAR EVENTOS DE CONEXÃO (CONNECTION_UPDATE)
+    // ========================================
+    if (payload.event === "connection.update") {
+      const state = payload.data?.state || payload.instance?.state;
+      console.log(`[whatsapp-webhook] CONNECTION_UPDATE recebido: ${state}`);
+      
+      // Mapear estado para nosso status
+      const novoStatus = state === 'open' ? 'open' : 'disconnected';
+      
+      // Buscar instância principal
+      const { data: instancia } = await supabase
+        .from("whatsapp_instancias")
+        .select("id, status")
+        .eq("principal", true)
+        .single();
+      
+      if (instancia) {
+        const statusAnterior = instancia.status;
+        
+        // Atualizar status no banco
+        await supabase
+          .from('whatsapp_instancias')
+          .update({
+            status: novoStatus,
+            updated_at: new Date().toISOString(),
+            ultima_conexao: novoStatus === 'open' ? new Date().toISOString() : undefined,
+          })
+          .eq('id', instancia.id);
+        
+        console.log(`[whatsapp-webhook] Status atualizado: ${statusAnterior} -> ${novoStatus}`);
+        
+        // Se desconectou, criar notificação para diretores
+        if (novoStatus === 'disconnected' && statusAnterior === 'open') {
+          console.log('[whatsapp-webhook] Criando notificação de desconexão');
+          
+          // Registrar log da desconexão
+          await supabase
+            .from('whatsapp_logs')
+            .insert({
+              instancia_id: instancia.id,
+              tipo: 'connection',
+              evento: 'disconnected',
+              payload: payload.data,
+              resposta: { state, timestamp: new Date().toISOString() },
+            });
+          
+          // Criar notificação geral (buscar diretores)
+          const { data: diretores } = await supabase
+            .from('user_roles')
+            .select('user_id')
+            .eq('role', 'diretor');
+          
+          if (diretores?.length) {
+            const notificacoes = diretores.map(d => ({
+              usuario_id: d.user_id,
+              titulo: '⚠️ WhatsApp Desconectado',
+              mensagem: 'A conexão do WhatsApp foi perdida. Acesse Configurações > Integrações para reconectar.',
+              tipo: 'alerta',
+              lida: false,
+            }));
+            
+            await supabase.from('notificacoes').insert(notificacoes);
+          }
+        }
+        
+        // Se reconectou, registrar log
+        if (novoStatus === 'open' && statusAnterior !== 'open') {
+          await supabase
+            .from('whatsapp_logs')
+            .insert({
+              instancia_id: instancia.id,
+              tipo: 'connection',
+              evento: 'connected',
+              payload: payload.data,
+              resposta: { state, timestamp: new Date().toISOString() },
+            });
+        }
+      }
+      
+      return new Response(JSON.stringify({ ok: true, event: 'connection.update', status: novoStatus }), { headers: corsHeaders });
+    }
+
+    // Ignorar outros eventos que não são mensagens
     if (payload.event !== "messages.upsert") {
-      return new Response(JSON.stringify({ ok: true, ignored: true }), { headers: corsHeaders });
+      console.log(`[whatsapp-webhook] Evento ignorado: ${payload.event}`);
+      return new Response(JSON.stringify({ ok: true, ignored: true, event: payload.event }), { headers: corsHeaders });
     }
 
     const data = payload.data;
@@ -877,11 +967,8 @@ serve(async (req) => {
 
     console.log(`[whatsapp-webhook] Mensagem de ${telefone}: ${mensagemTexto.substring(0, 100)}`);
 
-    // Criar cliente Supabase
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
+    // Reusar cliente Supabase já criado acima (na linha 831)
+    // (supabase já foi criado no início do try block)
 
     // Buscar instância e verificar se IA está habilitada
     const { data: instancia } = await supabase
