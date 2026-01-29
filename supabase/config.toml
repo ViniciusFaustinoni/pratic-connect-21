@@ -305,3 +305,6 @@ verify_jwt = false
 
 [functions.whatsapp-send-location]
 verify_jwt = false
+
+[functions.whatsapp-send-contact]
+verify_jwt = false
