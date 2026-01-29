@@ -48,7 +48,7 @@ serve(async (req) => {
     const webhookPayload = {
       url: WEBHOOK_URL,
       enabled: true,
-      webhook_by_events: true,
+      webhook_by_events: false,
       webhook_base64: false,
       events: [
         'MESSAGES_UPSERT',
