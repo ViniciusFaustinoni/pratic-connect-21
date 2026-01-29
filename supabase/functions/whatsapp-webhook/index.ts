@@ -1089,25 +1089,179 @@ async function saveMessage(supabase: any, associadoId: string, role: string, con
   });
 }
 
-// Salvar log de mensagem WhatsApp - ATUALIZADO para aceitar messageId
+// Salvar log de mensagem WhatsApp - ATUALIZADO para suportar mídia
 async function saveWhatsAppLog(
   supabase: any, 
   instanciaId: string, 
   telefone: string, 
   mensagem: string, 
   direcao: string, 
-  messageId?: string
+  messageId?: string,
+  tipo?: string,
+  mediaUrl?: string,
+  mediaMimetype?: string,
+  mediaFilename?: string,
+  referenciaId?: string,
+  referenciaTipo?: string,
+  nomeContato?: string
 ) {
   await supabase.from("whatsapp_mensagens").insert({
     instancia_id: instanciaId,
     telefone,
-    tipo: "text",
+    nome_contato: nomeContato || null,
+    tipo: tipo || "text",
     mensagem,
+    media_url: mediaUrl || null,
+    media_mimetype: mediaMimetype || null,
+    media_filename: mediaFilename || null,
     direcao,
     status: direcao === "saida" ? "enviada" : "entregue",
     message_id: messageId || null,
     sent_at: direcao === "saida" ? new Date().toISOString() : null,
+    referencia_tipo: referenciaTipo || null,
+    referencia_id: referenciaId || null,
   });
+}
+
+// ============================================
+// HELPERS PARA DOWNLOAD E ARMAZENAMENTO DE MÍDIA
+// ============================================
+
+// Baixar mídia da Evolution API
+async function downloadMediaEvolution(
+  apiUrl: string, 
+  instanceName: string, 
+  messageId: string
+): Promise<{ success: boolean; base64?: string; mimetype?: string }> {
+  const EVOLUTION_API_KEY = Deno.env.get("EVOLUTION_API_KEY");
+  
+  try {
+    console.log(`[whatsapp-webhook] Baixando mídia: ${messageId}`);
+    
+    const response = await fetch(
+      `${apiUrl}/chat/getBase64FromMediaMessage/${instanceName}`,
+      {
+        method: "POST",
+        headers: {
+          "apikey": EVOLUTION_API_KEY || "",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          message: { key: { id: messageId } },
+          convertToMp4: false,
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error("[whatsapp-webhook] Erro ao baixar mídia:", errText);
+      return { success: false };
+    }
+
+    const result = await response.json();
+    console.log(`[whatsapp-webhook] Mídia baixada: ${result.mimetype}, tamanho base64: ${result.base64?.length || 0}`);
+    
+    return {
+      success: true,
+      base64: result.base64,
+      mimetype: result.mimetype,
+    };
+  } catch (err) {
+    console.error("[whatsapp-webhook] Erro download mídia:", err);
+    return { success: false };
+  }
+}
+
+// Armazenar mídia no Supabase Storage
+async function storeMediaSupabase(
+  supabase: any,
+  base64: string,
+  mimetype: string,
+  telefone: string
+): Promise<string | null> {
+  try {
+    // Converter base64 para Uint8Array
+    const binaryStr = atob(base64);
+    const bytes = new Uint8Array(binaryStr.length);
+    for (let i = 0; i < binaryStr.length; i++) {
+      bytes[i] = binaryStr.charCodeAt(i);
+    }
+
+    // Determinar extensão
+    const ext = mimetype.split('/')[1]?.split(';')[0] || 'bin';
+    const fileName = `whatsapp/${telefone}/${Date.now()}.${ext}`;
+
+    console.log(`[whatsapp-webhook] Armazenando mídia: ${fileName}`);
+
+    // Upload para bucket
+    const { error } = await supabase.storage
+      .from('sinistros')
+      .upload(fileName, bytes, {
+        contentType: mimetype,
+        upsert: false,
+      });
+
+    if (error) {
+      console.error("[whatsapp-webhook] Erro upload storage:", error);
+      return null;
+    }
+
+    // Gerar URL pública
+    const { data: urlData } = supabase.storage
+      .from('sinistros')
+      .getPublicUrl(fileName);
+
+    console.log(`[whatsapp-webhook] Mídia armazenada: ${urlData?.publicUrl}`);
+    return urlData?.publicUrl || null;
+  } catch (err) {
+    console.error("[whatsapp-webhook] Erro ao armazenar mídia:", err);
+    return null;
+  }
+}
+
+// Transcrever áudio via Whisper
+async function transcreverAudio(base64: string, mimetype: string): Promise<string | null> {
+  try {
+    // Converter base64 para Blob
+    const binaryStr = atob(base64);
+    const bytes = new Uint8Array(binaryStr.length);
+    for (let i = 0; i < binaryStr.length; i++) {
+      bytes[i] = binaryStr.charCodeAt(i);
+    }
+    
+    const audioBlob = new Blob([bytes], { type: mimetype || 'audio/ogg' });
+    
+    // Criar FormData
+    const formData = new FormData();
+    formData.append('audio', audioBlob, 'audio.ogg');
+    
+    console.log(`[whatsapp-webhook] Enviando áudio para transcrição...`);
+    
+    const transcricaoResponse = await fetch(
+      `${Deno.env.get("SUPABASE_URL")}/functions/v1/transcrever-audio`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+        },
+        body: formData,
+      }
+    );
+    
+    if (transcricaoResponse.ok) {
+      const transcricao = await transcricaoResponse.json();
+      console.log(`[whatsapp-webhook] Áudio transcrito: "${transcricao.text?.substring(0, 50)}..."`);
+      return transcricao.text || null;
+    } else {
+      const errText = await transcricaoResponse.text();
+      console.error(`[whatsapp-webhook] Erro na transcrição: ${errText}`);
+      return null;
+    }
+  } catch (err) {
+    console.error("[whatsapp-webhook] Erro ao transcrever áudio:", err);
+    return null;
+  }
 }
 
 // ============================================
@@ -1494,14 +1648,15 @@ serve(async (req) => {
       return new Response(JSON.stringify({ ok: true, ignored: "própria mensagem" }), { headers: corsHeaders });
     }
 
-    // Extrair telefone e texto
+    // Extrair telefone
     const remoteJid = data.key.remoteJid || "";
     
     // Log detalhado para debug
     console.log("[whatsapp-webhook] Dados recebidos:", {
       remoteJid: data.key.remoteJid,
       sender: payload.sender,
-      fromMe: data.key.fromMe
+      fromMe: data.key.fromMe,
+      messageTypes: Object.keys(data.message || {})
     });
     
     if (remoteJid.includes("@g.us")) {
@@ -1512,7 +1667,6 @@ serve(async (req) => {
     // Extrair telefone - suporte para formato LID vs tradicional
     let telefone: string;
     if (remoteJid.includes("@lid")) {
-      // LID: Usar campo "sender" que contém o telefone real
       const sender = payload.sender || "";
       telefone = sender.replace("@s.whatsapp.net", "").replace(/\D/g, "");
       
@@ -1525,19 +1679,46 @@ serve(async (req) => {
     } else {
       telefone = remoteJid.replace("@s.whatsapp.net", "").replace(/\D/g, "");
     }
+
+    // ============================================
+    // DETECTAR TIPO DE MENSAGEM (TEXTO, ÁUDIO, IMAGEM, DOCUMENTO, etc.)
+    // ============================================
+    const messageData = data.message;
+    const messageId = data.key.id;
     
-    const mensagemTexto = data.message?.conversation || data.message?.extendedTextMessage?.text || "";
+    // Tipos de mensagem suportados pela Evolution API
+    const tipoMensagem = {
+      texto: messageData?.conversation || messageData?.extendedTextMessage?.text,
+      imagem: messageData?.imageMessage,
+      documento: messageData?.documentMessage,
+      audio: messageData?.audioMessage,
+      video: messageData?.videoMessage,
+      localizacao: messageData?.locationMessage,
+      contato: messageData?.contactMessage,
+    };
 
-    if (!mensagemTexto.trim()) {
-      return new Response(JSON.stringify({ ok: true, ignored: "sem texto" }), { headers: corsHeaders });
-    }
+    // Determinar tipo principal
+    type TipoMensagem = 'texto' | 'imagem' | 'documento' | 'audio' | 'video' | 'localizacao' | 'contato' | 'desconhecido';
+    let tipoPrincipal: TipoMensagem = 'desconhecido';
 
-    console.log(`[whatsapp-webhook] Mensagem de ${telefone}: ${mensagemTexto.substring(0, 100)}`);
+    if (tipoMensagem.texto) tipoPrincipal = 'texto';
+    else if (tipoMensagem.audio) tipoPrincipal = 'audio';
+    else if (tipoMensagem.imagem) tipoPrincipal = 'imagem';
+    else if (tipoMensagem.documento) tipoPrincipal = 'documento';
+    else if (tipoMensagem.video) tipoPrincipal = 'video';
+    else if (tipoMensagem.localizacao) tipoPrincipal = 'localizacao';
+    else if (tipoMensagem.contato) tipoPrincipal = 'contato';
 
-    // Reusar cliente Supabase já criado acima (na linha 831)
-    // (supabase já foi criado no início do try block)
+    console.log(`[whatsapp-webhook] Tipo de mensagem detectado: ${tipoPrincipal}`);
 
-    // Buscar instância e verificar se IA está habilitada
+    // Extrair dados conforme tipo
+    let mensagemTexto = '';
+    let mediaUrl: string | null = null;
+    let mediaMimetype: string | null = null;
+    let mediaFilename: string | null = null;
+    let mediaArmazenada: string | null = null;
+
+    // Buscar instância primeiro (precisamos para download de mídia)
     const { data: instancia } = await supabase
       .from("whatsapp_instancias")
       .select("id, api_url, instance_name, ia_habilitada")
@@ -1548,6 +1729,143 @@ serve(async (req) => {
       console.error("[whatsapp-webhook] Instância não encontrada");
       return new Response(JSON.stringify({ error: "Instância não configurada" }), { headers: corsHeaders });
     }
+
+    switch (tipoPrincipal) {
+      case 'texto':
+        mensagemTexto = tipoMensagem.texto || '';
+        break;
+      
+      case 'audio': {
+        console.log(`[whatsapp-webhook] Áudio recebido de ${telefone}, processando...`);
+        mediaUrl = tipoMensagem.audio.url;
+        mediaMimetype = tipoMensagem.audio.mimetype;
+        
+        // Baixar e transcrever áudio
+        const mediaResult = await downloadMediaEvolution(instancia.api_url, instancia.instance_name, messageId);
+        
+        if (mediaResult.success && mediaResult.base64) {
+          // Armazenar mídia
+          mediaArmazenada = await storeMediaSupabase(supabase, mediaResult.base64, mediaResult.mimetype || 'audio/ogg', telefone);
+          
+          // Transcrever áudio
+          const transcricao = await transcreverAudio(mediaResult.base64, mediaResult.mimetype || 'audio/ogg');
+          
+          if (transcricao) {
+            mensagemTexto = `[Áudio transcrito]: ${transcricao}`;
+            console.log(`[whatsapp-webhook] Áudio transcrito com sucesso`);
+          } else {
+            mensagemTexto = "[Áudio recebido - não foi possível transcrever]";
+          }
+        } else {
+          mensagemTexto = "[Áudio recebido - não foi possível processar]";
+        }
+        break;
+      }
+      
+      case 'imagem': {
+        console.log(`[whatsapp-webhook] Imagem recebida de ${telefone}`);
+        mediaUrl = tipoMensagem.imagem.url;
+        mediaMimetype = tipoMensagem.imagem.mimetype;
+        const captionImagem = tipoMensagem.imagem.caption || '';
+        
+        // Baixar e armazenar imagem
+        const mediaResult = await downloadMediaEvolution(instancia.api_url, instancia.instance_name, messageId);
+        
+        if (mediaResult.success && mediaResult.base64) {
+          mediaArmazenada = await storeMediaSupabase(supabase, mediaResult.base64, mediaResult.mimetype || 'image/jpeg', telefone);
+        }
+        
+        mensagemTexto = captionImagem ? `[Imagem]: ${captionImagem}` : '[Imagem recebida]';
+        break;
+      }
+      
+      case 'documento': {
+        console.log(`[whatsapp-webhook] Documento recebido de ${telefone}`);
+        mediaUrl = tipoMensagem.documento.url;
+        mediaMimetype = tipoMensagem.documento.mimetype;
+        mediaFilename = tipoMensagem.documento.fileName || 'documento';
+        const captionDoc = tipoMensagem.documento.caption || '';
+        
+        // Baixar e armazenar documento
+        const mediaResult = await downloadMediaEvolution(instancia.api_url, instancia.instance_name, messageId);
+        
+        if (mediaResult.success && mediaResult.base64) {
+          mediaArmazenada = await storeMediaSupabase(supabase, mediaResult.base64, mediaResult.mimetype || 'application/pdf', telefone);
+        }
+        
+        mensagemTexto = captionDoc ? `[Documento: ${mediaFilename}]: ${captionDoc}` : `[Documento recebido: ${mediaFilename}]`;
+        break;
+      }
+      
+      case 'video': {
+        console.log(`[whatsapp-webhook] Vídeo recebido de ${telefone}`);
+        mediaUrl = tipoMensagem.video.url;
+        mediaMimetype = tipoMensagem.video.mimetype;
+        const captionVideo = tipoMensagem.video.caption || '';
+        
+        // Baixar e armazenar vídeo (pode ser grande)
+        const mediaResult = await downloadMediaEvolution(instancia.api_url, instancia.instance_name, messageId);
+        
+        if (mediaResult.success && mediaResult.base64) {
+          mediaArmazenada = await storeMediaSupabase(supabase, mediaResult.base64, mediaResult.mimetype || 'video/mp4', telefone);
+        }
+        
+        mensagemTexto = captionVideo ? `[Vídeo]: ${captionVideo}` : '[Vídeo recebido]';
+        break;
+      }
+      
+      case 'localizacao': {
+        const lat = tipoMensagem.localizacao.degreesLatitude;
+        const lng = tipoMensagem.localizacao.degreesLongitude;
+        const nome = tipoMensagem.localizacao.name || '';
+        
+        console.log(`[whatsapp-webhook] Localização recebida: ${lat}, ${lng}`);
+        
+        // Tentar converter coordenadas em endereço
+        try {
+          const geoResponse = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/reverse-geocode`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+            },
+            body: JSON.stringify({ latitude: lat, longitude: lng }),
+          });
+          
+          if (geoResponse.ok) {
+            const geoData = await geoResponse.json();
+            if (geoData.success && geoData.endereco_completo) {
+              mensagemTexto = `[Localização compartilhada]: ${geoData.endereco_completo}`;
+            } else {
+              mensagemTexto = `[Localização compartilhada]: ${lat}, ${lng}${nome ? ` - ${nome}` : ''}`;
+            }
+          } else {
+            mensagemTexto = `[Localização compartilhada]: ${lat}, ${lng}${nome ? ` - ${nome}` : ''}`;
+          }
+        } catch (e) {
+          mensagemTexto = `[Localização compartilhada]: ${lat}, ${lng}${nome ? ` - ${nome}` : ''}`;
+        }
+        break;
+      }
+      
+      case 'contato': {
+        const displayName = tipoMensagem.contato.displayName || 'Contato';
+        mensagemTexto = `[Contato compartilhado]: ${displayName}`;
+        break;
+      }
+      
+      default:
+        // Tipo desconhecido - ignorar
+        console.log(`[whatsapp-webhook] Tipo de mensagem não suportado:`, Object.keys(messageData || {}));
+        return new Response(JSON.stringify({ ok: true, ignored: "tipo não suportado" }), { headers: corsHeaders });
+    }
+
+    // Validar se tem conteúdo para processar
+    if (!mensagemTexto.trim() && !mediaArmazenada) {
+      return new Response(JSON.stringify({ ok: true, ignored: "sem conteúdo" }), { headers: corsHeaders });
+    }
+
+    console.log(`[whatsapp-webhook] Mensagem de ${telefone}: ${mensagemTexto.substring(0, 100)}`);
 
     // Formatar telefone para busca (múltiplas variantes)
     const telefoneLimpo = telefone.replace(/\D/g, "");
@@ -1571,13 +1889,13 @@ serve(async (req) => {
       .limit(1)
       .maybeSingle();
 
-    if (confirmacaoPendente) {
+    if (confirmacaoPendente && tipoPrincipal === 'texto') {
       console.log(`[whatsapp-webhook] Resposta de confirmação detectada para ${confirmacaoPendente.servico_id}`);
       return await processarRespostaConfirmacao(supabase, confirmacaoPendente, mensagemTexto, instancia);
     }
 
     // ========================================
-    // FLUXO PADRÃO: ASSOCIADO
+    // FLUXO PADRÃO: ASSOCIADO OU LEAD
     // ========================================
     if (!instancia.ia_habilitada) {
       console.log("[whatsapp-webhook] IA desabilitada, ignorando");
@@ -1592,8 +1910,108 @@ serve(async (req) => {
       .eq("status", "ativo")
       .maybeSingle();
 
+    // ========================================
+    // SE NÃO É ASSOCIADO, VERIFICAR SE É LEAD
+    // ========================================
     if (!associado) {
-      console.log(`[whatsapp-webhook] Associado não encontrado para ${telefone}`);
+      console.log(`[whatsapp-webhook] Associado não encontrado, buscando lead para ${telefone}`);
+      
+      // Buscar lead pelo telefone
+      const { data: lead } = await supabase
+        .from("leads")
+        .select("id, nome, vendedor_id, etapa, telefone")
+        .or(`telefone.in.(${telefonesBusca.join(",")})`)
+        .maybeSingle();
+      
+      if (lead) {
+        console.log(`[whatsapp-webhook] Lead encontrado: ${lead.nome} (${lead.id})`);
+        
+        // Registrar mensagem no histórico do lead
+        await supabase.from("leads_historico").insert({
+          lead_id: lead.id,
+          tipo: "mensagem_whatsapp",
+          descricao: mensagemTexto.substring(0, 500),
+          dados_extras: {
+            telefone,
+            tipo_mensagem: tipoPrincipal,
+            media_url: mediaArmazenada,
+          },
+        });
+        
+        // Atualizar data do último contato
+        await supabase.from("leads")
+          .update({ 
+            data_ultimo_contato: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", lead.id);
+        
+        // Salvar na tabela whatsapp_mensagens com referência ao lead
+        await saveWhatsAppLog(
+          supabase, 
+          instancia.id, 
+          telefone, 
+          mensagemTexto, 
+          "entrada",
+          messageId,
+          tipoPrincipal,
+          mediaArmazenada || undefined,
+          mediaMimetype || undefined,
+          mediaFilename || undefined,
+          lead.id,
+          "lead",
+          lead.nome
+        );
+        
+        // Responder ao lead
+        const primeiroNome = lead.nome?.split(' ')[0] || 'Cliente';
+        await sendWhatsAppMessage(
+          instancia.api_url,
+          instancia.instance_name,
+          telefone,
+          `Olá ${primeiroNome}! 😊\n\nRecebemos sua mensagem. Nosso consultor entrará em contato em breve.\n\nAgradecemos o interesse na PRATICCAR! 🚗`
+        );
+        
+        // Notificar vendedor do lead (se tiver)
+        if (lead.vendedor_id) {
+          // Buscar profile_id do vendedor
+          const { data: vendedorProfile } = await supabase
+            .from("profiles")
+            .select("id")
+            .eq("user_id", lead.vendedor_id)
+            .single();
+          
+          if (vendedorProfile) {
+            await supabase.from("notificacoes").insert({
+              usuario_id: vendedorProfile.id,
+              titulo: "📱 Lead respondeu no WhatsApp",
+              mensagem: `${lead.nome}: "${mensagemTexto.substring(0, 100)}${mensagemTexto.length > 100 ? '...' : ''}"`,
+              tipo: "info",
+              dados: { lead_id: lead.id, telefone },
+            });
+          }
+        }
+        
+        return new Response(JSON.stringify({ ok: true, lead_id: lead.id }), { headers: corsHeaders });
+      }
+      
+      // Número desconhecido (nem associado nem lead)
+      console.log(`[whatsapp-webhook] Número desconhecido: ${telefone}`);
+      
+      // Salvar mensagem mesmo assim para histórico
+      await saveWhatsAppLog(
+        supabase, 
+        instancia.id, 
+        telefone, 
+        mensagemTexto, 
+        "entrada",
+        messageId,
+        tipoPrincipal,
+        mediaArmazenada || undefined,
+        mediaMimetype || undefined,
+        mediaFilename || undefined
+      );
+      
       await sendWhatsAppMessage(
         instancia.api_url,
         instancia.instance_name,
@@ -1603,10 +2021,27 @@ serve(async (req) => {
       return new Response(JSON.stringify({ ok: true, notFound: true }), { headers: corsHeaders });
     }
 
+    // ========================================
+    // FLUXO ASSOCIADO: PROCESSAR COM IA
+    // ========================================
     console.log(`[whatsapp-webhook] Associado encontrado: ${associado.nome} (${associado.id})`);
 
-    // Salvar mensagem recebida
-    await saveWhatsAppLog(supabase, instancia.id, telefone, mensagemTexto, "entrada");
+    // Salvar mensagem recebida com dados de mídia
+    await saveWhatsAppLog(
+      supabase, 
+      instancia.id, 
+      telefone, 
+      mensagemTexto, 
+      "entrada",
+      messageId,
+      tipoPrincipal,
+      mediaArmazenada || undefined,
+      mediaMimetype || undefined,
+      mediaFilename || undefined,
+      associado.id,
+      "associado",
+      associado.nome
+    );
     await saveMessage(supabase, associado.id, "user", mensagemTexto);
 
     // Buscar contexto e histórico
@@ -1632,7 +2067,7 @@ serve(async (req) => {
       for (const toolCall of assistantMessage.tool_calls) {
         const toolName = toolCall.function.name;
         const toolArgs = JSON.parse(toolCall.function.arguments || "{}");
-        const result = await executeTool(supabase, associado.id, toolName, toolArgs);
+        const result = await executeTool(supabase, associado.id, toolName, toolArgs, telefone, instancia);
         toolResults.push({
           tool_call_id: toolCall.id,
           role: "tool",
