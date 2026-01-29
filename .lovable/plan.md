@@ -1,332 +1,450 @@
 
-# Revisao Completa - WhatsApp via Evolution API no Modulo de Assistencia 24h
+# Revisao Completa - WhatsApp via Evolution API no Modulo de Sinistros
 
 ## Resumo Executivo
 
 | Momento do Fluxo | Status WhatsApp | Implementacao Atual |
 |------------------|-----------------|---------------------|
-| 1. Chamado aberto - confirmacao com protocolo | **PARCIAL** | Envia apenas para central, NAO para associado |
-| 2. Prestador acionado - previsao | **NAO IMPLEMENTADO** | Apenas toast local, sem WhatsApp |
-| 3. Prestador a caminho - contato | **MANUAL** | Botao existe mas precisa ser clicado manualmente |
-| 4. Servico iniciado - confirmacao | **NAO IMPLEMENTADO** | Sem notificacao |
-| 5. Servico concluido - pesquisa satisfacao | **NAO IMPLEMENTADO** | Sem WhatsApp |
-| 6. Atualizacao de status - tempo real | **NAO IMPLEMENTADO** | Sem notificacao automatica |
-| Associado abre chamado via WhatsApp | **PARCIAL** | Cria solicitacao para aprovacao, nao chamado direto |
-| Localizacao do associado capturada | **OK** | Tool reverse_geocode funciona |
-| Contato do prestador compartilhado | **MANUAL** | Funciona via botao ou tool IA |
-| Historico registrado | **OK** | Tabela chamados_assistencia_historico |
+| 1. Sinistro comunicado - confirmacao com protocolo | **PARCIAL** | Cria notificacao no sistema + email. WhatsApp **COMENTADO** |
+| 2. Documentos solicitados - lista detalhada | **NAO IMPLEMENTADO** | Apenas toast local, sem WhatsApp |
+| 3. Documento recebido - confirmacao | **NAO IMPLEMENTADO** | Apenas notificacao para analista |
+| 4. Atualizacao de analise - status atual | **NAO IMPLEMENTADO** | Sem WhatsApp automatico |
+| 5. Sinistro aprovado - proximos passos | **PARCIAL** | Template existe mas WhatsApp **COMENTADO** |
+| 6. Sinistro negado - motivo e recurso | **PARCIAL** | Template existe mas WhatsApp **COMENTADO** |
+| 7. Reparo/indenizacao concluido - confirmacao final | **PARCIAL** | Template existe mas WhatsApp **COMENTADO** |
+| Enviar fotos via WhatsApp | **PARCIAL** | Vinculacao apenas para documentos de CADASTRO |
+| Documentos vinculados ao sinistro | **NAO IMPLEMENTADO** | Funcao vincula apenas em documentos gerais |
+| Atualizacoes proativas | **NAO IMPLEMENTADO** | Associado precisa abrir o app |
+| Prazo de cada etapa informado | **NAO IMPLEMENTADO** | Sem SLAs definidos nas mensagens |
 
 ---
 
 ## Analise Detalhada
 
-### 1. Chamado Aberto - Confirmacao com Protocolo - PARCIAL
+### 1. Sinistro Comunicado - Confirmacao com Protocolo - PARCIAL
 
-**Situacao atual:** `criar-chamado-assistencia/index.ts` linha 352-386
-
-O sistema envia WhatsApp para a **central** quando chamado e aberto:
+**Situacao atual:** `criar-sinistro/index.ts` linhas 535-562
 
 ```typescript
-// Linha 351-371 - Envia apenas para CENTRAL
-if (telefoneCentral) {
-  const mensagemCentral = `🚨 *NOVO CHAMADO DE ASSISTÊNCIA*...`;
-  await supabaseAdmin.functions.invoke('whatsapp-send-media', { ... });
+// Linha 552-562 - Chama notificar-sinistro
+try {
+  await supabaseAdmin.functions.invoke('notificar-sinistro', {
+    body: { sinistro_id: sinistro.id, status: 'comunicado' }
+  });
+} catch (e) {
+  console.log('[criar-sinistro] Notificação adicional não enviada:', e);
 }
 ```
 
-Porem, **NAO envia WhatsApp de confirmacao para o ASSOCIADO**. Apenas cria notificacao no sistema (linha 392-405).
+**Problema:** Em `notificar-sinistro/index.ts` linhas 155-177, o codigo WhatsApp esta **COMENTADO**:
 
-**Gap:** Associado nao recebe WhatsApp confirmando abertura do chamado com protocolo.
-
-### 2. Prestador Acionado - Previsao - NAO IMPLEMENTADO
-
-**Situacao atual:** `AtribuirPrestadorModal.tsx` linha 94-149
-
-Quando prestador e acionado:
-- Atualiza tabela `chamados_assistencia` com `prestador_nome` e `prestador_telefone`
-- Cria registro em `chamados_assistencia_atendimentos` com status `acionado`
-- Registra no historico
-
-**Gap:** NAO envia WhatsApp para associado informando que prestador foi acionado.
-
-O template existe em `notificar-cliente`:
 ```typescript
-assistencia_prestador_acionado: {
-  titulo: '🚗 Prestador Acionado',
-  mensagem: 'Olá! O prestador {prestador_nome} foi acionado para atendê-lo...',
+// TODO: Integração com Evolution API (WhatsApp)
+// Quando os secrets EVOLUTION_API_URL e EVOLUTION_API_KEY forem configurados:
+// 
+// const evolutionUrl = Deno.env.get('EVOLUTION_API_URL');
+// ...
+```
+
+**Gap:** O sinistro e criado, notificacao no sistema e criada, email e enviado, mas **WhatsApp NAO e enviado**.
+
+### 2. Documentos Solicitados - Lista Detalhada - NAO IMPLEMENTADO
+
+**Situacao atual:** `SolicitarDocumentosSinistroDialog.tsx`
+
+Quando analista solicita documentos:
+- Cria registros em `sinistro_documentos` com status `pendente`
+- Atualiza sinistro para `documentacao_pendente`
+- Registra no historico
+- Exibe toast: "O associado sera notificado sobre a pendencia"
+
+**Gap:** **NAO existe codigo que envia WhatsApp** com a lista de documentos. A notificacao e apenas uma promessa no toast.
+
+### 3. Documento Recebido - Confirmacao - NAO IMPLEMENTADO
+
+**Situacao atual:** `enviar-documento-sinistro/index.ts` linhas 280-305
+
+Quando associado envia documento:
+- Upload para storage
+- Atualiza `sinistro_documentos` com status `enviado`
+- Se todos enviados, muda sinistro para `em_analise`
+- Notifica **analista** (nao associado)
+
+```typescript
+// Linha 291-299 - Notifica apenas o analista
+await supabaseAdmin.from('notificacoes').insert({
+  usuario_id: analistaProfile.id,
+  titulo: '📄 Novo documento recebido',
+  mensagem: `O associado enviou o documento...`
+});
+```
+
+**Gap:** O **associado NAO recebe confirmacao** de que o documento foi recebido e esta em analise.
+
+### 4. Atualizacao de Analise - Status Atual - NAO IMPLEMENTADO
+
+**Situacao atual:** `AtualizarStatusModal.tsx`
+
+Quando status muda:
+- Atualiza tabela `sinistros`
+- Registra no historico
+- Toast local
+
+**Gap:** **Nenhuma chamada** para `notificar-sinistro` ou `disparar-notificacao`. Associado precisa abrir o app.
+
+### 5. Sinistro Aprovado - Proximos Passos - PARCIAL
+
+**Situacao atual:** `EmitirParecerModal.tsx` linhas 108-188
+
+Quando sinistro e aprovado:
+- Atualiza sinistro com parecer, valor e tipo_dano
+- Registra no historico
+- Se perda total, inativa veiculo
+
+**Gap:** **NAO chama** `notificar-sinistro`. O template existe em `notificar-sinistro`:
+
+```typescript
+aprovado: {
+  titulo: '✅ Sinistro Aprovado',
+  mensagem: (protocolo) => `Ótima notícia! Seu sinistro ${protocolo} foi APROVADO. Verifique os detalhes no app.`,
 }
 ```
 
-Porem **nunca e chamado** no fluxo.
+Mas nunca e chamado quando o parecer e emitido.
 
-### 3. Prestador a Caminho - Contato - MANUAL
+### 6. Sinistro Negado - Motivo e Recurso - PARCIAL
 
-**Situacao atual:** `EnviarLinkPrestadorButton.tsx`
+**Situacao atual:** Mesmo que o aprovado, em `EmitirParecerModal.tsx`.
 
-Existe botao no painel para:
-- Enviar localizacao (PIN) para prestador
-- Enviar mensagem de texto com detalhes
-- Enviar contato do prestador para associado
+Template existe:
 
-**Gap:** Tudo e **manual**. Quando status muda para `prestador_a_caminho`, deveria enviar automaticamente:
-- Notificacao para associado com previsao e contato
-- Localizacao atualizada para prestador (se rastreador disponivel)
-
-### 4. Servico Iniciado - Confirmacao - NAO IMPLEMENTADO
-
-**Situacao atual:** `AtualizarStatusChamadoModal.tsx`
-
-Quando status muda para `em_atendimento`:
-- Atualiza banco de dados
-- Registra no historico
-- **NAO envia WhatsApp**
-
-**Gap:** Associado nao recebe confirmacao de que atendimento iniciou.
-
-### 5. Servico Concluido - Pesquisa Satisfacao - NAO IMPLEMENTADO
-
-**Situacao atual:** `AtualizarStatusChamadoModal.tsx` linha 78-101
-
-Quando status muda para `concluido`:
-- Captura posicao final do rastreador
-- Atualiza `data_conclusao`
-- **NAO envia WhatsApp com pesquisa de satisfacao**
+```typescript
+negado: {
+  titulo: 'Sinistro Negado',
+  mensagem: (protocolo) => `Seu sinistro ${protocolo} foi negado. Consulte o parecer no app para mais informações.`,
+}
+```
 
 **Gap:** 
-- Associado nao recebe confirmacao de conclusao
-- Nao ha link para avaliar o atendimento
-- Template `concluido` em `disparar-notificacao` nao inclui link de avaliacao
+- NAO e chamado apos emitir parecer
+- NAO informa motivo na mensagem
+- NAO menciona possibilidade de recurso
 
-O template existe mas e basico:
+### 7. Reparo/Indenizacao Concluido - NAO IMPLEMENTADO
+
+**Situacao atual:** `AtualizarStatusModal.tsx` permite mudar para `pago` ou `encerrado`, mas:
+- NAO envia WhatsApp
+- Template `pago` existe mas nunca e chamado:
+
 ```typescript
-concluido: {
-  titulo: 'Atendimento Concluído',
-  mensagem: 'Seu chamado foi concluído. Avalie o atendimento!',
+pago: {
+  titulo: '💰 Pagamento Realizado',
+  mensagem: (protocolo) => `O pagamento referente ao sinistro ${protocolo} foi realizado com sucesso!`,
 }
 ```
 
-### 6. Atualizacao de Status - Tempo Real - NAO IMPLEMENTADO
-
-**Situacao atual:** Nao existe trigger ou funcao para notificar associado quando status muda.
-
-**Gap:** Associado precisa abrir o app para ver atualizacoes. Nao recebe notificacao push/WhatsApp.
-
 ---
 
-## Abertura de Chamado via WhatsApp - PARCIAL
+## Envio de Fotos via WhatsApp - PARCIAL
 
-**Situacao atual:** `whatsapp-webhook/index.ts` linha 573-613
+**Situacao atual:** `whatsapp-webhook/index.ts` linhas 26-145
 
-A IA do WhatsApp pode criar solicitacao de assistencia, mas:
-- Cria registro em `chat_solicitacoes_ia` (nao em `chamados_assistencia`)
-- Requer aprovacao de diretor
-- Nao abre chamado diretamente
+A funcao `vincularMidiaADocumentoPendente` existe, mas:
+- Vincula **apenas para documentos de CADASTRO** (tabela `documentos`)
+- Busca associados com status `documentacao_pendente`, `pre_cadastro`, etc.
+- **NAO verifica** `sinistro_documentos` pendentes
 
 ```typescript
-case "criar_solicitacao_assistencia": {
-  const { data } = await supabase.from("chat_solicitacoes_ia").insert({
-    associado_id: associadoId,
-    tipo: "assistencia",
-    dados: { ... },
-    status: "pendente",
-  });
-  return JSON.stringify({
-    message: "Solicitação de assistência registrada! Um diretor irá aprovar em breve.",
-  });
-}
+// Linha 51-58 - Busca apenas documentos_solicitados (cadastro)
+const { data: docsPendentes } = await supabase
+  .from("documentos_solicitados")  // <-- APENAS CADASTRO
+  .select("id, tipo_documento, contrato_id, associado_id")
+  .eq("associado_id", associado.id)
+  .eq("status", "pendente")
 ```
 
-**Gap:** Nao ha fluxo para aprovar e criar chamado automaticamente. Diretor precisa aprovar manualmente.
+**Gap:** Fotos enviadas via WhatsApp **NAO sao vinculadas** a sinistros em andamento. Associado precisa usar o app.
 
 ---
 
-## Localizacao Enviada pelo Associado - OK
+## Documentos Vinculados ao Sinistro Correto - NAO IMPLEMENTADO
 
-**Situacao atual:** `whatsapp-webhook/index.ts` linha 615-665
+Para vincular automaticamente, seria necessario:
+1. Verificar se associado tem sinistro com status `documentacao_pendente`
+2. Listar documentos pendentes em `sinistro_documentos`
+3. Vincular midia recebida ao documento pendente mais antigo
+4. Confirmar recebimento via WhatsApp
 
-Tool `reverse_geocode` funciona corretamente:
-- Recebe latitude/longitude
-- Converte para endereco via Nominatim
-- Retorna endereco formatado para IA usar
-
-**Status:** Funcionando.
+**Status:** Nao implementado. O sistema atual so vincula documentos de cadastro.
 
 ---
 
-## Contato do Prestador Compartilhado - PARCIAL
+## Atualizacoes Proativas - NAO IMPLEMENTADO
 
-**Situacao atual:** 
+O sistema atual e **reativo**: associado precisa abrir o app para ver mudancas.
 
-1. **Via IA (tool):** `whatsapp-webhook/index.ts` linha 996-1093
-   - Tool `enviar_contato_prestador` funciona
-   - Envia cartao de contato via Evolution API
-   - Associado precisa pedir via chat
+Para ser proativo:
+- Cada mudanca de status deveria chamar `notificar-sinistro` ou `disparar-notificacao`
+- A funcao de notificacao deveria enviar WhatsApp (codigo atualmente comentado)
 
-2. **Via painel:** `EnviarLinkPrestadorButton.tsx`
-   - Botao "Enviar Contato ao Associado" funciona
-   - Atendente precisa clicar manualmente
+---
 
-**Gap:** Nao e automatico. Deveria enviar quando prestador e despachado.
+## Prazo de Cada Etapa - NAO IMPLEMENTADO
+
+Nenhuma mensagem informa prazos esperados. Exemplo de como deveria ser:
+
+| Status | Mensagem Ideal |
+|--------|----------------|
+| comunicado | "Seu sinistro sera analisado em ate 24h uteis" |
+| documentacao_pendente | "Envie os documentos em ate 48h para nao atrasar" |
+| em_analise | "A analise sera concluida em ate 5 dias uteis" |
+| aprovado | "O pagamento sera processado em ate 10 dias uteis" |
+
+---
+
+## Pagina de Avaliacao de Sinistro - NAO EXISTE
+
+Diferente da Assistencia 24h (que agora tem `/avaliar/assistencia/:id`), **nao existe** pagina de avaliacao para sinistros.
+
+A tabela `sinistros` **nao tem** colunas de avaliacao (`avaliacao_nota`, `avaliacao_comentario`).
 
 ---
 
 ## Plano de Implementacao
 
-### Fase 1: Notificacoes Automaticas por Status
+### Fase 1: Ativar WhatsApp na Funcao Existente
 
-**Criar edge function:** `supabase/functions/notificar-status-assistencia/index.ts`
+**Modificar:** `supabase/functions/notificar-sinistro/index.ts`
 
-Esta funcao sera chamada:
-- Via trigger no banco ao mudar status de chamado
-- Ou manualmente pelo frontend ao atualizar status
+Descomentar e ajustar codigo WhatsApp:
 
 ```typescript
-// Mapeamento de status para notificacao
-const NOTIFICACOES_POR_STATUS = {
-  aberto: {
-    titulo: '✅ Chamado Registrado!',
-    mensagem: 'Seu chamado de {tipo_servico} foi registrado. Protocolo: {protocolo}. Em breve um prestador será acionado.',
-  },
-  aguardando_prestador: {
-    titulo: '🚗 Prestador Acionado',
-    mensagem: 'O prestador {prestador_nome} foi acionado para atendê-lo. Previsão: 30-45 minutos.',
-  },
-  prestador_a_caminho: {
-    titulo: '🚚 Prestador a Caminho!',
-    mensagem: 'O prestador {prestador_nome} está a caminho. Telefone: {prestador_telefone}',
-    enviar_contato: true,
-  },
-  em_atendimento: {
-    titulo: '🔧 Atendimento Iniciado',
-    mensagem: 'O prestador chegou e iniciou o atendimento do seu chamado {protocolo}.',
-  },
-  concluido: {
-    titulo: '✅ Atendimento Concluído!',
-    mensagem: 'Seu chamado {protocolo} foi concluído. Como foi o atendimento? Avalie: {link_avaliacao}',
-    enviar_link_avaliacao: true,
-  },
-  cancelado_sistema: {
-    titulo: '❌ Chamado Cancelado',
-    mensagem: 'Seu chamado {protocolo} foi cancelado. Motivo: {motivo}',
-  },
-};
-```
-
-### Fase 2: Enviar Confirmacao ao Associado na Abertura
-
-**Modificar:** `supabase/functions/criar-chamado-assistencia/index.ts`
-
-Adicionar apos criar chamado (linha 340):
-
-```typescript
-// Enviar confirmacao para ASSOCIADO
-if (associado.whatsapp || associado.telefone) {
-  await supabaseAdmin.functions.invoke('whatsapp-send-text', {
-    body: {
-      telefone: (associado.whatsapp || associado.telefone).replace(/\D/g, ''),
-      mensagem: `✅ *Chamado Registrado!*
-
-📋 Protocolo: ${protocolo}
-🔧 Tipo: ${TIPO_LABELS[payload.tipo_assistencia]}
-
-Em breve um prestador será acionado para atendê-lo.
-Aguarde nossa confirmação.`,
-    },
-  });
+// Linha 155-177 - ATIVAR
+const telefone = associado.whatsapp || associado.telefone;
+if (telefone) {
+  try {
+    await supabase.functions.invoke('whatsapp-send-text', {
+      body: {
+        telefone: telefone.replace(/\D/g, ''),
+        mensagem: `*${titulo}*\n\n${mensagem}`,
+      },
+    });
+    console.log(`[notificar-sinistro] WhatsApp enviado para ${telefone}`);
+  } catch (whatsErr) {
+    console.error(`[notificar-sinistro] Erro WhatsApp:`, whatsErr);
+  }
 }
 ```
 
-### Fase 3: Notificar ao Atribuir Prestador
+### Fase 2: Notificar ao Solicitar Documentos
 
-**Modificar:** `src/components/assistencia/AtribuirPrestadorModal.tsx`
+**Modificar:** `src/components/sinistros/SolicitarDocumentosSinistroDialog.tsx`
 
-Apos criar atendimento (linha 124), adicionar:
+Apos inserir documentos (linha 76), chamar notificacao:
 
 ```typescript
-// Notificar associado via WhatsApp
-await supabase.functions.invoke('notificar-cliente', {
+// Apos inserir documentos pendentes
+const documentosFormatados = documentosSelecionados
+  .map(id => TIPOS_DOCUMENTOS_SINISTRO.find(d => d.id === id)?.label)
+  .join('\n• ');
+
+await supabase.functions.invoke('whatsapp-send-text', {
   body: {
-    tipo: 'assistencia_prestador_acionado',
-    associado_id: chamado.associado_id,
-    dados: {
-      prestador_nome: prestador.nome_fantasia || prestador.razao_social,
-      previsao: '30-45 minutos',
-      protocolo: chamado.protocolo,
-    },
+    telefone: associado.whatsapp || associado.telefone,
+    mensagem: `📄 *Documentos Solicitados*\n\nPara dar continuidade ao seu sinistro ${protocolo}, precisamos dos seguintes documentos:\n\n• ${documentosFormatados}\n\n⏰ Prazo: 48 horas\n\nEnvie pelo app ou responda esta mensagem com as fotos.`,
   },
 });
 ```
 
-### Fase 4: Notificar ao Mudar Status
+### Fase 3: Confirmar Recebimento de Documento
 
-**Modificar:** `src/components/assistencia/AtualizarStatusChamadoModal.tsx`
+**Modificar:** `supabase/functions/enviar-documento-sinistro/index.ts`
 
-Adicionar chamada para notificacao apos atualizar status:
+Apos vincular documento (linha 236), notificar associado:
 
 ```typescript
-// Buscar dados do chamado para notificacao
-const { data: chamadoCompleto } = await supabase
-  .from('chamados_assistencia')
-  .select('*, associado:associados(id, nome, whatsapp, telefone)')
-  .eq('id', chamado.id)
-  .single();
+// Notificar associado que documento foi recebido
+const telefoneAssociado = associado.whatsapp || associado.telefone;
+if (telefoneAssociado) {
+  const mensagem = documentosRestantes > 0
+    ? `✅ *Documento Recebido*\n\nRecebemos seu documento "${tipo_documento}".\n\n📋 Ainda faltam ${documentosRestantes} documento(s).\n\nEnvie os demais para dar continuidade.`
+    : `✅ *Todos os Documentos Recebidos*\n\nRecebemos todos os documentos solicitados!\n\n🔍 Seu sinistro ${sinistro.protocolo} entrou em análise.\n\n⏰ Prazo estimado: 5 dias úteis.`;
 
+  await supabaseAdmin.functions.invoke('whatsapp-send-text', {
+    body: { telefone: telefoneAssociado, mensagem }
+  });
+}
+```
+
+### Fase 4: Notificar ao Atualizar Status
+
+**Modificar:** `src/components/eventos/AtualizarStatusModal.tsx`
+
+Apos atualizar status (linha 103), chamar notificacao:
+
+```typescript
 // Notificar associado
-if (chamadoCompleto?.associado) {
-  await supabase.functions.invoke('notificar-status-assistencia', {
-    body: {
-      chamado_id: chamado.id,
-      status_novo: novoStatus,
-      associado_id: chamadoCompleto.associado.id,
-    },
-  });
-}
+await supabase.functions.invoke('notificar-sinistro', {
+  body: {
+    sinistro_id: sinistro.id,
+    status: novoStatus,
+  }
+});
 ```
 
-### Fase 5: Enviar Contato Automaticamente
+### Fase 5: Notificar ao Emitir Parecer
 
-**Modificar:** `notificar-status-assistencia`
+**Modificar:** `src/components/eventos/EmitirParecerModal.tsx`
 
-Quando status for `prestador_a_caminho`:
+Apos registrar parecer (linha 145), adicionar:
 
 ```typescript
-if (novoStatus === 'prestador_a_caminho' && chamado.prestador_nome && chamado.prestador_telefone) {
-  // Enviar cartao de contato
-  await supabase.functions.invoke('whatsapp-send-contact', {
-    body: {
-      telefone: associadoTelefone,
-      contato: {
-        fullName: chamado.prestador_nome,
-        phoneNumber: chamado.prestador_telefone,
-        organization: 'Prestador PRATICCAR',
-      },
-      referencia_tipo: 'chamado_assistencia',
-      referencia_id: chamado.id,
-    },
-  });
-}
+// Notificar associado via WhatsApp
+await supabase.functions.invoke('notificar-sinistro', {
+  body: {
+    sinistro_id: sinistro.id,
+    status: novoStatus, // 'aprovado' ou 'negado'
+    dados_extras: {
+      valor_indenizacao: valorIndenizacao,
+      tipo_dano: tipoDano,
+      parecer: parecer.substring(0, 200), // Resumo do parecer
+    }
+  }
+});
 ```
 
-### Fase 6: Pesquisa de Satisfacao na Conclusao
+### Fase 6: Vincular Fotos via WhatsApp a Sinistros
 
-**Criar rota publica:** `/avaliar/assistencia/:chamado_id`
+**Modificar:** `supabase/functions/whatsapp-webhook/index.ts`
 
-**Modificar template de conclusao:**
+Criar funcao `vincularMidiaASinistroPendente`:
 
 ```typescript
-concluido: {
-  titulo: '✅ Atendimento Concluído!',
-  mensagem: `Seu chamado {protocolo} foi concluído com sucesso!
+async function vincularMidiaASinistroPendente(
+  supabase: any,
+  telefonesBusca: string[],
+  mediaArmazenada: string,
+  instancia: any
+): Promise<{ vinculado: boolean; mensagem?: string }> {
+  // Buscar associado
+  const { data: associado } = await supabase
+    .from("associados")
+    .select("id, nome")
+    .or(`whatsapp.in.(${telefonesBusca.join(",")}),telefone.in.(${telefonesBusca.join(",")})`)
+    .maybeSingle();
 
-Como foi o atendimento do prestador {prestador_nome}?
+  if (!associado) return { vinculado: false };
 
-⭐ Avalie agora: {link_avaliacao}
+  // Buscar sinistro com documentos pendentes
+  const { data: sinistros } = await supabase
+    .from("sinistros")
+    .select("id, protocolo, status")
+    .eq("associado_id", associado.id)
+    .eq("status", "documentacao_pendente")
+    .order("created_at", { ascending: false })
+    .limit(1);
 
-Sua opinião é muito importante para nós!`,
+  if (!sinistros?.length) return { vinculado: false };
+
+  const sinistro = sinistros[0];
+
+  // Buscar documento pendente mais antigo
+  const { data: docsPendentes } = await supabase
+    .from("sinistro_documentos")
+    .select("id, tipo, nome")
+    .eq("sinistro_id", sinistro.id)
+    .eq("status", "pendente")
+    .order("created_at", { ascending: true })
+    .limit(1);
+
+  if (!docsPendentes?.length) return { vinculado: false };
+
+  const doc = docsPendentes[0];
+
+  // Atualizar documento
+  await supabase
+    .from("sinistro_documentos")
+    .update({
+      arquivo_url: mediaArmazenada,
+      status: "enviado",
+      enviado_em: new Date().toISOString(),
+    })
+    .eq("id", doc.id);
+
+  return {
+    vinculado: true,
+    mensagem: `✅ Recebemos sua foto para o sinistro ${sinistro.protocolo}!\n\nDocumento: ${doc.nome}\n\nAguarde a análise.`,
+  };
 }
 ```
 
-O link seria: `https://pratic-connect-21.lovable.app/avaliar/assistencia/{chamado_id}`
+Chamar antes da vinculacao de cadastro (linha 2022):
+
+```typescript
+// Tentar vincular a sinistro primeiro
+const resultadoSinistro = await vincularMidiaASinistroPendente(supabase, telefonesBusca, mediaArmazenada, instancia);
+if (resultadoSinistro.vinculado) {
+  if (resultadoSinistro.mensagem) {
+    await sendWhatsAppMessage(instancia.api_url, instancia.instance_name, telefone, resultadoSinistro.mensagem);
+  }
+  return new Response(JSON.stringify({ ok: true, vinculado_sinistro: true }), { headers: corsHeaders });
+}
+
+// Se nao vinculou a sinistro, tentar cadastro
+const resultadoVinculo = await vincularMidiaADocumentoPendente(...);
+```
+
+### Fase 7: Melhorar Templates com Prazos e Proximos Passos
+
+**Modificar:** `supabase/functions/notificar-sinistro/index.ts`
+
+```typescript
+const STATUS_TEMPLATES = {
+  comunicado: {
+    titulo: '✅ Sinistro Registrado',
+    mensagem: (protocolo) => `Seu sinistro foi registrado!\n\n📋 Protocolo: ${protocolo}\n\n⏰ Próximos passos:\n1. Analisaremos em até 24h úteis\n2. Se necessário, solicitaremos documentos\n3. Acompanhe pelo app`,
+  },
+  documentacao_pendente: {
+    titulo: '📄 Documentos Pendentes',
+    mensagem: (protocolo) => `Precisamos de documentos para o sinistro ${protocolo}.\n\n⏰ Prazo: 48 horas\n\nEnvie pelo app ou responda esta mensagem com as fotos.`,
+  },
+  em_analise: {
+    titulo: '🔍 Em Análise',
+    mensagem: (protocolo) => `Todos os documentos do sinistro ${protocolo} foram recebidos!\n\n⏰ Prazo de análise: até 5 dias úteis\n\nVocê será notificado sobre o resultado.`,
+  },
+  aprovado: {
+    titulo: '🎉 Sinistro APROVADO!',
+    mensagem: (protocolo) => `Ótima notícia! Seu sinistro ${protocolo} foi APROVADO!\n\n💰 Próximos passos:\n1. Verificaremos dados bancários\n2. Pagamento em até 10 dias úteis\n\nAcompanhe os detalhes no app.`,
+  },
+  negado: {
+    titulo: '❌ Sinistro Negado',
+    mensagem: (protocolo) => `Seu sinistro ${protocolo} foi negado.\n\n📝 Consulte o parecer completo no app.\n\n⚖️ Você pode solicitar revisão em até 15 dias.\n\nDúvidas? Entre em contato.`,
+  },
+  pago: {
+    titulo: '💰 Pagamento Realizado!',
+    mensagem: (protocolo) => `O pagamento do sinistro ${protocolo} foi realizado!\n\n✅ Confira sua conta bancária\n\nAgradecemos a confiança!`,
+  },
+  encerrado: {
+    titulo: '✔️ Sinistro Encerrado',
+    mensagem: (protocolo) => `Seu sinistro ${protocolo} foi encerrado.\n\n⭐ Como foi nossa análise?\n\nConte-nos sua experiência!`,
+  },
+};
+```
+
+### Fase 8: Criar Pagina de Avaliacao de Sinistro
+
+**Criar:** `src/pages/avaliar/AvaliarSinistro.tsx`
+
+Similar a `AvaliarAssistencia.tsx`, permitindo que associado avalie:
+- Atendimento geral
+- Clareza nas comunicacoes
+- Prazo de resolucao
+- Comentario livre
+
+**Migrar banco:** Adicionar colunas em `sinistros`:
+- `avaliacao_nota`
+- `avaliacao_comentario`
+- `avaliacao_data`
 
 ---
 
@@ -334,94 +452,59 @@ O link seria: `https://pratic-connect-21.lovable.app/avaliar/assistencia/{chamad
 
 | Arquivo | Alteracoes |
 |---------|------------|
-| `supabase/functions/criar-chamado-assistencia/index.ts` | Adicionar envio de WhatsApp para associado na abertura |
-| `src/components/assistencia/AtribuirPrestadorModal.tsx` | Chamar `notificar-cliente` ao acionar prestador |
-| `src/components/assistencia/AtualizarStatusChamadoModal.tsx` | Chamar notificacao ao mudar status |
-| `supabase/functions/disparar-notificacao/index.ts` | Adicionar templates completos de assistencia |
+| `supabase/functions/notificar-sinistro/index.ts` | Ativar WhatsApp + melhorar templates |
+| `src/components/sinistros/SolicitarDocumentosSinistroDialog.tsx` | Enviar lista via WhatsApp |
+| `supabase/functions/enviar-documento-sinistro/index.ts` | Confirmar recebimento ao associado |
+| `src/components/eventos/AtualizarStatusModal.tsx` | Chamar notificar-sinistro |
+| `src/components/eventos/EmitirParecerModal.tsx` | Notificar ao aprovar/negar |
+| `supabase/functions/whatsapp-webhook/index.ts` | Vincular fotos a sinistros |
 
 ## Arquivos a Criar
 
 | Arquivo | Descricao |
 |---------|-----------|
-| `supabase/functions/notificar-status-assistencia/index.ts` | Edge function dedicada para notificacoes de status |
-| `src/pages/avaliar/AvaliarAssistencia.tsx` | Pagina publica para avaliar atendimento |
-
----
-
-## Templates de WhatsApp Necessarios
-
-| Template | Momento | Conteudo |
-|----------|---------|----------|
-| `assistencia_aberto` | Abertura | Protocolo, tipo, previsao |
-| `assistencia_prestador_acionado` | Prestador selecionado | Nome, previsao |
-| `assistencia_prestador_caminho` | Status = a_caminho | Nome, telefone, enviar contato |
-| `assistencia_em_atendimento` | Status = em_atendimento | Confirmacao |
-| `assistencia_concluido` | Status = concluido | Agradecimento + link avaliacao |
-| `assistencia_cancelado` | Status = cancelado | Motivo |
+| `src/pages/avaliar/AvaliarSinistro.tsx` | Pagina publica para avaliar sinistro |
+| Migracao SQL | Adicionar colunas de avaliacao em sinistros |
 
 ---
 
 ## Fluxo de Notificacoes Proposto
 
-```
-1. Associado abre chamado (App ou WhatsApp)
-   └── WhatsApp: "✅ Chamado registrado! Protocolo: ASS-..."
+```text
+1. Associado comunica sinistro
+   └── WhatsApp: "✅ Sinistro registrado! Protocolo: SIN-..."
 
-2. Atendente aciona prestador
-   └── WhatsApp: "🚗 Prestador X foi acionado. Previsão: 30-45min"
+2. Analista solicita documentos
+   └── WhatsApp: "📄 Documentos pendentes: BO, CNH, fotos..."
 
-3. Prestador aceita e parte
-   └── WhatsApp: "🚚 Prestador a caminho!"
-   └── WhatsApp: [Cartao de Contato do Prestador]
+3. Associado envia documento (app ou WhatsApp)
+   └── WhatsApp: "✅ Documento recebido! Faltam X..."
 
-4. Prestador chega ao local
-   └── WhatsApp: "🔧 Atendimento iniciado"
+4. Todos documentos enviados
+   └── WhatsApp: "🔍 Sinistro em análise. Prazo: 5 dias"
 
-5. Atendimento concluido
-   └── WhatsApp: "✅ Concluído! Avalie: [link]"
+5. Parecer emitido
+   └── WhatsApp APROVADO: "🎉 Aprovado! Pagamento em 10 dias"
+   └── WhatsApp NEGADO: "❌ Negado. Veja parecer. Pode recorrer"
+
+6. Pagamento realizado
+   └── WhatsApp: "💰 Pagamento realizado! Confira conta"
+
+7. Sinistro encerrado
+   └── WhatsApp: "✔️ Encerrado. Avalie: [link]"
 ```
 
 ---
 
 ## Checklist Pos-Implementacao
 
-- [ ] Associado recebe WhatsApp ao abrir chamado
-- [ ] Associado recebe WhatsApp quando prestador e acionado
-- [ ] Associado recebe WhatsApp e contato quando prestador esta a caminho
-- [ ] Associado recebe WhatsApp quando atendimento inicia
-- [ ] Associado recebe WhatsApp com link de avaliacao quando concluido
-- [ ] Abertura de chamado via WhatsApp cria registro diretamente (sem aprovacao)
-- [ ] Localizacao do associado e capturada e usada
-- [ ] Contato do prestador e enviado automaticamente
-- [ ] Historico completo mantido
-
----
-
-## Testes Recomendados
-
-### Teste 1: Abertura de Chamado via App
-
-1. Acessar app do associado
-2. Solicitar assistencia (guincho)
-3. Verificar:
-   - Chamado criado com protocolo
-   - Associado recebe WhatsApp de confirmacao
-   - Central recebe notificacao
-
-### Teste 2: Fluxo Completo
-
-1. Abrir chamado
-2. Acionar prestador
-3. Mudar status para "a caminho"
-4. Mudar status para "em atendimento"
-5. Concluir chamado
-6. Verificar: Associado recebeu 5 mensagens + contato do prestador
-
-### Teste 3: Abertura via WhatsApp
-
-1. Enviar mensagem: "Preciso de um guincho"
-2. Fornecer localizacao
-3. Verificar:
-   - Solicitacao criada em `chat_solicitacoes_ia`
-   - Diretor recebe alerta
-   - Apos aprovacao, chamado e criado
+- [ ] Associado recebe WhatsApp ao comunicar sinistro
+- [ ] Associado recebe WhatsApp com lista de documentos solicitados
+- [ ] Associado recebe confirmacao ao enviar documento
+- [ ] Associado recebe WhatsApp quando status muda
+- [ ] Associado recebe WhatsApp quando sinistro e aprovado com proximos passos
+- [ ] Associado recebe WhatsApp quando sinistro e negado com orientacao de recurso
+- [ ] Associado recebe WhatsApp quando pagamento e realizado
+- [ ] Fotos enviadas via WhatsApp sao vinculadas ao sinistro correto
+- [ ] Mensagens informam prazos de cada etapa
+- [ ] Pagina de avaliacao de sinistro funcionando
