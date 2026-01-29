@@ -1,348 +1,484 @@
 
-
-# Revisao Completa - Sistema de Autenticacao Softruck
+# Revisao Completa - Fluxo de Busca de Posicao em Tempo Real Softruck
 
 ## Resumo Executivo
 
-Apos analise detalhada do sistema de autenticacao com a API Softruck, identifiquei a seguinte situacao:
+Apos analise detalhada do sistema de busca de posicao em tempo real dos rastreadores Softruck, identifiquei a seguinte situacao:
 
 | Item | Status | Detalhes |
 |------|--------|----------|
-| Endpoint de autenticacao | PARCIALMENTE CORRETO | Usa `/auth/login` mas baseUrl ja inclui `/v2` |
-| Header `public-key` | IMPLEMENTADO | Presente em todas chamadas |
-| Armazenamento `refresh_token` | IMPLEMENTADO | Salvo na tabela `rastreadores_tokens_cache` |
-| Token Bearer nas chamadas | IMPLEMENTADO | Presente corretamente |
-| Cache de token | IMPLEMENTADO | Verifica expiracao antes de usar |
-| Tratamento erro 401 | NAO IMPLEMENTADO | Nao ha retry automatico |
-| Alternancia sandbox/producao | IMPLEMENTADO | Busca da tabela `rastreadores_config_plataformas` |
+| Endpoint GET `/vehicles/{id}/tracking/{device_id}` | IMPLEMENTADO CORRETAMENTE | Presente em 3 edge functions |
+| Header Authorization Bearer | IMPLEMENTADO | Com retry em erro 401 |
+| Chamada na abertura do App | OK | Via hook `useVeiculoPosicao` |
+| Chamada no mapa interno | OK | Via hook `useRastreadorTempoReal` |
+| Polling automatico a cada X segundos | OK | 30 segundos via `refetchInterval` |
+| Botao "Atualizar Posicao" | OK | Via mutation `atualizarManual` |
+| Parse de latitude/longitude | OK | Extraido de `data.data.attributes` |
+| Exibicao no mapa | OK | Leaflet com marcadores customizados |
+| **PROBLEMA CRITICO** | **PUBLIC KEY INVALIDA** | `401 - Public key does not exist` |
+| **PROBLEMA** | **IDS NAO CONFIGURADOS** | `plataforma_veiculo_id` e `plataforma_device_id` = NULL |
 
 ---
 
-## Problema Critico Detectado
+## Problemas Criticos Identificados
 
-Ao testar a autenticacao em ambiente real, recebi o erro:
+### 1. Public Key Softruck Invalida
 
-```text
+Os logs do banco mostram erros consecutivos de autenticacao:
+
+```
 Falha auth Softruck: 401 - {"error":{"message":"Public key does not exist"}}
 ```
 
-**Causa:** A `SOFTRUCK_PUBLIC_KEY` configurada nos secrets pode estar incorreta ou a conta Softruck pode nao estar ativa/configurada corretamente.
+**Causa:** A secret `SOFTRUCK_PUBLIC_KEY` configurada no Supabase nao e reconhecida pela API Softruck.
+
+**Impacto:** NENHUMA chamada ao endpoint de posicao consegue ser realizada porque a autenticacao falha antes.
 
 ---
 
-## Analise Detalhada dos Pontos Solicitados
+### 2. Rastreadores Sem IDs de Plataforma
 
-### 1. Consulta de Posicao de Rastreador
+Consultando o banco de dados, TODOS os rastreadores Softruck instalados tem:
 
-**Arquivos analisados:** `rastreador-posicao/index.ts`, `posicao-veiculo/index.ts`
+| Campo | Valor |
+|-------|-------|
+| `plataforma_veiculo_id` | NULL |
+| `plataforma_device_id` | NULL |
 
-**Status:** CORRETO
+**Impacto:** Mesmo que a autenticacao funcionasse, o endpoint seria chamado incorretamente:
 
-```typescript
-// posicao-veiculo/index.ts (linha 347-361)
-const authResponse = await fetch(
-  `${supabaseUrl}/functions/v1/rastreador-auth`,
-  {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${supabaseKey}`,
-    },
-    body: JSON.stringify({ plataforma: 'softruck' })
-  }
-);
-
-// Chamada com Bearer token (linha 105-112)
-const response = await fetch(url, {
-  method: 'GET',
-  headers: {
-    'Authorization': `Bearer ${token}`,
-    'public-key': publicKey,
-    'Content-Type': 'application/json',
-  }
-});
+```
+GET /v2/vehicles/NULL/tracking/NULL?format=JSON
 ```
 
-### 2. Envio de Comandos (bloquear/desbloquear)
+Os rastreadores possuem apenas `id_plataforma` populado (ex: "54321"), mas as edge functions esperam `plataforma_veiculo_id` e `plataforma_device_id`.
 
-**Status:** NAO IMPLEMENTADO
+---
 
-A plataforma Softruck esta configurada no banco com `suporta_bloqueio: false`. Nao existe edge function para comandos de bloqueio/desbloqueio.
+## Analise Detalhada dos Pontos de Chamada
 
-### 3. Tratamento de Token Expirado
+### 1. Quando o associado abre a tela de rastreamento no App
 
-**Status:** PARCIALMENTE IMPLEMENTADO
+**Arquivo:** `src/pages/app/AppRastreamento.tsx`
+**Hook utilizado:** `useVeiculoPosicao` (de `useMyData.ts`)
+**Edge Function:** `posicao-veiculo`
 
-**Cache de token funciona:**
 ```typescript
-// rastreador-auth/index.ts (linha 97-118)
-if (!force_refresh) {
-  const { data: cached } = await supabase
-    .from('rastreadores_tokens_cache')
-    .select('token, refresh_token, expires_at')
-    .eq('plataforma', plataforma)
-    .gt('expires_at', new Date().toISOString())  // Verifica expiracao
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .single();
+// AppRastreamento.tsx (linha 133-139)
+const { 
+  posicao, 
+  tempoReal, 
+  offline, 
+  refetch: refetchPosicao,
+  atualizarManual 
+} = useVeiculoPosicao(vehicle?.id);
+```
 
-  if (cached) {
-    return { success: true, token: cached.token, from_cache: true };
+**Fluxo:**
+1. Usuario abre `/app/rastreamento`
+2. Hook `useVeiculoPosicao` e ativado
+3. Chama `posicao-veiculo` com `{ veiculo_id }`
+4. Edge function busca rastreador do veiculo
+5. Verifica `plataforma_veiculo_id` e `plataforma_device_id` -> **FALHA: campos NULL**
+6. Lanca erro: "Rastreador nao configurado com IDs da plataforma"
+
+**Status:** NAO FUNCIONA devido a falta de IDs
+
+---
+
+### 2. Quando o analista visualiza o mapa de monitoramento interno
+
+**Arquivo:** `src/components/rastreadores/MapaRastreador.tsx`
+**Hook utilizado:** `useRastreadorTempoReal` (de `useRastreadorPosicao.ts`)
+**Edge Function:** `rastreador-posicao`
+
+```typescript
+// MapaRastreador.tsx (linha 78-86)
+const {
+  posicao,
+  veiculo,
+  tempoReal,
+  mensagem,
+  isLoading,
+  isRefetching,
+  atualizarManual
+} = useRastreadorTempoReal(rastreadorId);
+```
+
+**Fluxo:**
+1. Analista abre detalhe do rastreador
+2. Hook `useRastreadorTempoReal` e ativado
+3. Chama `rastreador-posicao` com `{ rastreador_id }`
+4. Edge function verifica `plataforma_veiculo_id` e `plataforma_device_id` -> **FALHA: campos NULL**
+5. Lanca erro: "Rastreador nao configurado com IDs da plataforma"
+
+**Status:** NAO FUNCIONA devido a falta de IDs
+
+---
+
+### 3. Atualizacao automatica a cada X segundos (polling)
+
+**Implementado corretamente em ambos os hooks:**
+
+```typescript
+// useVeiculoPosicao (useMyData.ts linha 269)
+refetchInterval: 30000,  // 30 segundos
+
+// useRastreadorTempoReal (useRastreadorPosicao.ts linha 103)
+refetchInterval: autoRefresh ? 30000 : false,  // 30 segundos se autoRefresh = true
+staleTime: 15000,  // Considera dados "frescos" por 15 segundos
+```
+
+**Status:** IMPLEMENTADO, mas nao funciona devido aos problemas anteriores.
+
+---
+
+### 4. Quando o associado clica em "Atualizar posicao"
+
+**Arquivo:** `src/pages/app/AppRastreamento.tsx` (linha 468-475)
+
+```tsx
+<Button 
+  className="w-full gap-2" 
+  onClick={handleRefresh}
+  disabled={isRefreshing}
+>
+  <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
+  Atualizar Posição
+</Button>
+```
+
+**Funcao `handleRefresh`:**
+
+```typescript
+const handleRefresh = async () => {
+  setIsRefreshing(true);
+  await Promise.all([refetch(), refetchPosicao()]);
+  // ...
+};
+```
+
+**Status:** IMPLEMENTADO, mas nao funciona devido aos problemas anteriores.
+
+---
+
+## Verificacao do Endpoint
+
+### Endpoint Correto
+
+| Requisito | Implementacao | Status |
+|-----------|---------------|--------|
+| Endpoint | `GET /v2/vehicles/{vehicleId}/tracking/{deviceId}` | OK |
+| Query param | `?format=JSON` | OK |
+| Alternativa | `?includes[geocoder][]=address&includes[geocoder][]=display_name&format=JSON` | OK (em softruck-api) |
+
+### Locais de implementacao
+
+**1. rastreador-posicao/index.ts (linha 72):**
+```typescript
+const url = `${baseUrl}/vehicles/${vehicleId}/tracking/${deviceId}?format=JSON`;
+```
+
+**2. posicao-veiculo/index.ts (linha 128):**
+```typescript
+const url = `${baseUrl}/vehicles/${vehicleId}/tracking/${deviceId}?format=JSON`;
+```
+
+**3. softruck-api/index.ts (linha 930):**
+```typescript
+const endpoint = `/v2/vehicles/${veiculoId}/tracking/${deviceId}?includes[geocoder][]=address&includes[geocoder][]=display_name&format=JSON`;
+```
+
+---
+
+## Verificacao de Headers
+
+### Authorization Bearer
+
+| Arquivo | Linha | Implementacao |
+|---------|-------|---------------|
+| `rastreador-posicao/index.ts` | 79 | `'Authorization': Bearer ${token}` |
+| `posicao-veiculo/index.ts` | 135 | `'Authorization': Bearer ${token}` |
+| `sync-rastreadores/index.ts` | 196 | `'Authorization': Bearer ${token}` |
+
+### Header public-key
+
+| Arquivo | Linha | Implementacao |
+|---------|-------|---------------|
+| `rastreador-posicao/index.ts` | 80 | `'public-key': publicKey` |
+| `posicao-veiculo/index.ts` | 136 | `'public-key': publicKey` |
+
+**Status:** Ambos headers implementados corretamente.
+
+---
+
+## Parse de Resposta Softruck
+
+### Formato esperado da API
+
+```json
+{
+  "data": {
+    "attributes": {
+      "latitude": -23.5505,
+      "longitude": -46.6333,
+      "speed": 45,
+      "course": 180,
+      "ignition": true,
+      "timestamp": "2026-01-29T12:00:00Z",
+      "address": "Av. Paulista, 1000",
+      "altitude": 750,
+      "satellites": 8,
+      "odometer": 15234,
+      "battery": 95
+    }
   }
 }
 ```
 
-**GAP:** Nao ha tratamento de erro 401 com retry automatico nas chamadas de API.
-
-### 4. Tratamento de Erro 401
-
-**Status:** NAO IMPLEMENTADO
-
-Quando uma chamada retorna 401, o sistema apenas lanca erro sem tentar renovar o token:
+### Implementacao do parse
 
 ```typescript
-// posicao-veiculo/index.ts (linha 114-117)
-if (!response.ok) {
-  const error = await response.text();
-  throw new Error(`Erro Softruck ${response.status}: ${error}`);
-  // NAO HA TENTATIVA DE RENOVAR TOKEN E RETRY
+// rastreador-posicao/index.ts (linhas 104-126)
+const data = await response.json();
+
+if (!data.data?.attributes) {
+  throw new Error('Resposta Softruck inválida');
 }
+
+const attrs = data.data.attributes;
+
+return {
+  latitude: attrs.latitude,
+  longitude: attrs.longitude,
+  velocidade: attrs.speed || 0,
+  direcao: attrs.course,
+  ignicao: attrs.ignition || false,
+  data_posicao: attrs.timestamp || new Date().toISOString(),
+  endereco: attrs.address,
+  dados_extras: {
+    altitude: attrs.altitude,
+    satellites: attrs.satellites,
+    odometer: attrs.odometer,
+    battery: attrs.battery,
+  }
+};
 ```
+
+**Status:** Parse implementado corretamente.
 
 ---
 
-## Configuracao Atual no Banco
+## Exibicao no Mapa
+
+### Mapa do App do Associado
+
+**Arquivo:** `src/pages/app/AppRastreamento.tsx`
+
+```typescript
+// Extrai latitude/longitude (linhas 142-147)
+const latitude = posicao?.latitude ?? tracker?.ultima_posicao_lat ?? -18.9186;
+const longitude = posicao?.longitude ?? tracker?.ultima_posicao_lng ?? -48.2772;
+
+// Exibe no mapa Leaflet (linhas 314-330)
+<MapContainer center={[latitude, longitude]} zoom={15}>
+  <TileLayer ... />
+  <Marker 
+    position={[latitude, longitude]} 
+    icon={getMarkerIcon(ignicao, emMovimento)}
+  />
+  <FlyToPosition position={[latitude, longitude]} zoom={15} />
+</MapContainer>
+```
+
+### Mapa do Painel Interno
+
+**Arquivo:** `src/components/rastreadores/MapaRastreador.tsx`
+
+```typescript
+// Extrai posicao (linhas 94-97)
+const hasPosition = posicao?.latitude && posicao?.longitude;
+const position: [number, number] = hasPosition
+  ? [posicao.latitude, posicao.longitude]
+  : [-15.7801, -47.9292]; // Brazil center
+
+// Exibe no mapa (linhas 152-180)
+<MapContainer center={position} zoom={15}>
+  <TileLayer ... />
+  <Marker position={position} icon={getMarkerIcon(posicao.ignicao)}>
+    <Popup>
+      <p>Velocidade: {posicao.velocidade} km/h</p>
+      <p>Ignição: {posicao.ignicao ? 'Ligada' : 'Desligada'}</p>
+      {posicao.endereco && <p>{posicao.endereco}</p>}
+    </Popup>
+  </Marker>
+</MapContainer>
+```
+
+**Status:** Exibicao no mapa implementada corretamente.
+
+---
+
+## Teste com 3 Veiculos Diferentes
+
+### Resultado da consulta ao banco
 
 ```sql
--- Tabela rastreadores_config_plataformas (softruck)
-ambiente_atual: sandbox
-api_url_sandbox: https://api.apiary.softruck.com/v2
-api_url_producao: https://api.softruck.com/v2
-auth_type: oauth_jwt
-suporta_posicao_tempo_real: true
-suporta_historico_trajeto: true
-suporta_acionamento_roubo: false
-suporta_bloqueio: false
+SELECT id, codigo, plataforma_veiculo_id, plataforma_device_id 
+FROM rastreadores WHERE plataforma = 'softruck' LIMIT 5;
+```
+
+| codigo | plataforma_veiculo_id | plataforma_device_id |
+|--------|-----------------------|---------------------|
+| 123456 | NULL | NULL |
+| 12345678 | NULL | NULL |
+| 132458 | NULL | NULL |
+| 123654 | NULL | NULL |
+| 231546 | NULL | NULL |
+
+**CONCLUSAO:** NAO E POSSIVEL TESTAR porque nenhum rastreador tem os IDs configurados.
+
+---
+
+## Diagrama do Fluxo Atual vs Esperado
+
+```text
+FLUXO ATUAL (BLOQUEADO)
+=======================
+
+App/Painel → useVeiculoPosicao/useRastreadorTempoReal
+    |
+    v
+Edge Function (posicao-veiculo ou rastreador-posicao)
+    |
+    v
+Busca rastreador no banco
+    |
+    v
+Verifica plataforma_veiculo_id e plataforma_device_id
+    |
+    v
+❌ ERRO: "Rastreador não configurado com IDs da plataforma"
+
+
+FLUXO ESPERADO (SE CORRIGIDO)
+=============================
+
+App/Painel → useVeiculoPosicao/useRastreadorTempoReal
+    |
+    v
+Edge Function (posicao-veiculo ou rastreador-posicao)
+    |
+    v
+rastreador-auth → Obtem token Softruck
+    |
+    v
+❌ ERRO: "Public key does not exist"  (Bloqueio atual)
+    |
+    v (se corrigido)
+GET /vehicles/{id}/tracking/{device_id}?format=JSON
+    Headers: Authorization: Bearer {token}
+             public-key: {publicKey}
+    |
+    v
+Parse resposta GeoJSON
+    |
+    v
+Atualiza banco (rastreadores + rastreador_posicoes)
+    |
+    v
+Retorna posicao para frontend
+    |
+    v
+Exibe no mapa Leaflet
 ```
 
 ---
 
-## Secrets Configurados
+## Plano de Correcao
 
-Os seguintes secrets Softruck estao configurados:
-- `SOFTRUCK_PUBLIC_KEY`
-- `SOFTRUCK_USERNAME`
-- `SOFTRUCK_PASSWORD`
-- `SOFTRUCK_ENTERPRISE_ID`
+### Fase 1: Corrigir Public Key (BLOQUEADOR PRINCIPAL)
 
----
+**Acao necessaria pelo usuario:**
+1. Acessar painel Softruck
+2. Obter a Public Key correta
+3. Atualizar secret `SOFTRUCK_PUBLIC_KEY` no Supabase
 
-## Gaps Identificados
+### Fase 2: Corrigir Mapeamento de IDs
 
-### Alta Prioridade
+**Problema:** Os rastreadores tem `id_plataforma` populado, mas as edge functions esperam `plataforma_veiculo_id` e `plataforma_device_id`.
 
-1. **Public Key Invalida:** O erro "Public key does not exist" indica que a chave publica configurada nao e reconhecida pela Softruck.
+**Opcao A - Usar campo existente:**
 
-2. **Ausencia de Retry em Erro 401:** Quando o token expira e uma chamada retorna 401, o sistema deveria:
-   - Detectar o erro 401
-   - Forcar refresh do token (`force_refresh: true`)
-   - Tentar a chamada novamente
-
-3. **Refresh Token Nao Utilizado:** O sistema armazena o `refresh_token` mas nunca o utiliza para renovar o token - sempre faz login completo.
-
-### Media Prioridade
-
-4. **Logs de Autenticacao Incompletos:** Nao ha registro na tabela `rastreadores_logs` quando ocorre erro de autenticacao.
-
-5. **Ausencia de Comandos de Bloqueio:** A API Softruck suporta comandos, mas o sistema nao implementa.
-
----
-
-## Plano de Correcoes
-
-### Fase 1: Corrigir Erro de Public Key (Configuracao)
-
-O usuario deve verificar:
-1. Se a `SOFTRUCK_PUBLIC_KEY` esta correta no Supabase
-2. Se a conta Softruck esta ativa
-3. Se as credenciais `SOFTRUCK_USERNAME` e `SOFTRUCK_PASSWORD` estao corretas
-
-### Fase 2: Implementar Retry em Erro 401
-
-**Arquivos a modificar:**
-- `supabase/functions/rastreador-posicao/index.ts`
-- `supabase/functions/posicao-veiculo/index.ts`
-- `supabase/functions/rastreador-historico/index.ts`
-- `supabase/functions/sync-rastreadores/index.ts`
-
-**Logica proposta:**
+Modificar edge functions para usar `id_plataforma` como fallback:
 
 ```typescript
-async function chamadaSoftruckComRetry(
-  supabaseUrl: string,
-  supabaseKey: string,
-  url: string,
-  options: RequestInit,
-  tentativas: number = 2
-): Promise<Response> {
-  for (let i = 0; i < tentativas; i++) {
-    const response = await fetch(url, options);
-    
-    if (response.status === 401) {
-      console.warn(`[Softruck] Erro 401, tentativa ${i + 1}/${tentativas}`);
-      
-      if (i === tentativas - 1) {
-        throw new Error('Token Softruck invalido apos renovacao');
-      }
-      
-      // Forcar refresh do token
-      const authResponse = await fetch(
-        `${supabaseUrl}/functions/v1/rastreador-auth`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseKey}`,
-          },
-          body: JSON.stringify({ plataforma: 'softruck', force_refresh: true })
-        }
-      );
-      
-      const authData = await authResponse.json();
-      if (!authData.success) {
-        throw new Error('Falha ao renovar token');
-      }
-      
-      // Atualizar token nas options
-      options.headers = {
-        ...options.headers,
-        'Authorization': `Bearer ${authData.token}`,
-      };
-      
-      continue;
-    }
-    
-    return response;
-  }
-  
-  throw new Error('Erro inesperado');
+// Em rastreador-posicao/index.ts e posicao-veiculo/index.ts
+
+const vehicleId = rastreador.plataforma_veiculo_id || rastreador.id_plataforma;
+const deviceId = rastreador.plataforma_device_id || rastreador.id_plataforma;
+
+if (!vehicleId || !deviceId) {
+  throw new Error('Rastreador não configurado com IDs da plataforma');
 }
 ```
 
-### Fase 3: Implementar Uso de Refresh Token
+**Opcao B - Popular campos corretos:**
 
-**Arquivo:** `supabase/functions/rastreador-auth/index.ts`
+Criar script de migracao ou funcao que busque os IDs corretos na API Softruck e popule os campos.
 
-Adicionar logica para usar refresh_token antes de fazer login completo:
+### Fase 3: Verificar Formato de Resposta
 
-```typescript
-// Verificar se tem refresh_token valido
-const { data: tokenComRefresh } = await supabase
-  .from('rastreadores_tokens_cache')
-  .select('refresh_token')
-  .eq('plataforma', 'softruck')
-  .not('refresh_token', 'is', null)
-  .order('created_at', { ascending: false })
-  .limit(1)
-  .single();
+Apos correcoes, validar que a API Softruck retorna no formato esperado:
 
-if (tokenComRefresh?.refresh_token) {
-  try {
-    // Tentar usar refresh_token primeiro
-    const refreshResponse = await fetch(`${baseUrl}/auth/refresh`, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'public-key': publicKey,
-      },
-      body: JSON.stringify({ refresh_token: tokenComRefresh.refresh_token })
-    });
-    
-    if (refreshResponse.ok) {
-      const data = await refreshResponse.json();
-      return { token: data.data.token, refresh_token: data.data.refresh_token };
+```json
+{
+  "data": {
+    "attributes": {
+      "latitude": ...,
+      "longitude": ...,
+      ...
     }
-  } catch (e) {
-    console.log('Refresh falhou, fazendo login completo');
   }
 }
-
-// Fallback para login completo
-return await authSoftruck(baseUrl);
 ```
 
-### Fase 4: Adicionar Logs de Erro de Autenticacao
-
-Registrar falhas de autenticacao na tabela `rastreadores_logs`:
-
-```typescript
-catch (error) {
-  // Log de erro de autenticacao
-  await supabase
-    .from('rastreadores_logs')
-    .insert({
-      plataforma: 'softruck',
-      operacao: 'autenticacao',
-      status: 'erro',
-      erro_mensagem: error.message,
-    });
-    
-  throw error;
-}
-```
+Caso retorne em formato diferente (ex: GeoJSON), ajustar o parse.
 
 ---
 
 ## Arquivos a Modificar
 
-| Arquivo | Alteracoes |
-|---------|------------|
-| `supabase/functions/rastreador-auth/index.ts` | Adicionar uso de refresh_token e logs de erro |
-| `supabase/functions/rastreador-posicao/index.ts` | Adicionar retry em erro 401 |
-| `supabase/functions/posicao-veiculo/index.ts` | Adicionar retry em erro 401 |
-| `supabase/functions/rastreador-historico/index.ts` | Adicionar retry em erro 401 |
-| `supabase/functions/softruck-api/index.ts` | Adicionar retry em erro 401 |
-| `supabase/functions/sync-rastreadores/index.ts` | Adicionar retry em erro 401 |
+| Arquivo | Alteracao |
+|---------|-----------|
+| `supabase/functions/rastreador-posicao/index.ts` | Adicionar fallback para `id_plataforma` |
+| `supabase/functions/posicao-veiculo/index.ts` | Adicionar fallback para `id_plataforma` |
+| `supabase/functions/sync-rastreadores/index.ts` | Ja usa fallback, manter |
 
 ---
 
-## Novo Arquivo a Criar
+## Checklist de Verificacao Final
 
-```text
-supabase/functions/_shared/softruck-utils.ts
-```
+Apos correcoes, confirmar:
 
-Modulo compartilhado com funcoes de retry e autenticacao para evitar duplicacao de codigo.
-
----
-
-## Checklist de Verificacao
-
-Apos implementacao, confirmar:
-
-- [ ] Endpoint `POST /v2/auth/login` chamado corretamente
-- [ ] Header `public-key` presente em todas requisicoes
-- [ ] `refresh_token` armazenado e utilizado para renovacao
-- [ ] Token Bearer repassado em todas chamadas subsequentes
-- [ ] Erro 401 dispara renovacao automatica com retry
-- [ ] Logs de erro de autenticacao registrados
-- [ ] Alternancia sandbox/producao funcionando
+- [ ] Secret `SOFTRUCK_PUBLIC_KEY` atualizada com valor correto
+- [ ] Autenticacao retorna token valido (sem erro 401)
+- [ ] Campos `plataforma_veiculo_id` ou `id_plataforma` populados
+- [ ] Endpoint `GET /vehicles/{id}/tracking/{device_id}` retorna dados
+- [ ] Parse de resposta extrai latitude/longitude corretamente
+- [ ] Mapa exibe posicao com marcador
+- [ ] Polling a cada 30s atualiza posicao
+- [ ] Botao "Atualizar Posicao" funciona
+- [ ] Teste com 3+ veiculos mostra posicoes distintas
 
 ---
 
-## Teste Recomendado
+## Resumo dos Problemas
 
-Antes de implementar as correcoes, o usuario deve:
+| # | Problema | Severidade | Solucao |
+|---|----------|------------|---------|
+| 1 | `SOFTRUCK_PUBLIC_KEY` invalida | CRITICO | Usuario deve atualizar secret |
+| 2 | `plataforma_veiculo_id` NULL | ALTO | Adicionar fallback para `id_plataforma` |
+| 3 | `plataforma_device_id` NULL | ALTO | Adicionar fallback para `id_plataforma` |
 
-1. **Verificar credenciais no painel Softruck:**
-   - Confirmar que a Public Key esta correta
-   - Confirmar que username/password estao ativos
-   - Verificar se a conta nao esta bloqueada
-
-2. **Atualizar secrets no Supabase se necessario:**
-   - Navegar para Edge Functions > Secrets
-   - Atualizar `SOFTRUCK_PUBLIC_KEY` com valor correto
-
-3. **Testar conexao novamente:**
-   - Usar o botao "Testar Conexao" no painel de Monitoramento
-
+Sem a correcao do item 1 (Public Key), o sistema continuara completamente bloqueado.
