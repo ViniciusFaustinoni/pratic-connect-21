@@ -1,346 +1,286 @@
 
-# Plano de Implementacao - Importacao de Oficinas em Massa
 
-## Resumo
+# Revisão Completa - Fluxo de Acionamento de Roubo/Furto na Rede Veículos
 
-Criar uma funcionalidade completa de importacao de oficinas em massa atraves de arquivos Excel (XLSX), CSV ou XLS, seguindo o padrao ja existente na importacao de usuarios do sistema.
+## Resumo Executivo
 
----
-
-## Estrutura do Arquivo Excel Recebido
-
-| Coluna Excel | Campo Oficina | Tratamento |
-|--------------|---------------|------------|
-| Tipo | (filtro) | Aceitar apenas "Oficina" ou importar todos |
-| Nome | razao_social | Direto, obrigatorio |
-| Nome | nome_fantasia | Igual ao razao_social |
-| CNPJ | cnpj | Limpar formatacao, validar |
-| CEP | cep | Limpar formatacao (apenas numeros) |
-| Endereco | logradouro + numero + bairro | Parsear "RUA X, 123, BAIRRO" |
-| Telefone | telefone | Limpar formatacao |
-| Cidade | cidade | Remover " CIDADE" do final |
-| Estado | estado | Remover " ESTADO" do final, converter para UF |
+Após análise detalhada do sistema, identifiquei que **o fluxo de acionamento de roubo/furto na Rede Veículos NÃO está implementado**. A plataforma está configurada no banco de dados com `suporta_acionamento_roubo: true`, porém não existe nenhuma edge function ou lógica que faça a chamada ao endpoint `POST /acionamentoRouboFurto` da API Rede Veículos.
 
 ---
 
-## Componentes a Criar
+## Status Atual
 
-### 1. ImportarOficinasDialog.tsx
+| Item | Status | Detalhes |
+|------|--------|----------|
+| Plataforma configurada no banco | OK | `rede_veiculos` com `suporta_acionamento_roubo: true` |
+| Token Bearer configurado | OK | `REDE_VEICULOS_TOKEN` nos secrets |
+| Endpoint `/acionamentoRouboFurto` | NÃO IMPLEMENTADO | Não existe edge function |
+| Integração sinistro → rastreador | NÃO IMPLEMENTADO | `criar-sinistro` não aciona rastreador |
+| Modo rastreamento intensivo | NÃO IMPLEMENTADO | Não existe lógica |
+| Histórico com maior frequência | PARCIAL | Existe `rastreador_posicoes` mas sem modo intensivo |
+| Registro com data/hora/responsável | NÃO IMPLEMENTADO | Não há tabela de acionamentos |
 
-Modal completo com:
-- **Step 1 - Upload:** Drag-and-drop de arquivo ou selecao manual
-- **Step 2 - Preview:** Tabela de preview com validacao visual
-- **Step 3 - Importando:** Progress bar
-- **Step 4 - Resultado:** Resumo de sucesso/erros
+---
 
-**Recursos:**
-- Download de template Excel
-- Validacao de CNPJ duplicado (no arquivo e no banco)
-- Validacao de campos obrigatorios (razao_social, cnpj, cidade, estado)
-- Parser inteligente de endereco
-- Limpeza automatica de dados (CEP, telefone, cidade, estado)
-- Edicao inline de linhas com erro antes de importar
+## Gaps Identificados
 
-### 2. Hook useImportOficinas.ts
+### 1. Ausência de Edge Function para Acionamento
+
+**Problema:** Não existe edge function que chame o endpoint `POST /acionamentoRouboFurto` da API Rede Veículos.
+
+**Momentos que deveria ser chamado (conforme requisitos):**
+1. Quando associado comunica roubo/furto pelo App ❌
+2. Quando setor de Eventos confirma sinistro tipo roubo/furto ❌
+3. Quando Assistência 24h recebe chamado de emergência ❌
+4. Quando diretoria autoriza acionamento de recuperação ❌
+
+---
+
+### 2. `criar-sinistro` Não Integra com Rastreador
+
+**Código atual (linha 295-333):**
+O sinistro é criado no banco, histórico registrado, documentos pendentes criados, notificações enviadas - mas **não há nenhuma chamada para acionar o rastreador**.
+
+---
+
+### 3. Ausência de Tabela de Acionamentos
+
+Não existe tabela para registrar acionamentos de roubo/furto com:
+- Data/hora do acionamento
+- Responsável pelo acionamento
+- Status do acionamento (sucesso/erro)
+- Resposta da API
+
+---
+
+### 4. Ausência de Modo de Rastreamento Intensivo
+
+O sistema não possui lógica para:
+- Aumentar frequência de coleta de posições durante emergência
+- Mudar veículo para "modo rastreamento intensivo"
+- Preservar histórico com maior granularidade
+
+---
+
+## Plano de Implementação
+
+### Fase 1: Infraestrutura de Banco de Dados
+
+**Nova tabela: `acionamentos_roubo_furto`**
+
+```sql
+CREATE TABLE acionamentos_roubo_furto (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  
+  -- Referências
+  sinistro_id UUID REFERENCES sinistros(id),
+  chamado_assistencia_id UUID REFERENCES chamados_assistencia(id),
+  veiculo_id UUID NOT NULL REFERENCES veiculos(id),
+  rastreador_id UUID REFERENCES rastreadores(id),
+  
+  -- Dados do acionamento
+  tipo_origem VARCHAR(50) NOT NULL, -- 'sinistro', 'assistencia', 'diretoria', 'manual'
+  protocolo_externo VARCHAR(100), -- Protocolo retornado pela Rede Veículos
+  
+  -- Quem acionou
+  solicitado_por UUID REFERENCES profiles(id),
+  solicitado_por_nome VARCHAR(255),
+  solicitado_em TIMESTAMPTZ DEFAULT NOW(),
+  
+  -- Autorização (para acionamentos que requerem aprovação)
+  autorizado_por UUID REFERENCES profiles(id),
+  autorizado_em TIMESTAMPTZ,
+  
+  -- Status
+  status VARCHAR(30) DEFAULT 'solicitado',
+  -- (solicitado, autorizado, enviado, confirmado, erro, cancelado)
+  
+  -- Resposta da API
+  api_request JSONB,
+  api_response JSONB,
+  api_status_code INTEGER,
+  
+  -- Observações
+  observacoes TEXT,
+  
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Índices
+CREATE INDEX idx_acionamentos_sinistro ON acionamentos_roubo_furto(sinistro_id);
+CREATE INDEX idx_acionamentos_veiculo ON acionamentos_roubo_furto(veiculo_id);
+CREATE INDEX idx_acionamentos_status ON acionamentos_roubo_furto(status);
+```
+
+---
+
+### Fase 2: Edge Function `acionar-roubo-furto`
+
+**Nova edge function em `supabase/functions/acionar-roubo-furto/index.ts`**
 
 ```typescript
-export function useImportOficinas() {
-  // Mutation para importar oficinas em lote
-  // Valida CNPJs duplicados no banco
-  // Insere em batch
-  // Retorna resultados detalhados
-}
+// Endpoints da API Rede Veículos:
+// POST /acionamentoRouboFurto - Aciona alerta prioritário
+// POST /veiculos/{codigo}/rastreamentoIntensivo - Ativa modo intensivo
+
+// Fluxo:
+// 1. Validar autenticação e permissões
+// 2. Buscar dados do veículo e rastreador
+// 3. Verificar se rastreador é da plataforma Rede Veículos
+// 4. Chamar API /acionamentoRouboFurto
+// 5. Se sucesso, ativar rastreamento intensivo
+// 6. Registrar na tabela acionamentos_roubo_furto
+// 7. Criar alerta crítico na tabela rastreador_alertas
+// 8. Notificar equipe de monitoramento
 ```
 
 ---
 
-## Fluxo de Importacao
+### Fase 3: Integração nos Pontos de Entrada
+
+**3.1. Sinistro tipo roubo/furto (`criar-sinistro/index.ts`)**
+- Adicionar verificação: se `tipo_sinistro` é `roubo` ou `furto`
+- Chamar `acionar-roubo-furto` automaticamente
+- Registrar no histórico do sinistro
+
+**3.2. Atualização de status do sinistro (`SinistroDetalhe.tsx`)**
+- Adicionar botão "Acionar Recuperação" para analistas/diretoria
+- Disponível apenas para sinistros tipo roubo/furto
+- Requer confirmação antes de acionar
+
+**3.3. Assistência 24h emergencial (`criar-chamado-assistencia/index.ts`)**
+- Verificar se chamado é de tipo "roubo" ou marcado como emergência
+- Disparar acionamento automaticamente
+
+**3.4. Painel de Monitoramento (`AlertasWidget.tsx`)**
+- Adicionar tipo de alerta "acionamento_roubo"
+- Exibir com severidade "critica" e destaque visual
+- Ação rápida para "Ver Rastreamento"
+
+---
+
+### Fase 4: Modo Rastreamento Intensivo
+
+**4.1. Adicionar campo na tabela `rastreadores`:**
+```sql
+ALTER TABLE rastreadores ADD COLUMN IF NOT EXISTS 
+  modo_rastreamento VARCHAR(20) DEFAULT 'normal'
+  CHECK (modo_rastreamento IN ('normal', 'intensivo', 'emergencia'));
+
+ALTER TABLE rastreadores ADD COLUMN IF NOT EXISTS 
+  modo_ativado_em TIMESTAMPTZ;
+
+ALTER TABLE rastreadores ADD COLUMN IF NOT EXISTS 
+  modo_ativado_por UUID REFERENCES profiles(id);
+```
+
+**4.2. Lógica de coleta mais frequente:**
+- Modo normal: coleta a cada 5-10 minutos
+- Modo intensivo: coleta a cada 30 segundos (via API Rede Veículos)
+- Modo emergência: coleta contínua (tempo real se disponível)
+
+---
+
+### Fase 5: Interface de Usuário
+
+**5.1. Botão no Detalhe do Sinistro:**
+- "🚨 Acionar Recuperação"
+- Só aparece para sinistros roubo/furto
+- Abre modal de confirmação
+- Registra quem acionou
+
+**5.2. Card de Acionamento no Sinistro:**
+- Mostra status do acionamento
+- Data/hora do acionamento
+- Responsável
+- Link para rastreamento ao vivo
+
+**5.3. Widget no Dashboard de Monitoramento:**
+- Lista de veículos em modo intensivo
+- Alertas prioritários de roubo/furto
+- Mapa com localização em tempo real
+
+---
+
+## Arquivos a Criar
+
+| Arquivo | Descrição |
+|---------|-----------|
+| `supabase/functions/acionar-roubo-furto/index.ts` | Edge function principal |
+| `src/hooks/useAcionamentoRoubo.ts` | Hook para acionamento |
+| `src/components/sinistros/AcionarRecuperacaoModal.tsx` | Modal de confirmação |
+| `src/components/monitoramento/VeiculosEmergenciaWidget.tsx` | Widget de veículos em emergência |
+
+---
+
+## Arquivos a Modificar
+
+| Arquivo | Alterações |
+|---------|------------|
+| `supabase/functions/criar-sinistro/index.ts` | Integrar acionamento automático para roubo/furto |
+| `supabase/functions/criar-chamado-assistencia/index.ts` | Integrar acionamento para emergências |
+| `src/pages/eventos/SinistroDetalhe.tsx` | Adicionar botão e card de acionamento |
+| `src/components/monitoramento/AlertasWidget.tsx` | Adicionar tipo "acionamento_roubo" |
+| `supabase/config.toml` | Adicionar nova edge function |
+
+---
+
+## Fluxo Completo Após Implementação
 
 ```text
-1. Usuario clica em "Importar Oficinas"
-   |
-2. Abre modal com drag-and-drop
-   |
-3. Usuario faz upload do arquivo XLSX/CSV
-   |
-4. Sistema processa arquivo:
-   - Le dados com biblioteca xlsx
-   - Mapeia colunas para campos
-   - Parsea enderecos
-   - Limpa dados (CNPJ, CEP, telefone, cidade, estado)
-   - Valida campos obrigatorios
-   - Verifica CNPJs duplicados (no arquivo)
-   |
-5. Exibe preview com status por linha:
-   - Verde: Valido
-   - Vermelho: Erro (mostra motivo)
-   |
-6. Usuario pode editar linhas com erro
-   |
-7. Usuario clica "Importar X oficinas"
-   |
-8. Sistema:
-   - Verifica CNPJs ja existentes no banco
-   - Insere oficinas validas
-   - Retorna resultado detalhado
-   |
-9. Exibe resumo: X importadas, Y erros
+ASSOCIADO COMUNICA ROUBO (App ou WhatsApp)
+    │
+    ▼
+criar-sinistro detecta tipo = roubo/furto
+    │
+    ▼
+Chama acionar-roubo-furto automaticamente
+    │
+    ├──► POST /acionamentoRouboFurto (Rede Veículos)
+    │        │
+    │        ▼
+    │    Alerta gerado na central da Rede Veículos
+    │
+    ├──► Ativa modo rastreamento intensivo
+    │
+    ├──► Cria alerta crítico no SGA (rastreador_alertas)
+    │
+    ├──► Notifica equipe de monitoramento
+    │
+    └──► Registra em acionamentos_roubo_furto
+              │
+              ▼
+         Histórico completo:
+         - Data/hora
+         - Responsável
+         - Resposta API
+         - Status
 ```
 
 ---
 
-## Logica de Parsing
+## Requisitos Confirmados Após Implementação
 
-### Parser de Endereco
-
-Entrada: `"RUA CAMPOS, 541, PARQUE LAFAIETE"`
-
-```typescript
-function parseEndereco(endereco: string) {
-  // Remove duplicatas tipo "ENDEREÇO: ..."
-  const limpo = endereco.split('ENDEREÇO:')[0].trim();
-  
-  // Split por virgula
-  const partes = limpo.split(',').map(p => p.trim());
-  
-  return {
-    logradouro: partes[0] || '',
-    numero: partes[1] || '',
-    bairro: partes[2] || ''
-  };
-}
-```
-
-### Limpeza de Dados
-
-```typescript
-// CNPJ: remove pontos, barras, hifen
-const cnpjLimpo = cnpj.replace(/\D/g, '');
-
-// CEP: remove hifen
-const cepLimpo = cep.replace(/\D/g, '');
-
-// Telefone: remove formatacao
-const telLimpo = telefone.replace(/\D/g, '');
-
-// Cidade: remove " CIDADE" do final
-const cidadeLimpa = cidade.replace(/\s*CIDADE$/i, '').trim();
-
-// Estado: converte "RIO DE JANEIRO ESTADO" para "RJ"
-const estadoLimpo = parseEstado(estado);
-```
-
-### Mapa de Estados
-
-```typescript
-const ESTADOS_PARA_UF = {
-  'RIO DE JANEIRO': 'RJ',
-  'SAO PAULO': 'SP',
-  'MINAS GERAIS': 'MG',
-  // ... demais estados
-};
-
-function parseEstado(estado: string): string {
-  const limpo = estado.replace(/\s*ESTADO$/i, '').trim().toUpperCase();
-  return ESTADOS_PARA_UF[limpo] || limpo.substring(0, 2);
-}
-```
+| Requisito | Status |
+|-----------|--------|
+| Acionamento gera alerta prioritário na central | ✅ Via API Rede Veículos |
+| Veículo entra em modo rastreamento intensivo | ✅ Campo `modo_rastreamento` |
+| Histórico preservado com maior frequência | ✅ Coleta a cada 30s |
+| Registro com data/hora e responsável no SGA | ✅ Tabela `acionamentos_roubo_furto` |
 
 ---
 
-## Validacoes
+## Teste Recomendado
 
-| Campo | Validacao |
-|-------|-----------|
-| razao_social | Obrigatorio, min 3 caracteres |
-| cnpj | Obrigatorio, 14 digitos, nao duplicado |
-| cidade | Obrigatorio |
-| estado | Obrigatorio, 2 caracteres |
-| cep | Opcional, 8 digitos se preenchido |
-| telefone | Opcional |
+Após implementação, testar em ambiente sandbox:
 
----
-
-## Arquivos a Criar/Modificar
-
-### Novos Arquivos
-
-```text
-src/components/oficinas/ImportarOficinasDialog.tsx
-src/hooks/useImportOficinas.ts
-src/lib/parseOficina.ts (utilitarios de parsing)
+```bash
+# 1. Criar sinistro tipo roubo via App
+# 2. Verificar se acionamento foi criado automaticamente
+# 3. Confirmar resposta da API Rede Veículos
+# 4. Verificar alerta crítico no widget de alertas
+# 5. Confirmar que rastreador entrou em modo intensivo
+# 6. Verificar registro na tabela acionamentos_roubo_furto
 ```
 
-### Arquivos a Modificar
-
-```text
-src/pages/oficinas/Oficinas.tsx
-- Adicionar botao "Importar"
-- Adicionar estado para controlar modal
-- Adicionar ImportarOficinasDialog
-```
-
----
-
-## Interface do Modal
-
-### Step 1 - Upload
-
-```text
-+------------------------------------------+
-|  Importar Oficinas                    [X]|
-+------------------------------------------+
-|                                          |
-|     +----------------------------+       |
-|     |                            |       |
-|     |   Arraste o arquivo aqui   |       |
-|     |   ou clique para selecionar|       |
-|     |                            |       |
-|     |   .xlsx, .xls, .csv        |       |
-|     +----------------------------+       |
-|                                          |
-|  [Baixar template Excel]                 |
-|                                          |
-|  Colunas esperadas:                      |
-|  Tipo, Nome, CNPJ, CEP, Endereco,       |
-|  Telefone, Cidade, Estado                |
-+------------------------------------------+
-```
-
-### Step 2 - Preview
-
-```text
-+------------------------------------------+
-|  Importar Oficinas                    [X]|
-+------------------------------------------+
-| 15 validas | 2 com erro | Total: 17      |
-+------------------------------------------+
-| Filtrar: [Todas v] [Validas] [Com erro]  |
-+------------------------------------------+
-| # | Status | Razao Social | CNPJ | Cidade|
-|---|--------|--------------|------|-------|
-| 1 | [OK]   | ABDALA NAJA  | 05233| RIO...|
-| 2 | [OK]   | AUTOMANIA    | 15330| RIO...|
-| 3 | [ERR]  | HM SERVICOS  | 2122 | CNPJ..|
-+------------------------------------------+
-|            [Voltar] [Importar 15 oficinas]|
-+------------------------------------------+
-```
-
-### Step 3 - Importando
-
-```text
-+------------------------------------------+
-|  Importando...                           |
-+------------------------------------------+
-|                                          |
-|  [=========>                    ] 45%    |
-|                                          |
-|  Processando: 7 de 15                    |
-|                                          |
-+------------------------------------------+
-```
-
-### Step 4 - Resultado
-
-```text
-+------------------------------------------+
-|  Importacao Concluida                    |
-+------------------------------------------+
-|                                          |
-|  [OK] 13 oficinas importadas             |
-|  [X]  2 oficinas com erro                |
-|                                          |
-+------------------------------------------+
-| Erros:                                   |
-| - Linha 5: CNPJ ja cadastrado            |
-| - Linha 8: CNPJ invalido                 |
-+------------------------------------------+
-|                              [Fechar]    |
-+------------------------------------------+
-```
-
----
-
-## Codigo Principal
-
-### ImportarOficinasDialog.tsx (Estrutura)
-
-```tsx
-export function ImportarOficinasDialog({ open, onOpenChange, onSuccess }) {
-  const [step, setStep] = useState<'upload' | 'preview' | 'importing' | 'result'>('upload');
-  const [oficinas, setOficinas] = useState<OficinaImport[]>([]);
-  const [progress, setProgress] = useState(0);
-  const [resultados, setResultados] = useState<ImportResult[]>([]);
-  
-  const { mutateAsync: importOficinas } = useImportOficinas();
-  
-  const processFile = (file: File) => {
-    // Le arquivo com xlsx
-    // Mapeia colunas
-    // Parsea enderecos
-    // Limpa dados
-    // Valida
-    // setOficinas(validadas)
-    // setStep('preview')
-  };
-  
-  const handleImport = async () => {
-    setStep('importing');
-    // Para cada oficina valida:
-    // - Verifica CNPJ no banco
-    // - Insere
-    // - Atualiza progress
-    setStep('result');
-  };
-  
-  return (
-    <Dialog>
-      {step === 'upload' && <UploadStep />}
-      {step === 'preview' && <PreviewStep />}
-      {step === 'importing' && <ImportingStep />}
-      {step === 'result' && <ResultStep />}
-    </Dialog>
-  );
-}
-```
-
----
-
-## Template Excel para Download
-
-| Tipo | Nome | CNPJ | CEP | Endereco | Telefone | Cidade | Estado |
-|------|------|------|-----|----------|----------|--------|--------|
-| Oficina | EXEMPLO AUTO LTDA | 00.000.000/0001-00 | 00000-000 | RUA EXEMPLO, 123, CENTRO | (21) 99999-9999 | RIO DE JANEIRO | RJ |
-
----
-
-## Resumo Tecnico
-
-**Bibliotecas utilizadas:**
-- `xlsx` - Leitura de arquivos Excel/CSV (ja instalada)
-- `zod` - Validacao de schema (ja instalada)
-
-**Padrao seguido:**
-- Baseado em `ImportarUsuariosDialog.tsx` existente
-- Mesma estrutura de steps
-- Mesma UX de drag-and-drop
-- Mesma logica de validacao e preview
-
-**Fluxo de dados:**
-1. Arquivo -> xlsx.read()
-2. JSON -> mapeamento de colunas
-3. Dados brutos -> parseEndereco() + limpeza
-4. Dados limpos -> validacao
-5. Dados validados -> preview
-6. Confirmacao -> insert batch no Supabase
-
----
-
-## Consideracoes Finais
-
-1. **CNPJs duplicados:** O sistema verificara duplicatas tanto no arquivo quanto no banco
-2. **Tipo "Prestador":** Podemos incluir opcao para filtrar apenas "Oficina" ou importar todos
-3. **Especialidades:** Nao presentes no Excel, serao array vazio por padrao
-4. **Status:** Todas as oficinas importadas terao status "ativo" por padrao
-5. **Dados bancarios:** Nao presentes no Excel, serao nulos por padrao
