@@ -317,3 +317,6 @@ verify_jwt = false
 
 [functions.whatsapp-find-chats]
 verify_jwt = false
+
+[functions.integracoes-verificar-secrets]
+verify_jwt = false
