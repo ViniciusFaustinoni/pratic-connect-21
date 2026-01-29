@@ -1,428 +1,345 @@
 
-# Revisão Completa - Fluxo de Atualização de Dados do Veículo na Rede Veículos
+
+# Revisao Completa - Fluxo de Consulta de Posicao na Rede Veiculos
 
 ## Resumo Executivo
 
 | Item | Status | Detalhes |
 |------|--------|----------|
-| Endpoint POST /atualizarDadosVeiculo | **NAO EXISTE** | Não há edge function para atualização de dados do veículo |
-| Atualização quando associado edita dados do veículo | **NAO IMPLEMENTADO** | Não existe tela de edição de veículo no sistema |
-| Atualização quando há correção de informações FIPE | **NAO IMPLEMENTADO** | Apenas atualiza banco local |
-| Atualização quando veículo é transferido para outro associado | **NAO IMPLEMENTADO** | Funcionalidade não existe |
-| Atualização quando há correção de chassi/renavam | **NAO IMPLEMENTADO** | Apenas atualiza banco local |
-| Dados corretos enviados para veículo específico | **NAO** | Nenhuma integração ativa |
-| Identificador do veículo (placa/chassi) correto | **NAO** | Nenhuma integração ativa |
-| Atualizações de valor FIPE refletem no sistema | **PARCIAL** | Atualiza apenas localmente |
-| Histórico do veículo mantido após atualização | **SIM** | Via audit log local |
+| Endpoint POST /obterUltimaPosicaoValida | **NAO USADO** | Sistema usa GET /veiculos/{id}/posicao em vez disso |
+| Consulta quando associado abre tela de rastreamento | **IMPLEMENTADO** | Via `posicao-veiculo` Edge Function |
+| Consulta quando analista visualiza mapa | **PARCIAL** | Usa RPC `get_ultimas_posicoes` (dados locais, nao API em tempo real) |
+| Consulta quando ha solicitacao de Assistencia 24h | **IMPLEMENTADO** | Via `posicao-veiculo` na edge function `criar-chamado-assistencia` |
+| Consulta quando ha comunicado de sinistro | **PARCIAL** | Usa ultima posicao do banco, nao busca tempo real |
+| Identificador do veiculo enviado corretamente | **SIM** | Usa `rastreador.codigo` ou `id_plataforma` |
+| Latitude/longitude retornada e exibida no mapa | **SIM** | Mapeamento correto de campos |
+| Data/hora da posicao mostrada ao usuario | **SIM** | Via `data_hora` e calculo de tempo |
+| Posicoes antigas sinalizadas como desatualizada | **IMPLEMENTADO** | Via status `online/atencao/offline` |
 
 ---
 
-## Análise Detalhada
+## Analise Detalhada
 
-### 1. Estado Atual - Nenhuma Integração de Atualização de Veículo
+### 1. Estado Atual da Integracao Rede Veiculos
 
-A plataforma Rede Veículos possui os seguintes endpoints implementados:
+O sistema possui **duas Edge Functions** que consultam posicao:
 
-| Endpoint | Edge Function | Status |
-|----------|---------------|--------|
-| POST /vincularClienteVeiculo | `rede-veiculos-vincular-cliente` | Implementado |
-| POST /desvincularClienteVeiculo | `rede-veiculos-desvincular-cliente` | Implementado |
-| POST /atualizarDadosCliente | `rede-veiculos-atualizar-cliente` | Implementado |
-| **POST /atualizarDadosVeiculo** | **NAO EXISTE** | **Gap crítico** |
+| Edge Function | Uso Principal | Suporte Rede Veiculos |
+|---------------|---------------|----------------------|
+| `posicao-veiculo` | App do Associado | **SIM** - linha 195-232 |
+| `rastreador-posicao` | Painel Administrativo | **PARCIAL** - apenas Softruck |
 
-### 2. Comparação com Softruck
-
-A Softruck possui operação de atualização de veículo na edge function `softruck-api`:
+#### 1.1 Implementacao em `posicao-veiculo` (CORRETO)
 
 ```typescript
-// softruck-api/index.ts - operação: atualizar-veiculo
-case 'atualizar-veiculo': {
-  const { veiculoId, placa, chassi, marca, modelo, ano, cor, tipo } = data;
+// supabase/functions/posicao-veiculo/index.ts - linhas 379-394
+if (plataformaCodigo === 'rede_veiculos') {
+  const redeToken = Deno.env.get('REDE_VEICULOS_TOKEN');
+  const baseUrl = plataforma?.ambiente_atual === 'producao'
+    ? plataforma?.api_url_producao
+    : plataforma?.api_url_sandbox;
+
+  posicao = await getPosicaoRedeVeiculos(
+    redeToken,
+    rastreador.codigo,  // Identificador do veiculo
+    baseUrl
+  );
+}
+```
+
+**Endpoint chamado:** `GET /veiculos/{codigo}/posicao`
+
+#### 1.2 Implementacao em `rastreador-posicao` (INCOMPLETO)
+
+Esta edge function **APENAS** suporta Softruck - nao tem suporte para Rede Veiculos:
+
+```typescript
+// supabase/functions/rastreador-posicao/index.ts - linha 215
+// Buscar posicao com retry automatico em erro 401 (APENAS SOFTRUCK)
+const posicao = await getPosicaoSoftruckComRetry(...)
+```
+
+**Gap identificado:** Nenhum tratamento para `rede_veiculos` nesta edge function.
+
+### 2. Cenarios de Consulta de Posicao
+
+#### 2.1 Associado Abre Tela de Rastreamento no App
+
+**Arquivo:** `src/pages/app/AppRastreamento.tsx` (linha 139)
+
+```typescript
+const { posicao, tempoReal, offline, refetch, atualizarManual } = 
+  useVeiculoPosicao(vehicle?.id);
+```
+
+**Hook:** `src/hooks/useMyData.ts` (linhas 251-300)
+
+```typescript
+export function useVeiculoPosicao(veiculoId?: string) {
+  const query = useQuery({
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke('posicao-veiculo', {
+        body: { veiculo_id: veiculoId }
+      });
+      // ...
+    },
+    refetchInterval: 30000,  // Auto-refresh a cada 30s
+  });
+}
+```
+
+**Status:** IMPLEMENTADO - A edge function `posicao-veiculo` roteeia corretamente entre Softruck e Rede Veiculos.
+
+#### 2.2 Analista Visualiza Mapa de Monitoramento
+
+**Hook:** `src/hooks/useRastreadorPosicao.ts` (linhas 178-189)
+
+```typescript
+export function useTodasPosicoesAtuais() {
+  return useQuery({
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_ultimas_posicoes');
+      return data as PosicaoAtual[];
+    },
+    refetchInterval: 60000,  // A cada 60s
+  });
+}
+```
+
+**Status:** PARCIAL - Usa dados **locais** (RPC no banco), nao busca posicao em tempo real via API.
+
+**Gap:** O mapa do analista mostra posicoes sincronizadas pelo `sync-rastreadores` (cron a cada minuto), nao posicao em tempo real da plataforma.
+
+#### 2.3 Solicitacao de Assistencia 24h
+
+**Arquivo:** `supabase/functions/criar-chamado-assistencia/index.ts` (linhas 218-230)
+
+```typescript
+// Tentar buscar posicao em tempo real via API
+if (rastreador.plataforma === 'softruck' && rastreador.plataforma_veiculo_id) {
+  const posicaoResult = await fetch(
+    `${supabaseUrl}/functions/v1/posicao-veiculo`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ veiculo_id: veiculo.id }),
+    }
+  );
+  // ...
+}
+```
+
+**Gap Identificado:** Condicao `rastreador.plataforma === 'softruck'` - Nao busca posicao para Rede Veiculos!
+
+**Arquivo:** `src/pages/public/TrackingAssistencia.tsx` (linhas 85-96)
+
+```typescript
+if (chamadoData.veiculo?.id) {
+  const { data: posicaoResult } = await supabase.functions.invoke('posicao-veiculo', {
+    body: { veiculo_id: chamadoData.veiculo.id },
+  });
+}
+```
+
+**Status:** IMPLEMENTADO - Esta pagina publica busca posicao sem filtrar plataforma.
+
+#### 2.4 Comunicado de Sinistro
+
+**Arquivo:** `supabase/functions/criar-sinistro/index.ts` (linhas 235-240)
+
+```typescript
+// Buscar rastreador do veiculo
+const { data: rastreador } = await supabaseAdmin
+  .from('rastreadores')
+  .select('id, codigo, plataforma, ultima_posicao_lat, ultima_posicao_lng, ultima_comunicacao')
+  .eq('veiculo_id', payload.veiculo_id)
+  .eq('status', 'instalado')
+  .maybeSingle();
+```
+
+**Status:** PARCIAL - Usa ultima posicao **do banco** (campo `ultima_posicao_lat/lng`), nao busca em tempo real.
+
+**Implicacao:** Se o rastreador nao sincronizou recentemente, a posicao pode estar desatualizada.
+
+### 3. Sinalizacao de Posicoes Desatualizadas
+
+#### 3.1 Backend - Calculo de Status
+
+**Arquivo:** `supabase/functions/posicao-veiculo/index.ts` (linhas 51-61)
+
+```typescript
+function calcularStatusRastreador(ultimaComunicacao: string | null): 'online' | 'offline' | 'atencao' {
+  if (!ultimaComunicacao) return 'offline';
   
-  // Monta payload apenas com campos informados
-  if (placa) attrs.plate = placa;
-  if (chassi) attrs.vin = chassi;
-  if (marca) attrs.brand = marca;
-  if (modelo) attrs.model = modelo;
-  if (ano) attrs.year = ano;
-  if (cor) attrs.color = cor;
-  if (tipo) attrs.type = tipo;
-
-  result = await softruckRequest('PATCH', `/v2/vehicles/${veiculoId}`, token, updateData);
+  const diffMinutos = (agora.getTime() - ultima.getTime()) / 60000;
+  
+  if (diffMinutos < 10) return 'online';     // < 10 min = online
+  if (diffMinutos < 60) return 'atencao';    // < 1h = atencao
+  return 'offline';                           // > 1h = offline
 }
 ```
 
-**Rede Veículos: Nenhum equivalente implementado.**
+#### 3.2 Frontend - Exibicao do Status
 
-### 3. Cenários Onde Deveria Chamar /atualizarDadosVeiculo
-
-#### 3.1 Quando o Associado Atualiza Dados do Veículo
-
-**Estado atual:** Não existe tela de edição de veículo no app do associado.
-
-O arquivo `src/pages/app/AppPerfil.tsx` exibe os veículos do associado, mas **sem opção de edição**.
-
-#### 3.2 Quando há Edição pelo Painel Administrativo
-
-**Arquivo:** `src/pages/cadastro/AssociadoDetalhe.tsx` (linha 838-840)
-
-```tsx
-<Button size="sm" variant="outline">
-  <Edit className="mr-2 h-4 w-4" /> Editar
-</Button>
-```
-
-**Gap crítico:** O botão existe mas **não tem funcionalidade implementada** - é apenas visual.
-
-#### 3.3 Quando há Correção de Informações FIPE
-
-**Arquivo:** `src/components/contratos/ContratoWizard.tsx` (linhas 551-563)
+**Arquivo:** `src/pages/app/AppRastreamento.tsx` (linhas 157-181)
 
 ```typescript
-veiculo = await updateVeiculo.mutateAsync({
-  id: veiculo.id,
-  marca: data.marca,
-  modelo: data.modelo,
-  cor: data.cor,
-  chassi: data.chassi,
-  renavam: data.renavam,
-  valor_fipe: data.valor_fipe,  // Atualiza FIPE localmente
-});
+// Calcular horas sem comunicacao
+const horasSemCom = ultimaCom 
+  ? Math.floor((Date.now() - new Date(ultimaCom).getTime()) / (1000 * 60 * 60)) 
+  : null;
+
+// Exibir tempo desde atualizacao
+if (diffMin < 1) setTempoDesdeAtualizacao('agora');
+else if (diffMin < 60) setTempoDesdeAtualizacao(`ha ${diffMin} min`);
+else if (diffMin < 1440) setTempoDesdeAtualizacao(`ha ${Math.floor(diffMin / 60)}h`);
+else setTempoDesdeAtualizacao(`ha ${Math.floor(diffMin / 1440)}d`);
 ```
 
-**Gap:** Apenas atualiza banco local - Rede Veículos continua com dados antigos.
+**Overlays para estados especificos (linhas 329-362):**
 
-#### 3.4 Quando o Veículo é Transferido para Outro Associado
+| Status | Overlay | Mensagem |
+|--------|---------|----------|
+| Aguardando primeira posicao | Azul pulsante | "Aguardando primeira posicao GPS" |
+| Sem comunicacao > 4h | Vermelho | "O rastreador nao comunica ha Xh" |
+| Offline curto periodo | Amarelo | "Rastreador offline - Ultima posicao: ha X" |
 
-**Status:** Funcionalidade **NAO EXISTE** no sistema.
-
-Não há processo para:
-- Transferir veículo entre associados da mesma família
-- Atualizar proprietário na plataforma
-- Manter histórico de transferências
-
-#### 3.5 Quando há Correção de Chassi/Renavam
-
-**Hook atual:** `src/hooks/useVeiculos.ts` (linhas 101-126)
-
-```typescript
-export function useUpdateVeiculo() {
-  return useMutation({
-    mutationFn: async ({ id, ...updates }) => {
-      const { data, error } = await supabase
-        .from('veiculos')
-        .update(updates)
-        .eq('id', id);
-      // APENAS atualiza banco local
-      // NAO notifica plataforma Rede Veículos
-    },
-  });
-}
-```
+**Status:** IMPLEMENTADO - Sistema sinaliza corretamente posicoes antigas.
 
 ---
 
-## Campos do Veículo na Tabela Local
+## Gaps Identificados
 
-```sql
--- Campos principais da tabela veiculos
-id, associado_id, placa, chassi, renavam, marca, modelo,
-ano_fabricacao, ano_modelo, cor, combustivel, valor_fipe,
-codigo_fipe, ativo, status,
-rede_veiculos_cliente_id,  -- ID do cliente na plataforma
-rede_veiculos_veiculo_id   -- ID do veículo na plataforma
+### Gap 1: `rastreador-posicao` nao suporta Rede Veiculos
+
+Esta edge function so funciona com Softruck. Precisamos adicionar:
+
+```typescript
+// Adicionar em rastreador-posicao/index.ts
+if (plataformaCodigo === 'rede_veiculos') {
+  const redeToken = Deno.env.get('REDE_VEICULOS_TOKEN');
+  const baseUrl = plataforma.ambiente_atual === 'producao'
+    ? plataforma.api_url_producao
+    : plataforma.api_url_sandbox;
+
+  const url = `${baseUrl}/veiculos/${rastreador.codigo}/posicao`;
+  // ... fetch e mapear resposta
+}
 ```
+
+### Gap 2: `criar-chamado-assistencia` filtra apenas Softruck
+
+A condicao `if (rastreador.plataforma === 'softruck')` exclui Rede Veiculos:
+
+```typescript
+// ATUAL (incorreto)
+if (rastreador.plataforma === 'softruck' && rastreador.plataforma_veiculo_id) {
+
+// CORRIGIDO
+if (rastreador && (rastreador.plataforma === 'softruck' || rastreador.plataforma === 'rede_veiculos')) {
+```
+
+### Gap 3: `criar-sinistro` nao busca posicao em tempo real
+
+Atualmente usa apenas `ultima_posicao_lat/lng` do banco. Deveria:
+
+```typescript
+// Tentar buscar posicao em tempo real para evidencia
+if (rastreador) {
+  try {
+    const { data: posicaoReal } = await supabase.functions.invoke('posicao-veiculo', {
+      body: { veiculo_id: payload.veiculo_id },
+    });
+    if (posicaoReal?.success && posicaoReal?.posicao) {
+      rastreadorLat = posicaoReal.posicao.latitude;
+      rastreadorLng = posicaoReal.posicao.longitude;
+      rastreadorPosicaoCapturadaEm = posicaoReal.posicao.data_hora;
+    }
+  } catch { /* fallback para banco */ }
+}
+```
+
+### Gap 4: Mapa do analista nao busca tempo real
+
+O hook `useTodasPosicoesAtuais` usa RPC local. Para tempo real, precisaria chamar a API para cada veiculo (pode ser custoso).
+
+**Recomendacao:** Manter como esta (sync via cron) mas adicionar botao "Atualizar Agora" que chama `sync-rastreadores`.
 
 ---
 
-## Impactos dos Gaps
+## Plano de Correcao
 
-### Impacto 1: Dados de Veículo Dessincronizados
+### Fase 1: Corrigir `rastreador-posicao` para suportar Rede Veiculos
 
-Quando a cor do veículo é corrigida no SGA:
-- Banco local: cor atualizada
-- Rede Veículos: cor antiga
-- Consequência: Relatórios e alertas com informação errada
+**Modificar:** `supabase/functions/rastreador-posicao/index.ts`
 
-### Impacto 2: Valor FIPE Desatualizado
+Adicionar funcao `getPosicaoRedeVeiculos` e logica de roteamento por plataforma.
 
-Quando o valor FIPE é atualizado (consulta mais recente):
-- Sistema local pode ter valor correto
-- Plataforma Rede Veículos tem valor da vinculação
-- Consequência: Cobertura pode estar subvalorizada/supervalorizada
+### Fase 2: Corrigir `criar-chamado-assistencia`
 
-### Impacto 3: Placa Remarcada Não Atualizada
+**Modificar:** `supabase/functions/criar-chamado-assistencia/index.ts`
 
-Quando veículo tem placa remarcada (transferência entre estados):
-- Novo formato de placa não sincronizado
-- Alertas podem não identificar veículo corretamente
+Remover filtro `plataforma === 'softruck'` e usar `posicao-veiculo` para ambas plataformas.
 
-### Impacto 4: Chassi/Renavam com Erro
+### Fase 3: Corrigir `criar-sinistro`
 
-Erros de digitação no chassi ou renavam:
-- Podem causar problemas em acionamentos de roubo/furto
-- Boletins de ocorrência com dados incorretos
+**Modificar:** `supabase/functions/criar-sinistro/index.ts`
+
+Adicionar chamada a `posicao-veiculo` para obter posicao em tempo real como evidencia.
+
+### Fase 4: (Opcional) Adicionar botao "Atualizar Posicoes" no mapa do analista
+
+**Modificar:** Componente do mapa de monitoramento
+
+Adicionar botao que chama `useSyncRastreadores` para forcar atualizacao.
 
 ---
-
-## Plano de Implementação
-
-### Fase 1: Criar Edge Function rede-veiculos-atualizar-veiculo
-
-**Novo arquivo:** `supabase/functions/rede-veiculos-atualizar-veiculo/index.ts`
-
-```typescript
-interface RequestBody {
-  veiculoId: string;
-  camposAlterados: {
-    placa?: string;        // Apenas em caso de remarcação
-    marca?: string;
-    modelo?: string;
-    ano?: number;
-    cor?: string;
-    chassi?: string;       // Correção de erro
-    renavam?: string;      // Correção de erro
-    valorFipe?: number;    // Atualização de tabela
-    codigoFipe?: string;
-  };
-}
-
-// Fluxo:
-// 1. Buscar veículo local com rede_veiculos_veiculo_id
-// 2. Validar que há vínculo ativo na plataforma
-// 3. Usar rede_veiculos_veiculo_id como identificador
-// 4. Montar payload apenas com campos alterados
-// 5. Chamar POST /atualizarDadosVeiculo na API Rede Veículos
-// 6. Registrar log de atualização
-```
-
-**Payload esperado para API:**
-```json
-{
-  "idVeiculo": 12345,
-  "camposAlterados": {
-    "cor": "BRANCO",
-    "valorFipe": 85000.00
-  }
-}
-```
-
-### Fase 2: Criar Dialog de Edição de Veículo
-
-**Novo arquivo:** `src/components/veiculos/VeiculoEditDialog.tsx`
-
-Modal com campos editáveis:
-- Cor (dropdown com cores padrão)
-- Placa (bloqueado por padrão, liberado apenas com justificativa)
-- Chassi (bloqueado por padrão, liberado apenas para correção)
-- Renavam
-- Valor FIPE (com botão para reconsulta)
-- Código FIPE
-
-### Fase 3: Integrar no Hook useUpdateVeiculo
-
-**Modificar:** `src/hooks/useVeiculos.ts`
-
-```typescript
-export function useUpdateVeiculo() {
-  return useMutation({
-    mutationFn: async ({ id, ...updates }) => {
-      // 1. Buscar veículo atual para saber se tem vínculo Rede Veículos
-      const { data: veiculoAtual } = await supabase
-        .from('veiculos')
-        .select('rede_veiculos_veiculo_id')
-        .eq('id', id)
-        .single();
-      
-      // 2. Atualizar banco local
-      const { data, error } = await supabase
-        .from('veiculos')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
-      
-      // 3. Se tem vínculo Rede Veículos, sincronizar
-      if (veiculoAtual?.rede_veiculos_veiculo_id) {
-        await supabase.functions.invoke('rede-veiculos-atualizar-veiculo', {
-          body: {
-            veiculoId: id,
-            camposAlterados: updates,
-          },
-        });
-      }
-      
-      return data;
-    },
-  });
-}
-```
-
-### Fase 4: Criar Funcionalidade de Transferência de Veículo
-
-**Novo arquivo:** `src/hooks/useTransferirVeiculo.ts`
-
-```typescript
-interface TransferirVeiculoParams {
-  veiculoId: string;
-  novoAssociadoId: string;
-  motivoTransferencia: string;
-}
-
-export function useTransferirVeiculo() {
-  return useMutation({
-    mutationFn: async ({ veiculoId, novoAssociadoId, motivoTransferencia }) => {
-      // 1. Buscar dados do novo associado
-      // 2. Atualizar associado_id do veículo localmente
-      // 3. Se tem Rede Veículos:
-      //    a) Desvincular do cliente antigo
-      //    b) Vincular ao cliente novo
-      // 4. Registrar histórico de transferência
-    },
-  });
-}
-```
-
-### Fase 5: Habilitar Botão de Edição no Painel
-
-**Modificar:** `src/pages/cadastro/AssociadoDetalhe.tsx`
-
-```tsx
-// Adicionar estado para controlar modal
-const [veiculoEditar, setVeiculoEditar] = useState<Veiculo | null>(null);
-
-// Modificar botão existente (linha ~838)
-<Button 
-  size="sm" 
-  variant="outline"
-  onClick={() => setVeiculoEditar(v)}
->
-  <Edit className="mr-2 h-4 w-4" /> Editar
-</Button>
-
-// Adicionar modal
-<VeiculoEditDialog
-  open={!!veiculoEditar}
-  onClose={() => setVeiculoEditar(null)}
-  veiculo={veiculoEditar}
-/>
-```
-
----
-
-## Arquivos a Criar
-
-| Arquivo | Descrição |
-|---------|-----------|
-| `supabase/functions/rede-veiculos-atualizar-veiculo/index.ts` | Edge Function principal |
-| `src/components/veiculos/VeiculoEditDialog.tsx` | Modal de edição |
-| `src/hooks/useTransferirVeiculo.ts` | Hook para transferência |
-| `src/components/veiculos/TransferirVeiculoDialog.tsx` | Modal de transferência |
 
 ## Arquivos a Modificar
 
-| Arquivo | Alterações |
+| Arquivo | Alteracoes |
 |---------|------------|
-| `src/hooks/useVeiculos.ts` | Integrar sincronização após update |
-| `src/pages/cadastro/AssociadoDetalhe.tsx` | Conectar botão ao modal de edição |
-| `src/components/cadastro/VeiculoDetalhesModal.tsx` | Adicionar aba de edição |
-| `supabase/config.toml` | Registrar nova edge function |
+| `supabase/functions/rastreador-posicao/index.ts` | Adicionar suporte Rede Veiculos |
+| `supabase/functions/criar-chamado-assistencia/index.ts` | Remover filtro de plataforma |
+| `supabase/functions/criar-sinistro/index.ts` | Buscar posicao tempo real |
 
 ---
 
-## Payload Esperado para POST /atualizarDadosVeiculo
+## Checklist de Verificacao
 
-Baseado no padrão da API de vinculação:
-
-```typescript
-interface AtualizarDadosVeiculoRequest {
-  // Identificador do veículo na plataforma (obrigatório)
-  idVeiculo: number;  // rede_veiculos_veiculo_id
-  
-  // OU identificador alternativo
-  placa?: string;
-  chassi?: string;
-  
-  // Campos alteráveis
-  camposAlterados: {
-    // Dados básicos
-    tipo?: 'carro' | 'moto' | 'caminhao' | 'van';
-    marca?: string;
-    modelo?: string;
-    ano?: number;
-    cor?: string;
-    
-    // Identificação (apenas correção)
-    placa?: string;   // Remarcação
-    chassi?: string;  // Erro digitação
-    renavam?: string;
-    
-    // Valor
-    valorFipe?: number;
-    codigoFipe?: string;
-  };
-}
-```
+- [x] Associado abre tela de rastreamento - posicao Rede Veiculos funciona
+- [x] Posicao retornada com latitude/longitude
+- [x] Data/hora da posicao exibida ao usuario
+- [x] Posicoes antigas sinalizadas como offline/atencao
+- [ ] `rastreador-posicao` suporta Rede Veiculos
+- [ ] Assistencia 24h busca posicao Rede Veiculos
+- [ ] Sinistro busca posicao em tempo real
 
 ---
 
-## Checklist de Verificação Pós-Implementação
+## Teste Recomendado: Consulta de Posicao
 
-- [ ] Edge function `rede-veiculos-atualizar-veiculo` criada
-- [ ] Modal de edição de veículo implementado
-- [ ] Botão "Editar" funcional na página do associado
-- [ ] Ao atualizar cor, plataforma é sincronizada
-- [ ] Ao atualizar placa (remarcação), plataforma é sincronizada
-- [ ] Ao corrigir chassi/renavam, plataforma é sincronizada
-- [ ] Ao atualizar valor FIPE, plataforma é sincronizada
-- [ ] Funcionalidade de transferência implementada
-- [ ] rede_veiculos_veiculo_id usado como identificador
-- [ ] Apenas campos alterados são enviados
-- [ ] Histórico do veículo mantido (audit log)
-- [ ] Log de atualização registrado em `rastreadores_api_logs`
+### Pre-requisitos
 
----
-
-## Teste Recomendado: Atualização de Cor
-
-### Pré-requisitos
-
-1. Veículo ativo com rastreador Rede Veículos instalado
-2. `rede_veiculos_veiculo_id` preenchido no banco
-3. `REDE_VEICULOS_TOKEN` válido e configurado
-4. Acesso ao painel da Rede Veículos para verificar
+1. 3 veiculos com rastreadores Rede Veiculos instalados
+2. `REDE_VEICULOS_TOKEN` valido e configurado
+3. Acesso ao app do associado
 
 ### Passos do Teste
 
-1. **Acessar o sistema como administrador**
-2. **Navegar para Cadastro > Associados > [Associado com veículo]**
-3. **Na aba Veículos, clicar em "Editar"**
-4. **Alterar a cor do veículo** de "PRATA" para "BRANCO"
-5. **Salvar**
-6. **Verificar no banco:**
-   - `veiculos.cor = 'BRANCO'`
-   - `rastreadores_api_logs` com registro de atualização
-7. **Verificar na plataforma Rede Veículos:**
-   - Veículo com cor atualizada
+1. **Login como associado no App** (`/app/login`)
+2. **Acessar Rastreamento** (`/app/rastreamento`)
+3. **Verificar posicao do veiculo:**
+   - Mapa exibe marcador na posicao correta
+   - Data/hora da ultima atualizacao visivel
+   - Status do rastreador (online/atencao/offline)
+4. **Clicar "Atualizar"**
+5. **Verificar que posicao e atualizada**
+6. **Repetir para os outros 2 veiculos**
 
 ### Resultado Esperado
 
-- Cor atualizada no SGA e na Rede Veículos simultaneamente
-- Apenas campo `cor` enviado para API (não cadastro completo)
-- Log de auditoria registrado
-- Histórico do veículo mantido
+- Todos os 3 veiculos exibem posicao no mapa
+- Data/hora da posicao e exibida (formato "agora", "ha X min", etc)
+- Posicoes antigas mostram status "atencao" ou "offline"
+- Atualizacao manual funciona
 
----
-
-## Considerações Finais
-
-**IMPORTANTE:** Antes de implementar, é necessário confirmar com a documentação da API Rede Veículos:
-
-1. **URL exata do endpoint:** `POST /atualizarDadosVeiculo` ou similar
-2. **Campo identificador:** `idVeiculo` (numérico) ou `placa/chassi` (string)?
-3. **Formato do payload:** Aceita campos parciais ou exige cadastro completo?
-4. **Campos editáveis:** Quais campos podem ser alterados após vinculação?
-5. **Restrições:** Placa pode ser alterada? Chassi pode ser corrigido?
-6. **Valor FIPE:** Campo existe no cadastro do veículo na plataforma?
-
-**Recomendação:** Solicitar documentação oficial da API Rede Veículos antes de iniciar a implementação.
