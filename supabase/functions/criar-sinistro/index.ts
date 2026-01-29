@@ -298,6 +298,64 @@ Deno.serve(async (req) => {
       );
     }
 
+    // ============================================
+    // 4.2 VERIFICAR STATUS E ADIMPLÊNCIA NA PLATAFORMA REDE VEÍCULOS
+    // ============================================
+    if (rastreador?.plataforma === 'rede_veiculos') {
+      try {
+        console.log('[criar-sinistro] Verificando status na plataforma Rede Veículos...');
+        
+        const statusResponse = await fetch(
+          `${supabaseUrl}/functions/v1/rede-veiculos-obter-status-veiculo`,
+          {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${supabaseServiceKey}`,
+            },
+            body: JSON.stringify({ veiculoId: payload.veiculo_id }),
+          }
+        );
+        
+        const statusData = await statusResponse.json();
+        console.log('[criar-sinistro] Resposta status plataforma:', statusData);
+        
+        if (statusData.success) {
+          // Verificar se veículo está ativo na plataforma
+          if (statusData.dados?.statusPlataforma === 'inativo') {
+            console.warn('[criar-sinistro] Veículo inativo na plataforma');
+            return new Response(
+              JSON.stringify({
+                success: false,
+                error: 'Veículo inativo na plataforma de rastreamento. Entre em contato com a central para regularização.',
+              }),
+              { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+          
+          // Verificar adimplência
+          if (statusData.dados?.adimplente === false) {
+            console.warn('[criar-sinistro] Cliente inadimplente na plataforma');
+            return new Response(
+              JSON.stringify({
+                success: false,
+                error: 'Existem pendências financeiras que precisam ser regularizadas antes de comunicar o sinistro.',
+              }),
+              { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+          
+          console.log('[criar-sinistro] Status plataforma OK:', statusData.dados?.statusPlataforma);
+        } else {
+          console.warn('[criar-sinistro] Não foi possível verificar status na plataforma:', statusData.erro);
+          // Não bloqueia se API falhar - continua com status local
+        }
+      } catch (err) {
+        console.warn('[criar-sinistro] Erro ao verificar status na plataforma (não bloqueante):', err);
+        // Não bloqueia se API falhar - continua com status local
+      }
+    }
+
     console.log('[criar-sinistro] Veículo validado:', veiculo.placa);
 
     // ============================================
