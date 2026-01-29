@@ -6,7 +6,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-interface PosicaoSoftruck {
+interface PosicaoResponse {
   latitude: number;
   longitude: number;
   velocidade: number;
@@ -58,7 +58,7 @@ async function getPosicaoSoftruckComRetry(
   deviceId: string,
   baseUrl: string,
   maxRetries = 2
-): Promise<PosicaoSoftruck> {
+): Promise<PosicaoResponse> {
   let tokenRenovado = false;
   
   for (let tentativa = 1; tentativa <= maxRetries; tentativa++) {
@@ -136,6 +136,55 @@ async function getPosicaoSoftruckComRetry(
   throw new Error('Erro inesperado ao buscar posição');
 }
 
+/**
+ * Busca posição do rastreador na Rede Veículos
+ */
+async function getPosicaoRedeVeiculos(
+  token: string,
+  codigo: string,
+  baseUrl: string
+): Promise<PosicaoResponse> {
+  console.log(`[Rede Veículos] Buscando posição para código: ${codigo}`);
+  
+  const url = `${baseUrl}/veiculos/${codigo}/posicao`;
+  
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    }
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Erro Rede Veículos ${response.status}: ${error}`);
+  }
+
+  const data = await response.json();
+  
+  // Formato esperado da Rede Veículos
+  // { latitude, longitude, velocidade, ignicao, data_hora, ... }
+  if (!data.latitude || !data.longitude) {
+    throw new Error('Resposta Rede Veículos inválida - coordenadas ausentes');
+  }
+
+  return {
+    latitude: data.latitude,
+    longitude: data.longitude,
+    velocidade: data.velocidade || 0,
+    direcao: data.direcao,
+    ignicao: data.ignicao ?? false,
+    data_posicao: data.data_hora || data.dataHora || new Date().toISOString(),
+    endereco: data.endereco,
+    dados_extras: {
+      odometro: data.odometro,
+      bateria: data.bateria,
+      tensao: data.tensao,
+    }
+  };
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -201,24 +250,48 @@ serve(async (req) => {
     const vehicleId = rastreador.plataforma_veiculo_id || rastreador.id_plataforma;
     const deviceId = rastreador.plataforma_device_id || rastreador.id_plataforma;
 
-    if (!vehicleId || !deviceId) {
-      throw new Error('Rastreador não configurado com IDs da plataforma');
-    }
-
-    console.log(`[Softruck] Usando vehicleId=${vehicleId}, deviceId=${deviceId}`);
-
     const baseUrl = plataforma.ambiente_atual === 'producao'
       ? plataforma.api_url_producao
       : plataforma.api_url_sandbox;
 
-    // Buscar posição com retry automático em erro 401
-    const posicao = await getPosicaoSoftruckComRetry(
-      supabaseUrl,
-      supabaseKey,
-      vehicleId,
-      deviceId,
-      baseUrl
-    );
+    let posicao: PosicaoResponse;
+
+    // Roteamento por plataforma
+    const plataformaCodigo = plataforma.codigo || plataforma.plataforma;
+    
+    if (plataformaCodigo === 'softruck') {
+      if (!vehicleId || !deviceId) {
+        throw new Error('Rastreador não configurado com IDs da plataforma');
+      }
+      
+      console.log(`[Softruck] Usando vehicleId=${vehicleId}, deviceId=${deviceId}`);
+      
+      posicao = await getPosicaoSoftruckComRetry(
+        supabaseUrl,
+        supabaseKey,
+        vehicleId,
+        deviceId,
+        baseUrl
+      );
+    } else if (plataformaCodigo === 'rede_veiculos') {
+      const redeToken = Deno.env.get('REDE_VEICULOS_TOKEN');
+      
+      if (!redeToken) {
+        throw new Error('Token Rede Veículos não configurado');
+      }
+      
+      const codigo = rastreador.codigo || rastreador.id_plataforma;
+      
+      if (!codigo) {
+        throw new Error('Código do veículo não configurado para Rede Veículos');
+      }
+      
+      console.log(`[Rede Veículos] Usando código=${codigo}`);
+      
+      posicao = await getPosicaoRedeVeiculos(redeToken, codigo, baseUrl);
+    } else {
+      throw new Error(`Plataforma ${plataformaCodigo} não suportada`);
+    }
 
     // Atualizar rastreador
     await supabase
@@ -254,7 +327,7 @@ serve(async (req) => {
       .from('rastreadores_logs')
       .insert({
         rastreador_id,
-        plataforma: plataforma.codigo || 'softruck',
+        plataforma: plataformaCodigo,
         operacao: 'posicao_tempo_real',
         status: 'sucesso',
         tempo_ms: tempoMs,
@@ -283,7 +356,7 @@ serve(async (req) => {
       await supabase
         .from('rastreadores_logs')
         .insert({
-          plataforma: 'softruck',
+          plataforma: 'unknown',
           operacao: 'posicao_tempo_real',
           status: 'erro',
           erro_mensagem: error instanceof Error ? error.message : 'Erro desconhecido',
