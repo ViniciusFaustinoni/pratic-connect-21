@@ -1,150 +1,371 @@
 
-# Plano de Alinhamento: IA do WhatsApp com IA do App
+# Plano de Revisao dos Modulos Financeiros
 
-## Diagnóstico
+## Analise Comparativa: PDF vs Codigo Atual
 
-Após análise detalhada dos códigos, identifiquei que **a IA do WhatsApp NÃO está 100% alinhada com a IA do App**. Embora compartilhem a mesma estrutura de tools e salvem dados nas mesmas tabelas, existem diferenças críticas que podem causar comportamentos inconsistentes.
-
----
-
-## Gaps Identificados
-
-### Gap 1: Modelo de IA Diferente
-- **App**: `google/gemini-3-flash-preview` via `ai.gateway.lovable.dev`
-- **WhatsApp**: `gpt-4o-mini` via `api.lovable.dev` (endpoint legado)
-
-### Gap 2: Verificação de Cobertura Ausente
-O App verifica coberturas antes de criar solicitações:
-```
-Se veículo tem apenas "Roubo/Furto":
-- ✅ PERMITIDO: Sinistros de roubo/furto
-- ❌ BLOQUEADO: Assistência 24h, colisão, etc.
-```
-O WhatsApp NÃO faz essa verificação.
-
-### Gap 3: Contexto Incompleto
-- **App**: Envia dados de cobertura dos veículos (`cobertura_roubo_furto`, `cobertura_total`)
-- **WhatsApp**: Envia apenas dados básicos (placa, marca, modelo)
-
-### Gap 4: Tool `reverse_geocode` Ausente
-- **App**: Tem a tool para converter coordenadas GPS em endereço
-- **WhatsApp**: Pede endereço digitado como workaround
+Apos revisar detalhadamente o documento "MODULOS FINANCEIROS - SGA Pratic 2.0" e comparar com o codigo existente, identifiquei os gaps e melhorias necessarias para alinhar os tres modulos (Financeiro, Cobranca e Contabilidade).
 
 ---
 
-## Plano de Implementação
+## RESUMO EXECUTIVO
 
-### Fase 1: Atualizar Modelo e Endpoint
-**Arquivo**: `supabase/functions/whatsapp-webhook/index.ts`
+### Status Geral por Modulo
 
-Alterar a função `callAI` para usar:
-- Modelo: `google/gemini-3-flash-preview`
-- Endpoint: `https://ai.gateway.lovable.dev/v1/chat/completions`
-
-```text
-Antes:
-- model: "gpt-4o-mini"
-- endpoint: api.lovable.dev
-
-Depois:
-- model: "google/gemini-3-flash-preview"
-- endpoint: ai.gateway.lovable.dev
-```
-
-### Fase 2: Adicionar Verificação de Cobertura ao Contexto
-**Arquivo**: `supabase/functions/whatsapp-webhook/index.ts`
-
-Atualizar função `getAssociadoContext` para incluir:
-1. Dados de cobertura dos veículos (`cobertura_roubo_furto`, `cobertura_total`)
-2. Instrução clara sobre regras de cobertura no System Prompt
-
-```text
-Query atual:
-SELECT placa, marca, modelo, ano
-
-Query nova:
-SELECT placa, marca, modelo, ano, status, cobertura_roubo_furto, cobertura_total
-```
-
-### Fase 3: Adicionar Regras de Cobertura ao System Prompt
-**Arquivo**: `supabase/functions/whatsapp-webhook/index.ts`
-
-Adicionar ao `WHATSAPP_SYSTEM_PROMPT`:
-
-```text
-## REGRAS DE COBERTURA (VERIFICAR SEMPRE!)
-Antes de criar solicitação, verifique a cobertura:
-
-Se veículo tem apenas "Roubo/Furto":
-- ✅ PERMITIDO: Sinistros de roubo/furto
-- ❌ BLOQUEADO: Assistência 24h, colisão, incêndio
-
-Se veículo tem "Total":
-- ✅ TUDO LIBERADO
-
-Resposta quando bloqueado:
-"Sua cobertura atual é apenas para roubo/furto. 
-Após a instalação do rastreador, você terá acesso à cobertura total."
-```
-
-### Fase 4: Adicionar Tool `reverse_geocode`
-**Arquivo**: `supabase/functions/whatsapp-webhook/index.ts`
-
-Adicionar ao array `tools`:
-
-```javascript
-{
-  type: "function",
-  function: {
-    name: "reverse_geocode",
-    description: "Converte coordenadas GPS em endereço",
-    parameters: {
-      type: "object",
-      properties: {
-        latitude: { type: "number" },
-        longitude: { type: "number" }
-      },
-      required: ["latitude", "longitude"]
-    }
-  }
-}
-```
-
-Adicionar implementação na função `executeTool`:
-
-```javascript
-case "reverse_geocode": {
-  const response = await fetch(`${SUPABASE_URL}/functions/v1/reverse-geocode`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      latitude: args.latitude,
-      longitude: args.longitude
-    })
-  });
-  // ... processar resposta
-}
-```
+| Modulo | Conformidade | Gaps Identificados |
+|--------|--------------|-------------------|
+| FINANCEIRO | 70% | Falta saldo por conta, grafico de fluxo, checkbox em lote |
+| COBRANCA | 80% | Falta KPI recuperacao, negativacao lote, modo trabalho |
+| CONTABILIDADE | 85% | Falta balancete detalhado, razao da conta |
 
 ---
 
-## Resumo de Alterações
+## MODULO FINANCEIRO - Gaps e Implementacoes
 
-| Arquivo | Alteração |
+### 1. Dashboard Financeiro
+**Arquivo:** `src/pages/financeiro/FinanceiroDashboard.tsx`
+
+| Item PRD | Status Atual | Acao |
+|----------|--------------|------|
+| Card "Saldo Atual" com modal detalhado | Parcial | Adicionar modal com saldo por conta |
+| Grafico barras Fluxo Caixa 30 dias | Placeholder | Implementar grafico real com recharts |
+| Lista Contas a Receber por vencimento | Ausente | Adicionar componente lateral |
+| Cards Saldo por Conta Bancaria | Ausente | Adicionar grid de cards por conta |
+
+**Alteracoes:**
+- Adicionar query para buscar saldo de cada conta bancaria
+- Criar modal "Saldo por Conta" ao clicar no card Saldo Atual
+- Substituir placeholder por grafico de barras real (entradas verdes, saidas vermelhas)
+- Adicionar lista de contas a receber agrupadas por periodo (Hoje, Amanha, Esta semana)
+
+### 2. Lista de Cobrancas (Recebimentos)
+**Arquivo:** `src/pages/financeiro/CobrancasList.tsx`
+
+| Item PRD | Status Atual | Acao |
+|----------|--------------|------|
+| Checkbox para selecao em lote | Ausente | Adicionar coluna checkbox |
+| Acoes em lote (Enviar Boletos, WhatsApp, Email) | Ausente | Adicionar barra de acoes |
+| Botao "Reemitir" para boletos | Ausente | Adicionar no dropdown de acoes |
+
+**Alteracoes:**
+- Adicionar estado `selectedItems` para controle de selecao
+- Adicionar coluna checkbox na tabela
+- Criar barra de acoes em lote quando houver itens selecionados
+- Adicionar botao "Reemitir" no menu de acoes
+
+### 3. Detalhe da Cobranca
+**Arquivo:** `src/pages/financeiro/CobrancaDetalhe.tsx`
+
+| Item PRD | Status Atual | Acao |
+|----------|--------------|------|
+| Secao Associado com link "Ver Cadastro" | Parcial | Adicionar botao navegacao |
+| Secao Pagamento (quando pago) | Parcial | Expandir informacoes |
+| Secao Historico (timeline eventos) | Ausente | Criar timeline de eventos |
+
+### 4. Contas a Pagar
+**Arquivo:** `src/pages/financeiro/ContasPagar.tsx`
+
+| Item PRD | Status Atual | Acao |
+|----------|--------------|------|
+| Checkbox para selecao em lote | Ausente | Adicionar coluna checkbox |
+| Pagamento em lote | Ausente | Criar modal pagamento multiplo |
+| Vinculo a Sinistro/OS | Ausente | Adicionar campo no modal criacao |
+| Recorrencia (mensal) | Ausente | Adicionar opcao no modal |
+| Anexo Nota Fiscal | Ausente | Adicionar upload de anexo |
+
+**Alteracoes:**
+- Adicionar checkbox e barra de acoes em lote
+- Criar campos de vinculo (sinistro_id, os_id) no modal NovaContaPagarModal
+- Adicionar secao de recorrencia (pagamento unico vs mensal)
+- Integrar upload de anexo ao bucket 'documentos'
+
+### 5. Faturamento
+**Arquivo:** `src/pages/financeiro/FaturamentoMensal.tsx`
+
+| Item PRD | Status Atual | Acao |
+|----------|--------------|------|
+| Card Configuracoes Faturamento | Ausente | Adicionar card com settings |
+| Modal Progresso com barra | Parcial | Melhorar feedback visual |
+| Opcao "Refaturar especificos" | Ausente | Adicionar filtro de associados |
+
+### 6. Extratos Bancarios
+**Arquivo:** `src/pages/financeiro/ExtratosBancarios.tsx`
+
+| Item PRD | Status Atual | Acao |
+|----------|--------------|------|
+| Card Pendencias por conta | Parcial | Melhorar visualizacao |
+| Modal Conciliacao com sugestoes | Ausente | Criar modal inteligente |
+
+---
+
+## MODULO COBRANCA - Gaps e Implementacoes
+
+### 1. Dashboard Cobranca
+**Arquivo:** `src/pages/cobranca/CobrancaDashboard.tsx`
+
+| Item PRD | Status Atual | Acao |
+|----------|--------------|------|
+| KPI "Recuperado Este Mes" | Ausente | Adicionar card com valor |
+| KPI "Taxa Recuperacao" | Ausente | Calcular % de sucesso |
+| Grafico Evolucao Mensal | Ausente | Adicionar grafico de linha |
+
+**Alteracoes:**
+- Adicionar query para calcular valor recuperado (acordos pagos + boletos vencidos pagos)
+- Calcular taxa de recuperacao = recuperado / valor_total_inadimplencia
+- Implementar grafico de linha mostrando evolucao mes a mes
+
+### 2. Lista Inadimplentes
+**Arquivo:** `src/pages/cobranca/InadimplentesList.tsx`
+
+| Item PRD | Status Atual | Acao |
+|----------|--------------|------|
+| Status de Cobranca (Email, WhatsApp, Em negociacao) | Ausente | Adicionar coluna status |
+| Acoes em lote (WhatsApp, Email, Adicionar a Fila) | Parcial | Expandir acoes |
+| Botao "Negativar" | Ausente | Adicionar no menu de acoes |
+
+### 3. Fila de Trabalho
+**Arquivo:** `src/pages/cobranca/FilaTrabalho.tsx`
+
+| Item PRD | Status Atual | Acao |
+|----------|--------------|------|
+| Modal "Modo Trabalho" com roteiro | Ausente | Criar modal completo |
+| Roteiro de ligacao com script | Ausente | Adicionar texto sugerido |
+| Resultados da ligacao (atendeu, nao atendeu, etc) | Ausente | Adicionar opcoes de resultado |
+| Reagendamento com data/hora | Ausente | Adicionar campo data |
+
+**Alteracoes:**
+- Criar componente `ModoTrabalhoModal` com:
+  - Cabecalho mostrando "Acao #X de Y"
+  - Dados do associado e divida
+  - Roteiro de ligacao sugerido
+  - Radio buttons para resultado
+  - Campo de observacao
+  - Botao "Proximo" e "Pular"
+
+### 4. Acordos
+**Arquivo:** `src/pages/cobranca/NovoAcordo.tsx`
+
+| Item PRD | Status Atual | Acao |
+|----------|--------------|------|
+| Calculo automatico juros/multa | Verificar | Implementar se ausente |
+| Desconto maximo configuravel | Ausente | Adicionar validacao |
+| Regras do acordo (quebrar se atrasar) | Ausente | Adicionar checkboxes |
+
+### 5. Negativacao
+**Arquivo:** `src/pages/cobranca/Negativacao.tsx`
+
+| Item PRD | Status Atual | Acao |
+|----------|--------------|------|
+| Tabs: Negativados, Aptos, Historico | Verificar | Implementar se ausente |
+| Confirmacao com digitacao "NEGATIVAR" | Ausente | Adicionar validacao |
+| Negativacao em lote | Ausente | Adicionar funcionalidade |
+
+### 6. Regua de Cobranca
+**Arquivo:** `src/pages/cobranca/ReguaCobranca.tsx`
+
+| Item PRD | Status Atual | Acao |
+|----------|--------------|------|
+| Visualizacao timeline | OK | Ja implementado |
+| Editor de templates | Parcial | Melhorar preview |
+| Status ativo/pausado global | Ausente | Adicionar toggle no header |
+
+---
+
+## MODULO CONTABILIDADE - Gaps e Implementacoes
+
+### 1. Dashboard Contabilidade
+**Arquivo:** `src/pages/contabilidade/ContabilidadeDashboard.tsx`
+
+| Item PRD | Status Atual | Acao |
+|----------|--------------|------|
+| KPI "Lancamentos Pendentes" | Ausente | Adicionar contagem |
+| Grafico Evolucao Mensal | Ausente | Adicionar grafico de linha |
+| Status dos Periodos (ultimos 3) | OK | Ja implementado |
+
+### 2. Plano de Contas
+**Arquivo:** `src/pages/contabilidade/PlanoContas.tsx`
+
+| Item PRD | Status Atual | Acao |
+|----------|--------------|------|
+| Arvore hierarquica | OK | Ja implementado |
+| Botao [+] para adicionar filho | OK | Ja implementado |
+| Vinculo Conta Bancaria | Verificar | Adicionar se ausente |
+
+### 3. Lancamentos
+**Arquivo:** `src/pages/contabilidade/LancamentosList.tsx`
+
+| Item PRD | Status Atual | Acao |
+|----------|--------------|------|
+| Filtro por Conta do Plano | Ausente | Adicionar campo busca |
+| Totais Debito/Credito no header | Ausente | Adicionar resumo |
+
+### 4. Novo Lancamento
+**Arquivo:** `src/pages/contabilidade/NovoLancamento.tsx`
+
+| Item PRD | Status Atual | Acao |
+|----------|--------------|------|
+| Editor de partidas multiplas | Verificar | Confirmar funcionamento |
+| Validacao balanceado | Verificar | Confirmar |
+| Indicador visual D = C | Verificar | Adicionar badge |
+
+### 5. Balancete
+**Arquivo:** `src/pages/contabilidade/Balancete.tsx`
+
+| Item PRD | Status Atual | Acao |
+|----------|--------------|------|
+| Nivel de detalhe (sintetico/analitico) | Verificar | Adicionar toggle |
+| Exportacao Excel | Verificar | Confirmar |
+
+### 6. Razao da Conta
+**Arquivo:** `src/pages/contabilidade/RazaoConta.tsx`
+
+| Item PRD | Status Atual | Acao |
+|----------|--------------|------|
+| Busca por conta | Verificar | Confirmar |
+| Saldo acumulado por linha | Verificar | Confirmar |
+
+### 7. Fechamento
+**Arquivo:** `src/pages/contabilidade/Fechamentos.tsx`
+
+| Item PRD | Status Atual | Acao |
+|----------|--------------|------|
+| Checklist pre-fechamento | Parcial | Expandir verificacoes |
+| Botao Reabrir periodo | Ausente | Adicionar funcionalidade |
+
+---
+
+## INTEGRACAO ENTRE MODULOS
+
+### Fluxo 1: Pagamento de Mensalidade
+**Implementar automacao:**
+1. Webhook ASAAS atualiza cobranca para "Pago"
+2. Registrar entrada no extrato (`movimentacoes_financeiras`)
+3. Creditar na conta bancaria (`contas_bancarias.saldo_atual`)
+4. Remover da lista de inadimplentes (se estava)
+5. Cancelar acoes pendentes da regua
+6. Criar lancamento contabil automatico
+
+### Fluxo 2: Cobranca Vencida
+**Verificar automacao existente:**
+1. Status muda para "Vencida" (webhook ou cron)
+2. Adiciona a lista de inadimplentes
+3. Regua inicia automaticamente
+
+### Fluxo 3: Acordo de Divida
+**Implementar:**
+1. Ao criar acordo, pausar regua para o associado
+2. Gerar cobrancas do acordo no ASAAS
+3. Ao pagar parcela, atualizar progresso
+4. Ao quitar, remover da inadimplencia
+5. Criar lancamento contabil de "recuperacao"
+
+### Fluxo 4: Pagamento de Oficina
+**Implementar:**
+1. Ao concluir OS, criar conta a pagar vinculada
+2. Ao pagar, debitar conta bancaria
+3. Criar lancamento contabil (Despesa Sinistros)
+
+---
+
+## ARQUIVOS A MODIFICAR
+
+### Modulo Financeiro
+| Arquivo | Alteracoes |
 |---------|-----------|
-| `supabase/functions/whatsapp-webhook/index.ts` | Atualizar modelo para Gemini 3 Flash |
-| `supabase/functions/whatsapp-webhook/index.ts` | Atualizar endpoint para ai.gateway.lovable.dev |
-| `supabase/functions/whatsapp-webhook/index.ts` | Adicionar dados de cobertura ao contexto |
-| `supabase/functions/whatsapp-webhook/index.ts` | Adicionar regras de cobertura ao System Prompt |
-| `supabase/functions/whatsapp-webhook/index.ts` | Adicionar tool `reverse_geocode` |
+| `FinanceiroDashboard.tsx` | Grafico fluxo caixa, modal saldo por conta, lista a receber |
+| `CobrancasList.tsx` | Checkbox lote, acoes em lote, reemitir |
+| `CobrancaDetalhe.tsx` | Timeline historico, secao pagamento expandida |
+| `ContasPagar.tsx` | Checkbox lote, vinculo sinistro/OS, recorrencia, anexo |
+| `NovaContaPagarModal.tsx` | Campos vinculo, recorrencia, anexo |
+| `FaturamentoMensal.tsx` | Card configuracoes, refaturar especificos |
+| `ExtratosBancarios.tsx` | Modal conciliacao inteligente |
+
+### Modulo Cobranca
+| Arquivo | Alteracoes |
+|---------|-----------|
+| `CobrancaDashboard.tsx` | KPIs recuperacao, grafico evolucao |
+| `InadimplentesList.tsx` | Coluna status cobranca, acoes lote |
+| `FilaTrabalho.tsx` | Modal modo trabalho com roteiro |
+| `NovoAcordo.tsx` | Regras acordo, desconto maximo |
+| `Negativacao.tsx` | Tabs, confirmacao, lote |
+
+### Modulo Contabilidade
+| Arquivo | Alteracoes |
+|---------|-----------|
+| `ContabilidadeDashboard.tsx` | KPI pendentes, grafico evolucao |
+| `LancamentosList.tsx` | Filtro conta, totais |
+| `Balancete.tsx` | Toggle detalhe, exportacao |
+| `Fechamentos.tsx` | Botao reabrir |
 
 ---
 
-## Resultado Esperado
+## PRIORIDADES DE IMPLEMENTACAO
 
-Após implementação:
+### Fase 1 - Essencial (Esta sessao)
+1. Dashboard Financeiro: Grafico fluxo caixa + saldo por conta
+2. Cobrancas em lote: Checkbox + acoes
+3. Contas a Pagar em lote: Checkbox + acoes
+4. Dashboard Cobranca: KPIs recuperacao
 
-1. **Consistência**: Associado terá mesma experiência no App e no WhatsApp
-2. **Regras de Negócio**: Bloqueio de assistência 24h para veículos sem cobertura total
-3. **Geocoding**: Suporte a localização GPS no WhatsApp
-4. **Modelo Atualizado**: Respostas mais precisas com Gemini 3 Flash
+### Fase 2 - Importante
+1. Modo Trabalho na Fila de Cobranca
+2. Modal conciliacao inteligente
+3. Negativacao em lote
+4. Acordos com regras
+
+### Fase 3 - Melhorias
+1. Timeline historico cobrancas
+2. Vinculo sinistro/OS nas despesas
+3. Recorrencia em contas a pagar
+4. Reabrir periodo contabil
+
+---
+
+## DETALHES TECNICOS
+
+### Query Saldo por Conta Bancaria
+```sql
+SELECT id, banco_nome, agencia, conta, saldo_atual
+FROM contas_bancarias
+WHERE ativo = true
+ORDER BY banco_nome
+```
+
+### Calculo Valor Recuperado (Cobranca)
+```sql
+-- Boletos vencidos que foram pagos no mes
+SELECT SUM(pagamento_valor)
+FROM asaas_cobrancas
+WHERE status IN ('RECEIVED', 'CONFIRMED')
+  AND pagamento_data >= inicio_mes
+  AND pagamento_data < fim_mes
+  AND data_vencimento < pagamento_data
+```
+
+### Estrutura Modal Modo Trabalho
+```text
++------------------------------------------+
+| ACAO DE COBRANCA - Ligacao #1 de 45      |
+|                              [Pular] [X] |
++------------------------------------------+
+| ASSOCIADO                                |
+| Nome: Joao Silva                         |
+| Telefone: (21) 99999-9999  [Copiar][Lig] |
++------------------------------------------+
+| DIVIDA                                   |
+| 3 parcelas | 45 dias | R$ 569,70         |
++------------------------------------------+
+| ROTEIRO                                  |
+| "Ola, bom dia! Aqui e [nome] da..."     |
++------------------------------------------+
+| RESULTADO                                |
+| ( ) Atendeu - vai pagar                  |
+| ( ) Atendeu - quer acordo                |
+| ( ) Nao atendeu                          |
+| ( ) Pediu para ligar depois [__/__]      |
+|                                          |
+| Observacoes: [________________]          |
++------------------------------------------+
+|        [Propor Acordo] [Proximo]         |
++------------------------------------------+
+```
+
