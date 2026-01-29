@@ -160,6 +160,8 @@ import Organograma from "./pages/rh/Organograma";
 import DepartamentosCargos from "./pages/rh/DepartamentosCargos";
 import Beneficios from "./pages/rh/Beneficios";
 import FolhaPagamento from "./pages/rh/FolhaPagamento";
+import Treinamentos from "./pages/rh/Treinamentos";
+import Recrutamento from "./pages/rh/Recrutamento";
 
 // Marketing
 import MarketingDashboard from "./pages/marketing/MarketingDashboard";
@@ -414,6 +416,8 @@ const App = () => (
               <Route path="/rh/organograma" element={<Organograma />} />
               <Route path="/rh/departamentos" element={<DepartamentosCargos />} />
               <Route path="/rh/beneficios" element={<Beneficios />} />
+              <Route path="/rh/treinamentos" element={<Treinamentos />} />
+              <Route path="/rh/recrutamento" element={<Recrutamento />} />
               
               {/* Monitoramento */}
               <Route path="/monitoramento/dashboard" element={<DashboardCoordenador />} />
