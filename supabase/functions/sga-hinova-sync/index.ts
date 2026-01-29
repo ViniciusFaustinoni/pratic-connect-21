@@ -91,15 +91,64 @@ serve(async (req) => {
   const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-  // Hinova credentials
-  const hinovaApiUrl = Deno.env.get('HINOVA_API_URL') || 'https://api.hinova.com.br/api/sga/v2';
-  const hinovaToken = Deno.env.get('HINOVA_TOKEN');
-  const hinovaUsuario = Deno.env.get('HINOVA_USUARIO');
-  const hinovaSenha = Deno.env.get('HINOVA_SENHA');
-  const hinovaCodigoConta = Deno.env.get('HINOVA_CODIGO_CONTA') || '1';
-  const hinovaCodigoRegional = Deno.env.get('HINOVA_CODIGO_REGIONAL');
-  const hinovaCodigoCooperativa = Deno.env.get('HINOVA_CODIGO_COOPERATIVA');
-  const hinovaCodigoVoluntario = Deno.env.get('HINOVA_CODIGO_VOLUNTARIO');
+  // Helper para descriptografar credenciais do banco
+  async function getCredenciaisBanco(integracao: string): Promise<Record<string, string> | null> {
+    try {
+      const { data, error } = await supabase
+        .from('integracoes_credenciais')
+        .select('credenciais_encrypted, iv, configurado')
+        .eq('integracao', integracao)
+        .single();
+
+      if (error || !data || !data.configurado) return null;
+
+      // Derivar chave e descriptografar
+      const encoder = new TextEncoder();
+      const keyMaterial = await crypto.subtle.importKey(
+        'raw', encoder.encode(supabaseServiceKey), { name: 'PBKDF2' }, false, ['deriveKey']
+      );
+      const key = await crypto.subtle.deriveKey(
+        { name: 'PBKDF2', salt: encoder.encode('integracoes_credenciais_salt'), iterations: 100000, hash: 'SHA-256' },
+        keyMaterial, { name: 'AES-GCM', length: 256 }, false, ['decrypt']
+      );
+      
+      const encrypted = Uint8Array.from(atob(data.credenciais_encrypted), c => c.charCodeAt(0));
+      const iv = Uint8Array.from(atob(data.iv), c => c.charCodeAt(0));
+      const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, encrypted);
+      
+      return JSON.parse(new TextDecoder().decode(decrypted));
+    } catch (e) {
+      console.error('[getCredenciaisBanco] Erro:', e);
+      return null;
+    }
+  }
+
+  // Hinova credentials - primeiro tenta ENV, depois banco
+  let hinovaApiUrl = Deno.env.get('HINOVA_API_URL') || 'https://api.hinova.com.br/api/sga/v2';
+  let hinovaToken = Deno.env.get('HINOVA_TOKEN');
+  let hinovaUsuario = Deno.env.get('HINOVA_USUARIO');
+  let hinovaSenha = Deno.env.get('HINOVA_SENHA');
+  let hinovaCodigoConta = Deno.env.get('HINOVA_CODIGO_CONTA') || '1';
+  let hinovaCodigoRegional = Deno.env.get('HINOVA_CODIGO_REGIONAL');
+  let hinovaCodigoCooperativa = Deno.env.get('HINOVA_CODIGO_COOPERATIVA');
+  let hinovaCodigoVoluntario = Deno.env.get('HINOVA_CODIGO_VOLUNTARIO');
+
+  // Se não tiver nas ENV, buscar do banco
+  if (!hinovaToken || !hinovaUsuario || !hinovaSenha) {
+    console.log('[SGA Sync] Credenciais não encontradas em ENV, buscando do banco...');
+    const credBanco = await getCredenciaisBanco('hinova');
+    if (credBanco) {
+      hinovaToken = credBanco.token || hinovaToken;
+      hinovaUsuario = credBanco.usuario || hinovaUsuario;
+      hinovaSenha = credBanco.senha || hinovaSenha;
+      hinovaCodigoConta = credBanco.codigo_conta || hinovaCodigoConta;
+      hinovaCodigoRegional = credBanco.codigo_regional || hinovaCodigoRegional;
+      hinovaCodigoCooperativa = credBanco.codigo_cooperativa || hinovaCodigoCooperativa;
+      hinovaCodigoVoluntario = credBanco.codigo_voluntario || hinovaCodigoVoluntario;
+      if (credBanco.api_url) hinovaApiUrl = credBanco.api_url;
+      console.log('[SGA Sync] Credenciais carregadas do banco');
+    }
+  }
 
   // Helper para registrar log
   async function logSync(
@@ -133,7 +182,7 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({
           success: false,
-          error: 'Credenciais do Hinova não configuradas. Configure os secrets HINOVA_TOKEN, HINOVA_USUARIO e HINOVA_SENHA.',
+          error: 'Credenciais do Hinova não configuradas. Configure em Configurações > Integrações ou via Supabase Secrets.',
           step: 'config'
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
