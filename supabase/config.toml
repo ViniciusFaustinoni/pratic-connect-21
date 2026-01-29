@@ -299,3 +299,6 @@ verify_jwt = false
 
 [functions.rede-veiculos-sincronizar-status]
 verify_jwt = false
+
+[functions.whatsapp-delete-instance]
+verify_jwt = false

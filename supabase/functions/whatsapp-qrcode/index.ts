@@ -23,9 +23,13 @@ serve(async (req) => {
   }
 
   try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const WEBHOOK_URL = `${supabaseUrl}/functions/v1/whatsapp-webhook`;
+    
     const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      supabaseUrl,
+      supabaseServiceKey
     );
 
     const { instancia_id } = await req.json();
@@ -79,6 +83,13 @@ serve(async (req) => {
             instanceName: instancia.instance_name,
             qrcode: true,
             integration: 'WHATSAPP-BAILEYS',
+            webhook: {
+              url: WEBHOOK_URL,
+              enabled: true,
+              webhook_by_events: false,
+              webhook_base64: false,
+              events: ['MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'CONNECTION_UPDATE']
+            }
           })
         }
       );
