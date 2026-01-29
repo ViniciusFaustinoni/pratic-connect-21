@@ -1045,8 +1045,8 @@ async function callAI(messages: any[], systemPrompt: string, useTools: boolean =
   return response.json();
 }
 
-// Enviar mensagem via Evolution API
-async function sendWhatsAppMessage(apiUrl: string, instanceName: string, telefone: string, texto: string) {
+// Enviar mensagem via Evolution API - ATUALIZADO para retornar messageId
+async function sendWhatsAppMessage(apiUrl: string, instanceName: string, telefone: string, texto: string): Promise<{ ok: boolean; messageId?: string }> {
   const EVOLUTION_API_KEY = Deno.env.get("EVOLUTION_API_KEY");
   if (!EVOLUTION_API_KEY) throw new Error("EVOLUTION_API_KEY não configurada");
 
@@ -1065,9 +1065,19 @@ async function sendWhatsAppMessage(apiUrl: string, instanceName: string, telefon
   if (!response.ok) {
     const err = await response.text();
     console.error(`[whatsapp-webhook] Erro ao enviar: ${err}`);
+    return { ok: false };
   }
 
-  return response.ok;
+  // Extrair message_id da resposta da Evolution API
+  try {
+    const result = await response.json();
+    const messageId = result?.key?.id;
+    console.log(`[whatsapp-webhook] Mensagem enviada, messageId: ${messageId}`);
+    return { ok: true, messageId };
+  } catch (e) {
+    console.warn(`[whatsapp-webhook] Resposta não é JSON, sem messageId`);
+    return { ok: true };
+  }
 }
 
 // Salvar mensagem no histórico
@@ -1079,8 +1089,15 @@ async function saveMessage(supabase: any, associadoId: string, role: string, con
   });
 }
 
-// Salvar log de mensagem WhatsApp
-async function saveWhatsAppLog(supabase: any, instanciaId: string, telefone: string, mensagem: string, direcao: string) {
+// Salvar log de mensagem WhatsApp - ATUALIZADO para aceitar messageId
+async function saveWhatsAppLog(
+  supabase: any, 
+  instanciaId: string, 
+  telefone: string, 
+  mensagem: string, 
+  direcao: string, 
+  messageId?: string
+) {
   await supabase.from("whatsapp_mensagens").insert({
     instancia_id: instanciaId,
     telefone,
@@ -1088,6 +1105,8 @@ async function saveWhatsAppLog(supabase: any, instanciaId: string, telefone: str
     mensagem,
     direcao,
     status: direcao === "saida" ? "enviada" : "entregue",
+    message_id: messageId || null,
+    sent_at: direcao === "saida" ? new Date().toISOString() : null,
   });
 }
 
@@ -1395,6 +1414,75 @@ serve(async (req) => {
       return new Response(JSON.stringify({ ok: true, event: 'connection.update', status: novoStatus }), { headers: corsHeaders });
     }
 
+    // ============================================
+    // PROCESSAR EVENTOS DE STATUS DE MENSAGEM (MESSAGES_UPDATE)
+    // ============================================
+    if (payload.event === "messages.update") {
+      console.log('[whatsapp-webhook] MESSAGES_UPDATE recebido');
+      
+      // A Evolution API pode enviar em formatos diferentes
+      const updates = payload.data?.messages || payload.data || [];
+      const updatesList = Array.isArray(updates) ? updates : [updates];
+      
+      for (const update of updatesList) {
+        // Extrair messageId - pode vir em diferentes formatos
+        const messageId = update.key?.id || update.id;
+        // Status pode vir em update.status ou update.update.status
+        const status = update.status ?? update.update?.status;
+        
+        if (!messageId) {
+          console.log('[whatsapp-webhook] MESSAGES_UPDATE sem messageId, ignorando');
+          continue;
+        }
+        
+        console.log(`[whatsapp-webhook] Status update: ${messageId} -> ${status}`);
+        
+        // Mapear status da Evolution para nosso sistema
+        // 0=ERROR, 1=PENDING, 2=SERVER_ACK(enviada), 3=DELIVERY_ACK(entregue), 4=READ(lida), 5=PLAYED(reproduzida)
+        const statusMap: Record<number, { status: string; field: string }> = {
+          0: { status: 'erro', field: '' },
+          1: { status: 'pendente', field: '' },
+          2: { status: 'enviada', field: 'sent_at' },
+          3: { status: 'entregue', field: 'delivered_at' },
+          4: { status: 'lida', field: 'read_at' },
+          5: { status: 'reproduzida', field: 'read_at' }, // Para áudio/vídeo
+        };
+        
+        const statusInfo = statusMap[status];
+        
+        if (statusInfo) {
+          const updateData: Record<string, any> = {
+            status: statusInfo.status,
+            updated_at: new Date().toISOString(),
+          };
+          
+          // Preencher campo de timestamp correspondente
+          if (statusInfo.field) {
+            updateData[statusInfo.field] = new Date().toISOString();
+          }
+          
+          // Atualizar mensagem no banco pelo message_id
+          const { error, count } = await supabase
+            .from('whatsapp_mensagens')
+            .update(updateData)
+            .eq('message_id', messageId);
+          
+          if (error) {
+            console.error(`[whatsapp-webhook] Erro ao atualizar status: ${error.message}`);
+          } else {
+            console.log(`[whatsapp-webhook] Status atualizado: ${messageId} -> ${statusInfo.status}`);
+          }
+        } else {
+          console.log(`[whatsapp-webhook] Status desconhecido: ${status}`);
+        }
+      }
+      
+      // Log do evento (sem dependência de instancia que é declarada depois)
+      console.log(`[whatsapp-webhook] MESSAGES_UPDATE processado: ${updatesList.length} atualizações`);
+      
+      return new Response(JSON.stringify({ ok: true, event: 'messages.update' }), { headers: corsHeaders });
+    }
+
     // Ignorar outros eventos que não são mensagens
     if (payload.event !== "messages.upsert") {
       console.log(`[whatsapp-webhook] Evento ignorado: ${payload.event}`);
@@ -1567,10 +1655,10 @@ serve(async (req) => {
     // Extrair resposta final
     const respostaFinal = assistantMessage?.content || "Desculpe, não consegui processar sua mensagem. Tente novamente.";
 
-    // Salvar e enviar resposta
+    // Salvar e enviar resposta - capturar messageId para tracking de status
     await saveMessage(supabase, associado.id, "assistant", respostaFinal);
-    await saveWhatsAppLog(supabase, instancia.id, telefone, respostaFinal, "saida");
-    await sendWhatsAppMessage(instancia.api_url, instancia.instance_name, telefone, respostaFinal);
+    const sendResult = await sendWhatsAppMessage(instancia.api_url, instancia.instance_name, telefone, respostaFinal);
+    await saveWhatsAppLog(supabase, instancia.id, telefone, respostaFinal, "saida", sendResult.messageId);
 
     console.log(`[whatsapp-webhook] Resposta enviada para ${telefone}`);
 
