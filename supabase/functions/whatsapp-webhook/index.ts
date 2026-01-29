@@ -242,10 +242,24 @@ const tools = [
         properties: {
           boleto_id: { type: "string", description: "ID do boleto a ser enviado (obtido de get_boletos_pendentes)" },
         },
-        required: ["boleto_id"],
-      },
+      required: ["boleto_id"],
     },
   },
+},
+{
+  type: "function",
+  function: {
+    name: "enviar_localizacao_veiculo",
+    description: "Envia a localização atual do veículo como pin nativo do WhatsApp. Use quando o associado pedir para ver onde está o carro ou a última posição do rastreador.",
+    parameters: {
+      type: "object",
+      properties: {
+        veiculo_id: { type: "string", description: "ID do veículo (opcional, usa o primeiro ativo se não informado)" },
+      },
+      required: [],
+    },
+  },
+},
 ];
 
 // Executa tools
@@ -594,6 +608,150 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
         return JSON.stringify({ 
           success: false, 
           message: "Erro ao enviar boleto. Tente novamente mais tarde." 
+        });
+      }
+    }
+
+    case "enviar_localizacao_veiculo": {
+      // Nova tool: Enviar localização do veículo via pin nativo do WhatsApp
+      const { veiculo_id } = args;
+
+      // Buscar veículo do associado
+      let veiculoQuery = supabase
+        .from("veiculos")
+        .select("id, placa, marca, modelo")
+        .eq("associado_id", associadoId)
+        .eq("status", "ativo");
+      
+      if (veiculo_id) {
+        veiculoQuery = veiculoQuery.eq("id", veiculo_id);
+      }
+
+      const { data: veiculos } = await veiculoQuery.limit(1);
+      const veiculo = veiculos?.[0];
+
+      if (!veiculo) {
+        return JSON.stringify({ success: false, message: "Nenhum veículo ativo encontrado" });
+      }
+
+      // Buscar posição do rastreador
+      const { data: rastreador } = await supabase
+        .from("rastreadores")
+        .select("id, ultima_posicao_lat, ultima_posicao_lng, ultima_comunicacao")
+        .eq("veiculo_id", veiculo.id)
+        .eq("status", "instalado")
+        .maybeSingle();
+
+      if (!rastreador) {
+        return JSON.stringify({ success: false, message: "Este veículo não possui rastreador instalado" });
+      }
+
+      if (!rastreador.ultima_posicao_lat || !rastreador.ultima_posicao_lng) {
+        return JSON.stringify({ success: false, message: "Posição do veículo não disponível. O rastreador ainda não enviou dados de localização." });
+      }
+
+      if (!telefone || !instancia) {
+        return JSON.stringify({ success: false, message: "Erro de contexto: telefone ou instância não disponíveis" });
+      }
+
+      // Calcular há quanto tempo a posição foi atualizada
+      let tempoAtras = "";
+      if (rastreador.ultima_comunicacao) {
+        const diff = Date.now() - new Date(rastreador.ultima_comunicacao).getTime();
+        const minutos = Math.floor(diff / 60000);
+        if (minutos < 60) {
+          tempoAtras = `há ${minutos} minuto${minutos !== 1 ? 's' : ''}`;
+        } else {
+          const horas = Math.floor(minutos / 60);
+          tempoAtras = `há ${horas} hora${horas !== 1 ? 's' : ''}`;
+        }
+      }
+
+      try {
+        const EVOLUTION_API_KEY = Deno.env.get("EVOLUTION_API_KEY");
+        const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+
+        // Buscar endereço via reverse geocoding
+        let endereco = "Última posição conhecida";
+        try {
+          const geoResponse = await fetch(`${SUPABASE_URL}/functions/v1/reverse-geocode`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+            },
+            body: JSON.stringify({
+              latitude: rastreador.ultima_posicao_lat,
+              longitude: rastreador.ultima_posicao_lng,
+            }),
+          });
+          if (geoResponse.ok) {
+            const geoData = await geoResponse.json();
+            if (geoData.success && geoData.endereco_completo) {
+              endereco = geoData.endereco_completo;
+            }
+          }
+        } catch (geoErr) {
+          console.warn("[whatsapp-webhook] Erro no geocoding:", geoErr);
+        }
+
+        // Enviar pin de localização
+        const locationBody = {
+          number: telefone,
+          name: `Veículo ${veiculo.placa}`,
+          address: endereco + (tempoAtras ? ` (${tempoAtras})` : ""),
+          latitude: rastreador.ultima_posicao_lat,
+          longitude: rastreador.ultima_posicao_lng,
+        };
+
+        console.log(`[whatsapp-webhook] Enviando localização do veículo ${veiculo.placa}`);
+
+        const response = await fetch(
+          `${instancia.api_url}/message/sendLocation/${instancia.instance_name}`,
+          {
+            method: "POST",
+            headers: {
+              "apikey": EVOLUTION_API_KEY || "",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(locationBody),
+          }
+        );
+
+        const result = await response.json();
+
+        if (result.key?.id) {
+          // Registrar mensagem no banco
+          await supabase.from("whatsapp_mensagens").insert({
+            instancia_id: instancia.id,
+            telefone: telefone,
+            tipo: "location",
+            mensagem: `📍 ${locationBody.name}: ${locationBody.address}`,
+            status: "enviada",
+            message_id: result.key.id,
+            referencia_tipo: "veiculo",
+            referencia_id: veiculo.id,
+            direcao: "saida",
+            sent_at: new Date().toISOString(),
+          });
+
+          console.log(`[whatsapp-webhook] Localização enviada com sucesso: ${result.key.id}`);
+          return JSON.stringify({ 
+            success: true, 
+            message: `Pronto! A localização do seu veículo ${veiculo.placa} foi enviada. Verifique o mapa na conversa! 📍${tempoAtras ? ` (Atualizado ${tempoAtras})` : ''}` 
+          });
+        } else {
+          console.error(`[whatsapp-webhook] Erro ao enviar localização:`, result);
+          return JSON.stringify({ 
+            success: false, 
+            message: "Não foi possível enviar a localização. Tente novamente mais tarde." 
+          });
+        }
+      } catch (err) {
+        console.error(`[whatsapp-webhook] Erro ao enviar localização:`, err);
+        return JSON.stringify({ 
+          success: false, 
+          message: "Erro ao enviar localização. Tente novamente mais tarde." 
         });
       }
     }

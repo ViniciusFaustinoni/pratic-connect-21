@@ -302,3 +302,6 @@ verify_jwt = false
 
 [functions.whatsapp-delete-instance]
 verify_jwt = false
+
+[functions.whatsapp-send-location]
+verify_jwt = false
