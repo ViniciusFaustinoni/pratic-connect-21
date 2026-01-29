@@ -10,7 +10,7 @@ import {
   HelpCircle, FileText, Clock, MoreHorizontal, Loader2,
   ExternalLink, Download, CheckCircle, XCircle, AlertCircle,
   User, FileCheck, FilePlus, Scale, Plus, Link as LinkIcon, Trash2,
-  Bot, Wrench
+  Bot, Wrench, Radio
 } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useDeleteSinistro } from '@/hooks/useSinistros';
@@ -21,6 +21,8 @@ import { AtualizarStatusModal } from '@/components/eventos/AtualizarStatusModal'
 import { AgendarVistoriaModal } from '@/components/eventos/AgendarVistoriaModal';
 import { EmitirParecerModal } from '@/components/eventos/EmitirParecerModal';
 import { ConversaIADialog } from '@/components/sinistros/ConversaIADialog';
+import { AcionarRecuperacaoModal } from '@/components/sinistros/AcionarRecuperacaoModal';
+import { CardAcionamentoRoubo } from '@/components/sinistros/CardAcionamentoRoubo';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -116,7 +118,7 @@ export default function SinistroDetalhe() {
   const [modalExcluirOpen, setModalExcluirOpen] = useState(false);
   const [modalConversaOpen, setModalConversaOpen] = useState(false);
   const [modalSolicitarDocsOpen, setModalSolicitarDocsOpen] = useState(false);
-
+  const [modalAcionamentoOpen, setModalAcionamentoOpen] = useState(false);
   const { isDiretor } = usePermissions();
   const deleteSinistro = useDeleteSinistro();
 
@@ -362,6 +364,18 @@ export default function SinistroDetalhe() {
               Enviar WhatsApp
             </DropdownMenuItem>
             <DropdownMenuSeparator />
+            {['roubo', 'furto'].includes(sinistro.tipo) && (
+              <DropdownMenuItem 
+                className="text-destructive focus:text-destructive"
+                onSelect={(e) => {
+                  e.preventDefault();
+                  setTimeout(() => setModalAcionamentoOpen(true), 0);
+                }}
+              >
+                <Radio className="h-4 w-4 mr-2" />
+                Acionar Recuperação
+              </DropdownMenuItem>
+            )}
             {['aprovado', 'em_regulacao', 'em_reparo'].includes(sinistro.status) && (
               <DropdownMenuItem onClick={() => navigate(`/oficina/ordens-servico?novo=true&sinistro_id=${id}`)}>
                 <Wrench className="h-4 w-4 mr-2" />
@@ -806,6 +820,15 @@ export default function SinistroDetalhe() {
               )}
             </CardContent>
           </Card>
+
+          {/* Card Acionamento Roubo/Furto - apenas para sinistros tipo roubo/furto */}
+          {['roubo', 'furto'].includes(sinistro.tipo) && (
+            <CardAcionamentoRoubo 
+              sinistroId={id!}
+              onAcionar={() => setModalAcionamentoOpen(true)}
+              podeAcionar={!['encerrado', 'cancelado', 'negado'].includes(sinistro.status)}
+            />
+          )}
         </div>
       </div>
 
@@ -945,6 +968,25 @@ export default function SinistroDetalhe() {
           sinistroId={sinistro.id}
           protocolo={sinistro.protocolo}
           statusAtual={sinistro.status}
+        />
+      )}
+
+      {/* Modal Acionar Recuperação */}
+      {sinistro && ['roubo', 'furto'].includes(sinistro.tipo) && sinistro.veiculo && (
+        <AcionarRecuperacaoModal
+          open={modalAcionamentoOpen}
+          onOpenChange={setModalAcionamentoOpen}
+          sinistro={{
+            id: sinistro.id,
+            protocolo: sinistro.protocolo,
+            tipo: sinistro.tipo,
+            veiculo_id: sinistro.veiculo_id,
+          }}
+          veiculo={{
+            placa: sinistro.veiculo.placa || '',
+            marca: sinistro.veiculo.marca || '',
+            modelo: sinistro.veiculo.modelo || '',
+          }}
         />
       )}
     </div>
