@@ -104,6 +104,7 @@ serve(async (req) => {
     };
 
     const novoStatus = statusMap[data.instance?.state] || data.instance?.state || 'disconnected';
+    const statusAnterior = instancia.status;
 
     // Atualizar status no banco
     await supabase
@@ -114,6 +115,34 @@ serve(async (req) => {
         updated_at: new Date().toISOString(),
       })
       .eq('id', instancia.id);
+
+    // Auto-configurar webhook quando conectar (status mudou para "open")
+    if (novoStatus === 'open' && statusAnterior !== 'open' && !instancia.webhook_url) {
+      console.log('[whatsapp-status] Instância conectou! Configurando webhook automaticamente...');
+      
+      try {
+        const setWebhookResponse = await fetch(
+          `${Deno.env.get('SUPABASE_URL')}/functions/v1/whatsapp-set-webhook`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+            },
+            body: JSON.stringify({ instancia_id: instancia.id })
+          }
+        );
+        
+        const webhookResult = await setWebhookResponse.json();
+        console.log('[whatsapp-status] Resultado configuração webhook:', webhookResult);
+        
+        if (!webhookResult.success) {
+          console.error('[whatsapp-status] Falha ao configurar webhook:', webhookResult.error);
+        }
+      } catch (webhookError) {
+        console.error('[whatsapp-status] Erro ao chamar whatsapp-set-webhook:', webhookError);
+      }
+    }
 
     // Registrar log
     await supabase
