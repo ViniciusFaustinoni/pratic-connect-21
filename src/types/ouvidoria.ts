@@ -1,6 +1,14 @@
 // Tipos do módulo Ouvidoria
 
-export type TipoManifestacao = 'reclamacao' | 'reclamacao_urgente' | 'sugestao' | 'elogio' | 'denuncia';
+export type TipoManifestacao = 'reclamacao' | 'reclamacao_urgente' | 'sugestao' | 'elogio' | 'denuncia' | 'solicitacao';
+
+export type CategoriaSolicitacao = 
+  | 'documentos' 
+  | 'informacoes' 
+  | 'providencias' 
+  | 'acesso';
+
+export type ProcedenciaManifestacao = 'procedente' | 'parcial' | 'improcedente';
 
 export type CategoriaManifestacao = 
   | 'atendimento' 
@@ -200,6 +208,20 @@ export const TIPO_MANIFESTACAO_LABELS: Record<TipoManifestacao, string> = {
   sugestao: 'Sugestão',
   elogio: 'Elogio',
   denuncia: 'Denúncia',
+  solicitacao: 'Solicitação',
+};
+
+export const CATEGORIA_SOLICITACAO_LABELS: Record<CategoriaSolicitacao, string> = {
+  documentos: 'Documentos',
+  informacoes: 'Informações',
+  providencias: 'Providências',
+  acesso: 'Acesso',
+};
+
+export const PROCEDENCIA_LABELS: Record<ProcedenciaManifestacao, string> = {
+  procedente: 'Procedente',
+  parcial: 'Parcialmente Procedente',
+  improcedente: 'Improcedente',
 };
 
 export const CATEGORIA_LABELS: Record<CategoriaManifestacao, string> = {

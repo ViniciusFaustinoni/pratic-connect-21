@@ -95,6 +95,22 @@ export const tiposManifestacao = [
   { value: 'denuncia', label: 'Denúncia' },
   { value: 'sugestao', label: 'Sugestão' },
   { value: 'elogio', label: 'Elogio' },
+  { value: 'solicitacao', label: 'Solicitação' },
+];
+
+// Categorias de solicitação
+export const categoriasSolicitacao = [
+  { value: 'documentos', label: 'Documentos' },
+  { value: 'informacoes', label: 'Informações' },
+  { value: 'providencias', label: 'Providências' },
+  { value: 'acesso', label: 'Acesso' },
+];
+
+// Opções de procedência para encerramento
+export const procedenciaOptions = [
+  { value: 'procedente', label: 'Sim, Procedente' },
+  { value: 'parcial', label: 'Parcialmente Procedente' },
+  { value: 'improcedente', label: 'Não, Improcedente' },
 ];
 
 // Prioridades

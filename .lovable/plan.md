@@ -233,12 +233,21 @@ Apos implementacao de todas as alteracoes:
 
 ---
 
-## PROXIMO PASSO
+## IMPLEMENTADO NESTA SESSAO
 
-Iniciar implementacao pelos itens de ALTA prioridade:
-1. Criar tipo "solicitacao" nos types e constantes
-2. Criar pagina CanalDenuncia.tsx
-3. Criar pagina ConsultaProtocolo.tsx
-4. Criar pagina PesquisaSatisfacao.tsx
-5. Registrar rotas no App.tsx
-6. Adicionar secoes faltantes no Dashboard
+### Concluido:
+1. ✅ Tipo "solicitacao" adicionado aos types e constants
+2. ✅ Pagina CanalDenuncia.tsx criada (formulario publico)
+3. ✅ Pagina ConsultaProtocolo.tsx criada (acompanhamento)
+4. ✅ Pagina PesquisaSatisfacao.tsx criada (NPS)
+5. ✅ TriagemModal.tsx criado
+6. ✅ EncerrarPareceModal.tsx criado
+7. ✅ Rotas registradas no App.tsx
+8. ✅ TipoBadge atualizado para suportar "solicitacao"
+
+### Pendente para proxima sessao:
+- Integrar TriagemModal na lista de manifestacoes
+- Integrar EncerrarPareceModal no detalhe
+- Adicionar secoes faltantes no Dashboard (SLA, Top 5, Ultimas)
+- Adicionar campos de procedencia no schema (migracao)
+- Pagina de Relatorios completa

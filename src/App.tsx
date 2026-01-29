@@ -246,6 +246,9 @@ import OuvidoriaDashboard from "./pages/ouvidoria/OuvidoriaDashboard";
 import OuvidoriaFila from "./pages/ouvidoria/ManifestacoesList";
 import OuvidoriaDetalhe from "./pages/ouvidoria/ManifestacaoDetalhe";
 import NovaManifestacao from "./pages/ouvidoria/NovaManifestacao";
+import CanalDenuncia from "./pages/ouvidoria/CanalDenuncia";
+import ConsultaProtocolo from "./pages/ouvidoria/ConsultaProtocolo";
+import PesquisaSatisfacao from "./pages/ouvidoria/PesquisaSatisfacao";
 
 // Installer App Pages
 import InstaladorLogin from "./pages/instalador/InstaladorLogin";
@@ -308,6 +311,11 @@ const App = () => (
             
             {/* Public Associate Vistoria Page */}
             <Route path="/associado/:token" element={<AssociadoVistoria />} />
+            
+            {/* Public Ouvidoria Pages */}
+            <Route path="/ouvidoria/canal-denuncia" element={<CanalDenuncia />} />
+            <Route path="/ouvidoria/consulta-protocolo" element={<ConsultaProtocolo />} />
+            <Route path="/ouvidoria/pesquisa/:protocolo" element={<PesquisaSatisfacao />} />
             
             {/* Redirect root to dashboard */}
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
@@ -500,6 +508,8 @@ const App = () => (
               {/* Ouvidoria ERP */}
               <Route path="/ouvidoria" element={<OuvidoriaDashboard />} />
               <Route path="/ouvidoria/fila" element={<OuvidoriaFila />} />
+              <Route path="/ouvidoria/manifestacoes" element={<OuvidoriaFila />} />
+              <Route path="/ouvidoria/nova" element={<NovaManifestacao />} />
               <Route path="/ouvidoria/:id" element={<OuvidoriaDetalhe />} />
               
               {/* Config */}
