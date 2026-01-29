@@ -827,6 +827,8 @@ export default function SinistroDetalhe() {
           {['roubo', 'furto'].includes(sinistro.tipo) && (
             <CardAcionamentoRoubo 
               sinistroId={id!}
+              veiculoId={sinistro.veiculo_id}
+              veiculoPlaca={sinistro.veiculo?.placa}
               onAcionar={() => setModalAcionamentoOpen(true)}
               podeAcionar={!['encerrado', 'cancelado', 'negado'].includes(sinistro.status)}
             />
