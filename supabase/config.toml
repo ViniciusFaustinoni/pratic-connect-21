@@ -251,3 +251,6 @@ verify_jwt = false
 
 [functions.enviar-comando-rastreador]
 verify_jwt = false
+
+[functions.softruck-webhook]
+verify_jwt = false
