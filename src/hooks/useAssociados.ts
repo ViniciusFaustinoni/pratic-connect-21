@@ -433,12 +433,41 @@ export function useAssociadoActions() {
 
   const suspenderAssociado = useMutation({
     mutationFn: async ({ id, motivo }: { id: string; motivo?: string }) => {
+      // 1. Atualizar status local
       const { error } = await supabase.from('associados').update({
         status: 'suspenso' as StatusAssociado,
         motivo_bloqueio: motivo || 'Suspenso pelo sistema',
+        data_bloqueio: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }).eq('id', id);
       if (error) throw error;
+
+      // 2. Registrar histórico
+      await supabase.from('associados_historico').insert({
+        associado_id: id,
+        tipo: 'status_alterado',
+        descricao: `Associado suspenso manualmente. Motivo: ${motivo || 'Não informado'}`,
+        dados_anteriores: { status: 'ativo' },
+        dados_novos: { status: 'suspenso', motivo_bloqueio: motivo },
+      });
+
+      // 3. Notificar Rede Veículos sobre inadimplência
+      try {
+        const motivoRede = motivo?.toLowerCase().includes('judicial') 
+          ? 'cobranca_judicial' 
+          : 'bloqueio_diretoria';
+          
+        await supabase.functions.invoke('rede-veiculos-informar-inadimplente', {
+          body: {
+            associadoId: id,
+            motivo: motivoRede,
+          },
+        });
+        console.log('[suspenderAssociado] Inadimplência notificada à Rede Veículos');
+      } catch (redeErr) {
+        console.warn('[suspenderAssociado] Erro ao notificar Rede Veículos:', redeErr);
+        // Não bloqueia o fluxo
+      }
     },
     onSuccess: () => {
       invalidateAll();
@@ -454,11 +483,35 @@ export function useAssociadoActions() {
         status: 'ativo' as StatusAssociado,
         bloqueado: false,
         motivo_bloqueio: null,
+        data_bloqueio: null,
         updated_at: new Date().toISOString(),
       }).eq('id', id);
       if (error) throw error;
 
-      // 2. Buscar veículos do associado com rastreador Rede Veículos
+      // 2. Registrar histórico
+      await supabase.from('associados_historico').insert({
+        associado_id: id,
+        tipo: 'status_alterado',
+        descricao: 'Associado reativado manualmente',
+        dados_anteriores: { status: 'suspenso' },
+        dados_novos: { status: 'ativo' },
+      });
+
+      // 3. Notificar Rede Veículos sobre adimplência
+      try {
+        await supabase.functions.invoke('rede-veiculos-informar-adimplente', {
+          body: {
+            associadoId: id,
+            motivo: 'reativacao_manual',
+          },
+        });
+        console.log('[reativarAssociado] Adimplência notificada à Rede Veículos');
+      } catch (redeErr) {
+        console.warn('[reativarAssociado] Erro ao notificar Rede Veículos:', redeErr);
+        // Não bloquear fluxo
+      }
+
+      // 4. (Opcional) Revincular veículos se necessário
       const { data: veiculos } = await supabase
         .from('veiculos')
         .select('id')
@@ -467,7 +520,6 @@ export function useAssociadoActions() {
 
       if (veiculos && veiculos.length > 0) {
         for (const veiculo of veiculos) {
-          // Buscar rastreador do veículo
           const { data: rastreador } = await supabase
             .from('rastreadores')
             .select('imei, plataforma, status')
@@ -475,7 +527,6 @@ export function useAssociadoActions() {
             .eq('status', 'instalado')
             .maybeSingle();
 
-          // Se tem rastreador Rede Veículos, revincular
           if (rastreador?.plataforma === 'rede_veiculos' && rastreador.imei) {
             try {
               await supabase.functions.invoke('rede-veiculos-vincular-cliente', {
@@ -488,7 +539,6 @@ export function useAssociadoActions() {
               console.log('[reativarAssociado] Veículo revinculado na Rede Veículos:', veiculo.id);
             } catch (err) {
               console.warn('[reativarAssociado] Erro ao revincular na Rede Veículos:', err);
-              // Não bloquear fluxo
             }
           }
         }

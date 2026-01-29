@@ -269,3 +269,12 @@ verify_jwt = false
 
 [functions.rede-veiculos-atualizar-veiculo]
 verify_jwt = false
+
+[functions.rede-veiculos-informar-adimplente]
+verify_jwt = false
+
+[functions.rede-veiculos-informar-inadimplente]
+verify_jwt = false
+
+[functions.cron-suspender-inadimplentes]
+verify_jwt = false

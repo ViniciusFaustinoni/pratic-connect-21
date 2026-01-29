@@ -605,6 +605,20 @@ serve(async (req) => {
                 });
 
                 console.log(`[asaas-webhook] Associado ${cobranca.associado_id} reativado automaticamente`);
+
+                // NOVO: Notificar Rede Veículos sobre adimplência
+                try {
+                  await supabase.functions.invoke('rede-veiculos-informar-adimplente', {
+                    body: {
+                      associadoId: cobranca.associado_id,
+                      motivo: 'pagamento_confirmado',
+                    },
+                  });
+                  console.log(`[asaas-webhook] Adimplência notificada à Rede Veículos para ${cobranca.associado_id}`);
+                } catch (redeErr) {
+                  console.warn(`[asaas-webhook] Erro ao notificar Rede Veículos:`, redeErr);
+                  // Não bloqueia o fluxo
+                }
               }
             }
           }
