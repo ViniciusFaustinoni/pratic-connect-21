@@ -497,51 +497,20 @@ export function useAssociadoActions() {
         dados_novos: { status: 'ativo' },
       });
 
-      // 3. Notificar Rede Veículos sobre adimplência
+      // 3. Usar orquestrador para ativar cliente completamente na Rede Veículos
+      // Isso vai: revincular veículos desvinculados, ativar todos, informar adimplência
       try {
-        await supabase.functions.invoke('rede-veiculos-informar-adimplente', {
+        const result = await supabase.functions.invoke('rede-veiculos-ativar-cliente-completo', {
           body: {
             associadoId: id,
             motivo: 'reativacao_manual',
+            revincular: true,
           },
         });
-        console.log('[reativarAssociado] Adimplência notificada à Rede Veículos');
+        console.log('[reativarAssociado] Cliente ativado na Rede Veículos:', result.data);
       } catch (redeErr) {
-        console.warn('[reativarAssociado] Erro ao notificar Rede Veículos:', redeErr);
+        console.warn('[reativarAssociado] Erro ao ativar na Rede Veículos:', redeErr);
         // Não bloquear fluxo
-      }
-
-      // 4. (Opcional) Revincular veículos se necessário
-      const { data: veiculos } = await supabase
-        .from('veiculos')
-        .select('id')
-        .eq('associado_id', id)
-        .eq('ativo', true);
-
-      if (veiculos && veiculos.length > 0) {
-        for (const veiculo of veiculos) {
-          const { data: rastreador } = await supabase
-            .from('rastreadores')
-            .select('imei, plataforma, status')
-            .eq('veiculo_id', veiculo.id)
-            .eq('status', 'instalado')
-            .maybeSingle();
-
-          if (rastreador?.plataforma === 'rede_veiculos' && rastreador.imei) {
-            try {
-              await supabase.functions.invoke('rede-veiculos-vincular-cliente', {
-                body: {
-                  imei: rastreador.imei,
-                  veiculoId: veiculo.id,
-                  associadoId: id,
-                },
-              });
-              console.log('[reativarAssociado] Veículo revinculado na Rede Veículos:', veiculo.id);
-            } catch (err) {
-              console.warn('[reativarAssociado] Erro ao revincular na Rede Veículos:', err);
-            }
-          }
-        }
       }
     },
     onSuccess: () => {
@@ -589,58 +558,57 @@ export function useAssociadoActions() {
 
   const cancelarAssociado = useMutation({
     mutationFn: async ({ id, motivo }: { id: string; motivo: string }) => {
-      // 1. Buscar veículos do associado com rastreadores
+      // 1. Usar orquestrador para inativar + desvincular todos os veículos Rede Veículos
+      try {
+        const result = await supabase.functions.invoke('rede-veiculos-inativar-cliente-completo', {
+          body: {
+            associadoId: id,
+            motivo: 'cancelamento',
+            observacoes: motivo,
+            atualizarBancoLocal: true,
+            desvincular: true, // Desvincular ao cancelar
+          },
+        });
+        console.log('[cancelarAssociado] Cliente inativado na Rede Veículos:', result.data);
+      } catch (redeErr) {
+        console.warn('[cancelarAssociado] Erro ao inativar na Rede Veículos:', redeErr);
+        // Continua mesmo com erro
+      }
+
+      // 2. Tratar Softruck separadamente
       const { data: veiculos } = await supabase
         .from('veiculos')
-        .select('id, placa')
+        .select('id')
         .eq('associado_id', id);
 
-      // 2. Buscar rastreadores vinculados a esses veículos
       if (veiculos && veiculos.length > 0) {
         const veiculoIds = veiculos.map(v => v.id);
         const { data: rastreadores } = await supabase
           .from('rastreadores')
           .select('id, imei, plataforma, status')
           .in('veiculo_id', veiculoIds)
-          .eq('status', 'instalado');
+          .eq('status', 'instalado')
+          .eq('plataforma', 'softruck');
 
-        // 3. Para cada rastreador Rede Veículos, desvincular na plataforma
         for (const rastreador of rastreadores || []) {
-          if (rastreador.plataforma === 'rede_veiculos') {
-            console.log(`Desvinculando rastreador ${rastreador.imei} ao cancelar associado...`);
-            try {
-              await supabase.functions.invoke('rede-veiculos-desvincular-cliente', {
-                body: {
-                  rastreadorId: rastreador.id,
-                  motivo: 'cancelamento_contrato',
-                  atualizarBancoLocal: true,
-                },
-              });
-            } catch (error) {
-              console.error('Erro ao desvincular rastreador:', error);
-              // Continua mesmo com erro
-            }
-          } else if (rastreador.plataforma === 'softruck') {
-            try {
-              await supabase.functions.invoke('softruck-api', {
-                body: {
-                  operation: 'desassociar-device-veiculo',
-                  data: { deviceId: rastreador.id },
-                },
-              });
-              // Atualizar banco local para Softruck
-              await supabase.from('rastreadores').update({
-                veiculo_id: null,
-                status: 'estoque',
-              }).eq('id', rastreador.id);
-            } catch (error) {
-              console.error('Erro ao desvincular Softruck:', error);
-            }
+          try {
+            await supabase.functions.invoke('softruck-api', {
+              body: {
+                operation: 'desassociar-device-veiculo',
+                data: { deviceId: rastreador.id },
+              },
+            });
+            await supabase.from('rastreadores').update({
+              veiculo_id: null,
+              status: 'estoque',
+            }).eq('id', rastreador.id);
+          } catch (error) {
+            console.error('Erro ao desvincular Softruck:', error);
           }
         }
       }
 
-      // 4. Atualizar status do associado
+      // 3. Atualizar status do associado
       const { error } = await supabase.from('associados').update({
         status: 'cancelado' as StatusAssociado,
         motivo_bloqueio: motivo,

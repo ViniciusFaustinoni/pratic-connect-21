@@ -284,3 +284,9 @@ verify_jwt = false
 
 [functions.rede-veiculos-inativar-veiculo]
 verify_jwt = false
+
+[functions.rede-veiculos-inativar-cliente-completo]
+verify_jwt = false
+
+[functions.rede-veiculos-ativar-cliente-completo]
+verify_jwt = false
