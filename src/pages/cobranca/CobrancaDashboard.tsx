@@ -8,6 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { RecuperacaoKPIs } from '@/components/cobranca/RecuperacaoKPIs';
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -251,6 +252,9 @@ export default function CobrancaDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* KPIs de Recuperação e Gráfico */}
+      <RecuperacaoKPIs />
 
       {/* Faixas de Atraso */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
