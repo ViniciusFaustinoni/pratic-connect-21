@@ -44,6 +44,7 @@ interface FormData {
   gestor_id: string;
   tipo_contrato: string;
   data_admissao: string;
+  periodo_experiencia: string;
   carga_horaria_semanal: number;
   horario_entrada: string;
   horario_saida: string;
@@ -130,6 +131,7 @@ export default function FuncionarioForm() {
       gestor_id: '',
       tipo_contrato: 'clt',
       data_admissao: '',
+      periodo_experiencia: '',
       carga_horaria_semanal: 44,
       horario_entrada: '08:00',
       horario_saida: '18:00',
@@ -223,6 +225,7 @@ export default function FuncionarioForm() {
         gestor_id: funcionario.gestor_id || '',
         tipo_contrato: funcionario.tipo_contrato || 'clt',
         data_admissao: funcionario.data_admissao || '',
+        periodo_experiencia: (funcionario as Record<string, unknown>).periodo_experiencia as string || '',
         carga_horaria_semanal: funcionario.carga_horaria_semanal || 44,
         horario_entrada: funcionario.horario_entrada || '08:00',
         horario_saida: funcionario.horario_saida || '18:00',
@@ -775,6 +778,26 @@ export default function FuncionarioForm() {
                     rules={{ required: 'Data de admissão é obrigatória' }}
                     render={({ field }) => (
                       <Input id="data_admissao" type="date" {...field} />
+                    )}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="periodo_experiencia">Período de Experiência</Label>
+                  <Controller
+                    name="periodo_experiencia"
+                    control={control}
+                    render={({ field }) => (
+                      <Select value={field.value} onValueChange={field.onChange}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="45">45 dias</SelectItem>
+                          <SelectItem value="90">45 + 45 dias (90 dias)</SelectItem>
+                          <SelectItem value="nao_aplicavel">Não aplicável</SelectItem>
+                        </SelectContent>
+                      </Select>
                     )}
                   />
                 </div>
