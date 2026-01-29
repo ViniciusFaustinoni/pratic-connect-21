@@ -2287,14 +2287,17 @@ export type Database = {
           meta_cpl: number | null
           meta_leads: number | null
           nome: string
+          objetivo: string | null
           observacoes: string | null
           orcamento_diario: number | null
           orcamento_total: number | null
           publico_alvo: string | null
           regioes: string[] | null
           responsavel_id: string | null
+          segmentacao: string | null
           status: string | null
           tipo: string
+          tipo_anuncio: string | null
           updated_at: string | null
           utm_campaign: string | null
           utm_content: string | null
@@ -2315,14 +2318,17 @@ export type Database = {
           meta_cpl?: number | null
           meta_leads?: number | null
           nome: string
+          objetivo?: string | null
           observacoes?: string | null
           orcamento_diario?: number | null
           orcamento_total?: number | null
           publico_alvo?: string | null
           regioes?: string[] | null
           responsavel_id?: string | null
+          segmentacao?: string | null
           status?: string | null
           tipo: string
+          tipo_anuncio?: string | null
           updated_at?: string | null
           utm_campaign?: string | null
           utm_content?: string | null
@@ -2343,14 +2349,17 @@ export type Database = {
           meta_cpl?: number | null
           meta_leads?: number | null
           nome?: string
+          objetivo?: string | null
           observacoes?: string | null
           orcamento_diario?: number | null
           orcamento_total?: number | null
           publico_alvo?: string | null
           regioes?: string[] | null
           responsavel_id?: string | null
+          segmentacao?: string | null
           status?: string | null
           tipo?: string
+          tipo_anuncio?: string | null
           updated_at?: string | null
           utm_campaign?: string | null
           utm_content?: string | null
@@ -2403,6 +2412,81 @@ export type Database = {
             referencedColumns: ["vendedor_id"]
           },
         ]
+      }
+      campanhas_comunicacao: {
+        Row: {
+          abertos: number | null
+          assunto: string | null
+          clicados: number | null
+          codigo: string | null
+          concluido_em: string | null
+          conteudo: string | null
+          created_at: string | null
+          criado_por: string | null
+          data_agendamento: string | null
+          entregues: number | null
+          enviados: number | null
+          falhas: number | null
+          filtros: Json | null
+          id: string
+          iniciado_em: string | null
+          nome: string
+          segmento: string | null
+          status: string | null
+          template_id: string | null
+          tipo: string
+          total_destinatarios: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          abertos?: number | null
+          assunto?: string | null
+          clicados?: number | null
+          codigo?: string | null
+          concluido_em?: string | null
+          conteudo?: string | null
+          created_at?: string | null
+          criado_por?: string | null
+          data_agendamento?: string | null
+          entregues?: number | null
+          enviados?: number | null
+          falhas?: number | null
+          filtros?: Json | null
+          id?: string
+          iniciado_em?: string | null
+          nome: string
+          segmento?: string | null
+          status?: string | null
+          template_id?: string | null
+          tipo: string
+          total_destinatarios?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          abertos?: number | null
+          assunto?: string | null
+          clicados?: number | null
+          codigo?: string | null
+          concluido_em?: string | null
+          conteudo?: string | null
+          created_at?: string | null
+          criado_por?: string | null
+          data_agendamento?: string | null
+          entregues?: number | null
+          enviados?: number | null
+          falhas?: number | null
+          filtros?: Json | null
+          id?: string
+          iniciado_em?: string | null
+          nome?: string
+          segmento?: string | null
+          status?: string | null
+          template_id?: string | null
+          tipo?: string
+          total_destinatarios?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
       }
       campanhas_metricas: {
         Row: {
@@ -2472,6 +2556,7 @@ export type Database = {
           nome: string
           tipo: string
           updated_at: string | null
+          utm_source_padrao: string | null
           webhook_url: string | null
         }
         Insert: {
@@ -2485,6 +2570,7 @@ export type Database = {
           nome: string
           tipo: string
           updated_at?: string | null
+          utm_source_padrao?: string | null
           webhook_url?: string | null
         }
         Update: {
@@ -2498,6 +2584,7 @@ export type Database = {
           nome?: string
           tipo?: string
           updated_at?: string | null
+          utm_source_padrao?: string | null
           webhook_url?: string | null
         }
         Relationships: []
@@ -5395,6 +5482,71 @@ export type Database = {
           },
         ]
       }
+      disparos_comunicacao: {
+        Row: {
+          aberto_em: string | null
+          campanha_id: string | null
+          clicado_em: string | null
+          contato_id: string | null
+          contato_tipo: string | null
+          created_at: string | null
+          email: string | null
+          entregue_em: string | null
+          enviado_em: string | null
+          erro_codigo: string | null
+          erro_mensagem: string | null
+          id: string
+          nome: string | null
+          status: string | null
+          telefone: string | null
+          tentativas: number | null
+        }
+        Insert: {
+          aberto_em?: string | null
+          campanha_id?: string | null
+          clicado_em?: string | null
+          contato_id?: string | null
+          contato_tipo?: string | null
+          created_at?: string | null
+          email?: string | null
+          entregue_em?: string | null
+          enviado_em?: string | null
+          erro_codigo?: string | null
+          erro_mensagem?: string | null
+          id?: string
+          nome?: string | null
+          status?: string | null
+          telefone?: string | null
+          tentativas?: number | null
+        }
+        Update: {
+          aberto_em?: string | null
+          campanha_id?: string | null
+          clicado_em?: string | null
+          contato_id?: string | null
+          contato_tipo?: string | null
+          created_at?: string | null
+          email?: string | null
+          entregue_em?: string | null
+          enviado_em?: string | null
+          erro_codigo?: string | null
+          erro_mensagem?: string | null
+          id?: string
+          nome?: string | null
+          status?: string | null
+          telefone?: string | null
+          tentativas?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "disparos_comunicacao_campanha_id_fkey"
+            columns: ["campanha_id"]
+            isOneToOne: false
+            referencedRelation: "campanhas_comunicacao"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       distribuicao_config: {
         Row: {
           ativo: boolean | null
@@ -7679,6 +7831,7 @@ export type Database = {
           indicador_nome: string | null
           indicador_telefone: string | null
           lead_id: string | null
+          link_referencia: string | null
           observacoes: string | null
           programa_id: string | null
           recompensa_paga: boolean | null
@@ -7702,6 +7855,7 @@ export type Database = {
           indicador_nome?: string | null
           indicador_telefone?: string | null
           lead_id?: string | null
+          link_referencia?: string | null
           observacoes?: string | null
           programa_id?: string | null
           recompensa_paga?: boolean | null
@@ -7725,6 +7879,7 @@ export type Database = {
           indicador_nome?: string | null
           indicador_telefone?: string | null
           lead_id?: string | null
+          link_referencia?: string | null
           observacoes?: string | null
           programa_id?: string | null
           recompensa_paga?: boolean | null
@@ -12748,6 +12903,107 @@ export type Database = {
             columns: ["rateio_id"]
             isOneToOne: false
             referencedRelation: "rateios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      redes_sociais_contas: {
+        Row: {
+          access_token: string | null
+          created_at: string | null
+          id: string
+          nome_conta: string | null
+          pagina_id: string | null
+          plataforma: string
+          refresh_token: string | null
+          seguidores: number | null
+          status: string | null
+          token_expira_em: string | null
+          ultima_sincronizacao: string | null
+          updated_at: string | null
+          username: string | null
+        }
+        Insert: {
+          access_token?: string | null
+          created_at?: string | null
+          id?: string
+          nome_conta?: string | null
+          pagina_id?: string | null
+          plataforma: string
+          refresh_token?: string | null
+          seguidores?: number | null
+          status?: string | null
+          token_expira_em?: string | null
+          ultima_sincronizacao?: string | null
+          updated_at?: string | null
+          username?: string | null
+        }
+        Update: {
+          access_token?: string | null
+          created_at?: string | null
+          id?: string
+          nome_conta?: string | null
+          pagina_id?: string | null
+          plataforma?: string
+          refresh_token?: string | null
+          seguidores?: number | null
+          status?: string | null
+          token_expira_em?: string | null
+          ultima_sincronizacao?: string | null
+          updated_at?: string | null
+          username?: string | null
+        }
+        Relationships: []
+      }
+      redes_sociais_metricas: {
+        Row: {
+          alcance: number | null
+          comentarios: number | null
+          compartilhamentos: number | null
+          conta_id: string | null
+          created_at: string | null
+          curtidas: number | null
+          engajamento: number | null
+          id: string
+          impressoes: number | null
+          novos_seguidores: number | null
+          periodo: string
+          publicacoes: number | null
+        }
+        Insert: {
+          alcance?: number | null
+          comentarios?: number | null
+          compartilhamentos?: number | null
+          conta_id?: string | null
+          created_at?: string | null
+          curtidas?: number | null
+          engajamento?: number | null
+          id?: string
+          impressoes?: number | null
+          novos_seguidores?: number | null
+          periodo: string
+          publicacoes?: number | null
+        }
+        Update: {
+          alcance?: number | null
+          comentarios?: number | null
+          compartilhamentos?: number | null
+          conta_id?: string | null
+          created_at?: string | null
+          curtidas?: number | null
+          engajamento?: number | null
+          id?: string
+          impressoes?: number | null
+          novos_seguidores?: number | null
+          periodo?: string
+          publicacoes?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "redes_sociais_metricas_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "redes_sociais_contas"
             referencedColumns: ["id"]
           },
         ]
