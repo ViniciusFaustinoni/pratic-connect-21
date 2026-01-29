@@ -26,6 +26,8 @@ import {
   Package,
   XCircle,
   Navigation,
+  Lock,
+  Unlock,
 } from 'lucide-react';
 import {
   useRastreador,
@@ -50,6 +52,9 @@ import { MapaRastreador } from './MapaRastreador';
 import { MapaHistorico } from './MapaHistorico';
 import { BotaoRedefinirSenha } from './BotaoRedefinirSenha';
 import { HistoricoMovimentacoesRastreador } from './HistoricoMovimentacoesRastreador';
+import { ComandoRastreadorDialog } from './ComandoRastreadorDialog';
+import { HistoricoComandos } from './HistoricoComandos';
+import { useEnviarComando } from '@/hooks/useComandosRastreador';
 
 interface RastreadorDetailDrawerProps {
   rastreadorId: string | null;
@@ -67,6 +72,12 @@ export function RastreadorDetailDrawer({
   const { data: rastreador, isLoading } = useRastreador(rastreadorId || undefined);
   const updateStatus = useUpdateRastreadorStatus();
   const deleteRastreador = useDeleteRastreador();
+  const enviarComando = useEnviarComando();
+
+  const [comandoDialog, setComandoDialog] = useState<{
+    open: boolean;
+    tipo: 'bloquear' | 'desbloquear';
+  }>({ open: false, tipo: 'bloquear' });
 
   const handleStatusChange = async (status: StatusRastreador) => {
     if (!rastreadorId) return;
@@ -92,6 +103,17 @@ export function RastreadorDetailDrawer({
       `https://www.google.com/maps?q=${rastreador.ultima_posicao_lat},${rastreador.ultima_posicao_lng}`,
       '_blank'
     );
+  };
+
+  const handleComandoConfirm = async (motivo: string) => {
+    if (!rastreadorId) return;
+    await enviarComando.mutateAsync({
+      rastreador_id: rastreadorId,
+      tipo_comando: comandoDialog.tipo,
+      motivo,
+      origem: 'monitoramento',
+    });
+    setComandoDialog({ open: false, tipo: 'bloquear' });
   };
 
   const isOnline = rastreador ? isRastreadorOnline(rastreador.ultima_comunicacao) : false;
@@ -384,6 +406,25 @@ export function RastreadorDetailDrawer({
                             nomeAssociado={rastreador.veiculos.associados.nome}
                           />
                         )}
+                        {/* Botões de Bloqueio/Desbloqueio */}
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => setComandoDialog({ open: true, tipo: 'bloquear' })}
+                          disabled={enviarComando.isPending}
+                        >
+                          <Lock className="mr-2 h-4 w-4" />
+                          Bloquear
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setComandoDialog({ open: true, tipo: 'desbloquear' })}
+                          disabled={enviarComando.isPending}
+                        >
+                          <Unlock className="mr-2 h-4 w-4" />
+                          Desbloquear
+                        </Button>
                       </>
                     )}
                     {rastreador.status !== 'baixado' && (
@@ -426,7 +467,34 @@ export function RastreadorDetailDrawer({
                   <HistoricoMovimentacoesRastreador rastreadorId={rastreadorId} />
                 )}
               </TabsContent>
+
+              {/* Aba de Comandos (opcional - para histórico) */}
             </Tabs>
+
+            {/* Dialog de Comando */}
+            {rastreador && (
+              <ComandoRastreadorDialog
+                open={comandoDialog.open}
+                onOpenChange={(open) => setComandoDialog(prev => ({ ...prev, open }))}
+                tipoComando={comandoDialog.tipo}
+                rastreador={{
+                  id: rastreador.id,
+                  codigo: rastreador.codigo,
+                  plataforma: rastreador.plataforma,
+                }}
+                veiculo={rastreador.veiculos ? {
+                  placa: rastreador.veiculos.placa,
+                  marca: rastreador.veiculos.marca,
+                  modelo: rastreador.veiculos.modelo,
+                } : null}
+                associado={rastreador.veiculos?.associados ? {
+                  nome: rastreador.veiculos.associados.nome,
+                } : null}
+                onConfirm={handleComandoConfirm}
+                isLoading={enviarComando.isPending}
+                origem="monitoramento"
+              />
+            )}
           </>
         )}
       </SheetContent>

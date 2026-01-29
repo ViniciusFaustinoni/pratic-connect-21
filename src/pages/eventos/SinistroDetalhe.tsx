@@ -10,7 +10,7 @@ import {
   HelpCircle, FileText, Clock, MoreHorizontal, Loader2,
   ExternalLink, Download, CheckCircle, XCircle, AlertCircle,
   User, FileCheck, FilePlus, Scale, Plus, Link as LinkIcon, Trash2,
-  Bot, Wrench, Radio
+  Bot, Wrench, Radio, Lock
 } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useDeleteSinistro } from '@/hooks/useSinistros';

@@ -12840,6 +12840,161 @@ export type Database = {
           },
         ]
       }
+      rastreadores_comandos: {
+        Row: {
+          api_request: Json | null
+          api_response: Json | null
+          autorizado_em: string | null
+          autorizado_por: string | null
+          autorizado_por_nome: string | null
+          comando_enviado: string | null
+          confirmado_em: string | null
+          created_at: string | null
+          erro_mensagem: string | null
+          id: string
+          metodo_envio: string | null
+          motivo: string
+          observacoes: string | null
+          origem: string
+          origem_id: string | null
+          plataforma: string
+          rastreador_id: string | null
+          solicitado_em: string | null
+          solicitado_por: string | null
+          solicitado_por_nome: string | null
+          status: string
+          telefone_destino: string | null
+          tipo_comando: string
+          updated_at: string | null
+          veiculo_id: string | null
+        }
+        Insert: {
+          api_request?: Json | null
+          api_response?: Json | null
+          autorizado_em?: string | null
+          autorizado_por?: string | null
+          autorizado_por_nome?: string | null
+          comando_enviado?: string | null
+          confirmado_em?: string | null
+          created_at?: string | null
+          erro_mensagem?: string | null
+          id?: string
+          metodo_envio?: string | null
+          motivo: string
+          observacoes?: string | null
+          origem?: string
+          origem_id?: string | null
+          plataforma: string
+          rastreador_id?: string | null
+          solicitado_em?: string | null
+          solicitado_por?: string | null
+          solicitado_por_nome?: string | null
+          status?: string
+          telefone_destino?: string | null
+          tipo_comando: string
+          updated_at?: string | null
+          veiculo_id?: string | null
+        }
+        Update: {
+          api_request?: Json | null
+          api_response?: Json | null
+          autorizado_em?: string | null
+          autorizado_por?: string | null
+          autorizado_por_nome?: string | null
+          comando_enviado?: string | null
+          confirmado_em?: string | null
+          created_at?: string | null
+          erro_mensagem?: string | null
+          id?: string
+          metodo_envio?: string | null
+          motivo?: string
+          observacoes?: string | null
+          origem?: string
+          origem_id?: string | null
+          plataforma?: string
+          rastreador_id?: string | null
+          solicitado_em?: string | null
+          solicitado_por?: string | null
+          solicitado_por_nome?: string | null
+          status?: string
+          telefone_destino?: string | null
+          tipo_comando?: string
+          updated_at?: string | null
+          veiculo_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rastreadores_comandos_autorizado_por_fkey"
+            columns: ["autorizado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rastreadores_comandos_autorizado_por_fkey"
+            columns: ["autorizado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "rastreadores_comandos_rastreador_id_fkey"
+            columns: ["rastreador_id"]
+            isOneToOne: false
+            referencedRelation: "rastreadores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rastreadores_comandos_rastreador_id_fkey"
+            columns: ["rastreador_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["rastreador_id"]
+          },
+          {
+            foreignKeyName: "rastreadores_comandos_solicitado_por_fkey"
+            columns: ["solicitado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rastreadores_comandos_solicitado_por_fkey"
+            columns: ["solicitado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "rastreadores_comandos_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "veiculos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rastreadores_comandos_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "rastreadores_comandos_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "rastreadores_comandos_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["veiculo_id"]
+          },
+        ]
+      }
       rastreadores_config_plataformas: {
         Row: {
           ambiente_atual: string | null
