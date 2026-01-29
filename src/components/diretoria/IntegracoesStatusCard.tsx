@@ -11,21 +11,26 @@ import {
   Check, 
   X, 
   AlertTriangle,
-  RefreshCw
+  RefreshCw,
+  Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
+import { useWhatsAppStatus } from '@/hooks/useWhatsAppStatus';
 
 interface IntegracaoStatus {
   nome: string;
   slug: string;
   icone: React.ReactNode;
-  status: 'conectado' | 'desconectado' | 'configurar';
+  status: 'conectado' | 'desconectado' | 'configurar' | 'conectando';
   descricao: string;
 }
 
 export function IntegracoesStatusCard() {
   const navigate = useNavigate();
+
+  // USAR HOOK DE STATUS REAL DO WHATSAPP
+  const { connected: whatsappConnected, status: whatsappStatus, isLoading: loadingWhatsApp } = useWhatsAppStatus();
 
   // Verificar ASAAS
   const { data: asaasConfig, isLoading: loadingAsaas } = useQuery({
@@ -40,16 +45,16 @@ export function IntegracoesStatusCard() {
     },
   });
 
-  // Verificar WhatsApp (via configurações)
-  const { data: evolutionConfig, isLoading: loadingEvolution } = useQuery({
-    queryKey: ['evolution-config-status'],
+  // Verificar se WhatsApp está configurado (tem instância)
+  const { data: whatsappConfigured, isLoading: loadingWhatsAppConfig } = useQuery({
+    queryKey: ['whatsapp-configured-status'],
     queryFn: async () => {
       const { data } = await supabase
-        .from('configuracoes')
-        .select('valor')
-        .eq('chave', 'evolution_api_key')
+        .from('whatsapp_instancias')
+        .select('id')
+        .eq('principal', true)
         .maybeSingle();
-      return data?.valor ? true : false;
+      return !!data;
     },
   });
 
@@ -66,7 +71,21 @@ export function IntegracoesStatusCard() {
     },
   });
 
-  const isLoading = loadingAsaas || loadingEvolution || loadingSascar;
+  const isLoading = loadingAsaas || loadingWhatsApp || loadingWhatsAppConfig || loadingSascar;
+
+  // Determinar status do WhatsApp baseado no status real
+  const getWhatsAppStatus = (): IntegracaoStatus['status'] => {
+    if (!whatsappConfigured) return 'configurar';
+    if (whatsappStatus === 'connecting') return 'conectando';
+    return whatsappConnected ? 'conectado' : 'desconectado';
+  };
+
+  const getWhatsAppDescricao = (): string => {
+    if (!whatsappConfigured) return 'Comunicação via WhatsApp';
+    if (whatsappStatus === 'connecting') return 'Conectando...';
+    if (!whatsappConnected) return 'Desconectado - reconecte';
+    return 'Comunicação via WhatsApp';
+  };
 
   const integracoes: IntegracaoStatus[] = [
     {
@@ -80,8 +99,8 @@ export function IntegracoesStatusCard() {
       nome: 'WhatsApp (Evolution API)',
       slug: 'whatsapp',
       icone: <MessageCircle className="h-5 w-5" />,
-      status: evolutionConfig ? 'conectado' : 'configurar',
-      descricao: 'Comunicação via WhatsApp',
+      status: getWhatsAppStatus(),
+      descricao: getWhatsAppDescricao(),
     },
     {
       nome: 'Sascar',
@@ -96,7 +115,7 @@ export function IntegracoesStatusCard() {
     switch (status) {
       case 'conectado':
         return (
-          <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+          <Badge className="bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20">
             <Check className="h-3 w-3 mr-1" />
             Conectado
           </Badge>
@@ -106,6 +125,13 @@ export function IntegracoesStatusCard() {
           <Badge variant="destructive">
             <X className="h-3 w-3 mr-1" />
             Desconectado
+          </Badge>
+        );
+      case 'conectando':
+        return (
+          <Badge variant="secondary" className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20">
+            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+            Conectando
           </Badge>
         );
       case 'configurar':

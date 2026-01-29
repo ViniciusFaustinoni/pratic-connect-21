@@ -17,6 +17,7 @@ interface SendMediaPayload {
   instancia_id?: string;
   referencia_tipo?: string;
   referencia_id?: string;
+  verificar_conexao_real?: boolean; // Opcional: verificar status real na API
 }
 
 function formatarTelefone(telefone: string): string {
@@ -84,13 +85,53 @@ serve(async (req) => {
       throw new Error('Nenhuma instância WhatsApp ativa encontrada');
     }
 
+    // Verificação LOCAL (rápida) - status armazenado no banco
     if (instancia.status !== 'open') {
-      throw new Error('WhatsApp não está conectado');
+      console.log(`[whatsapp-send-media] WhatsApp desconectado. Status: ${instancia.status}`);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'WhatsApp não está conectado. Acesse as configurações para reconectar.',
+          status: instancia.status
+        }),
+        { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     const apiKey = Deno.env.get('EVOLUTION_API_KEY');
     if (!apiKey) {
       throw new Error('EVOLUTION_API_KEY não configurada');
+    }
+
+    // Verificação REAL na API (opcional para mensagens críticas)
+    if (payload.verificar_conexao_real) {
+      console.log('[whatsapp-send-media] Verificando conexão real na Evolution API...');
+      const statusResponse = await fetch(
+        `${instancia.api_url}/instance/connectionState/${instancia.instance_name}`,
+        { method: 'GET', headers: { 'apikey': apiKey } }
+      );
+      
+      if (statusResponse.ok) {
+        const statusData = await statusResponse.json();
+        const realStatus = statusData.instance?.state;
+        
+        if (realStatus !== 'open') {
+          // Atualizar banco com status real
+          await supabase
+            .from('whatsapp_instancias')
+            .update({ status: 'disconnected', updated_at: new Date().toISOString() })
+            .eq('id', instancia.id);
+          
+          return new Response(
+            JSON.stringify({ 
+              success: false, 
+              error: 'WhatsApp desconectou. Reconecte para continuar enviando mensagens.',
+              status: 'disconnected'
+            }),
+            { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      }
     }
 
     // Registrar no banco

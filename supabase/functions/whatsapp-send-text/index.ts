@@ -26,8 +26,8 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Buscar instância
-    let query = supabase.from("whatsapp_instancias").select("id, api_url, instance_name");
+    // Buscar instância - INCLUIR status para verificação
+    let query = supabase.from("whatsapp_instancias").select("id, api_url, instance_name, status");
     
     if (instancia_id) {
       query = query.eq("id", instancia_id);
@@ -41,6 +41,19 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ success: false, error: "Instância não encontrada" }),
         { status: 404, headers: corsHeaders }
+      );
+    }
+
+    // VERIFICAR SE WHATSAPP ESTÁ CONECTADO ANTES DE ENVIAR
+    if (!instancia.status || instancia.status !== 'open') {
+      console.log(`[whatsapp-send-text] WhatsApp desconectado. Status: ${instancia.status}`);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: "WhatsApp não está conectado. Acesse as configurações para reconectar.",
+          status: instancia.status
+        }),
+        { status: 503, headers: corsHeaders }
       );
     }
 
