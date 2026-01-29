@@ -839,12 +839,36 @@ serve(async (req) => {
 
     // Extrair telefone e texto
     const remoteJid = data.key.remoteJid || "";
+    
+    // Log detalhado para debug
+    console.log("[whatsapp-webhook] Dados recebidos:", {
+      remoteJid: data.key.remoteJid,
+      sender: payload.sender,
+      fromMe: data.key.fromMe
+    });
+    
     if (remoteJid.includes("@g.us")) {
       // Ignorar grupos
       return new Response(JSON.stringify({ ok: true, ignored: "grupo" }), { headers: corsHeaders });
     }
 
-    const telefone = remoteJid.replace("@s.whatsapp.net", "");
+    // Extrair telefone - suporte para formato LID vs tradicional
+    let telefone: string;
+    if (remoteJid.includes("@lid")) {
+      // LID: Usar campo "sender" que contém o telefone real
+      const sender = payload.sender || "";
+      telefone = sender.replace("@s.whatsapp.net", "").replace(/\D/g, "");
+      
+      if (!telefone) {
+        console.error("[whatsapp-webhook] LID sem sender válido:", { remoteJid, sender });
+        return new Response(JSON.stringify({ ok: true, ignored: "lid_sem_sender" }), { headers: corsHeaders });
+      }
+      
+      console.log(`[whatsapp-webhook] LID detectado, telefone extraído de sender: ${telefone}`);
+    } else {
+      telefone = remoteJid.replace("@s.whatsapp.net", "").replace(/\D/g, "");
+    }
+    
     const mensagemTexto = data.message?.conversation || data.message?.extendedTextMessage?.text || "";
 
     if (!mensagemTexto.trim()) {
