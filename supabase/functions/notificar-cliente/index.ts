@@ -50,7 +50,27 @@ const TEMPLATES: Record<string, {
   },
   documentos_solicitados: {
     titulo: '📄 Documentos Pendentes',
-    mensagem: 'Olá {nome}! Precisamos de alguns documentos para dar continuidade ao seu cadastro: {documentos}. Acesse o link de acompanhamento para enviar.',
+    mensagem: 'Olá {nome}! Precisamos de alguns documentos para dar continuidade ao seu cadastro: {documentos}. Acesse o link de acompanhamento para enviar. Você tem 7 dias para enviar.',
+    emailTemplate: 'generico',
+  },
+  documento_aprovado: {
+    titulo: '✅ Documento Aprovado',
+    mensagem: 'Olá {nome}! O documento "{tipo_documento}" foi aprovado com sucesso. {mensagem_adicional}',
+    emailTemplate: 'generico',
+  },
+  documento_reprovado: {
+    titulo: '⚠️ Documento Precisa de Ajuste',
+    mensagem: 'Olá {nome}! O documento "{tipo_documento}" precisa ser reenviado. Motivo: {motivo}. Acesse o link de acompanhamento para enviar novamente.',
+    emailTemplate: 'generico',
+  },
+  cadastro_aprovado: {
+    titulo: '🎉 Cadastro Aprovado!',
+    mensagem: 'Parabéns {nome}! Seu cadastro foi aprovado. Em breve entraremos em contato para agendar a instalação do rastreador e ativar sua proteção. Bem-vindo à PRATIC!',
+    emailTemplate: 'generico',
+  },
+  lembrete_documentos: {
+    titulo: '📋 Lembrete: Documentos Pendentes',
+    mensagem: 'Olá {nome}! Lembramos que ainda aguardamos o envio dos documentos: {documentos}. Acesse o link de acompanhamento para enviar. Faltam {dias_restantes} dias para o prazo.',
     emailTemplate: 'generico',
   },
   status_atualizado: {

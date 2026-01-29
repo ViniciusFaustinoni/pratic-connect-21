@@ -8,6 +8,23 @@ import type {
   StatusDocumento,
 } from '@/types/cadastro';
 
+// Formatar tipo de documento para exibição
+function formatarTipoDocumento(tipo: string): string {
+  const tipos: Record<string, string> = {
+    cnh: 'CNH',
+    cpf: 'CPF',
+    rg: 'RG',
+    crlv: 'CRLV',
+    comprovante_residencia: 'Comprovante de Residência',
+    contrato_assinado: 'Contrato Assinado',
+    foto_veiculo: 'Foto do Veículo',
+    foto_hodometro: 'Foto do Hodômetro',
+    nota_fiscal: 'Nota Fiscal',
+    outro: 'Outro',
+  };
+  return tipos[tipo] || tipo;
+}
+
 // ============================================
 // TYPES
 // ============================================
@@ -268,17 +285,42 @@ export function useDocumentoActions() {
       
       if (!user?.id) throw new Error('Usuário não autenticado');
 
+      // Buscar dados do documento antes de atualizar
+      const { data: documentoData } = await supabase
+        .from('documentos')
+        .select('tipo, associado_id')
+        .eq('id', id)
+        .single();
+
       const { error } = await supabase
         .from('documentos')
         .update({
           status: 'aprovado',
-          analista_id: user.id, // Usar user.id diretamente (FK para auth.users)
+          analista_id: user.id,
           data_analise: new Date().toISOString(),
           motivo_reprovacao: null,
         })
         .eq('id', id);
 
       if (error) throw error;
+
+      // Enviar notificação WhatsApp
+      if (documentoData?.associado_id) {
+        try {
+          await supabase.functions.invoke('notificar-cliente', {
+            body: {
+              tipo: 'documento_aprovado',
+              associado_id: documentoData.associado_id,
+              dados: { 
+                tipo_documento: formatarTipoDocumento(documentoData.tipo),
+                mensagem_adicional: 'Continue acompanhando o status do seu cadastro.',
+              },
+            },
+          });
+        } catch (e) {
+          console.error('Erro ao enviar notificação:', e);
+        }
+      }
     },
     onSuccess: () => {
       invalidateAll();
@@ -300,17 +342,42 @@ export function useDocumentoActions() {
         ? `${motivo}: ${observacao}` 
         : motivo;
 
+      // Buscar dados do documento antes de atualizar
+      const { data: documentoData } = await supabase
+        .from('documentos')
+        .select('tipo, associado_id')
+        .eq('id', id)
+        .single();
+
       const { error } = await supabase
         .from('documentos')
         .update({
           status: 'reprovado',
-          analista_id: user.id, // Usar user.id diretamente (FK para auth.users)
+          analista_id: user.id,
           data_analise: new Date().toISOString(),
           motivo_reprovacao: motivoCompleto,
         })
         .eq('id', id);
 
       if (error) throw error;
+
+      // Enviar notificação WhatsApp com motivo
+      if (documentoData?.associado_id) {
+        try {
+          await supabase.functions.invoke('notificar-cliente', {
+            body: {
+              tipo: 'documento_reprovado',
+              associado_id: documentoData.associado_id,
+              dados: { 
+                tipo_documento: formatarTipoDocumento(documentoData.tipo),
+                motivo: motivoCompleto,
+              },
+            },
+          });
+        } catch (e) {
+          console.error('Erro ao enviar notificação:', e);
+        }
+      }
     },
     onSuccess: () => {
       invalidateAll();

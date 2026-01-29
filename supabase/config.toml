@@ -308,3 +308,6 @@ verify_jwt = false
 
 [functions.whatsapp-send-contact]
 verify_jwt = false
+
+[functions.cron-lembrete-documentos]
+verify_jwt = false
