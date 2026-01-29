@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Search, Building2, MapPin, Phone } from 'lucide-react';
+import { Plus, Search, Building2, MapPin, Phone, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -8,15 +8,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useOficinas } from '@/hooks/useOficinas';
 import { OficinaFormDialog } from '@/components/oficinas/OficinaFormDialog';
 import { OficinaDetailDrawer } from '@/components/oficinas/OficinaDetailDrawer';
+import { ImportarOficinasDialog } from '@/components/oficinas/ImportarOficinasDialog';
 import { STATUS_OFICINA_LABELS, STATUS_OFICINA_COLORS, type Oficina, type StatusOficina } from '@/types/database';
 
 export default function Oficinas() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusOficina | 'todos'>('todos');
   const [formOpen, setFormOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [selectedOficina, setSelectedOficina] = useState<Oficina | null>(null);
 
-  const { data: oficinas, isLoading } = useOficinas({
+  const { data: oficinas, isLoading, refetch } = useOficinas({
     search: search || undefined,
     status: statusFilter === 'todos' ? undefined : statusFilter,
   });
@@ -28,10 +30,16 @@ export default function Oficinas() {
           <h1 className="text-2xl font-bold tracking-tight">Oficinas Credenciadas</h1>
           <p className="text-muted-foreground">Gerencie as oficinas parceiras</p>
         </div>
-        <Button onClick={() => setFormOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Nova Oficina
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setImportOpen(true)}>
+            <Upload className="mr-2 h-4 w-4" />
+            Importar
+          </Button>
+          <Button onClick={() => setFormOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Nova Oficina
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-col gap-4 sm:flex-row">
@@ -128,6 +136,11 @@ export default function Oficinas() {
         oficina={selectedOficina}
         open={!!selectedOficina}
         onOpenChange={(open) => !open && setSelectedOficina(null)}
+      />
+      <ImportarOficinasDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        onSuccess={() => refetch()}
       />
     </div>
   );
