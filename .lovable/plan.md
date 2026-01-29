@@ -1,445 +1,428 @@
 
-# Revisao Completa - Fluxo de Atualizacao de Dados do Cliente na Rede Veiculos
+# Revisão Completa - Fluxo de Atualização de Dados do Veículo na Rede Veículos
 
 ## Resumo Executivo
 
 | Item | Status | Detalhes |
 |------|--------|----------|
-| Endpoint POST /atualizarDadosCliente | **NAO EXISTE** | Nao ha edge function para atualizacao de dados |
-| Atualizacao quando associado edita no App | **NAO IMPLEMENTADO** | Apenas atualiza banco local |
-| Atualizacao quando atendimento corrige dados | **NAO IMPLEMENTADO** | Apenas atualiza banco local |
-| Atualizacao quando associado muda endereco | **NAO IMPLEMENTADO** | Apenas atualiza banco local |
-| Atualizacao de permissoes (alertas, acesso web) | **NAO IMPLEMENTADO** | Permissoes fixas na vinculacao |
-| Envio apenas de campos alterados | **NAO** | Nenhuma integracao ativa |
-| CPF/CNPJ como identificador imutavel | **NAO** | Nenhuma integracao ativa |
-| Sincronizacao imediata com plataforma | **NAO** | Dados ficam dessincronizados |
+| Endpoint POST /atualizarDadosVeiculo | **NAO EXISTE** | Não há edge function para atualização de dados do veículo |
+| Atualização quando associado edita dados do veículo | **NAO IMPLEMENTADO** | Não existe tela de edição de veículo no sistema |
+| Atualização quando há correção de informações FIPE | **NAO IMPLEMENTADO** | Apenas atualiza banco local |
+| Atualização quando veículo é transferido para outro associado | **NAO IMPLEMENTADO** | Funcionalidade não existe |
+| Atualização quando há correção de chassi/renavam | **NAO IMPLEMENTADO** | Apenas atualiza banco local |
+| Dados corretos enviados para veículo específico | **NAO** | Nenhuma integração ativa |
+| Identificador do veículo (placa/chassi) correto | **NAO** | Nenhuma integração ativa |
+| Atualizações de valor FIPE refletem no sistema | **PARCIAL** | Atualiza apenas localmente |
+| Histórico do veículo mantido após atualização | **SIM** | Via audit log local |
 
 ---
 
-## Analise Detalhada
+## Análise Detalhada
 
-### 1. Estado Atual - Nenhuma Integracao de Atualizacao
+### 1. Estado Atual - Nenhuma Integração de Atualização de Veículo
 
-A plataforma Rede Veiculos possui apenas dois endpoints implementados para gestao de clientes:
+A plataforma Rede Veículos possui os seguintes endpoints implementados:
 
 | Endpoint | Edge Function | Status |
 |----------|---------------|--------|
 | POST /vincularClienteVeiculo | `rede-veiculos-vincular-cliente` | Implementado |
 | POST /desvincularClienteVeiculo | `rede-veiculos-desvincular-cliente` | Implementado |
-| POST /atualizarDadosCliente | **NAO EXISTE** | **Gap critico** |
+| POST /atualizarDadosCliente | `rede-veiculos-atualizar-cliente` | Implementado |
+| **POST /atualizarDadosVeiculo** | **NAO EXISTE** | **Gap crítico** |
 
-### 2. Cenarios Onde Deveria Chamar /atualizarDadosCliente
+### 2. Comparação com Softruck
 
-#### 2.1 Quando o Associado Atualiza Dados no App
-
-**Arquivo:** `src/pages/app/AppPerfil.tsx` (linhas 686-743)
-
-O modal `ModalEditarDadosPessoais` permite ao associado alterar:
-- Nome
-- Email
-- Telefone
-- WhatsApp
-- Data de Nascimento
+A Softruck possui operação de atualização de veículo na edge function `softruck-api`:
 
 ```typescript
-// AppPerfil.tsx - linha 727-735
-const handleSalvar = async () => {
-  await onSave({ 
-    nome, 
-    email, 
-    telefone, 
-    whatsapp,
-    data_nascimento: dataNascimento ? format(dataNascimento, 'yyyy-MM-dd') : null
-  });
-  // APENAS atualiza banco local via useUpdateAssociado
-  // NAO notifica plataforma Rede Veiculos
-};
-```
+// softruck-api/index.ts - operação: atualizar-veiculo
+case 'atualizar-veiculo': {
+  const { veiculoId, placa, chassi, marca, modelo, ano, cor, tipo } = data;
+  
+  // Monta payload apenas com campos informados
+  if (placa) attrs.plate = placa;
+  if (chassi) attrs.vin = chassi;
+  if (marca) attrs.brand = marca;
+  if (modelo) attrs.model = modelo;
+  if (ano) attrs.year = ano;
+  if (cor) attrs.color = cor;
+  if (tipo) attrs.type = tipo;
 
-**Hook utilizado:** `src/hooks/useMyData.ts` (linhas 492-510)
-
-```typescript
-export function useUpdateAssociado() {
-  return useMutation({
-    mutationFn: async (data: Partial<Associado>) => {
-      // APENAS atualiza Supabase local
-      await supabase.from('associados').update(data).eq('user_id', user.id);
-      // NAO chama API Rede Veiculos
-    },
-  });
+  result = await softruckRequest('PATCH', `/v2/vehicles/${veiculoId}`, token, updateData);
 }
 ```
 
-**Gap:** Associado pode atualizar telefone no app, mas na Rede Veiculos permanece o telefone antigo.
+**Rede Veículos: Nenhum equivalente implementado.**
 
-#### 2.2 Quando o Atendimento Corrige Dados
+### 3. Cenários Onde Deveria Chamar /atualizarDadosVeiculo
 
-**Arquivo:** `src/components/associados/AssociadoEditDialog.tsx` (linhas 154-191)
+#### 3.1 Quando o Associado Atualiza Dados do Veículo
 
-O atendente pode editar todos os campos do associado pelo painel administrativo:
+**Estado atual:** Não existe tela de edição de veículo no app do associado.
 
-```typescript
-const handleSubmit = async (data: FormData) => {
-  await updateAssociado.mutateAsync({
-    id: associado.id,
-    ...data,  // Todos os campos
-  });
-  // APENAS atualiza banco local
-  // NAO sincroniza com Rede Veiculos
-};
+O arquivo `src/pages/app/AppPerfil.tsx` exibe os veículos do associado, mas **sem opção de edição**.
+
+#### 3.2 Quando há Edição pelo Painel Administrativo
+
+**Arquivo:** `src/pages/cadastro/AssociadoDetalhe.tsx` (linha 838-840)
+
+```tsx
+<Button size="sm" variant="outline">
+  <Edit className="mr-2 h-4 w-4" /> Editar
+</Button>
 ```
 
-**Hook utilizado:** `src/hooks/useAssociados.ts` (linhas 712-732)
+**Gap crítico:** O botão existe mas **não tem funcionalidade implementada** - é apenas visual.
+
+#### 3.3 Quando há Correção de Informações FIPE
+
+**Arquivo:** `src/components/contratos/ContratoWizard.tsx` (linhas 551-563)
 
 ```typescript
-export function useUpdateAssociado() {
+veiculo = await updateVeiculo.mutateAsync({
+  id: veiculo.id,
+  marca: data.marca,
+  modelo: data.modelo,
+  cor: data.cor,
+  chassi: data.chassi,
+  renavam: data.renavam,
+  valor_fipe: data.valor_fipe,  // Atualiza FIPE localmente
+});
+```
+
+**Gap:** Apenas atualiza banco local - Rede Veículos continua com dados antigos.
+
+#### 3.4 Quando o Veículo é Transferido para Outro Associado
+
+**Status:** Funcionalidade **NAO EXISTE** no sistema.
+
+Não há processo para:
+- Transferir veículo entre associados da mesma família
+- Atualizar proprietário na plataforma
+- Manter histórico de transferências
+
+#### 3.5 Quando há Correção de Chassi/Renavam
+
+**Hook atual:** `src/hooks/useVeiculos.ts` (linhas 101-126)
+
+```typescript
+export function useUpdateVeiculo() {
   return useMutation({
     mutationFn: async ({ id, ...updates }) => {
-      await supabase.from('associados').update(updates).eq('id', id);
-      // NAO chama API externa
+      const { data, error } = await supabase
+        .from('veiculos')
+        .update(updates)
+        .eq('id', id);
+      // APENAS atualiza banco local
+      // NAO notifica plataforma Rede Veículos
     },
   });
 }
 ```
-
-#### 2.3 Quando o Associado Muda de Endereco
-
-**Arquivo:** `src/pages/app/AppPerfil.tsx` (possui modal de endereco)
-
-O associado pode atualizar endereco pelo app, mas a alteracao nao e propagada para a plataforma Rede Veiculos.
-
-#### 2.4 Quando Ha Alteracao nas Permissoes
-
-**Estado atual das permissoes:**
-
-Na vinculacao (`rede-veiculos-vincular-cliente`), as permissoes sao enviadas **hardcoded**:
-
-```typescript
-// rede-veiculos-vincular-cliente/index.ts - linhas 273-279
-permissoes: {
-  acessoWeb: true,        // Fixo
-  pushNotifications: true, // Fixo
-  alertaVelocidade: true,  // Fixo
-  alertaCercaVirtual: true,// Fixo
-  alertaIgnicao: true,     // Fixo
-},
-```
-
-**Nao existe:**
-- Tela para o associado configurar preferencias de alertas
-- Tela para o atendente alterar permissoes
-- Endpoint para atualizar permissoes na Rede Veiculos
 
 ---
 
-## Campos de Permissoes no Banco Local
+## Campos do Veículo na Tabela Local
 
-A tabela `veiculos` possui campos para alertas que **NAO estao sendo usados**:
-
-| Campo | Tipo | Uso Atual |
-|-------|------|-----------|
-| `alerta_velocidade_ativo` | boolean | Nao utilizado na integracao |
-| `alerta_cerca_ativo` | boolean | Nao utilizado na integracao |
-| `alerta_ignicao_ativo` | boolean | Nao utilizado na integracao |
-| `rede_veiculos_cliente_id` | varchar | ID do cliente na plataforma |
-| `rede_veiculos_veiculo_id` | varchar | ID do veiculo na plataforma |
+```sql
+-- Campos principais da tabela veiculos
+id, associado_id, placa, chassi, renavam, marca, modelo,
+ano_fabricacao, ano_modelo, cor, combustivel, valor_fipe,
+codigo_fipe, ativo, status,
+rede_veiculos_cliente_id,  -- ID do cliente na plataforma
+rede_veiculos_veiculo_id   -- ID do veículo na plataforma
+```
 
 ---
 
 ## Impactos dos Gaps
 
-### Impacto 1: Dados Dessincronizados
+### Impacto 1: Dados de Veículo Dessincronizados
 
-Quando um associado atualiza o telefone no app:
-- Banco local: telefone atualizado
-- Rede Veiculos: telefone antigo
-- Consequencia: Central de monitoramento tem contato errado
+Quando a cor do veículo é corrigida no SGA:
+- Banco local: cor atualizada
+- Rede Veículos: cor antiga
+- Consequência: Relatórios e alertas com informação errada
 
-### Impacto 2: Email de Recuperacao Incorreto
+### Impacto 2: Valor FIPE Desatualizado
 
-Se o associado mudar o email no sistema:
-- Associado nao consegue acessar portal Rede Veiculos
-- Notificacoes da plataforma vao para email errado
+Quando o valor FIPE é atualizado (consulta mais recente):
+- Sistema local pode ter valor correto
+- Plataforma Rede Veículos tem valor da vinculação
+- Consequência: Cobertura pode estar subvalorizada/supervalorizada
 
-### Impacto 3: Endereco para Atendimento Errado
+### Impacto 3: Placa Remarcada Não Atualizada
 
-Quando o associado muda de endereco:
-- Guincho/assistencia podem ir para endereco antigo
-- Analise de cercas virtuais fica incorreta
+Quando veículo tem placa remarcada (transferência entre estados):
+- Novo formato de placa não sincronizado
+- Alertas podem não identificar veículo corretamente
 
-### Impacto 4: Permissoes Nao Configuráveis
+### Impacto 4: Chassi/Renavam com Erro
 
-Associado nao pode:
-- Desativar alertas indesejados
-- Configurar limite de velocidade personalizado
-- Gerenciar notificacoes push
+Erros de digitação no chassi ou renavam:
+- Podem causar problemas em acionamentos de roubo/furto
+- Boletins de ocorrência com dados incorretos
 
 ---
 
-## Plano de Implementacao
+## Plano de Implementação
 
-### Fase 1: Criar Edge Function rede-veiculos-atualizar-cliente
+### Fase 1: Criar Edge Function rede-veiculos-atualizar-veiculo
 
-**Novo arquivo:** `supabase/functions/rede-veiculos-atualizar-cliente/index.ts`
+**Novo arquivo:** `supabase/functions/rede-veiculos-atualizar-veiculo/index.ts`
 
 ```typescript
 interface RequestBody {
-  associadoId: string;
+  veiculoId: string;
   camposAlterados: {
-    nome?: string;
-    email?: string;
-    celular?: string;
-    endereco?: {
-      cep?: string;
-      logradouro?: string;
-      numero?: string;
-      bairro?: string;
-      cidade?: string;
-      uf?: string;
-    };
-    permissoes?: {
-      acessoWeb?: boolean;
-      pushNotifications?: boolean;
-      alertaVelocidade?: boolean;
-      alertaCercaVirtual?: boolean;
-      alertaIgnicao?: boolean;
-    };
+    placa?: string;        // Apenas em caso de remarcação
+    marca?: string;
+    modelo?: string;
+    ano?: number;
+    cor?: string;
+    chassi?: string;       // Correção de erro
+    renavam?: string;      // Correção de erro
+    valorFipe?: number;    // Atualização de tabela
+    codigoFipe?: string;
   };
 }
 
 // Fluxo:
-// 1. Buscar associado e veiculos com rastreador Rede Veiculos
-// 2. Validar que ha vinculo ativo (rede_veiculos_cliente_id)
-// 3. Montar payload apenas com campos alterados
-// 4. Usar CPF/CNPJ como identificador (nao pode ser alterado)
-// 5. Chamar POST /atualizarDadosCliente na API Rede Veiculos
-// 6. Registrar log de atualizacao
+// 1. Buscar veículo local com rede_veiculos_veiculo_id
+// 2. Validar que há vínculo ativo na plataforma
+// 3. Usar rede_veiculos_veiculo_id como identificador
+// 4. Montar payload apenas com campos alterados
+// 5. Chamar POST /atualizarDadosVeiculo na API Rede Veículos
+// 6. Registrar log de atualização
 ```
 
 **Payload esperado para API:**
 ```json
 {
-  "cpfCnpj": "12345678901",
+  "idVeiculo": 12345,
   "camposAlterados": {
-    "celular": "21999998888",
-    "email": "novo@email.com"
+    "cor": "BRANCO",
+    "valorFipe": 85000.00
   }
 }
 ```
 
-### Fase 2: Integrar nos Hooks de Atualizacao
+### Fase 2: Criar Dialog de Edição de Veículo
 
-#### 2.1 No App do Associado
+**Novo arquivo:** `src/components/veiculos/VeiculoEditDialog.tsx`
 
-**Modificar:** `src/hooks/useMyData.ts`
+Modal com campos editáveis:
+- Cor (dropdown com cores padrão)
+- Placa (bloqueado por padrão, liberado apenas com justificativa)
+- Chassi (bloqueado por padrão, liberado apenas para correção)
+- Renavam
+- Valor FIPE (com botão para reconsulta)
+- Código FIPE
+
+### Fase 3: Integrar no Hook useUpdateVeiculo
+
+**Modificar:** `src/hooks/useVeiculos.ts`
 
 ```typescript
-export function useUpdateAssociado() {
+export function useUpdateVeiculo() {
   return useMutation({
-    mutationFn: async (data: Partial<Associado>) => {
-      // 1. Atualizar banco local
-      await supabase.from('associados').update(data).eq('user_id', user.id);
-      
-      // 2. Verificar se associado tem veiculo com rastreador Rede Veiculos
-      const { data: associado } = await supabase
-        .from('associados')
-        .select('id, veiculos(rede_veiculos_cliente_id)')
-        .eq('user_id', user.id)
+    mutationFn: async ({ id, ...updates }) => {
+      // 1. Buscar veículo atual para saber se tem vínculo Rede Veículos
+      const { data: veiculoAtual } = await supabase
+        .from('veiculos')
+        .select('rede_veiculos_veiculo_id')
+        .eq('id', id)
         .single();
       
-      const temRedeVeiculos = associado?.veiculos?.some(v => v.rede_veiculos_cliente_id);
+      // 2. Atualizar banco local
+      const { data, error } = await supabase
+        .from('veiculos')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
       
-      // 3. Se tem, sincronizar com plataforma
-      if (temRedeVeiculos) {
-        await supabase.functions.invoke('rede-veiculos-atualizar-cliente', {
+      // 3. Se tem vínculo Rede Veículos, sincronizar
+      if (veiculoAtual?.rede_veiculos_veiculo_id) {
+        await supabase.functions.invoke('rede-veiculos-atualizar-veiculo', {
           body: {
-            associadoId: associado.id,
-            camposAlterados: data,
+            veiculoId: id,
+            camposAlterados: updates,
           },
         });
       }
+      
+      return data;
     },
   });
 }
 ```
 
-#### 2.2 No Painel Administrativo
+### Fase 4: Criar Funcionalidade de Transferência de Veículo
 
-**Modificar:** `src/hooks/useAssociados.ts`
+**Novo arquivo:** `src/hooks/useTransferirVeiculo.ts`
 
 ```typescript
-export function useUpdateAssociado() {
+interface TransferirVeiculoParams {
+  veiculoId: string;
+  novoAssociadoId: string;
+  motivoTransferencia: string;
+}
+
+export function useTransferirVeiculo() {
   return useMutation({
-    mutationFn: async ({ id, ...updates }) => {
-      // 1. Atualizar banco local
-      await supabase.from('associados').update(updates).eq('id', id);
-      
-      // 2. Verificar se tem vinculo Rede Veiculos
-      const { data: veiculos } = await supabase
-        .from('veiculos')
-        .select('rede_veiculos_cliente_id')
-        .eq('associado_id', id);
-      
-      const temRedeVeiculos = veiculos?.some(v => v.rede_veiculos_cliente_id);
-      
-      // 3. Se tem, sincronizar
-      if (temRedeVeiculos) {
-        await supabase.functions.invoke('rede-veiculos-atualizar-cliente', {
-          body: { associadoId: id, camposAlterados: updates },
-        });
-      }
+    mutationFn: async ({ veiculoId, novoAssociadoId, motivoTransferencia }) => {
+      // 1. Buscar dados do novo associado
+      // 2. Atualizar associado_id do veículo localmente
+      // 3. Se tem Rede Veículos:
+      //    a) Desvincular do cliente antigo
+      //    b) Vincular ao cliente novo
+      // 4. Registrar histórico de transferência
     },
   });
 }
 ```
 
-### Fase 3: Criar Tela de Configuracao de Alertas
+### Fase 5: Habilitar Botão de Edição no Painel
 
-**Novo arquivo:** `src/components/app/ConfiguracaoAlertasCard.tsx`
+**Modificar:** `src/pages/cadastro/AssociadoDetalhe.tsx`
 
-Card no app do associado para configurar:
-- Ativar/desativar alertas de velocidade
-- Ativar/desativar alertas de cerca virtual
-- Ativar/desativar alertas de ignicao
-- Ativar/desativar notificacoes push
-- Definir limite de velocidade personalizado
+```tsx
+// Adicionar estado para controlar modal
+const [veiculoEditar, setVeiculoEditar] = useState<Veiculo | null>(null);
 
-**Novo arquivo:** `src/hooks/useAtualizarPermissoesRastreador.ts`
+// Modificar botão existente (linha ~838)
+<Button 
+  size="sm" 
+  variant="outline"
+  onClick={() => setVeiculoEditar(v)}
+>
+  <Edit className="mr-2 h-4 w-4" /> Editar
+</Button>
 
-```typescript
-export function useAtualizarPermissoesRastreador() {
-  return useMutation({
-    mutationFn: async ({ veiculoId, permissoes }) => {
-      // 1. Atualizar campos locais na tabela veiculos
-      await supabase.from('veiculos').update({
-        alerta_velocidade_ativo: permissoes.alertaVelocidade,
-        alerta_cerca_ativo: permissoes.alertaCercaVirtual,
-        alerta_ignicao_ativo: permissoes.alertaIgnicao,
-      }).eq('id', veiculoId);
-      
-      // 2. Sincronizar com Rede Veiculos
-      await supabase.functions.invoke('rede-veiculos-atualizar-cliente', {
-        body: {
-          veiculoId,
-          camposAlterados: { permissoes },
-        },
-      });
-    },
-  });
-}
+// Adicionar modal
+<VeiculoEditDialog
+  open={!!veiculoEditar}
+  onClose={() => setVeiculoEditar(null)}
+  veiculo={veiculoEditar}
+/>
 ```
 
 ---
 
 ## Arquivos a Criar
 
-| Arquivo | Descricao |
+| Arquivo | Descrição |
 |---------|-----------|
-| `supabase/functions/rede-veiculos-atualizar-cliente/index.ts` | Edge Function principal |
-| `src/hooks/useAtualizarPermissoesRastreador.ts` | Hook para permissoes |
-| `src/components/app/ConfiguracaoAlertasCard.tsx` | Card de configuracao |
+| `supabase/functions/rede-veiculos-atualizar-veiculo/index.ts` | Edge Function principal |
+| `src/components/veiculos/VeiculoEditDialog.tsx` | Modal de edição |
+| `src/hooks/useTransferirVeiculo.ts` | Hook para transferência |
+| `src/components/veiculos/TransferirVeiculoDialog.tsx` | Modal de transferência |
 
 ## Arquivos a Modificar
 
-| Arquivo | Alteracoes |
+| Arquivo | Alterações |
 |---------|------------|
-| `src/hooks/useMyData.ts` | Integrar sincronizacao apos update |
-| `src/hooks/useAssociados.ts` | Integrar sincronizacao apos update |
-| `src/pages/app/AppPerfil.tsx` | Adicionar card de alertas |
+| `src/hooks/useVeiculos.ts` | Integrar sincronização após update |
+| `src/pages/cadastro/AssociadoDetalhe.tsx` | Conectar botão ao modal de edição |
+| `src/components/cadastro/VeiculoDetalhesModal.tsx` | Adicionar aba de edição |
 | `supabase/config.toml` | Registrar nova edge function |
 
 ---
 
-## Payload Esperado para POST /atualizarDadosCliente
+## Payload Esperado para POST /atualizarDadosVeiculo
 
-Baseado no padrao da API de vinculacao:
+Baseado no padrão da API de vinculação:
 
 ```typescript
-interface AtualizarDadosClienteRequest {
-  // Identificador (obrigatorio, imutavel)
-  cpfCnpj: string;
+interface AtualizarDadosVeiculoRequest {
+  // Identificador do veículo na plataforma (obrigatório)
+  idVeiculo: number;  // rede_veiculos_veiculo_id
   
-  // Campos alterados (apenas os que mudaram)
+  // OU identificador alternativo
+  placa?: string;
+  chassi?: string;
+  
+  // Campos alteráveis
   camposAlterados: {
-    nome?: string;
-    email?: string;
-    celular?: string;
+    // Dados básicos
+    tipo?: 'carro' | 'moto' | 'caminhao' | 'van';
+    marca?: string;
+    modelo?: string;
+    ano?: number;
+    cor?: string;
     
-    endereco?: {
-      cep?: string;
-      logradouro?: string;
-      numero?: string;
-      bairro?: string;
-      cidade?: string;
-      uf?: string;
-    };
+    // Identificação (apenas correção)
+    placa?: string;   // Remarcação
+    chassi?: string;  // Erro digitação
+    renavam?: string;
     
-    permissoes?: {
-      acessoWeb?: boolean;
-      pushNotifications?: boolean;
-      alertaVelocidade?: boolean;
-      alertaCercaVirtual?: boolean;
-      alertaIgnicao?: boolean;
-    };
+    // Valor
+    valorFipe?: number;
+    codigoFipe?: string;
   };
 }
 ```
 
 ---
 
-## Checklist de Verificacao Pos-Implementacao
+## Checklist de Verificação Pós-Implementação
 
-- [ ] Edge function `rede-veiculos-atualizar-cliente` criada
-- [ ] Ao atualizar dados no App, plataforma e sincronizada
-- [ ] Ao atualizar dados pelo painel, plataforma e sincronizada
-- [ ] Ao mudar endereco, plataforma e atualizada
-- [ ] Apenas campos alterados sao enviados (nao cadastro completo)
-- [ ] CPF/CNPJ e usado como identificador imutavel
-- [ ] Permissoes podem ser alteradas pelo associado
-- [ ] Campos locais de alerta funcionam (alerta_velocidade_ativo, etc)
-- [ ] Atualizacao reflete imediatamente na Rede Veiculos
-- [ ] Log de atualizacao registrado em `rastreadores_api_logs`
+- [ ] Edge function `rede-veiculos-atualizar-veiculo` criada
+- [ ] Modal de edição de veículo implementado
+- [ ] Botão "Editar" funcional na página do associado
+- [ ] Ao atualizar cor, plataforma é sincronizada
+- [ ] Ao atualizar placa (remarcação), plataforma é sincronizada
+- [ ] Ao corrigir chassi/renavam, plataforma é sincronizada
+- [ ] Ao atualizar valor FIPE, plataforma é sincronizada
+- [ ] Funcionalidade de transferência implementada
+- [ ] rede_veiculos_veiculo_id usado como identificador
+- [ ] Apenas campos alterados são enviados
+- [ ] Histórico do veículo mantido (audit log)
+- [ ] Log de atualização registrado em `rastreadores_api_logs`
 
 ---
 
-## Teste Recomendado: Atualizacao de Telefone
+## Teste Recomendado: Atualização de Cor
 
-### Pre-requisitos
+### Pré-requisitos
 
-1. Associado ativo com veiculo e rastreador Rede Veiculos instalado
-2. `REDE_VEICULOS_TOKEN` valido e configurado
-3. Acesso ao painel da Rede Veiculos para verificar
+1. Veículo ativo com rastreador Rede Veículos instalado
+2. `rede_veiculos_veiculo_id` preenchido no banco
+3. `REDE_VEICULOS_TOKEN` válido e configurado
+4. Acesso ao painel da Rede Veículos para verificar
 
 ### Passos do Teste
 
-1. **Login como associado no App** (`/app/login`)
-2. **Acessar Perfil** (`/app/perfil`)
-3. **Clicar em "Editar" nos Dados Pessoais**
-4. **Alterar apenas o telefone** para um novo numero
+1. **Acessar o sistema como administrador**
+2. **Navegar para Cadastro > Associados > [Associado com veículo]**
+3. **Na aba Veículos, clicar em "Editar"**
+4. **Alterar a cor do veículo** de "PRATA" para "BRANCO"
 5. **Salvar**
 6. **Verificar no banco:**
-   - `associados.telefone` atualizado
-   - `rastreadores_api_logs` com registro de atualizacao
-7. **Verificar na plataforma Rede Veiculos:**
-   - Cliente com telefone atualizado
-   - Outros dados inalterados
+   - `veiculos.cor = 'BRANCO'`
+   - `rastreadores_api_logs` com registro de atualização
+7. **Verificar na plataforma Rede Veículos:**
+   - Veículo com cor atualizada
 
 ### Resultado Esperado
 
-- Telefone atualizado no SGA e na Rede Veiculos simultaneamente
-- Apenas campo `celular` enviado para API (nao cadastro completo)
+- Cor atualizada no SGA e na Rede Veículos simultaneamente
+- Apenas campo `cor` enviado para API (não cadastro completo)
 - Log de auditoria registrado
+- Histórico do veículo mantido
 
 ---
 
-## Consideracoes Finais
+## Considerações Finais
 
-**IMPORTANTE:** Antes de implementar, e necessario confirmar com a documentacao da API Rede Veiculos:
+**IMPORTANTE:** Antes de implementar, é necessário confirmar com a documentação da API Rede Veículos:
 
-1. **URL exata do endpoint:** `POST /atualizarDadosCliente` ou similar
-2. **Formato do payload:** Aceita campos parciais ou exige cadastro completo?
-3. **Campo identificador:** CPF/CNPJ ou ID interno da plataforma?
-4. **Restricoes:** Quais campos podem ser alterados via API?
-5. **Permissoes:** Endpoint de permissoes e separado ou junto com dados do cliente?
+1. **URL exata do endpoint:** `POST /atualizarDadosVeiculo` ou similar
+2. **Campo identificador:** `idVeiculo` (numérico) ou `placa/chassi` (string)?
+3. **Formato do payload:** Aceita campos parciais ou exige cadastro completo?
+4. **Campos editáveis:** Quais campos podem ser alterados após vinculação?
+5. **Restrições:** Placa pode ser alterada? Chassi pode ser corrigido?
+6. **Valor FIPE:** Campo existe no cadastro do veículo na plataforma?
 
-**Recomendacao:** Solicitar documentacao oficial da API Rede Veiculos antes de iniciar a implementacao.
+**Recomendação:** Solicitar documentação oficial da API Rede Veículos antes de iniciar a implementação.
