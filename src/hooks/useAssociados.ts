@@ -539,6 +539,58 @@ export function useAssociadoActions() {
 
   const cancelarAssociado = useMutation({
     mutationFn: async ({ id, motivo }: { id: string; motivo: string }) => {
+      // 1. Buscar veículos do associado com rastreadores
+      const { data: veiculos } = await supabase
+        .from('veiculos')
+        .select('id, placa')
+        .eq('associado_id', id);
+
+      // 2. Buscar rastreadores vinculados a esses veículos
+      if (veiculos && veiculos.length > 0) {
+        const veiculoIds = veiculos.map(v => v.id);
+        const { data: rastreadores } = await supabase
+          .from('rastreadores')
+          .select('id, imei, plataforma, status')
+          .in('veiculo_id', veiculoIds)
+          .eq('status', 'instalado');
+
+        // 3. Para cada rastreador Rede Veículos, desvincular na plataforma
+        for (const rastreador of rastreadores || []) {
+          if (rastreador.plataforma === 'rede_veiculos') {
+            console.log(`Desvinculando rastreador ${rastreador.imei} ao cancelar associado...`);
+            try {
+              await supabase.functions.invoke('rede-veiculos-desvincular-cliente', {
+                body: {
+                  rastreadorId: rastreador.id,
+                  motivo: 'cancelamento_contrato',
+                  atualizarBancoLocal: true,
+                },
+              });
+            } catch (error) {
+              console.error('Erro ao desvincular rastreador:', error);
+              // Continua mesmo com erro
+            }
+          } else if (rastreador.plataforma === 'softruck') {
+            try {
+              await supabase.functions.invoke('softruck-api', {
+                body: {
+                  operation: 'desassociar-device-veiculo',
+                  data: { deviceId: rastreador.id },
+                },
+              });
+              // Atualizar banco local para Softruck
+              await supabase.from('rastreadores').update({
+                veiculo_id: null,
+                status: 'estoque',
+              }).eq('id', rastreador.id);
+            } catch (error) {
+              console.error('Erro ao desvincular Softruck:', error);
+            }
+          }
+        }
+      }
+
+      // 4. Atualizar status do associado
       const { error } = await supabase.from('associados').update({
         status: 'cancelado' as StatusAssociado,
         motivo_bloqueio: motivo,

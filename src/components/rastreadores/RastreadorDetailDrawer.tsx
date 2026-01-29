@@ -28,6 +28,7 @@ import {
   Navigation,
   Lock,
   Unlock,
+  RefreshCw,
 } from 'lucide-react';
 import {
   useRastreador,
@@ -54,6 +55,7 @@ import { BotaoRedefinirSenha } from './BotaoRedefinirSenha';
 import { HistoricoMovimentacoesRastreador } from './HistoricoMovimentacoesRastreador';
 import { ComandoRastreadorDialog } from './ComandoRastreadorDialog';
 import { HistoricoComandos } from './HistoricoComandos';
+import { SubstituirEquipamentoDialog } from './SubstituirEquipamentoDialog';
 import { useEnviarComando } from '@/hooks/useComandosRastreador';
 
 interface RastreadorDetailDrawerProps {
@@ -78,6 +80,8 @@ export function RastreadorDetailDrawer({
     open: boolean;
     tipo: 'bloquear' | 'desbloquear';
   }>({ open: false, tipo: 'bloquear' });
+
+  const [substituirDialogOpen, setSubstituirDialogOpen] = useState(false);
 
   const handleStatusChange = async (status: StatusRastreador) => {
     if (!rastreadorId) return;
@@ -400,6 +404,15 @@ export function RastreadorDetailDrawer({
                           <Package className="mr-2 h-4 w-4" />
                           Desinstalar
                         </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setSubstituirDialogOpen(true)}
+                          disabled={updateStatus.isPending}
+                        >
+                          <RefreshCw className="mr-2 h-4 w-4" />
+                          Substituir
+                        </Button>
                         {rastreador.veiculos?.associados && (
                           <BotaoRedefinirSenha
                             rastreadorId={rastreadorId!}
@@ -495,6 +508,13 @@ export function RastreadorDetailDrawer({
                 origem="monitoramento"
               />
             )}
+
+            {/* Dialog de Substituição */}
+            <SubstituirEquipamentoDialog
+              open={substituirDialogOpen}
+              onOpenChange={setSubstituirDialogOpen}
+              rastreadorAtual={rastreador}
+            />
           </>
         )}
       </SheetContent>
