@@ -148,6 +148,17 @@ export default function AppRastreamento() {
   const hasValidPosition = latitude !== null && longitude !== null && latitude !== 0 && longitude !== 0;
   const isOnline = posicao?.status_rastreador === 'online' || (tracker?.status === 'instalado' && !offline);
   const emMovimento = velocidade > 0;
+  
+  // Detectar estado de aguardando primeira posição
+  const aguardandoPrimeiraPosicao = tracker?.status === 'instalado' && 
+    !tracker?.ultima_comunicacao && 
+    !posicao?.latitude;
+  
+  // Calcular horas sem comunicação
+  const ultimaCom = posicao?.data_hora || tracker?.ultima_comunicacao;
+  const horasSemCom = ultimaCom 
+    ? Math.floor((Date.now() - new Date(ultimaCom).getTime()) / (1000 * 60 * 60)) 
+    : null;
 
   // Time since last update
   const [tempoDesdeAtualizacao, setTempoDesdeAtualizacao] = useState('');
@@ -295,11 +306,51 @@ export default function AppRastreamento() {
 
       {/* Map Container */}
       <div className="flex-1 relative">
-        {/* Offline Overlay */}
-        {!isOnline && (
+        {/* Aguardando Primeira Posição Overlay */}
+        {aguardandoPrimeiraPosicao && (
+          <div className="absolute inset-0 z-[1000] flex flex-col items-center justify-center bg-background/90 backdrop-blur-sm">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+              <Radio className="h-8 w-8 text-primary animate-pulse" />
+            </div>
+            <h3 className="mt-4 text-lg font-semibold">Rastreador ativado</h3>
+            <p className="mt-1 text-sm text-muted-foreground text-center px-8">
+              Aguardando primeira posição GPS do dispositivo...
+            </p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Isso pode levar alguns minutos após a instalação
+            </p>
+            <Button className="mt-4" onClick={handleRefresh} disabled={isRefreshing}>
+              <RefreshCw className={cn("h-4 w-4 mr-2", isRefreshing && "animate-spin")} />
+              Verificar agora
+            </Button>
+          </div>
+        )}
+
+        {/* Sem Comunicação Prolongada Overlay */}
+        {!aguardandoPrimeiraPosicao && horasSemCom !== null && horasSemCom >= 4 && (
           <div className="absolute inset-0 z-[1000] flex flex-col items-center justify-center bg-background/90 backdrop-blur-sm">
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
               <WifiOff className="h-8 w-8 text-destructive" />
+            </div>
+            <h3 className="mt-4 text-lg font-semibold">Sem comunicação</h3>
+            <p className="mt-1 text-sm text-muted-foreground text-center px-8">
+              O rastreador não comunica há {horasSemCom}h. Verifique o dispositivo.
+            </p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Última posição: {tempoDesdeAtualizacao}
+            </p>
+            <Button className="mt-4" onClick={handleRefresh} disabled={isRefreshing}>
+              <RefreshCw className={cn("h-4 w-4 mr-2", isRefreshing && "animate-spin")} />
+              Tentar reconectar
+            </Button>
+          </div>
+        )}
+
+        {/* Offline Overlay (curto período) */}
+        {!aguardandoPrimeiraPosicao && !isOnline && (horasSemCom === null || horasSemCom < 4) && (
+          <div className="absolute inset-0 z-[1000] flex flex-col items-center justify-center bg-background/90 backdrop-blur-sm">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-accent/10">
+              <WifiOff className="h-8 w-8 text-accent" />
             </div>
             <h3 className="mt-4 text-lg font-semibold">Rastreador offline</h3>
             <p className="mt-1 text-sm text-muted-foreground">
