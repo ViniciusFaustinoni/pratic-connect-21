@@ -266,3 +266,6 @@ verify_jwt = false
 
 [functions.rede-veiculos-atualizar-cliente]
 verify_jwt = false
+
+[functions.rede-veiculos-atualizar-veiculo]
+verify_jwt = false

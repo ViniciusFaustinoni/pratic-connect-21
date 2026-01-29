@@ -103,6 +103,19 @@ export function useUpdateVeiculo() {
   
   return useMutation({
     mutationFn: async ({ id, ...updates }: VeiculoUpdate & { id: string }) => {
+      // 1. Buscar veículo atual para verificar vínculo com Rede Veículos
+      const { data: veiculoAtual, error: buscarError } = await supabase
+        .from('veiculos')
+        .select('rede_veiculos_veiculo_id, placa')
+        .eq('id', id)
+        .single();
+      
+      if (buscarError) {
+        console.error('[useUpdateVeiculo] Erro ao buscar veículo:', buscarError);
+        throw buscarError;
+      }
+      
+      // 2. Atualizar banco local
       const { data, error } = await supabase
         .from('veiculos')
         .update(updates)
@@ -111,6 +124,34 @@ export function useUpdateVeiculo() {
         .single();
       
       if (error) throw error;
+      
+      // 3. Se tem vínculo com Rede Veículos, sincronizar
+      if (veiculoAtual?.rede_veiculos_veiculo_id) {
+        console.log('[useUpdateVeiculo] Sincronizando com Rede Veículos...');
+        
+        try {
+          const { data: syncResult, error: syncError } = await supabase.functions.invoke(
+            'rede-veiculos-atualizar-veiculo',
+            {
+              body: {
+                veiculoId: id,
+                camposAlterados: updates,
+              },
+            }
+          );
+          
+          if (syncError) {
+            console.error('[useUpdateVeiculo] Erro ao sincronizar com Rede Veículos:', syncError);
+            // Não propaga o erro - atualização local foi bem sucedida
+          } else {
+            console.log('[useUpdateVeiculo] Sincronização concluída:', syncResult);
+          }
+        } catch (syncException) {
+          console.error('[useUpdateVeiculo] Exceção ao sincronizar:', syncException);
+          // Não propaga o erro - atualização local foi bem sucedida
+        }
+      }
+      
       return data as Veiculo;
     },
     onSuccess: (data) => {
