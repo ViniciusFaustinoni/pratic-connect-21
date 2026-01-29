@@ -14,6 +14,301 @@ export type Database = {
   }
   public: {
     Tables: {
+      acionamentos_roubo_furto: {
+        Row: {
+          api_request: Json | null
+          api_response: Json | null
+          api_status_code: number | null
+          associado_id: string | null
+          autorizado_em: string | null
+          autorizado_por: string | null
+          autorizado_por_nome: string | null
+          chamado_assistencia_id: string | null
+          created_at: string | null
+          encerrado_em: string | null
+          encerrado_por: string | null
+          erro_mensagem: string | null
+          id: string
+          motivo_encerramento: string | null
+          observacoes: string | null
+          plataforma: string | null
+          protocolo_externo: string | null
+          rastreador_id: string | null
+          sinistro_id: string | null
+          solicitado_em: string | null
+          solicitado_por: string | null
+          solicitado_por_nome: string | null
+          status: string | null
+          tipo_origem: string
+          ultima_posicao_data: string | null
+          ultima_posicao_lat: number | null
+          ultima_posicao_lng: number | null
+          updated_at: string | null
+          veiculo_id: string
+        }
+        Insert: {
+          api_request?: Json | null
+          api_response?: Json | null
+          api_status_code?: number | null
+          associado_id?: string | null
+          autorizado_em?: string | null
+          autorizado_por?: string | null
+          autorizado_por_nome?: string | null
+          chamado_assistencia_id?: string | null
+          created_at?: string | null
+          encerrado_em?: string | null
+          encerrado_por?: string | null
+          erro_mensagem?: string | null
+          id?: string
+          motivo_encerramento?: string | null
+          observacoes?: string | null
+          plataforma?: string | null
+          protocolo_externo?: string | null
+          rastreador_id?: string | null
+          sinistro_id?: string | null
+          solicitado_em?: string | null
+          solicitado_por?: string | null
+          solicitado_por_nome?: string | null
+          status?: string | null
+          tipo_origem: string
+          ultima_posicao_data?: string | null
+          ultima_posicao_lat?: number | null
+          ultima_posicao_lng?: number | null
+          updated_at?: string | null
+          veiculo_id: string
+        }
+        Update: {
+          api_request?: Json | null
+          api_response?: Json | null
+          api_status_code?: number | null
+          associado_id?: string | null
+          autorizado_em?: string | null
+          autorizado_por?: string | null
+          autorizado_por_nome?: string | null
+          chamado_assistencia_id?: string | null
+          created_at?: string | null
+          encerrado_em?: string | null
+          encerrado_por?: string | null
+          erro_mensagem?: string | null
+          id?: string
+          motivo_encerramento?: string | null
+          observacoes?: string | null
+          plataforma?: string | null
+          protocolo_externo?: string | null
+          rastreador_id?: string | null
+          sinistro_id?: string | null
+          solicitado_em?: string | null
+          solicitado_por?: string | null
+          solicitado_por_nome?: string | null
+          status?: string | null
+          tipo_origem?: string
+          ultima_posicao_data?: string | null
+          ultima_posicao_lat?: number | null
+          ultima_posicao_lng?: number | null
+          updated_at?: string | null
+          veiculo_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "acionamentos_roubo_furto_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "acionamentos_roubo_furto_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "acionamentos_roubo_furto_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "acionamentos_roubo_furto_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "acionamentos_roubo_furto_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "acionamentos_roubo_furto_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "acionamentos_roubo_furto_autorizado_por_fkey"
+            columns: ["autorizado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "acionamentos_roubo_furto_autorizado_por_fkey"
+            columns: ["autorizado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "acionamentos_roubo_furto_chamado_assistencia_id_fkey"
+            columns: ["chamado_assistencia_id"]
+            isOneToOne: false
+            referencedRelation: "chamados_assistencia"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "acionamentos_roubo_furto_encerrado_por_fkey"
+            columns: ["encerrado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "acionamentos_roubo_furto_encerrado_por_fkey"
+            columns: ["encerrado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "acionamentos_roubo_furto_rastreador_id_fkey"
+            columns: ["rastreador_id"]
+            isOneToOne: false
+            referencedRelation: "rastreadores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "acionamentos_roubo_furto_rastreador_id_fkey"
+            columns: ["rastreador_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["rastreador_id"]
+          },
+          {
+            foreignKeyName: "acionamentos_roubo_furto_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "sinistros"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "acionamentos_roubo_furto_solicitado_por_fkey"
+            columns: ["solicitado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "acionamentos_roubo_furto_solicitado_por_fkey"
+            columns: ["solicitado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "acionamentos_roubo_furto_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "veiculos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "acionamentos_roubo_furto_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "acionamentos_roubo_furto_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "acionamentos_roubo_furto_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["veiculo_id"]
+          },
+        ]
+      }
+      acionamentos_roubo_furto_historico: {
+        Row: {
+          acionamento_id: string
+          created_at: string | null
+          dados_extras: Json | null
+          id: string
+          observacao: string | null
+          status_anterior: string | null
+          status_novo: string
+          usuario_id: string | null
+          usuario_nome: string | null
+        }
+        Insert: {
+          acionamento_id: string
+          created_at?: string | null
+          dados_extras?: Json | null
+          id?: string
+          observacao?: string | null
+          status_anterior?: string | null
+          status_novo: string
+          usuario_id?: string | null
+          usuario_nome?: string | null
+        }
+        Update: {
+          acionamento_id?: string
+          created_at?: string | null
+          dados_extras?: Json | null
+          id?: string
+          observacao?: string | null
+          status_anterior?: string | null
+          status_novo?: string
+          usuario_id?: string | null
+          usuario_nome?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "acionamentos_roubo_furto_historico_acionamento_id_fkey"
+            columns: ["acionamento_id"]
+            isOneToOne: false
+            referencedRelation: "acionamentos_roubo_furto"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "acionamentos_roubo_furto_historico_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "acionamentos_roubo_furto_historico_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+        ]
+      }
       acordo_parcelas: {
         Row: {
           acordo_id: string
@@ -12345,6 +12640,7 @@ export type Database = {
       }
       rastreadores: {
         Row: {
+          acionamento_ativo_id: string | null
           associado_email: string | null
           associado_id: string | null
           bloqueado: boolean | null
@@ -12356,6 +12652,9 @@ export type Database = {
           id: string
           id_plataforma: string | null
           imei: string | null
+          modo_ativado_em: string | null
+          modo_ativado_por: string | null
+          modo_rastreamento: string | null
           numero_serie: string | null
           plataforma: string
           plataforma_device_id: string | null
@@ -12372,6 +12671,7 @@ export type Database = {
           veiculo_id: string | null
         }
         Insert: {
+          acionamento_ativo_id?: string | null
           associado_email?: string | null
           associado_id?: string | null
           bloqueado?: boolean | null
@@ -12383,6 +12683,9 @@ export type Database = {
           id?: string
           id_plataforma?: string | null
           imei?: string | null
+          modo_ativado_em?: string | null
+          modo_ativado_por?: string | null
+          modo_rastreamento?: string | null
           numero_serie?: string | null
           plataforma?: string
           plataforma_device_id?: string | null
@@ -12399,6 +12702,7 @@ export type Database = {
           veiculo_id?: string | null
         }
         Update: {
+          acionamento_ativo_id?: string | null
           associado_email?: string | null
           associado_id?: string | null
           bloqueado?: boolean | null
@@ -12410,6 +12714,9 @@ export type Database = {
           id?: string
           id_plataforma?: string | null
           imei?: string | null
+          modo_ativado_em?: string | null
+          modo_ativado_por?: string | null
+          modo_rastreamento?: string | null
           numero_serie?: string | null
           plataforma?: string
           plataforma_device_id?: string | null
@@ -12426,6 +12733,13 @@ export type Database = {
           veiculo_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "rastreadores_acionamento_ativo_id_fkey"
+            columns: ["acionamento_ativo_id"]
+            isOneToOne: false
+            referencedRelation: "acionamentos_roubo_furto"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "rastreadores_associado_id_fkey"
             columns: ["associado_id"]
@@ -12467,6 +12781,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "rastreadores_modo_ativado_por_fkey"
+            columns: ["modo_ativado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rastreadores_modo_ativado_por_fkey"
+            columns: ["modo_ativado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
           },
           {
             foreignKeyName: "rastreadores_portador_id_fkey"
