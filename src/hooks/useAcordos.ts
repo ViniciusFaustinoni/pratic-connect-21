@@ -88,10 +88,32 @@ export function useAcordos(filters?: AcordoFilters) {
 
       if (parcelasError) throw parcelasError;
 
+      // Enviar notificação via WhatsApp para o associado
+      try {
+        await supabase.functions.invoke('disparar-notificacao', {
+          body: {
+            associado_id: dados.associado_id,
+            tipo: 'cobranca',
+            subtipo: 'acordo_criado',
+            dados: {
+              valor_acordo: dados.valor_acordo.toFixed(2),
+              parcelas: dados.qtd_parcelas,
+              valor_parcela: dados.valor_parcela.toFixed(2),
+              data_primeira: new Date(dados.primeira_parcela_data).toLocaleDateString('pt-BR'),
+            },
+            forcar_envio: true,
+          },
+        });
+        console.log('[useAcordos] Notificação de acordo enviada');
+      } catch (notifError) {
+        console.error('[useAcordos] Erro ao enviar notificação:', notifError);
+        // Não interrompe o fluxo principal
+      }
+
       return acordo;
     },
     onSuccess: () => {
-      toast.success('Acordo criado com sucesso!');
+      toast.success('Acordo criado com sucesso! O associado foi notificado.');
       queryClient.invalidateQueries({ queryKey: ['acordos'] });
     },
     onError: () => {

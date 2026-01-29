@@ -1040,6 +1040,9 @@ export type Database = {
           forma_pagamento: string | null
           id: string
           juros: number | null
+          lembrete_d1_enviado: boolean | null
+          lembrete_d3_enviado: boolean | null
+          lembrete_d5_enviado: boolean | null
           lembrete_vencimento_enviado: boolean | null
           linha_digitavel: string | null
           motivo_cancelamento: string | null
@@ -1081,6 +1084,9 @@ export type Database = {
           forma_pagamento?: string | null
           id?: string
           juros?: number | null
+          lembrete_d1_enviado?: boolean | null
+          lembrete_d3_enviado?: boolean | null
+          lembrete_d5_enviado?: boolean | null
           lembrete_vencimento_enviado?: boolean | null
           linha_digitavel?: string | null
           motivo_cancelamento?: string | null
@@ -1122,6 +1128,9 @@ export type Database = {
           forma_pagamento?: string | null
           id?: string
           juros?: number | null
+          lembrete_d1_enviado?: boolean | null
+          lembrete_d3_enviado?: boolean | null
+          lembrete_d5_enviado?: boolean | null
           lembrete_vencimento_enviado?: boolean | null
           linha_digitavel?: string | null
           motivo_cancelamento?: string | null

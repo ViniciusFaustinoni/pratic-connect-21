@@ -30,9 +30,46 @@ const TEMPLATES: Record<string, Record<string, { titulo: string; mensagem: strin
       prioridade: 'urgente'
     },
     pago: {
-      titulo: 'Pagamento Confirmado ✓',
-      mensagem: 'Pagamento de R$ {valor} confirmado. Obrigado!',
+      titulo: '✅ Pagamento Confirmado!',
+      mensagem: 'Pagamento de R$ {valor} confirmado com sucesso! Obrigado pela confiança. 🙏',
       prioridade: 'normal'
+    }
+  },
+  cobranca: {
+    aviso_atraso: {
+      titulo: '⚠️ Cobrança em Atraso',
+      mensagem: 'Olá! Sua mensalidade de R$ {valor} está em atraso há {dias_atraso} dias. Regularize para evitar suspensão.',
+      prioridade: 'alta'
+    },
+    suspensao_iminente: {
+      titulo: '🚨 Suspensão em 48h',
+      mensagem: 'ATENÇÃO: Sua conta será suspensa em 48h por inadimplência. Valor pendente: R$ {valor}. Regularize agora!',
+      prioridade: 'urgente'
+    },
+    suspensao: {
+      titulo: '❌ Conta Suspensa',
+      mensagem: 'Sua conta foi suspensa por inadimplência. Valor pendente: R$ {valor}. Regularize para reativar sua proteção.',
+      prioridade: 'urgente'
+    },
+    acordo_criado: {
+      titulo: '🤝 Acordo Disponível!',
+      mensagem: 'Boa notícia! Seu acordo de R$ {valor_acordo} em {parcelas}x de R$ {valor_parcela} foi criado. Primeira parcela: {data_primeira}.',
+      prioridade: 'alta'
+    },
+    parcela_vencendo: {
+      titulo: '📅 Parcela do Acordo Vence Amanhã',
+      mensagem: 'Lembrete: A parcela {numero}/{total} do seu acordo vence amanhã. Valor: R$ {valor}.',
+      prioridade: 'normal'
+    },
+    parcela_paga: {
+      titulo: '✅ Parcela Paga!',
+      mensagem: 'Parcela {numero}/{total} do seu acordo foi paga. Valor: R$ {valor}. Continue assim! 💪',
+      prioridade: 'normal'
+    },
+    reativacao: {
+      titulo: '🎉 Conta Reativada!',
+      mensagem: 'Sua conta foi reativada com sucesso! Sua proteção veicular está ativa novamente.',
+      prioridade: 'alta'
     }
   },
   sinistro: {
