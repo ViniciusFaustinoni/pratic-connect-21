@@ -1,455 +1,280 @@
 
-# Plano: Integracao SGA Pratic com API Hinova SGA
+# Plano: Configurar Secrets de Integracoes pela Interface do Sistema
 
-## Resumo Executivo
+## Objetivo
 
-Implementar sincronizacao de associados e veiculos com o sistema SGA Hinova, incluindo:
-1. Edge Function para comunicacao com a API Hinova
-2. Botao "Ativar no SGA" na pagina de analise de proposta
-3. Hook customizado para gerenciar o estado da sincronizacao
-4. Tabelas auxiliares para logs e mapeamentos
-5. Campos adicionais nas tabelas existentes
+Permitir que os diretores configurem os secrets de integracoes (SGA Hinova, Softruck, Rede Veiculos) diretamente pela pagina **Configuracoes > Integracoes**, sem precisar acessar o painel do Supabase.
 
 ---
 
-## Arquitetura da Solucao
+## Situacao Atual
+
+| Integracao | Secrets Necessarios | Status |
+|------------|---------------------|--------|
+| SGA Hinova | HINOVA_TOKEN, HINOVA_USUARIO, HINOVA_SENHA, HINOVA_CODIGO_CONTA | Nao configurado |
+| Softruck | SOFTRUCK_PUBLIC_KEY, SOFTRUCK_USERNAME, SOFTRUCK_PASSWORD, SOFTRUCK_ENTERPRISE_ID | Parcialmente configurado |
+| Rede Veiculos | REDE_VEICULOS_TOKEN | Configurado e testado |
+| ASAAS | ASAAS_API_KEY | Configurado |
+| Autentique | AUTENTIQUE_API_KEY | Configurado |
+| Email (Resend) | RESEND_API_KEY | Configurado |
+
+O sistema atual mostra apenas instrucoes para configurar secrets no painel do Supabase, sem interface para input direto.
+
+---
+
+## Abordagem Proposta
+
+### Arquitetura de Seguranca
+
+Como os Supabase Secrets NAO podem ser atualizados diretamente via Edge Functions sem a Management API Key (que nao deve ser exposta), adotaremos uma abordagem hibrida:
+
+1. **Armazenamento seguro no banco** - Criar tabela `integracoes_credenciais` com criptografia a nivel de aplicacao
+2. **Edge Function de ponte** - Funcao que le as credenciais do banco e as utiliza para autenticar nas APIs externas
+3. **Interface de configuracao** - Sheet para inserir credenciais com validacao em tempo real
+4. **Migracao gradual** - Ao salvar credenciais no banco, o sistema as testa automaticamente
+
+### Fluxo de Configuracao
 
 ```text
-┌─────────────────────────────────────────────────────────────────────┐
-│                        FRONTEND (React)                              │
-├─────────────────────────────────────────────────────────────────────┤
-│  PropostaAnalise.tsx                                                 │
-│  ├── BotaoAtivarSGA.tsx (novo componente)                           │
-│  │   └── Dialog confirmacao                                          │
-│  │   └── Status visual (pendente/sincronizando/ativado/erro)        │
-│  └── useSGASync.ts (hook de estado)                                  │
-└─────────────────────────────────────────────────────────────────────┘
-                               │
-                               ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                      EDGE FUNCTION                                   │
-├─────────────────────────────────────────────────────────────────────┤
-│  sga-hinova-sync/index.ts                                            │
-│  ├── 1. Autenticar na API Hinova                                     │
-│  ├── 2. Cadastrar/buscar associado                                   │
-│  ├── 3. Cadastrar veiculo                                            │
-│  ├── 4. Enviar fotos/documentos                                      │
-│  └── 5. Atualizar registros locais                                   │
-└─────────────────────────────────────────────────────────────────────┘
-                               │
-                               ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                      API HINOVA SGA v2                               │
-├─────────────────────────────────────────────────────────────────────┤
-│  Base URL: https://api.hinova.com.br/api/sga/v2                      │
-│  ├── POST /usuario/autenticar                                        │
-│  ├── POST /associado/cadastrar                                       │
-│  ├── POST /veiculo/cadastrar                                         │
-│  └── POST /veiculo/foto/cadastrar                                    │
-└─────────────────────────────────────────────────────────────────────┘
+Diretor abre Configuracoes > Integracoes
+           |
+           v
+Clica em "Configurar" no card da integracao
+           |
+           v
+Sheet abre com formulario de credenciais
+           |
+           v
+Preenche os campos (senhas mascaradas)
+           |
+           v
+Clica "Testar Conexao"
+           |
+           v
+Edge Function busca credenciais do banco + testa API externa
+           |
+           v
+Se sucesso: marca como configurado
+Se erro: mostra mensagem detalhada
+           |
+           v
+Clica "Salvar" - persiste no banco criptografado
 ```
 
 ---
 
-## Fase 1: Configuracao de Secrets
+## Fase 1: Criar Tabela de Credenciais Criptografadas
 
-**Secrets necessarios no Supabase:**
-
-| Secret | Descricao | Obrigatorio |
-|--------|-----------|-------------|
-| `HINOVA_API_URL` | URL base da API (https://api.hinova.com.br/api/sga/v2) | Sim |
-| `HINOVA_TOKEN` | Token Bearer gerado no SGA Hinova | Sim |
-| `HINOVA_USUARIO` | Usuario para autenticacao | Sim |
-| `HINOVA_SENHA` | Senha para autenticacao | Sim |
-| `HINOVA_CODIGO_CONTA` | Codigo da conta padrao | Sim |
-| `HINOVA_CODIGO_REGIONAL` | Codigo regional padrao | Nao |
-| `HINOVA_CODIGO_COOPERATIVA` | Codigo cooperativa padrao | Nao |
-| `HINOVA_CODIGO_VOLUNTARIO` | Codigo voluntario padrao | Nao |
-
----
-
-## Fase 2: Alteracoes no Banco de Dados
-
-### 2.1 Novos campos na tabela `associados`
+### Nova Tabela: `integracoes_credenciais`
 
 ```sql
-ALTER TABLE associados 
-ADD COLUMN IF NOT EXISTS codigo_hinova INTEGER,
-ADD COLUMN IF NOT EXISTS sincronizado_hinova BOOLEAN DEFAULT FALSE,
-ADD COLUMN IF NOT EXISTS sincronizado_hinova_em TIMESTAMPTZ;
-```
-
-### 2.2 Novos campos na tabela `veiculos`
-
-```sql
-ALTER TABLE veiculos 
-ADD COLUMN IF NOT EXISTS codigo_hinova INTEGER,
-ADD COLUMN IF NOT EXISTS sincronizado_hinova BOOLEAN DEFAULT FALSE,
-ADD COLUMN IF NOT EXISTS sincronizado_hinova_em TIMESTAMPTZ,
-ADD COLUMN IF NOT EXISTS status_sga VARCHAR(50) DEFAULT 'pendente';
--- status_sga: pendente | sincronizando | ativado_sga | erro_sincronizacao
-```
-
-### 2.3 Nova tabela `sga_sync_logs`
-
-```sql
-CREATE TABLE sga_sync_logs (
+CREATE TABLE integracoes_credenciais (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  integracao VARCHAR(50) NOT NULL UNIQUE,
+  credenciais_encrypted TEXT NOT NULL,
+  iv TEXT NOT NULL,
+  configurado BOOLEAN DEFAULT FALSE,
+  testado_em TIMESTAMPTZ,
+  teste_sucesso BOOLEAN,
+  teste_mensagem TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
-  veiculo_id UUID REFERENCES veiculos(id),
-  associado_id UUID REFERENCES associados(id),
-  action VARCHAR(100) NOT NULL,
-  status VARCHAR(50) NOT NULL,
-  request_payload JSONB,
-  response_payload JSONB,
-  error_message TEXT,
-  usuario_id UUID,
-  duracao_ms INTEGER
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_by UUID REFERENCES profiles(id)
 );
 
-CREATE INDEX idx_sync_logs_veiculo ON sga_sync_logs(veiculo_id);
-CREATE INDEX idx_sync_logs_associado ON sga_sync_logs(associado_id);
-CREATE INDEX idx_sync_logs_created ON sga_sync_logs(created_at DESC);
+CREATE INDEX idx_integracoes_credenciais_integracao ON integracoes_credenciais(integracao);
 
--- RLS
-ALTER TABLE sga_sync_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE integracoes_credenciais ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Funcionarios podem ver logs" ON sga_sync_logs
-FOR SELECT TO authenticated
-USING (public.am_i_funcionario());
-
-CREATE POLICY "Edge functions podem inserir logs" ON sga_sync_logs
-FOR INSERT TO authenticated
-WITH CHECK (true);
+CREATE POLICY "Apenas diretores podem gerenciar credenciais" ON integracoes_credenciais
+FOR ALL TO authenticated
+USING (public.is_diretor(auth.uid()) OR public.is_desenvolvedor(auth.uid()))
+WITH CHECK (public.is_diretor(auth.uid()) OR public.is_desenvolvedor(auth.uid()));
 ```
 
-### 2.4 Nova tabela `hinova_mapeamentos`
+### Mapeamento de Integracoes
 
-```sql
-CREATE TABLE hinova_mapeamentos (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tipo VARCHAR(50) NOT NULL,
-  codigo_local VARCHAR(100) NOT NULL,
-  codigo_hinova INTEGER NOT NULL,
-  descricao VARCHAR(255),
-  ativo BOOLEAN DEFAULT TRUE,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(tipo, codigo_local)
-);
-
--- Dados iniciais de mapeamento
-INSERT INTO hinova_mapeamentos (tipo, codigo_local, codigo_hinova, descricao) VALUES
--- Cores
-('cor', 'preto', 1, 'PRETO'),
-('cor', 'branco', 2, 'BRANCO'),
-('cor', 'prata', 3, 'PRATA'),
-('cor', 'cinza', 4, 'CINZA'),
-('cor', 'vermelho', 5, 'VERMELHO'),
-('cor', 'azul', 6, 'AZUL'),
-('cor', 'verde', 7, 'VERDE'),
-('cor', 'amarelo', 8, 'AMARELO'),
-('cor', 'marrom', 9, 'MARROM'),
-('cor', 'bege', 10, 'BEGE'),
--- Combustivel
-('combustivel', 'gasolina', 1, 'GASOLINA'),
-('combustivel', 'etanol', 2, 'ETANOL'),
-('combustivel', 'alcool', 2, 'ETANOL'),
-('combustivel', 'flex', 3, 'FLEX'),
-('combustivel', 'diesel', 4, 'DIESEL'),
-('combustivel', 'gnv', 5, 'GNV'),
-('combustivel', 'eletrico', 6, 'ELETRICO'),
-('combustivel', 'hibrido', 7, 'HIBRIDO'),
--- Tipo de veiculo
-('tipo_veiculo', 'automovel', 1, 'AUTOMOVEL'),
-('tipo_veiculo', 'carro', 1, 'AUTOMOVEL'),
-('tipo_veiculo', 'motocicleta', 2, 'MOTOCICLETA'),
-('tipo_veiculo', 'moto', 2, 'MOTOCICLETA'),
-('tipo_veiculo', 'caminhao', 3, 'CAMINHAO'),
-('tipo_veiculo', 'utilitario', 4, 'UTILITARIO'),
--- Tipos de foto/documento
-('tipo_foto', 'cnh', 1, 'CNH'),
-('tipo_foto', 'crlv', 2, 'CRLV'),
-('tipo_foto', 'comprovante_residencia', 3, 'COMPROVANTE RESIDENCIA'),
-('tipo_foto', 'foto_frontal_veiculo', 4, 'FOTO FRENTE'),
-('tipo_foto', 'foto_frente', 4, 'FOTO FRENTE'),
-('tipo_foto', 'foto_traseira_veiculo', 5, 'FOTO TRASEIRA'),
-('tipo_foto', 'foto_traseira', 5, 'FOTO TRASEIRA'),
-('tipo_foto', 'foto_lateral_esquerda', 6, 'FOTO LATERAL ESQUERDA'),
-('tipo_foto', 'foto_lateral_direita', 7, 'FOTO LATERAL DIREITA'),
-('tipo_foto', 'foto_motor', 8, 'FOTO MOTOR'),
-('tipo_foto', 'foto_chassi', 9, 'FOTO CHASSI'),
-('tipo_foto', 'foto_painel', 10, 'FOTO PAINEL'),
-('tipo_foto', 'foto_hodometro', 10, 'FOTO KM')
-ON CONFLICT (tipo, codigo_local) DO NOTHING;
-
--- RLS
-ALTER TABLE hinova_mapeamentos ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Todos autenticados podem ler mapeamentos" ON hinova_mapeamentos
-FOR SELECT TO authenticated USING (true);
-```
+| integracao | Campos de Credenciais |
+|------------|----------------------|
+| hinova | token, usuario, senha, codigo_conta, codigo_regional, codigo_cooperativa, codigo_voluntario, api_url |
+| softruck | public_key, username, password, enterprise_id |
+| rede_veiculos | bearer_token |
+| asaas | api_key, ambiente |
+| autentique | api_key |
+| resend | api_key |
 
 ---
 
-## Fase 3: Edge Function `sga-hinova-sync`
+## Fase 2: Edge Function para Salvar/Ler Credenciais
 
-**Arquivo:** `supabase/functions/sga-hinova-sync/index.ts`
+### Nova Funcao: `integracoes-credenciais`
 
-### 3.1 Estrutura da Funcao
+**Arquivo:** `supabase/functions/integracoes-credenciais/index.ts`
+
+**Acoes suportadas:**
+- `GET` - Retorna status (configurado/nao) sem expor valores
+- `POST` - Salva credenciais criptografadas
+- `DELETE` - Remove credenciais
 
 ```text
-Entrada:
+POST /integracoes-credenciais
 {
-  veiculo_id: string (UUID),
-  associado_id: string (UUID)
-}
-
-Fluxo:
-1. Validar entrada
-2. Buscar dados do associado (Supabase)
-3. Buscar dados do veiculo (Supabase)
-4. Buscar documentos/fotos do Storage
-5. Autenticar na API Hinova
-6. Verificar se associado ja existe (por CPF)
-   - Se existe: usar codigo_associado existente
-   - Se nao existe: cadastrar novo
-7. Cadastrar veiculo com codigo_associado
-8. Enviar fotos em lotes de 50
-9. Atualizar registros locais (codigo_hinova, status_sga)
-10. Registrar logs em sga_sync_logs
-11. Retornar resultado
-
-Saida (sucesso):
-{
-  success: true,
-  data: {
-    codigo_associado_hinova: 12345,
-    codigo_veiculo_hinova: 67890,
-    fotos_enviadas: 8,
-    fotos_com_erro: []
+  "integracao": "hinova",
+  "credenciais": {
+    "token": "xxx",
+    "usuario": "yyy",
+    "senha": "zzz",
+    "codigo_conta": "1"
   }
 }
 
-Saida (erro):
+Resposta:
 {
-  success: false,
-  error: "Descricao do erro",
-  step: "autenticar|associado|veiculo|fotos",
-  details: {...}
+  "success": true,
+  "mensagem": "Credenciais salvas com sucesso",
+  "configurado": true
 }
 ```
 
-### 3.2 Mapeamento de Campos
+### Criptografia
 
-| Campo Supabase (associados) | Campo Hinova |
-|-----------------------------|--------------|
-| nome | nome |
-| cpf | cpf |
-| rg | rg |
-| data_nascimento | data_nascimento (dd/mm/yyyy) |
-| email | email |
-| telefone | telefone |
-| whatsapp | celular |
-| cep | cep |
-| logradouro | logradouro |
-| numero | numero |
-| complemento | complemento |
-| bairro | bairro |
-| cidade | cidade |
-| uf | estado |
-| sexo | sexo |
-| dia_vencimento | dia_vencimento |
-
-| Campo Supabase (veiculos) | Campo Hinova |
-|---------------------------|--------------|
-| placa | placa |
-| chassi | chassi |
-| renavam | renavam |
-| ano_fabricacao | ano_fabricacao |
-| ano_modelo | ano_modelo |
-| codigo_fipe | codigo_fipe |
-| valor_fipe | valor_fipe |
-| cor | codigo_cor (via mapeamento) |
-| combustivel | codigo_combustivel (via mapeamento) |
-
-### 3.3 Tratamento de Erros e Retry
-
-- Implementar retry com backoff exponencial (3 tentativas)
-- Delays: 1s, 2s, 4s
-- Registrar cada tentativa no log
-- Se associado ja existe (CPF duplicado): buscar codigo existente
-- Se foto falhar: continuar com proximas, retornar lista de falhas
+- Algoritmo: AES-256-GCM
+- Chave derivada do SUPABASE_SERVICE_ROLE_KEY (apenas acessivel pela Edge Function)
+- IV unico por registro
 
 ---
 
-## Fase 4: Componente `BotaoAtivarSGA`
+## Fase 3: Atualizar Edge Functions de Teste
 
-**Arquivo:** `src/components/cadastro/BotaoAtivarSGA.tsx`
+### Modificar funcoes existentes para buscar credenciais do banco
 
-### 4.1 Interface do Componente
+1. `rastreador-testar-conexao` - Ja usa Secrets, adicionar fallback para banco
+2. `sga-hinova-sync` - Adicionar busca de credenciais do banco
+3. `integracoes-verificar-secrets` - Adicionar verificacao de credenciais do banco
 
-```typescript
-interface BotaoAtivarSGAProps {
-  veiculoId: string;
-  associadoId: string;
-  statusAtual: 'pendente' | 'sincronizando' | 'ativado_sga' | 'erro_sincronizacao';
-  onSuccess?: () => void;
-  onError?: (error: string) => void;
-}
-```
+**Logica de prioridade:**
+1. Primeiro verifica Supabase Secrets (ENV)
+2. Se nao encontrar, busca na tabela `integracoes_credenciais`
+3. Retorna qual fonte foi usada
 
-### 4.2 Estados Visuais
+---
 
-| Status | Aparencia | Acao |
-|--------|-----------|------|
-| `pendente` | Botao azul, icone Upload | Abre dialog de confirmacao |
-| `sincronizando` | Botao cinza, spinner | Desabilitado |
-| `ativado_sga` | Botao verde, icone Check | Desabilitado, tooltip com data |
-| `erro_sincronizacao` | Botao vermelho/laranja | Permite retry |
+## Fase 4: Componente ConfigurarIntegracaoSheet
 
-### 4.3 Fluxo de Interacao
+### Novo Componente: `src/components/integracoes/ConfigurarIntegracaoSheet.tsx`
+
+**Funcionalidades:**
+- Formulario dinamico baseado na integracao selecionada
+- Campos de senha com toggle mostrar/ocultar
+- Botao "Testar Conexao" integrado
+- Status visual do ultimo teste
+- Salvamento com feedback
+
+**Campos por integracao:**
+
+| SGA Hinova | Softruck | Rede Veiculos |
+|------------|----------|---------------|
+| Token Bearer | Public Key | Token Bearer |
+| Usuario | Username | |
+| Senha | Password | |
+| Codigo Conta | Enterprise ID (opcional) | |
+| API URL (opcional) | | |
+
+### Interface do Sheet
 
 ```text
-1. Usuario clica "Ativar no SGA"
-2. Dialog de confirmacao abre:
-   - Titulo: "Ativar Associado no SGA Hinova?"
-   - Mensagem: "Esta acao enviara todos os dados para o sistema SGA Hinova"
-   - Botoes: "Cancelar" | "Confirmar Ativacao"
-3. Ao confirmar:
-   - Status muda para "sincronizando"
-   - Chama Edge Function sga-hinova-sync
-4. Se sucesso:
-   - Status muda para "ativado_sga"
-   - Toast: "Associado ativado com sucesso no SGA!"
-   - Invalida queries relacionadas
-5. Se erro:
-   - Status muda para "erro_sincronizacao"
-   - Toast com mensagem de erro
-   - Permite nova tentativa
+┌────────────────────────────────────────────┐
+│ x  Configurar SGA Hinova                   │
+├────────────────────────────────────────────┤
+│                                            │
+│  Token Bearer *                            │
+│  ┌──────────────────────────────────┐      │
+│  │ ●●●●●●●●●●●●                  👁 │      │
+│  └──────────────────────────────────┘      │
+│                                            │
+│  Usuario *                                 │
+│  ┌──────────────────────────────────┐      │
+│  │ usuario_api                       │      │
+│  └──────────────────────────────────┘      │
+│                                            │
+│  Senha *                                   │
+│  ┌──────────────────────────────────┐      │
+│  │ ●●●●●●●●●●●●                  👁 │      │
+│  └──────────────────────────────────┘      │
+│                                            │
+│  Codigo da Conta *                         │
+│  ┌──────────────────────────────────┐      │
+│  │ 1                                 │      │
+│  └──────────────────────────────────┘      │
+│                                            │
+│  ───────────────────────────────────       │
+│                                            │
+│  ┌─────────────────────────────────────┐   │
+│  │ ✅ Conexao testada com sucesso!     │   │
+│  │    Ultimo teste: ha 5 minutos       │   │
+│  └─────────────────────────────────────┘   │
+│                                            │
+│  ┌───────────────┐  ┌────────────────┐     │
+│  │ Testar        │  │  💾 Salvar     │     │
+│  └───────────────┘  └────────────────┘     │
+│                                            │
+└────────────────────────────────────────────┘
 ```
 
 ---
 
-## Fase 5: Hook `useSGASync`
+## Fase 5: Atualizar ServicosTab
 
-**Arquivo:** `src/hooks/useSGASync.ts`
+### Modificacoes:
 
-### 5.1 Interface do Hook
+1. Tornar TODOS os servicos configuraveis (nao apenas rastreadores)
+2. Adicionar prop `integracaoTipo` para mapear ao sheet correto
+3. Usar o novo `ConfigurarIntegracaoSheet` para todas as integracoes
 
 ```typescript
-interface UseSGASyncOptions {
-  veiculoId: string;
-  associadoId: string;
-  onSuccess?: (data: SyncResult) => void;
-  onError?: (error: Error) => void;
+const categoriasBase = [
+  {
+    titulo: 'Gestao',
+    servicos: [
+      {
+        id: 'hinova',
+        nome: 'SGA Hinova',
+        integracaoId: 'hinova',
+        integracao Tipo: 'hinova', // Para o sheet
+        configuravel: true, // AGORA CONFIGURAVEL
+      },
+    ],
+  },
+  // ... outras categorias
+];
+```
+
+---
+
+## Fase 6: Hook useIntegracaoCredenciais
+
+### Novo Hook: `src/hooks/useIntegracaoCredenciais.ts`
+
+**Funcionalidades:**
+- Buscar status de credenciais por integracao
+- Salvar novas credenciais
+- Testar conexao
+- Deletar credenciais
+
+```typescript
+interface UseIntegracaoCredenciaisOptions {
+  integracao: 'hinova' | 'softruck' | 'rede_veiculos' | 'asaas' | 'autentique' | 'resend';
 }
 
-interface SyncResult {
-  success: boolean;
-  codigo_associado_hinova?: number;
-  codigo_veiculo_hinova?: number;
-  fotos_enviadas?: number;
-  fotos_com_erro?: string[];
-}
-
-// Retorno do hook
 const {
-  status,           // 'idle' | 'loading' | 'success' | 'error'
+  status,           // { configurado, testado_em, teste_sucesso, teste_mensagem }
   isLoading,
-  isSynced,         // true se ja sincronizado
-  canSync,          // true se pode sincronizar
-  error,
-  syncResult,
-  veiculoData,      // dados do veiculo com status_sga
-  logs,             // historico de tentativas
-  sync,             // funcao para sincronizar
-  retry,            // funcao para retry
-} = useSGASync(options);
-```
-
-### 5.2 Logica de `canSync`
-
-```typescript
-const canSync = useMemo(() => {
-  const veiculo = veiculoQuery.data;
-  if (!veiculo) return false;
-  if (veiculo.sincronizado_hinova) return false;
-  if (veiculo.status_sga === 'sincronizando') return false;
-  
-  // Veiculo deve estar aprovado ou ativo
-  const statusOk = ['aprovado', 'ativo'].includes(veiculo.status);
-  
-  return statusOk;
-}, [veiculoQuery.data]);
-```
-
----
-
-## Fase 6: Integracao na Pagina PropostaAnalise
-
-**Arquivo:** `src/pages/cadastro/PropostaAnalise.tsx`
-
-### 6.1 Onde Adicionar o Botao
-
-Na secao de acoes (linha ~730), apos a aprovacao, adicionar:
-
-```typescript
-{/* Ativacao SGA Hinova */}
-{proposta.status === 'ativo' && proposta.veiculo_id && (
-  <div className="mt-4 pt-4 border-t">
-    <p className="text-sm text-muted-foreground mb-3">
-      Integracao SGA Hinova
-    </p>
-    <BotaoAtivarSGA
-      veiculoId={proposta.veiculo_id}
-      associadoId={proposta.associado_id}
-      statusAtual={proposta.veiculo_status_sga || 'pendente'}
-      onSuccess={() => {
-        queryClient.invalidateQueries({ queryKey: ['proposta', id] });
-      }}
-    />
-    
-    {/* Informacoes pos-sincronizacao */}
-    {proposta.veiculo_sincronizado_hinova && (
-      <div className="mt-3 p-3 bg-success/10 rounded-lg text-sm">
-        <p>Codigo Hinova: {proposta.veiculo_codigo_hinova}</p>
-        <p>Sincronizado em: {format(...)}</p>
-      </div>
-    )}
-  </div>
-)}
-```
-
-### 6.2 Condicoes para Exibir
-
-- Proposta com status `ativo`
-- Veiculo possui `veiculo_id`
-- Usuario tem perfil `analista_cadastro` ou superior
-
----
-
-## Fase 7: Configuracao no Supabase
-
-### 7.1 config.toml
-
-```toml
-[functions.sga-hinova-sync]
-verify_jwt = false
-```
-
-### 7.2 Adicionar Integracao na Pagina de Servicos
-
-Na `ServicosTab.tsx`, adicionar card para SGA Hinova:
-
-```typescript
-{
-  id: 'hinova',
-  nome: 'SGA Hinova',
-  descricao: 'Sistema de gestao de associados',
-  icone: '🏢',
-  integracaoId: 'hinova',
-  secretName: 'HINOVA_TOKEN',
-}
+  isSaving,
+  isTesting,
+  salvar,           // (credenciais) => Promise
+  testar,           // () => Promise
+  remover,          // () => Promise
+} = useIntegracaoCredenciais({ integracao: 'hinova' });
 ```
 
 ---
@@ -458,19 +283,45 @@ Na `ServicosTab.tsx`, adicionar card para SGA Hinova:
 
 | Arquivo | Descricao |
 |---------|-----------|
-| `supabase/functions/sga-hinova-sync/index.ts` | Edge function principal |
-| `src/components/cadastro/BotaoAtivarSGA.tsx` | Componente do botao |
-| `src/hooks/useSGASync.ts` | Hook de gerenciamento de estado |
+| `supabase/functions/integracoes-credenciais/index.ts` | Edge function para CRUD de credenciais |
+| `src/components/integracoes/ConfigurarIntegracaoSheet.tsx` | Sheet de configuracao generico |
+| `src/hooks/useIntegracaoCredenciais.ts` | Hook para gerenciar credenciais |
 
 ## Arquivos a Modificar
 
 | Arquivo | Alteracoes |
 |---------|------------|
-| `supabase/config.toml` | Adicionar funcao sga-hinova-sync |
-| `src/pages/cadastro/PropostaAnalise.tsx` | Integrar BotaoAtivarSGA |
-| `src/pages/cadastro/AssociadoDetalhe.tsx` | Exibir status SGA |
-| `src/components/integracoes/ServicosTab.tsx` | Adicionar card Hinova |
-| `src/hooks/useIntegracoesStatus.ts` | Verificar secret HINOVA_TOKEN |
+| `supabase/config.toml` | Adicionar nova edge function |
+| `supabase/functions/sga-hinova-sync/index.ts` | Buscar credenciais do banco como fallback |
+| `supabase/functions/rastreador-testar-conexao/index.ts` | Buscar credenciais do banco como fallback |
+| `supabase/functions/integracoes-verificar-secrets/index.ts` | Verificar banco alem de ENV |
+| `src/components/integracoes/ServicosTab.tsx` | Usar novo sheet para todas integracoes |
+| `src/hooks/useIntegracoesStatus.ts` | Incluir status de credenciais do banco |
+
+---
+
+## Seguranca
+
+1. **Criptografia em repouso** - Credenciais criptografadas com AES-256-GCM
+2. **RLS restritivo** - Apenas diretores e desenvolvedores podem gerenciar
+3. **Sem exposicao de valores** - UI nunca recebe valores decriptografados apos salvar
+4. **Logs de auditoria** - Registrar quem alterou credenciais e quando
+5. **Chave segura** - Derivada do SERVICE_ROLE_KEY, inacessivel pelo frontend
+
+---
+
+## Fluxo de Usuario Final
+
+1. Diretor acessa **Configuracoes > Integracoes**
+2. Clica no card **SGA Hinova** > "Configurar"
+3. Sheet abre com campos: Token, Usuario, Senha, Codigo Conta
+4. Preenche os valores fornecidos pela Hinova
+5. Clica "Testar Conexao"
+6. Sistema testa autenticacao com a API real
+7. Se sucesso, mostra mensagem verde
+8. Clica "Salvar"
+9. Card muda para verde com "Configurado"
+10. Sistema ja pode sincronizar associados com o SGA
 
 ---
 
@@ -478,22 +329,11 @@ Na `ServicosTab.tsx`, adicionar card para SGA Hinova:
 
 | Fase | Tempo |
 |------|-------|
-| Configurar secrets | 10 min |
-| Migracoes de banco | 15 min |
-| Edge Function sga-hinova-sync | 90 min |
-| Componente BotaoAtivarSGA | 45 min |
-| Hook useSGASync | 30 min |
-| Integracao PropostaAnalise | 30 min |
-| Integracao ServicosTab | 15 min |
+| Migracao de banco | 10 min |
+| Edge Function integracoes-credenciais | 60 min |
+| Modificar Edge Functions existentes | 45 min |
+| ConfigurarIntegracaoSheet | 60 min |
+| Hook useIntegracaoCredenciais | 30 min |
+| Atualizar ServicosTab | 20 min |
 | Testes e ajustes | 45 min |
-| **Total** | **~4-5 horas** |
-
----
-
-## Proximos Passos Apos Implementacao
-
-1. Obter credenciais da API Hinova com o cliente
-2. Configurar secrets no Supabase
-3. Testar com um associado/veiculo em ambiente de homologacao
-4. Ajustar mapeamentos de codigos conforme cadastros no Hinova
-5. Liberar para producao
+| **Total** | **~4.5 horas** |
