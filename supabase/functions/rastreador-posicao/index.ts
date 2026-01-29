@@ -197,10 +197,15 @@ serve(async (req) => {
       );
     }
 
-    // Verificar IDs necessários
-    if (!rastreador.plataforma_veiculo_id || !rastreador.plataforma_device_id) {
+    // Fallback: usa id_plataforma se campos específicos estiverem vazios
+    const vehicleId = rastreador.plataforma_veiculo_id || rastreador.id_plataforma;
+    const deviceId = rastreador.plataforma_device_id || rastreador.id_plataforma;
+
+    if (!vehicleId || !deviceId) {
       throw new Error('Rastreador não configurado com IDs da plataforma');
     }
+
+    console.log(`[Softruck] Usando vehicleId=${vehicleId}, deviceId=${deviceId}`);
 
     const baseUrl = plataforma.ambiente_atual === 'producao'
       ? plataforma.api_url_producao
@@ -210,8 +215,8 @@ serve(async (req) => {
     const posicao = await getPosicaoSoftruckComRetry(
       supabaseUrl,
       supabaseKey,
-      rastreador.plataforma_veiculo_id,
-      rastreador.plataforma_device_id,
+      vehicleId,
+      deviceId,
       baseUrl
     );
 
