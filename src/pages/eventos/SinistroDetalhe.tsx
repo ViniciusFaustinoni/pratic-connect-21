@@ -23,6 +23,7 @@ import { EmitirParecerModal } from '@/components/eventos/EmitirParecerModal';
 import { ConversaIADialog } from '@/components/sinistros/ConversaIADialog';
 import { AcionarRecuperacaoModal } from '@/components/sinistros/AcionarRecuperacaoModal';
 import { CardAcionamentoRoubo } from '@/components/sinistros/CardAcionamentoRoubo';
+import { TrajetoSinistroCard } from '@/components/sinistros/TrajetoSinistroCard';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -827,6 +828,15 @@ export default function SinistroDetalhe() {
               sinistroId={id!}
               onAcionar={() => setModalAcionamentoOpen(true)}
               podeAcionar={!['encerrado', 'cancelado', 'negado'].includes(sinistro.status)}
+            />
+          )}
+
+          {/* Card Trajeto para Auditoria */}
+          {sinistro.veiculo_id && (
+            <TrajetoSinistroCard
+              veiculoId={sinistro.veiculo_id}
+              dataOcorrencia={sinistro.data_ocorrencia}
+              localOcorrencia={sinistro.local_ocorrencia}
             />
           )}
         </div>

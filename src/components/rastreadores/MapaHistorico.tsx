@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { MapContainer, TileLayer, Polyline, Marker, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { format, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Calendar, Route, Play, Pause, SkipForward, SkipBack, Loader2, AlertTriangle } from 'lucide-react';
+import { Calendar, Route, Play, Pause, SkipForward, SkipBack, Loader2, AlertTriangle, StopCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Calendar as CalendarPicker } from '@/components/ui/calendar';
@@ -11,7 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { useRastreadorHistoricoAPI, type TrajetoPonto } from '@/hooks/useRastreadorHistoricoAPI';
+import { useRastreadorHistoricoAPI, type TrajetoPonto, type PontoParada } from '@/hooks/useRastreadorHistoricoAPI';
 import 'leaflet/dist/leaflet.css';
 
 interface MapaHistoricoProps {
@@ -57,11 +57,20 @@ const createEndIcon = () => L.divIcon({
   iconAnchor: [6, 6],
 });
 
+// Ícone para paradas (amarelo)
+const createStopIcon = () => L.divIcon({
+  className: 'stop-marker',
+  html: `<div style="width: 10px; height: 10px; background: #f59e0b; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"></div>`,
+  iconSize: [10, 10],
+  iconAnchor: [5, 5],
+});
+
 export function MapaHistorico({ rastreadorId, altura = '400px' }: MapaHistoricoProps) {
   const [dataInicio, setDataInicio] = useState<Date>(subDays(new Date(), 1));
   const [dataFim, setDataFim] = useState<Date>(new Date());
   const [posicaoAtual, setPosicaoAtual] = useState(0);
   const [reproduzindo, setReproduzindo] = useState(false);
+  const [mostrarParadas, setMostrarParadas] = useState(true);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const { data, isLoading, error } = useRastreadorHistoricoAPI({
@@ -71,6 +80,7 @@ export function MapaHistorico({ rastreadorId, altura = '400px' }: MapaHistoricoP
   });
 
   const trajeto = data?.trajeto || [];
+  const paradas: PontoParada[] = data?.paradas || [];
 
   // Reprodução automática
   useEffect(() => {
@@ -154,6 +164,18 @@ export function MapaHistorico({ rastreadorId, altura = '400px' }: MapaHistoricoP
               {trajeto.length} pontos
             </Badge>
 
+            {paradas.length > 0 && (
+              <Button 
+                variant={mostrarParadas ? "default" : "outline"} 
+                size="sm"
+                onClick={() => setMostrarParadas(!mostrarParadas)}
+                className="gap-1"
+              >
+                <StopCircle className="h-3 w-3" />
+                {paradas.length} parada{paradas.length > 1 ? 's' : ''}
+              </Button>
+            )}
+
             {data?.fonte && (
               <Badge variant={data.fonte === 'api' ? 'default' : 'outline'}>
                 {data.fonte === 'api' ? '🟢 API' : '🟡 Local'}
@@ -201,6 +223,26 @@ export function MapaHistorico({ rastreadorId, altura = '400px' }: MapaHistoricoP
                   position={[trajeto[trajeto.length - 1].latitude, trajeto[trajeto.length - 1].longitude]}
                   icon={createEndIcon()}
                 />
+
+                {/* Marcadores de parada (amarelos) */}
+                {mostrarParadas && paradas.map((parada, idx) => (
+                  <Marker
+                    key={`stop-${idx}`}
+                    position={[parada.latitude, parada.longitude]}
+                    icon={createStopIcon()}
+                  >
+                    <Popup>
+                      <div className="text-sm">
+                        <strong className="text-amber-600">⏸ Parada</strong>
+                        <p>{parada.duracao_minutos} minutos</p>
+                        <p className="text-xs text-muted-foreground">
+                          {format(new Date(parada.inicio), 'HH:mm', { locale: ptBR })} - {format(new Date(parada.fim), 'HH:mm', { locale: ptBR })}
+                        </p>
+                        {parada.endereco && <p className="text-xs mt-1">{parada.endereco}</p>}
+                      </div>
+                    </Popup>
+                  </Marker>
+                ))}
 
                 {/* Marcador posição atual */}
                 {pontoAtual && (

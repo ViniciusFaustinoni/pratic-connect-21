@@ -6,6 +6,80 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+interface TrajetoPonto {
+  latitude: number;
+  longitude: number;
+  velocidade: number;
+  ignicao: boolean;
+  data_posicao: string;
+  endereco?: string;
+}
+
+interface PontoParada {
+  latitude: number;
+  longitude: number;
+  inicio: string;
+  fim: string;
+  duracao_minutos: number;
+  endereco?: string;
+}
+
+/**
+ * Identifica pontos de parada no trajeto (velocidade = 0 por mais de 5 minutos)
+ */
+function identificarParadas(pontos: TrajetoPonto[]): PontoParada[] {
+  const paradas: PontoParada[] = [];
+  let inicioParada: number | null = null;
+  
+  for (let i = 0; i < pontos.length; i++) {
+    const ponto = pontos[i];
+    const estaParado = ponto.velocidade === 0 && !ponto.ignicao;
+    
+    if (estaParado && inicioParada === null) {
+      inicioParada = i;
+    } else if (!estaParado && inicioParada !== null) {
+      const pontoInicio = pontos[inicioParada];
+      const pontoFim = pontos[i - 1];
+      const duracao = (new Date(pontoFim.data_posicao).getTime() - 
+                       new Date(pontoInicio.data_posicao).getTime()) / 60000;
+      
+      // Só considera paradas maiores que 5 minutos
+      if (duracao >= 5) {
+        paradas.push({
+          latitude: pontoInicio.latitude,
+          longitude: pontoInicio.longitude,
+          inicio: pontoInicio.data_posicao,
+          fim: pontoFim.data_posicao,
+          duracao_minutos: Math.round(duracao),
+          endereco: pontoInicio.endereco,
+        });
+      }
+      inicioParada = null;
+    }
+  }
+  
+  // Verificar se terminou em uma parada
+  if (inicioParada !== null && pontos.length > 0) {
+    const pontoInicio = pontos[inicioParada];
+    const pontoFim = pontos[pontos.length - 1];
+    const duracao = (new Date(pontoFim.data_posicao).getTime() - 
+                     new Date(pontoInicio.data_posicao).getTime()) / 60000;
+    
+    if (duracao >= 5) {
+      paradas.push({
+        latitude: pontoInicio.latitude,
+        longitude: pontoInicio.longitude,
+        inicio: pontoInicio.data_posicao,
+        fim: pontoFim.data_posicao,
+        duracao_minutos: Math.round(duracao),
+        endereco: pontoInicio.endereco,
+      });
+    }
+  }
+  
+  return paradas;
+}
+
 /**
  * Obtém token Softruck com suporte a retry
  */
@@ -56,7 +130,8 @@ async function buscarTrajetoSoftruckComRetry(
       const url = new URL(`${baseUrl}/vehicles/${vehicleId}/trajectories/`);
       url.searchParams.set('filters[start_date]', inicio);
       url.searchParams.set('filters[end_date]', fim);
-      url.searchParams.set('limit', '500');
+      url.searchParams.set('includes[stops]', 'true'); // Solicitar paradas
+      url.searchParams.set('limit', '1000');
 
       console.log(`[Softruck] Buscando trajeto (tentativa ${tentativa}/${maxRetries}):`, url.toString());
 
@@ -154,6 +229,19 @@ serve(async (req) => {
 
       const { data: historico } = await query.limit(1000);
 
+      // Transformar dados locais para formato padrão
+      const trajeto: TrajetoPonto[] = (historico || []).map((p: any) => ({
+        latitude: Number(p.latitude),
+        longitude: Number(p.longitude),
+        velocidade: p.velocidade || 0,
+        ignicao: p.ignicao || false,
+        data_posicao: p.data_posicao,
+        endereco: p.endereco,
+      }));
+
+      // Identificar paradas mesmo em dados locais
+      const paradas = identificarParadas(trajeto);
+
       return new Response(
         JSON.stringify({
           success: true,
@@ -161,8 +249,10 @@ serve(async (req) => {
           mensagem: plataforma 
             ? `${plataforma.nome_exibicao} não suporta histórico via API. Exibindo dados locais.`
             : 'Plataforma não configurada. Exibindo dados locais.',
-          trajeto: historico || [],
-          total: historico?.length || 0,
+          trajeto,
+          paradas,
+          total: trajeto.length,
+          total_paradas: paradas.length,
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -176,8 +266,8 @@ serve(async (req) => {
     const inicio = data_inicio || new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const fim = data_fim || new Date().toISOString();
 
-    // Buscar histórico Softruck com retry
-    const vehicleId = rastreador.plataforma_device_id || rastreador.id_plataforma;
+    // Buscar histórico Softruck com retry - usar fallback para id_plataforma
+    const vehicleId = rastreador.plataforma_veiculo_id || rastreador.plataforma_device_id || rastreador.id_plataforma;
     
     if (!vehicleId) {
       throw new Error('ID do veículo na plataforma não configurado');
@@ -193,7 +283,7 @@ serve(async (req) => {
     );
 
     // Transformar dados
-    const trajeto = dadosTrajeto.map((item: any) => ({
+    const trajeto: TrajetoPonto[] = dadosTrajeto.map((item: any) => ({
       latitude: item.attributes?.latitude || item.latitude,
       longitude: item.attributes?.longitude || item.longitude,
       velocidade: item.attributes?.speed || item.speed || 0,
@@ -202,15 +292,20 @@ serve(async (req) => {
       endereco: item.attributes?.address || item.address,
     }));
 
-    console.log(`Trajeto Softruck: ${trajeto.length} pontos`);
+    // Identificar paradas
+    const paradas = identificarParadas(trajeto);
+
+    console.log(`Trajeto Softruck: ${trajeto.length} pontos, ${paradas.length} paradas`);
 
     return new Response(
       JSON.stringify({
         success: true,
         fonte: 'api',
         trajeto,
+        paradas,
         periodo: { inicio, fim },
         total: trajeto.length,
+        total_paradas: paradas.length,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
