@@ -13,6 +13,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format, differenceInDays } from 'date-fns';
 import { BaixarNegativacaoModal } from '@/components/cobranca/BaixarNegativacaoModal';
+import { ConfirmarNegativacaoModal } from '@/components/cobranca/ConfirmarNegativacaoModal';
 import { ptBR } from 'date-fns/locale';
 
 interface Negativacao {
@@ -71,6 +72,7 @@ export default function Negativacao() {
   const [baixaModalOpen, setBaixaModalOpen] = useState(false);
   const [negativacaoSelecionada, setNegativacaoSelecionada] = useState<Negativacao | null>(null);
   const [orgaoLote, setOrgaoLote] = useState('SPC');
+  const [confirmarLoteOpen, setConfirmarLoteOpen] = useState(false);
 
   // Query: Negativações
   const { data: negativacoes = [], isLoading: loadingNegativacoes } = useQuery({
@@ -170,6 +172,7 @@ export default function Negativacao() {
     onSuccess: () => {
       toast.success(`${selectedCandidatos.length} negativações registradas`);
       setSelectedCandidatos([]);
+      setConfirmarLoteOpen(false);
       queryClient.invalidateQueries({ queryKey: ['negativacoes'] });
       queryClient.invalidateQueries({ queryKey: ['candidatos-negativacao'] });
     },
@@ -490,7 +493,7 @@ export default function Negativacao() {
                     </Select>
                     <Button
                       variant="destructive"
-                      onClick={() => negativarLote.mutate()}
+                      onClick={() => setConfirmarLoteOpen(true)}
                       disabled={negativarLote.isPending}
                     >
                       <AlertTriangle className="h-4 w-4 mr-2" />
@@ -552,6 +555,16 @@ export default function Negativacao() {
         open={baixaModalOpen}
         onClose={handleCloseBaixa}
         negativacao={negativacaoSelecionada}
+      />
+
+      {/* Modal Confirmar Negativação em Lote */}
+      <ConfirmarNegativacaoModal
+        open={confirmarLoteOpen}
+        onClose={() => setConfirmarLoteOpen(false)}
+        onConfirm={() => negativarLote.mutate()}
+        quantidade={selectedCandidatos.length}
+        valorTotal={candidatos.filter(c => selectedCandidatos.includes(c.id)).reduce((acc, c) => acc + (c.valor_final || 0), 0)}
+        isPending={negativarLote.isPending}
       />
     </div>
   );

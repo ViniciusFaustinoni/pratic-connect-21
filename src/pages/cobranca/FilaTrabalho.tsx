@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { Play, Users, User, Clock, CheckCircle, Phone, MessageSquare, RefreshCw } from 'lucide-react';
+import { useState } from 'react';
+import { Play, Users, User, Clock, CheckCircle, Phone, MessageSquare, RefreshCw, Headphones } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -13,6 +13,7 @@ import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
+import { ModoTrabalhoModal } from '@/components/cobranca/ModoTrabalhoModal';
 
 const formatTelefone = (tel: string) => {
   const clean = tel?.replace(/\D/g, '') || '';
@@ -63,6 +64,8 @@ const FilaTrabalho = () => {
     motivo: 'todos'
   });
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
+  const [modoTrabalhoOpen, setModoTrabalhoOpen] = useState(false);
+  const [currentModoIndex, setCurrentModoIndex] = useState(0);
 
   // Fila de trabalho
   const { data: fila, isLoading } = useQuery({
@@ -208,19 +211,59 @@ const FilaTrabalho = () => {
     }
   };
 
+  // Iniciar modo trabalho
+  const iniciarModoTrabalho = () => {
+    if (!fila || fila.length === 0) {
+      toast.error('Nenhum item na fila');
+      return;
+    }
+    setCurrentModoIndex(0);
+    setModoTrabalhoOpen(true);
+  };
+
+  const handleModoNext = () => {
+    if (fila && currentModoIndex < fila.length - 1) {
+      setCurrentModoIndex(prev => prev + 1);
+    } else {
+      setModoTrabalhoOpen(false);
+      toast.success('Fila de trabalho concluída!');
+      queryClient.invalidateQueries({ queryKey: ['fila-cobranca'] });
+    }
+  };
+
+  const handleModoSkip = () => {
+    if (fila && currentModoIndex < fila.length - 1) {
+      setCurrentModoIndex(prev => prev + 1);
+    } else {
+      setModoTrabalhoOpen(false);
+    }
+  };
+
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Fila de Trabalho</h1>
-        <Button 
-          size="lg" 
-          onClick={() => pegarProximo.mutate()}
-          disabled={pegarProximo.isPending}
-        >
-          <Play className="h-5 w-5 mr-2" />
-          {pegarProximo.isPending ? 'Buscando...' : 'Pegar Próximo'}
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline"
+            size="lg" 
+            onClick={iniciarModoTrabalho}
+            disabled={!fila || fila.length === 0}
+          >
+            <Headphones className="h-5 w-5 mr-2" />
+            Modo Trabalho
+          </Button>
+          <Button 
+            size="lg" 
+            onClick={() => pegarProximo.mutate()}
+            disabled={pegarProximo.isPending}
+          >
+            <Play className="h-5 w-5 mr-2" />
+            {pegarProximo.isPending ? 'Buscando...' : 'Pegar Próximo'}
+          </Button>
+        </div>
       </div>
 
       {/* Cards Resumo */}
@@ -445,6 +488,15 @@ const FilaTrabalho = () => {
           )}
         </CardContent>
       </Card>
+      {/* Modal Modo Trabalho */}
+      <ModoTrabalhoModal
+        open={modoTrabalhoOpen}
+        onClose={() => setModoTrabalhoOpen(false)}
+        fila={fila || []}
+        currentIndex={currentModoIndex}
+        onNext={handleModoNext}
+        onSkip={handleModoSkip}
+      />
     </div>
   );
 };
