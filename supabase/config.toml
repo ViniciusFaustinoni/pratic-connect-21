@@ -260,3 +260,6 @@ verify_jwt = false
 
 [functions.rede-veiculos-vincular-cliente]
 verify_jwt = false
+
+[functions.rede-veiculos-desvincular-cliente]
+verify_jwt = false

@@ -226,6 +226,56 @@ export function useUpdateRastreadorStatus() {
 
   return useMutation({
     mutationFn: async ({ id, status, veiculo_id }: { id: string; status: StatusRastreador; veiculo_id?: string | null }) => {
+      // 1. Buscar rastreador atual para verificar se precisa desvincular na plataforma
+      const { data: rastreadorAtual, error: fetchError } = await supabase
+        .from('rastreadores')
+        .select('id, imei, plataforma, status, veiculo_id')
+        .eq('id', id)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      // 2. Se estava instalado e vai para outro status, desvincular na plataforma
+      if (rastreadorAtual?.status === 'instalado' && status !== 'instalado' && rastreadorAtual.veiculo_id) {
+        console.log(`Desvinculando rastreador ${rastreadorAtual.imei} da plataforma ${rastreadorAtual.plataforma}...`);
+        
+        if (rastreadorAtual.plataforma === 'rede_veiculos') {
+          try {
+            const { error: desvincularError } = await supabase.functions.invoke(
+              'rede-veiculos-desvincular-cliente',
+              {
+                body: {
+                  rastreadorId: id,
+                  motivo: `mudanca_status_${status}`,
+                  atualizarBancoLocal: false, // Vamos atualizar manualmente abaixo
+                },
+              }
+            );
+            if (desvincularError) {
+              console.error('Erro ao desvincular na Rede Veículos:', desvincularError);
+              // Continua mesmo com erro na API
+            }
+          } catch (error) {
+            console.error('Exceção ao desvincular:', error);
+          }
+        } else if (rastreadorAtual.plataforma === 'softruck') {
+          try {
+            const { error: softError } = await supabase.functions.invoke('softruck-api', {
+              body: {
+                operation: 'desassociar-device-veiculo',
+                data: { deviceId: id },
+              },
+            });
+            if (softError) {
+              console.error('Erro ao desvincular Softruck:', softError);
+            }
+          } catch (error) {
+            console.error('Exceção ao desvincular Softruck:', error);
+          }
+        }
+      }
+
+      // 3. Atualizar banco local
       const updateData: RastreadorUpdate = { status };
       
       // If status is not 'instalado', clear vehicle association
