@@ -1,371 +1,355 @@
 
 
-# Revisao Completa - Gestao de Conversas e Historico na Evolution API
+# Revisao Completa - Fluxo de Ativacao e Inativacao de Cliente na Rede Veiculos
 
 ## Resumo Executivo
 
-| Funcionalidade | Status | Implementacao Atual |
-|----------------|--------|---------------------|
-| POST /chat/findMessages/{instanceName} | **NAO IMPLEMENTADO** | Nenhum endpoint ou funcao chama este recurso |
-| POST /chat/findChats/{instanceName} | **NAO IMPLEMENTADO** | Nenhum endpoint ou funcao chama este recurso |
-| Historico exibido na ficha do cliente | **NAO IMPLEMENTADO** | Fichas de Lead e Associado nao mostram conversas WhatsApp |
-| Mensagens antigas carregadas | **PARCIAL** | Armazenadas em `whatsapp_mensagens`, mas nao exibidas em UI |
-| Busca por conversas | **NAO IMPLEMENTADO** | Sem interface para buscar/listar conversas |
-| Historico persiste apos reconexao | **PARCIAL** | Mensagens salvas no banco, mas nao sincronizadas da Evolution API |
+| Item | Status | Detalhes |
+|------|--------|----------|
+| Endpoint POST /ativarCliente | **NAO EXISTE NA API** | A API Rede Veiculos trabalha com ativacao por **VEICULO**, nao por cliente |
+| Endpoint POST /inativarCliente | **NAO EXISTE NA API** | A API Rede Veiculos trabalha com inativacao por **VEICULO**, nao por cliente |
+| Associado aprovado no cadastro | **PARCIAL** | Aprovacao ativa associado localmente, vinculacao ocorre na instalacao |
+| Reativacao de associado que cancelou | **IMPLEMENTADO** | Usa `informarAdimplente` + revincular veiculos |
+| Associado regulariza pendencias | **IMPLEMENTADO** | Webhook ASAAS e baixa manual notificam adimplencia |
+| Cancelamento definitivo | **IMPLEMENTADO** | Usa `desvincularClienteVeiculo` para cada veiculo |
+| Exclusao por fraude | **NAO EXISTE** | Funcionalidade especifica nao implementada |
+| Todos os veiculos desvinculados | **PARCIAL** | Nao ha logica especifica para inativar cliente |
+| Cliente inativo perde acesso ao App | **IMPLEMENTADO** | AppRastreamento bloqueia se status = suspenso/inadimplente |
+| Reativacao restaura acesso | **IMPLEMENTADO** | Muda status para ativo e notifica adimplencia |
+| Historico preservado | **IMPLEMENTADO** | Tabela `associados_historico` mantem registros |
 
 ---
 
-## Analise Detalhada
+## Analise Conceitual: Cliente vs Veiculo na API Rede Veiculos
 
-### 1. Endpoints da Evolution API - NAO UTILIZADOS
+### Descoberta Importante
 
-**POST /chat/findMessages/{instanceName}**
+A API da Rede Veiculos **NAO POSSUI** endpoints especificos para ativar/inativar CLIENTES. O modelo de negocio e baseado em **VEICULOS**, nao em clientes. Os endpoints disponiveis sao:
 
-Este endpoint permite buscar historico de mensagens de uma conversa especifica. Parametros aceitos:
+| Nivel | Endpoints Disponiveis |
+|-------|----------------------|
+| **Cliente** | vincularClienteVeiculo, desvincularClienteVeiculo, atualizarDadosCliente |
+| **Veiculo** | ativarVeiculo, inativarVeiculo, atualizarDadosVeiculo |
+| **Financeiro** | informarVeiculoAdimplente, informarVeiculoInadimplente |
 
-```json
-{
-  "where": {
-    "key": {
-      "remoteJid": "5521999999999@s.whatsapp.net"
+**Implicacao:** Para "inativar um cliente" na Rede Veiculos, deve-se:
+1. Inativar/desvincular TODOS os seus veiculos
+2. Informar inadimplencia em TODOS os veiculos
+
+---
+
+## Estado Atual da Implementacao
+
+### Edge Functions Existentes
+
+| Edge Function | Operacao | Status |
+|---------------|----------|--------|
+| `rede-veiculos-vincular-cliente` | vincularClienteVeiculo | Implementado |
+| `rede-veiculos-desvincular-cliente` | desvincularClienteVeiculo | Implementado |
+| `rede-veiculos-atualizar-cliente` | atualizarDadosCliente | Implementado |
+| `rede-veiculos-ativar-veiculo` | ativarVeiculo | Implementado |
+| `rede-veiculos-inativar-veiculo` | inativarVeiculo | Implementado |
+| `rede-veiculos-informar-adimplente` | informarVeiculoAdimplente | Implementado |
+| `rede-veiculos-informar-inadimplente` | informarVeiculoInadimplente | Implementado |
+
+### Cenarios de Ativacao de Cliente
+
+#### 1. Associado Aprovado no Cadastro
+
+**Arquivo:** `src/hooks/usePropostasPendentes.ts` (linhas 1356-1382)
+
+```typescript
+// Status do associado definido como 'ativo' imediatamente na aprovacao
+const statusAssociado = 'ativo';
+
+const { data: associadoAtualizado } = await supabase
+  .from('associados')
+  .update({
+    status: statusAssociado,
+    data_adesao: agora.split('T')[0],
+    aprovado_por: profile.id,
+    aprovado_em: agora,
+  })
+  .eq('id', associadoId);
+```
+
+**Status:** Apenas atualiza banco local. Vinculacao na Rede Veiculos ocorre posteriormente quando instalador executa a instalacao e chama `rede-veiculos-vincular-cliente`.
+
+**Fluxo Completo:**
+1. Analista aprova proposta -> associado.status = 'ativo'
+2. Instalador conclui instalacao -> chama `rede-veiculos-vincular-cliente`
+3. Vinculacao cria cliente e veiculo na Rede Veiculos
+4. Automaticamente ativa veiculo via `ativarVeiculo`
+
+#### 2. Reativacao de Associado que Havia Cancelado
+
+**Arquivo:** `src/hooks/useAssociados.ts` (linhas 479-545)
+
+```typescript
+const reativarAssociado = useMutation({
+  mutationFn: async (id: string) => {
+    // 1. Atualizar status local
+    await supabase.from('associados').update({ status: 'ativo', ... });
+
+    // 2. Notificar Rede Veiculos sobre adimplencia
+    await supabase.functions.invoke('rede-veiculos-informar-adimplente', {
+      body: { associadoId: id, motivo: 'reativacao_manual' },
+    });
+
+    // 3. Revincular veiculos se necessario
+    for (const veiculo of veiculos) {
+      if (rastreador?.plataforma === 'rede_veiculos') {
+        await supabase.functions.invoke('rede-veiculos-vincular-cliente', { ... });
+      }
     }
-  }
+  },
+});
+```
+
+**Status:** IMPLEMENTADO - Notifica adimplencia e revincular cada veiculo individualmente.
+
+#### 3. Associado Regulariza Pendencias
+
+**Coberto por:**
+- Webhook ASAAS (`PAYMENT_RECEIVED`) - chama `rede-veiculos-informar-adimplente`
+- Baixa manual (`RegistrarPagamentoModal.tsx`) - chama `rede-veiculos-informar-adimplente`
+
+**Status:** IMPLEMENTADO
+
+### Cenarios de Inativacao de Cliente
+
+#### 1. Cancelamento Definitivo
+
+**Arquivo:** `src/hooks/useAssociados.ts` (linhas 590-656)
+
+```typescript
+const cancelarAssociado = useMutation({
+  mutationFn: async ({ id, motivo }) => {
+    // Para cada rastreador Rede Veiculos, desvincular na plataforma
+    for (const rastreador of rastreadores || []) {
+      if (rastreador.plataforma === 'rede_veiculos') {
+        await supabase.functions.invoke('rede-veiculos-desvincular-cliente', {
+          body: {
+            rastreadorId: rastreador.id,
+            motivo: 'cancelamento_contrato',
+            atualizarBancoLocal: true,
+          },
+        });
+      }
+    }
+    
+    // Atualizar status do associado
+    await supabase.from('associados').update({ status: 'cancelado', ... });
+  },
+});
+```
+
+**Status:** IMPLEMENTADO - Desvincula cada veiculo individualmente.
+
+**Gap Identificado:** A funcao deveria tambem chamar `inativarVeiculo` antes de `desvincularClienteVeiculo` para garantir que o veiculo seja desativado corretamente na plataforma.
+
+#### 2. Exclusao por Fraude Comprovada
+
+**Arquivo:** `supabase/functions/delete-associado/index.ts`
+
+Esta funcao exclui permanentemente o associado do banco local, mas **NAO** notifica a Rede Veiculos:
+- Nao chama `inativarVeiculo`
+- Nao chama `desvincularClienteVeiculo`
+- Nao chama `informarInadimplente`
+
+**Status:** GAP CRITICO - Exclusao por fraude nao inativa/desvincula na plataforma Rede Veiculos.
+
+#### 3. Todos os Veiculos Desvinculados
+
+**Nao existe logica automatica para:**
+- Detectar quando o ultimo veiculo foi desvinculado
+- Marcar cliente como inativo na plataforma
+
+**Status:** GAP - Nao ha logica para tratar este cenario.
+
+---
+
+## Controle de Acesso ao App
+
+### Implementacao Atual (CORRETA)
+
+**Arquivo:** `src/pages/app/AppRastreamento.tsx` (linhas 227-260)
+
+```typescript
+const associadoBloqueado = associado?.status === 'suspenso' || 
+                            associado?.status === 'inadimplente' || 
+                            associado?.bloqueado === true;
+
+if (associadoBloqueado) {
+  return (
+    <div className="flex h-screen flex-col bg-background">
+      // Tela de Acesso Bloqueado
+      <h3>Acesso Bloqueado</h3>
+      <p>Seu acesso esta suspenso devido a pendencias financeiras.</p>
+      <Button onClick={() => navigate('/app/boletos')}>Ver Boletos</Button>
+    </div>
+  );
 }
 ```
 
-**Uso esperado no sistema:**
-- Quando atendente abre ficha do lead/associado
-- Quando precisa consultar historico de atendimento
-- Para auditoria de comunicacao
-
-**Status:** NAO existe nenhuma funcao ou componente que chame este endpoint.
+**Status:** IMPLEMENTADO - Cliente com status suspenso/inadimplente nao consegue acessar rastreamento.
 
 ---
 
-**POST /chat/findChats/{instanceName}**
+## Gaps Identificados
 
-Este endpoint lista todas as conversas da instancia WhatsApp.
+### Gap 1: `delete-associado` Nao Notifica Rede Veiculos
 
-**Uso esperado no sistema:**
-- Sincronizar conversas existentes
-- Buscar conversas nao vinculadas a leads/associados
-- Identificar contatos que ainda nao tem cadastro
+A edge function de exclusao permanente **nao** inativa/desvincula na plataforma:
 
-**Status:** NAO existe nenhuma funcao ou componente que chame este endpoint.
-
----
-
-### 2. Armazenamento Local - PARCIAL
-
-**Tabela `whatsapp_mensagens`:**
-
-A tabela existe e armazena mensagens enviadas/recebidas:
-
-| Coluna | Tipo | Uso |
-|--------|------|-----|
-| id | uuid | PK |
-| telefone | varchar | Numero do contato (com DDI) |
-| nome_contato | varchar | Nome se disponivel |
-| tipo | varchar | text, image, document, audio |
-| mensagem | text | Conteudo da mensagem |
-| direcao | varchar | 'entrada' ou 'saida' |
-| status | varchar | enviada, entregue, lida, erro |
-| created_at | timestamp | Data/hora |
-
-**Indices existentes:**
-- `idx_wpp_msg_telefone` - Busca por telefone
-- `idx_wpp_msg_created` - Ordenacao por data
-- `idx_wpp_msg_referencia` - Vinculacao a entidades
-
-**Dados atuais:** 4 mensagens nos ultimos 7 dias (sistema em testes).
-
-**Gap principal:** As mensagens sao salvas quando enviadas/recebidas pelo sistema, mas NAO ha sincronizacao de historico pre-existente da Evolution API.
-
----
-
-### 3. Interface de Usuario - NAO IMPLEMENTADO
-
-**Ficha do Lead (`LeadDetalhe.tsx`):**
-- Mostra historico de acoes do funil (mudancas de etapa, cotacoes)
-- NAO mostra conversas WhatsApp
-- Botao "WhatsApp" apenas abre link externo wa.me
-
-**Ficha do Associado (`AssociadoDetalhe.tsx`):**
-- Mostra historico de eventos (boletos, sinistros, documentos)
-- NAO mostra conversas WhatsApp
-- Botao "WhatsApp" apenas abre link externo wa.me
-
-**Componentes existentes que poderiam ser adaptados:**
-- `TimelineContatos.tsx` - Timeline de contatos no modulo de cobranca (ligacao, whatsapp, sms)
-- `ConversaIADialog.tsx` - Modal para visualizar conversas do chat IA
-- `InteracaoTimeline.tsx` - Timeline de interacoes na ouvidoria
-
----
-
-### 4. Fluxo Atual de Mensagens
-
-```text
-MENSAGEM ENVIADA (sistema -> associado):
-1. Edge Function (whatsapp-send-text, disparar-notificacao, etc.)
-2. Chama Evolution API: POST /message/sendText/{instanceName}
-3. Salva em whatsapp_mensagens com direcao='saida'
-
-MENSAGEM RECEBIDA (associado -> sistema):
-1. Evolution API envia webhook para whatsapp-webhook
-2. Processa mensagem (IA, vinculacao de documentos, etc.)
-3. Salva em whatsapp_mensagens com direcao='entrada'
-4. Envia resposta se necessario
+```typescript
+// FALTANDO em delete-associado/index.ts:
+// 1. Para cada veiculo do associado com rede_veiculos_veiculo_id:
+//    - Chamar rede-veiculos-inativar-veiculo
+//    - Chamar rede-veiculos-desvincular-cliente
+// 2. Registrar log da operacao
 ```
 
-**Gap:** NAO ha sincronizacao de mensagens antigas. Se a instancia for reconectada, o historico anterior na Evolution API nao e importado.
+### Gap 2: `cancelarAssociado` Deveria Inativar Antes de Desvincular
+
+Atualmente, cancela apenas desvincula. Deveria:
+1. Chamar `rede-veiculos-inativar-veiculo` para cada veiculo
+2. Depois chamar `rede-veiculos-desvincular-cliente`
+
+### Gap 3: Nao Ha Funcionalidade Especifica para Fraude
+
+Exclusao por fraude deveria ter fluxo especifico:
+1. Bloquear imediatamente na Rede Veiculos
+2. Desativar todos os alertas
+3. Registrar motivo especial
+
+### Gap 4: Falta Orquestrador de Inativacao de Cliente
+
+Nao ha funcao que coordene a inativacao completa de um cliente:
+- Inativar todos os veiculos
+- Informar inadimplencia em todos
+- Atualizar status local
+- Registrar historico
 
 ---
 
 ## Plano de Implementacao
 
-### Fase 1: Criar Edge Function para Buscar Historico
+### Fase 1: Criar Edge Function Orquestradora
 
-**Criar:** `supabase/functions/whatsapp-find-messages/index.ts`
+**Novo arquivo:** `supabase/functions/rede-veiculos-inativar-cliente-completo/index.ts`
 
 ```typescript
-// Endpoint para buscar historico de mensagens de um contato
-serve(async (req) => {
-  const { telefone, limit = 50 } = await req.json();
-  
-  const EVOLUTION_API_KEY = Deno.env.get("EVOLUTION_API_KEY");
-  
-  // Buscar instancia principal
-  const { data: instancia } = await supabase
-    .from("whatsapp_instancias")
-    .select("api_url, instance_name")
-    .eq("principal", true)
-    .single();
-  
-  // Formatar JID do WhatsApp
-  const jid = `${telefone.replace(/\D/g, '')}@s.whatsapp.net`;
-  
-  // Chamar Evolution API
-  const response = await fetch(
-    `${instancia.api_url}/chat/findMessages/${instancia.instance_name}`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: EVOLUTION_API_KEY,
+interface RequestBody {
+  associadoId: string;
+  motivo: 'cancelamento' | 'fraude' | 'inadimplencia' | 'exclusao';
+  observacoes?: string;
+  atualizarBancoLocal?: boolean;
+}
+
+// Fluxo:
+// 1. Buscar todos os veiculos do associado com rastreador Rede Veiculos
+// 2. Para cada veiculo:
+//    a. Chamar POST /inativarVeiculo
+//    b. Chamar POST /informarVeiculoInadimplente (se aplicavel)
+//    c. Chamar POST /desvincularClienteVeiculo (se cancelamento/exclusao)
+// 3. Atualizar banco local
+// 4. Registrar historico
+```
+
+### Fase 2: Criar Edge Function de Ativacao de Cliente Completo
+
+**Novo arquivo:** `supabase/functions/rede-veiculos-ativar-cliente-completo/index.ts`
+
+```typescript
+interface RequestBody {
+  associadoId: string;
+  motivo?: string;
+}
+
+// Fluxo:
+// 1. Buscar todos os veiculos do associado com rastreador Rede Veiculos
+// 2. Para cada veiculo:
+//    a. Se nao vinculado, chamar vincularClienteVeiculo
+//    b. Chamar POST /ativarVeiculo
+//    c. Chamar POST /informarVeiculoAdimplente
+// 3. Atualizar banco local (veiculos ativos)
+// 4. Registrar historico
+```
+
+### Fase 3: Integrar em `cancelarAssociado`
+
+**Modificar:** `src/hooks/useAssociados.ts`
+
+```typescript
+const cancelarAssociado = useMutation({
+  mutationFn: async ({ id, motivo }) => {
+    // NOVO: Usar orquestrador para inativar completamente
+    await supabase.functions.invoke('rede-veiculos-inativar-cliente-completo', {
+      body: {
+        associadoId: id,
+        motivo: 'cancelamento',
+        observacoes: motivo,
       },
-      body: JSON.stringify({
-        where: {
-          key: { remoteJid: jid },
-        },
-      }),
-    }
-  );
-  
-  const mensagens = await response.json();
-  
-  // Opcionalmente sincronizar com banco local
-  // ...
-  
-  return mensagens;
+    });
+    
+    // Atualizar status do associado (ja existe)
+    await supabase.from('associados').update({ status: 'cancelado', ... });
+  },
 });
 ```
 
-### Fase 2: Criar Edge Function para Listar Conversas
+### Fase 4: Integrar em `delete-associado`
 
-**Criar:** `supabase/functions/whatsapp-find-chats/index.ts`
+**Modificar:** `supabase/functions/delete-associado/index.ts`
+
+Antes de excluir, chamar a edge function orquestradora:
 
 ```typescript
-// Endpoint para listar todas as conversas
-serve(async (req) => {
-  const EVOLUTION_API_KEY = Deno.env.get("EVOLUTION_API_KEY");
-  
-  const { data: instancia } = await supabase
-    .from("whatsapp_instancias")
-    .select("api_url, instance_name")
-    .eq("principal", true)
-    .single();
-  
-  const response = await fetch(
-    `${instancia.api_url}/chat/findChats/${instancia.instance_name}`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: EVOLUTION_API_KEY,
-      },
-      body: JSON.stringify({}),
-    }
-  );
-  
-  const chats = await response.json();
-  
-  // Enriquecer com dados de leads/associados
-  // ...
-  
-  return chats;
+// Antes de deletar veiculos (linha ~196)
+await fetch(`${supabaseUrl}/functions/v1/rede-veiculos-inativar-cliente-completo`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${supabaseServiceKey}`,
+  },
+  body: JSON.stringify({
+    associadoId,
+    motivo: 'exclusao',
+    observacoes: 'Exclusao permanente por diretor',
+  }),
 });
 ```
 
-### Fase 3: Criar Hook para Buscar Mensagens do Cliente
-
-**Criar:** `src/hooks/useWhatsAppHistorico.ts`
-
-```typescript
-export function useWhatsAppHistorico(telefone: string | null) {
-  return useQuery({
-    queryKey: ['whatsapp-historico', telefone],
-    queryFn: async () => {
-      if (!telefone) return [];
-      
-      // Primeiro buscar do banco local
-      const { data: mensagensLocais } = await supabase
-        .from('whatsapp_mensagens')
-        .select('*')
-        .or(`telefone.eq.${telefone},telefone.eq.55${telefone}`)
-        .order('created_at', { ascending: true })
-        .limit(100);
-      
-      return mensagensLocais;
-    },
-    enabled: !!telefone,
-  });
-}
-
-export function useSincronizarHistorico() {
-  return useMutation({
-    mutationFn: async (telefone: string) => {
-      const { data } = await supabase.functions.invoke('whatsapp-find-messages', {
-        body: { telefone, limit: 100 },
-      });
-      return data;
-    },
-  });
-}
-```
-
-### Fase 4: Criar Componente de Timeline WhatsApp
-
-**Criar:** `src/components/whatsapp/HistoricoConversaWhatsApp.tsx`
-
-```typescript
-interface Props {
-  telefone: string;
-}
-
-export function HistoricoConversaWhatsApp({ telefone }: Props) {
-  const { data: mensagens, isLoading } = useWhatsAppHistorico(telefone);
-  const sincronizar = useSincronizarHistorico();
-  
-  return (
-    <Card>
-      <CardHeader className="flex-row justify-between items-center">
-        <CardTitle className="text-base flex items-center gap-2">
-          <MessageCircle className="h-5 w-5 text-green-600" />
-          Conversas WhatsApp
-        </CardTitle>
-        <Button 
-          variant="outline" 
-          size="sm"
-          onClick={() => sincronizar.mutate(telefone)}
-        >
-          <RefreshCw className="h-4 w-4 mr-2" />
-          Sincronizar
-        </Button>
-      </CardHeader>
-      <CardContent>
-        <ScrollArea className="h-[400px]">
-          {mensagens?.map((msg) => (
-            <div 
-              key={msg.id}
-              className={cn(
-                "mb-3 p-3 rounded-lg max-w-[80%]",
-                msg.direcao === 'entrada' 
-                  ? "bg-muted mr-auto" 
-                  : "bg-green-100 ml-auto"
-              )}
-            >
-              <p className="text-sm">{msg.mensagem}</p>
-              <span className="text-xs text-muted-foreground">
-                {format(new Date(msg.created_at), "dd/MM HH:mm")}
-              </span>
-            </div>
-          ))}
-        </ScrollArea>
-      </CardContent>
-    </Card>
-  );
-}
-```
-
-### Fase 5: Integrar na Ficha do Associado
+### Fase 5: Adicionar Opcao de Exclusao por Fraude
 
 **Modificar:** `src/pages/cadastro/AssociadoDetalhe.tsx`
 
-Adicionar nova aba ou secao para historico WhatsApp:
+Adicionar dialog especifico para exclusao por fraude com:
+- Motivo detalhado
+- Confirmacao dupla
+- Chamada a `rede-veiculos-inativar-cliente-completo` com motivo 'fraude'
+
+### Fase 6: Integrar em `reativarAssociado`
+
+**Modificar:** `src/hooks/useAssociados.ts`
 
 ```typescript
-// Nas tabs existentes
-<TabsTrigger value="whatsapp">
-  <MessageCircle className="h-4 w-4 mr-2" />
-  WhatsApp
-</TabsTrigger>
-
-// Conteudo da tab
-<TabsContent value="whatsapp">
-  <HistoricoConversaWhatsApp 
-    telefone={associado.whatsapp || associado.telefone} 
-  />
-</TabsContent>
-```
-
-### Fase 6: Integrar na Ficha do Lead
-
-**Modificar:** `src/pages/vendas/LeadDetalhe.tsx`
-
-Similar ao associado, adicionar componente de historico:
-
-```typescript
-{/* Apos secao de cotacoes */}
-<Card className="shadow-sm">
-  <CardHeader className="pb-4 bg-muted/50 rounded-t-lg border-b">
-    <CardTitle className="flex items-center gap-2 text-lg">
-      <MessageCircle className="h-5 w-5 text-green-600" />
-      Conversas WhatsApp
-    </CardTitle>
-  </CardHeader>
-  <CardContent>
-    <HistoricoConversaWhatsApp telefone={lead.telefone} />
-  </CardContent>
-</Card>
-```
-
-### Fase 7: Sincronizar Historico ao Reconectar
-
-**Modificar:** `src/hooks/useWhatsAppStatus.ts`
-
-Quando status muda para 'open', sincronizar historico recente:
-
-```typescript
-useEffect(() => {
-  if (previousStatus !== 'open' && status === 'open') {
-    // WhatsApp acabou de conectar - sincronizar conversas recentes
-    supabase.functions.invoke('whatsapp-find-chats', {
-      body: { sincronizar: true },
+const reativarAssociado = useMutation({
+  mutationFn: async (id: string) => {
+    // Atualizar status local (ja existe)
+    await supabase.from('associados').update({ status: 'ativo', ... });
+    
+    // NOVO: Usar orquestrador para ativar completamente
+    await supabase.functions.invoke('rede-veiculos-ativar-cliente-completo', {
+      body: {
+        associadoId: id,
+        motivo: 'reativacao_manual',
+      },
     });
-  }
-}, [status, previousStatus]);
+  },
+});
 ```
-
-### Fase 8: Criar Pagina de Conversas Nao Vinculadas
-
-**Criar:** `src/pages/integracao/ConversasWhatsApp.tsx`
-
-Pagina para visualizar todas as conversas e vincular a leads/associados:
-
-- Listar conversas ativas
-- Indicar quais estao vinculadas a cadastros
-- Permitir vincular manualmente
-- Mostrar mensagens recentes de cada conversa
 
 ---
 
@@ -373,85 +357,74 @@ Pagina para visualizar todas as conversas e vincular a leads/associados:
 
 | Arquivo | Descricao |
 |---------|-----------|
-| `supabase/functions/whatsapp-find-messages/index.ts` | Buscar historico de mensagens via Evolution API |
-| `supabase/functions/whatsapp-find-chats/index.ts` | Listar conversas via Evolution API |
-| `src/hooks/useWhatsAppHistorico.ts` | Hook para buscar/sincronizar historico |
-| `src/components/whatsapp/HistoricoConversaWhatsApp.tsx` | Componente de timeline de conversas |
-| `src/pages/integracao/ConversasWhatsApp.tsx` | Pagina de gestao de conversas |
+| `supabase/functions/rede-veiculos-inativar-cliente-completo/index.ts` | Orquestrador de inativacao |
+| `supabase/functions/rede-veiculos-ativar-cliente-completo/index.ts` | Orquestrador de ativacao |
 
 ## Arquivos a Modificar
 
 | Arquivo | Alteracoes |
 |---------|------------|
-| `src/pages/cadastro/AssociadoDetalhe.tsx` | Adicionar tab/secao de WhatsApp |
-| `src/pages/vendas/LeadDetalhe.tsx` | Adicionar secao de WhatsApp |
-| `src/hooks/useWhatsAppStatus.ts` | Sincronizar ao reconectar |
-| `supabase/config.toml` | Adicionar novas functions |
-| `src/App.tsx` | Adicionar rota de conversas |
+| `supabase/functions/delete-associado/index.ts` | Chamar orquestrador antes de excluir |
+| `src/hooks/useAssociados.ts` | Usar orquestradores em cancelar/reativar |
+| `src/pages/cadastro/AssociadoDetalhe.tsx` | Adicionar opcao de exclusao por fraude |
+| `supabase/config.toml` | Registrar novas edge functions |
 
 ---
 
-## Fluxo Proposto
+## Checklist de Verificacao
 
-```text
-ABERTURA DA FICHA DO CLIENTE:
-1. Carregar dados do lead/associado
-2. Buscar mensagens em whatsapp_mensagens pelo telefone
-3. Exibir timeline de conversas na ficha
-
-SINCRONIZACAO MANUAL:
-1. Usuario clica "Sincronizar"
-2. Chama whatsapp-find-messages com telefone
-3. Evolution API retorna historico
-4. Salva mensagens novas em whatsapp_mensagens
-5. Atualiza timeline na tela
-
-RECONEXAO DO WHATSAPP:
-1. Status muda para 'open'
-2. Automaticamente chama whatsapp-find-chats
-3. Identifica conversas recentes
-4. Sincroniza mensagens dos ultimos 7 dias
-5. Mensagens ficam disponiveis nas fichas
-
-AUDITORIA:
-1. Acessar Integracoes > Conversas WhatsApp
-2. Visualizar todas as conversas da instancia
-3. Filtrar por periodo, status, vinculacao
-4. Exportar conversas se necessario
-```
+- [x] Aprovacao de proposta cria associado ativo localmente
+- [x] Vinculacao na instalacao cria cliente na Rede Veiculos
+- [x] Reativacao notifica adimplencia na Rede Veiculos
+- [x] Regularizacao de pendencias notifica adimplencia
+- [x] Cancelamento desvincula veiculos da plataforma
+- [x] Cliente suspenso/inadimplente nao acessa App
+- [x] Historico de mudancas preservado
+- [ ] Edge function orquestradora de inativacao
+- [ ] Edge function orquestradora de ativacao
+- [ ] Exclusao notifica Rede Veiculos antes de deletar
+- [ ] Cancelamento inativa antes de desvincular
+- [ ] Opcao especifica para exclusao por fraude
 
 ---
 
-## Consideracoes Tecnicas
+## Teste Recomendado: Ciclo Completo
 
-### Limites da Evolution API
+### Pre-requisitos
 
-- Endpoint `findMessages` pode retornar muitas mensagens
-- Recomendado usar paginacao/limite (ex: ultimas 100)
-- Mensagens antigas podem nao estar disponiveis se a sessao foi encerrada
+1. Associado ativo com veiculo e rastreador Rede Veiculos
+2. `REDE_VEICULOS_TOKEN` valido
+3. Acesso ao App do Associado
 
-### Performance
+### Passos do Teste
 
-- Indice `idx_wpp_msg_telefone` ja existe para busca por telefone
-- Considerar cache das mensagens mais recentes
-- Paginacao na UI para conversas longas
+**Parte 1: Inativar Cliente (Cancelamento)**
 
-### Privacidade
+1. Acessar sistema como diretor (admin@teste.com)
+2. Navegar para Cadastro > Associados > [Associado teste]
+3. Clicar em "Cancelar Associado"
+4. Informar motivo: "Teste de cancelamento"
+5. Confirmar
+6. Verificar no banco:
+   - `associados.status = 'cancelado'`
+   - `rastreadores_api_logs` com operacoes `inativarVeiculo` e `desvincularClienteVeiculo`
+   - `veiculos.ativo = false`
+7. Verificar no App do Associado:
+   - Nao consegue fazer login ou acessa tela de bloqueio
 
-- Mensagens podem conter dados sensiveis
-- Acesso deve ser restrito a usuarios autorizados (diretor, analista)
-- Log de auditoria para consultas de historico
+**Parte 2: Reativar Cliente**
 
----
+8. Voltar ao painel administrativo
+9. Clicar em "Reativar Associado"
+10. Verificar no banco:
+    - `associados.status = 'ativo'`
+    - `rastreadores_api_logs` com operacoes `vincularClienteVeiculo` e `ativarVeiculo`
+11. Verificar no App do Associado:
+    - Consegue fazer login e ver rastreamento
 
-## Checklist Pos-Implementacao
+### Resultado Esperado
 
-- [ ] Atendente consegue ver historico WhatsApp na ficha do lead
-- [ ] Atendente consegue ver historico WhatsApp na ficha do associado
-- [ ] Botao de sincronizar busca mensagens da Evolution API
-- [ ] Mensagens antigas sao exibidas corretamente
-- [ ] Historico persiste apos reconexao do WhatsApp
-- [ ] Pagina de conversas lista todos os chats ativos
-- [ ] Conversas nao vinculadas podem ser identificadas
-- [ ] Auditoria de comunicacao disponivel
+- Inativacao bloqueia acesso e desvincula na Rede Veiculos
+- Reativacao restaura acesso e revincula na Rede Veiculos
+- Todo o historico registrado em `associados_historico` e `rastreadores_api_logs`
 
