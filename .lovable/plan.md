@@ -1,364 +1,327 @@
 
-# Revisao Completa - Fluxo de Conexao e Monitoramento de Status Evolution API
+
+# Revisao Completa - Fluxo de Envio de Mensagens de Texto via Evolution API
 
 ## Resumo Executivo
 
-| Cenario | Status | Detalhes |
-|---------|--------|----------|
-| GET /instance/connect chamado ao acessar tela | **PARCIAL** | So e chamado quando usuario clica em "Conectar" |
-| GET /instance/connect para reconexao | **PARCIAL** | Depende de acao manual do usuario |
-| GET /instance/connect para exibir QR Code | **IMPLEMENTADO** | `whatsapp-qrcode` chama `/instance/connect/{name}` |
-| GET /connectionState antes de enviar mensagem | **PARCIAL** | `whatsapp-send-media` verifica status LOCAL, nao chama API |
-| GET /connectionState no dashboard | **NAO IMPLEMENTADO** | Dashboard usa query local, nao status real-time |
-| GET /connectionState em timeout de envio | **NAO IMPLEMENTADO** | Nao ha tratamento especifico de timeout |
-| GET /connectionState periodico | **IMPLEMENTADO** | Hook `useWhatsAppStatus` chama a cada 30s |
-| QR Code exibido corretamente | **IMPLEMENTADO** | Modal exibe QR Code com polling de 5s |
-| Status "open" verificado antes de enviar | **PARCIAL** | `whatsapp-send-media` verifica, mas `whatsapp-send-text` NAO verifica |
-| Desconexoes detectadas e alertadas | **NAO IMPLEMENTADO** | Webhook recebe CONNECTION_UPDATE mas NAO processa |
-| Reconexao automatica tentada | **NAO IMPLEMENTADO** | Nao existe logica de auto-reconnect |
+| Cenario | Status | Edge Function | Observacoes |
+|---------|--------|---------------|-------------|
+| IA interagindo com Associado | **IMPLEMENTADO** | `whatsapp-webhook` | Usa funcao interna `sendWhatsAppMessage()` |
+| Notificacao automatica de status de cadastro | **PARCIAL** | `notificar-cliente` | Usa `whatsapp-send-media` para texto (incorreto) |
+| Atendente Assistencia 24h responde chamado | **NAO IMPLEMENTADO** | Nenhum | Apenas abre link `wa.me` no navegador |
+| Lembrete de boleto proximo do vencimento | **NAO IMPLEMENTADO** | `enviar-lembretes-vencimento` | Apenas registra na tabela, NAO envia |
+| Analista solicita documentos ao associado | **NAO IMPLEMENTADO** | Nenhum | Apenas altera status no banco |
 
 ---
 
 ## Analise Detalhada
 
-### 1. GET /instance/connect/{instanceName}
+### 1. IA Interagindo com Associado via WhatsApp
 
-#### Quando Administrador Acessa Tela de Configuracao
+**STATUS: IMPLEMENTADO CORRETAMENTE**
 
-**STATUS: NAO IMPLEMENTADO**
+**Arquivo:** `supabase/functions/whatsapp-webhook/index.ts` (linhas 569-592)
 
-Ao acessar a tela de WhatsApp (`WhatsAppStatusCard`), o sistema apenas chama `whatsapp-status` para verificar o estado:
-
-```typescript
-// useWhatsAppStatus.ts (linhas 10-25)
-const statusQuery = useQuery({
-  queryKey: ['whatsapp-status', instanciaId],
-  queryFn: async () => {
-    const { data, error } = await supabase.functions.invoke('whatsapp-status', {
-      body: { instancia_id: instanciaId },
-    });
-    return data;
-  },
-  refetchInterval: 30000, // Verifica a cada 30s
-});
-```
-
-O `whatsapp-status` chama `GET /instance/connectionState`, NAO `/instance/connect`. A conexao so e iniciada quando o usuario clica em "Conectar".
-
-#### Quando Ha Necessidade de Reconectar
-
-**STATUS: PARCIAL**
-
-O usuario precisa clicar manualmente em "Conectar" para reescanear QR Code. Nao ha tentativa automatica de reconexao.
-
-#### Quando QR Code Precisa Ser Exibido
-
-**STATUS: IMPLEMENTADO**
-
-O `whatsapp-qrcode` implementa corretamente:
+O webhook implementa uma funcao interna que chama `POST /message/sendText/{instanceName}`:
 
 ```typescript
-// whatsapp-qrcode/index.ts (linhas 135-142)
-const response = await fetch(
-  `${instancia.api_url}/instance/connect/${instancia.instance_name}`,
-  {
-    method: 'GET',
-    headers: { 'apikey': apiKey }
-  }
-);
+async function sendWhatsAppMessage(apiUrl: string, instanceName: string, telefone: string, texto: string) {
+  const EVOLUTION_API_KEY = Deno.env.get("EVOLUTION_API_KEY");
+  
+  const response = await fetch(`${apiUrl}/message/sendText/${instanceName}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: EVOLUTION_API_KEY,
+    },
+    body: JSON.stringify({
+      number: telefone,
+      text: texto,
+    }),
+  });
+}
 ```
+
+**Locais onde e usada:**
+- Linha 785: Resposta de confirmacao de agendamento
+- Linha 810: Fluxo de reagendamento
+- Linha 1030: Associado nao encontrado
+- Linha 1094: Resposta da IA ao associado
+
+**Verificacao do numero:** Telefone e formatado sem caracteres especiais (linha 986-993)
+
+**Problema identificado:**
+- A funcao `sendWhatsAppMessage` NAO verifica se a instancia esta conectada antes de enviar
+- NAO ha delay configurado entre mensagens
+- Erros sao logados mas nao ha retry
 
 ---
 
-### 2. GET /instance/connectionState/{instanceName}
+### 2. Notificacao Automatica de Status de Cadastro
 
-#### Antes de Enviar Mensagem
+**STATUS: PARCIALMENTE IMPLEMENTADO**
 
-**STATUS: PARCIAL**
+**Arquivo:** `supabase/functions/notificar-cliente/index.ts`
 
-| Edge Function | Verifica Status? | Tipo de Verificacao |
-|---------------|------------------|---------------------|
-| `whatsapp-send-media` | SIM | Status LOCAL (`instancia.status !== 'open'`) |
-| `whatsapp-send-text` | NAO | Nao verifica nada antes de enviar |
-
-**Problema em `whatsapp-send-text`:**
-```typescript
-// whatsapp-send-text/index.ts (linhas 29-46)
-// Buscar instância - NAO VERIFICA STATUS!
-let query = supabase.from("whatsapp_instancias").select("id, api_url, instance_name");
-
-if (instancia_id) {
-  query = query.eq("id", instancia_id);
-} else {
-  query = query.eq("principal", true);
-}
-
-const { data: instancia } = await query.single();
-// Envia direto sem verificar se esta conectado!
-```
-
-**Problema em `whatsapp-send-media`:**
-```typescript
-// whatsapp-send-media/index.ts (linhas 87-89)
-if (instancia.status !== 'open') {
-  throw new Error('WhatsApp não está conectado');
-}
-// Verifica status LOCAL (campo `status` do banco)
-// NAO chama /connectionState para verificar status REAL na API
-```
-
-#### No Dashboard de Monitoramento
-
-**STATUS: NAO IMPLEMENTADO**
-
-O `IntegracoesStatusCard` no dashboard NAO verifica status real do WhatsApp:
+O sistema chama `whatsapp-send-media` para enviar mensagens de texto, o que e tecnicamente incorreto:
 
 ```typescript
-// IntegracoesStatusCard.tsx (linhas 43-54)
-const { data: evolutionConfig } = useQuery({
-  queryKey: ['evolution-config-status'],
-  queryFn: async () => {
-    const { data } = await supabase
-      .from('configuracoes')
-      .select('valor')
-      .eq('chave', 'evolution_api_key')
-      .maybeSingle();
-    return data?.valor ? true : false; // Apenas verifica se API KEY existe!
+// Linha 159-167
+await supabase.functions.invoke('whatsapp-send-media', {
+  body: {
+    telefone: telefone.replace(/\D/g, ''),
+    tipo: 'text',
+    mensagem: whatsappMsg,
+    referencia_tipo: 'notificacao_cliente',
+    referencia_id: associado_id,
   },
 });
 ```
 
-Deveria usar o hook `useWhatsAppStatus` para mostrar status real.
+**Problema:** O `whatsapp-send-media` espera `media_type`, nao `tipo`, e chama `/message/sendMedia`, nao `/message/sendText`.
 
-#### Em Timeout de Envio de Mensagem
-
-**STATUS: NAO IMPLEMENTADO**
-
-Nao ha tratamento especifico de timeout. Se a Evolution API nao responder, o erro e generico.
-
-#### Periodicamente para Verificar Saude da Conexao
-
-**STATUS: IMPLEMENTADO**
-
-O hook `useWhatsAppStatus` faz polling a cada 30 segundos:
-
-```typescript
-const statusQuery = useQuery({
-  refetchInterval: 30000, // Verificar a cada 30s
-  staleTime: 10000,
-});
-```
-
-Porem, este polling so ocorre quando o componente `WhatsAppStatusCard` esta renderizado (tela de configuracao aberta).
+**Templates implementados:**
+- `vistoria_aprovada`
+- `vistoria_reprovada`
+- `vistoria_nova_tentativa`
+- `instalacao_agendada`
+- `instalacao_concluida`
+- `cobertura_total_ativada`
 
 ---
 
-### 3. Verificacao de Desconexoes
+### 3. Atendente Assistencia 24h Responde Chamado
 
-**STATUS: NAO IMPLEMENTADO**
+**STATUS: NAO IMPLEMENTADO VIA EVOLUTION API**
 
-O webhook esta configurado para receber `CONNECTION_UPDATE`, mas NAO processa este evento:
+**Arquivo:** `src/components/assistencia/EnviarLinkPrestadorButton.tsx`
+
+O componente abre o WhatsApp Web no navegador, NAO usa a Evolution API:
 
 ```typescript
-// whatsapp-webhook/index.ts (linhas 830-833)
-// Ignorar eventos que não são mensagens
-if (payload.event !== "messages.upsert") {
-  return new Response(JSON.stringify({ ok: true, ignored: true }), { headers: corsHeaders });
+// Linha 82-94
+const handleEnviarWhatsApp = () => {
+  const telefoneFormatado = prestadorTelefone.replace(/\D/g, '');
+  const mensagemCodificada = encodeURIComponent(mensagem);
+  
+  // Abre wa.me - NÃO usa Evolution API!
+  window.open(`https://wa.me/55${telefoneFormatado}?text=${mensagemCodificada}`, '_blank');
+};
+```
+
+**Gaps:**
+- Mensagem nao e registrada no banco
+- Nao ha integracao com Evolution API
+- Nao ha rastreabilidade do envio
+- Atendente precisa ter WhatsApp Web aberto
+
+---
+
+### 4. Lembrete de Boleto Proximo do Vencimento
+
+**STATUS: NAO IMPLEMENTADO - APENAS REGISTRA**
+
+**Arquivo:** `supabase/functions/enviar-lembretes-vencimento/index.ts`
+
+A funcao apenas cria registro na tabela `whatsapp_mensagens` com status "pendente", mas NAO chama a Evolution API:
+
+```typescript
+// Linha 169-179
+const telefone = associado.whatsapp || associado.telefone;
+if (telefone) {
+  await supabase.from('whatsapp_mensagens').insert({
+    associado_id: associado.id,
+    telefone: telefone.replace(/\D/g, ''),
+    mensagem,
+    tipo: 'lembrete_vencimento',
+    status: 'pendente',  // <- FICA PENDENTE FOREVER!
+  });
 }
 ```
 
-Quando o WhatsApp desconecta do celular:
-1. Evolution API envia evento `CONNECTION_UPDATE`
-2. Webhook recebe mas IGNORA o evento
-3. Status no banco permanece "open"
-4. Sistema continua tentando enviar mensagens que falham
-5. Nenhum alerta e gerado
+**Problema critico:** Mensagens nunca sao enviadas, ficam "pendentes" para sempre.
 
 ---
 
-### 4. Reconexao Automatica
+### 5. Analista Solicita Documentos ao Associado
 
-**STATUS: NAO IMPLEMENTADO**
+**STATUS: NAO IMPLEMENTADO VIA WHATSAPP**
 
-Nao existe nenhuma logica para:
-- Detectar desconexao e alertar administrador
-- Tentar reconexao automatica
-- Limitar tentativas de reconexao
-- Notificar diretores sobre problemas de conexao
+**Arquivo:** `src/hooks/usePropostasPendentes.ts` (linhas 1572-1641)
+
+Quando o analista solicita documentos:
+1. Cria registros na tabela `documentos_solicitados`
+2. Atualiza status do associado para `documentacao_pendente`
+3. Registra no historico
+
+**NAO ha envio de WhatsApp!** O toast diz "O cliente sera notificado no link de acompanhamento", mas nenhuma mensagem e enviada.
 
 ---
 
-## Gaps Identificados
+## Edge Function whatsapp-send-text - Analise
 
-### Gap 1: Webhook NAO Processa CONNECTION_UPDATE
+**Arquivo:** `supabase/functions/whatsapp-send-text/index.ts`
 
-O evento mais importante para monitoramento esta sendo ignorado. Deveria:
-- Detectar quando status muda para `close` ou `disconnected`
-- Atualizar status no banco imediatamente
-- Criar alerta para administradores
+### Pontos Positivos
 
-### Gap 2: whatsapp-send-text NAO Verifica Status
+1. **Verificacao de conexao:** Linhas 47-58 verificam se `instancia.status === 'open'`
+2. **Formatacao de telefone:** Linha 69 remove caracteres especiais
+3. **Registro de mensagem:** Linhas 94-103 salvam na tabela `whatsapp_mensagens`
+4. **Tratamento de erros:** Linhas 86-91 e 114-119
 
-Mensagens de texto podem ser enviadas para instancia desconectada, causando erros silenciosos.
+### Problemas Identificados
 
-### Gap 3: Dashboard NAO Mostra Status Real
-
-O card de integracoes mostra apenas se a API key existe, nao se o WhatsApp esta conectado.
-
-### Gap 4: NAO Ha Alertas de Desconexao
-
-Quando WhatsApp desconecta, administradores nao sao notificados.
-
-### Gap 5: NAO Ha Reconexao Automatica
-
-O sistema depende de acao manual para reconectar.
+1. **Sem prefixo 55:** Linha 69 apenas limpa caracteres, NAO adiciona prefixo Brasil
+2. **Sem delay:** Nenhum delay entre mensagens, risco de bloqueio
+3. **Sem retry:** Erros sao logados mas nao ha retentativa
 
 ---
 
 ## Plano de Implementacao
 
-### Fase 1: Processar CONNECTION_UPDATE no Webhook
-
-**Modificar:** `supabase/functions/whatsapp-webhook/index.ts`
-
-Adicionar handler para eventos de conexao:
-
-```typescript
-// Antes de ignorar eventos que não são mensagens
-if (payload.event === "connection.update") {
-  const state = payload.data?.state;
-  console.log(`[whatsapp-webhook] CONNECTION_UPDATE: ${state}`);
-  
-  // Atualizar status no banco
-  const novoStatus = state === 'open' ? 'open' : 'disconnected';
-  
-  await supabase
-    .from('whatsapp_instancias')
-    .update({
-      status: novoStatus,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('principal', true);
-  
-  // Se desconectou, criar alerta
-  if (novoStatus === 'disconnected') {
-    await supabase
-      .from('notificacoes')
-      .insert({
-        titulo: 'WhatsApp Desconectado',
-        mensagem: 'A conexao do WhatsApp foi perdida. Acesse Configuracoes > Integracoes para reconectar.',
-        tipo: 'erro',
-        destinatario_role: 'diretor',
-      });
-  }
-  
-  return new Response(JSON.stringify({ ok: true, status: novoStatus }), { headers: corsHeaders });
-}
-```
-
-### Fase 2: Adicionar Verificacao de Status em whatsapp-send-text
+### Fase 1: Corrigir Formatacao de Telefone
 
 **Modificar:** `supabase/functions/whatsapp-send-text/index.ts`
 
-Adicionar verificacao de status antes de enviar:
+Adicionar prefixo 55 quando necessario:
 
 ```typescript
-// Apos buscar instancia
-const { data: instancia } = await query.single();
-
-// NOVO: Verificar se WhatsApp está conectado
-if (!instancia.status || instancia.status !== 'open') {
-  return new Response(
-    JSON.stringify({ 
-      success: false, 
-      error: "WhatsApp não está conectado. Acesse as configurações para reconectar." 
-    }),
-    { status: 503, headers: corsHeaders }
-  );
+// Formatar telefone (remover caracteres especiais E garantir prefixo 55)
+let telefoneFormatado = telefone.replace(/\D/g, "");
+if (!telefoneFormatado.startsWith("55")) {
+  telefoneFormatado = "55" + telefoneFormatado;
 }
 ```
 
-### Fase 3: Atualizar Dashboard com Status Real do WhatsApp
+### Fase 2: Corrigir notificar-cliente
 
-**Modificar:** `src/components/diretoria/IntegracoesStatusCard.tsx`
+**Modificar:** `supabase/functions/notificar-cliente/index.ts`
 
-Usar hook `useWhatsAppStatus` para mostrar status real:
+Trocar de `whatsapp-send-media` para `whatsapp-send-text`:
 
 ```typescript
-import { useWhatsAppStatus } from '@/hooks/useWhatsAppStatus';
-
-// Dentro do componente
-const { connected, status } = useWhatsAppStatus();
-
-// Na lista de integracoes
-{
-  nome: 'WhatsApp (Evolution API)',
-  slug: 'whatsapp',
-  icone: <MessageCircle className="h-5 w-5" />,
-  status: connected ? 'conectado' : 'desconectado',
-  descricao: status === 'connecting' ? 'Conectando...' : 'Comunicação via WhatsApp',
-}
+await supabase.functions.invoke('whatsapp-send-text', {
+  body: {
+    telefone: telefone.replace(/\D/g, ''),
+    mensagem: whatsappMsg,
+  },
+});
 ```
 
-### Fase 4: Verificar Status Real (API) Antes de Enviar Mensagens Criticas
+### Fase 3: Implementar Envio de Lembretes de Vencimento
 
-**Modificar:** `supabase/functions/whatsapp-send-media/index.ts`
+**Modificar:** `supabase/functions/enviar-lembretes-vencimento/index.ts`
 
-Adicionar verificacao dupla (banco + API) para mensagens importantes:
+Adicionar chamada real para Evolution API:
 
 ```typescript
-// Verificação LOCAL (rápida)
-if (instancia.status !== 'open') {
-  throw new Error('WhatsApp não está conectado');
-}
-
-// NOVO: Verificação REAL na API para mensagens críticas
-// (opcional, ativado por parametro)
-if (payload.verificar_conexao_real) {
-  const statusResponse = await fetch(
-    `${instancia.api_url}/instance/connectionState/${instancia.instance_name}`,
-    { method: 'GET', headers: { 'apikey': apiKey } }
-  );
-  
-  const statusData = await statusResponse.json();
-  if (statusData.instance?.state !== 'open') {
-    // Atualizar banco com status real
-    await supabase.from('whatsapp_instancias').update({ status: 'disconnected' }).eq('id', instancia.id);
-    throw new Error('WhatsApp desconectou. Reconecte para continuar enviando mensagens.');
+const telefone = associado.whatsapp || associado.telefone;
+if (telefone) {
+  try {
+    // NOVO: Enviar via Evolution API
+    const { data: sendResult, error: sendError } = await supabase.functions.invoke('whatsapp-send-text', {
+      body: {
+        telefone: telefone.replace(/\D/g, ''),
+        mensagem,
+      },
+    });
+    
+    if (sendError) throw sendError;
+    
+    // Registrar mensagem como enviada
+    await supabase.from('whatsapp_mensagens').insert({
+      associado_id: associado.id,
+      telefone: telefone.replace(/\D/g, ''),
+      mensagem,
+      tipo: 'lembrete_vencimento',
+      status: 'enviada',
+      message_id: sendResult?.message_id,
+    });
+  } catch (whatsError) {
+    console.error(`[enviar-lembretes] Erro WhatsApp:`, whatsError);
+    // Registrar como falha
+    await supabase.from('whatsapp_mensagens').insert({
+      telefone: telefone.replace(/\D/g, ''),
+      mensagem,
+      tipo: 'lembrete_vencimento',
+      status: 'erro',
+      erro_mensagem: whatsError.message,
+    });
   }
 }
 ```
 
-### Fase 5: Criar Componente de Alerta Global de WhatsApp
+### Fase 4: Implementar Notificacao de Documentos Solicitados
 
-**Novo arquivo:** `src/components/global/WhatsAppConnectionAlert.tsx`
+**Modificar:** `src/hooks/usePropostasPendentes.ts`
 
-Exibir banner de alerta quando WhatsApp esta desconectado:
+Adicionar chamada para WhatsApp quando documentos sao solicitados:
 
 ```typescript
-export function WhatsAppConnectionAlert() {
-  const { connected, status } = useWhatsAppStatus();
-  const navigate = useNavigate();
-  const { data: profile } = useProfile();
-  
-  // Mostrar apenas para diretores
-  if (profile?.role !== 'diretor' || connected) {
-    return null;
+// No hook useSolicitarDocumentos, após criar registros
+// Chamar edge function para notificar via WhatsApp
+await supabase.functions.invoke('notificar-cliente', {
+  body: {
+    tipo: 'documentos_solicitados',
+    associado_id: associadoId,
+    dados: {
+      documentos: documentos.join(', '),
+      observacoes,
+    },
+  },
+});
+```
+
+E adicionar template em `notificar-cliente`:
+
+```typescript
+documentos_solicitados: {
+  titulo: '📄 Documentos Pendentes',
+  mensagem: 'Olá {nome}! Precisamos de alguns documentos para dar continuidade ao seu cadastro: {documentos}. Acesse o link de acompanhamento para enviar.',
+  emailTemplate: 'generico',
+},
+```
+
+### Fase 5: Integrar Assistencia 24h com Evolution API
+
+**Modificar:** `src/components/assistencia/EnviarLinkPrestadorButton.tsx`
+
+Adicionar opcao de enviar via Evolution API alem de wa.me:
+
+```typescript
+const handleEnviarViaEvolution = async () => {
+  try {
+    const { error } = await supabase.functions.invoke('whatsapp-send-text', {
+      body: {
+        telefone: `55${prestadorTelefone.replace(/\D/g, '')}`,
+        mensagem,
+      },
+    });
+    
+    if (error) throw error;
+    toast.success('Mensagem enviada com sucesso!');
+    setOpen(false);
+  } catch (err: any) {
+    toast.error(`Erro ao enviar: ${err.message}`);
   }
-  
-  return (
-    <Alert variant="destructive" className="mb-4">
-      <AlertTriangle className="h-4 w-4" />
-      <AlertTitle>WhatsApp Desconectado</AlertTitle>
-      <AlertDescription className="flex items-center justify-between">
-        <span>A conexao do WhatsApp foi perdida. Mensagens nao serao enviadas.</span>
-        <Button size="sm" onClick={() => navigate('/configuracoes/integracoes')}>
-          Reconectar
-        </Button>
-      </AlertDescription>
-    </Alert>
-  );
+};
+```
+
+### Fase 6: Adicionar Delay entre Mensagens (Anti-Bloqueio)
+
+**Modificar:** `supabase/functions/whatsapp-send-text/index.ts`
+
+Adicionar delay configuraavel para envios em lote:
+
+```typescript
+// Adicionar delay opcional para evitar rate limit
+const delay = parseInt(Deno.env.get('WHATSAPP_SEND_DELAY_MS') || '0');
+if (delay > 0) {
+  await new Promise(resolve => setTimeout(resolve, delay));
 }
+
+// Enviar mensagem via Evolution API
+const response = await fetch(...);
 ```
 
 ---
@@ -367,115 +330,71 @@ export function WhatsAppConnectionAlert() {
 
 | Arquivo | Alteracoes |
 |---------|------------|
-| `supabase/functions/whatsapp-webhook/index.ts` | Processar evento CONNECTION_UPDATE |
-| `supabase/functions/whatsapp-send-text/index.ts` | Adicionar verificacao de status |
-| `supabase/functions/whatsapp-send-media/index.ts` | Adicionar verificacao real opcional |
-| `src/components/diretoria/IntegracoesStatusCard.tsx` | Usar hook useWhatsAppStatus |
+| `supabase/functions/whatsapp-send-text/index.ts` | Corrigir formatacao telefone, adicionar delay |
+| `supabase/functions/notificar-cliente/index.ts` | Trocar para whatsapp-send-text, adicionar template |
+| `supabase/functions/enviar-lembretes-vencimento/index.ts` | Chamar whatsapp-send-text em vez de apenas registrar |
+| `src/hooks/usePropostasPendentes.ts` | Adicionar notificacao WhatsApp ao solicitar docs |
+| `src/components/assistencia/EnviarLinkPrestadorButton.tsx` | Adicionar envio via Evolution API |
 
-## Arquivos a Criar
+---
 
-| Arquivo | Descricao |
-|---------|-----------|
-| `src/components/global/WhatsAppConnectionAlert.tsx` | Banner de alerta global |
+## Verificacoes a Fazer
+
+### Formatacao do Numero
+
+| Cenario | Entrada | Saida Esperada |
+|---------|---------|----------------|
+| Numero completo | 5599999999999 | 5599999999999 |
+| Sem DDI | 99999999999 | 5599999999999 |
+| Com mascara | (99) 99999-9999 | 5599999999999 |
+| Celular 8 digitos | 99999999 | 559999999999 (DDD ausente!) |
+
+### Delay entre Mensagens
+
+| Volume | Delay Recomendado |
+|--------|-------------------|
+| Envio unitario | 0ms |
+| Lote ate 10 | 500ms |
+| Lote ate 50 | 1000ms |
+| Lote 100+ | 2000ms + jitter |
 
 ---
 
 ## Checklist de Verificacao Pos-Implementacao
 
-- [x] GET /instance/connect chamado para gerar QR Code
-- [ ] GET /instance/connect chamado automaticamente ao detectar desconexao
-- [x] GET /connectionState chamado periodicamente (polling 30s)
-- [ ] GET /connectionState verificado antes de enviar QUALQUER mensagem
-- [ ] Dashboard mostra status REAL do WhatsApp (nao apenas se API key existe)
-- [ ] Evento CONNECTION_UPDATE processado no webhook
-- [ ] Alerta criado quando conexao e perdida
-- [ ] Administradores notificados sobre desconexao
-- [ ] Banner global exibido quando WhatsApp desconectado
-- [ ] Reconexao automatica tentada (ou orientacao clara para reconectar)
+- [ ] Telefone formatado com prefixo 55 automaticamente
+- [ ] Mensagem de texto enviada completa sem truncamento
+- [ ] Delay configuravel para envios em lote
+- [ ] Erros logados com detalhes da Evolution API
+- [ ] Status da mensagem atualizado no banco (enviada/erro)
+- [ ] notificar-cliente usa whatsapp-send-text
+- [ ] Lembretes de vencimento sao enviados (nao apenas registrados)
+- [ ] Documentos solicitados gera notificacao WhatsApp
+- [ ] Assistencia 24h pode enviar via Evolution (nao apenas wa.me)
 
 ---
 
-## Teste Recomendado: Desconexao do WhatsApp
+## Teste Recomendado: Envio de Mensagem de Texto
 
 ### Pre-requisitos
 
 1. WhatsApp conectado via QR Code
-2. Acesso ao celular com WhatsApp vinculado
+2. Numero de teste cadastrado como associado
 3. Acesso como diretor no sistema
 
 ### Passos do Teste
 
-**Parte 1: Verificar Estado Inicial**
-
-1. Acessar Configuracoes > Integracoes > WhatsApp
-2. Confirmar que status e "Conectado"
-3. Enviar mensagem de teste para um numero
-
-**Parte 2: Simular Desconexao**
-
-4. No celular, acessar WhatsApp > Aparelhos conectados
-5. Desconectar o dispositivo "SGA-PRATIC"
-6. Aguardar 30 segundos (polling do status)
-
-**Parte 3: Verificar Deteccao**
-
-7. Na tela de configuracoes, verificar que status mudou para "Desconectado"
-8. Verificar que banner de alerta aparece (apos implementacao)
-9. Verificar que notificacao foi criada para diretores
-10. Tentar enviar mensagem e confirmar que erro e tratado corretamente
-
-**Parte 4: Reconectar**
-
-11. Clicar em "Conectar"
-12. Escanear QR Code novamente
-13. Confirmar que status volta para "Conectado"
-14. Enviar mensagem de teste e confirmar sucesso
+1. Acessar painel administrativo
+2. Abrir uma cotacao ou associado com telefone valido
+3. Executar acao que envia WhatsApp (ex: confirmar agendamento)
+4. Verificar que mensagem chegou no WhatsApp do destinatario
+5. Verificar registro na tabela `whatsapp_mensagens`
+6. Verificar logs da edge function no Supabase
 
 ### Resultado Esperado
 
-- Desconexao detectada automaticamente via webhook ou polling
-- Status atualizado no banco imediatamente
-- Alerta visual para administradores
-- Mensagens NAO sao enviadas quando desconectado
-- Reconexao via QR Code funciona sem problemas
+- Mensagem recebida no WhatsApp do destinatario
+- Texto completo sem truncamento
+- Status "enviada" no banco
+- Log de sucesso no console da edge function
 
----
-
-## Diagrama do Fluxo de Monitoramento
-
-```text
-+-------------------+     +------------------+     +-------------------+
-|   WhatsApp App    |     |   Evolution API  |     |   Supabase Edge   |
-|   (Celular)       |     |                  |     |   Functions       |
-+--------+----------+     +--------+---------+     +---------+---------+
-         |                         |                         |
-         | Desconecta              |                         |
-         +------------------------>|                         |
-         |                         |                         |
-         |                         | CONNECTION_UPDATE       |
-         |                         | (event: "close")        |
-         |                         +------------------------>|
-         |                         |                         |
-         |                         |       whatsapp-webhook  |
-         |                         |       processa evento   |
-         |                         |                         |
-         |                         |                         v
-         |                         |               +---------+---------+
-         |                         |               |   Supabase DB     |
-         |                         |               |                   |
-         |                         |               | UPDATE instancias |
-         |                         |               | status='disconn'  |
-         |                         |               |                   |
-         |                         |               | INSERT notificacao|
-         |                         |               | 'WhatsApp desc.'  |
-         |                         |               +---------+---------+
-         |                         |                         |
-         |                         |                         v
-         |                         |               +---------+---------+
-         |                         |               |   Frontend React  |
-         |                         |               |                   |
-         |                         |               | Query invalida    |
-         |                         |               | Status badge: OFF |
-         |                         |               | Alert banner: ON  |
-         |                         |               +-------------------+
-```
