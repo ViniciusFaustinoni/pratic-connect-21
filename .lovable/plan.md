@@ -1,315 +1,315 @@
 
-# Revisao Completa - Dados do Rastreador Softruck no Modulo de Assistencia 24h
+# Revisao Completa - Fluxo de Vinculacao Cliente/Veiculo/Equipamento na Rede Veiculos
 
 ## Resumo Executivo
 
 | Item | Status | Detalhes |
 |------|--------|----------|
-| Buscar posicao atual quando chamado entra | **NAO IMPLEMENTADO** | Usa apenas GPS do celular do associado |
-| Enviar localizacao para prestador | **PARCIALMENTE** | Envia link Google Maps apenas com coordenadas informadas |
-| Atualizar posicao em tempo real | **NAO IMPLEMENTADO** | Nao ha atualizacao durante acompanhamento |
-| Registrar posicao final ao encerrar | **NAO IMPLEMENTADO** | Historico nao possui campo de posicao |
-| Posicao exibida no mapa para atendente | **PARCIALMENTE** | Exibe coordenadas informadas, nao do rastreador |
-| Prestador recebe link com localizacao | **PARCIALMENTE** | Recebe posicao estatica, nao atualizada |
-| Historico inclui posicoes durante atendimento | **NAO IMPLEMENTADO** | Tabela historico sem campos lat/lng |
-| Rastreador fornece posicao se associado nao sabe | **NAO IMPLEMENTADO** | Nao ha fallback para rastreador |
+| Endpoint POST /vincularClienteVeiculo na instalacao | **NAO IMPLEMENTADO** | Nao existe integracao equivalente a `softruck-ativar-dispositivo` |
+| Endpoint na aprovacao do associado | **NAO IMPLEMENTADO** | Hook `useAtivarRastreador` apenas atualiza banco local |
+| Endpoint na migracao de equipamento | **NAO IMPLEMENTADO** | Funcionalidade nao existe |
+| Endpoint na reativacao de associado | **NAO IMPLEMENTADO** | Hook `reativarAssociado` apenas atualiza status local |
+| Dados do equipamento enviados | **NAO** | Nenhuma integracao ativa |
+| Dados do veiculo enviados | **NAO** | Nenhuma integracao ativa |
+| Dados do cliente enviados | **NAO** | Nenhuma integracao ativa |
+| Permissoes padrao aplicadas | **NAO** | Nenhuma integracao ativa |
 
 ---
 
 ## Analise Detalhada
 
-### 1. Quando o Chamado Entra no Sistema - Buscar Posicao Atual
+### 1. Integracao Atual com Rede Veiculos
 
-**Arquivos Analisados:**
-- `supabase/functions/criar-chamado-assistencia/index.ts`
-- `src/pages/app/AppAssistenciaNova.tsx`
+A plataforma Rede Veiculos esta configurada no sistema com os seguintes endpoints implementados:
 
-**Situacao Atual:**
+| Endpoint | Implementado | Edge Function |
+|----------|--------------|---------------|
+| GET /veiculos/{id}/posicao | Sim | `posicao-veiculo` |
+| GET /historico | Sim (fallback local) | `historico-posicoes` |
+| POST /acionamentoRouboFurto | Sim | `acionar-roubo-furto` |
+| POST /rastreamentoIntensivo | Sim | `acionar-roubo-furto` |
+| POST /redefinirSenhaCliente | Sim | `rastreador-redefinir-senha` |
+| **POST /vincularClienteVeiculo** | **NAO** | **Nao existe** |
 
-O fluxo de criacao de chamado:
-1. Associado abre o app e solicita assistencia
-2. App captura GPS do celular via `navigator.geolocation.getCurrentPosition`
-3. Edge function `criar-chamado-assistencia` recebe `latitude` e `longitude`
-4. Grava na tabela `chamados_assistencia` nos campos `origem_lat` e `origem_lng`
+### 2. Comparacao com Softruck
 
+A Softruck possui fluxo completo de ativacao via `softruck-ativar-dispositivo`:
+
+```
+Softruck (IMPLEMENTADO):
+1. Buscar rastreador local pelo IMEI
+2. Buscar/criar veiculo na plataforma (POST /v2/vehicles)
+3. Buscar device pelo IMEI (GET /v2/devices)
+4. Associar device ao veiculo (POST /v2/vehicles/associations/devices)
+5. Ativar device (PATCH /v2/devices/{id}/status/activation)
+6. Verificar primeira posicao GPS
+7. Atualizar banco local com IDs da plataforma
+
+Rede Veiculos (NAO IMPLEMENTADO):
+- Apenas atualizacao local do banco
+- Nenhuma chamada para API externa
+- Nao vincula cliente/veiculo/equipamento na plataforma
+```
+
+### 3. Momentos Onde Deveria Chamar vincularClienteVeiculo
+
+#### 3.1 Quando a instalacao e finalizada pelo instalador
+
+**Arquivo:** `src/hooks/useServicos.ts` (linhas 850-970)
+
+**Fluxo Atual:**
 ```typescript
-// AppAssistenciaNova.tsx - linha 216-260
-const handleGetGPS = async () => {
-  const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-    navigator.geolocation.getCurrentPosition(resolve, reject, {
-      enableHighAccuracy: true,
-      timeout: 10000,
-      maximumAge: 0,
-    });
+// useAprovarVeiculoServico
+// 1. Buscar rastreador por IMEI
+// 2. Atualizar servico como concluida
+// 3. Vincular rastreador ao veiculo (LOCAL)
+// 4. Registrar movimentacao de estoque
+// 5. SE Softruck: chama softruck-ativar-dispositivo (linhas 933-944)
+// 6. SE Rede Veiculos: NADA!
+```
+
+**Gap:** O codigo verifica se e Softruck e chama a integracao, mas para Rede Veiculos:
+- Apenas atualiza `rastreadores.status = 'instalado'`
+- Apenas atualiza `rastreadores.veiculo_id`
+- **NAO** chama nenhum endpoint da plataforma Rede Veiculos
+
+#### 3.2 Quando o associado e aprovado no cadastro
+
+**Arquivo:** `src/hooks/useAtivarRastreador.ts`
+
+**Fluxo Atual:**
+```typescript
+// useAtivarRastreador
+if (rastreadorExistente.plataforma === 'softruck') {
+  // Chama softruck-ativar-dispositivo
+} else {
+  // Para outras plataformas (inclui rede_veiculos):
+  // Apenas atualiza banco local!
+  await supabase.from('rastreadores').update({
+    veiculo_id: veiculoId,
+    associado_id: associadoId,
+    status: 'instalado',
   });
-  // Usa GPS do celular, NAO do rastreador
-};
+}
 ```
 
-**Gap Critico:** O sistema **NAO** busca a posicao do rastreador Softruck quando o chamado entra. Isso e problematico porque:
-- Associado pode estar em local sem sinal de celular
-- GPS do celular pode ser impreciso (dentro de edificios)
-- O rastreador ja possui posicao precisa do veiculo
+**Gap:** Rede Veiculos cai no `else` generico que apenas atualiza o banco local.
+
+#### 3.3 Quando ha migracao de equipamento
+
+**Status:** Funcionalidade NAO existe no sistema.
+
+Nao ha fluxo implementado para:
+- Trocar rastreador de um veiculo para outro
+- Migrar equipamento entre associados
+- Substituir equipamento com defeito
+
+#### 3.4 Quando ha reativacao de associado
+
+**Arquivo:** `src/hooks/useAssociados.ts` (linhas 450-464)
+
+**Fluxo Atual:**
+```typescript
+const reativarAssociado = useMutation({
+  mutationFn: async (id: string) => {
+    await supabase.from('associados').update({
+      status: 'ativo',
+      bloqueado: false,
+      motivo_bloqueio: null,
+    }).eq('id', id);
+  },
+});
+```
+
+**Gap:** Apenas atualiza status local, nao notifica a plataforma Rede Veiculos.
 
 ---
 
-### 2. Quando o Prestador e Acionado - Enviar Localizacao
+## Configuracao Atual da Plataforma Rede Veiculos
 
-**Arquivos Analisados:**
-- `src/components/assistencia/AtribuirPrestadorModal.tsx`
-- `supabase/functions/criar-chamado-assistencia/index.ts`
+```json
+{
+  "plataforma": "rede_veiculos",
+  "nome_exibicao": "Rede Veiculos",
+  "api_url_sandbox": "https://integracao.redeveiculos.com/api/v2/sandbox",
+  "api_url_producao": "https://integracao.redeveiculos.com/api/v2/prod",
+  "auth_type": "bearer_fixo",
+  "ambiente_atual": "sandbox",
+  "suporta_posicao_tempo_real": false,
+  "suporta_historico_trajeto": false,
+  "suporta_acionamento_roubo": true,
+  "suporta_bloqueio": false,
+  "suporta_redefinir_senha": true
+}
+```
 
-**Situacao Atual:**
+**Secrets Configurados:**
+- `REDE_VEICULOS_TOKEN`: Token Bearer para autenticacao
 
-Ao criar chamado, envia WhatsApp para central com link do Google Maps:
+---
+
+## Payload Esperado para POST /vincularClienteVeiculo
+
+Baseado em integracoes similares, o endpoint provavelmente espera:
 
 ```typescript
-// criar-chamado-assistencia/index.ts - linha 283-316
-const linkMapa = `https://www.google.com/maps?q=${payload.latitude},${payload.longitude}`;
-
-const mensagemCentral = `🚨 *NOVO CHAMADO DE ASSISTÊNCIA*
-...
-🗺️ *Ver no Mapa:* ${linkMapa}`;
+interface VincularClienteVeiculoRequest {
+  // Dados do Equipamento
+  equipamento: {
+    imei: string;              // IMEI do rastreador
+    localInstalacao: string;   // "painel", "motor", "porta-malas", etc
+    possuiBloqueio: boolean;   // Se tem modulo de bloqueio
+  };
+  
+  // Dados do Veiculo
+  veiculo: {
+    tipo: string;              // "carro", "moto", "caminhao"
+    marca: string;             // "FIAT", "CHEVROLET", etc
+    modelo: string;            // "UNO", "ONIX", etc
+    placa: string;             // "ABC1234" ou "ABC1D23"
+    cor: string;               // "BRANCO", "PRETO", etc
+    ano: number;               // 2020, 2021, etc
+    chassi?: string;           // Opcional
+    renavam?: string;          // Opcional
+  };
+  
+  // Dados do Cliente
+  cliente: {
+    cpfCnpj: string;           // CPF ou CNPJ
+    nome: string;              // Nome completo ou razao social
+    celular: string;           // Telefone com DDD
+    email: string;             // Email valido
+    endereco?: {               // Opcional
+      cep: string;
+      logradouro: string;
+      numero: string;
+      bairro: string;
+      cidade: string;
+      uf: string;
+    };
+  };
+  
+  // Permissoes padrao
+  permissoes?: {
+    acessoWeb: boolean;        // Acesso ao portal web
+    pushNotifications: boolean; // Receber notificacoes push
+    alertaVelocidade: boolean; // Alertas de velocidade
+    alertaCercaVirtual: boolean; // Alertas de cerca virtual
+    alertaIgnicao: boolean;    // Alertas de ignicao
+  };
+}
 ```
-
-**Gap:** Quando o atendente atribui o prestador (`AtribuirPrestadorModal`):
-- **NAO** envia automaticamente WhatsApp para o prestador
-- **NAO** compartilha link com localizacao
-- Prestador recebe apenas ligacao manual do atendente
-
-Nao existe funcionalidade para:
-- Enviar link atualizado de posicao do rastreador
-- Compartilhar localizacao em tempo real
-- Usar posicao do rastreador em vez do GPS do celular
-
----
-
-### 3. Quando Ha Acompanhamento do Chamado - Atualizar Posicao
-
-**Arquivos Analisados:**
-- `src/pages/app/AcompanharChamado.tsx`
-- `src/pages/assistencia/ChamadoDetalhe.tsx`
-
-**Situacao Atual:**
-
-No app do associado (`AcompanharChamado.tsx`):
-- Exibe mapa com marcador **ESTATICO** na posicao original
-- Nao atualiza posicao durante acompanhamento
-- Usa coordenadas salvas em `origem_lat` e `origem_lng`
-
-```typescript
-// AcompanharChamado.tsx - linha 460-474
-<Marker 
-  position={[chamado.origem_lat, chamado.origem_lng]}
-  icon={origemIcon}
->
-  <Popup>Sua localização</Popup>
-</Marker>
-```
-
-Na central (`ChamadoDetalhe.tsx`):
-- Exibe placeholder "Visualização de mapa (em breve)" - **linha 359-364**
-- Mapa nao esta implementado para o atendente
-
-**Gap Critico:**
-- Nenhuma atualizacao de posicao durante o atendimento
-- Nao consulta API Softruck para posicao em tempo real
-- Nao registra movimentacao do veiculo
-
----
-
-### 4. Quando o Chamado e Encerrado - Registrar Posicao Final
-
-**Tabela Analisada:**
-- `chamados_assistencia_historico`
-
-**Colunas disponiveis:**
-| Campo | Tipo |
-|-------|------|
-| id | uuid |
-| chamado_id | uuid |
-| status_anterior | varchar |
-| status_novo | varchar |
-| usuario_id | uuid |
-| observacao | text |
-| created_at | timestamp |
-
-**Gap:** A tabela historico **NAO possui** campos para:
-- `latitude` / `longitude` do momento da mudanca de status
-- `posicao_rastreador_lat` / `posicao_rastreador_lng`
-- `posicao_capturada_em` - timestamp da posicao
-
-Ao encerrar chamado:
-- Nao grava posicao final do veiculo
-- Nao consulta rastreador para confirmar localizacao
-- Perde auditoria de onde o veiculo estava
-
----
-
-## Gaps Identificados e Impacto
-
-### Gap 1: Nao Utiliza Posicao do Rastreador
-
-**Impacto: ALTO**
-
-Cenario problematico:
-1. Associado sofre pane em estrada sem sinal de celular
-2. App nao consegue capturar GPS
-3. Associado informa endereco aproximado por texto
-4. Prestador vai para local errado
-
-Se o sistema consultasse o rastreador:
-- Teria posicao precisa independente do celular
-- Poderia sugerir endereco ao associado
-- Prestador chegaria mais rapido
-
-### Gap 2: Prestador Nao Recebe Link de Localizacao
-
-**Impacto: MEDIO**
-
-Fluxo atual:
-1. Central recebe chamado com link
-2. Atendente liga para prestador
-3. Repassa endereco verbalmente ou por WhatsApp manual
-4. Prestador digita endereco no GPS
-
-Fluxo ideal:
-1. Ao despachar prestador, sistema envia automaticamente
-2. WhatsApp com link de localizacao atualizada
-3. Link consulta rastreador em tempo real
-4. Prestador abre e vai direto
-
-### Gap 3: Sem Atualizacao em Tempo Real
-
-**Impacto: MEDIO**
-
-Se veiculo estiver sendo rebocado:
-- Posicao inicial fica desatualizada
-- Prestador pode ir para lugar errado
-- Sem tracking do deslocamento
-
-### Gap 4: Historico Sem Posicoes
-
-**Impacto: BAIXO**
-
-Para auditoria e analise:
-- Nao sabe onde prestador estava ao aceitar
-- Nao sabe onde estava ao concluir
-- Perde metricas de deslocamento
 
 ---
 
 ## Plano de Implementacao
 
-### Fase 1: Adicionar Campos de Rastreador na Tabela
+### Fase 1: Criar Edge Function rede-veiculos-vincular-cliente
 
-**SQL Migration:**
-```sql
--- Campos na tabela chamados_assistencia
-ALTER TABLE chamados_assistencia 
-  ADD COLUMN rastreador_lat DECIMAL(10,8),
-  ADD COLUMN rastreador_lng DECIMAL(11,8),
-  ADD COLUMN rastreador_posicao_capturada_em TIMESTAMPTZ,
-  ADD COLUMN rastreador_endereco TEXT;
-
--- Campos na tabela chamados_assistencia_historico  
-ALTER TABLE chamados_assistencia_historico
-  ADD COLUMN latitude DECIMAL(10,8),
-  ADD COLUMN longitude DECIMAL(11,8),
-  ADD COLUMN posicao_fonte VARCHAR(20); -- 'rastreador', 'gps', 'manual'
-```
-
-### Fase 2: Modificar Edge Function criar-chamado-assistencia
-
-**Alteracoes:**
-
-1. Buscar rastreador do veiculo
-2. Consultar posicao via API Softruck
-3. Gravar posicao do rastreador como alternativa/complemento
-4. Se GPS do celular nao disponivel, usar rastreador
+**Novo arquivo:** `supabase/functions/rede-veiculos-vincular-cliente/index.ts`
 
 ```typescript
-// Buscar rastreador do veiculo
-const { data: rastreador } = await supabaseAdmin
-  .from('rastreadores')
-  .select('id, plataforma, plataforma_device_id, plataforma_veiculo_id, ultima_posicao_lat, ultima_posicao_lng')
-  .eq('veiculo_id', veiculo.id)
-  .eq('status', 'instalado')
-  .maybeSingle();
-
-// Se tem rastreador, buscar posicao atualizada
-if (rastreador?.plataforma === 'softruck' && rastreador.plataforma_veiculo_id) {
-  const posicaoResult = await supabaseAdmin.functions.invoke('posicao-veiculo', {
-    body: { veiculo_id: veiculo.id }
-  });
-  
-  if (posicaoResult.data?.posicao) {
-    // Gravar posicao do rastreador
-    rastreadorLat = posicaoResult.data.posicao.latitude;
-    rastreadorLng = posicaoResult.data.posicao.longitude;
-  }
+interface RequestBody {
+  imei: string;
+  veiculoId: string;
+  associadoId: string;
+  localInstalacao?: string;
+  possuiBloqueio?: boolean;
 }
 
-// Se associado nao informou localizacao, usar rastreador
-if (!payload.latitude || !payload.longitude) {
-  payload.latitude = rastreadorLat || rastreador?.ultima_posicao_lat;
-  payload.longitude = rastreadorLng || rastreador?.ultima_posicao_lng;
+// Fluxo:
+// 1. Buscar rastreador local pelo IMEI
+// 2. Buscar veiculo local
+// 3. Buscar associado local
+// 4. Montar payload conforme API Rede Veiculos
+// 5. Chamar POST /vincularClienteVeiculo
+// 6. Salvar IDs retornados no banco local
+// 7. Registrar log de integracao
+```
+
+### Fase 2: Integrar nos Momentos Apropriados
+
+#### 2.1 Na finalizacao da instalacao
+
+**Modificar:** `src/hooks/useServicos.ts` (linha 933)
+
+```typescript
+// Tentar ativar rastreador na plataforma
+if (rastreador.plataforma === 'softruck') {
+  await supabase.functions.invoke('softruck-ativar-dispositivo', { ... });
+} else if (rastreador.plataforma === 'rede_veiculos') {
+  await supabase.functions.invoke('rede-veiculos-vincular-cliente', {
+    body: {
+      imei: data.imeiRastreador,
+      veiculoId: data.veiculoId,
+      associadoId: data.associadoId,
+      localInstalacao: 'painel', // Pode vir do formulario
+      possuiBloqueio: false,
+    },
+  });
 }
 ```
 
-### Fase 3: Enviar Link Automatico para Prestador
+#### 2.2 Na ativacao do rastreador via hook
 
-**Novo arquivo:** `src/components/assistencia/EnviarLinkPrestadorButton.tsx`
+**Modificar:** `src/hooks/useAtivarRastreador.ts`
 
-Botao que:
-1. Gera link para pagina publica de tracking
-2. Envia WhatsApp automatico para prestador
-3. Link consulta posicao atualizada do rastreador
+```typescript
+if (rastreadorExistente.plataforma === 'softruck') {
+  // Softruck
+  await supabase.functions.invoke('softruck-ativar-dispositivo', { ... });
+} else if (rastreadorExistente.plataforma === 'rede_veiculos') {
+  // Rede Veiculos
+  await supabase.functions.invoke('rede-veiculos-vincular-cliente', { ... });
+} else {
+  // Outras plataformas: apenas local
+}
+```
 
-**Novo arquivo:** `src/pages/public/TrackingAssistencia.tsx`
+### Fase 3: Criar Funcionalidade de Migracao de Equipamento
 
-Pagina publica (sem login) que:
-1. Recebe token de chamado
-2. Exibe mapa com posicao em tempo real
-3. Atualiza automaticamente a cada 30 segundos
-4. Consulta rastreador via API
+**Novo arquivo:** `src/hooks/useMigrarEquipamento.ts`
 
-### Fase 4: Atualizar Posicao Durante Acompanhamento
+```typescript
+interface MigrarEquipamentoParams {
+  rastreadorId: string;
+  veiculoOrigemId: string;
+  veiculoDestinoId: string;
+  motivoMigracao: string;
+}
 
-**Modificar:** `src/pages/app/AcompanharChamado.tsx`
+// Fluxo:
+// 1. Desvincular do veiculo origem (na plataforma)
+// 2. Vincular ao veiculo destino (na plataforma)
+// 3. Atualizar banco local
+// 4. Registrar movimentacao
+```
 
-Adicionar:
-1. Polling de posicao do rastreador a cada 30s
-2. Atualizar marcador no mapa
-3. Exibir status do rastreador (online/offline)
-4. Mostrar ultima atualizacao
+### Fase 4: Integrar na Reativacao de Associado
 
-**Modificar:** `src/pages/assistencia/ChamadoDetalhe.tsx`
+**Modificar:** `src/hooks/useAssociados.ts`
 
-Implementar:
-1. Mapa real (nao placeholder)
-2. Marcador com posicao do rastreador
-3. Botao "Atualizar Posicao"
-4. Historico de posicoes
-
-### Fase 5: Registrar Posicoes no Historico
-
-**Modificar:** `src/components/assistencia/AtualizarStatusChamadoModal.tsx`
-
-Ao mudar status:
-1. Buscar posicao atual do rastreador
-2. Gravar no historico
-3. Registrar fonte (rastreador/gps)
-
-### Fase 6: Exibir Opcao "Usar Posicao do Rastreador"
-
-**Modificar:** `src/pages/app/AppAssistenciaNova.tsx`
-
-Adicionar:
-1. Botao "Usar posicao do rastreador"
-2. Consultar API e exibir endereco
-3. Fallback se GPS do celular falhar
-4. Badge indicando fonte da posicao
+```typescript
+const reativarAssociado = useMutation({
+  mutationFn: async (id: string) => {
+    // 1. Atualizar status local
+    await supabase.from('associados').update({ status: 'ativo' });
+    
+    // 2. Buscar veiculos do associado com rastreador
+    const { data: veiculos } = await supabase
+      .from('veiculos')
+      .select('*, rastreadores(*)')
+      .eq('associado_id', id);
+    
+    // 3. Para cada veiculo com rastreador Rede Veiculos, revincular
+    for (const veiculo of veiculos || []) {
+      if (veiculo.rastreadores?.plataforma === 'rede_veiculos') {
+        await supabase.functions.invoke('rede-veiculos-vincular-cliente', { ... });
+      }
+    }
+  },
+});
+```
 
 ---
 
@@ -317,75 +317,78 @@ Adicionar:
 
 | Arquivo | Descricao |
 |---------|-----------|
-| `src/components/assistencia/EnviarLinkPrestadorButton.tsx` | Botao para enviar WhatsApp com link |
-| `src/pages/public/TrackingAssistencia.tsx` | Pagina publica de tracking |
-| `src/components/assistencia/MapaChamado.tsx` | Mapa do chamado com rastreador |
-| `src/hooks/useChamadoPosicaoTempoReal.ts` | Hook para posicao em tempo real |
+| `supabase/functions/rede-veiculos-vincular-cliente/index.ts` | Edge Function principal |
+| `supabase/functions/rede-veiculos-desvincular/index.ts` | Edge Function para desvincular |
+| `src/hooks/useMigrarEquipamento.ts` | Hook para migracao |
+| `src/components/rastreadores/MigrarEquipamentoDialog.tsx` | Modal de migracao |
 
 ## Arquivos a Modificar
 
 | Arquivo | Alteracoes |
 |---------|------------|
-| `supabase/functions/criar-chamado-assistencia/index.ts` | Buscar e gravar posicao do rastreador |
-| `src/pages/app/AppAssistenciaNova.tsx` | Adicionar opcao "usar rastreador" |
-| `src/pages/app/AcompanharChamado.tsx` | Atualizar posicao em tempo real |
-| `src/pages/assistencia/ChamadoDetalhe.tsx` | Implementar mapa real |
-| `src/components/assistencia/AtribuirPrestadorModal.tsx` | Adicionar envio de link |
-| `src/components/assistencia/AtualizarStatusChamadoModal.tsx` | Gravar posicao ao mudar status |
+| `src/hooks/useServicos.ts` | Adicionar chamada para rede_veiculos na finalizacao |
+| `src/hooks/useAtivarRastreador.ts` | Adicionar branch para rede_veiculos |
+| `src/hooks/useAssociados.ts` | Integrar reativacao com plataforma |
+| `supabase/config.toml` | Registrar novas edge functions |
+| `src/types/rastreadores.ts` | Adicionar interfaces de vinculacao |
 
-## SQL Migrations
+---
 
-Necessarias para adicionar campos de posicao do rastreador.
+## Dados Necessarios da API Rede Veiculos
+
+**Antes de implementar, e necessario confirmar:**
+
+1. **URL exata do endpoint:** `POST /vincularClienteVeiculo` ou similar
+2. **Formato do payload:** Campos obrigatorios e opcionais
+3. **Formato da resposta:** IDs retornados, codigos de erro
+4. **Credenciais de teste:** Acesso ao sandbox
+
+**Recomendacao:** Solicitar documentacao da API Rede Veiculos antes de iniciar a implementacao.
 
 ---
 
 ## Checklist de Verificacao Pos-Implementacao
 
-- [ ] Ao abrir chamado, posicao do rastreador e capturada
-- [ ] Se GPS do celular falhar, rastreador e usado como fallback
-- [ ] Central ve mapa com posicao do rastreador em tempo real
-- [ ] Ao despachar prestador, WhatsApp com link e enviado automaticamente
-- [ ] Link do prestador abre mapa com posicao atualizada
-- [ ] Durante acompanhamento, posicao atualiza a cada 30s
-- [ ] Ao mudar status, posicao e registrada no historico
-- [ ] Ao encerrar chamado, posicao final e gravada
-- [ ] Associado pode escolher "usar posicao do rastreador"
-- [ ] Card de veiculo no chamado mostra status do rastreador
+- [ ] Edge function `rede-veiculos-vincular-cliente` criada
+- [ ] Chamada integrada na finalizacao da instalacao
+- [ ] Chamada integrada na ativacao de rastreador
+- [ ] Funcionalidade de migracao implementada
+- [ ] Reativacao de associado notifica plataforma
+- [ ] Dados do equipamento enviados corretamente (imei, localInstalacao, possuiBloqueio)
+- [ ] Dados do veiculo enviados completos (tipo, marca, modelo, placa, cor, ano)
+- [ ] Dados do cliente enviados corretos (cpfCnpj, nome, celular, email)
+- [ ] Permissoes padrao aplicadas (acessoWeb, pushNotifications, alertas)
+- [ ] IDs da plataforma salvos no banco local
+- [ ] Veiculo aparece na plataforma Rede Veiculos apos vinculacao
 
 ---
 
-## Teste Recomendado: Chamado de Guincho
+## Teste Recomendado
 
 ### Pre-requisitos
 
-1. Associado com veiculo que possui rastreador Softruck instalado
-2. Rastreador comunicando (posicao disponivel)
-3. `SOFTRUCK_PUBLIC_KEY` valida
+1. `REDE_VEICULOS_TOKEN` valido e configurado
+2. Rastreador cadastrado no estoque com `plataforma = 'rede_veiculos'`
+3. Associado e veiculo cadastrados no sistema
+4. Acesso ao painel da Rede Veiculos para verificar
 
 ### Passos do Teste
 
-1. **Login como associado** no app (`/app/login`)
-2. **Solicitar assistencia de guincho**
-   - Verificar se botao "Usar posicao do rastreador" aparece
-   - Clicar e confirmar que endereco e preenchido automaticamente
-3. **Enviar solicitacao**
-4. **Login como atendente** (`/assistencia`)
-5. **Abrir chamado**
-   - Verificar se mapa exibe posicao do rastreador
-   - Confirmar que coordenadas sao do rastreador (nao do GPS)
-6. **Atribuir prestador**
-   - Verificar se opcao "Enviar Link" aparece
-   - Clicar e confirmar que WhatsApp abre com link
-7. **Abrir link enviado ao prestador**
-   - Confirmar que mapa exibe posicao atualizada
-   - Aguardar 30s e verificar se atualiza
-8. **Mudar status para "A caminho"**
-   - Verificar se posicao foi registrada no historico
-9. **Concluir chamado**
-   - Confirmar posicao final gravada
+1. **Login como instalador**
+2. **Aceitar tarefa de instalacao**
+3. **Completar checklist** e informar IMEI do rastreador Rede Veiculos
+4. **Clicar "Aprovar Instalacao"**
+5. **Verificar no banco:**
+   - `rastreadores.status = 'instalado'`
+   - `rastreadores.id_plataforma` preenchido (ID retornado pela API)
+   - `rastreadores_api_logs` com registro de sucesso
+6. **Verificar na plataforma Rede Veiculos:**
+   - Cliente cadastrado
+   - Veiculo cadastrado
+   - Equipamento vinculado
 
 ### Resultado Esperado
 
-- Posicao do rastreador aparece em todas as etapas
-- Prestador recebe link funcional com mapa
-- Historico mostra posicoes de cada mudanca de status
+- Veiculo aparece na plataforma Rede Veiculos
+- Dados do cliente corretos
+- Permissoes padrao ativas (acessoWeb, push, alertas)
