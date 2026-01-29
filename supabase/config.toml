@@ -248,3 +248,6 @@ verify_jwt = false
 
 [functions.relatorio-quilometragem]
 verify_jwt = false
+
+[functions.enviar-comando-rastreador]
+verify_jwt = false
