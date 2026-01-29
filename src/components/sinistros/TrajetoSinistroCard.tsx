@@ -16,12 +16,24 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { SalvarTrajetoButton } from './SalvarTrajetoButton';
+import { ExportarTrajetoPDF } from './ExportarTrajetoPDF';
+import { ConsultaTrajetoAvancada } from './ConsultaTrajetoAvancada';
 import 'leaflet/dist/leaflet.css';
 
 interface TrajetoSinistroCardProps {
   veiculoId: string;
   dataOcorrencia: string | null;
   localOcorrencia?: string | null;
+  sinistroId?: string;
+  snapshotExistente?: boolean;
+  protocolo?: string;
+  veiculo?: { placa: string; marca: string; modelo: string } | null;
+  associado?: { nome: string } | null;
+  latitudeInformada?: number | null;
+  longitudeInformada?: number | null;
+  rastreadorLat?: number | null;
+  rastreadorLng?: number | null;
 }
 
 interface PontoParada {
@@ -55,7 +67,20 @@ const paradaIcon = L.divIcon({
   iconAnchor: [6, 6],
 });
 
-export function TrajetoSinistroCard({ veiculoId, dataOcorrencia, localOcorrencia }: TrajetoSinistroCardProps) {
+export function TrajetoSinistroCard({ 
+  veiculoId, 
+  dataOcorrencia, 
+  localOcorrencia,
+  sinistroId,
+  snapshotExistente = false,
+  protocolo,
+  veiculo,
+  associado,
+  latitudeInformada,
+  longitudeInformada,
+  rastreadorLat,
+  rastreadorLng,
+}: TrajetoSinistroCardProps) {
   const [fullscreenOpen, setFullscreenOpen] = useState(false);
 
   // Calcular período de 24h antes do sinistro
@@ -240,18 +265,50 @@ export function TrajetoSinistroCard({ veiculoId, dataOcorrencia, localOcorrencia
           ) : (
             <>
               {renderMap('200px')}
-              <div className="p-3 border-t flex items-center justify-between text-xs">
-                <div className="flex items-center gap-3">
-                  <Badge variant="outline">{trajeto.length} pontos</Badge>
-                  {paradas.length > 0 && (
-                    <Badge variant="secondary" className="bg-amber-100 text-amber-800">
-                      {paradas.length} parada{paradas.length > 1 ? 's' : ''}
-                    </Badge>
-                  )}
+              <div className="p-3 border-t space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-3">
+                    <Badge variant="outline">{trajeto.length} pontos</Badge>
+                    {paradas.length > 0 && (
+                      <Badge variant="secondary" className="bg-amber-100 text-amber-800">
+                        {paradas.length} parada{paradas.length > 1 ? 's' : ''}
+                      </Badge>
+                    )}
+                  </div>
+                  <Badge variant={historico?.fonte === 'api' ? 'default' : 'outline'}>
+                    {historico?.fonte === 'api' ? '🟢 API' : '🟡 Local'}
+                  </Badge>
                 </div>
-                <Badge variant={historico?.fonte === 'api' ? 'default' : 'outline'}>
-                  {historico?.fonte === 'api' ? '🟢 API' : '🟡 Local'}
-                </Badge>
+                {/* Botões de ação */}
+                {sinistroId && rastreador && (
+                  <div className="flex flex-wrap gap-2 pt-2 border-t">
+                    <SalvarTrajetoButton
+                      sinistroId={sinistroId}
+                      rastreadorId={rastreador.id}
+                      dataInicio={dataInicio}
+                      dataFim={dataFim}
+                      snapshotExistente={snapshotExistente}
+                    />
+                    <ExportarTrajetoPDF
+                      protocolo={protocolo || sinistroId}
+                      veiculo={veiculo}
+                      associado={associado}
+                      dataOcorrencia={dataOcorrencia || new Date().toISOString()}
+                      localOcorrencia={localOcorrencia}
+                      trajeto={trajeto}
+                      paradas={paradas}
+                      latitudeInformada={latitudeInformada}
+                      longitudeInformada={longitudeInformada}
+                      rastreadorLat={rastreadorLat}
+                      rastreadorLng={rastreadorLng}
+                    />
+                    <ConsultaTrajetoAvancada
+                      rastreadorId={rastreador.id}
+                      dataOcorrencia={dataOcorrencia || new Date().toISOString()}
+                      veiculoPlaca={veiculo?.placa}
+                    />
+                  </div>
+                )}
               </div>
             </>
           )}
