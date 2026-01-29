@@ -264,6 +264,7 @@ import CotacaoPublicaPage from "./pages/public/CotacaoPublica";
 import CotacaoPublicaCompleta from "./pages/public/CotacaoPublicaCompleta";
 import CotacaoContratacao from "./pages/public/CotacaoContratacao";
 import AcompanhamentoProposta from "./pages/public/AcompanhamentoProposta";
+import TrackingAssistencia from "./pages/public/TrackingAssistencia";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -316,6 +317,9 @@ const App = () => (
             <Route path="/ouvidoria/canal-denuncia" element={<CanalDenuncia />} />
             <Route path="/ouvidoria/consulta-protocolo" element={<ConsultaProtocolo />} />
             <Route path="/ouvidoria/pesquisa/:protocolo" element={<PesquisaSatisfacao />} />
+            
+            {/* Public Tracking Assistência Page */}
+            <Route path="/tracking/assistencia/:id" element={<TrackingAssistencia />} />
             
             {/* Redirect root to dashboard */}
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
