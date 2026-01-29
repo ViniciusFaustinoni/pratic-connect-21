@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { ArrowLeft, Copy, Download, Send, Phone, MessageSquare, 
-         AlertTriangle, ExternalLink, MoreVertical, Mail, Ban, Loader2, RefreshCw } from 'lucide-react';
+         AlertTriangle, ExternalLink, MoreVertical, Mail, Ban, Loader2, RefreshCw, FileText } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -72,6 +73,7 @@ export default function CobrancaDetalhe() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { cancelarCobranca, gerarSegundaVia } = useAsaas();
+  const [enviandoPDF, setEnviandoPDF] = useState(false);
 
   const { data: cobranca, isLoading, error } = useQuery({
     queryKey: ['cobranca', id],
@@ -187,6 +189,48 @@ export default function CobrancaDetalhe() {
     window.open(`https://wa.me/55${telefone}?text=${encodeURIComponent(mensagem)}`, '_blank');
   };
 
+  // Enviar boleto PDF via Evolution API
+  const handleEnviarBoletoPDF = async () => {
+    if (!cobranca?.associado?.whatsapp && !cobranca?.associado?.telefone) {
+      toast.error('Associado não possui telefone cadastrado');
+      return;
+    }
+    if (!cobranca?.boleto_url) {
+      toast.error('Boleto não disponível para envio');
+      return;
+    }
+
+    setEnviandoPDF(true);
+    try {
+      const telefone = (cobranca.associado.whatsapp || cobranca.associado.telefone || '').replace(/\D/g, '');
+      const valor = formatCurrency(cobranca.valor_liquido || cobranca.valor);
+      const vencimento = cobranca.data_vencimento 
+        ? format(parseISO(cobranca.data_vencimento), 'dd/MM/yyyy')
+        : '';
+
+      const { error } = await supabase.functions.invoke('whatsapp-send-media', {
+        body: {
+          telefone: telefone,
+          media_url: cobranca.boleto_url,
+          media_type: 'document',
+          mimetype: 'application/pdf',
+          filename: `boleto_${cobranca.asaas_id || cobranca.id}.pdf`,
+          caption: `📄 Boleto PRATICCAR\n💰 Valor: ${valor}\n📅 Vencimento: ${vencimento}`,
+          referencia_tipo: 'cobranca',
+          referencia_id: cobranca.id,
+        },
+      });
+
+      if (error) throw error;
+      toast.success('Boleto PDF enviado por WhatsApp!');
+    } catch (err: any) {
+      console.error('Erro ao enviar boleto PDF:', err);
+      toast.error(`Erro ao enviar: ${err.message}`);
+    } finally {
+      setEnviandoPDF(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -264,8 +308,18 @@ export default function CobrancaDetalhe() {
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={handleEnviarWhatsApp}>
               <MessageSquare className="mr-2 h-4 w-4" />
-              Enviar por WhatsApp
+              WhatsApp (link)
             </DropdownMenuItem>
+            {cobranca.boleto_url && (
+              <DropdownMenuItem onClick={handleEnviarBoletoPDF} disabled={enviandoPDF}>
+                {enviandoPDF ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <FileText className="mr-2 h-4 w-4" />
+                )}
+                Enviar Boleto PDF
+              </DropdownMenuItem>
+            )}
             {cobranca.boleto_url && (
               <DropdownMenuItem onClick={() => window.open(cobranca.boleto_url, '_blank')}>
                 <Download className="mr-2 h-4 w-4" />
