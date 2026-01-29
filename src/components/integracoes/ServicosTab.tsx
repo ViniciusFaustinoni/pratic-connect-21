@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { CreditCard, MessageSquare, MapPin, FileSignature, Zap, CheckCircle, Mail, Search, ExternalLink, Settings } from 'lucide-react';
+import { CreditCard, MessageSquare, MapPin, FileSignature, Zap, CheckCircle, Mail, Search, Settings, Loader2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ConfigurarRastreadorSheet } from './ConfigurarRastreadorSheet';
-import { useRastreadorStatus } from '@/hooks/useRastreadorStatus';
+import { useIntegracoesStatus } from '@/hooks/useIntegracoesStatus';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -15,10 +15,10 @@ interface Servico {
   icon: React.ElementType;
   color: string;
   bgColor: string;
-  ativo: boolean;
-  ultimaExecucao?: string;
+  integracaoId?: string;
   plataformaCodigo?: 'softruck' | 'rede_veiculos';
   configuravel?: boolean;
+  sempreAtivo?: boolean;
 }
 
 interface CategoriaServicos {
@@ -39,7 +39,7 @@ const categoriasBase: CategoriaServicos[] = [
         icon: CreditCard,
         color: 'text-green-500',
         bgColor: 'bg-green-500/10',
-        ativo: false,
+        integracaoId: 'asaas',
       },
     ],
   },
@@ -54,7 +54,7 @@ const categoriasBase: CategoriaServicos[] = [
         icon: MessageSquare,
         color: 'text-emerald-500',
         bgColor: 'bg-emerald-500/10',
-        ativo: false,
+        integracaoId: 'whatsapp',
       },
       {
         id: 'email',
@@ -63,7 +63,7 @@ const categoriasBase: CategoriaServicos[] = [
         icon: Mail,
         color: 'text-blue-500',
         bgColor: 'bg-blue-500/10',
-        ativo: false,
+        integracaoId: 'email',
       },
     ],
   },
@@ -78,7 +78,6 @@ const categoriasBase: CategoriaServicos[] = [
         icon: MapPin,
         color: 'text-blue-500',
         bgColor: 'bg-blue-500/10',
-        ativo: false,
         plataformaCodigo: 'rede_veiculos',
         configuravel: true,
       },
@@ -89,7 +88,6 @@ const categoriasBase: CategoriaServicos[] = [
         icon: MapPin,
         color: 'text-orange-500',
         bgColor: 'bg-orange-500/10',
-        ativo: false,
         plataformaCodigo: 'softruck',
         configuravel: true,
       },
@@ -100,7 +98,7 @@ const categoriasBase: CategoriaServicos[] = [
         icon: Search,
         color: 'text-indigo-500',
         bgColor: 'bg-indigo-500/10',
-        ativo: true,
+        sempreAtivo: true,
       },
     ],
   },
@@ -115,7 +113,7 @@ const categoriasBase: CategoriaServicos[] = [
         icon: FileSignature,
         color: 'text-purple-500',
         bgColor: 'bg-purple-500/10',
-        ativo: false,
+        integracaoId: 'autentique',
       },
     ],
   },
@@ -130,32 +128,22 @@ const categoriasBase: CategoriaServicos[] = [
         icon: Zap,
         color: 'text-orange-500',
         bgColor: 'bg-orange-500/10',
-        ativo: true,
-        ultimaExecucao: 'há 5 min',
+        sempreAtivo: true,
       },
     ],
   },
 ];
 
-function ServicoCard({ 
-  servico, 
-  onConfigurar 
-}: { 
-  servico: Servico & { statusRastreador?: { configurado: boolean; teste_sucesso: boolean; testado_em: string | null } };
+interface ServicoCardProps {
+  servico: Servico;
+  status: { ativo: boolean; ultimaExecucao?: string };
   onConfigurar?: () => void;
-}) {
+  isLoading?: boolean;
+}
+
+function ServicoCard({ servico, status, onConfigurar, isLoading }: ServicoCardProps) {
   const Icon = servico.icon;
-  
-  // Determinar status real para plataformas rastreadores
-  const isRastreador = servico.configuravel && servico.plataformaCodigo;
-  const statusConfig = servico.statusRastreador;
-  const isAtivo = isRastreador 
-    ? (statusConfig?.configurado && statusConfig?.teste_sucesso) 
-    : servico.ativo;
-  
-  const ultimaExecucao = isRastreador && statusConfig?.testado_em
-    ? formatDistanceToNow(new Date(statusConfig.testado_em), { addSuffix: true, locale: ptBR })
-    : servico.ultimaExecucao;
+  const isAtivo = status.ativo;
 
   return (
     <Card className={cn(
@@ -175,18 +163,24 @@ function ServicoCard({
           </div>
           
           {/* Status Badge */}
-          <div className={cn(
-            "flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium",
-            isAtivo 
-              ? "bg-green-500/10 text-green-500" 
-              : "bg-red-500/10 text-red-500"
-          )}>
-            <span className={cn(
-              "h-2 w-2 rounded-full",
-              isAtivo ? "bg-green-500 animate-pulse" : "bg-red-500"
-            )} />
-            {isAtivo ? 'ON' : 'OFF'}
-          </div>
+          {isLoading ? (
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium bg-muted text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" />
+            </div>
+          ) : (
+            <div className={cn(
+              "flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium",
+              isAtivo 
+                ? "bg-green-500/10 text-green-500" 
+                : "bg-red-500/10 text-red-500"
+            )}>
+              <span className={cn(
+                "h-2 w-2 rounded-full",
+                isAtivo ? "bg-green-500 animate-pulse" : "bg-red-500"
+              )} />
+              {isAtivo ? 'ON' : 'OFF'}
+            </div>
+          )}
         </div>
 
         {/* Description */}
@@ -195,9 +189,9 @@ function ServicoCard({
         </p>
 
         {/* Last execution if available */}
-        {ultimaExecucao && (
+        {status.ultimaExecucao && (
           <p className="text-xs text-muted-foreground mt-1">
-            {isRastreador ? 'Último teste:' : 'Última execução:'} {ultimaExecucao}
+            Último teste: {status.ultimaExecucao}
           </p>
         )}
 
@@ -209,7 +203,7 @@ function ServicoCard({
                 <CheckCircle className="w-4 h-4" />
                 Configurado
               </Button>
-              {isRastreador && onConfigurar && (
+              {servico.configuravel && onConfigurar && (
                 <Button variant="outline" size="sm" className="gap-2" onClick={onConfigurar}>
                   <Settings className="w-4 h-4" />
                   Editar
@@ -221,10 +215,11 @@ function ServicoCard({
               variant="outline" 
               size="sm" 
               className="gap-2"
-              onClick={isRastreador ? onConfigurar : undefined}
+              onClick={servico.configuravel ? onConfigurar : undefined}
+              disabled={!servico.configuravel && !servico.sempreAtivo}
             >
-              {isRastreador ? <Settings className="w-4 h-4" /> : <ExternalLink className="w-4 h-4" />}
-              Configurar
+              <Settings className="w-4 h-4" />
+              {servico.configuravel ? 'Configurar' : 'Não configurado'}
             </Button>
           )}
         </div>
@@ -237,26 +232,48 @@ export function ServicosTab() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [plataformaSelecionada, setPlataformaSelecionada] = useState<'softruck' | 'rede_veiculos'>('softruck');
   
-  const { data: statusRastreadores, refetch: refetchStatus } = useRastreadorStatus();
+  const integracoes = useIntegracoesStatus();
 
-  // Enriquecer serviços com status real dos rastreadores
-  const categoriasEnriquecidas = categoriasBase.map(cat => ({
-    ...cat,
-    servicos: cat.servicos.map(servico => {
-      if (servico.plataformaCodigo) {
-        const status = statusRastreadores?.find(s => s.plataforma === servico.plataformaCodigo);
-        return {
-          ...servico,
-          statusRastreador: status ? {
-            configurado: status.configurado,
-            teste_sucesso: status.teste_sucesso,
-            testado_em: status.testado_em,
-          } : undefined,
-        };
-      }
-      return servico;
-    }),
-  }));
+  // Função para obter status de cada serviço
+  function getServicoStatus(servico: Servico): { ativo: boolean; ultimaExecucao?: string } {
+    // Serviços sempre ativos
+    if (servico.sempreAtivo) {
+      return { ativo: true };
+    }
+
+    // Rastreadores (usam teste de conexão)
+    if (servico.plataformaCodigo === 'softruck') {
+      return {
+        ativo: integracoes.softruck.configurado && integracoes.softruck.testado,
+        ultimaExecucao: integracoes.softruck.testado_em 
+          ? formatDistanceToNow(new Date(integracoes.softruck.testado_em), { addSuffix: true, locale: ptBR })
+          : undefined
+      };
+    }
+    if (servico.plataformaCodigo === 'rede_veiculos') {
+      return {
+        ativo: integracoes.rede_veiculos.configurado && integracoes.rede_veiculos.testado,
+        ultimaExecucao: integracoes.rede_veiculos.testado_em 
+          ? formatDistanceToNow(new Date(integracoes.rede_veiculos.testado_em), { addSuffix: true, locale: ptBR })
+          : undefined
+      };
+    }
+
+    // Integrações por secret
+    switch (servico.integracaoId) {
+      case 'asaas':
+        return { ativo: integracoes.asaas.configurado };
+      case 'autentique':
+        return { ativo: integracoes.autentique.configurado };
+      case 'email':
+        return { ativo: integracoes.email.configurado };
+      case 'whatsapp':
+        // WhatsApp precisa estar conectado (não apenas ter a API configurada)
+        return { ativo: integracoes.whatsapp.conectado };
+      default:
+        return { ativo: false };
+    }
+  }
 
   function handleConfigurar(plataforma: 'softruck' | 'rede_veiculos') {
     setPlataformaSelecionada(plataforma);
@@ -264,14 +281,14 @@ export function ServicosTab() {
   }
 
   function handleSheetSuccess() {
-    refetchStatus();
+    integracoes.refetch();
     setSheetOpen(false);
   }
 
   return (
     <>
       <div className="space-y-8">
-        {categoriasEnriquecidas.map((categoria) => (
+        {categoriasBase.map((categoria) => (
           <div key={categoria.titulo} className="space-y-4">
             {/* Section Title */}
             <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
@@ -285,6 +302,8 @@ export function ServicosTab() {
                 <ServicoCard 
                   key={servico.id} 
                   servico={servico}
+                  status={getServicoStatus(servico)}
+                  isLoading={integracoes.isLoading}
                   onConfigurar={servico.plataformaCodigo ? () => handleConfigurar(servico.plataformaCodigo!) : undefined}
                 />
               ))}
