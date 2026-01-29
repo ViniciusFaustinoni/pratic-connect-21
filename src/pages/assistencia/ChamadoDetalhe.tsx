@@ -3,6 +3,9 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { AtribuirPrestadorModal } from '@/components/assistencia/AtribuirPrestadorModal';
 import { AtualizarStatusChamadoModal } from '@/components/assistencia/AtualizarStatusChamadoModal';
+import { MapaChamado } from '@/components/assistencia/MapaChamado';
+import { EnviarLinkPrestadorButton } from '@/components/assistencia/EnviarLinkPrestadorButton';
+import { useChamadoPosicaoTempoReal } from '@/hooks/useChamadoPosicaoTempoReal';
 import { supabase } from '@/integrations/supabase/client';
 import { format, differenceInMinutes } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -114,6 +117,15 @@ export default function ChamadoDetalhe() {
     },
     enabled: !!id,
   });
+
+  // Hook: Posição em tempo real do rastreador
+  const { 
+    posicao: posicaoTempoReal, 
+    isLoading: posicaoLoading, 
+    isRefetching: posicaoRefetching,
+    tempoReal, 
+    refetch: refetchPosicao 
+  } = useChamadoPosicaoTempoReal(chamado?.veiculo?.id);
 
   // Query: Histórico do Chamado
   const { data: historico } = useQuery({
@@ -355,13 +367,24 @@ export default function ChamadoDetalhe() {
                 </div>
               )}
 
-              {/* Placeholder para mapa */}
-              <div className="h-40 bg-muted rounded-lg flex items-center justify-center">
-                <div className="text-center text-muted-foreground">
-                  <MapPin className="h-8 w-8 mx-auto mb-2" />
-                  <p className="text-sm">Visualização de mapa (em breve)</p>
-                </div>
-              </div>
+              {/* Mapa com posição em tempo real */}
+              <MapaChamado
+                origemLat={chamado.origem_lat}
+                origemLng={chamado.origem_lng}
+                origemEndereco={chamado.origem_logradouro || chamado.origem_endereco}
+                rastreadorLat={posicaoTempoReal?.latitude || chamado.rastreador_lat}
+                rastreadorLng={posicaoTempoReal?.longitude || chamado.rastreador_lng}
+                rastreadorDataPosicao={posicaoTempoReal?.data_posicao || chamado.rastreador_posicao_capturada_em}
+                rastreadorEndereco={posicaoTempoReal?.endereco || chamado.rastreador_endereco}
+                velocidade={posicaoTempoReal?.velocidade || 0}
+                ignicao={posicaoTempoReal?.ignicao || false}
+                tempoReal={tempoReal}
+                isLoading={posicaoLoading}
+                isRefetching={posicaoRefetching}
+                onRefresh={refetchPosicao}
+                height="h-64"
+                showControls={true}
+              />
             </CardContent>
           </Card>
 
@@ -382,7 +405,7 @@ export default function ChamadoDetalhe() {
                   </p>
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   {(chamado.prestador?.telefone || chamado.prestador_telefone) && (
                     <>
                       <Button
@@ -408,6 +431,20 @@ export default function ChamadoDetalhe() {
                     </>
                   )}
                 </div>
+
+                {/* Botão enviar localização ao prestador */}
+                <EnviarLinkPrestadorButton
+                  chamadoId={chamado.id}
+                  protocolo={chamado.protocolo}
+                  prestadorNome={chamado.prestador?.razao_social || chamado.prestador?.nome_fantasia || chamado.prestador_nome}
+                  prestadorTelefone={chamado.prestador?.whatsapp || chamado.prestador?.telefone || chamado.prestador_telefone}
+                  origemLat={chamado.origem_lat}
+                  origemLng={chamado.origem_lng}
+                  origemEndereco={chamado.origem_logradouro || chamado.origem_endereco}
+                  rastreadorLat={posicaoTempoReal?.latitude || chamado.rastreador_lat}
+                  rastreadorLng={posicaoTempoReal?.longitude || chamado.rastreador_lng}
+                  tipoServico={chamado.tipo_servico}
+                />
               </CardContent>
             </Card>
           )}
@@ -621,6 +658,7 @@ export default function ChamadoDetalhe() {
         open={modalStatus}
         onClose={() => setModalStatus(false)}
         chamado={chamado}
+        veiculoId={chamado.veiculo?.id}
       />
     </div>
   );

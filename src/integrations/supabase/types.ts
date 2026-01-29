@@ -3138,6 +3138,7 @@ export type Database = {
           destino_lng: number | null
           destino_logradouro: string | null
           destino_uf: string | null
+          distancia_percorrida_km: number | null
           id: string
           origem_cep: string | null
           origem_cidade: string | null
@@ -3146,6 +3147,9 @@ export type Database = {
           origem_lng: number | null
           origem_logradouro: string | null
           origem_uf: string | null
+          posicao_final_capturada_em: string | null
+          posicao_final_lat: number | null
+          posicao_final_lng: number | null
           prestador_id: string | null
           prestador_nome: string | null
           prestador_telefone: string | null
@@ -3176,6 +3180,7 @@ export type Database = {
           destino_lng?: number | null
           destino_logradouro?: string | null
           destino_uf?: string | null
+          distancia_percorrida_km?: number | null
           id?: string
           origem_cep?: string | null
           origem_cidade?: string | null
@@ -3184,6 +3189,9 @@ export type Database = {
           origem_lng?: number | null
           origem_logradouro?: string | null
           origem_uf?: string | null
+          posicao_final_capturada_em?: string | null
+          posicao_final_lat?: number | null
+          posicao_final_lng?: number | null
           prestador_id?: string | null
           prestador_nome?: string | null
           prestador_telefone?: string | null
@@ -3214,6 +3222,7 @@ export type Database = {
           destino_lng?: number | null
           destino_logradouro?: string | null
           destino_uf?: string | null
+          distancia_percorrida_km?: number | null
           id?: string
           origem_cep?: string | null
           origem_cidade?: string | null
@@ -3222,6 +3231,9 @@ export type Database = {
           origem_lng?: number | null
           origem_logradouro?: string | null
           origem_uf?: string | null
+          posicao_final_capturada_em?: string | null
+          posicao_final_lat?: number | null
+          posicao_final_lng?: number | null
           prestador_id?: string | null
           prestador_nome?: string | null
           prestador_telefone?: string | null

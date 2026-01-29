@@ -52,9 +52,10 @@ interface AtualizarStatusChamadoModalProps {
   open: boolean;
   onClose: () => void;
   chamado: Chamado | null;
+  veiculoId?: string;
 }
 
-export function AtualizarStatusChamadoModal({ open, onClose, chamado }: AtualizarStatusChamadoModalProps) {
+export function AtualizarStatusChamadoModal({ open, onClose, chamado, veiculoId }: AtualizarStatusChamadoModalProps) {
   const queryClient = useQueryClient();
   const [novoStatus, setNovoStatus] = useState('');
   const [observacao, setObservacao] = useState('');
@@ -73,9 +74,30 @@ export function AtualizarStatusChamadoModal({ open, onClose, chamado }: Atualiza
         updated_at: new Date().toISOString(),
       };
 
-      // Se concluído, adicionar data de conclusão
+      // Se concluído, adicionar data de conclusão e capturar posição final
       if (novoStatus === 'concluido') {
         updateData.data_conclusao = new Date().toISOString();
+
+        // Capturar posição final do rastreador
+        if (veiculoId) {
+          try {
+            console.log('[AtualizarStatus] Capturando posição final do veículo:', veiculoId);
+            const { data: posicaoFinal, error: posicaoError } = await supabase.functions.invoke('posicao-veiculo', {
+              body: { veiculo_id: veiculoId },
+            });
+
+            if (!posicaoError && posicaoFinal?.success && posicaoFinal?.posicao) {
+              updateData.posicao_final_lat = posicaoFinal.posicao.latitude;
+              updateData.posicao_final_lng = posicaoFinal.posicao.longitude;
+              updateData.posicao_final_capturada_em = posicaoFinal.posicao.data_posicao || new Date().toISOString();
+              console.log('[AtualizarStatus] Posição final capturada:', posicaoFinal.posicao.latitude, posicaoFinal.posicao.longitude);
+            } else {
+              console.warn('[AtualizarStatus] Não foi possível capturar posição final:', posicaoError);
+            }
+          } catch (err) {
+            console.warn('[AtualizarStatus] Erro ao capturar posição final:', err);
+          }
+        }
       }
 
       // 2. Atualizar chamado
