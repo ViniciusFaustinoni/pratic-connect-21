@@ -1,9 +1,9 @@
-import { Shield } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { AppMobileMenu } from './AppMobileMenu';
 import { AppUserDropdown } from './AppUserDropdown';
+import logoPratic from '@/assets/pratic-logo.png';
 
 
 const navItems = [
@@ -30,10 +30,7 @@ export function AppHeader() {
         onClick={() => navigate('/app/home')}
         className="flex items-center gap-2"
       >
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-          <Shield className="h-4 w-4 text-primary-foreground" />
-        </div>
-        <span className="text-lg font-bold text-foreground">PRATIC</span>
+        <img src={logoPratic} alt="PRATIC" className="h-10 w-auto" />
       </button>
 
       {/* Desktop Navigation */}
