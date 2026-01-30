@@ -1,126 +1,82 @@
 
-# Plano: Pular Etapa de Fotos para Sinistros de Roubo/Furto
+# Correção: Mensagem de Erro Clara para Veículo com Status Não-Ativo
 
-## Problema Identificado
+## Diagnóstico
 
-Quando o associado seleciona **Roubo** ou **Furto** no wizard de criação de sinistro, o sistema ainda exibe a etapa 4 "Envie fotos" solicitando fotos dos danos do veículo. Isso não faz sentido porque:
+O erro ao criar sinistro de roubo/furto **não está relacionado às mudanças no wizard**. A causa real é:
 
-1. O veículo **não está mais** com o associado (foi roubado/furtado)
-2. Não há como fotografar "danos" ou "detalhes do veículo"
-3. O texto "Fotografe os danos e o local da ocorrência" é confuso neste contexto
+```
+ERROR [criar-sinistro] Veículo não está ativo: instalacao_pendente
+```
+
+O veículo selecionado (`f14d8be0-1964-4cc0-ba4c-1963aba54fa1`) está com status `instalacao_pendente`, e a edge function valida corretamente que apenas veículos **ativos** podem ter sinistros registrados.
+
+## Problema de UX
+
+A mensagem de erro retornada ao frontend não está sendo exibida de forma clara ao usuário. O toast mostra apenas "Erro ao enviar sinistro. Tente novamente." em vez da mensagem real do backend.
 
 ## Solução
 
-Modificar a lógica de navegação do wizard para **pular automaticamente a etapa de fotos** quando o tipo de sinistro for `roubo` ou `furto`:
+Melhorar a exibição da mensagem de erro e traduzir o status do veículo para linguagem amigável:
 
-```text
-FLUXO ATUAL (6 etapas para todos):
-Tipo → Data/Local → Descrição → Fotos → B.O. → Confirmação
+### 1. `supabase/functions/criar-sinistro/index.ts`
 
-FLUXO PROPOSTO:
-- Colisão, Incêndio, etc: Tipo → Data/Local → Descrição → Fotos → B.O. → Confirmação (6 etapas)
-- Roubo/Furto:           Tipo → Data/Local → Descrição → B.O. → Confirmação (5 etapas)
-                                                          ↑
-                                                    Pula etapa de fotos
+Melhorar a mensagem de erro quando veículo não está ativo:
+
+```typescript
+// Antes (linha 290-299):
+if (veiculo.status !== 'ativo') {
+  return new Response(
+    JSON.stringify({ 
+      success: false, 
+      error: `Este veículo não está ativo (status: ${veiculo.status}). Entre em contato com a central.` 
+    }),
+    ...
+  );
+}
+
+// Depois:
+if (veiculo.status !== 'ativo') {
+  const statusLabels: Record<string, string> = {
+    instalacao_pendente: 'aguardando instalação do rastreador',
+    inativo: 'inativo',
+    cancelado: 'cancelado',
+    bloqueado: 'bloqueado',
+  };
+  const statusLabel = statusLabels[veiculo.status] || veiculo.status;
+  
+  return new Response(
+    JSON.stringify({ 
+      success: false, 
+      error: `Não é possível registrar sinistro: veículo ${statusLabel}. Entre em contato com a central.` 
+    }),
+    ...
+  );
+}
+```
+
+### 2. `src/pages/app/AppSinistroNovo.tsx` e `src/pages/app/NovoSinistro.tsx`
+
+Garantir que a mensagem de erro do backend seja exibida ao usuário:
+
+```typescript
+// Verificar se o toast já exibe a mensagem correta
+// O hook useSinistros já faz isso, mas verificar se está propagando corretamente
 ```
 
 ## Arquivos a Modificar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/pages/app/NovoSinistro.tsx` | Pular etapa 4 (fotos) para roubo/furto, ajustar navegação e contagem |
-| `src/pages/app/AppSinistroNovo.tsx` | Mesma lógica - pular etapa de fotos para roubo/furto |
+| `supabase/functions/criar-sinistro/index.ts` | Melhorar mensagem de erro com labels amigáveis |
 
-## Detalhamento Técnico
+## Nota sobre o Teste
 
-### 1. `NovoSinistro.tsx`
+O veículo usado no teste (`MARCUS VINICIUS FAUSTINONI DE FREITAS`) está com status `instalacao_pendente` - isso significa que ainda não teve o rastreador instalado. Para testar a criação de sinistro com sucesso, será necessário:
 
-**a) Criar constante para verificar se é roubo/furto:**
-```typescript
-const isRouboOuFurto = tipoSelecionado === 'roubo' || tipoSelecionado === 'furto';
-```
-
-**b) Ajustar o total de etapas dinamicamente:**
-```typescript
-// Total de etapas: 6 normal, 5 para roubo/furto (pula fotos)
-const totalEtapas = isRouboOuFurto ? 5 : 6;
-const progressoPercentual = (etapa / totalEtapas) * 100;
-```
-
-**c) Modificar navegação `avancarEtapa`:**
-```typescript
-const avancarEtapa = () => {
-  if (etapa === totalEtapas) {
-    handleEnviar();
-  } else if (etapa === 3 && isRouboOuFurto) {
-    // Pular etapa 4 (fotos) - ir direto para B.O.
-    setEtapa(5);
-  } else {
-    setEtapa(e => e + 1);
-  }
-};
-```
-
-**d) Modificar navegação `voltarEtapa`:**
-```typescript
-const voltarEtapa = () => {
-  if (etapa === 1) {
-    navigate('/app/sinistros');
-  } else if (etapa === 5 && isRouboOuFurto) {
-    // Ao voltar do B.O., pular fotos - ir para descrição
-    setEtapa(3);
-  } else {
-    setEtapa(e => e - 1);
-  }
-};
-```
-
-**e) Atualizar indicador de progresso no header:**
-```typescript
-<span className="text-sm text-muted-foreground">
-  Etapa {isRouboOuFurto && etapa > 3 ? etapa - 1 : etapa} de {totalEtapas}
-</span>
-```
-
-### 2. `AppSinistroNovo.tsx`
-
-Aplicar a mesma lógica:
-
-**a) Verificar tipo:**
-```typescript
-const isRouboOuFurto = tipoSelecionado === 'roubo' || tipoSelecionado === 'furto';
-```
-
-**b) Ajustar total de etapas:**
-```typescript
-const totalEtapas = isRouboOuFurto ? 4 : 5;
-```
-
-**c) Modificar navegação para pular etapa 4:**
-- Se etapa 3 → avançar → pular para etapa 5 (confirmação)
-- Se etapa 5 → voltar → pular para etapa 3 (descrição)
-
-## Comportamento Esperado Após Mudança
-
-**Para Roubo/Furto:**
-```text
-Etapa 1: Tipo de sinistro (seleciona Roubo)
-Etapa 2: Quando e onde? (data/local)
-Etapa 3: Descrição
-Etapa 4: Boletim de Ocorrência (obrigatório) ← vai direto para cá
-Etapa 5: Confirmação
-```
-
-**Para outros tipos (Colisão, Incêndio, etc):**
-```text
-Etapa 1: Tipo de sinistro
-Etapa 2: Quando e onde?
-Etapa 3: Descrição
-Etapa 4: Fotos ← continua exibindo
-Etapa 5: Boletim de Ocorrência
-Etapa 6: Confirmação
-```
+1. Usar um veículo que tenha status `ativo`, **ou**
+2. Alterar o status do veículo para `ativo` no banco de dados
 
 ## Tempo Estimado
 
-~15 minutos
+~5 minutos
