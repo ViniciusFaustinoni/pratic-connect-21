@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -11,13 +11,15 @@ import {
   Image as ImageIcon,
   Gauge,
   Info,
-  X
+  X,
+  RefreshCw
 } from 'lucide-react';
 import { getFotosAutovistoria, type TipoVeiculo, type FotoAutovistoria } from '@/data/autovistoriaConfig';
 import { useFotosCotacaoVistoria, useUploadFotoCotacaoVistoria, useFinalizarVistoriaCotacao } from '@/hooks/useCotacaoVistoria';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
+import { compressImage, createOptimizedPreview, revokePreview } from '@/lib/imageCompressor';
 
 interface AutovistoriaCotacaoProps {
   cotacaoId: string;
@@ -71,6 +73,15 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
     }
   }, [fotosExistentes, fotos, hidratado]);
   
+  // Limpar previews ao desmontar para liberar memória
+  useEffect(() => {
+    return () => {
+      if (previewLocal) {
+        revokePreview(previewLocal);
+      }
+    };
+  }, []);
+
   const handleCapturarFoto = () => {
     inputRef.current?.click();
   };
@@ -79,11 +90,39 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
     const file = e.target.files?.[0];
     if (!file) return;
     
-    // Preview local imediato
-    const localUrl = URL.createObjectURL(file);
+    // Validar tamanho (max 15MB antes de comprimir)
+    if (file.size > 15 * 1024 * 1024) {
+      toast.error('Arquivo muito grande. Máximo 15MB.');
+      e.target.value = '';
+      return;
+    }
+    
+    // Preview local imediato usando Object URL (muito mais eficiente que base64)
+    if (previewLocal) {
+      revokePreview(previewLocal);
+    }
+    const localUrl = createOptimizedPreview(file);
     setPreviewLocal(localUrl);
     
     try {
+      // Comprimir imagem para economizar memória e acelerar upload
+      let arquivoFinal = file;
+      if (file.size > 500 * 1024) { // Comprimir se > 500KB
+        toast.loading('Otimizando imagem...', { id: 'compress' });
+        try {
+          arquivoFinal = await compressImage(file, { 
+            maxWidth: 1920, 
+            maxHeight: 1920, 
+            quality: 0.75,
+            maxSizeKB: 800 
+          });
+          toast.dismiss('compress');
+        } catch (compressError) {
+          console.warn('[AutovistoriaCotacao] Erro na compressão, usando original:', compressError);
+          toast.dismiss('compress');
+        }
+      }
+
       // Tentar obter geolocalização
       let latitude: number | undefined;
       let longitude: number | undefined;
@@ -107,13 +146,16 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
       const result = await uploadMutation.mutateAsync({
         cotacaoId,
         fotoId: fotoAtual.id,
-        file,
+        file: arquivoFinal,
         latitude,
         longitude,
       });
       
       // Atualizar estado local
       setFotosEnviadas(prev => ({ ...prev, [fotoAtual.id]: result.url }));
+      
+      // Liberar preview local após sucesso
+      revokePreview(localUrl);
       setPreviewLocal(null);
       
       // Se extraiu KM do odômetro
@@ -128,9 +170,16 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
       if (fotoAtualIndex < totalFotos - 1) {
         setTimeout(() => setFotoAtualIndex(fotoAtualIndex + 1), 800);
       }
-    } catch (error) {
-      console.error('Erro no upload:', error);
-      setPreviewLocal(null);
+    } catch (error: any) {
+      console.error('[AutovistoriaCotacao] Erro no upload:', error);
+      // Mensagem amigável
+      toast.error('Não foi possível enviar a foto. Tente novamente.', {
+        action: {
+          label: 'Tentar novamente',
+          onClick: () => inputRef.current?.click(),
+        },
+      });
+      // Manter preview para o usuário poder tentar novamente
     }
     
     // Limpar input para permitir reenvio

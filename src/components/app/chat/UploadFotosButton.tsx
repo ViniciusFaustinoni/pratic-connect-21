@@ -1,7 +1,9 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Camera, ImagePlus, Loader2, X, Check, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { compressImage, createOptimizedPreview, revokePreview } from '@/lib/imageCompressor';
+import { toast } from 'sonner';
 
 interface UploadFotosButtonProps {
   onUpload: (files: File[]) => Promise<void>;
@@ -26,36 +28,40 @@ export function UploadFotosButton({
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFilesSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Limpar previews ao desmontar
+  useEffect(() => {
+    return () => {
+      selectedFiles.forEach(f => revokePreview(f.previewUrl));
+    };
+  }, []);
+
+  const handleFilesSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    const validFiles: SelectedFile[] = [];
     const remainingSlots = maxFiles - selectedFiles.length;
+    const filesToProcess = Array.from(files).slice(0, remainingSlots);
 
-    for (let i = 0; i < Math.min(files.length, remainingSlots); i++) {
-      const file = files[i];
-
+    for (const file of filesToProcess) {
       // Validate file type
       if (!file.type.startsWith('image/')) {
         continue;
       }
 
-      // Validate file size (max 5MB each)
-      if (file.size > 5 * 1024 * 1024) {
-        alert(`${file.name} é muito grande. Máximo 5MB por foto.`);
+      // Validate file size (max 15MB antes de comprimir)
+      if (file.size > 15 * 1024 * 1024) {
+        toast.error(`${file.name} é muito grande. Máximo 15MB.`);
         continue;
       }
 
-      validFiles.push({
+      // Criar preview usando Object URL
+      const previewUrl = createOptimizedPreview(file);
+
+      setSelectedFiles(prev => [...prev, {
         id: crypto.randomUUID(),
         file,
-        previewUrl: URL.createObjectURL(file),
-      });
-    }
-
-    if (validFiles.length > 0) {
-      setSelectedFiles(prev => [...prev, ...validFiles]);
+        previewUrl,
+      }]);
     }
 
     // Reset input
@@ -66,7 +72,7 @@ export function UploadFotosButton({
     setSelectedFiles(prev => {
       const file = prev.find(f => f.id === id);
       if (file) {
-        URL.revokeObjectURL(file.previewUrl);
+        revokePreview(file.previewUrl);
       }
       return prev.filter(f => f.id !== id);
     });
@@ -77,20 +83,40 @@ export function UploadFotosButton({
 
     setIsUploading(true);
     try {
-      await onUpload(selectedFiles.map(f => f.file));
+      // Comprimir arquivos antes de enviar
+      const compressedFiles: File[] = [];
+      for (const sf of selectedFiles) {
+        let arquivo = sf.file;
+        if (arquivo.size > 500 * 1024) {
+          try {
+            arquivo = await compressImage(arquivo, { 
+              maxWidth: 1920, 
+              maxHeight: 1920, 
+              quality: 0.75,
+              maxSizeKB: 800 
+            });
+          } catch (e) {
+            console.warn('[UploadFotosButton] Erro na compressão:', e);
+          }
+        }
+        compressedFiles.push(arquivo);
+      }
+
+      await onUpload(compressedFiles);
       setUploaded(true);
       
       // Cleanup previews
-      selectedFiles.forEach(f => URL.revokeObjectURL(f.previewUrl));
+      selectedFiles.forEach(f => revokePreview(f.previewUrl));
     } catch (error) {
       console.error('Erro ao fazer upload:', error);
+      toast.error('Erro ao enviar fotos. Tente novamente.');
     } finally {
       setIsUploading(false);
     }
   };
 
   const handleClear = () => {
-    selectedFiles.forEach(f => URL.revokeObjectURL(f.previewUrl));
+    selectedFiles.forEach(f => revokePreview(f.previewUrl));
     setSelectedFiles([]);
     setUploaded(false);
   };

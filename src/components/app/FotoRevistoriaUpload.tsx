@@ -1,11 +1,13 @@
-import { useRef, useState } from 'react';
-import { Camera, Check, X, AlertTriangle } from 'lucide-react';
+import { useRef, useState, useEffect } from 'react';
+import { Camera, Check, X, AlertTriangle, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { FotoConfig } from '@/data/revistoriaConfig';
 import {
   Dialog,
   DialogContent,
 } from '@/components/ui/dialog';
+import { compressImage, createOptimizedPreview, revokePreview } from '@/lib/imageCompressor';
+import { toast } from 'sonner';
 
 interface FotoRevistoriaUploadProps {
   config: FotoConfig;
@@ -24,6 +26,17 @@ export function FotoRevistoriaUpload({
 }: FotoRevistoriaUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [localPreview, setLocalPreview] = useState<string | null>(null);
+  const [isCompressing, setIsCompressing] = useState(false);
+
+  // Limpar preview ao desmontar
+  useEffect(() => {
+    return () => {
+      if (localPreview) {
+        revokePreview(localPreview);
+      }
+    };
+  }, []);
 
   const handleClick = () => {
     if (foto) {
@@ -33,16 +46,47 @@ export function FotoRevistoriaUpload({
     }
   };
 
-  const handleCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64 = reader.result as string;
-      onCapture(base64);
-    };
-    reader.readAsDataURL(file);
+    // Criar preview local otimizado
+    if (localPreview) {
+      revokePreview(localPreview);
+    }
+    const previewUrl = createOptimizedPreview(file);
+    setLocalPreview(previewUrl);
+
+    try {
+      // Comprimir se necessário
+      let arquivoFinal = file;
+      if (file.size > 500 * 1024) {
+        setIsCompressing(true);
+        try {
+          arquivoFinal = await compressImage(file, { 
+            maxWidth: 1920, 
+            maxHeight: 1920, 
+            quality: 0.75,
+            maxSizeKB: 800 
+          });
+        } catch (compressError) {
+          console.warn('[FotoRevistoriaUpload] Erro na compressão:', compressError);
+        }
+        setIsCompressing(false);
+      }
+
+      // Converter para base64 para passar ao callback
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64 = reader.result as string;
+        onCapture(base64);
+      };
+      reader.readAsDataURL(arquivoFinal);
+    } catch (error) {
+      console.error('[FotoRevistoriaUpload] Erro:', error);
+      toast.error('Erro ao processar foto');
+      setIsCompressing(false);
+    }
 
     // Reset input para permitir selecionar a mesma foto novamente
     e.target.value = '';

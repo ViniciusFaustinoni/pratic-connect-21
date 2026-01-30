@@ -1,7 +1,7 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   Camera, Check, ArrowLeft, ArrowRight, Loader2, ChevronRight, Gauge, 
-  CheckCircle, XCircle, Lightbulb, RotateCcw, Lock
+  CheckCircle, XCircle, Lightbulb, RotateCcw, Lock, RefreshCw, AlertTriangle
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { getFotosAutovistoria, TipoVeiculo } from '@/data/autovistoriaConfig';
 import { useCriarAutovistoria, useUploadFotoAutovistoria, useAutovistoriaExistente, useFinalizarAutovistoria } from '@/hooks/useContratoLink';
 import { toast } from 'sonner';
+import { compressImage, createOptimizedPreview, revokePreview } from '@/lib/imageCompressor';
 
 interface AutovistoriaProps {
   contratoId: string;
@@ -114,13 +115,22 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
     inputRef.current?.click();
   };
 
+  // Limpar previews locais ao desmontar para liberar memória
+  useEffect(() => {
+    return () => {
+      Object.values(previewsLocais).forEach((url) => {
+        revokePreview(url);
+      });
+    };
+  }, []);
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !vistoriaId) return;
 
-    // Validar tamanho (max 10MB)
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error('Arquivo muito grande. Máximo 10MB.');
+    // Validar tamanho (max 15MB antes de comprimir)
+    if (file.size > 15 * 1024 * 1024) {
+      toast.error('Arquivo muito grande. Máximo 15MB.');
       return;
     }
 
@@ -130,22 +140,43 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
       return;
     }
 
-    // Criar preview local IMEDIATAMENTE e guardar por fotoId
-    const reader = new FileReader();
-    reader.onload = () => {
-      setPreviewsLocais(prev => ({
-        ...prev,
-        [fotoAtual.id]: reader.result as string,
-      }));
-    };
-    reader.readAsDataURL(file);
+    // Criar preview local usando Object URL (muito mais eficiente que base64)
+    const previewUrl = createOptimizedPreview(file);
+    
+    // Revogar preview anterior se existir
+    if (previewsLocais[fotoAtual.id]) {
+      revokePreview(previewsLocais[fotoAtual.id]);
+    }
+    
+    setPreviewsLocais(prev => ({
+      ...prev,
+      [fotoAtual.id]: previewUrl,
+    }));
 
     setUploading(true);
     try {
+      // Comprimir imagem para economizar memória e acelerar upload
+      let arquivoFinal = file;
+      if (file.size > 500 * 1024) { // Comprimir se > 500KB
+        toast.loading('Otimizando imagem...', { id: 'compress' });
+        try {
+          arquivoFinal = await compressImage(file, { 
+            maxWidth: 1920, 
+            maxHeight: 1920, 
+            quality: 0.75,
+            maxSizeKB: 800 
+          });
+          toast.dismiss('compress');
+        } catch (compressError) {
+          console.warn('[Autovistoria] Erro na compressão, usando original:', compressError);
+          toast.dismiss('compress');
+        }
+      }
+
       const result = await uploadFoto.mutateAsync({
         vistoriaId,
         fotoId: fotoAtual.id,
-        file,
+        file: arquivoFinal,
         contratoId,
       });
 
@@ -168,8 +199,15 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
           avancarFoto();
         }, 500);
       }
-    } catch (error) {
-      toast.error('Erro ao enviar foto');
+    } catch (error: any) {
+      console.error('[Autovistoria] Erro no upload:', error);
+      // Mensagem amigável em vez de erro técnico
+      toast.error('Não foi possível enviar a foto. Tente novamente.', {
+        action: {
+          label: 'Tentar novamente',
+          onClick: () => inputRef.current?.click(),
+        },
+      });
     } finally {
       setUploading(false);
       // Reset input
