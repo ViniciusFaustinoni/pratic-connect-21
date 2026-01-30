@@ -70,6 +70,7 @@ export function WhatsAppStatusCard() {
   const [qrCodeOpen, setQrCodeOpen] = useState(false);
   const [qrCodeData, setQrCodeData] = useState<string | null>(null);
   const [pairingCode, setPairingCode] = useState<string | null>(null);
+  const [qrCodeError, setQrCodeError] = useState<string | null>(null);
   const [isRecriando, setIsRecriando] = useState(false);
   
   const { 
@@ -102,17 +103,25 @@ export function WhatsAppStatusCard() {
       setQrCodeOpen(false);
       setQrCodeData(null);
       setPairingCode(null);
+      setQrCodeError(null);
     }
   }, [connected, qrCodeOpen]);
 
   const handleObterQRCode = async () => {
     try {
       const result = await obterQRCode.mutateAsync();
-      if (result.qrcode) {
-        setQrCodeData(result.qrcode);
-        setPairingCode(result.pairingCode || null);
-        setQrCodeOpen(true);
-      }
+
+      setQrCodeData(result.qrcode || null);
+      setPairingCode(result.pairingCode || null);
+      setQrCodeError(
+        result.qrcode || result.pairingCode
+          ? null
+          : 'Não foi possível obter o QR Code agora. Clique em “Tentar novamente”.'
+      );
+
+      // Sempre abrir o modal quando o usuário clica em Conectar.
+      // A Evolution API pode retornar success sem base64 em alguns cenários.
+      setQrCodeOpen(true);
     } catch {
       // Error já tratado no hook
     }
@@ -288,8 +297,21 @@ export function WhatsAppStatusCard() {
                 )}
               </>
             ) : (
-              <div className="flex items-center justify-center w-64 h-64 bg-muted rounded-lg">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              <div className="flex flex-col items-center justify-center w-64 h-64 bg-muted rounded-lg gap-3 px-4">
+                {obterQRCode.isPending ? (
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                ) : (
+                  <QrCode className="h-10 w-10 text-muted-foreground" />
+                )}
+                <p className="text-xs text-muted-foreground text-center">
+                  {qrCodeError || 'Gerando QR Code…'}
+                </p>
+                {!obterQRCode.isPending && (
+                  <Button size="sm" variant="outline" onClick={handleObterQRCode}>
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Tentar novamente
+                  </Button>
+                )}
               </div>
             )}
           </div>
