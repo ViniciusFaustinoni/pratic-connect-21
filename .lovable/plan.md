@@ -1,156 +1,171 @@
 
+# Plano: Impedimento de Duplicidade de Placa em Cotações
 
-# Plano: Expandir Monitoramento de Exclusividade de Vendedores
+## Resumo
 
-## Resumo Executivo
+Implementar uma validação que impede um vendedor de criar cotação para uma placa que já está sendo atendida por outro consultor, exibindo um alerta pop-up com informações do responsável atual.
 
-O sistema **já possui** um módulo de Auditoria de Vendedores completo em `/auditoria/vendedores`. Este plano expande a funcionalidade existente para detectar vendedores que possam estar realizando cotações para associações concorrentes.
+## Regras de Negócio
 
-## Situação Atual
+| Regra | Descrição |
+|-------|-----------|
+| Bloqueio de duplicidade | Se a placa já existe em cotação ativa de outro vendedor, bloquear |
+| Cotações ativas | Status: `rascunho`, `enviada`, `aceita` (não expiradas) |
+| Período de validade | Cotações com menos de 7 dias da criação |
+| Mesmo vendedor | Permitir que o mesmo vendedor crie nova cotação (com aviso informativo) |
+| Cotações fechadas | Placas de cotações `recusada` ou `expirada` ficam livres |
 
-O sistema já conta com:
+## Dados Exibidos no Alerta
 
-| Componente | Status |
-|------------|--------|
-| Tela de Auditoria (`/auditoria/vendedores`) | Existente |
-| Tabela `auditoria_vendedores` | Existente |
-| Tabela `vendedores_monitoramento` | Existente |
-| Edge Function `analisar-exclusividade` | Existente |
-| Hooks de auditoria (`useAuditoriaVendedores`) | Existente |
-| Alertas de CPF duplicado | Existente |
-| Alertas de taxa conversão baixa | Existente |
-| Alertas de cotações abandonadas | Existente |
+Quando houver conflito, o modal exibirá:
+- Aviso: "Esta placa já está vinculada a outro consultor"
+- Nome do consultor responsável
+- Data e hora do cadastro original
+- Número da cotação existente
 
-## O Que Será Implementado
+## Componentes da Solução
 
-### 1. Nova Tabela: Associações Concorrentes Cadastradas
+### 1. Novo Hook: `useVerificarPlaca.ts`
 
-Criar uma tabela para cadastrar associações/empresas concorrentes conhecidas que serão usadas para identificar conflitos.
+Hook para verificar duplicidade de placa antes de criar cotação.
 
-```sql
-CREATE TABLE associacoes_concorrentes (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  nome VARCHAR(255) NOT NULL,
-  cnpj VARCHAR(20),
-  palavras_chave TEXT[], -- ex: ['proteja', 'protecao xyz', 'apv']
-  ativo BOOLEAN DEFAULT true,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
+```typescript
+// src/hooks/useVerificarPlaca.ts
+
+interface PlacaDuplicadaInfo {
+  cotacaoId: string;
+  numero: string;
+  vendedorId: string;
+  vendedorNome: string;
+  createdAt: string;
+  status: string;
+}
+
+export function useVerificarPlacaDuplicada() {
+  return useMutation({
+    mutationFn: async (placa: string): Promise<PlacaDuplicadaInfo | null> => {
+      // Buscar cotações ativas com essa placa nos últimos 7 dias
+      // Status: rascunho, enviada, aceita
+      // Retornar dados do vendedor responsável se existir
+    }
+  });
+}
 ```
 
-### 2. Nova Tabela: Registro de Indícios
+### 2. Novo Componente: `PlacaDuplicadaModal.tsx`
 
-Armazenar evidências de possível conflito de interesse detectadas.
+Modal de alerta com:
+- Ícone de alerta vermelho
+- Mensagem clara de bloqueio
+- Dados do vendedor responsável (nome)
+- Data/hora do cadastro original
+- Número da cotação
+- Botão "Entendido" para fechar
 
-```sql
-CREATE TABLE auditoria_indicios_concorrencia (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  vendedor_id UUID REFERENCES profiles(id) NOT NULL,
-  tipo_indicio VARCHAR(50) NOT NULL, -- 'email_corporativo', 'telefone_duplicado', 'padrao_horario', 'cliente_migrado'
-  descricao TEXT,
-  associacao_concorrente_id UUID REFERENCES associacoes_concorrentes(id),
-  dados_evidencia JSONB,
-  score_risco INTEGER DEFAULT 20,
-  status VARCHAR(20) DEFAULT 'pendente', -- pendente, analisado, confirmado, ignorado
-  analisado_por UUID REFERENCES profiles(id),
-  analisado_em TIMESTAMPTZ,
-  observacoes TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-```
+### 3. Integração no Cotador
 
-### 3. Novo Tipo de Alerta na Edge Function
+Modificar `src/pages/vendas/Cotador.tsx`:
 
-Expandir a Edge Function `analisar-exclusividade` para incluir novos tipos de detecção:
+Na função `handleBuscarPlaca` (após encontrar veículo):
+1. Chamar `verificarPlacaDuplicada(placa)`
+2. Obter `profile.id` do usuário atual via auth
+3. Se retornar dados e `vendedor_id !== profile.id` → Exibir modal e bloquear
+4. Se retornar dados do mesmo vendedor → Exibir toast informativo
+5. Se não retornar → Prosseguir normalmente
 
-**Novos tipos de alerta:**
-- `email_suspeito` - Email do vendedor ou leads com domínio de concorrente
-- `padrao_multi_organizacao` - Vendedor com leads que mencionam outras associações
-- `horario_fora_expediente` - Atividade concentrada fora do horário comercial
-- `clientes_migrados` - Leads com histórico em outras associações (quando detectável)
+### 4. Integração no CotacaoFormDialog
 
-### 4. Nova View: Métricas de Conflito
+Modificar `src/components/cotacoes/CotacaoFormDialog.tsx`:
 
-```sql
-CREATE VIEW vw_vendedores_conflito AS
-SELECT 
-  p.id as vendedor_id,
-  p.nome,
-  p.email,
-  COUNT(DISTINCT aic.id) as total_indicios,
-  COUNT(DISTINCT CASE WHEN aic.status = 'confirmado' THEN aic.id END) as indicios_confirmados,
-  MAX(aic.created_at) as ultimo_indicio,
-  ARRAY_AGG(DISTINCT ac.nome) FILTER (WHERE ac.nome IS NOT NULL) as associacoes_envolvidas
-FROM profiles p
-LEFT JOIN auditoria_indicios_concorrencia aic ON aic.vendedor_id = p.id
-LEFT JOIN associacoes_concorrentes ac ON ac.id = aic.associacao_concorrente_id
-WHERE aic.id IS NOT NULL
-GROUP BY p.id, p.nome, p.email;
-```
+Na função `buscarPorPlaca` (após encontrar veículo):
+1. Aplicar a mesma lógica de verificação
+2. Bloquear avanço se placa duplicada de outro vendedor
 
-### 5. UI: Nova Aba na Tela de Auditoria
-
-Adicionar uma nova aba "Conflito de Interesse" na página `/auditoria/vendedores` com:
-
-- Lista de vendedores com indícios de trabalho para concorrentes
-- Detalhes das associações envolvidas
-- Timeline de evidências detectadas
-- Ações para analisar/confirmar/ignorar
-
-### 6. UI: Cadastro de Associações Concorrentes
-
-Criar uma seção de configuração para gerenciar a lista de associações concorrentes conhecidas (apenas para diretor/desenvolvedor).
-
-## Fluxo de Detecção
+## Fluxo Visual do Modal
 
 ```text
-1. Vendedor cria cotação/lead
-          ↓
-2. Edge Function analisa:
-   - Email tem domínio de concorrente?
-   - Telefone aparece em outra associação?
-   - Observações mencionam concorrente?
-   - Horário atípico frequente?
-          ↓
-3. Se detectado → Cria registro em auditoria_indicios_concorrencia
-          ↓
-4. Atualiza score de risco em vendedores_monitoramento
-          ↓
-5. Se score >= 70 → Notifica gestores
-          ↓
-6. Gestor analisa na tela de Auditoria
+┌─────────────────────────────────────────────────┐
+│  ⚠️  PLACA JÁ EM ATENDIMENTO                     │
+├─────────────────────────────────────────────────┤
+│                                                 │
+│  A placa ABC-1234 já está vinculada a outro     │
+│  consultor e não pode ser utilizada para uma    │
+│  nova cotação no momento.                       │
+│                                                 │
+│  ┌───────────────────────────────────────────┐  │
+│  │ Consultor: João Silva                     │  │
+│  │ Cotação: COT-20260130-001                 │  │
+│  │ Cadastrada em: 29/01/2026 às 14:32       │  │
+│  │ Status: Enviada                           │  │
+│  └───────────────────────────────────────────┘  │
+│                                                 │
+│  Para atender este cliente, entre em contato    │
+│  com o consultor responsável.                   │
+│                                                 │
+│                           [ Entendido ]         │
+└─────────────────────────────────────────────────┘
 ```
 
-## Alterações em Arquivos
+## Arquivos a Criar/Modificar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `supabase/functions/analisar-exclusividade/index.ts` | Adicionar novos tipos de análise |
-| `src/hooks/useAuditoriaVendedores.ts` | Novos hooks para indícios de concorrência |
-| `src/pages/auditoria/AuditoriaVendedores.tsx` | Nova aba "Conflito de Interesse" |
-| `src/components/auditoria/AlertaDetalheModal.tsx` | Suporte a novos tipos de alerta |
-| `src/components/auditoria/IndiciosConcorrenciaTab.tsx` | **Novo** - Componente da nova aba |
-| `src/components/auditoria/CadastroAssociacoesModal.tsx` | **Novo** - Modal de cadastro |
+| `src/hooks/useVerificarPlaca.ts` | **Criar** - Hook de verificação de placa |
+| `src/components/cotacoes/PlacaDuplicadaModal.tsx` | **Criar** - Modal de alerta |
+| `src/pages/vendas/Cotador.tsx` | Adicionar verificação em `handleBuscarPlaca` |
+| `src/components/cotacoes/CotacaoFormDialog.tsx` | Adicionar verificação em `buscarPorPlaca` |
 
-## Controle de Acesso
+## Casos de Uso
 
-Acesso restrito a:
-- `diretor`
-- `gerente_comercial`
-- `desenvolvedor`
-- `admin_master`
+| Cenário | Comportamento |
+|---------|---------------|
+| Placa nova (sem cotação) | Prossegue normalmente |
+| Placa com cotação do mesmo vendedor | Toast informativo, permite continuar |
+| Placa com cotação de outro vendedor (ativa) | **Bloqueia** e exibe modal |
+| Placa com cotação expirada (>7 dias) | Prossegue normalmente |
+| Placa com cotação recusada | Prossegue normalmente |
 
-Usando as permissões já existentes no `usePermissions`:
-```ts
-canManageAuditoria: isDiretor || isGerencia() || isDesenvolvedor || isAdminMaster
+## Detalhes Técnicos
+
+### Consulta SQL da Verificação
+
+```sql
+SELECT 
+  c.id, c.numero, c.vendedor_id, c.created_at, c.status,
+  p.nome as vendedor_nome
+FROM cotacoes c
+LEFT JOIN profiles p ON c.vendedor_id = p.id
+WHERE c.veiculo_placa = '<PLACA_NORMALIZADA>'
+  AND c.status IN ('rascunho', 'enviada', 'aceita')
+  AND c.created_at >= NOW() - INTERVAL '7 days'
+ORDER BY c.created_at DESC
+LIMIT 1;
 ```
 
-## Próximos Passos
+### Obtenção do Vendedor Atual
 
-1. **Migração SQL** - Criar as novas tabelas e views
-2. **Atualizar Edge Function** - Expandir lógica de análise
-3. **Novos Hooks** - Adicionar `useIndiciosConcorrencia`, `useAssociacoesConcorrentes`
-4. **UI** - Implementar nova aba e modais
-5. **Testes** - Validar detecção e notificações
+Utilizando o AuthContext existente:
+```typescript
+const { profile } = useAuth();
+const vendedorAtualId = profile?.id;
+```
 
+### Comparação de Vendedores
+
+```typescript
+if (cotacaoExistente && cotacaoExistente.vendedorId !== vendedorAtualId) {
+  // Bloquear e mostrar modal
+  setPlacaDuplicada(cotacaoExistente);
+  setShowPlacaDuplicadaModal(true);
+} else if (cotacaoExistente) {
+  // Mesmo vendedor - apenas informar
+  toast.info(`Você já possui uma cotação ativa para esta placa: ${cotacaoExistente.numero}`);
+}
+```
+
+## Benefícios
+
+1. **Evita conflitos comerciais** - Cada cliente é atendido por apenas um consultor
+2. **Transparência** - O vendedor sabe exatamente quem está responsável
+3. **Organização do funil** - Evita duplicidade de trabalho
+4. **Rastreabilidade** - Mantém histórico claro de responsabilidades
