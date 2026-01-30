@@ -1,100 +1,157 @@
 
-# Plano: Corrigir Sincronização Bidirecional Servicos ↔ Instalações
+# Plano: Corrigir Mapeamento de Status WhatsApp `connecting`
 
 ## Problema Identificado
 
-A atribuição automática de tarefas está funcionando corretamente na tabela `servicos`, mas a sincronização de volta para a tabela `instalacoes` está incompleta.
+O webhook do WhatsApp está recebendo eventos `CONNECTION_UPDATE` com `state: connecting` e mapeando para `disconnected`, quando deveria:
+1. Tratar `connecting` como um estado intermediário (não sobrescrever `open` para `disconnected`)
+2. Ou simplesmente ignorar eventos `connecting` para não alterar o status atual
 
-**Evidência:**
-- Tabela `servicos`: `profissional_id = 68f4857b...` (correto)
-- Tabela `instalacoes`: `instalador_id = null` (incorreto)
+### Evidência
+```
+17:02:12 - status_check: state = open (correto)
+17:02:13 - webhook: state = connecting → salva como disconnected (BUG!)
+```
 
-O trigger atual `sync_servico_to_instalacao` só sincroniza quando o status muda para `concluida`, ignorando:
-- Atribuição de profissional
-- Status `em_rota` e `em_andamento`
+### Impacto
+- Mensagens de WhatsApp falham porque o sistema lê `status: disconnected` do banco
+- Mesmo com a instância realmente conectada na Evolution API
+
+---
 
 ## Alteração Necessária
 
-### Migração SQL
+### Arquivo: `supabase/functions/whatsapp-webhook/index.ts`
 
-```sql
--- Atualizar função de sincronização servicos → instalacoes
-CREATE OR REPLACE FUNCTION public.sync_servico_to_instalacao()
-RETURNS trigger
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path TO 'public'
-AS $$
-BEGIN
-  -- Só sincronizar para serviços do tipo instalação
-  IF NEW.tipo = 'instalacao' AND NEW.instalacao_origem_id IS NOT NULL THEN
-    
-    -- Sincronizar profissional quando atribuído
-    IF NEW.profissional_id IS DISTINCT FROM OLD.profissional_id THEN
-      UPDATE instalacoes
-      SET 
-        instalador_id = NEW.profissional_id,
-        updated_at = NOW()
-      WHERE id = NEW.instalacao_origem_id;
-    END IF;
-    
-    -- Sincronizar status quando muda para em_rota ou em_andamento
-    IF NEW.status IN ('em_rota', 'em_andamento') 
-       AND OLD.status IS DISTINCT FROM NEW.status THEN
-      UPDATE instalacoes
-      SET 
-        status = NEW.status::status_instalacao,
-        updated_at = NOW()
-      WHERE id = NEW.instalacao_origem_id;
-    END IF;
-    
-    -- Sincronizar conclusão (lógica existente)
-    IF NEW.status = 'concluida' AND OLD.status IS DISTINCT FROM NEW.status THEN
-      UPDATE instalacoes
-      SET 
-        status = 'concluida',
-        concluida_em = COALESCE(NEW.concluida_em, NOW()),
-        instalador_responsavel_id = COALESCE(NEW.profissional_id, instalador_responsavel_id),
-        rastreador_id = COALESCE(NEW.rastreador_id, rastreador_id),
-        updated_at = NOW()
-      WHERE id = NEW.instalacao_origem_id;
-    END IF;
-    
-  END IF;
+**Localização:** Linha ~2118
+
+**Código Atual (Incorreto):**
+```typescript
+const novoStatus = state === 'open' ? 'open' : 'disconnected';
+```
+
+**Código Corrigido:**
+```typescript
+// Mapear estado para nosso status
+// IMPORTANTE: 'connecting' não deve sobrescrever 'open'
+let novoStatus: string;
+if (state === 'open') {
+  novoStatus = 'open';
+} else if (state === 'close' || state === 'qrcode') {
+  novoStatus = 'disconnected';
+} else if (state === 'connecting') {
+  // Ignorar eventos 'connecting' - manter status atual
+  console.log(`[whatsapp-webhook] Ignorando estado 'connecting' - mantendo status atual`);
+  return new Response(
+    JSON.stringify({ success: true, message: "Estado connecting ignorado" }),
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
+} else {
+  // Estado desconhecido - manter como disconnected por segurança
+  novoStatus = 'disconnected';
+}
+```
+
+---
+
+## Alternativa (Mais Simples)
+
+Manter a lógica atual mas adicionar `connecting` como estado válido:
+
+```typescript
+// Mapear estado para nosso status
+const statusMap: Record<string, string> = {
+  'open': 'open',
+  'close': 'disconnected',
+  'qrcode': 'disconnected',
+  'connecting': 'connecting', // Novo: manter como connecting
+};
+
+const novoStatus = statusMap[state] || 'disconnected';
+
+// Só atualizar se for um estado definitivo (open ou disconnected)
+// Connecting é transitório - pode ignorar ou salvar
+if (state === 'connecting') {
+  // Opção 1: Ignorar completamente
+  console.log(`[whatsapp-webhook] Estado 'connecting' - ignorando atualização`);
+  return new Response(
+    JSON.stringify({ success: true, message: "Connecting ignorado" }),
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
+}
+```
+
+---
+
+## Também Atualizar: `whatsapp-send-text`
+
+### Problema Secundário
+O envio valida status do banco, mas deveria ter fallback para consultar a API se banco mostrar disconnected.
+
+### Arquivo: `supabase/functions/whatsapp-send-text/index.ts`
+
+**Adicionar verificação em tempo real (opcional mas recomendado):**
+```typescript
+// Linha 47-58 - Após buscar instância
+if (!instancia.status || instancia.status !== 'open') {
+  // NOVO: Verificar status real na Evolution API antes de falhar
+  console.log(`[whatsapp-send-text] Status no banco: ${instancia.status} - verificando API...`);
   
-  RETURN NEW;
-END;
-$$;
+  const statusResponse = await fetch(
+    `${apiUrl}/instance/connectionState/${instancia.instance_name}`,
+    {
+      method: 'GET',
+      headers: { 'apikey': EVOLUTION_API_KEY }
+    }
+  );
+  
+  if (statusResponse.ok) {
+    const statusData = await statusResponse.json();
+    const realStatus = statusData.instance?.state;
+    
+    if (realStatus === 'open') {
+      console.log(`[whatsapp-send-text] API retorna OPEN - prosseguindo com envio`);
+      // Atualizar banco com status correto
+      await supabase
+        .from('whatsapp_instancias')
+        .update({ status: 'open', updated_at: new Date().toISOString() })
+        .eq('id', instancia.id);
+    } else {
+      // Realmente desconectado
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: "WhatsApp não está conectado. Acesse as configurações para reconectar.",
+          status: realStatus
+        }),
+        { status: 503, headers: corsHeaders }
+      );
+    }
+  }
+}
 ```
 
-### Correção de Dados Existentes
+---
 
-```sql
--- Corrigir instalações que não têm instalador_id mas o serviço tem
-UPDATE instalacoes i
-SET instalador_id = s.profissional_id
-FROM servicos s
-WHERE s.instalacao_origem_id = i.id
-  AND s.profissional_id IS NOT NULL
-  AND i.instalador_id IS NULL;
-```
-
-## Impacto
-
-- **Positivo**: Garante consistência total entre `servicos` e `instalacoes`
-- **Relatórios**: Consultas diretas em `instalacoes` refletirão o estado real
-- **Baixo risco**: Apenas adiciona sincronização, não remove funcionalidade
-
-## Arquivos a Modificar
+## Resumo de Alterações
 
 | Arquivo | Alteração |
 |---------|-----------|
-| Nova migração SQL | Atualizar função `sync_servico_to_instalacao` |
-| (opcional) Script de correção | Sincronizar dados existentes |
+| `supabase/functions/whatsapp-webhook/index.ts` | Ignorar eventos `connecting` para não sobrescrever status `open` |
+| `supabase/functions/whatsapp-send-text/index.ts` | (Opcional) Verificar API em tempo real antes de falhar |
 
-## Validação
+---
 
-Após aplicar:
-1. Verificar que `instalacoes.instalador_id` = `servicos.profissional_id`
-2. Verificar que status intermediários (`em_rota`, `em_andamento`) estão sincronizados
-3. Testar novo agendamento e verificar sincronização bidirecional
+## Ação Imediata para Marcos Vinicius
+
+Após aplicar a correção:
+1. O status no banco será corrigido automaticamente no próximo `status_check`
+2. Podemos reenviar a mensagem de boas-vindas manualmente via console ou criar um endpoint de reenvio
+
+---
+
+## Validação Pós-Deploy
+
+1. Verificar que eventos `connecting` são ignorados nos logs
+2. Confirmar que status no banco permanece `open` quando conectado
+3. Testar envio de mensagem WhatsApp
