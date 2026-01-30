@@ -1,281 +1,124 @@
 
-# Plano: Configurar Secrets de Integracoes pela Interface do Sistema
 
-## Objetivo
+# Plano: Implementar Funcionalidades Completas na Pagina Produto Detalhe
 
-Permitir que os diretores configurem os secrets de integracoes (SGA Hinova, Softruck, Rede Veiculos) diretamente pela pagina **Configuracoes > Integracoes**, sem precisar acessar o painel do Supabase.
+## Problema Identificado
 
----
+A pagina de detalhes do produto (`/diretoria/produtos/{id}`) possui varios botoes sem funcionalidade:
 
-## Situacao Atual
+| Botao | Localizacao | Status |
+|-------|-------------|--------|
+| "Adicionar Cobertura" | Tab Coberturas | Sem onClick - NAO FUNCIONA |
+| "Editar" cobertura | Tab Coberturas | Sem onClick - NAO FUNCIONA |
+| "Excluir" cobertura | Tab Coberturas | Sem onClick - NAO FUNCIONA |
+| "Nova Faixa" | Tab Precos | Sem onClick - NAO FUNCIONA |
+| "Editar" preco | Tab Precos | Sem onClick - NAO FUNCIONA |
+| "Excluir" preco | Tab Precos | Sem onClick - NAO FUNCIONA |
+| "Editar" (header) | Header | Sem onClick - NAO FUNCIONA |
 
-| Integracao | Secrets Necessarios | Status |
-|------------|---------------------|--------|
-| SGA Hinova | HINOVA_TOKEN, HINOVA_USUARIO, HINOVA_SENHA, HINOVA_CODIGO_CONTA | Nao configurado |
-| Softruck | SOFTRUCK_PUBLIC_KEY, SOFTRUCK_USERNAME, SOFTRUCK_PASSWORD, SOFTRUCK_ENTERPRISE_ID | Parcialmente configurado |
-| Rede Veiculos | REDE_VEICULOS_TOKEN | Configurado e testado |
-| ASAAS | ASAAS_API_KEY | Configurado |
-| Autentique | AUTENTIQUE_API_KEY | Configurado |
-| Email (Resend) | RESEND_API_KEY | Configurado |
+**Os modais ja existem e estao funcionais:**
+- `VincularCoberturaModal` - Pronto para vincular coberturas
+- `FaixaPrecoModal` - Pronto para criar/editar faixas de preco
+- `ProdutoFormModal` - Pronto para editar produto
 
-O sistema atual mostra apenas instrucoes para configurar secrets no painel do Supabase, sem interface para input direto.
+## Solucao Proposta
 
----
+### Fase 1: Importar Componentes Existentes
 
-## Abordagem Proposta
+**Arquivo:** `src/pages/diretoria/ProdutoDetalhe.tsx`
 
-### Arquitetura de Seguranca
+Adicionar imports dos modais que ja existem:
+- `VincularCoberturaModal` - para vincular novas coberturas
+- `FaixaPrecoModal` - para criar/editar faixas de preco
+- `ProdutoFormModal` - para editar dados do produto
 
-Como os Supabase Secrets NAO podem ser atualizados diretamente via Edge Functions sem a Management API Key (que nao deve ser exposta), adotaremos uma abordagem hibrida:
+### Fase 2: Criar Estados para Controlar Modais
 
-1. **Armazenamento seguro no banco** - Criar tabela `integracoes_credenciais` com criptografia a nivel de aplicacao
-2. **Edge Function de ponte** - Funcao que le as credenciais do banco e as utiliza para autenticar nas APIs externas
-3. **Interface de configuracao** - Sheet para inserir credenciais com validacao em tempo real
-4. **Migracao gradual** - Ao salvar credenciais no banco, o sistema as testa automaticamente
-
-### Fluxo de Configuracao
-
-```text
-Diretor abre Configuracoes > Integracoes
-           |
-           v
-Clica em "Configurar" no card da integracao
-           |
-           v
-Sheet abre com formulario de credenciais
-           |
-           v
-Preenche os campos (senhas mascaradas)
-           |
-           v
-Clica "Testar Conexao"
-           |
-           v
-Edge Function busca credenciais do banco + testa API externa
-           |
-           v
-Se sucesso: marca como configurado
-Se erro: mostra mensagem detalhada
-           |
-           v
-Clica "Salvar" - persiste no banco criptografado
-```
-
----
-
-## Fase 1: Criar Tabela de Credenciais Criptografadas
-
-### Nova Tabela: `integracoes_credenciais`
-
-```sql
-CREATE TABLE integracoes_credenciais (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  integracao VARCHAR(50) NOT NULL UNIQUE,
-  credenciais_encrypted TEXT NOT NULL,
-  iv TEXT NOT NULL,
-  configurado BOOLEAN DEFAULT FALSE,
-  testado_em TIMESTAMPTZ,
-  teste_sucesso BOOLEAN,
-  teste_mensagem TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_by UUID REFERENCES profiles(id)
-);
-
-CREATE INDEX idx_integracoes_credenciais_integracao ON integracoes_credenciais(integracao);
-
-ALTER TABLE integracoes_credenciais ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Apenas diretores podem gerenciar credenciais" ON integracoes_credenciais
-FOR ALL TO authenticated
-USING (public.is_diretor(auth.uid()) OR public.is_desenvolvedor(auth.uid()))
-WITH CHECK (public.is_diretor(auth.uid()) OR public.is_desenvolvedor(auth.uid()));
-```
-
-### Mapeamento de Integracoes
-
-| integracao | Campos de Credenciais |
-|------------|----------------------|
-| hinova | token, usuario, senha, codigo_conta, codigo_regional, codigo_cooperativa, codigo_voluntario, api_url |
-| softruck | public_key, username, password, enterprise_id |
-| rede_veiculos | bearer_token |
-| asaas | api_key, ambiente |
-| autentique | api_key |
-| resend | api_key |
-
----
-
-## Fase 2: Edge Function para Salvar/Ler Credenciais
-
-### Nova Funcao: `integracoes-credenciais`
-
-**Arquivo:** `supabase/functions/integracoes-credenciais/index.ts`
-
-**Acoes suportadas:**
-- `GET` - Retorna status (configurado/nao) sem expor valores
-- `POST` - Salva credenciais criptografadas
-- `DELETE` - Remove credenciais
-
-```text
-POST /integracoes-credenciais
-{
-  "integracao": "hinova",
-  "credenciais": {
-    "token": "xxx",
-    "usuario": "yyy",
-    "senha": "zzz",
-    "codigo_conta": "1"
-  }
-}
-
-Resposta:
-{
-  "success": true,
-  "mensagem": "Credenciais salvas com sucesso",
-  "configurado": true
-}
-```
-
-### Criptografia
-
-- Algoritmo: AES-256-GCM
-- Chave derivada do SUPABASE_SERVICE_ROLE_KEY (apenas acessivel pela Edge Function)
-- IV unico por registro
-
----
-
-## Fase 3: Atualizar Edge Functions de Teste
-
-### Modificar funcoes existentes para buscar credenciais do banco
-
-1. `rastreador-testar-conexao` - Ja usa Secrets, adicionar fallback para banco
-2. `sga-hinova-sync` - Adicionar busca de credenciais do banco
-3. `integracoes-verificar-secrets` - Adicionar verificacao de credenciais do banco
-
-**Logica de prioridade:**
-1. Primeiro verifica Supabase Secrets (ENV)
-2. Se nao encontrar, busca na tabela `integracoes_credenciais`
-3. Retorna qual fonte foi usada
-
----
-
-## Fase 4: Componente ConfigurarIntegracaoSheet
-
-### Novo Componente: `src/components/integracoes/ConfigurarIntegracaoSheet.tsx`
-
-**Funcionalidades:**
-- Formulario dinamico baseado na integracao selecionada
-- Campos de senha com toggle mostrar/ocultar
-- Botao "Testar Conexao" integrado
-- Status visual do ultimo teste
-- Salvamento com feedback
-
-**Campos por integracao:**
-
-| SGA Hinova | Softruck | Rede Veiculos |
-|------------|----------|---------------|
-| Token Bearer | Public Key | Token Bearer |
-| Usuario | Username | |
-| Senha | Password | |
-| Codigo Conta | Enterprise ID (opcional) | |
-| API URL (opcional) | | |
-
-### Interface do Sheet
-
-```text
-┌────────────────────────────────────────────┐
-│ x  Configurar SGA Hinova                   │
-├────────────────────────────────────────────┤
-│                                            │
-│  Token Bearer *                            │
-│  ┌──────────────────────────────────┐      │
-│  │ ●●●●●●●●●●●●                  👁 │      │
-│  └──────────────────────────────────┘      │
-│                                            │
-│  Usuario *                                 │
-│  ┌──────────────────────────────────┐      │
-│  │ usuario_api                       │      │
-│  └──────────────────────────────────┘      │
-│                                            │
-│  Senha *                                   │
-│  ┌──────────────────────────────────┐      │
-│  │ ●●●●●●●●●●●●                  👁 │      │
-│  └──────────────────────────────────┘      │
-│                                            │
-│  Codigo da Conta *                         │
-│  ┌──────────────────────────────────┐      │
-│  │ 1                                 │      │
-│  └──────────────────────────────────┘      │
-│                                            │
-│  ───────────────────────────────────       │
-│                                            │
-│  ┌─────────────────────────────────────┐   │
-│  │ ✅ Conexao testada com sucesso!     │   │
-│  │    Ultimo teste: ha 5 minutos       │   │
-│  └─────────────────────────────────────┘   │
-│                                            │
-│  ┌───────────────┐  ┌────────────────┐     │
-│  │ Testar        │  │  💾 Salvar     │     │
-│  └───────────────┘  └────────────────┘     │
-│                                            │
-└────────────────────────────────────────────┘
-```
-
----
-
-## Fase 5: Atualizar ServicosTab
-
-### Modificacoes:
-
-1. Tornar TODOS os servicos configuraveis (nao apenas rastreadores)
-2. Adicionar prop `integracaoTipo` para mapear ao sheet correto
-3. Usar o novo `ConfigurarIntegracaoSheet` para todas as integracoes
+Adicionar estados para controlar abertura/fechamento dos modais:
 
 ```typescript
-const categoriasBase = [
-  {
-    titulo: 'Gestao',
-    servicos: [
-      {
-        id: 'hinova',
-        nome: 'SGA Hinova',
-        integracaoId: 'hinova',
-        integracao Tipo: 'hinova', // Para o sheet
-        configuravel: true, // AGORA CONFIGURAVEL
-      },
-    ],
+const [modalCoberturaOpen, setModalCoberturaOpen] = useState(false);
+const [modalFaixaOpen, setModalFaixaOpen] = useState(false);
+const [modalProdutoOpen, setModalProdutoOpen] = useState(false);
+const [faixaEdit, setFaixaEdit] = useState<TabelaPreco | null>(null);
+const [coberturaEdit, setCoberturaEdit] = useState<PlanoCoberturas | null>(null);
+const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+const [itemToDelete, setItemToDelete] = useState<{tipo: 'cobertura' | 'preco', id: string} | null>(null);
+```
+
+### Fase 3: Criar Modal de Edicao de Cobertura Vinculada
+
+**Novo arquivo:** `src/components/diretoria/EditarCoberturaVinculadaModal.tsx`
+
+O modal `VincularCoberturaModal` cria novas vinculacoes. Precisamos de um modal para EDITAR vinculacoes existentes com os campos:
+- Percentual de cobertura
+- Valor limite
+- Franquia percentual
+- Franquia valor
+- Carencia dias
+- Obrigatoria
+
+### Fase 4: Adicionar Mutations para Exclusao
+
+Criar mutations para:
+- Excluir cobertura vinculada (`planos_coberturas`)
+- Excluir faixa de preco (`tabelas_preco`)
+
+```typescript
+const removerCobertura = useMutation({
+  mutationFn: async (id: string) => {
+    const { error } = await supabase
+      .from('planos_coberturas')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
   },
-  // ... outras categorias
-];
+  onSuccess: () => {
+    toast.success('Cobertura removida!');
+    queryClient.invalidateQueries({ queryKey: ['plano-coberturas', id] });
+  }
+});
+
+const removerPreco = useMutation({
+  mutationFn: async (precoId: string) => {
+    const { error } = await supabase
+      .from('tabelas_preco')
+      .delete()
+      .eq('id', precoId);
+    if (error) throw error;
+  },
+  onSuccess: () => {
+    toast.success('Faixa de preco removida!');
+    queryClient.invalidateQueries({ queryKey: ['plano-precos', id] });
+  }
+});
 ```
 
----
+### Fase 5: Conectar Botoes aos Handlers
 
-## Fase 6: Hook useIntegracaoCredenciais
+**Tab Coberturas:**
+- Botao "Adicionar Cobertura" -> abre `VincularCoberturaModal`
+- Botao "Editar" -> abre `EditarCoberturaVinculadaModal` com dados
+- Botao "Excluir" -> abre dialog de confirmacao -> chama `removerCobertura`
 
-### Novo Hook: `src/hooks/useIntegracaoCredenciais.ts`
+**Tab Precos:**
+- Botao "Nova Faixa" -> abre `FaixaPrecoModal` sem faixa
+- Botao "Editar" -> abre `FaixaPrecoModal` com faixa para edicao
+- Botao "Excluir" -> abre dialog de confirmacao -> chama `removerPreco`
 
-**Funcionalidades:**
-- Buscar status de credenciais por integracao
-- Salvar novas credenciais
-- Testar conexao
-- Deletar credenciais
+**Header:**
+- Botao "Editar" -> abre `ProdutoFormModal` com dados do plano
 
-```typescript
-interface UseIntegracaoCredenciaisOptions {
-  integracao: 'hinova' | 'softruck' | 'rede_veiculos' | 'asaas' | 'autentique' | 'resend';
-}
+### Fase 6: Adicionar Dialog de Confirmacao de Exclusao
 
-const {
-  status,           // { configurado, testado_em, teste_sucesso, teste_mensagem }
-  isLoading,
-  isSaving,
-  isTesting,
-  salvar,           // (credenciais) => Promise
-  testar,           // () => Promise
-  remover,          // () => Promise
-} = useIntegracaoCredenciais({ integracao: 'hinova' });
-```
+Implementar `AlertDialog` para confirmacao antes de excluir itens.
+
+### Fase 7: Invalidar Queries Corretas
+
+Garantir que apos cada operacao as queries sejam invalidadas:
+- `['plano-coberturas', id]` - apos adicionar/editar/remover cobertura
+- `['plano-precos', id]` - apos adicionar/editar/remover preco
+- `['plano', id]` - apos editar produto
 
 ---
 
@@ -283,57 +126,54 @@ const {
 
 | Arquivo | Descricao |
 |---------|-----------|
-| `supabase/functions/integracoes-credenciais/index.ts` | Edge function para CRUD de credenciais |
-| `src/components/integracoes/ConfigurarIntegracaoSheet.tsx` | Sheet de configuracao generico |
-| `src/hooks/useIntegracaoCredenciais.ts` | Hook para gerenciar credenciais |
+| `src/components/diretoria/EditarCoberturaVinculadaModal.tsx` | Modal para editar cobertura ja vinculada |
 
 ## Arquivos a Modificar
 
 | Arquivo | Alteracoes |
 |---------|------------|
-| `supabase/config.toml` | Adicionar nova edge function |
-| `supabase/functions/sga-hinova-sync/index.ts` | Buscar credenciais do banco como fallback |
-| `supabase/functions/rastreador-testar-conexao/index.ts` | Buscar credenciais do banco como fallback |
-| `supabase/functions/integracoes-verificar-secrets/index.ts` | Verificar banco alem de ENV |
-| `src/components/integracoes/ServicosTab.tsx` | Usar novo sheet para todas integracoes |
-| `src/hooks/useIntegracoesStatus.ts` | Incluir status de credenciais do banco |
+| `src/pages/diretoria/ProdutoDetalhe.tsx` | Adicionar imports, estados, handlers e conectar botoes |
+| `src/components/diretoria/index.ts` | Exportar novo modal |
 
 ---
 
-## Seguranca
+## Interconexoes com Outras Areas
 
-1. **Criptografia em repouso** - Credenciais criptografadas com AES-256-GCM
-2. **RLS restritivo** - Apenas diretores e desenvolvedores podem gerenciar
-3. **Sem exposicao de valores** - UI nunca recebe valores decriptografados apos salvar
-4. **Logs de auditoria** - Registrar quem alterou credenciais e quando
-5. **Chave segura** - Derivada do SERVICE_ROLE_KEY, inacessivel pelo frontend
+A implementacao utiliza:
+
+1. **Tabela `planos`** - Dados basicos do produto
+2. **Tabela `coberturas`** - Catalogo de coberturas disponiveis
+3. **Tabela `planos_coberturas`** - Vinculacao N:N entre planos e coberturas
+4. **Tabela `tabelas_preco`** - Faixas de preco por plano
+5. **Modais existentes:**
+   - `VincularCoberturaModal` - ja funcional
+   - `FaixaPrecoModal` - ja funcional
+   - `ProdutoFormModal` - ja funcional
 
 ---
 
-## Fluxo de Usuario Final
+## Resultado Final
 
-1. Diretor acessa **Configuracoes > Integracoes**
-2. Clica no card **SGA Hinova** > "Configurar"
-3. Sheet abre com campos: Token, Usuario, Senha, Codigo Conta
-4. Preenche os valores fornecidos pela Hinova
-5. Clica "Testar Conexao"
-6. Sistema testa autenticacao com a API real
-7. Se sucesso, mostra mensagem verde
-8. Clica "Salvar"
-9. Card muda para verde com "Configurado"
-10. Sistema ja pode sincronizar associados com o SGA
+Apos implementacao:
+
+| Botao | Funcionalidade |
+|-------|----------------|
+| "Adicionar Cobertura" | Abre modal para vincular cobertura do catalogo |
+| "Editar" cobertura | Abre modal para editar % cobertura, franquia, carencia |
+| "Excluir" cobertura | Confirma e remove vinculacao |
+| "Nova Faixa" | Abre modal para criar faixa de preco |
+| "Editar" preco | Abre modal para editar faixa existente |
+| "Excluir" preco | Confirma e remove faixa |
+| "Editar" (header) | Abre modal para editar dados do produto |
 
 ---
 
 ## Estimativa de Tempo
 
-| Fase | Tempo |
-|------|-------|
-| Migracao de banco | 10 min |
-| Edge Function integracoes-credenciais | 60 min |
-| Modificar Edge Functions existentes | 45 min |
-| ConfigurarIntegracaoSheet | 60 min |
-| Hook useIntegracaoCredenciais | 30 min |
-| Atualizar ServicosTab | 20 min |
-| Testes e ajustes | 45 min |
-| **Total** | **~4.5 horas** |
+| Tarefa | Tempo |
+|--------|-------|
+| Criar EditarCoberturaVinculadaModal | 30 min |
+| Modificar ProdutoDetalhe.tsx | 45 min |
+| Testar funcionalidades | 15 min |
+| **Total** | **~1.5 horas** |
+
