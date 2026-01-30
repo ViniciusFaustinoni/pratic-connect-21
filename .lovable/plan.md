@@ -1,157 +1,276 @@
 
-# Plano: Corrigir Mapeamento de Status WhatsApp `connecting`
+# Plano: Correção do Sistema de Atribuição Automática de Tarefas
 
-## Problema Identificado
+## Resumo do Problema
 
-O webhook do WhatsApp está recebendo eventos `CONNECTION_UPDATE` com `state: connecting` e mapeando para `disconnected`, quando deveria:
-1. Tratar `connecting` como um estado intermediário (não sobrescrever `open` para `disconnected`)
-2. Ou simplesmente ignorar eventos `connecting` para não alterar o status atual
+Foram identificados **4 contratos pagos de autovistoria sem instalações criadas**:
 
-### Evidência
-```
-17:02:12 - status_check: state = open (correto)
-17:02:13 - webhook: state = connecting → salva como disconnected (BUG!)
-```
+| Cliente | Cotação ID | Contrato ID | Status |
+|---------|------------|-------------|--------|
+| MARCOS VINICIUS DATIVO MACHADO | 028562d5-... | ebc84738-... | adesao_paga, sem instalação |
+| THALES HENRIQUE SOILO | 16403742-... | e6c35a08-... | adesao_paga, sem instalação |
+| LEANDRO DA SILVA FERREIRA | 2dec2d91-... | 47aec80e-... | adesao_paga, sem instalação |
+| MARCUS VINICIUS FAUSTINONI | c34d6e95-... | 5309c4e9-... | adesao_paga, sem instalação |
 
-### Impacto
-- Mensagens de WhatsApp falham porque o sistema lê `status: disconnected` do banco
-- Mesmo com a instância realmente conectada na Evolution API
+## Causa Raiz Identificada
+
+O webhook ASAAS registrou o pagamento, marcou `adesao_paga = true`, mas a chamada para `criar-instalacao-pos-pagamento` falhou silenciosamente ou não foi executada. Possíveis causas:
+
+1. **Timeout na chamada HTTP interna** - o webhook usa `fetch()` para chamar outra edge function, que pode ter excedido o tempo limite
+2. **Erro não capturado** - o try/catch permite que erros passem sem bloquear o fluxo principal, mas também sem retry
 
 ---
 
-## Alteração Necessária
+## Parte 1: Correção Imediata - Criar Instalações Retroativas
 
-### Arquivo: `supabase/functions/whatsapp-webhook/index.ts`
+### Script SQL para criar instalações manualmente
 
-**Localização:** Linha ~2118
+Executar via SQL para criar as 4 instalações pendentes:
 
-**Código Atual (Incorreto):**
-```typescript
-const novoStatus = state === 'open' ? 'open' : 'disconnected';
+```text
++------------------+     +------------------+     +------------------+
+|   asaas-webhook  | --> | criar-instalacao | --> |   instalacoes    |
+|  (pagamento OK)  |     | -pos-pagamento   |     |   (registro)     |
++------------------+     +------------------+     +------------------+
+         |                       X
+         v                   (FALHOU)
+  adesao_paga = true
 ```
 
-**Código Corrigido:**
+### Ação: Criar instalações via edge function
+
+Chamar a edge function `criar-instalacao-pos-pagamento` para cada cotação manualmente.
+
+---
+
+## Parte 2: Correção do Mapeamento de Coordenadas
+
+### Problema no código atual
+
+```text
+Arquivo: supabase/functions/criar-instalacao-pos-pagamento/index.ts
+Linhas: 216-217
+```
+
+O código usa `cotacao.vistoria_endereco_latitude` mesmo quando o tipo de vistoria é autovistoria (que usa campos `vistoria_completa_*`). Isso funciona "acidentalmente" porque o frontend salva coordenadas em `vistoria_endereco_latitude` para todos os tipos.
+
+### Correção proposta
+
+Adicionar colunas específicas para coordenadas de vistoria completa:
+- `vistoria_completa_endereco_latitude`
+- `vistoria_completa_endereco_longitude`
+
+E corrigir o mapeamento no código para usar as colunas corretas.
+
+**Alternativa (mais simples)**: Manter o comportamento atual já que o frontend já salva coordenadas no campo `vistoria_endereco_latitude` para todos os tipos. Apenas documentar essa dependência.
+
+---
+
+## Parte 3: Melhorar Resiliência do Webhook
+
+### Problema
+
+O webhook ASAAS processa pagamentos e chama `criar-instalacao-pos-pagamento` internamente, mas erros são apenas logados e ignorados:
+
 ```typescript
-// Mapear estado para nosso status
-// IMPORTANTE: 'connecting' não deve sobrescrever 'open'
-let novoStatus: string;
-if (state === 'open') {
-  novoStatus = 'open';
-} else if (state === 'close' || state === 'qrcode') {
-  novoStatus = 'disconnected';
-} else if (state === 'connecting') {
-  // Ignorar eventos 'connecting' - manter status atual
-  console.log(`[whatsapp-webhook] Ignorando estado 'connecting' - mantendo status atual`);
-  return new Response(
-    JSON.stringify({ success: true, message: "Estado connecting ignorado" }),
-    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-  );
+// Linha 556-558
+} catch (instalacaoErr) {
+  console.error('[asaas-webhook] Erro ao criar instalação pós-pagamento:', instalacaoErr);
+  // Não bloqueia o fluxo principal se falhar
+}
+```
+
+### Correções propostas
+
+1. **Adicionar retry com backoff** - tentar novamente após falha
+2. **Registrar falhas em tabela de auditoria** - para permitir reprocessamento manual
+3. **Criar cron job de reconciliação** - verificar periodicamente contratos pagos sem instalação
+
+---
+
+## Detalhamento Técnico
+
+### Alteração 1: Edge Function `criar-instalacao-pos-pagamento`
+
+**Arquivo**: `supabase/functions/criar-instalacao-pos-pagamento/index.ts`
+
+**Mudanças**:
+
+1. Adicionar suporte explícito para `tipo_vistoria = 'autovistoria'`:
+
+```typescript
+// Linha 188-222 - Adicionar tratamento para autovistoria
+if (tipoVistoria === 'agendada') {
+  // Usar campos vistoria_* (vistoria presencial simples)
+  // ... código existente ...
+} else if (tipoVistoria === 'autovistoria') {
+  // AUTOVISTORIA: Usar campos vistoria_completa_* 
+  // A instalação é para fazer a vistoria COMPLETA após autovistoria aprovada
+  dataAgendada = cotacao.vistoria_completa_data_agendada;
+  horarioAgendado = cotacao.vistoria_completa_horario_agendado;
+  endereco = {
+    cep: cotacao.vistoria_completa_endereco_cep || '',
+    logradouro: cotacao.vistoria_completa_endereco_logradouro || '',
+    numero: cotacao.vistoria_completa_endereco_numero || '',
+    bairro: cotacao.vistoria_completa_endereco_bairro || '',
+    cidade: cotacao.vistoria_completa_endereco_cidade || '',
+    estado: cotacao.vistoria_completa_endereco_estado || '',
+    // Coordenadas estão em vistoria_endereco_* (compartilhado)
+    latitude: cotacao.vistoria_endereco_latitude,
+    longitude: cotacao.vistoria_endereco_longitude,
+  };
+  // ... resto do código ...
 } else {
-  // Estado desconhecido - manter como disconnected por segurança
-  novoStatus = 'disconnected';
+  // Fallback para outros tipos futuros
+  // ... código existente do else ...
 }
 ```
 
----
-
-## Alternativa (Mais Simples)
-
-Manter a lógica atual mas adicionar `connecting` como estado válido:
+2. Adicionar logs mais detalhados para debug:
 
 ```typescript
-// Mapear estado para nosso status
-const statusMap: Record<string, string> = {
-  'open': 'open',
-  'close': 'disconnected',
-  'qrcode': 'disconnected',
-  'connecting': 'connecting', // Novo: manter como connecting
-};
-
-const novoStatus = statusMap[state] || 'disconnected';
-
-// Só atualizar se for um estado definitivo (open ou disconnected)
-// Connecting é transitório - pode ignorar ou salvar
-if (state === 'connecting') {
-  // Opção 1: Ignorar completamente
-  console.log(`[whatsapp-webhook] Estado 'connecting' - ignorando atualização`);
-  return new Response(
-    JSON.stringify({ success: true, message: "Connecting ignorado" }),
-    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-  );
-}
+console.log(`[CriarInstalacaoPosPagamento] tipo_vistoria: ${tipoVistoria}`);
+console.log(`[CriarInstalacaoPosPagamento] dataAgendada: ${dataAgendada}`);
+console.log(`[CriarInstalacaoPosPagamento] horarioAgendado: ${horarioAgendado}`);
 ```
 
----
+### Alteração 2: Edge Function `asaas-webhook`
 
-## Também Atualizar: `whatsapp-send-text`
+**Arquivo**: `supabase/functions/asaas-webhook/index.ts`
 
-### Problema Secundário
-O envio valida status do banco, mas deveria ter fallback para consultar a API se banco mostrar disconnected.
+**Mudanças**:
 
-### Arquivo: `supabase/functions/whatsapp-send-text/index.ts`
+1. Adicionar retry para criação de instalação:
 
-**Adicionar verificação em tempo real (opcional mas recomendado):**
 ```typescript
-// Linha 47-58 - Após buscar instância
-if (!instancia.status || instancia.status !== 'open') {
-  // NOVO: Verificar status real na Evolution API antes de falhar
-  console.log(`[whatsapp-send-text] Status no banco: ${instancia.status} - verificando API...`);
-  
-  const statusResponse = await fetch(
-    `${apiUrl}/instance/connectionState/${instancia.instance_name}`,
-    {
-      method: 'GET',
-      headers: { 'apikey': EVOLUTION_API_KEY }
-    }
-  );
-  
-  if (statusResponse.ok) {
-    const statusData = await statusResponse.json();
-    const realStatus = statusData.instance?.state;
+// Linha 534-560 - Adicionar retry
+let tentativas = 0;
+const maxTentativas = 3;
+let instalacaoCriada = false;
+
+while (!instalacaoCriada && tentativas < maxTentativas) {
+  tentativas++;
+  try {
+    console.log(`[asaas-webhook] Tentativa ${tentativas} de criar instalação...`);
     
-    if (realStatus === 'open') {
-      console.log(`[whatsapp-send-text] API retorna OPEN - prosseguindo com envio`);
-      // Atualizar banco com status correto
-      await supabase
-        .from('whatsapp_instancias')
-        .update({ status: 'open', updated_at: new Date().toISOString() })
-        .eq('id', instancia.id);
+    const instalacaoResponse = await fetch(
+      `${SUPABASE_URL}/functions/v1/criar-instalacao-pos-pagamento`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ cotacaoId: contratoData.cotacao_id })
+      }
+    );
+
+    const instalacaoResult = await instalacaoResponse.json();
+    
+    if (instalacaoResult.success) {
+      instalacaoCriada = true;
+      console.log(`[asaas-webhook] ✓ Instalação criada: ${instalacaoResult.instalacaoId}`);
+    } else if (instalacaoResult.error === 'Instalação já existente') {
+      instalacaoCriada = true; // Não precisa retentar
     } else {
-      // Realmente desconectado
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: "WhatsApp não está conectado. Acesse as configurações para reconectar.",
-          status: realStatus
-        }),
-        { status: 503, headers: corsHeaders }
-      );
+      console.warn(`[asaas-webhook] Tentativa ${tentativas} falhou: ${instalacaoResult.error}`);
+      if (tentativas < maxTentativas) {
+        await new Promise(r => setTimeout(r, 1000 * tentativas)); // Backoff
+      }
+    }
+  } catch (instalacaoErr) {
+    console.error(`[asaas-webhook] Erro na tentativa ${tentativas}:`, instalacaoErr);
+    if (tentativas < maxTentativas) {
+      await new Promise(r => setTimeout(r, 1000 * tentativas));
     }
   }
 }
+
+// Registrar falha para reprocessamento manual
+if (!instalacaoCriada) {
+  await supabase.from('instalacoes_pendentes_criacao').insert({
+    cotacao_id: contratoData.cotacao_id,
+    contrato_id: cobranca.contrato_id,
+    motivo: 'Falha após 3 tentativas no webhook ASAAS',
+    created_at: new Date().toISOString()
+  });
+}
+```
+
+### Alteração 3: Nova Tabela para Rastreamento
+
+**Migração SQL**:
+
+```sql
+CREATE TABLE IF NOT EXISTS instalacoes_pendentes_criacao (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  cotacao_id UUID REFERENCES cotacoes(id),
+  contrato_id UUID REFERENCES contratos(id),
+  motivo TEXT,
+  resolvido BOOLEAN DEFAULT false,
+  resolvido_em TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Índice para busca rápida
+CREATE INDEX idx_instalacoes_pendentes_nao_resolvidas 
+ON instalacoes_pendentes_criacao(resolvido) 
+WHERE resolvido = false;
+```
+
+### Alteração 4: Script de Reconciliação (Cron Job)
+
+Criar edge function `cron-reconciliar-instalacoes`:
+
+```typescript
+// Busca contratos pagos sem instalação
+const { data: contratosSemInstalacao } = await supabase
+  .from('contratos')
+  .select(`
+    id,
+    cotacao_id,
+    adesao_paga_em
+  `)
+  .eq('adesao_paga', true)
+  .is('instalacoes.id', null) // LEFT JOIN implícito via RLS
+  .order('adesao_paga_em', { ascending: true });
+
+// Para cada um, tentar criar instalação
+for (const contrato of contratosSemInstalacao) {
+  await fetch(`${SUPABASE_URL}/functions/v1/criar-instalacao-pos-pagamento`, {
+    method: 'POST',
+    headers: { /* ... */ },
+    body: JSON.stringify({ cotacaoId: contrato.cotacao_id })
+  });
+}
 ```
 
 ---
 
-## Resumo de Alterações
+## Ordem de Implementação
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `supabase/functions/whatsapp-webhook/index.ts` | Ignorar eventos `connecting` para não sobrescrever status `open` |
-| `supabase/functions/whatsapp-send-text/index.ts` | (Opcional) Verificar API em tempo real antes de falhar |
-
----
-
-## Ação Imediata para Marcos Vinicius
-
-Após aplicar a correção:
-1. O status no banco será corrigido automaticamente no próximo `status_check`
-2. Podemos reenviar a mensagem de boas-vindas manualmente via console ou criar um endpoint de reenvio
+1. **Correção imediata**: Criar as 4 instalações pendentes chamando a edge function manualmente
+2. **Deploy**: Atualizar `criar-instalacao-pos-pagamento` com tratamento explícito para autovistoria
+3. **Deploy**: Atualizar `asaas-webhook` com retry e logging melhorado
+4. **Migração**: Criar tabela de rastreamento
+5. **Deploy**: Criar cron job de reconciliação
 
 ---
 
 ## Validação Pós-Deploy
 
-1. Verificar que eventos `connecting` são ignorados nos logs
-2. Confirmar que status no banco permanece `open` quando conectado
-3. Testar envio de mensagem WhatsApp
+1. Verificar que as 4 instalações foram criadas
+2. Testar novo fluxo de autovistoria end-to-end
+3. Verificar logs do webhook para confirmar retry funcionando
+4. Confirmar atribuição automática para instalações criadas
+
+---
+
+## Resumo de Arquivos a Modificar
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `supabase/functions/criar-instalacao-pos-pagamento/index.ts` | Tratamento explícito para `tipo_vistoria = 'autovistoria'` |
+| `supabase/functions/asaas-webhook/index.ts` | Adicionar retry com backoff e registro de falhas |
+| Nova migração SQL | Criar tabela `instalacoes_pendentes_criacao` |
+| `supabase/functions/cron-reconciliar-instalacoes/index.ts` | Novo cron job para reconciliação |
