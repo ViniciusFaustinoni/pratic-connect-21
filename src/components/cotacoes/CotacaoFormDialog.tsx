@@ -1672,12 +1672,24 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                               </p>
                               {/* Lista de benefícios com Ver mais */}
                               <ul className="text-sm space-y-1.5 text-muted-foreground">
-                                {plano.coberturas.slice(0, LIMIT).map((cobertura, i) => (
-                                  <li key={i} className="flex items-start gap-2">
-                                    <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                                    <span>{cobertura}</span>
-                                  </li>
-                                ))}
+                                {plano.coberturas.slice(0, LIMIT).map((cobertura, i) => {
+                                  const isRemovida = isCoberturaRemovida(cobertura, categoria);
+                                  return (
+                                    <li key={i} className="flex items-start gap-2">
+                                      {isRemovida ? (
+                                        <>
+                                          <X className="h-4 w-4 text-destructive mt-0.5 flex-shrink-0" />
+                                          <span className="line-through text-muted-foreground/60">{cobertura}</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                                          <span>{cobertura}</span>
+                                        </>
+                                      )}
+                                    </li>
+                                  );
+                                })}
                                 <AnimatePresence initial={false}>
                                   {isExpanded && hasMore && (
                                     <motion.div
@@ -1687,12 +1699,24 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                                       transition={{ duration: 0.2, ease: "easeInOut" }}
                                       className="overflow-hidden"
                                     >
-                                      {plano.coberturas.slice(LIMIT).map((cobertura, i) => (
-                                        <li key={i + LIMIT} className="flex items-start gap-2 mt-1.5">
-                                          <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                                          <span>{cobertura}</span>
-                                        </li>
-                                      ))}
+                                      {plano.coberturas.slice(LIMIT).map((cobertura, i) => {
+                                        const isRemovida = isCoberturaRemovida(cobertura, categoria);
+                                        return (
+                                          <li key={i + LIMIT} className="flex items-start gap-2 mt-1.5">
+                                            {isRemovida ? (
+                                              <>
+                                                <X className="h-4 w-4 text-destructive mt-0.5 flex-shrink-0" />
+                                                <span className="line-through text-muted-foreground/60">{cobertura}</span>
+                                              </>
+                                            ) : (
+                                              <>
+                                                <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                                                <span>{cobertura}</span>
+                                              </>
+                                            )}
+                                          </li>
+                                        );
+                                      })}
                                     </motion.div>
                                   )}
                                 </AnimatePresence>
