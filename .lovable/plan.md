@@ -1,255 +1,474 @@
 
-## Plano: Sistema de Análise de Sinistros para Diretor
+# Plano: Revisão Completa do Fluxo de Sinistros — SGA PRATIC 2.0
 
-### Visão Geral
+## Análise da Situação Atual vs. Requisitos
 
-Criar um fluxo de análise de sinistros semelhante à análise cadastral (`PropostaAnalise.tsx`), onde o diretor pode visualizar todos os dados do sinistro, documentos do veículo, histórico do veículo, localização e trajeto das últimas 24 horas, e tomar uma decisão: **Aprovar**, **Reprovar** ou **Solicitar Documentação**.
-
-### Arquivos a Criar/Modificar
-
-| Arquivo | Ação | Descrição |
-|---------|------|-----------|
-| `src/pages/eventos/SinistroAnalise.tsx` | **Criar** | Nova página de análise completa do sinistro |
-| `src/hooks/useSinistroAnalise.ts` | **Criar** | Hook para buscar dados completos para análise |
-| `src/components/sinistros/AprovarSinistroDialog.tsx` | **Criar** | Dialog de confirmação de aprovação |
-| `src/components/sinistros/ReprovarSinistroDialog.tsx` | **Criar** | Dialog com motivo de reprovação |
-| `src/pages/eventos/SinistrosList.tsx` | **Modificar** | Adicionar botão "Analisar" na tabela |
-| `src/pages/eventos/SinistroDetalhe.tsx` | **Modificar** | Adicionar botão "Analisar" no header |
-| `src/App.tsx` | **Modificar** | Adicionar rota `/eventos/sinistros/:id/analisar` |
-| `supabase/functions/aprovar-sinistro/index.ts` | **Criar** | Edge Function para aprovar sinistro |
-| `supabase/functions/reprovar-sinistro/index.ts` | **Criar** | Edge Function para reprovar sinistro |
-
-### Estrutura da Página de Análise
-
-```text
-+---------------------------------------------------------------+
-|  ← Voltar    Análise de Sinistro - SIN-2026XXXX    [Próximo →] |
-|  Status: Comunicado                                            |
-+---------------------------------------------------------------+
-|                                                                |
-| ⚠️ ALERTA (se aplicável): Associado Recém-Ativado             |
-|                                                                |
-+---------------------------------------------------------------+
-|                                                                |
-| COLUNA ESQUERDA (60%)              | COLUNA DIREITA (40%)     |
-|                                    |                          |
-| ┌─────────────────────────────┐   | ┌─────────────────────┐  |
-| │ 👤 Dados do Associado       │   | │ 🎬 AÇÕES            │  |
-| │ Nome, CPF, Telefone, Email  │   | │                     │  |
-| └─────────────────────────────┘   | │ [✓ Aprovar]         │  |
-|                                    | │ [✗ Reprovar]        │  |
-| ┌─────────────────────────────┐   | │ [📄 Solicitar Docs] │  |
-| │ 🚗 Dados do Veículo         │   | └─────────────────────┘  |
-| │ Placa, Marca, Modelo, Ano   │   |                          |
-| │ Status, Coberturas          │   | ┌─────────────────────┐  |
-| │ Código FIPE, Valor FIPE     │   | │ 📋 Checklist        │  |
-| └─────────────────────────────┘   | │ ☑ Documentos OK     │  |
-|                                    | │ ☑ Fotos OK          │  |
-| ┌─────────────────────────────┐   | │ ☑ B.O. Anexado      │  |
-| │ 🔔 Informações do Sinistro  │   | │ ☑ Local Verificado  │  |
-| │ Tipo, Data, Local, Descrição│   | └─────────────────────┘  |
-| └─────────────────────────────┘   |                          |
-|                                    | ┌─────────────────────┐  |
-| ┌─────────────────────────────┐   | │ 📜 Histórico        │  |
-| │ 📍 Trajeto 24h              │   | │ Timeline de eventos │  |
-| │ (TrajetoSinistroCard)       │   | └─────────────────────┘  |
-| │ Mapa + Paradas + Exportar   │   |                          |
-| └─────────────────────────────┘   |                          |
-|                                    |                          |
-| ┌─────────────────────────────┐   |                          |
-| │ 📍 Comparação GPS           │   |                          |
-| │ (ComparacaoPosicoes)        │   |                          |
-| │ Informada vs Rastreador     │   |                          |
-| └─────────────────────────────┘   |                          |
-|                                    |                          |
-| ┌─────────────────────────────┐   |                          |
-| │ 📸 Fotos do Sinistro        │   |                          |
-| │ Galeria com visualização    │   |                          |
-| └─────────────────────────────┘   |                          |
-|                                    |                          |
-| ┌─────────────────────────────┐   |                          |
-| │ 📄 Documentos Anexados      │   |                          |
-| │ B.O., CNH, CRLV, etc        │   |                          |
-| └─────────────────────────────┘   |                          |
-|                                    |                          |
-| ┌─────────────────────────────┐   |                          |
-| │ 🚗 Histórico do Veículo     │   |                          |
-| │ Sinistros anteriores        │   |                          |
-| │ Ativações/desativações      │   |                          |
-| └─────────────────────────────┘   |                          |
-+---------------------------------------------------------------+
+### Status Atuais no Banco (Enum `status_sinistro`)
+```
+aguardando_parecer, aguardando_vistoria, aprovado, cancelado, comunicado,
+documentacao_pendente, em_analise, em_regulacao, em_reparo, em_sindicancia,
+em_vistoria, encerrado, indenizado, negado, pago, reprovado
 ```
 
-### Fluxo de Decisões
+### Gaps Identificados
 
-```text
-                    SINISTRO COMUNICADO
-                           │
-                           ▼
-              ┌────────────────────────┐
-              │   PÁGINA DE ANÁLISE    │
-              │  (visualização total)  │
-              └────────────────────────┘
-                           │
-         ┌─────────────────┼─────────────────┐
-         ▼                 ▼                 ▼
-    [APROVAR]      [SOLICITAR DOCS]     [REPROVAR]
-         │                 │                 │
-         ▼                 ▼                 ▼
-    - Status →         - Status →        - Status →
-      'em_analise'    'doc_pendente'      'negado'
-    - Registra         - Registra         - Registra
-      histórico         histórico          histórico
-    - Notifica         - IA envia         - Notifica
-      WhatsApp          WhatsApp           WhatsApp
-                        pedindo docs        com motivo
+| Fase do Fluxo | Status Necessário | Status Atual | Ação |
+|---------------|-------------------|--------------|------|
+| 1. Comunicado | `comunicado` | Existe | OK |
+| 2. Abertura | `em_analise` | Existe | OK |
+| 3. Vistoria | `aguardando_vistoria`, `em_vistoria` | Existem | OK |
+| 4. Parecer | `aguardando_parecer` | Existe | OK |
+| 5. Sindicância | `em_sindicancia` | Existe | Completar lógica |
+| 5b. Perícia | `em_pericia` | **NÃO EXISTE** | Criar |
+| 5c. Suspenso | `suspenso` | **NÃO EXISTE** | Criar |
+| 5d. Análise Interna | `analise_interna` | **NÃO EXISTE** | Criar |
+| 6. Aprovado | `aprovado` | Existe | OK |
+| 6b. Negado | `negado` | Existe | OK |
+| 7. Regulação | `em_regulacao` | Existe | OK |
+| 8. Em Reparo | `em_reparo` | Existe | Integrar com OS |
+| 9. Aguard. Cota | `aguardando_cota` | **NÃO EXISTE** | Criar |
+| 10. Aguard. Termo | `aguardando_termo` | **NÃO EXISTE** | Criar |
+| 11. Pago/Indenizado | `pago`, `indenizado` | Existem | OK |
+| 12. Em Garantia | `em_garantia` | **NÃO EXISTE** | Criar |
+| 13. Encerrado | `encerrado` | Existe | OK |
+| 14. Em Recuperação | `em_recuperacao` | **NÃO EXISTE** | Criar (Roubo/Furto) |
+
+### Regras de Negócio Faltantes
+
+1. **Prazo de Comunicado**: 30 dias (imediato para Roubo/Furto)
+2. **Carência Vidros**: 120 dias
+3. **Cota de Participação**: R$ 750 padrão
+4. **Regra 75% FIPE**: Parcial (<75%) vs Perda Total (≥75%)
+5. **Documentos por Local**: Rodovia Federal, Estadual, Urbana
+
+---
+
+## Alterações Propostas
+
+### 1. Migração SQL — Novos Status e Campos
+
+```sql
+-- Adicionar novos valores ao enum
+ALTER TYPE status_sinistro ADD VALUE IF NOT EXISTS 'em_pericia';
+ALTER TYPE status_sinistro ADD VALUE IF NOT EXISTS 'suspenso';
+ALTER TYPE status_sinistro ADD VALUE IF NOT EXISTS 'analise_interna';
+ALTER TYPE status_sinistro ADD VALUE IF NOT EXISTS 'aguardando_cota';
+ALTER TYPE status_sinistro ADD VALUE IF NOT EXISTS 'aguardando_termo';
+ALTER TYPE status_sinistro ADD VALUE IF NOT EXISTS 'em_garantia';
+ALTER TYPE status_sinistro ADD VALUE IF NOT EXISTS 'em_recuperacao';
+
+-- Novos campos na tabela sinistros
+ALTER TABLE sinistros ADD COLUMN IF NOT EXISTS
+  tipo_local_evento VARCHAR(50); -- 'rodovia_federal', 'rodovia_estadual', 'urbana'
+
+ALTER TABLE sinistros ADD COLUMN IF NOT EXISTS
+  condutor_nome VARCHAR(255);
+
+ALTER TABLE sinistros ADD COLUMN IF NOT EXISTS
+  condutor_cnh VARCHAR(20);
+
+ALTER TABLE sinistros ADD COLUMN IF NOT EXISTS
+  condutor_relacao VARCHAR(50); -- 'associado', 'terceiro_autorizado', 'terceiro'
+
+ALTER TABLE sinistros ADD COLUMN IF NOT EXISTS
+  condutor_embriaguez BOOLEAN DEFAULT false;
+
+ALTER TABLE sinistros ADD COLUMN IF NOT EXISTS
+  condutor_cnh_vencida BOOLEAN DEFAULT false;
+
+ALTER TABLE sinistros ADD COLUMN IF NOT EXISTS
+  prazo_comunicado_dias INTEGER;
+
+ALTER TABLE sinistros ADD COLUMN IF NOT EXISTS
+  valor_cota_participacao NUMERIC(10,2) DEFAULT 750.00;
+
+ALTER TABLE sinistros ADD COLUMN IF NOT EXISTS
+  cota_paga BOOLEAN DEFAULT false;
+
+ALTER TABLE sinistros ADD COLUMN IF NOT EXISTS
+  cota_paga_em TIMESTAMP WITH TIME ZONE;
+
+ALTER TABLE sinistros ADD COLUMN IF NOT EXISTS
+  termo_anuencia_assinado BOOLEAN DEFAULT false;
+
+ALTER TABLE sinistros ADD COLUMN IF NOT EXISTS
+  termo_anuencia_url TEXT;
+
+ALTER TABLE sinistros ADD COLUMN IF NOT EXISTS
+  termo_anuencia_assinado_em TIMESTAMP WITH TIME ZONE;
+
+ALTER TABLE sinistros ADD COLUMN IF NOT EXISTS
+  tipo_dano VARCHAR(20) DEFAULT 'parcial'; -- 'parcial', 'perda_total'
+
+ALTER TABLE sinistros ADD COLUMN IF NOT EXISTS
+  percentual_fipe NUMERIC(5,2);
+
+ALTER TABLE sinistros ADD COLUMN IF NOT EXISTS
+  veiculo_recuperado BOOLEAN DEFAULT false;
+
+ALTER TABLE sinistros ADD COLUMN IF NOT EXISTS
+  veiculo_recuperado_em TIMESTAMP WITH TIME ZONE;
+
+ALTER TABLE sinistros ADD COLUMN IF NOT EXISTS
+  data_prazo_documentos TIMESTAMP WITH TIME ZONE;
+
+ALTER TABLE sinistros ADD COLUMN IF NOT EXISTS
+  data_prazo_cota TIMESTAMP WITH TIME ZONE;
+
+ALTER TABLE sinistros ADD COLUMN IF NOT EXISTS
+  data_garantia_inicio DATE;
+
+ALTER TABLE sinistros ADD COLUMN IF NOT EXISTS
+  data_garantia_fim DATE;
+
+ALTER TABLE sinistros ADD COLUMN IF NOT EXISTS
+  motivo_analise_interna TEXT;
+
+ALTER TABLE sinistros ADD COLUMN IF NOT EXISTS
+  sindicante_id UUID REFERENCES profiles(id);
+
+ALTER TABLE sinistros ADD COLUMN IF NOT EXISTS
+  perito_id UUID REFERENCES profiles(id);
+
+ALTER TABLE sinistros ADD COLUMN IF NOT EXISTS
+  resultado_sindicancia VARCHAR(50); -- 'regular', 'irregular', 'inconclusivo'
+
+ALTER TABLE sinistros ADD COLUMN IF NOT EXISTS
+  resultado_pericia TEXT;
 ```
 
-### Detalhamento Técnico
-
-#### 1. Hook `useSinistroAnalise.ts`
+### 2. Atualizar Types — `src/types/sinistros.ts`
 
 ```typescript
-// Dados agregados para análise:
-interface SinistroAnaliseData {
-  sinistro: SinistroComRelacoes;
-  documentos: SinistroDocumento[];
-  fotos: SinistroFoto[];
-  historicoSinistro: SinistroHistorico[];
+export type StatusSinistro = 
+  | 'comunicado'
+  | 'em_analise'
+  | 'documentacao_pendente'
+  | 'aguardando_vistoria'
+  | 'em_vistoria'
+  | 'aguardando_parecer'
+  | 'em_sindicancia'
+  | 'em_pericia'
+  | 'analise_interna'
+  | 'suspenso'
+  | 'aprovado'
+  | 'negado'
+  | 'em_regulacao'
+  | 'aguardando_termo'
+  | 'aguardando_cota'
+  | 'em_reparo'
+  | 'em_recuperacao'
+  | 'aguardando_pagamento'
+  | 'pago'
+  | 'indenizado'
+  | 'em_garantia'
+  | 'encerrado'
+  | 'cancelado';
+
+export type TipoLocalEvento = 'rodovia_federal' | 'rodovia_estadual' | 'urbana';
+export type TipoDano = 'parcial' | 'perda_total';
+export type ResultadoSindicancia = 'regular' | 'irregular' | 'inconclusivo';
+```
+
+### 3. Workflow Completo — Fluxo de Transições
+
+```typescript
+export const WORKFLOW_SINISTRO_COMPLETO: Record<StatusSinistro, StatusSinistro[]> = {
+  // FASE 1: ENTRADA
+  comunicado: ['em_analise', 'cancelado'],
   
-  // Dados do veículo
-  veiculo: VeiculoComDetalhes;
-  veiculoHistorico: VeiculoHistoricoItem[];
-  sinistrosAnteriores: Sinistro[];
+  // FASE 2: ABERTURA/DOCUMENTAÇÃO
+  em_analise: [
+    'documentacao_pendente', 
+    'aguardando_vistoria', 
+    'em_sindicancia', 
+    'analise_interna',
+    'aprovado', 
+    'negado', 
+    'cancelado'
+  ],
+  documentacao_pendente: ['em_analise', 'cancelado'],
   
-  // Rastreador (se existir)
-  rastreador: Rastreador | null;
-  temRastreadorAtivo: boolean;
+  // FASE 3: VISTORIA
+  aguardando_vistoria: ['em_vistoria', 'cancelado'],
+  em_vistoria: ['aguardando_parecer', 'em_sindicancia', 'cancelado'],
+  aguardando_parecer: ['aprovado', 'negado', 'em_sindicancia'],
   
-  // Dados do associado
-  associado: AssociadoCompleto;
-  contratoAtivo: Contrato | null;
+  // FASE 4: ANÁLISES ESPECIAIS
+  em_sindicancia: ['em_analise', 'aprovado', 'negado', 'suspenso', 'cancelado'],
+  em_pericia: ['em_sindicancia', 'aprovado', 'negado'],
+  analise_interna: ['em_analise', 'aprovado', 'negado'],
+  suspenso: ['em_analise', 'em_sindicancia', 'cancelado'],
+  
+  // FASE 5: DECISÃO
+  aprovado: ['em_regulacao', 'em_recuperacao'], // Recuperação para Roubo/Furto
+  negado: ['encerrado'],
+  
+  // FASE 6: EXECUÇÃO (REPAROS)
+  em_regulacao: ['aguardando_termo', 'aguardando_cota', 'em_reparo', 'pago'], 
+  aguardando_termo: ['aguardando_cota', 'cancelado'],
+  aguardando_cota: ['em_reparo', 'cancelado'],
+  em_reparo: ['em_garantia', 'pago'],
+  em_garantia: ['encerrado'],
+  
+  // FASE 6B: RECUPERAÇÃO (ROUBO/FURTO)
+  em_recuperacao: ['em_regulacao', 'pago', 'encerrado'], // Recuperado = vai para regulação ou encerra
+  
+  // FASE 7: PAGAMENTO
+  aguardando_pagamento: ['pago', 'indenizado'],
+  pago: ['encerrado'],
+  indenizado: ['encerrado'],
+  
+  // FINAIS
+  encerrado: [],
+  cancelado: [],
+};
+```
+
+### 4. Regras de Validação — Edge Function `criar-sinistro`
+
+Atualizar para incluir:
+
+**a) Verificação de Prazo de Comunicado**
+```typescript
+// Roubo/Furto: deve ser imediato (tolerância 3 dias)
+// Outros: 30 dias corridos
+const diasDesdeEvento = differenceInDays(new Date(), new Date(payload.data_evento));
+const isRouboFurto = ['roubo', 'furto'].includes(payload.tipo_sinistro);
+
+if (isRouboFurto && diasDesdeEvento > 3) {
+  // Aceitar mas marcar alerta
+  alertas.push('Comunicado de roubo/furto fora do prazo recomendado (imediato)');
+}
+if (!isRouboFurto && diasDesdeEvento > 30) {
+  // Aceitar mas marcar alerta
+  alertas.push('Comunicado fora do prazo de 30 dias');
 }
 ```
 
-#### 2. Página `SinistroAnalise.tsx`
-
-Seções principais:
-- **Header**: Protocolo, status, badges de alerta, navegação
-- **Alerta Recém-Ativado**: Se `alerta_recem_ativado = true`
-- **Dados do Associado**: Nome, CPF, telefone, email, endereço
-- **Dados do Veículo**: Placa, marca/modelo, ano, cor, chassi, FIPE, coberturas
-- **Informações do Sinistro**: Tipo, data, hora, local, descrição, B.O.
-- **Trajeto 24h**: Componente `TrajetoSinistroCard` (se rastreador ativo)
-- **Comparação GPS**: Componente `ComparacaoPosicoes` (se houver coordenadas)
-- **Fotos do Sinistro**: Galeria com zoom
-- **Documentos Anexados**: Lista com status e visualização
-- **Histórico do Veículo**: Sinistros anteriores, ativações
-- **Painel de Ações**: Aprovar, Reprovar, Solicitar Docs
-- **Checklist de Análise**: Itens verificados pelo analista
-- **Histórico do Sinistro**: Timeline de mudanças de status
-
-#### 3. Edge Function `aprovar-sinistro`
-
+**b) Verificação de Carência para Vidros/Faróis**
 ```typescript
-// Payload
-{
-  sinistro_id: string;
-  observacao?: string;
+if (payload.tipo_sinistro === 'vidros') {
+  const diasAtivacao = differenceInDays(new Date(), new Date(veiculo.data_ativacao));
+  if (diasAtivacao < 120) {
+    return Response.json({
+      success: false,
+      error: `Veículo em período de carência para vidros. Carência de 120 dias - Faltam ${120 - diasAtivacao} dias.`
+    }, { status: 400 });
+  }
 }
-
-// Ações:
-// 1. Atualizar status para 'em_analise' (aguarda vistoria/regulação)
-// 2. Registrar no histórico
-// 3. Enviar WhatsApp: "Seu sinistro foi aprovado para análise. Próximos passos..."
-// 4. Retornar sucesso
 ```
 
-#### 4. Edge Function `reprovar-sinistro`
+**c) Documentos por Tipo de Local**
+```typescript
+const DOCUMENTOS_POR_LOCAL: Record<string, Record<string, string[]>> = {
+  rodovia_federal: {
+    sem_vitima: ['cst_prf'],
+    com_vitima: ['lpst', 'raph', 'bam', 'certidao_cbmerj']
+  },
+  rodovia_estadual: {
+    sem_vitima: ['ebrat_pmerj'],
+    com_vitima: ['brat_bopm', 'raph', 'bam', 'certidao_cbmerj']
+  },
+  urbana: {
+    sem_vitima: ['ebrat'],
+    com_vitima: ['brat', 'documentos_medicos']
+  },
+  sp_outros: {
+    sem_vitima: ['bo'],
+    com_vitima: ['bo', 'documentos_medicos']
+  }
+};
+```
+
+### 5. Nova Página — `SinistroAnaliseCompleta.tsx`
+
+Aprimorar a página de análise existente com:
+
+**Seções Adicionais:**
+
+1. **Dados do Condutor** (separado do associado)
+   - Nome, CNH, Relação com associado
+   - Alertas: CNH vencida, embriaguez, recusa bafômetro
+
+2. **Validações Automáticas** (Card de Checklist Expandido)
+   - Condutor = Associado? 
+   - CNH válida na data do evento?
+   - Veículo em carência?
+   - Prazo de comunicado OK?
+   - Status plataforma OK?
+
+3. **Ações por Fase:**
+   ```
+   COMUNICADO → [Iniciar Análise] [Cancelar]
+   EM ANÁLISE → [Solicitar Docs] [Agendar Vistoria] [Encaminhar Sindicância] [Aprovar] [Negar]
+   AGUARDANDO VISTORIA → [Iniciar Vistoria] [Cancelar]
+   EM VISTORIA → [Registrar Parecer]
+   EM SINDICÂNCIA → [Registrar Resultado] [Encaminhar Perícia]
+   APROVADO → [Iniciar Regulação] [Recuperação (R/F)]
+   EM REGULAÇÃO → [Gerar Termo Anuência] [Cobrar Cota] [Criar OS Oficina]
+   EM REPARO → [Concluir Reparo] [Iniciar Garantia]
+   ```
+
+4. **Painel de Valores** (para Perda Total)
+   - Valor FIPE
+   - Valor Orçamento
+   - Percentual = Orçamento/FIPE × 100
+   - Classificação automática: < 75% = Parcial, ≥ 75% = Perda Total
+
+### 6. Dialogs de Ação — Novos Componentes
+
+| Componente | Função |
+|------------|--------|
+| `EncaminharSindicanciaDialog.tsx` | Selecionar sindicante, prazo 30 dias, motivo |
+| `EncaminharPericiaDialog.tsx` | Selecionar perito, tipo perícia (técnica) |
+| `RegistrarParecerVistoriaDialog.tsx` | Laudo, fotos, valor estimado danos |
+| `IniciarRecuperacaoDialog.tsx` | Para Roubo/Furto, período monitoramento |
+| `RegistrarRecuperacaoDialog.tsx` | Veículo recuperado, estado, localização |
+| `GerarTermoAnuenciaDialog.tsx` | Gerar PDF, enviar para assinatura |
+| `CobrarCotaParticipacaoDialog.tsx` | Gerar cobrança Asaas, valor R$ 750 |
+| `CriarOSOficinaDialog.tsx` | Selecionar oficina, vincular sinistro |
+| `ConcluirReparoDialog.tsx` | Fotos entrega, iniciar garantia 90 dias |
+
+### 7. Integração com Oficinas
+
+**Novo fluxo:**
+```
+APROVADO (tipo_dano = parcial)
+     ↓
+EM REGULAÇÃO (orçamentos, negociação)
+     ↓
+AGUARDANDO TERMO (gerar PDF, assinatura digital)
+     ↓
+AGUARDANDO COTA (cobrar R$ 750 via Asaas)
+     ↓
+EM REPARO (criar OS vinculada ao sinistro)
+     ↓
+[Oficina executa...]
+     ↓
+EM GARANTIA (90 dias pós-entrega)
+     ↓
+ENCERRADO
+```
+
+**Campos em `ordens_servico`:**
+- `sinistro_id` já existe
+- Adicionar: `tipo_origem` = 'sinistro' ou 'avulso'
+
+### 8. Fluxo Roubo/Furto — Recuperação
+
+```
+COMUNICADO (imediato)
+     ↓
+EM ANÁLISE (sem vistoria, análise rastreador)
+     ↓
+[30 dias monitoramento]
+     ↓
+EM SINDICÂNCIA (se suspeita)
+     ↓
+APROVADO
+     ↓
+EM RECUPERAÇÃO (tentativa localização)
+     ↓
+[Recuperado?]
+  ├─ NÃO → INDENIZAÇÃO (Perda Total)
+  ├─ SIM, sem dano → ENCERRADO (ABP desonerada)
+  ├─ SIM, dano <75% → EM REGULAÇÃO → REPAROS
+  └─ SIM, dano ≥75% → INDENIZAÇÃO
+```
+
+### 9. Notificações WhatsApp por Status
+
+Atualizar `notificar-sinistro` com templates para novos status:
 
 ```typescript
-// Payload
-{
-  sinistro_id: string;
-  motivo: 'fora_cobertura' | 'documentacao_invalida' | 'fraude_suspeita' | 'prazo_expirado' | 'outro';
-  justificativa: string;
-}
-
-// Ações:
-// 1. Atualizar status para 'negado'
-// 2. Salvar motivo e justificativa
-// 3. Registrar no histórico
-// 4. Enviar WhatsApp: "Seu sinistro foi analisado e infelizmente não foi aprovado. Motivo: ..."
+const TEMPLATES_NOVOS = {
+  aguardando_vistoria: {
+    titulo: '📋 Vistoria Agendada',
+    mensagem: 'Sua vistoria foi agendada para o sinistro {protocolo}...'
+  },
+  em_sindicancia: {
+    titulo: '🔍 Em Análise Especial',
+    mensagem: 'Seu sinistro {protocolo} está em análise detalhada...'
+  },
+  aguardando_termo: {
+    titulo: '📝 Termo de Anuência',
+    mensagem: 'Para prosseguir com o reparo do sinistro {protocolo}, assine o termo...'
+  },
+  aguardando_cota: {
+    titulo: '💰 Cota de Participação',
+    mensagem: 'Para iniciar o reparo, efetue o pagamento da cota de R$ 750...'
+  },
+  em_garantia: {
+    titulo: '✅ Garantia Ativa',
+    mensagem: 'Seu veículo foi entregue. Garantia válida por 90 dias...'
+  },
+  em_recuperacao: {
+    titulo: '🔎 Buscando Veículo',
+    mensagem: 'Estamos monitorando e buscando seu veículo...'
+  }
+};
 ```
 
-#### 5. Dialog `SolicitarDocumentosSinistroDialog` (já existe!)
+### 10. Prazos e Automações
 
-O componente já está implementado em `src/components/sinistros/SolicitarDocumentosSinistroDialog.tsx`:
-- Lista tipos de documentos
-- Atualiza status para `documentacao_pendente`
-- Envia WhatsApp com lista de documentos
-- Vinculação automática já funciona via `whatsapp-webhook`
+**Regras de timeout:**
+- Documentos pendentes: 30 dias → Encerra
+- Cota não paga: 30 dias → Encerra
+- Termo não assinado: 30 dias → Encerra
+- Reparo em oficina: 90 dias úteis → Alerta
 
-#### 6. Modificações na Lista de Sinistros
-
-Adicionar botão "Analisar" visível apenas para `isDiretor`:
-
+**Edge Function `cron-verificar-prazos-sinistros`:**
 ```typescript
-{isDiretor && sinistro.status === 'comunicado' && (
-  <Button
-    size="sm"
-    className="bg-purple-600 hover:bg-purple-700"
-    onClick={() => navigate(`/eventos/sinistros/${sinistro.id}/analisar`)}
-  >
-    <Search className="mr-1 h-4 w-4" />
-    Analisar
-  </Button>
-)}
+// Executar diariamente
+// 1. Buscar sinistros com prazos vencidos
+// 2. Atualizar status para cancelado/encerrado
+// 3. Notificar associado e equipe
 ```
 
-### Processamento de Documentos via WhatsApp
+---
 
-O sistema já possui integração completa no `whatsapp-webhook`:
+## Resumo de Arquivos
 
-1. **Solicitação de documentos** → Status sinistro muda para `documentacao_pendente`
-2. **IA envia WhatsApp** listando documentos necessários
-3. **Associado envia foto/PDF** via WhatsApp
-4. **Webhook processa mídia**:
-   - Baixa arquivo para Supabase Storage
-   - Vincula a `sinistro_documentos` pendente
-   - Atualiza status do documento para `enviado`
-   - Se todos enviados, status sinistro → `em_analise`
-5. **IA confirma recebimento** via WhatsApp
+### Criar
+| Arquivo | Descrição |
+|---------|-----------|
+| `supabase/migrations/XXX_novos_status_sinistros.sql` | Novos enums e campos |
+| `src/components/sinistros/EncaminharSindicanciaDialog.tsx` | Dialog sindicância |
+| `src/components/sinistros/RegistrarParecerVistoriaDialog.tsx` | Parecer técnico |
+| `src/components/sinistros/GerarTermoAnuenciaDialog.tsx` | Gerar termo PDF |
+| `src/components/sinistros/CobrarCotaDialog.tsx` | Integração Asaas |
+| `src/components/sinistros/CriarOSDialog.tsx` | Vincular a oficina |
+| `src/components/sinistros/IniciarRecuperacaoDialog.tsx` | Fluxo roubo/furto |
+| `supabase/functions/cron-verificar-prazos-sinistros/index.ts` | Automação prazos |
 
-### Navegação entre Sinistros
+### Modificar
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/types/sinistros.ts` | Novos types e workflow |
+| `supabase/functions/criar-sinistro/index.ts` | Validações prazo, carência |
+| `supabase/functions/notificar-sinistro/index.ts` | Novos templates |
+| `src/pages/eventos/SinistroAnalise.tsx` | Ações por fase |
+| `src/components/eventos/AtualizarStatusModal.tsx` | Novo fluxo transições |
+| `src/pages/eventos/SinistrosList.tsx` | Novos filtros status |
+| `src/pages/eventos/SinistroDetalhe.tsx` | Novos cards info |
 
-Similar à análise cadastral:
-- Botão "Próximo Sinistro" para ir ao próximo com status `comunicado`
-- Após aprovar/reprovar, redireciona automaticamente
+---
 
-### Resumo de Permissões
+## Complexidade e Priorização
 
-| Ação | Diretor | Analista | Associado |
-|------|---------|----------|-----------|
-| Ver lista de sinistros | ✅ | ✅ | ❌ |
-| Ver detalhes | ✅ | ✅ | ✅ (próprio) |
-| Analisar (página completa) | ✅ | ❌ | ❌ |
-| Aprovar | ✅ | ❌ | ❌ |
-| Reprovar | ✅ | ❌ | ❌ |
-| Solicitar documentos | ✅ | ✅ | ❌ |
+**Fase 1 (Crítica):**
+- Migração SQL com novos status
+- Atualizar types e workflow
+- Validação prazo comunicado
+- Validação carência vidros
 
-### Arquivos a Criar
+**Fase 2 (Importante):**
+- Dialogs de sindicância/perícia
+- Fluxo termo + cota
+- Integração OS oficina
 
-1. `src/pages/eventos/SinistroAnalise.tsx` (~800 linhas)
-2. `src/hooks/useSinistroAnalise.ts` (~200 linhas)
-3. `src/components/sinistros/AprovarSinistroDialog.tsx` (~100 linhas)
-4. `src/components/sinistros/ReprovarSinistroDialog.tsx` (~150 linhas)
-5. `supabase/functions/aprovar-sinistro/index.ts` (~150 linhas)
-6. `supabase/functions/reprovar-sinistro/index.ts` (~180 linhas)
-
-### Arquivos a Modificar
-
-1. `src/pages/eventos/SinistrosList.tsx` - Adicionar botão "Analisar"
-2. `src/pages/eventos/SinistroDetalhe.tsx` - Adicionar botão "Analisar" no header
-3. `src/App.tsx` - Nova rota
-4. `supabase/config.toml` - Registrar novas edge functions
+**Fase 3 (Complementar):**
+- Fluxo recuperação roubo/furto
+- Automação prazos (cron)
+- Garantia pós-reparo
