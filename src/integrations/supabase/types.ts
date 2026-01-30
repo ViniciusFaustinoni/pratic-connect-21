@@ -166,6 +166,13 @@ export type Database = {
             referencedColumns: ["vendedor_id"]
           },
           {
+            foreignKeyName: "acionamentos_roubo_furto_autorizado_por_fkey"
+            columns: ["autorizado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
             foreignKeyName: "acionamentos_roubo_furto_chamado_assistencia_id_fkey"
             columns: ["chamado_assistencia_id"]
             isOneToOne: false
@@ -184,6 +191,13 @@ export type Database = {
             columns: ["encerrado_por"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "acionamentos_roubo_furto_encerrado_por_fkey"
+            columns: ["encerrado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
           {
@@ -219,6 +233,13 @@ export type Database = {
             columns: ["solicitado_por"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "acionamentos_roubo_furto_solicitado_por_fkey"
+            columns: ["solicitado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
           {
@@ -305,6 +326,13 @@ export type Database = {
             columns: ["usuario_id"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "acionamentos_roubo_furto_historico_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
         ]
@@ -656,6 +684,13 @@ export type Database = {
             referencedRelation: "vw_metricas_vendedores"
             referencedColumns: ["vendedor_id"]
           },
+          {
+            foreignKeyName: "afastamentos_registrado_por_fkey"
+            columns: ["registrado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
         ]
       }
       agendamentos_base: {
@@ -726,6 +761,13 @@ export type Database = {
             columns: ["atendido_por"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "agendamentos_base_atendido_por_fkey"
+            columns: ["atendido_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
           {
@@ -1211,6 +1253,13 @@ export type Database = {
             referencedColumns: ["vendedor_id"]
           },
           {
+            foreignKeyName: "asaas_cobrancas_cancelado_por_fkey"
+            columns: ["cancelado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
             foreignKeyName: "asaas_cobrancas_contrato_id_fkey"
             columns: ["contrato_id"]
             isOneToOne: false
@@ -1229,6 +1278,13 @@ export type Database = {
             columns: ["criado_por"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "asaas_cobrancas_criado_por_fkey"
+            columns: ["criado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
           {
@@ -1434,6 +1490,39 @@ export type Database = {
         }
         Relationships: []
       }
+      associacoes_concorrentes: {
+        Row: {
+          ativo: boolean | null
+          cnpj: string | null
+          created_at: string | null
+          dominios_email: string[] | null
+          id: string
+          nome: string
+          palavras_chave: string[] | null
+          updated_at: string | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          cnpj?: string | null
+          created_at?: string | null
+          dominios_email?: string[] | null
+          id?: string
+          nome: string
+          palavras_chave?: string[] | null
+          updated_at?: string | null
+        }
+        Update: {
+          ativo?: boolean | null
+          cnpj?: string | null
+          created_at?: string | null
+          dominios_email?: string[] | null
+          id?: string
+          nome?: string
+          palavras_chave?: string[] | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       associados: {
         Row: {
           aprovado_em: string | null
@@ -1577,6 +1666,13 @@ export type Database = {
             columns: ["aprovado_por"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "associados_aprovado_por_fkey"
+            columns: ["aprovado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
           {
@@ -1727,6 +1823,13 @@ export type Database = {
             referencedColumns: ["vendedor_id"]
           },
           {
+            foreignKeyName: "associados_historico_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
             foreignKeyName: "associados_historico_veiculo_id_fkey"
             columns: ["veiculo_id"]
             isOneToOne: false
@@ -1753,6 +1856,101 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["veiculo_id"]
+          },
+        ]
+      }
+      auditoria_indicios_concorrencia: {
+        Row: {
+          analisado_em: string | null
+          analisado_por: string | null
+          associacao_concorrente_id: string | null
+          created_at: string | null
+          dados_evidencia: Json | null
+          descricao: string | null
+          id: string
+          observacoes: string | null
+          score_risco: number | null
+          status: string | null
+          tipo_indicio: string
+          vendedor_id: string
+        }
+        Insert: {
+          analisado_em?: string | null
+          analisado_por?: string | null
+          associacao_concorrente_id?: string | null
+          created_at?: string | null
+          dados_evidencia?: Json | null
+          descricao?: string | null
+          id?: string
+          observacoes?: string | null
+          score_risco?: number | null
+          status?: string | null
+          tipo_indicio: string
+          vendedor_id: string
+        }
+        Update: {
+          analisado_em?: string | null
+          analisado_por?: string | null
+          associacao_concorrente_id?: string | null
+          created_at?: string | null
+          dados_evidencia?: Json | null
+          descricao?: string | null
+          id?: string
+          observacoes?: string | null
+          score_risco?: number | null
+          status?: string | null
+          tipo_indicio?: string
+          vendedor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "auditoria_indicios_concorrencia_analisado_por_fkey"
+            columns: ["analisado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "auditoria_indicios_concorrencia_analisado_por_fkey"
+            columns: ["analisado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "auditoria_indicios_concorrencia_analisado_por_fkey"
+            columns: ["analisado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "auditoria_indicios_concorrencia_associacao_concorrente_id_fkey"
+            columns: ["associacao_concorrente_id"]
+            isOneToOne: false
+            referencedRelation: "associacoes_concorrentes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "auditoria_indicios_concorrencia_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "auditoria_indicios_concorrencia_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "auditoria_indicios_concorrencia_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
           },
         ]
       }
@@ -1812,6 +2010,13 @@ export type Database = {
             referencedColumns: ["vendedor_id"]
           },
           {
+            foreignKeyName: "auditoria_vendedores_analisado_por_fkey"
+            columns: ["analisado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
             foreignKeyName: "auditoria_vendedores_vendedor_id_fkey"
             columns: ["vendedor_id"]
             isOneToOne: false
@@ -1823,6 +2028,13 @@ export type Database = {
             columns: ["vendedor_id"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "auditoria_vendedores_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
         ]
@@ -1877,6 +2089,13 @@ export type Database = {
             columns: ["desbloqueado_por"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "auth_bloqueios_desbloqueado_por_fkey"
+            columns: ["desbloqueado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
         ]
@@ -1945,6 +2164,13 @@ export type Database = {
             referencedRelation: "vw_metricas_vendedores"
             referencedColumns: ["vendedor_id"]
           },
+          {
+            foreignKeyName: "auth_logs_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
         ]
       }
       auth_sessoes: {
@@ -2003,6 +2229,13 @@ export type Database = {
             columns: ["profile_id"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "auth_sessoes_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
         ]
@@ -2360,6 +2593,13 @@ export type Database = {
             referencedColumns: ["vendedor_id"]
           },
           {
+            foreignKeyName: "banco_horas_fechado_por_fkey"
+            columns: ["fechado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
             foreignKeyName: "banco_horas_funcionario_id_fkey"
             columns: ["funcionario_id"]
             isOneToOne: false
@@ -2711,6 +2951,13 @@ export type Database = {
             referencedColumns: ["vendedor_id"]
           },
           {
+            foreignKeyName: "campanhas_criado_por_fkey"
+            columns: ["criado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
             foreignKeyName: "campanhas_responsavel_id_fkey"
             columns: ["responsavel_id"]
             isOneToOne: false
@@ -2722,6 +2969,13 @@ export type Database = {
             columns: ["responsavel_id"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "campanhas_responsavel_id_fkey"
+            columns: ["responsavel_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
         ]
@@ -3326,6 +3580,13 @@ export type Database = {
             referencedColumns: ["vendedor_id"]
           },
           {
+            foreignKeyName: "chamados_assistencia_atendente_id_fkey"
+            columns: ["atendente_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
             foreignKeyName: "chamados_assistencia_prestador_id_fkey"
             columns: ["prestador_id"]
             isOneToOne: false
@@ -3493,6 +3754,13 @@ export type Database = {
             referencedRelation: "vw_metricas_vendedores"
             referencedColumns: ["vendedor_id"]
           },
+          {
+            foreignKeyName: "chamados_assistencia_historico_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
         ]
       }
       chat_mensagens_ia: {
@@ -3618,6 +3886,13 @@ export type Database = {
             columns: ["aprovador_id"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "chat_solicitacoes_ia_aprovador_id_fkey"
+            columns: ["aprovador_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
           {
@@ -4057,6 +4332,13 @@ export type Database = {
             referencedColumns: ["vendedor_id"]
           },
           {
+            foreignKeyName: "cobrancas_cancelado_por_fkey"
+            columns: ["cancelado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
             foreignKeyName: "cobrancas_contrato_id_fkey"
             columns: ["contrato_id"]
             isOneToOne: false
@@ -4075,6 +4357,13 @@ export type Database = {
             columns: ["criado_por"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "cobrancas_criado_por_fkey"
+            columns: ["criado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
           {
@@ -4154,6 +4443,13 @@ export type Database = {
             columns: ["updated_by"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "configuracoes_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
         ]
@@ -4349,6 +4645,13 @@ export type Database = {
             referencedColumns: ["vendedor_id"]
           },
           {
+            foreignKeyName: "consultas_juridicas_respondido_por_fkey"
+            columns: ["respondido_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
             foreignKeyName: "consultas_juridicas_sinistro_id_fkey"
             columns: ["sinistro_id"]
             isOneToOne: false
@@ -4367,6 +4670,13 @@ export type Database = {
             columns: ["solicitante_id"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "consultas_juridicas_solicitante_id_fkey"
+            columns: ["solicitante_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
         ]
@@ -4517,6 +4827,13 @@ export type Database = {
             referencedColumns: ["vendedor_id"]
           },
           {
+            foreignKeyName: "contas_pagar_aprovado_por_fkey"
+            columns: ["aprovado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
             foreignKeyName: "contas_pagar_pago_por_fkey"
             columns: ["pago_por"]
             isOneToOne: false
@@ -4528,6 +4845,13 @@ export type Database = {
             columns: ["pago_por"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "contas_pagar_pago_por_fkey"
+            columns: ["pago_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
         ]
@@ -4771,6 +5095,13 @@ export type Database = {
             referencedColumns: ["vendedor_id"]
           },
           {
+            foreignKeyName: "contratos_analista_id_fkey"
+            columns: ["analista_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
             foreignKeyName: "contratos_aprovado_por_fkey"
             columns: ["aprovado_por"]
             isOneToOne: false
@@ -4782,6 +5113,13 @@ export type Database = {
             columns: ["aprovado_por"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "contratos_aprovado_por_fkey"
+            columns: ["aprovado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
           {
@@ -4803,6 +5141,13 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "contratos_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
           {
@@ -4866,6 +5211,13 @@ export type Database = {
             columns: ["vendedor_id"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "contratos_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
           {
@@ -5028,6 +5380,13 @@ export type Database = {
             columns: ["usuario_id"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "contratos_historico_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
         ]
@@ -5645,6 +6004,13 @@ export type Database = {
             referencedRelation: "vw_metricas_vendedores"
             referencedColumns: ["vendedor_id"]
           },
+          {
+            foreignKeyName: "cotacoes_publicas_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
         ]
       }
       cotacoes_publicas_fotos: {
@@ -5829,6 +6195,13 @@ export type Database = {
             referencedRelation: "vw_metricas_vendedores"
             referencedColumns: ["vendedor_id"]
           },
+          {
+            foreignKeyName: "departamentos_responsavel_id_fkey"
+            columns: ["responsavel_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
         ]
       }
       disparos_comunicacao: {
@@ -5940,6 +6313,13 @@ export type Database = {
             columns: ["fallback_usuario_id"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "distribuicao_config_fallback_usuario_id_fkey"
+            columns: ["fallback_usuario_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
         ]
@@ -6234,6 +6614,13 @@ export type Database = {
             referencedColumns: ["vendedor_id"]
           },
           {
+            foreignKeyName: "documento_gerados_gerado_por_fkey"
+            columns: ["gerado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
             foreignKeyName: "documento_gerados_template_id_fkey"
             columns: ["template_id"]
             isOneToOne: false
@@ -6320,6 +6707,13 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "documento_templates_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
         ]
@@ -6599,6 +6993,13 @@ export type Database = {
             referencedRelation: "vw_metricas_vendedores"
             referencedColumns: ["vendedor_id"]
           },
+          {
+            foreignKeyName: "documentos_solicitados_solicitado_por_fkey"
+            columns: ["solicitado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
         ]
       }
       encaixes_urgentes: {
@@ -6657,6 +7058,13 @@ export type Database = {
             columns: ["reservado_por"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "encaixes_urgentes_reservado_por_fkey"
+            columns: ["reservado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
           {
@@ -6847,6 +7255,13 @@ export type Database = {
             referencedColumns: ["vendedor_id"]
           },
           {
+            foreignKeyName: "estoque_movimentacoes_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
             foreignKeyName: "estoque_movimentacoes_veiculo_id_fkey"
             columns: ["veiculo_id"]
             isOneToOne: false
@@ -6954,6 +7369,13 @@ export type Database = {
             columns: ["importado_por"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "extratos_bancarios_importado_por_fkey"
+            columns: ["importado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
         ]
@@ -7135,6 +7557,13 @@ export type Database = {
             referencedRelation: "vw_metricas_vendedores"
             referencedColumns: ["vendedor_id"]
           },
+          {
+            foreignKeyName: "faturamentos_gerado_por_fkey"
+            columns: ["gerado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
         ]
       }
       fechamentos_contabeis: {
@@ -7205,6 +7634,13 @@ export type Database = {
             referencedColumns: ["vendedor_id"]
           },
           {
+            foreignKeyName: "fechamentos_contabeis_fechado_por_fkey"
+            columns: ["fechado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
             foreignKeyName: "fechamentos_contabeis_reaberto_por_fkey"
             columns: ["reaberto_por"]
             isOneToOne: false
@@ -7216,6 +7652,13 @@ export type Database = {
             columns: ["reaberto_por"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "fechamentos_contabeis_reaberto_por_fkey"
+            columns: ["reaberto_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
         ]
@@ -7288,6 +7731,13 @@ export type Database = {
             columns: ["aprovado_por"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "ferias_aprovado_por_fkey"
+            columns: ["aprovado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
           {
@@ -7426,6 +7876,13 @@ export type Database = {
             referencedColumns: ["vendedor_id"]
           },
           {
+            foreignKeyName: "folha_pagamento_aprovado_por_fkey"
+            columns: ["aprovado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
             foreignKeyName: "folha_pagamento_calculado_por_fkey"
             columns: ["calculado_por"]
             isOneToOne: false
@@ -7437,6 +7894,13 @@ export type Database = {
             columns: ["calculado_por"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "folha_pagamento_calculado_por_fkey"
+            columns: ["calculado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
           {
@@ -7684,6 +8148,13 @@ export type Database = {
             referencedRelation: "vw_metricas_vendedores"
             referencedColumns: ["vendedor_id"]
           },
+          {
+            foreignKeyName: "funcionarios_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: true
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
         ]
       }
       funcionarios_beneficios: {
@@ -7862,6 +8333,13 @@ export type Database = {
             referencedColumns: ["vendedor_id"]
           },
           {
+            foreignKeyName: "funcionarios_documentos_enviado_por_fkey"
+            columns: ["enviado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
             foreignKeyName: "funcionarios_documentos_funcionario_id_fkey"
             columns: ["funcionario_id"]
             isOneToOne: false
@@ -7992,6 +8470,13 @@ export type Database = {
             columns: ["registrado_por"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "funcionarios_historico_registrado_por_fkey"
+            columns: ["registrado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
         ]
@@ -8687,6 +9172,13 @@ export type Database = {
             referencedColumns: ["vendedor_id"]
           },
           {
+            foreignKeyName: "instalacoes_instalador_id_fkey"
+            columns: ["instalador_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
             foreignKeyName: "instalacoes_instalador_responsavel_id_fkey"
             columns: ["instalador_responsavel_id"]
             isOneToOne: false
@@ -8698,6 +9190,13 @@ export type Database = {
             columns: ["instalador_responsavel_id"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "instalacoes_instalador_responsavel_id_fkey"
+            columns: ["instalador_responsavel_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
           {
@@ -8834,6 +9333,13 @@ export type Database = {
             referencedRelation: "vw_metricas_vendedores"
             referencedColumns: ["vendedor_id"]
           },
+          {
+            foreignKeyName: "instalacoes_pendentes_criacao_resolvido_por_fkey"
+            columns: ["resolvido_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
         ]
       }
       integracoes_credenciais: {
@@ -8889,6 +9395,13 @@ export type Database = {
             columns: ["updated_by"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "integracoes_credenciais_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
         ]
@@ -8973,6 +9486,13 @@ export type Database = {
             referencedColumns: ["vendedor_id"]
           },
           {
+            foreignKeyName: "lancamentos_contabeis_criado_por_fkey"
+            columns: ["criado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
             foreignKeyName: "lancamentos_contabeis_estornado_por_fkey"
             columns: ["estornado_por"]
             isOneToOne: false
@@ -8984,6 +9504,13 @@ export type Database = {
             columns: ["estornado_por"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "lancamentos_contabeis_estornado_por_fkey"
+            columns: ["estornado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
           {
@@ -9106,6 +9633,13 @@ export type Database = {
             columns: ["criado_por"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "landing_pages_criado_por_fkey"
+            columns: ["criado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
         ]
@@ -9525,6 +10059,13 @@ export type Database = {
             referencedRelation: "vw_metricas_vendedores"
             referencedColumns: ["vendedor_id"]
           },
+          {
+            foreignKeyName: "logs_auditoria_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
         ]
       }
       main_coverages: {
@@ -9625,6 +10166,13 @@ export type Database = {
             referencedRelation: "vw_metricas_vendedores"
             referencedColumns: ["vendedor_id"]
           },
+          {
+            foreignKeyName: "materiais_marketing_criado_por_fkey"
+            columns: ["criado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
         ]
       }
       metas_vendas: {
@@ -9689,6 +10237,13 @@ export type Database = {
             columns: ["vendedor_id"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "metas_vendas_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
         ]
@@ -9792,6 +10347,13 @@ export type Database = {
             referencedColumns: ["vendedor_id"]
           },
           {
+            foreignKeyName: "movimentacoes_bancarias_conciliado_por_fkey"
+            columns: ["conciliado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
             foreignKeyName: "movimentacoes_bancarias_conta_bancaria_id_fkey"
             columns: ["conta_bancaria_id"]
             isOneToOne: false
@@ -9863,6 +10425,13 @@ export type Database = {
             columns: ["registrado_por"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "movimentacoes_financeiras_registrado_por_fkey"
+            columns: ["registrado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
         ]
@@ -10109,6 +10678,13 @@ export type Database = {
             referencedRelation: "vw_metricas_vendedores"
             referencedColumns: ["vendedor_id"]
           },
+          {
+            foreignKeyName: "notificacoes_lidas_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
         ]
       }
       notificacoes_preferencias: {
@@ -10232,6 +10808,13 @@ export type Database = {
             referencedRelation: "vw_metricas_vendedores"
             referencedColumns: ["vendedor_id"]
           },
+          {
+            foreignKeyName: "notificacoes_sistema_criado_por_fkey"
+            columns: ["criado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
         ]
       }
       notificacoes_vendas: {
@@ -10298,6 +10881,13 @@ export type Database = {
             columns: ["usuario_id"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "notificacoes_vendas_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
         ]
@@ -10468,6 +11058,13 @@ export type Database = {
             referencedRelation: "vw_metricas_vendedores"
             referencedColumns: ["vendedor_id"]
           },
+          {
+            foreignKeyName: "oficinas_pagamentos_pago_por_fkey"
+            columns: ["pago_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
         ]
       }
       ordens_servico: {
@@ -10550,6 +11147,13 @@ export type Database = {
             referencedColumns: ["vendedor_id"]
           },
           {
+            foreignKeyName: "ordens_servico_aprovado_por_fkey"
+            columns: ["aprovado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
             foreignKeyName: "ordens_servico_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
@@ -10603,6 +11207,13 @@ export type Database = {
             columns: ["criado_por"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "ordens_servico_criado_por_fkey"
+            columns: ["criado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
           {
@@ -10732,6 +11343,13 @@ export type Database = {
             columns: ["usuario_id"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "ordens_servico_historico_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
         ]
@@ -10960,6 +11578,13 @@ export type Database = {
             referencedRelation: "vw_metricas_vendedores"
             referencedColumns: ["vendedor_id"]
           },
+          {
+            foreignKeyName: "ouvidoria_interacoes_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
         ]
       }
       ouvidoria_manifestacoes: {
@@ -11111,6 +11736,13 @@ export type Database = {
             referencedColumns: ["vendedor_id"]
           },
           {
+            foreignKeyName: "ouvidoria_manifestacoes_registrado_por_id_fkey"
+            columns: ["registrado_por_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
             foreignKeyName: "ouvidoria_manifestacoes_responsavel_id_fkey"
             columns: ["responsavel_id"]
             isOneToOne: false
@@ -11122,6 +11754,13 @@ export type Database = {
             columns: ["responsavel_id"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "ouvidoria_manifestacoes_responsavel_id_fkey"
+            columns: ["responsavel_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
           {
@@ -11687,6 +12326,13 @@ export type Database = {
             referencedColumns: ["vendedor_id"]
           },
           {
+            foreignKeyName: "ponto_registros_aprovado_por_fkey"
+            columns: ["aprovado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
             foreignKeyName: "ponto_registros_funcionario_id_fkey"
             columns: ["funcionario_id"]
             isOneToOne: false
@@ -11979,6 +12625,13 @@ export type Database = {
             referencedColumns: ["vendedor_id"]
           },
           {
+            foreignKeyName: "processos_criado_por_fkey"
+            columns: ["criado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
             foreignKeyName: "processos_responsavel_id_fkey"
             columns: ["responsavel_id"]
             isOneToOne: false
@@ -11990,6 +12643,13 @@ export type Database = {
             columns: ["responsavel_id"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "processos_responsavel_id_fkey"
+            columns: ["responsavel_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
           {
@@ -12067,6 +12727,13 @@ export type Database = {
             columns: ["registrado_por"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "processos_andamentos_registrado_por_fkey"
+            columns: ["registrado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
         ]
@@ -12189,6 +12856,13 @@ export type Database = {
             referencedColumns: ["vendedor_id"]
           },
           {
+            foreignKeyName: "processos_custas_pago_por_fkey"
+            columns: ["pago_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
             foreignKeyName: "processos_custas_processo_id_fkey"
             columns: ["processo_id"]
             isOneToOne: false
@@ -12254,6 +12928,13 @@ export type Database = {
             columns: ["enviado_por"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "processos_documentos_enviado_por_fkey"
+            columns: ["enviado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
           {
@@ -12349,6 +13030,13 @@ export type Database = {
             referencedColumns: ["vendedor_id"]
           },
           {
+            foreignKeyName: "processos_prazos_cumprido_por_fkey"
+            columns: ["cumprido_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
             foreignKeyName: "processos_prazos_processo_id_fkey"
             columns: ["processo_id"]
             isOneToOne: false
@@ -12367,6 +13055,13 @@ export type Database = {
             columns: ["responsavel_id"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "processos_prazos_responsavel_id_fkey"
+            columns: ["responsavel_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
         ]
@@ -12496,6 +13191,13 @@ export type Database = {
             referencedColumns: ["vendedor_id"]
           },
           {
+            foreignKeyName: "profiles_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
             foreignKeyName: "profiles_updated_by_fkey"
             columns: ["updated_by"]
             isOneToOne: false
@@ -12507,6 +13209,13 @@ export type Database = {
             columns: ["updated_by"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "profiles_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
         ]
@@ -12614,6 +13323,13 @@ export type Database = {
             referencedRelation: "vw_metricas_vendedores"
             referencedColumns: ["vendedor_id"]
           },
+          {
+            foreignKeyName: "push_subscriptions_profissionais_profissional_id_fkey"
+            columns: ["profissional_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
         ]
       }
       rastreador_alertas: {
@@ -12686,6 +13402,13 @@ export type Database = {
             columns: ["tratado_por"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "rastreador_alertas_tratado_por_fkey"
+            columns: ["tratado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
         ]
@@ -13009,6 +13732,13 @@ export type Database = {
             referencedColumns: ["vendedor_id"]
           },
           {
+            foreignKeyName: "rastreadores_modo_ativado_por_fkey"
+            columns: ["modo_ativado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
             foreignKeyName: "rastreadores_portador_id_fkey"
             columns: ["portador_id"]
             isOneToOne: false
@@ -13020,6 +13750,13 @@ export type Database = {
             columns: ["portador_id"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "rastreadores_portador_id_fkey"
+            columns: ["portador_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
           {
@@ -13150,6 +13887,13 @@ export type Database = {
             referencedColumns: ["vendedor_id"]
           },
           {
+            foreignKeyName: "rastreadores_comandos_autorizado_por_fkey"
+            columns: ["autorizado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
             foreignKeyName: "rastreadores_comandos_rastreador_id_fkey"
             columns: ["rastreador_id"]
             isOneToOne: false
@@ -13175,6 +13919,13 @@ export type Database = {
             columns: ["solicitado_por"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "rastreadores_comandos_solicitado_por_fkey"
+            columns: ["solicitado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
           {
@@ -13490,6 +14241,13 @@ export type Database = {
             columns: ["aprovado_por"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "rateios_aprovado_por_fkey"
+            columns: ["aprovado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
         ]
@@ -13945,6 +14703,13 @@ export type Database = {
             referencedColumns: ["vendedor_id"]
           },
           {
+            foreignKeyName: "rota_instaladores_instalador_id_fkey"
+            columns: ["instalador_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
             foreignKeyName: "rota_instaladores_rota_id_fkey"
             columns: ["rota_id"]
             isOneToOne: false
@@ -14018,6 +14783,13 @@ export type Database = {
             referencedColumns: ["vendedor_id"]
           },
           {
+            foreignKeyName: "rotas_coordenador_id_fkey"
+            columns: ["coordenador_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
             foreignKeyName: "rotas_instalador_id_fkey"
             columns: ["instalador_id"]
             isOneToOne: false
@@ -14029,6 +14801,13 @@ export type Database = {
             columns: ["instalador_id"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "rotas_instalador_id_fkey"
+            columns: ["instalador_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
         ]
@@ -14312,6 +15091,13 @@ export type Database = {
             referencedColumns: ["vendedor_id"]
           },
           {
+            foreignKeyName: "servicos_analisado_por_fkey"
+            columns: ["analisado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
             foreignKeyName: "servicos_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
@@ -14393,6 +15179,13 @@ export type Database = {
             columns: ["profissional_id"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "servicos_profissional_id_fkey"
+            columns: ["profissional_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
           {
@@ -14660,6 +15453,13 @@ export type Database = {
             referencedColumns: ["vendedor_id"]
           },
           {
+            foreignKeyName: "sinistro_fotos_enviado_por_fkey"
+            columns: ["enviado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
             foreignKeyName: "sinistro_fotos_sinistro_id_fkey"
             columns: ["sinistro_id"]
             isOneToOne: false
@@ -14763,6 +15563,13 @@ export type Database = {
             columns: ["remetente_id"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "sinistro_mensagens_remetente_id_fkey"
+            columns: ["remetente_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
           {
@@ -15025,6 +15832,13 @@ export type Database = {
             referencedColumns: ["vendedor_id"]
           },
           {
+            foreignKeyName: "sinistros_analista_id_fkey"
+            columns: ["analista_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
             foreignKeyName: "sinistros_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
@@ -15088,6 +15902,13 @@ export type Database = {
             referencedColumns: ["vendedor_id"]
           },
           {
+            foreignKeyName: "sinistros_perito_id_fkey"
+            columns: ["perito_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
             foreignKeyName: "sinistros_sindicante_id_fkey"
             columns: ["sindicante_id"]
             isOneToOne: false
@@ -15102,6 +15923,13 @@ export type Database = {
             referencedColumns: ["vendedor_id"]
           },
           {
+            foreignKeyName: "sinistros_sindicante_id_fkey"
+            columns: ["sindicante_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
             foreignKeyName: "sinistros_snapshot_salvo_por_fkey"
             columns: ["snapshot_salvo_por"]
             isOneToOne: false
@@ -15113,6 +15941,13 @@ export type Database = {
             columns: ["snapshot_salvo_por"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "sinistros_snapshot_salvo_por_fkey"
+            columns: ["snapshot_salvo_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
           {
@@ -15793,6 +16628,13 @@ export type Database = {
             referencedRelation: "vw_metricas_vendedores"
             referencedColumns: ["vendedor_id"]
           },
+          {
+            foreignKeyName: "utms_criado_por_fkey"
+            columns: ["criado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
         ]
       }
       vagas: {
@@ -16119,6 +16961,13 @@ export type Database = {
             referencedColumns: ["vendedor_id"]
           },
           {
+            foreignKeyName: "vendedores_monitoramento_analisado_por_fkey"
+            columns: ["analisado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
             foreignKeyName: "vendedores_monitoramento_vendedor_id_fkey"
             columns: ["vendedor_id"]
             isOneToOne: true
@@ -16130,6 +16979,13 @@ export type Database = {
             columns: ["vendedor_id"]
             isOneToOne: true
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "vendedores_monitoramento_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: true
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
         ]
@@ -16207,6 +17063,13 @@ export type Database = {
             columns: ["vistoriador_id"]
             isOneToOne: true
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "vistoriadores_localizacao_vistoriador_id_fkey"
+            columns: ["vistoriador_id"]
+            isOneToOne: true
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
         ]
@@ -16384,6 +17247,13 @@ export type Database = {
             referencedColumns: ["vendedor_id"]
           },
           {
+            foreignKeyName: "vistorias_analisado_por_fkey"
+            columns: ["analisado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
             foreignKeyName: "vistorias_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
@@ -16521,6 +17391,13 @@ export type Database = {
             columns: ["vistoriador_id"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "vistorias_vistoriador_id_fkey"
+            columns: ["vistoriador_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
         ]
@@ -16718,6 +17595,13 @@ export type Database = {
             columns: ["enviado_por"]
             isOneToOne: false
             referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "whatsapp_mensagens_enviado_por_fkey"
+            columns: ["enviado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
           },
           {
@@ -17024,6 +17908,13 @@ export type Database = {
             referencedRelation: "vw_metricas_vendedores"
             referencedColumns: ["vendedor_id"]
           },
+          {
+            foreignKeyName: "funcionarios_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: true
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
         ]
       }
       view_inadimplentes: {
@@ -17247,6 +18138,13 @@ export type Database = {
             referencedRelation: "vw_metricas_vendedores"
             referencedColumns: ["vendedor_id"]
           },
+          {
+            foreignKeyName: "processos_prazos_responsavel_id_fkey"
+            columns: ["responsavel_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
         ]
       }
       view_rastreadores_posicao: {
@@ -17373,6 +18271,20 @@ export type Database = {
           total_leads: number | null
           vendedor_id: string | null
           vendedor_nome: string | null
+        }
+        Relationships: []
+      }
+      vw_vendedores_conflito: {
+        Row: {
+          associacoes_envolvidas: string[] | null
+          email: string | null
+          indicios_confirmados: number | null
+          indicios_pendentes: number | null
+          nome: string | null
+          score_total: number | null
+          total_indicios: number | null
+          ultimo_indicio: string | null
+          vendedor_id: string | null
         }
         Relationships: []
       }

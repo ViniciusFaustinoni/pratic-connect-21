@@ -14,6 +14,7 @@ import {
   AlertCircle,
   CheckCircle,
   Clock,
+  Building2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -47,6 +48,8 @@ import {
 import { VendedorRiskBadge, RiskScoreIndicator } from '@/components/auditoria/VendedorRiskBadge';
 import { AlertaDetalheModal } from '@/components/auditoria/AlertaDetalheModal';
 import { VendedorMonitoramentoModal } from '@/components/auditoria/VendedorMonitoramentoModal';
+import { IndiciosConcorrenciaTab } from '@/components/auditoria/IndiciosConcorrenciaTab';
+import { useConcorrenciaStats } from '@/hooks/useIndiciosConcorrencia';
 import { toast } from 'sonner';
 
 const ALERT_TYPE_CONFIG: Record<string, { label: string; icon: React.ElementType; color: string }> = {
@@ -74,6 +77,7 @@ export default function AuditoriaVendedores() {
   });
   const { data: vendedoresRisco = [], isLoading: loadingVendedores, refetch: refetchVendedores } = useVendedoresRisco();
   const { data: cpfsDuplicados = [], isLoading: loadingCPFs } = useCPFsDuplicados();
+  const { data: concorrenciaStats } = useConcorrenciaStats();
   const executarAnalise = useExecutarAnalise();
 
   const handleExecutarAnalise = async () => {
@@ -204,6 +208,10 @@ export default function AuditoriaVendedores() {
               <TabsTrigger value="alertas" className="gap-2">
                 <AlertTriangle className="h-4 w-4" />
                 Alertas ({alertas.length})
+              </TabsTrigger>
+              <TabsTrigger value="concorrencia" className="gap-2">
+                <Building2 className="h-4 w-4" />
+                Conflito de Interesse ({concorrenciaStats?.indiciosPendentes || 0})
               </TabsTrigger>
               <TabsTrigger value="ranking" className="gap-2">
                 <Shield className="h-4 w-4" />
@@ -363,6 +371,11 @@ export default function AuditoriaVendedores() {
                 </Table>
               </Card>
             )}
+          </TabsContent>
+
+          {/* Conflito de Interesse Tab */}
+          <TabsContent value="concorrencia" className="space-y-4">
+            <IndiciosConcorrenciaTab />
           </TabsContent>
 
           {/* Ranking Tab */}
