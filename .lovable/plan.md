@@ -1,31 +1,38 @@
 
-# Plano: Corrigir RPC `buscar_tarefa_atual_profissional` - ✅ CONCLUÍDO
+# Plano: Inverter Posição dos Botões de Link no Menu de Cotações
 
-## Problema Identificado
+## Objetivo
 
-A RPC `buscar_tarefa_atual_profissional` estava **quebrada** devido a erro de colunas inexistentes:
+Trocar a ordem dos itens "Acessar Link do Cliente" e "Copiar Link" no menu dropdown do card de cotação.
 
-```sql
--- ANTES (errado)
-COALESCE(a.nome, c.nome)::TEXT AS associado_nome,
-COALESCE(a.telefone, c.telefone)::TEXT AS associado_telefone,
+## Situação Atual
 
--- DEPOIS (corrigido)
-COALESCE(a.nome, c.nome_solicitante)::TEXT AS associado_nome,
-COALESCE(a.telefone, c.telefone1_solicitante)::TEXT AS associado_telefone,
-```
+No menu de ações extras (3 pontinhos) do card de cotação:
 
-## Validação
+1. Baixar PDF
+2. **Acessar Link do Cliente** (linha 497-503)
+3. **Copiar Link** (linha 504-510)
+4. Duplicar
+5. Excluir
 
-```sql
-SELECT * FROM buscar_tarefa_atual_profissional('68f4857b-3499-4665-b73a-52d167df566a');
--- Retorna: Marcus Vinicius Faustinoni | status: em_rota ✅
-```
+## Situação Desejada
 
-## Status Final
+1. Baixar PDF
+2. **Copiar Link**
+3. **Acessar Link do Cliente**
+4. Duplicar
+5. Excluir
 
-| Item | Status |
-|------|--------|
-| RPC `buscar_tarefa_atual_profissional` | ✅ Corrigida |
-| Detecção de tarefa ativa | ✅ Funcionando |
-| Atribuição automática | ✅ Pronta para operar |
+## Alteração
+
+**Arquivo**: `src/components/cotacoes/CotacaoCard.tsx`
+
+Inverter a ordem dos dois `DropdownMenuItem` (linhas 497-510):
+
+- Mover o bloco de "Copiar Link" (linhas 504-510) para antes do bloco "Acessar Link do Cliente" (linhas 497-503)
+
+## Resumo de Alterações
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/components/cotacoes/CotacaoCard.tsx` | Inverter ordem dos itens no dropdown menu |
