@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { FileText, Send, Check, X, MessageCircle, FileDown, Mail, FileSignature, Eye, Link2, Copy, Trash2, MoreHorizontal, Car, User, Phone, RefreshCw, ClipboardCopy, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -437,10 +438,14 @@ export function CotacaoCard({
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => window.open(`/cotacao/${cotacao.token_publico}`, '_blank')}
+                  onClick={() => {
+                    const link = `${window.location.origin}/cotacao/${cotacao.token_publico}`;
+                    navigator.clipboard.writeText(link);
+                    toast.success('Link copiado!');
+                  }}
                 >
-                  <ExternalLink className="h-4 w-4 mr-1" />
-                  Acessar Link do Cliente
+                  <Link2 className="h-4 w-4 mr-1" />
+                  Copiar Link do Cliente
                 </Button>
               )}
             </>
@@ -493,22 +498,13 @@ export function CotacaoCard({
                 Baixar PDF
               </DropdownMenuItem>
               {cotacao.token_publico && (
-                <>
-                  <DropdownMenuItem onClick={() => {
-                    const link = `${window.location.origin}/cotacao/${cotacao.token_publico}`;
-                    navigator.clipboard.writeText(link);
-                  }}>
-                    <Link2 className="h-4 w-4 mr-2" />
-                    Copiar Link
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => {
-                    const link = `${window.location.origin}/cotacao/${cotacao.token_publico}`;
-                    window.open(link, '_blank');
-                  }}>
-                    <ExternalLink className="h-4 w-4 mr-2" />
-                    Acessar Link do Cliente
-                  </DropdownMenuItem>
-                </>
+                <DropdownMenuItem onClick={() => {
+                  const link = `${window.location.origin}/cotacao/${cotacao.token_publico}`;
+                  window.open(link, '_blank');
+                }}>
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  Acessar Link do Cliente
+                </DropdownMenuItem>
               )}
               {permissions?.canDuplicate !== false && (
                 <>
