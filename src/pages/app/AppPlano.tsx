@@ -48,7 +48,7 @@ const BENEFICIOS_POR_TIPO: Record<string, BeneficioExpandido[]> = {
       icone: Phone, 
       titulo: 'Central de atendimento', 
       descricao: 'Suporte 24h para emergências e dúvidas',
-      detalhes: '0800 123 4567'
+      detalhes: '0800 980 0001'
     },
     { 
       icone: MapPin, 
@@ -77,7 +77,7 @@ const BENEFICIOS_POR_TIPO: Record<string, BeneficioExpandido[]> = {
       icone: Phone, 
       titulo: 'Central prioritária', 
       descricao: 'Atendimento prioritário 24h para motoristas de app',
-      detalhes: '0800 123 4567'
+      detalhes: '0800 980 0001'
     },
     { 
       icone: MapPin, 
@@ -171,7 +171,7 @@ export default function AppPlano() {
             <p className="text-sm text-muted-foreground mb-4">
               Entre em contato conosco para conhecer nossos planos de proteção.
             </p>
-            <Button onClick={() => window.open('tel:08001234567')}>
+            <Button onClick={() => window.open('tel:08009800001')}>
               <Phone className="h-4 w-4 mr-2" />
               Ligar Agora
             </Button>
@@ -382,12 +382,12 @@ export default function AppPlano() {
             <Phone className="h-5 w-5 text-primary" />
             <div>
               <p className="text-sm font-medium text-foreground">Fale Conosco</p>
-              <p className="text-sm text-muted-foreground">0800 123 4567</p>
+              <p className="text-sm text-muted-foreground">0800 980 0001</p>
             </div>
           </div>
           <Button 
             className="w-full"
-            onClick={() => window.open('tel:08001234567')}
+            onClick={() => window.open('tel:08009800001')}
           >
             <Phone className="h-4 w-4 mr-2" />
             Ligar Agora

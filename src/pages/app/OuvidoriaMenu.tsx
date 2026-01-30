@@ -134,13 +134,13 @@ export default function OuvidoriaMenu() {
       {/* Card 0800 */}
       <Card className="bg-muted/50">
         <CardContent className="p-4">
-          <a href="tel:08001234567" className="flex items-center gap-3">
+          <a href="tel:08009800001" className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
               <Phone className="h-5 w-5 text-primary" />
             </div>
             <div>
               <p className="font-medium">Central de Atendimento</p>
-              <p className="text-primary font-semibold">0800 123 4567</p>
+              <p className="text-primary font-semibold">0800 980 0001</p>
             </div>
           </a>
         </CardContent>
