@@ -118,6 +118,7 @@ interface ServicoDisponivel {
   latitude: number | null;
   longitude: number | null;
   permite_encaixe: boolean;
+  periodo: string | null;
   status: string;
   associado_id: string | null;
   associado_nome: string;
@@ -299,6 +300,7 @@ serve(async (req) => {
         tipo,
         data_agendada,
         hora_agendada,
+        periodo,
         latitude,
         longitude,
         permite_encaixe,
@@ -337,6 +339,7 @@ serve(async (req) => {
         tipo,
         data_agendada,
         hora_agendada,
+        periodo,
         latitude,
         longitude,
         permite_encaixe,
@@ -383,6 +386,7 @@ serve(async (req) => {
       latitude: s.latitude,
       longitude: s.longitude,
       permite_encaixe: s.permite_encaixe || false,
+      periodo: s.periodo || null,
       status: s.status,
       associado_id: s.associado_id,
       associado_nome: s.associado?.nome || 'Cliente não vinculado',
@@ -727,6 +731,52 @@ serve(async (req) => {
         } catch (pushError) {
           console.error('[atribuir-proxima-tarefa] Erro ao enviar push notification:', pushError);
           // Não bloqueia o fluxo principal
+        }
+
+        // 9. NOTIFICAR CLIENTE via WhatsApp que técnico está a caminho
+        if (servico.associado_id) {
+          try {
+            // Buscar nome do técnico
+            const { data: profissionalData } = await supabase
+              .from('profiles')
+              .select('nome')
+              .eq('id', profissionalId)
+              .single();
+            
+            const tecnicoNome = profissionalData?.nome || 'Técnico PRATIC';
+            const tipoServicoLabel = servico.tipo === 'instalacao' 
+              ? 'instalação do rastreador' 
+              : 'vistoria';
+            const periodoLabel = servico.periodo === 'manha' 
+              ? 'Manhã (08:00-12:00)' 
+              : servico.periodo === 'tarde'
+                ? 'Tarde (14:00-18:00)'
+                : 'A definir';
+            const endereco = [
+              servico.logradouro,
+              servico.numero,
+              servico.bairro,
+              servico.cidade
+            ].filter(Boolean).join(', ') || 'Endereço cadastrado';
+
+            await supabase.functions.invoke('notificar-cliente', {
+              body: {
+                tipo: 'tecnico_em_rota',
+                associado_id: servico.associado_id,
+                dados: {
+                  tecnico_nome: tecnicoNome,
+                  tipo_servico: tipoServicoLabel,
+                  endereco: endereco,
+                  periodo: periodoLabel,
+                },
+              },
+            });
+            
+            console.log(`[atribuir-proxima-tarefa] ✓ Cliente notificado sobre técnico em rota`);
+          } catch (notifError) {
+            console.error('[atribuir-proxima-tarefa] Erro ao notificar cliente:', notifError);
+            // Não bloqueia o fluxo principal
+          }
         }
 
         return new Response(
