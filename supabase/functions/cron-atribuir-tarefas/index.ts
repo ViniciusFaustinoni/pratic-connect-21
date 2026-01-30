@@ -323,7 +323,20 @@ serve(async (req) => {
           .single();
 
         if (updateError) {
-          console.log(`[cron-atribuir-tarefas] Serviço ${servico.id} já foi atribuído a outro`);
+          // ✅ CORRIGIDO: Logar erro REAL do banco em vez de assumir concorrência
+          console.error(`[cron-atribuir-tarefas] ERRO ao atribuir serviço ${servico.id}:`, JSON.stringify({
+            message: updateError.message,
+            code: updateError.code,
+            details: updateError.details,
+            hint: updateError.hint
+          }));
+          
+          // Identificar se é erro de concorrência ou erro técnico
+          if (updateError.code === 'PGRST116' || updateError.message?.includes('0 rows')) {
+            console.log(`[cron-atribuir-tarefas] Serviço ${servico.id} já foi atribuído a outro (concorrência)`);
+          } else {
+            console.error(`[cron-atribuir-tarefas] ❌ ERRO TÉCNICO na atribuição: ${updateError.message}`);
+          }
           continue;
         }
 
