@@ -140,6 +140,9 @@ export function ProdutoFormModal({ open, onClose, produto }: ProdutoFormModalPro
     onSuccess: () => {
       toast.success(produto ? 'Produto atualizado!' : 'Produto criado!');
       queryClient.invalidateQueries({ queryKey: ['planos-gestao'] });
+      if (produto) {
+        queryClient.invalidateQueries({ queryKey: ['plano', produto.id] });
+      }
       onClose();
     },
     onError: (error: Error) => {
