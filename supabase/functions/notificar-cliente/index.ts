@@ -83,6 +83,11 @@ const TEMPLATES: Record<string, {
     mensagem: 'Olá! O prestador {prestador_nome} foi acionado para atendê-lo. Previsão de chegada: {previsao}. Acompanhe pelo protocolo {protocolo}.',
     emailTemplate: 'generico',
   },
+  proposta_aprovada_roubo_furto: {
+    titulo: '🎉 Proposta Aprovada!',
+    mensagem: 'Parabéns {nome}! Seu cadastro foi aprovado e a cobertura de Roubo e Furto já está ativa!\n\nAcesse o link abaixo para criar sua conta no app PRATIC:\n🔗 {link_acompanhamento}\n\nApós a instalação do rastreador, sua proteção será completa. Bem-vindo à PRATIC!',
+    emailTemplate: 'generico',
+  },
 };
 
 serve(async (req) => {

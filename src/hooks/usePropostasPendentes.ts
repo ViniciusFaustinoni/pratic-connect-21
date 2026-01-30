@@ -1520,6 +1520,32 @@ export function useAprovarProposta() {
 
       // Nota: Cobranças serão geradas em outro momento do fluxo (após instalação ou pelo financeiro)
 
+      // 9. NOTIFICAR CLIENTE VIA WHATSAPP - Enviar link para criar conta no app
+      const { data: contratoComLink } = await supabase
+        .from('contratos')
+        .select('link_token')
+        .eq('id', contratoId)
+        .single();
+
+      if (contratoComLink?.link_token) {
+        try {
+          const linkAcompanhamento = `${window.location.origin}/acompanhar/${contratoComLink.link_token}`;
+          
+          await supabase.functions.invoke('notificar-cliente', {
+            body: {
+              tipo: 'proposta_aprovada_roubo_furto',
+              associado_id: associadoId,
+              dados: {
+                link_acompanhamento: linkAcompanhamento,
+              },
+            },
+          });
+          console.log('[useAprovarProposta] Notificação WhatsApp enviada com link:', linkAcompanhamento);
+        } catch (notifError) {
+          console.warn('[useAprovarProposta] Erro ao enviar notificação (não crítico):', notifError);
+        }
+      }
+
       const mensagemRetorno = jaTemInstalacaoConcluida
         ? 'Proposta aprovada! Instalação já concluída. Aguardando ativação do rastreador.'
         : 'Proposta aprovada! Cobertura Roubo/Furto ativada. Aguardando instalação para cobertura total.';
