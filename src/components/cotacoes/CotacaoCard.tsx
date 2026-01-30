@@ -496,17 +496,17 @@ export function CotacaoCard({
                 <>
                   <DropdownMenuItem onClick={() => {
                     const link = `${window.location.origin}/cotacao/${cotacao.token_publico}`;
-                    window.open(link, '_blank');
-                  }}>
-                    <ExternalLink className="h-4 w-4 mr-2" />
-                    Acessar Link do Cliente
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => {
-                    const link = `${window.location.origin}/cotacao/${cotacao.token_publico}`;
                     navigator.clipboard.writeText(link);
                   }}>
                     <Link2 className="h-4 w-4 mr-2" />
                     Copiar Link
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => {
+                    const link = `${window.location.origin}/cotacao/${cotacao.token_publico}`;
+                    window.open(link, '_blank');
+                  }}>
+                    <ExternalLink className="h-4 w-4 mr-2" />
+                    Acessar Link do Cliente
                   </DropdownMenuItem>
                 </>
               )}
