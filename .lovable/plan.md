@@ -1,164 +1,209 @@
 
-# Plano: Correção do Bug de Navegação entre Etapas no Link do Cliente
 
-## Problema Identificado
+# Plano: Visualização de Cotações Finalizadas por Data e Consultor
 
-Quando o cliente volta para uma etapa anterior para revisar, o sistema "trava" e ele não consegue mais avançar. Isso acontece por um conflito na lógica de navegação.
+## Resumo
 
-## Causa Raiz
+Adicionar filtros avançados na aba "Finalizadas" da página de Cotações para permitir que gestores, comerciais, admins e diretores visualizem cotações finalizadas organizadas por data específica e por consultor.
 
-O problema está na interação entre os botões "Continuar" de cada componente de etapa e o componente `NavegacaoEtapas`:
+## Situação Atual
 
-### Problema 1: Botão "Continuar" de cada etapa é desativado quando `readOnly=true`
+A página `src/pages/vendas/Cotacoes.tsx` já possui:
+- Tabs separando "Em Andamento" e "Finalizadas"
+- Filtro por **mês** (período mensal)
+- Filtro por **status**
+- Campo de **busca** por texto
 
-Quando o cliente volta para a etapa 0 (Plano), o sistema corretamente marca `readOnly={isEtapaConcluida(0)}` como `true`. Porém, o botão "Continuar com este plano" fica desativado porque a etapa já foi concluída:
+## O Que Será Implementado
 
-```tsx
-// EscolhaPlano.tsx - botão desativado se readOnly
-<Button
-  onClick={onConfirmar}
-  disabled={!planoSelecionadoId || isLoading}  // não considera readOnly
-  // ...
+| Funcionalidade | Descrição |
+|---------------|-----------|
+| Filtro por Data | Seletor de data específica para ver cotações de um dia |
+| Filtro por Consultor | Dropdown com lista de vendedores para filtrar por responsável |
+| Combinação de Filtros | Ambos os filtros funcionando simultaneamente |
+| Visibilidade Condicional | Filtro de consultor aparece apenas para gestores (quem pode ver todas) |
+
+## Regras de Negócio
+
+### Visibilidade por Perfil
+
+| Perfil | Vê filtro de Consultor? | Vê quais cotações? |
+|--------|-------------------------|---------------------|
+| Vendedor CLT/Externo | Não | Apenas as próprias |
+| Supervisor de Vendas | Sim | Da equipe |
+| Gerente Comercial | Sim | Todas |
+| Diretor | Sim | Todas |
+| Admin Master | Sim | Todas |
+
+### Comportamento dos Filtros
+
+1. **Filtro de Data**:
+   - Calendário para selecionar data específica
+   - Opção "Todos os dias" para ver tudo
+   - Filtra pela data de criação (`created_at`) da cotação
+
+2. **Filtro de Consultor**:
+   - Dropdown com vendedores
+   - Opção "Todos" para ver de todos
+   - Visível apenas para quem tem `viewScope === 'all'` ou `viewScope === 'team'`
+
+3. **Combinação**:
+   - Data + Consultor funcionam juntos
+   - Ex: "30/01/2026 + João Silva" mostra só as cotações do João naquele dia
+
+## Fluxo Visual
+
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│  Cotação                                        + Nova Cotação  │
+├─────────────────────────────────────────────────────────────────┤
+│  [Total: 50] [Enviadas: 10] [Aceitas: 35] [Taxa: 70%]          │
+├─────────────────────────────────────────────────────────────────┤
+│  [Buscar...]  [Status ▼]  [Consultor ▼]  [📅 Data ▼]           │
+├─────────────────────────────────────────────────────────────────┤
+│  [Em Andamento (15)]  [✓ Finalizadas (35)]                     │
+├─────────────────────────────────────────────────────────────────┤
+│  📅 30/01/2026 - 5 cotações                                     │
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │ ✓ ACEITA  João Silva        Toyota Corolla   R$ 211,00/mês ││
+│  │ ✓ ACEITA  João Silva        Honda Civic      R$ 195,00/mês ││
+│  │ ✗ RECUSADA Maria Costa      VW Golf          R$ 180,00/mês ││
+│  └─────────────────────────────────────────────────────────────┘│
+│                                                                 │
+│  📅 29/01/2026 - 3 cotações                                     │
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │ ✓ ACEITA  Pedro Lima        Fiat Argo        R$ 150,00/mês ││
+│  └─────────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-### Problema 2: Botão "Continuar" do NavegacaoEtapas não aparece
+## Alterações Técnicas
 
-O `NavegacaoEtapas` só mostra o botão "Continuar" quando `podeAvancar = etapaAtual < etapaMaxima`. No entanto, quando a etapa já está concluída, o botão deveria aparecer para permitir a navegação.
+### 1. Modificar `src/pages/vendas/Cotacoes.tsx`
 
-A linha 29 do `NavegacaoEtapas` oculta o componente inteiro:
-```tsx
-if (!navegacaoManual && etapaAtual >= etapaMaxima) return null;
+**Novos estados**:
+```typescript
+const [dataFilter, setDataFilter] = useState<Date | undefined>(undefined);
+const [consultorFilter, setConsultorFilter] = useState<string>('all');
 ```
 
-Mas quando `navegacaoManual=true` e `etapaAtual < etapaMaxima`, o botão deveria aparecer. O problema é que `podeAvancar` verifica `etapaAtual < etapaMaxima`, mas isso pode falhar em certos estados.
+**Importar hook de vendedores**:
+```typescript
+import { useVendedores } from '@/hooks/useVendedores';
+```
 
-### Problema 3: Conflito entre botões
-
-Existem dois botões que podem avançar:
-1. O botão específico da etapa (ex: "Continuar com este plano")
-2. O botão genérico de navegação
-
-Quando em modo `readOnly`, o botão específico é desativado, mas o genérico também não aparece corretamente.
-
-## Solução Proposta
-
-### 1. Modificar `NavegacaoEtapas` para sempre mostrar navegação em modo manual
-
-Quando `navegacaoManual=true`, os botões de navegação devem sempre estar visíveis, permitindo que o usuário avance para qualquer etapa já concluída.
-
-**Mudança**: Garantir que o botão "Continuar" apareça quando estamos em navegação manual e ainda não chegamos na etapa máxima.
-
-### 2. Adicionar botão "Continuar" específico para modo readOnly nos componentes
-
-Nos componentes de etapa (`EscolhaPlano`, `EtapaDadosPessoaisDocumentos`, etc.), quando `readOnly=true`, não mostrar o botão de ação primária (que executa a ação), mas garantir que o `NavegacaoEtapas` cuide da navegação.
-
-### 3. Simplificar a lógica de visibilidade do NavegacaoEtapas
-
-```tsx
-// NavegacaoEtapas.tsx - Nova lógica simplificada
-export function NavegacaoEtapas({...}: NavegacaoEtapasProps) {
-  const podeVoltar = etapaAtual > 0;
-  const podeAvancar = navegacaoManual && etapaAtual < etapaMaxima;
-  
-  // Sempre mostrar se pode voltar OU se está em navegação manual e pode avançar
-  if (!podeVoltar && !podeAvancar) return null;
-  
-  return (
-    // Mostrar botões de navegação...
-  );
+**Nova lógica de filtragem**:
+```typescript
+// Filtrar por data específica
+let matchesData = true;
+if (dataFilter) {
+  const cotacaoDate = new Date(cotacao.created_at);
+  const filterDate = dataFilter;
+  matchesData = 
+    cotacaoDate.getDate() === filterDate.getDate() &&
+    cotacaoDate.getMonth() === filterDate.getMonth() &&
+    cotacaoDate.getFullYear() === filterDate.getFullYear();
 }
+
+// Filtrar por consultor
+let matchesConsultor = true;
+if (consultorFilter !== 'all') {
+  matchesConsultor = cotacao.vendedor_id === consultorFilter;
+}
+```
+
+**Novo componente de filtro de data**:
+```typescript
+<Popover>
+  <PopoverTrigger asChild>
+    <Button variant="outline" className="w-full sm:w-auto">
+      <Calendar className="h-4 w-4 mr-2" />
+      {dataFilter ? format(dataFilter, 'dd/MM/yyyy') : 'Todos os dias'}
+    </Button>
+  </PopoverTrigger>
+  <PopoverContent>
+    <Calendar 
+      mode="single"
+      selected={dataFilter}
+      onSelect={setDataFilter}
+    />
+  </PopoverContent>
+</Popover>
+```
+
+**Filtro de consultor (condicional)**:
+```typescript
+{permissions.cotacao.viewScope !== 'own' && (
+  <Select value={consultorFilter} onValueChange={setConsultorFilter}>
+    <SelectTrigger className="w-full sm:w-48">
+      <User className="h-4 w-4 mr-2" />
+      <SelectValue placeholder="Todos os consultores" />
+    </SelectTrigger>
+    <SelectContent>
+      <SelectItem value="all">Todos os consultores</SelectItem>
+      {vendedores?.map(v => (
+        <SelectItem key={v.user_id} value={v.user_id}>{v.nome}</SelectItem>
+      ))}
+    </SelectContent>
+  </Select>
+)}
+```
+
+### 2. Agrupamento por Data na Visualização
+
+Para cotações finalizadas, agrupar visualmente por data:
+
+```typescript
+// Agrupar finalizadas por data
+const finalizadasPorData = useMemo(() => {
+  const grupos: Record<string, CotacaoWithRelations[]> = {};
+  
+  fechadas.forEach(cotacao => {
+    const data = format(new Date(cotacao.created_at), 'yyyy-MM-dd');
+    if (!grupos[data]) grupos[data] = [];
+    grupos[data].push(cotacao);
+  });
+  
+  return Object.entries(grupos)
+    .sort(([a], [b]) => b.localeCompare(a)) // Mais recente primeiro
+    .map(([data, cotacoes]) => ({
+      data,
+      dataFormatada: format(new Date(data), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }),
+      cotacoes,
+    }));
+}, [fechadas]);
+```
+
+### 3. Renderização Agrupada
+
+```tsx
+<TabsContent value="fechadas">
+  {finalizadasPorData.map(grupo => (
+    <div key={grupo.data} className="space-y-3">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Calendar className="h-4 w-4" />
+        <span className="font-medium">{grupo.dataFormatada}</span>
+        <Badge variant="secondary">{grupo.cotacoes.length}</Badge>
+      </div>
+      {grupo.cotacoes.map(cotacao => (
+        <CotacaoCard key={cotacao.id} ... />
+      ))}
+    </div>
+  ))}
+</TabsContent>
 ```
 
 ## Arquivos a Modificar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/cotacao-publica/NavegacaoEtapas.tsx` | Corrigir lógica de visibilidade para navegação manual |
-| `src/components/cotacao-publica/EscolhaPlano.tsx` | Ocultar botão "Continuar" quando `readOnly=true` |
-| `src/components/cotacao-publica/EtapaDadosPessoaisDocumentos.tsx` | Ocultar botão "Continuar" quando `readOnly=true` |
-| `src/components/cotacao-publica/EtapaAssinaturaContrato.tsx` | Verificar comportamento em modo `readOnly` |
-| `src/components/cotacao-publica/EtapaVistoria.tsx` | Verificar comportamento em modo `readOnly` |
-| `src/components/cotacao-publica/EtapaPagamentoCotacao.tsx` | Verificar comportamento em modo `readOnly` |
-
-## Fluxo Corrigido
-
-```
-1. Cliente completa etapas 1, 2, 3, 4
-           ↓
-2. Cliente clica na etapa 1 para revisar
-           ↓
-3. navegacaoManual = true, etapaAtual = 0, etapaMaxima = 4
-           ↓
-4. EscolhaPlano mostra em modo readOnly (sem botão "Continuar com este plano")
-           ↓
-5. NavegacaoEtapas mostra:
-   [Voltar] (desativado - etapa 0)  |  [Continuar] (ativo - vai para etapa 1)
-           ↓
-6. Cliente clica "Continuar" e vai para etapa 1
-           ↓
-7. Pode continuar navegando até chegar na etapa máxima (4)
-```
-
-## Alterações Detalhadas
-
-### NavegacaoEtapas.tsx
-```tsx
-export function NavegacaoEtapas({
-  etapaAtual,
-  etapaMaxima,
-  totalEtapas,
-  onVoltar,
-  onAvancar,
-  navegacaoManual = false,
-}: NavegacaoEtapasProps) {
-  const podeVoltar = etapaAtual > 0;
-  // CORREÇÃO: Em modo manual, permitir avançar até a etapa máxima
-  const podeAvancar = navegacaoManual && etapaAtual < etapaMaxima;
-  
-  // Só oculta se não pode fazer nenhuma ação
-  if (!podeVoltar && !podeAvancar) return null;
-  
-  return (
-    <motion.div className="flex justify-between items-center pt-6 mt-6 border-t border-border/30" ...>
-      {podeVoltar ? (
-        <Button variant="ghost" onClick={onVoltar}>
-          <ChevronLeft /> Voltar
-        </Button>
-      ) : <div />}
-      
-      {podeAvancar && (
-        <Button onClick={onAvancar}>
-          Continuar <ChevronRight />
-        </Button>
-      )}
-    </motion.div>
-  );
-}
-```
-
-### EscolhaPlano.tsx
-```tsx
-// Ocultar botão quando em modo somente leitura
-{!readOnly && (
-  <Button onClick={onConfirmar} disabled={!planoSelecionadoId || isLoading}>
-    Continuar com este plano
-  </Button>
-)}
-```
-
-### EtapaDadosPessoaisDocumentos.tsx
-```tsx
-// Ocultar botão quando em modo somente leitura
-{!readOnly && (
-  <Button onClick={handleSubmit} disabled={!podeAvancar || isLoading}>
-    Continuar
-  </Button>
-)}
-```
+| `src/pages/vendas/Cotacoes.tsx` | Adicionar filtros de data e consultor, agrupar por data |
 
 ## Benefícios
 
-1. **Navegação fluida** - Cliente pode revisar qualquer etapa anterior sem travar
-2. **Interface consistente** - Botões de navegação aparecem de forma previsível
-3. **Modo revisão claro** - Em etapas já concluídas, apenas mostra os dados (sem ações duplicadas)
-4. **Sem perda de dados** - Ao revisar, os dados permanecem salvos
+1. **Acompanhamento diário** - Gestores podem ver performance de cada dia
+2. **Análise por consultor** - Filtrar para ver desempenho individual
+3. **Combinação de filtros** - Visão granular (data + consultor)
+4. **Interface intuitiva** - Agrupamento visual por data facilita navegação
+5. **Controle de acesso** - Vendedores não veem filtro de consultor (só suas próprias cotações)
+
