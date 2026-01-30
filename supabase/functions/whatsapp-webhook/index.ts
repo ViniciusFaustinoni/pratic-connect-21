@@ -823,8 +823,9 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
 
         console.log(`[whatsapp-webhook] Enviando boleto PDF para ${telefone}`);
 
+        const toolApiUrl = Deno.env.get('EVOLUTION_API_URL') || instancia.api_url;
         const response = await fetch(
-          `${instancia.api_url}/message/sendMedia/${instancia.instance_name}`,
+          `${toolApiUrl}/message/sendMedia/${instancia.instance_name}`,
           {
             method: "POST",
             headers: {
@@ -970,8 +971,9 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
 
         console.log(`[whatsapp-webhook] Enviando localização do veículo ${veiculo.placa}`);
 
+        const toolApiUrl = Deno.env.get('EVOLUTION_API_URL') || instancia.api_url;
         const response = await fetch(
-          `${instancia.api_url}/message/sendLocation/${instancia.instance_name}`,
+          `${toolApiUrl}/message/sendLocation/${instancia.instance_name}`,
           {
             method: "POST",
             headers: {
@@ -1053,8 +1055,9 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
 
         console.log(`[whatsapp-webhook] Enviando contato da central para ${telefone}`);
 
+        const toolApiUrl = Deno.env.get('EVOLUTION_API_URL') || instancia.api_url;
         const response = await fetch(
-          `${instancia.api_url}/message/sendContact/${instancia.instance_name}`,
+          `${toolApiUrl}/message/sendContact/${instancia.instance_name}`,
           {
             method: "POST",
             headers: {
@@ -1152,8 +1155,9 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
 
         console.log(`[whatsapp-webhook] Enviando contato do prestador para ${telefone}`);
 
+        const toolApiUrl = Deno.env.get('EVOLUTION_API_URL') || instancia.api_url;
         const response = await fetch(
-          `${instancia.api_url}/message/sendContact/${instancia.instance_name}`,
+          `${toolApiUrl}/message/sendContact/${instancia.instance_name}`,
           {
             method: "POST",
             headers: {
@@ -1682,7 +1686,8 @@ async function processarRespostaConfirmacao(
   }
 
   // Enviar resposta ao cliente
-  await sendWhatsAppMessage(instancia.api_url, instancia.instance_name, confirmacao.telefone, resultado.mensagem_resposta);
+  const confirmApiUrl = Deno.env.get('EVOLUTION_API_URL') || instancia.api_url;
+  await sendWhatsAppMessage(confirmApiUrl, instancia.instance_name, confirmacao.telefone, resultado.mensagem_resposta);
   await saveWhatsAppLog(supabase, instancia.id, confirmacao.telefone, resultado.mensagem_resposta, "saida");
 
   console.log(`[whatsapp-webhook] Confirmação processada: ${resultado.intencao}`);
@@ -1707,7 +1712,8 @@ Nossa equipe de agendamento entrará em contato em breve para definir uma nova d
 
 Obrigado pela compreensão! 🙏`;
 
-  await sendWhatsAppMessage(instancia.api_url, instancia.instance_name, confirmacao.telefone, mensagem);
+  const reagendApiUrl = Deno.env.get('EVOLUTION_API_URL') || instancia.api_url;
+  await sendWhatsAppMessage(reagendApiUrl, instancia.instance_name, confirmacao.telefone, mensagem);
   await saveWhatsAppLog(supabase, instancia.id, confirmacao.telefone, mensagem, "saida");
 
   // Marcar como reagendando (equipe vai contatar)
@@ -1978,6 +1984,10 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "Instância não configurada" }), { headers: corsHeaders });
     }
 
+    // PRIORIZAR URL do secret sobre a URL do banco de dados
+    const apiUrl = Deno.env.get('EVOLUTION_API_URL') || instancia.api_url;
+    console.log(`[whatsapp-webhook] Usando API URL: ${apiUrl}`);
+
     switch (tipoPrincipal) {
       case 'texto':
         mensagemTexto = tipoMensagem.texto || '';
@@ -1989,7 +1999,7 @@ serve(async (req) => {
         mediaMimetype = tipoMensagem.audio.mimetype;
         
         // Baixar e transcrever áudio
-        const mediaResult = await downloadMediaEvolution(instancia.api_url, instancia.instance_name, messageId);
+        const mediaResult = await downloadMediaEvolution(apiUrl, instancia.instance_name, messageId);
         
         if (mediaResult.success && mediaResult.base64) {
           // Armazenar mídia
@@ -2017,7 +2027,7 @@ serve(async (req) => {
         const captionImagem = tipoMensagem.imagem.caption || '';
         
         // Baixar e armazenar imagem
-        const mediaResult = await downloadMediaEvolution(instancia.api_url, instancia.instance_name, messageId);
+        const mediaResult = await downloadMediaEvolution(apiUrl, instancia.instance_name, messageId);
         
         if (mediaResult.success && mediaResult.base64) {
           mediaArmazenada = await storeMediaSupabase(supabase, mediaResult.base64, mediaResult.mimetype || 'image/jpeg', telefone);
@@ -2035,7 +2045,7 @@ serve(async (req) => {
         const captionDoc = tipoMensagem.documento.caption || '';
         
         // Baixar e armazenar documento
-        const mediaResult = await downloadMediaEvolution(instancia.api_url, instancia.instance_name, messageId);
+        const mediaResult = await downloadMediaEvolution(apiUrl, instancia.instance_name, messageId);
         
         if (mediaResult.success && mediaResult.base64) {
           mediaArmazenada = await storeMediaSupabase(supabase, mediaResult.base64, mediaResult.mimetype || 'application/pdf', telefone);
@@ -2052,7 +2062,7 @@ serve(async (req) => {
         const captionVideo = tipoMensagem.video.caption || '';
         
         // Baixar e armazenar vídeo (pode ser grande)
-        const mediaResult = await downloadMediaEvolution(instancia.api_url, instancia.instance_name, messageId);
+        const mediaResult = await downloadMediaEvolution(apiUrl, instancia.instance_name, messageId);
         
         if (mediaResult.success && mediaResult.base64) {
           mediaArmazenada = await storeMediaSupabase(supabase, mediaResult.base64, mediaResult.mimetype || 'video/mp4', telefone);
@@ -2143,7 +2153,7 @@ serve(async (req) => {
         const EVOLUTION_API_KEY = Deno.env.get("EVOLUTION_API_KEY");
         if (EVOLUTION_API_KEY && resultadoSinistro.mensagem) {
           try {
-            await fetch(`${instancia.api_url}/message/sendText/${instancia.instance_name}`, {
+            await fetch(`${apiUrl}/message/sendText/${instancia.instance_name}`, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
@@ -2179,7 +2189,7 @@ serve(async (req) => {
         const EVOLUTION_API_KEY = Deno.env.get("EVOLUTION_API_KEY");
         if (EVOLUTION_API_KEY) {
           try {
-            await fetch(`${instancia.api_url}/message/sendText/${instancia.instance_name}`, {
+            await fetch(`${apiUrl}/message/sendText/${instancia.instance_name}`, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
@@ -2291,7 +2301,7 @@ serve(async (req) => {
         // Responder ao lead
         const primeiroNome = lead.nome?.split(' ')[0] || 'Cliente';
         await sendWhatsAppMessage(
-          instancia.api_url,
+          apiUrl,
           instancia.instance_name,
           telefone,
           `Olá ${primeiroNome}! 😊\n\nRecebemos sua mensagem. Nosso consultor entrará em contato em breve.\n\nAgradecemos o interesse na PRATICCAR! 🚗`
@@ -2338,7 +2348,7 @@ serve(async (req) => {
       );
       
       await sendWhatsAppMessage(
-        instancia.api_url,
+        apiUrl,
         instancia.instance_name,
         telefone,
         "Olá! Este número não está cadastrado como associado PRATIC. Entre em contato com nossa central para mais informações. 📞"
@@ -2417,7 +2427,7 @@ serve(async (req) => {
 
     // Salvar e enviar resposta - capturar messageId para tracking de status
     await saveMessage(supabase, associado.id, "assistant", respostaFinal);
-    const sendResult = await sendWhatsAppMessage(instancia.api_url, instancia.instance_name, telefone, respostaFinal);
+    const sendResult = await sendWhatsAppMessage(apiUrl, instancia.instance_name, telefone, respostaFinal);
     await saveWhatsAppLog(supabase, instancia.id, telefone, respostaFinal, "saida", sendResult.messageId);
 
     console.log(`[whatsapp-webhook] Resposta enviada para ${telefone}`);
