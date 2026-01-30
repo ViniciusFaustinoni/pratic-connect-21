@@ -145,10 +145,10 @@ export default function AppAssistencia() {
           <Button 
             className="w-full bg-white text-destructive hover:bg-white/90"
             size="lg"
-            onClick={() => window.open('tel:08001234567')}
+            onClick={() => window.open('tel:08009800001')}
           >
             <Phone className="mr-2 h-5 w-5" />
-            Ligar Agora - 0800 123 4567
+            Ligar Agora - 0800 980 0001
           </Button>
           <p className="mt-2 text-center text-sm opacity-90">
             Atendimento 24 horas, 7 dias por semana
@@ -240,7 +240,7 @@ export default function AppAssistencia() {
       {/* FAB Emergency Button */}
       <Button
         className="fixed bottom-24 right-4 h-14 w-14 rounded-full shadow-lg bg-destructive hover:bg-destructive/90 z-50"
-        onClick={() => window.open('tel:08001234567')}
+        onClick={() => window.open('tel:08009800001')}
       >
         <AlertTriangle className="h-6 w-6" />
         <span className="sr-only">Emergência</span>

@@ -1056,7 +1056,7 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
         .eq("chave", "assistencia_telefone_central")
         .maybeSingle();
 
-      const telefoneCentral = config?.valor || "08001234567";
+      const telefoneCentral = config?.valor || "08009800001";
       const wuid = telefoneCentral.replace(/\D/g, '');
 
       try {
