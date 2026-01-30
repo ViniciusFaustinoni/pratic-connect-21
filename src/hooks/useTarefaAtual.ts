@@ -93,6 +93,7 @@ export function useTarefaAtual() {
         vistoria_origem_id: tarefa.vistoria_origem_id,
         confirmacao_whatsapp: tarefa.confirmacao_whatsapp || null,
         confirmado_via_whatsapp_em: tarefa.confirmado_via_whatsapp_em || null,
+        permite_encaixe: tarefa.permite_encaixe ?? false,
       };
     },
     enabled: !!profissionalId,

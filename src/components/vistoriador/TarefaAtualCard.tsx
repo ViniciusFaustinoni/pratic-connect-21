@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   MapPin, Phone, Car, Clock, Navigation, Play, 
   CheckCircle2, User, ChevronRight, Loader2, Route, Zap,
-  MessageCircle, MessageSquareWarning
+  MessageCircle, MessageSquareWarning, Timer
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -29,6 +29,7 @@ interface TarefaAtualCardProps {
   tarefa: TarefaAtual & {
     confirmacao_whatsapp?: string | null;
     confirmado_via_whatsapp_em?: string | null;
+    permite_encaixe?: boolean;
   };
 }
 
@@ -38,6 +39,47 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
   const { mutate: iniciarTarefa, isPending: isIniciando } = useIniciarTarefa();
   const { mutate: iniciarRota, isPending: isIniciandoRota } = useIniciarRota();
   const { buscarProximaTarefa, isLoading: isBuscandoProxima } = useIniciarServico();
+  
+  // Estado para atualização em tempo real (a cada minuto)
+  const [agora, setAgora] = useState(new Date());
+  
+  useEffect(() => {
+    const interval = setInterval(() => setAgora(new Date()), 60000); // Atualiza a cada minuto
+    return () => clearInterval(interval);
+  }, []);
+
+  // Verificar se pode iniciar rota baseado no horário agendado
+  const podeIniciarPorHorario = useMemo(() => {
+    // Se não é hoje, pode iniciar (tarefas futuras atribuídas manualmente)
+    const hoje = agora.toISOString().split('T')[0];
+    if (tarefa.data_agendada !== hoje) return true;
+    
+    // Se é encaixe, pode iniciar a qualquer momento
+    if (tarefa.permite_encaixe) return true;
+    
+    // Se não tem hora específica, pode iniciar
+    if (!tarefa.hora_agendada) return true;
+    
+    // Verificar se hora atual >= hora agendada
+    const horaAtual = agora.toTimeString().slice(0, 5); // "HH:MM"
+    const horaAgendada = tarefa.hora_agendada.slice(0, 5);
+    return horaAtual >= horaAgendada;
+  }, [agora, tarefa.data_agendada, tarefa.hora_agendada, tarefa.permite_encaixe]);
+
+  // Calcular tempo restante para habilitar
+  const tempoRestante = useMemo(() => {
+    if (podeIniciarPorHorario || !tarefa.hora_agendada) return null;
+    
+    const [h, m] = tarefa.hora_agendada.split(':').map(Number);
+    const horaAgendada = new Date(agora);
+    horaAgendada.setHours(h, m, 0, 0);
+    
+    const diff = horaAgendada.getTime() - agora.getTime();
+    if (diff <= 0) return null;
+    
+    const minutos = Math.ceil(diff / 60000);
+    return minutos;
+  }, [agora, tarefa.hora_agendada, podeIniciarPorHorario]);
 
   const enderecoCompleto = [
     tarefa.endereco.logradouro,
@@ -69,7 +111,6 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
   };
 
   const handleExecutar = () => {
-    // Sempre usar o ID do serviço (tabela unificada)
     const path = isInstalacao(tarefa.tipo) ? 'instalacao' : 'vistoria';
     navigate(`/instalador/${path}/${tarefa.id}`);
   };
@@ -79,7 +120,7 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
   const isEmAndamento = tarefa.status === 'em_andamento';
 
   // Verificar se é um encaixe (tarefa foi antecipada)
-  const isEncaixe = (tarefa as any).encaixe_executado === true;
+  const isEncaixe = tarefa.permite_encaixe === true;
   const dataOriginal = (tarefa as any).data_agendada_original;
 
   return (
@@ -230,23 +271,38 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
           )}
 
           {/* Ações */}
-          <div className="grid grid-cols-2 gap-3 pt-2">
+          <div className="space-y-3 pt-2">
             {isAgendada ? (
               // Tarefa atribuída manualmente - mostrar botão para iniciar rota
-              <Button
-                onClick={handleIniciarRota}
-                disabled={isIniciandoRota}
-                className="col-span-2 gap-2"
-              >
-                {isIniciandoRota ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Route className="h-4 w-4" />
+              <div className="space-y-2">
+                <Button
+                  onClick={handleIniciarRota}
+                  disabled={isIniciandoRota || !podeIniciarPorHorario}
+                  className="w-full gap-2"
+                >
+                  {isIniciandoRota ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Route className="h-4 w-4" />
+                  )}
+                  Iniciar Rota
+                </Button>
+                
+                {/* Feedback visual quando bloqueado por horário */}
+                {!podeIniciarPorHorario && tarefa.hora_agendada && (
+                  <div className="flex items-center justify-center gap-2 text-sm text-amber-600 dark:text-amber-400 bg-amber-500/10 rounded-md py-2 px-3">
+                    <Timer className="h-4 w-4" />
+                    <span>
+                      {tempoRestante && tempoRestante > 60 
+                        ? `Disponível em ${Math.floor(tempoRestante / 60)}h ${tempoRestante % 60}min (${tarefa.hora_agendada.slice(0, 5)})`
+                        : `Disponível em ${tempoRestante} min (${tarefa.hora_agendada.slice(0, 5)})`
+                      }
+                    </span>
+                  </div>
                 )}
-                Iniciar Rota
-              </Button>
+              </div>
             ) : isEmRota ? (
-              <>
+              <div className="grid grid-cols-2 gap-3">
                 <Button
                   variant="outline"
                   onClick={abrirNavegacao}
@@ -268,11 +324,11 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
                   )}
                   Cheguei no Local
                 </Button>
-              </>
+              </div>
             ) : (
               <Button
                 onClick={handleExecutar}
-                className="col-span-2 gap-2"
+                className="w-full gap-2"
               >
                 <ChevronRight className="h-4 w-4" />
                 Executar {TIPO_SERVICO_LABELS[tarefa.tipo] || tarefa.tipo}
