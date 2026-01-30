@@ -60,9 +60,18 @@ serve(async (req) => {
       throw new Error('EVOLUTION_API_KEY não configurada');
     }
 
+    // PRIORIZAR URL do secret sobre a URL do banco (para facilitar testes)
+    const evolutionUrl = Deno.env.get('EVOLUTION_API_URL');
+    const apiUrl = evolutionUrl || instancia.api_url;
+    if (!apiUrl) {
+      throw new Error('URL da Evolution API não configurada (secret EVOLUTION_API_URL ou campo api_url)');
+    }
+
+    console.log('[whatsapp-status] Usando API URL:', apiUrl, 'Instância:', instancia.instance_name);
+
     // Verificar status da conexão
     const response = await fetch(
-      `${instancia.api_url}/instance/connectionState/${instancia.instance_name}`,
+      `${apiUrl}/instance/connectionState/${instancia.instance_name}`,
       {
         method: 'GET',
         headers: { 'apikey': apiKey }
@@ -71,10 +80,10 @@ serve(async (req) => {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Erro Evolution API:', response.status, errorText);
+      console.error('[whatsapp-status] Erro Evolution API:', response.status, errorText);
       
-      // Se a instância não existe, retornar desconectado
-      if (response.status === 404) {
+      // Se a instância não existe (404) ou não autorizada (401 - pode ser instância não existe na Evolution v2.3)
+      if (response.status === 404 || response.status === 401) {
         return new Response(
           JSON.stringify({
             success: true,
@@ -86,6 +95,7 @@ serve(async (req) => {
             status: 'disconnected',
             connected: false,
             telefone: null,
+            message: 'Instância não conectada. Clique em Conectar para gerar QR Code.'
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
