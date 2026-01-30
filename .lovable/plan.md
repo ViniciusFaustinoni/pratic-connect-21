@@ -1,203 +1,255 @@
 
-## Plano: IA Notificar Associado ao Criar Sinistro (App ou Painel)
+## Plano: Sistema de Análise de Sinistros para Diretor
 
-### Problema Identificado
+### Visão Geral
 
-Atualmente a notificação de sinistro via WhatsApp usa um template básico que não mostra informações importantes:
+Criar um fluxo de análise de sinistros semelhante à análise cadastral (`PropostaAnalise.tsx`), onde o diretor pode visualizar todos os dados do sinistro, documentos do veículo, histórico do veículo, localização e trajeto das últimas 24 horas, e tomar uma decisão: **Aprovar**, **Reprovar** ou **Solicitar Documentação**.
 
-**Template atual:**
+### Arquivos a Criar/Modificar
+
+| Arquivo | Ação | Descrição |
+|---------|------|-----------|
+| `src/pages/eventos/SinistroAnalise.tsx` | **Criar** | Nova página de análise completa do sinistro |
+| `src/hooks/useSinistroAnalise.ts` | **Criar** | Hook para buscar dados completos para análise |
+| `src/components/sinistros/AprovarSinistroDialog.tsx` | **Criar** | Dialog de confirmação de aprovação |
+| `src/components/sinistros/ReprovarSinistroDialog.tsx` | **Criar** | Dialog com motivo de reprovação |
+| `src/pages/eventos/SinistrosList.tsx` | **Modificar** | Adicionar botão "Analisar" na tabela |
+| `src/pages/eventos/SinistroDetalhe.tsx` | **Modificar** | Adicionar botão "Analisar" no header |
+| `src/App.tsx` | **Modificar** | Adicionar rota `/eventos/sinistros/:id/analisar` |
+| `supabase/functions/aprovar-sinistro/index.ts` | **Criar** | Edge Function para aprovar sinistro |
+| `supabase/functions/reprovar-sinistro/index.ts` | **Criar** | Edge Function para reprovar sinistro |
+
+### Estrutura da Página de Análise
+
+```text
++---------------------------------------------------------------+
+|  ← Voltar    Análise de Sinistro - SIN-2026XXXX    [Próximo →] |
+|  Status: Comunicado                                            |
++---------------------------------------------------------------+
+|                                                                |
+| ⚠️ ALERTA (se aplicável): Associado Recém-Ativado             |
+|                                                                |
++---------------------------------------------------------------+
+|                                                                |
+| COLUNA ESQUERDA (60%)              | COLUNA DIREITA (40%)     |
+|                                    |                          |
+| ┌─────────────────────────────┐   | ┌─────────────────────┐  |
+| │ 👤 Dados do Associado       │   | │ 🎬 AÇÕES            │  |
+| │ Nome, CPF, Telefone, Email  │   | │                     │  |
+| └─────────────────────────────┘   | │ [✓ Aprovar]         │  |
+|                                    | │ [✗ Reprovar]        │  |
+| ┌─────────────────────────────┐   | │ [📄 Solicitar Docs] │  |
+| │ 🚗 Dados do Veículo         │   | └─────────────────────┘  |
+| │ Placa, Marca, Modelo, Ano   │   |                          |
+| │ Status, Coberturas          │   | ┌─────────────────────┐  |
+| │ Código FIPE, Valor FIPE     │   | │ 📋 Checklist        │  |
+| └─────────────────────────────┘   | │ ☑ Documentos OK     │  |
+|                                    | │ ☑ Fotos OK          │  |
+| ┌─────────────────────────────┐   | │ ☑ B.O. Anexado      │  |
+| │ 🔔 Informações do Sinistro  │   | │ ☑ Local Verificado  │  |
+| │ Tipo, Data, Local, Descrição│   | └─────────────────────┘  |
+| └─────────────────────────────┘   |                          |
+|                                    | ┌─────────────────────┐  |
+| ┌─────────────────────────────┐   | │ 📜 Histórico        │  |
+| │ 📍 Trajeto 24h              │   | │ Timeline de eventos │  |
+| │ (TrajetoSinistroCard)       │   | └─────────────────────┘  |
+| │ Mapa + Paradas + Exportar   │   |                          |
+| └─────────────────────────────┘   |                          |
+|                                    |                          |
+| ┌─────────────────────────────┐   |                          |
+| │ 📍 Comparação GPS           │   |                          |
+| │ (ComparacaoPosicoes)        │   |                          |
+| │ Informada vs Rastreador     │   |                          |
+| └─────────────────────────────┘   |                          |
+|                                    |                          |
+| ┌─────────────────────────────┐   |                          |
+| │ 📸 Fotos do Sinistro        │   |                          |
+| │ Galeria com visualização    │   |                          |
+| └─────────────────────────────┘   |                          |
+|                                    |                          |
+| ┌─────────────────────────────┐   |                          |
+| │ 📄 Documentos Anexados      │   |                          |
+| │ B.O., CNH, CRLV, etc        │   |                          |
+| └─────────────────────────────┘   |                          |
+|                                    |                          |
+| ┌─────────────────────────────┐   |                          |
+| │ 🚗 Histórico do Veículo     │   |                          |
+| │ Sinistros anteriores        │   |                          |
+| │ Ativações/desativações      │   |                          |
+| └─────────────────────────────┘   |                          |
++---------------------------------------------------------------+
 ```
-✅ Sinistro Registrado
-Seu sinistro foi registrado com sucesso!
-📋 Protocolo: SIN-20260130-0001
-⏰ Próximos passos: ...
+
+### Fluxo de Decisões
+
+```text
+                    SINISTRO COMUNICADO
+                           │
+                           ▼
+              ┌────────────────────────┐
+              │   PÁGINA DE ANÁLISE    │
+              │  (visualização total)  │
+              └────────────────────────┘
+                           │
+         ┌─────────────────┼─────────────────┐
+         ▼                 ▼                 ▼
+    [APROVAR]      [SOLICITAR DOCS]     [REPROVAR]
+         │                 │                 │
+         ▼                 ▼                 ▼
+    - Status →         - Status →        - Status →
+      'em_analise'    'doc_pendente'      'negado'
+    - Registra         - Registra         - Registra
+      histórico         histórico          histórico
+    - Notifica         - IA envia         - Notifica
+      WhatsApp          WhatsApp           WhatsApp
+                        pedindo docs        com motivo
 ```
 
-**Faltam:**
-- Dados do veículo (placa, marca, modelo)
-- Tipo de evento (colisão, roubo, furto, etc.)
-- Local do evento (cidade/estado)
-- Data do evento
+### Detalhamento Técnico
 
-Além disso, o modal do painel admin (`NovoSinistroModal.tsx`) cria sinistros direto no banco **sem enviar WhatsApp**.
+#### 1. Hook `useSinistroAnalise.ts`
+
+```typescript
+// Dados agregados para análise:
+interface SinistroAnaliseData {
+  sinistro: SinistroComRelacoes;
+  documentos: SinistroDocumento[];
+  fotos: SinistroFoto[];
+  historicoSinistro: SinistroHistorico[];
+  
+  // Dados do veículo
+  veiculo: VeiculoComDetalhes;
+  veiculoHistorico: VeiculoHistoricoItem[];
+  sinistrosAnteriores: Sinistro[];
+  
+  // Rastreador (se existir)
+  rastreador: Rastreador | null;
+  temRastreadorAtivo: boolean;
+  
+  // Dados do associado
+  associado: AssociadoCompleto;
+  contratoAtivo: Contrato | null;
+}
+```
+
+#### 2. Página `SinistroAnalise.tsx`
+
+Seções principais:
+- **Header**: Protocolo, status, badges de alerta, navegação
+- **Alerta Recém-Ativado**: Se `alerta_recem_ativado = true`
+- **Dados do Associado**: Nome, CPF, telefone, email, endereço
+- **Dados do Veículo**: Placa, marca/modelo, ano, cor, chassi, FIPE, coberturas
+- **Informações do Sinistro**: Tipo, data, hora, local, descrição, B.O.
+- **Trajeto 24h**: Componente `TrajetoSinistroCard` (se rastreador ativo)
+- **Comparação GPS**: Componente `ComparacaoPosicoes` (se houver coordenadas)
+- **Fotos do Sinistro**: Galeria com zoom
+- **Documentos Anexados**: Lista com status e visualização
+- **Histórico do Veículo**: Sinistros anteriores, ativações
+- **Painel de Ações**: Aprovar, Reprovar, Solicitar Docs
+- **Checklist de Análise**: Itens verificados pelo analista
+- **Histórico do Sinistro**: Timeline de mudanças de status
+
+#### 3. Edge Function `aprovar-sinistro`
+
+```typescript
+// Payload
+{
+  sinistro_id: string;
+  observacao?: string;
+}
+
+// Ações:
+// 1. Atualizar status para 'em_analise' (aguarda vistoria/regulação)
+// 2. Registrar no histórico
+// 3. Enviar WhatsApp: "Seu sinistro foi aprovado para análise. Próximos passos..."
+// 4. Retornar sucesso
+```
+
+#### 4. Edge Function `reprovar-sinistro`
+
+```typescript
+// Payload
+{
+  sinistro_id: string;
+  motivo: 'fora_cobertura' | 'documentacao_invalida' | 'fraude_suspeita' | 'prazo_expirado' | 'outro';
+  justificativa: string;
+}
+
+// Ações:
+// 1. Atualizar status para 'negado'
+// 2. Salvar motivo e justificativa
+// 3. Registrar no histórico
+// 4. Enviar WhatsApp: "Seu sinistro foi analisado e infelizmente não foi aprovado. Motivo: ..."
+```
+
+#### 5. Dialog `SolicitarDocumentosSinistroDialog` (já existe!)
+
+O componente já está implementado em `src/components/sinistros/SolicitarDocumentosSinistroDialog.tsx`:
+- Lista tipos de documentos
+- Atualiza status para `documentacao_pendente`
+- Envia WhatsApp com lista de documentos
+- Vinculação automática já funciona via `whatsapp-webhook`
+
+#### 6. Modificações na Lista de Sinistros
+
+Adicionar botão "Analisar" visível apenas para `isDiretor`:
+
+```typescript
+{isDiretor && sinistro.status === 'comunicado' && (
+  <Button
+    size="sm"
+    className="bg-purple-600 hover:bg-purple-700"
+    onClick={() => navigate(`/eventos/sinistros/${sinistro.id}/analisar`)}
+  >
+    <Search className="mr-1 h-4 w-4" />
+    Analisar
+  </Button>
+)}
+```
+
+### Processamento de Documentos via WhatsApp
+
+O sistema já possui integração completa no `whatsapp-webhook`:
+
+1. **Solicitação de documentos** → Status sinistro muda para `documentacao_pendente`
+2. **IA envia WhatsApp** listando documentos necessários
+3. **Associado envia foto/PDF** via WhatsApp
+4. **Webhook processa mídia**:
+   - Baixa arquivo para Supabase Storage
+   - Vincula a `sinistro_documentos` pendente
+   - Atualiza status do documento para `enviado`
+   - Se todos enviados, status sinistro → `em_analise`
+5. **IA confirma recebimento** via WhatsApp
+
+### Navegação entre Sinistros
+
+Similar à análise cadastral:
+- Botão "Próximo Sinistro" para ir ao próximo com status `comunicado`
+- Após aprovar/reprovar, redireciona automaticamente
+
+### Resumo de Permissões
+
+| Ação | Diretor | Analista | Associado |
+|------|---------|----------|-----------|
+| Ver lista de sinistros | ✅ | ✅ | ❌ |
+| Ver detalhes | ✅ | ✅ | ✅ (próprio) |
+| Analisar (página completa) | ✅ | ❌ | ❌ |
+| Aprovar | ✅ | ❌ | ❌ |
+| Reprovar | ✅ | ❌ | ❌ |
+| Solicitar documentos | ✅ | ✅ | ❌ |
+
+### Arquivos a Criar
+
+1. `src/pages/eventos/SinistroAnalise.tsx` (~800 linhas)
+2. `src/hooks/useSinistroAnalise.ts` (~200 linhas)
+3. `src/components/sinistros/AprovarSinistroDialog.tsx` (~100 linhas)
+4. `src/components/sinistros/ReprovarSinistroDialog.tsx` (~150 linhas)
+5. `supabase/functions/aprovar-sinistro/index.ts` (~150 linhas)
+6. `supabase/functions/reprovar-sinistro/index.ts` (~180 linhas)
 
 ### Arquivos a Modificar
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `supabase/functions/notificar-sinistro/index.ts` | Melhorar template `comunicado` com dados do veículo, evento e local |
-| `src/components/eventos/NovoSinistroModal.tsx` | Chamar `notificar-sinistro` após criar sinistro pelo painel |
-
-### Alterações Detalhadas
-
-#### 1. Melhorar Template `comunicado` (`notificar-sinistro/index.ts`)
-
-**Mudança:** Buscar dados do veículo e do sinistro para incluir na mensagem.
-
-```typescript
-// Linha 101-123: Expandir select do sinistro para incluir dados completos
-const { data: sinistro, error: sinistroError } = await supabase
-  .from('sinistros')
-  .select(`
-    id, protocolo, tipo, status, valor_indenizacao, tipo_dano, parecer,
-    data_ocorrencia, local_ocorrencia, cidade_ocorrencia, estado_ocorrencia,
-    associado_id,
-    associados:associado_id (id, nome, user_id, email, telefone, whatsapp),
-    veiculos:veiculo_id (id, placa, marca, modelo, ano_modelo)
-  `)
-  .eq('id', sinistro_id)
-  .single();
-```
-
-**Mudança:** Atualizar template `comunicado` para usar dados completos:
-
-```typescript
-comunicado: {
-  titulo: '✅ Sinistro Registrado',
-  mensagem: (protocolo, extras) => {
-    const tipoLabel = extras?.tipo_label || 'Sinistro';
-    const veiculo = extras?.veiculo;
-    const dataEvento = extras?.data_ocorrencia 
-      ? new Date(extras.data_ocorrencia).toLocaleDateString('pt-BR') 
-      : '';
-    const local = [extras?.cidade_ocorrencia, extras?.estado_ocorrencia]
-      .filter(Boolean).join('/') || 'Local não informado';
-    
-    let msg = `Olá! Recebemos sua comunicação de sinistro e nossa equipe já está analisando.
-
-📋 *Protocolo:* ${protocolo}
-📌 *Tipo:* ${tipoLabel}`;
-
-    if (veiculo) {
-      msg += `
-
-🚗 *Veículo:*
-${veiculo.placa} - ${veiculo.marca} ${veiculo.modelo}`;
-    }
-    
-    msg += `
-
-📍 *Local:* ${local}`;
-    
-    if (dataEvento) {
-      msg += `
-📅 *Data do evento:* ${dataEvento}`;
-    }
-    
-    msg += `
-
-⏰ *Próximos passos:*
-1. Analisaremos em até 24h úteis
-2. Se necessário, solicitaremos documentos
-3. Acompanhe pelo app ou aqui no WhatsApp
-
-Em breve um analista entrará em contato. Fique tranquilo! 💙`;
-    
-    return msg;
-  },
-},
-```
-
-**Mudança:** Passar dados extras para o template:
-
-```typescript
-// Antes de obter template, preparar dados extras
-const veiculo = sinistro.veiculos as any;
-const tipoLabels: Record<string, string> = {
-  colisao: 'Colisão', roubo: 'Roubo', furto: 'Furto',
-  incendio: 'Incêndio', fenomeno_natural: 'Fenômeno Natural',
-  vidros: 'Vidros', vandalismo: 'Vandalismo', terceiros: 'Terceiros', outro: 'Outro'
-};
-
-const extrasParaTemplate = {
-  ...dados_extras,
-  valor_indenizacao: sinistro.valor_indenizacao,
-  tipo_dano: sinistro.tipo_dano,
-  parecer: sinistro.parecer,
-  // Novos campos
-  tipo_label: tipoLabels[sinistro.tipo] || sinistro.tipo,
-  veiculo: veiculo,
-  data_ocorrencia: sinistro.data_ocorrencia,
-  local_ocorrencia: sinistro.local_ocorrencia,
-  cidade_ocorrencia: sinistro.cidade_ocorrencia,
-  estado_ocorrencia: sinistro.estado_ocorrencia,
-};
-```
-
-#### 2. Adicionar Notificação no Painel Admin (`NovoSinistroModal.tsx`)
-
-**Mudança:** Após criar sinistro, invocar `notificar-sinistro`:
-
-```typescript
-// Após linha 172 (depois de inserir no histórico)
-// Notificar via WhatsApp
-try {
-  await supabase.functions.invoke('notificar-sinistro', {
-    body: {
-      sinistro_id: sinistro.id,
-      status: 'comunicado',
-    }
-  });
-  console.log('[NovoSinistroModal] Notificação enviada via WhatsApp');
-} catch (notifError) {
-  console.warn('[NovoSinistroModal] Erro ao notificar (não bloqueante):', notifError);
-  // Não bloqueia - sinistro foi criado
-}
-
-return sinistro;
-```
-
-### Exemplo de Mensagem Melhorada
-
-```
-*✅ Sinistro Registrado*
-
-Olá! Recebemos sua comunicação de sinistro e nossa equipe já está analisando.
-
-📋 *Protocolo:* SIN-20260130-0001
-📌 *Tipo:* Roubo
-
-🚗 *Veículo:*
-LTB4J74 - Fiat Mobi
-
-📍 *Local:* São Paulo/SP
-📅 *Data do evento:* 30/01/2026
-
-⏰ *Próximos passos:*
-1. Analisaremos em até 24h úteis
-2. Se necessário, solicitaremos documentos
-3. Acompanhe pelo app ou aqui no WhatsApp
-
-Em breve um analista entrará em contato. Fique tranquilo! 💙
-```
-
-### Fluxo Esperado
-
-```text
-SINISTRO CRIADO (App ou Painel)
-          |
-          v
-    notificar-sinistro(status='comunicado')
-          |
-          v
-    Buscar dados completos:
-    - Sinistro (tipo, local, data)
-    - Veículo (placa, marca, modelo)
-    - Associado (whatsapp)
-          |
-          v
-    Montar mensagem personalizada
-          |
-          v
-    Enviar via WhatsApp:
-    "📋 Protocolo: SIN-...
-     🚗 Veículo: LTB4J74 - Fiat Mobi
-     📍 Local: São Paulo/SP
-     Em breve um analista entrará em contato..."
-```
-
-### Resumo das Mudanças
-
-1. **Template melhorado:** Inclui veículo, tipo de evento, local e data
-2. **Painel notifica:** Modal do admin agora envia WhatsApp igual ao app
-3. **Mensagem humanizada:** "Em breve um analista entrará em contato"
+1. `src/pages/eventos/SinistrosList.tsx` - Adicionar botão "Analisar"
+2. `src/pages/eventos/SinistroDetalhe.tsx` - Adicionar botão "Analisar" no header
+3. `src/App.tsx` - Nova rota
+4. `supabase/config.toml` - Registrar novas edge functions
