@@ -231,8 +231,13 @@ export default function NovoSinistro() {
   // Verificar se B.O. é obrigatório
   const boObrigatorio = tipoSelecionado === 'roubo' || tipoSelecionado === 'furto';
   
-  // Progresso
-  const progressoPercentual = (etapa / 6) * 100;
+  // Verificar se deve pular etapa de fotos (roubo/furto)
+  const isRouboOuFurto = tipoSelecionado === 'roubo' || tipoSelecionado === 'furto';
+  
+  // Progresso - 5 etapas para roubo/furto, 6 para outros
+  const totalEtapas = isRouboOuFurto ? 5 : 6;
+  const etapaExibida = isRouboOuFurto && etapa > 3 ? etapa - 1 : etapa;
+  const progressoPercentual = (etapaExibida / totalEtapas) * 100;
   
   // ============================================
   // HANDLERS
@@ -394,6 +399,9 @@ export default function NovoSinistro() {
   const avancarEtapa = () => {
     if (etapa === 6) {
       handleEnviar();
+    } else if (etapa === 3 && isRouboOuFurto) {
+      // Pular etapa 4 (fotos) para roubo/furto - ir direto para B.O.
+      setEtapa(5);
     } else {
       setEtapa(e => e + 1);
     }
@@ -402,6 +410,9 @@ export default function NovoSinistro() {
   const voltarEtapa = () => {
     if (etapa === 1) {
       navigate('/app/sinistros');
+    } else if (etapa === 5 && isRouboOuFurto) {
+      // Ao voltar do B.O., pular fotos - ir para descrição
+      setEtapa(3);
     } else {
       setEtapa(e => e - 1);
     }
@@ -477,7 +488,7 @@ export default function NovoSinistro() {
         </div>
         
         <div className="flex items-center gap-3">
-          <span className="text-sm text-muted-foreground">Etapa {etapa} de 6</span>
+          <span className="text-sm text-muted-foreground">Etapa {etapaExibida} de {totalEtapas}</span>
           <Progress value={progressoPercentual} className="flex-1 h-2" />
         </div>
       </header>

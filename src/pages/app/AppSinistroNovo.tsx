@@ -121,10 +121,21 @@ export default function AppSinistroNovo() {
   const [aceitouTermos, setAceitouTermos] = useState(false);
   const [enviando, setEnviando] = useState(false);
 
+  // Verificar se deve pular etapa de fotos (roubo/furto)
+  const isRouboOuFurto = tipoSelecionado === 'roubo' || tipoSelecionado === 'furto';
+  
+  // Total de etapas: 5 normal, 4 para roubo/furto (pula fotos)
+  const totalEtapas = isRouboOuFurto ? 4 : 5;
+  const etapaExibida = isRouboOuFurto && etapa > 3 ? etapa - 1 : etapa;
+  const progressoPercentual = (etapaExibida / totalEtapas) * 100;
+
   // Navegação
   const handleVoltar = () => {
     if (etapa === 1) {
       setShowSairModal(true);
+    } else if (etapa === 5 && isRouboOuFurto) {
+      // Ao voltar da confirmação, pular fotos - ir para descrição
+      setEtapa(3);
     } else {
       setEtapa((prev) => prev - 1);
     }
@@ -199,13 +210,13 @@ export default function AppSinistroNovo() {
         {/* Progress bar */}
         <div className="px-4 pb-3">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-gray-500">Etapa {etapa} de 5</span>
-            <span className="text-xs text-gray-500">{etapa * 20}%</span>
+            <span className="text-xs text-gray-500">Etapa {etapaExibida} de {totalEtapas}</span>
+            <span className="text-xs text-gray-500">{Math.round(progressoPercentual)}%</span>
           </div>
           <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
             <div
               className="h-full bg-blue-500 rounded-full transition-all duration-500"
-              style={{ width: `${etapa * 20}%` }}
+              style={{ width: `${progressoPercentual}%` }}
             />
           </div>
         </div>
@@ -473,7 +484,11 @@ export default function AppSinistroNovo() {
               <ChevronLeft className="h-4 w-4 mr-1" />
               Voltar
             </Button>
-            <Button onClick={() => setEtapa(4)} className="flex-1" disabled={!etapa3Valida}>
+            <Button 
+              onClick={() => setEtapa(isRouboOuFurto ? 5 : 4)} 
+              className="flex-1" 
+              disabled={!etapa3Valida}
+            >
               Continuar
               <ChevronRight className="h-4 w-4 ml-1" />
             </Button>
@@ -481,8 +496,8 @@ export default function AppSinistroNovo() {
         </div>
       )}
 
-      {/* ETAPA 4: Fotos e Documentos */}
-      {etapa === 4 && (
+      {/* ETAPA 4: Fotos e Documentos - NÃO exibida para roubo/furto */}
+      {etapa === 4 && !isRouboOuFurto && (
         <div className="p-4">
           <div className="text-center mb-6">
             <div className="w-16 h-16 mx-auto bg-green-100 rounded-full flex items-center justify-center mb-3">
