@@ -51,9 +51,18 @@ serve(async (req) => {
       throw new Error('EVOLUTION_API_KEY não configurada');
     }
 
+    // PRIORIZAR URL do secret sobre a URL do banco (para facilitar testes)
+    const evolutionUrl = Deno.env.get('EVOLUTION_API_URL');
+    const apiUrl = evolutionUrl || instancia.api_url;
+    if (!apiUrl) {
+      throw new Error('URL da Evolution API não configurada (secret EVOLUTION_API_URL ou campo api_url)');
+    }
+    
+    console.log('[whatsapp-qrcode] Usando API URL:', apiUrl, '(secret:', !!evolutionUrl, ') Instância:', instancia.instance_name);
+
     // Primeiro, verificar se a instância existe na Evolution API
     const checkResponse = await fetch(
-      `${instancia.api_url}/instance/fetchInstances?instanceName=${instancia.instance_name}`,
+      `${apiUrl}/instance/fetchInstances?instanceName=${instancia.instance_name}`,
       {
         method: 'GET',
         headers: { 'apikey': apiKey }
@@ -76,7 +85,7 @@ serve(async (req) => {
       console.log('[whatsapp-qrcode] Criando instância:', instancia.instance_name);
       
       const createResponse = await fetch(
-        `${instancia.api_url}/instance/create`,
+        `${apiUrl}/instance/create`,
         {
           method: 'POST',
           headers: { 
@@ -157,7 +166,7 @@ serve(async (req) => {
     // Instância existe, solicitar dados de conexão (QR string / pairingCode)
     // Observação: em algumas versões da Evolution API, /connect retorna apenas {count, code, pairingCode}
     // (sem base64). Vamos retentar por alguns segundos até o code aparecer.
-    const connectUrl = `${instancia.api_url}/instance/connect/${instancia.instance_name}`;
+    const connectUrl = `${apiUrl}/instance/connect/${instancia.instance_name}`;
 
     let qrcodeBase64: string | undefined;
     let pairingCode: string | undefined;
@@ -197,8 +206,8 @@ serve(async (req) => {
       try {
         console.log('[whatsapp-qrcode] Nenhum QR retornado (count=0). Tentando restart da instância...');
         const restartResp = await fetch(
-          `${instancia.api_url}/instance/restart/${instancia.instance_name}`,
-          { method: 'PUT', headers: { 'apikey': apiKey } }
+          `${apiUrl}/instance/restart/${instancia.instance_name}`,
+          { method: 'POST', headers: { 'apikey': apiKey } }
         );
 
         console.log('[whatsapp-qrcode] Restart status:', restartResp.status);
@@ -228,7 +237,7 @@ serve(async (req) => {
       console.log('[whatsapp-qrcode] Base64 não retornado em /connect, tentando /fetchQrCode...');
 
       const qrFetchResponse = await fetch(
-        `${instancia.api_url}/instance/fetchQrCode/${instancia.instance_name}`,
+        `${apiUrl}/instance/fetchQrCode/${instancia.instance_name}`,
         {
           method: 'GET',
           headers: { 'apikey': apiKey }
