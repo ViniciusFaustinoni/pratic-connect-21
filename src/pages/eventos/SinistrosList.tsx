@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { NovoSinistroModal } from '@/components/eventos/NovoSinistroModal';
+import { usePermissions } from '@/hooks/usePermissions';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -36,6 +37,7 @@ import {
   Eye,
   Plus,
   Search,
+  ClipboardCheck,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -76,6 +78,7 @@ interface Filters {
 
 export default function SinistrosList() {
   const navigate = useNavigate();
+  const { isDiretor } = usePermissions();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [filters, setFilters] = useState<Filters>({
     busca: '',
@@ -374,13 +377,26 @@ export default function SinistrosList() {
                         {formatCurrency(sinistro.veiculo?.valor_fipe || sinistro.valor_fipe)}
                       </TableCell>
                       <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => navigate(`/eventos/sinistros/${sinistro.id}`)}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          {isDiretor && sinistro.status === 'comunicado' && (
+                            <Button
+                              variant="default"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => navigate(`/eventos/sinistros/${sinistro.id}/analisar`)}
+                              title="Analisar"
+                            >
+                              <ClipboardCheck className="h-4 w-4" />
+                            </Button>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => navigate(`/eventos/sinistros/${sinistro.id}`)}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
