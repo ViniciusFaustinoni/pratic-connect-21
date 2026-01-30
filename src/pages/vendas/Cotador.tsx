@@ -54,6 +54,9 @@ import { supabase } from '@/integrations/supabase/client';
 import type { Tables } from '@/integrations/supabase/types';
 import { BotaoGerarProposta } from '@/components/vendas/BotaoGerarProposta';
 import { DadosProposta } from '@/types/proposta';
+import { useVerificarPlacaDuplicada, type PlacaDuplicadaInfo } from '@/hooks/useVerificarPlaca';
+import { PlacaDuplicadaModal } from '@/components/cotacoes/PlacaDuplicadaModal';
+import { useAuth } from '@/contexts/AuthContext';
 
 // ============================================
 // INTERFACES
@@ -336,9 +339,19 @@ export default function CotadorPage() {
   const [planoFinalSelecionado, setPlanoFinalSelecionado] = useState<PlanoCalculado | null>(null);
   const [cotacaoSalva, setCotacaoSalva] = useState<any>(null);
   const [salvandoCotacao, setSalvandoCotacao] = useState(false);
+  
+  // Estado para modal de placa duplicada
+  const [placaDuplicadaInfo, setPlacaDuplicadaInfo] = useState<PlacaDuplicadaInfo | null>(null);
+  const [showPlacaDuplicadaModal, setShowPlacaDuplicadaModal] = useState(false);
 
   // Hook FIPE
   const { getByPlaca, loading: loadingFipe } = useFipe();
+  
+  // Hook para verificar placa duplicada
+  const verificarPlacaDuplicada = useVerificarPlacaDuplicada();
+  
+  // Auth para obter profile do usuário atual
+  const { profile } = useAuth();
 
   // Hooks Supabase
   const { data: leadsData, isLoading: loadingLeads } = useAllLeads();
@@ -489,6 +502,24 @@ export default function CotadorPage() {
     setErroBusca(null);
     
     try {
+      // Primeiro, verificar se a placa já está em cotação de outro vendedor
+      const placaDuplicada = await verificarPlacaDuplicada.mutateAsync(placaBusca);
+      
+      if (placaDuplicada) {
+        // Verifica se é do mesmo vendedor ou de outro
+        if (placaDuplicada.vendedorId !== profile?.id) {
+          // Placa é de OUTRO vendedor - BLOQUEAR
+          setPlacaDuplicadaInfo(placaDuplicada);
+          setShowPlacaDuplicadaModal(true);
+          setBuscandoPlaca(false);
+          return; // Interrompe o fluxo
+        } else {
+          // Placa é do MESMO vendedor - Apenas informa
+          toast.info(`Você já possui uma cotação ativa para esta placa: ${placaDuplicada.numero}`);
+        }
+      }
+      
+      // Continuar com a busca do veículo
       const result = await getByPlaca(placaBusca.replace(/[^A-Za-z0-9]/g, ''));
       
       if (result.success && result.vehicleData) {
@@ -1494,6 +1525,14 @@ _Cotação válida por 7 dias_
           </CardContent>
         </Card>
       )}
+      
+      {/* Modal de Placa Duplicada */}
+      <PlacaDuplicadaModal
+        open={showPlacaDuplicadaModal}
+        onOpenChange={setShowPlacaDuplicadaModal}
+        placa={placaBusca}
+        info={placaDuplicadaInfo}
+      />
     </div>
   );
 }

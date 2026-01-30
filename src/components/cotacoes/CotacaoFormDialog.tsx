@@ -59,6 +59,8 @@ import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { VehicleCategorySelect, CATEGORIAS_VEICULO } from '@/components/cotador/VehicleCategorySelect';
 import { isCoberturaRemovida } from '@/data/restricoesCategorias';
+import { useVerificarPlacaDuplicada, type PlacaDuplicadaInfo } from '@/hooks/useVerificarPlaca';
+import { PlacaDuplicadaModal } from '@/components/cotacoes/PlacaDuplicadaModal';
 
 // Regiões disponíveis no sistema
 const REGIOES = [
@@ -149,8 +151,11 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const { data: lead } = useLead(leadId);
   const { getMarcas, getModelos, getAnos, getPreco, getByPlaca, buscarPorNome, loading: fipeLoading } = useFipe();
   const { data: vendedores = [], isLoading: vendedoresLoading } = useVendedores();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { userId, isDiretor, isGerente, isSupervisor } = usePermissions();
+  
+  // Hook para verificar placa duplicada
+  const verificarPlacaDuplicada = useVerificarPlacaDuplicada();
   
   // Apenas liderança (diretor, gerente, supervisor) pode atribuir vendedor manualmente
   const podeAtribuirVendedor = isDiretor || isGerente || isSupervisor;
@@ -172,6 +177,10 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [pendingFormData, setPendingFormData] = useState<CotacaoFormData | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Estado para modal de placa duplicada
+  const [placaDuplicadaInfo, setPlacaDuplicadaInfo] = useState<PlacaDuplicadaInfo | null>(null);
+  const [showPlacaDuplicadaModal, setShowPlacaDuplicadaModal] = useState(false);
 
   // Estados para seleção FIPE manual
   const [marcas, setMarcas] = useState<FipeMarca[]>([]);
@@ -446,6 +455,23 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     
     setBuscandoPlaca(true);
     try {
+      // Primeiro, verificar se a placa já está em cotação de outro vendedor
+      const placaDuplicada = await verificarPlacaDuplicada.mutateAsync(placa);
+      
+      if (placaDuplicada) {
+        // Verifica se é do mesmo vendedor ou de outro
+        if (placaDuplicada.vendedorId !== profile?.id) {
+          // Placa é de OUTRO vendedor - BLOQUEAR
+          setPlacaDuplicadaInfo(placaDuplicada);
+          setShowPlacaDuplicadaModal(true);
+          setBuscandoPlaca(false);
+          return; // Interrompe o fluxo
+        } else {
+          // Placa é do MESMO vendedor - Apenas informa
+          toast.info(`Você já possui uma cotação ativa para esta placa: ${placaDuplicada.numero}`);
+        }
+      }
+      
       const resultado = await getByPlaca(placa);
       
       if (resultado.success && resultado.vehicleData) {
@@ -1864,6 +1890,14 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      
+      {/* Modal de Placa Duplicada */}
+      <PlacaDuplicadaModal
+        open={showPlacaDuplicadaModal}
+        onOpenChange={setShowPlacaDuplicadaModal}
+        placa={placa}
+        info={placaDuplicadaInfo}
+      />
     </Dialog>
   );
 }
