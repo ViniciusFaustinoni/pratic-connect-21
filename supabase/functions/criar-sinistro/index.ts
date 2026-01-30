@@ -289,10 +289,21 @@ Deno.serve(async (req) => {
     // Verificar se veículo está ativo
     if (veiculo.status !== 'ativo') {
       console.error('[criar-sinistro] Veículo não está ativo:', veiculo.status);
+      
+      // Labels amigáveis para status do veículo
+      const statusLabels: Record<string, string> = {
+        instalacao_pendente: 'aguardando instalação do rastreador',
+        inativo: 'inativo',
+        cancelado: 'cancelado',
+        bloqueado: 'bloqueado',
+        suspenso: 'suspenso',
+      };
+      const statusLabel = statusLabels[veiculo.status] || veiculo.status;
+      
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: `Este veículo não está ativo (status: ${veiculo.status}). Entre em contato com a central.` 
+          error: `Não é possível registrar sinistro: veículo ${statusLabel}. Entre em contato com a central.` 
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
