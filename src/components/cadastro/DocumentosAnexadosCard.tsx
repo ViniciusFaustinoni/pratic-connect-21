@@ -16,9 +16,6 @@ import {
   Camera,
   Eye,
   CheckCircle,
-  Clock,
-  XCircle,
-  AlertCircle,
   ClipboardCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -52,13 +49,6 @@ const TIPO_DOC_CONFIG: Record<string, { label: string; icon: React.ComponentType
   foto_veiculo_chassi: { label: 'Foto Chassi', icon: Car },
 };
 
-const STATUS_CONFIG: Record<string, { label: string; icon: React.ComponentType<{ className?: string }>; className: string }> = {
-  aprovado: { label: 'Aprovado', icon: CheckCircle, className: 'bg-success/20 text-success border-success' },
-  pendente: { label: 'Pendente', icon: Clock, className: 'bg-warning/20 text-warning border-warning' },
-  em_analise: { label: 'Em Análise', icon: AlertCircle, className: 'bg-info/20 text-info border-info' },
-  reprovado: { label: 'Reprovado', icon: XCircle, className: 'bg-destructive/20 text-destructive border-destructive' },
-};
-
 interface DocumentosAnexadosCardProps {
   documentos: DocumentoAnexado[];
 }
@@ -90,10 +80,6 @@ export function DocumentosAnexadosCard({ documentos }: DocumentosAnexadosCardPro
     return TIPO_DOC_CONFIG[tipo] || { label: tipo, icon: FileText };
   };
 
-  const getStatusConfig = (status: string) => {
-    return STATUS_CONFIG[status] || STATUS_CONFIG.pendente;
-  };
-
   return (
     <>
       <Card className="border-border bg-card">
@@ -108,11 +94,9 @@ export function DocumentosAnexadosCard({ documentos }: DocumentosAnexadosCardPro
           <CardDescription>Clique para visualizar cada documento</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
-          {documentos.map((doc) => {
+        {documentos.map((doc) => {
             const docConfig = getDocConfig(doc.tipo);
-            const statusConfig = getStatusConfig(doc.status);
             const DocIcon = docConfig.icon;
-            const StatusIcon = statusConfig.icon;
 
             const isContrato = doc.tipo === 'contrato_assinado';
             const isLaudo = doc.tipo === 'laudo_vistoria';
@@ -164,11 +148,7 @@ export function DocumentosAnexadosCard({ documentos }: DocumentosAnexadosCardPro
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge className={cn('text-xs', statusConfig.className)}>
-                    <StatusIcon className="h-3 w-3 mr-1" />
-                    {statusConfig.label}
-                  </Badge>
-                  {/* Badge adicional se OCR validou o documento */}
+                  {/* Badge se OCR validou o documento */}
                   {doc.ocr_resultado?.validado_ocr && doc.status === 'pendente' && (
                     <Badge variant="outline" className="text-xs border-success/40 text-success bg-success/5">
                       <CheckCircle className="h-3 w-3 mr-1" />
@@ -193,16 +173,9 @@ export function DocumentosAnexadosCard({ documentos }: DocumentosAnexadosCardPro
       <Dialog open={!!selectedDoc} onOpenChange={(open) => !open && setSelectedDoc(null)}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-auto">
           <DialogHeader>
-            <div className="flex items-center gap-3">
-              <DialogTitle>
-                {selectedDoc && getDocConfig(selectedDoc.tipo).label}
-              </DialogTitle>
-              {selectedDoc && (
-                <Badge className={cn('text-xs', getStatusConfig(selectedDoc.status).className)}>
-                  {getStatusConfig(selectedDoc.status).label}
-                </Badge>
-              )}
-            </div>
+            <DialogTitle>
+              {selectedDoc && getDocConfig(selectedDoc.tipo).label}
+            </DialogTitle>
           </DialogHeader>
 
           {selectedDoc && (
