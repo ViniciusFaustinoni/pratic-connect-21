@@ -3055,6 +3055,73 @@ export type Database = {
         }
         Relationships: []
       }
+      campanhas_desconto: {
+        Row: {
+          created_at: string | null
+          criado_por: string | null
+          data_fim: string
+          data_inicio: string
+          descricao: string | null
+          id: string
+          meses_aplicacao: number
+          nome: string
+          status: string
+          tipo_beneficio: string
+          updated_at: string | null
+          valor_beneficio: number
+        }
+        Insert: {
+          created_at?: string | null
+          criado_por?: string | null
+          data_fim: string
+          data_inicio: string
+          descricao?: string | null
+          id?: string
+          meses_aplicacao?: number
+          nome: string
+          status?: string
+          tipo_beneficio: string
+          updated_at?: string | null
+          valor_beneficio: number
+        }
+        Update: {
+          created_at?: string | null
+          criado_por?: string | null
+          data_fim?: string
+          data_inicio?: string
+          descricao?: string | null
+          id?: string
+          meses_aplicacao?: number
+          nome?: string
+          status?: string
+          tipo_beneficio?: string
+          updated_at?: string | null
+          valor_beneficio?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campanhas_desconto_criado_por_fkey"
+            columns: ["criado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campanhas_desconto_criado_por_fkey"
+            columns: ["criado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "campanhas_desconto_criado_por_fkey"
+            columns: ["criado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+        ]
+      }
       campanhas_metricas: {
         Row: {
           campanha_id: string
@@ -5394,6 +5461,7 @@ export type Database = {
       cotacoes: {
         Row: {
           adicionais_selecionados: Json | null
+          campanha_desconto_id: string | null
           cancelada_em: string | null
           categoria: string | null
           cidade: string | null
@@ -5422,6 +5490,7 @@ export type Database = {
           email_solicitante: string | null
           id: string
           lead_id: string | null
+          meses_desconto_campanha: number | null
           motivo_cancelamento: string | null
           nome_solicitante: string | null
           numero: string
@@ -5445,6 +5514,7 @@ export type Database = {
           valor_cota: number
           valor_fipe: number
           valor_mensal_original: number | null
+          valor_mensal_promocional: number | null
           valor_rastreamento: number
           valor_total_mensal: number
           veiculo_ano: number | null
@@ -5486,6 +5556,7 @@ export type Database = {
         }
         Insert: {
           adicionais_selecionados?: Json | null
+          campanha_desconto_id?: string | null
           cancelada_em?: string | null
           categoria?: string | null
           cidade?: string | null
@@ -5514,6 +5585,7 @@ export type Database = {
           email_solicitante?: string | null
           id?: string
           lead_id?: string | null
+          meses_desconto_campanha?: number | null
           motivo_cancelamento?: string | null
           nome_solicitante?: string | null
           numero: string
@@ -5537,6 +5609,7 @@ export type Database = {
           valor_cota: number
           valor_fipe: number
           valor_mensal_original?: number | null
+          valor_mensal_promocional?: number | null
           valor_rastreamento?: number
           valor_total_mensal: number
           veiculo_ano?: number | null
@@ -5578,6 +5651,7 @@ export type Database = {
         }
         Update: {
           adicionais_selecionados?: Json | null
+          campanha_desconto_id?: string | null
           cancelada_em?: string | null
           categoria?: string | null
           cidade?: string | null
@@ -5606,6 +5680,7 @@ export type Database = {
           email_solicitante?: string | null
           id?: string
           lead_id?: string | null
+          meses_desconto_campanha?: number | null
           motivo_cancelamento?: string | null
           nome_solicitante?: string | null
           numero?: string
@@ -5629,6 +5704,7 @@ export type Database = {
           valor_cota?: number
           valor_fipe?: number
           valor_mensal_original?: number | null
+          valor_mensal_promocional?: number | null
           valor_rastreamento?: number
           valor_total_mensal?: number
           veiculo_ano?: number | null
@@ -5669,6 +5745,13 @@ export type Database = {
           visualizado_em?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "cotacoes_campanha_desconto_id_fkey"
+            columns: ["campanha_desconto_id"]
+            isOneToOne: false
+            referencedRelation: "campanhas_desconto"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "cotacoes_contrato_gerado_id_fkey"
             columns: ["contrato_gerado_id"]
