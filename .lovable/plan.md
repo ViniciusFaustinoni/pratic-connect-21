@@ -1,117 +1,79 @@
 
 
-# Plano: Remover Área de Credenciais do Menu Monitoramento
+# Plano: Remover Badges de Status dos Documentos Anexados
 
-## Contexto
+## Objetivo
 
-A página **Credenciais de Rastreadores** (`/monitoramento/credenciais`) é uma duplicação de funcionalidade que já existe em **Configurações > Integrações**. 
+Remover os badges "Aprovado", "Pendente", "Reprovado", "Em Análise" que aparecem ao lado de cada documento na lista de "Documentos Anexados".
 
-Na área de Integrações, os usuários podem:
-- Configurar credenciais do SGA Hinova
-- Configurar credenciais do Softruck
-- Configurar credenciais da Rede Veículos
-- Testar conexões
-- E mais integrações
+## Localização do Código
 
-Manter duas áreas distintas para a mesma funcionalidade causa confusão e dificulta a manutenção.
+**Arquivo:** `src/components/cadastro/DocumentosAnexadosCard.tsx`
 
----
+Os badges aparecem em dois lugares:
+1. **Lista de documentos** - Linhas 166-170
+2. **Dialog de visualização** - Linhas 200-204
 
 ## O Que Será Removido
 
-| Item | Localização | Ação |
-|------|-------------|------|
-| Submenu "Credenciais API" | Menu Monitoramento | Remover |
-| Rota `/monitoramento/credenciais` | App.tsx | Remover |
-| Breadcrumb `/monitoramento/credenciais` | GlobalBreadcrumb.tsx | Remover |
-| Arquivo `ConfigCredenciais.tsx` | src/pages/monitoramento/ | Deletar |
-
----
-
-## Alterações por Arquivo
-
-### 1. `src/components/layout/AppSidebar.tsx`
-
-Remover o item do submenu Monitoramento:
-
-```typescript
-// REMOVER estas linhas (194-199):
-{ 
-  title: 'Credenciais API', 
-  url: '/monitoramento/credenciais', 
-  icon: Key,
-  permission: 'isGerencia',
-},
+### Na lista de documentos (linhas 166-170):
+```tsx
+// REMOVER:
+<Badge className={cn('text-xs', statusConfig.className)}>
+  <StatusIcon className="h-3 w-3 mr-1" />
+  {statusConfig.label}
+</Badge>
 ```
 
-### 2. `src/App.tsx`
-
-Remover:
-- O import do componente `ConfigCredenciais`
-- A rota `/monitoramento/credenciais`
-
-### 3. `src/components/layout/GlobalBreadcrumb.tsx`
-
-Remover a entrada do breadcrumb:
-
-```typescript
-// REMOVER linha 108:
-'/monitoramento/credenciais': { label: 'Credenciais' },
+### No dialog de visualização (linhas 200-204):
+```tsx
+// REMOVER:
+{selectedDoc && (
+  <Badge className={cn('text-xs', getStatusConfig(selectedDoc.status).className)}>
+    {getStatusConfig(selectedDoc.status).label}
+  </Badge>
+)}
 ```
 
-### 4. `src/pages/monitoramento/ConfigCredenciais.tsx`
+## Código Não Afetado
 
-Deletar o arquivo completamente, pois não será mais utilizado.
+O badge de "Validado por IA" (linhas 171-177) será mantido, pois é uma informação diferente que indica processamento por OCR.
 
----
+## Limpeza Adicional
 
-## Onde Configurar Credenciais Após Remoção
+Após remover os badges, podemos também remover:
+- A constante `STATUS_CONFIG` (linhas 55-60) - não será mais usada na lista
+- A função `getStatusConfig` (linhas 93-95) - não será mais chamada
+- As variáveis `statusConfig` e `StatusIcon` (linhas 113, 115) - não serão mais usadas
+- Import do `Clock` e `AlertCircle` que só eram usados nos badges de status
 
-Os usuários devem usar:
-
-**Configurações > Integrações > Aba Serviços**
-
-Lá encontrarão cards para:
-- SGA Hinova
-- Softruck  
-- Rede Veículos
-- ASAAS
-- Autentique
-- E-mail (Resend)
-
-Cada card possui botão "Configurar" que abre um formulário para inserir credenciais, testar conexão e salvar.
-
----
-
-## Arquivos a Deletar
-
-| Arquivo | Motivo |
-|---------|--------|
-| `src/pages/monitoramento/ConfigCredenciais.tsx` | Funcionalidade duplicada |
-
-## Arquivos a Modificar
+## Arquivo a Modificar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/layout/AppSidebar.tsx` | Remover item "Credenciais API" do menu |
-| `src/App.tsx` | Remover import e rota |
-| `src/components/layout/GlobalBreadcrumb.tsx` | Remover entrada do breadcrumb |
+| `src/components/cadastro/DocumentosAnexadosCard.tsx` | Remover badges de status e código relacionado |
 
----
+## Resultado Visual
 
-## Impacto
+Antes:
+```
+[📄] Contrato Assinado          [✓ Aprovado]  [👁]
+     30/01/2026 às 08:12
 
-- Usuários que acessavam `/monitoramento/credenciais` verão erro 404
-- Devem acessar `/configuracoes/integracoes` para mesma funcionalidade
-- Não há perda de funcionalidade, apenas consolidação
+[🏠] Comprovante de Residência  [⏱ Pendente]  [👁]
+     30/01/2026 às 08:06
+```
 
----
+Depois:
+```
+[📄] Contrato Assinado                        [👁]
+     30/01/2026 às 08:12
+
+[🏠] Comprovante de Residência                [👁]
+     30/01/2026 às 08:06
+```
 
 ## Tempo Estimado
 
-| Tarefa | Tempo |
-|--------|-------|
-| Modificar 3 arquivos | 5 min |
-| Deletar 1 arquivo | 1 min |
-| **Total** | **~6 min** |
+~5 minutos
 
