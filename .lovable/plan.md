@@ -1,82 +1,59 @@
 
-# Correção: Mensagem de Erro Clara para Veículo com Status Não-Ativo
 
-## Diagnóstico
+## Plano: Corrigir envio de mensagem WhatsApp e testar
 
-O erro ao criar sinistro de roubo/furto **não está relacionado às mudanças no wizard**. A causa real é:
+### Problema Identificado
 
-```
-ERROR [criar-sinistro] Veículo não está ativo: instalacao_pendente
-```
+A função `whatsapp-send-text` está usando a URL antiga do banco de dados (`https://evolution.praticcar.org`) em vez do secret `EVOLUTION_API_URL` (`https://evolution.controledepropostas.com/`). Isso causa falha no envio.
 
-O veículo selecionado (`f14d8be0-1964-4cc0-ba4c-1963aba54fa1`) está com status `instalacao_pendente`, e a edge function valida corretamente que apenas veículos **ativos** podem ter sinistros registrados.
+### Arquivos a Modificar
 
-## Problema de UX
+**1. `supabase/functions/whatsapp-send-text/index.ts`**
 
-A mensagem de erro retornada ao frontend não está sendo exibida de forma clara ao usuário. O toast mostra apenas "Erro ao enviar sinistro. Tente novamente." em vez da mensagem real do backend.
-
-## Solução
-
-Melhorar a exibição da mensagem de erro e traduzir o status do veículo para linguagem amigável:
-
-### 1. `supabase/functions/criar-sinistro/index.ts`
-
-Melhorar a mensagem de erro quando veículo não está ativo:
+Adicionar priorização do secret `EVOLUTION_API_URL`:
 
 ```typescript
-// Antes (linha 290-299):
-if (veiculo.status !== 'ativo') {
+// Linha ~60 (após verificar EVOLUTION_API_KEY)
+// PRIORIZAR URL do secret sobre a URL do banco
+const apiUrl = Deno.env.get('EVOLUTION_API_URL') || instancia.api_url;
+if (!apiUrl) {
   return new Response(
-    JSON.stringify({ 
-      success: false, 
-      error: `Este veículo não está ativo (status: ${veiculo.status}). Entre em contato com a central.` 
-    }),
-    ...
+    JSON.stringify({ success: false, error: "URL da Evolution API não configurada" }),
+    { status: 500, headers: corsHeaders }
   );
 }
 
-// Depois:
-if (veiculo.status !== 'ativo') {
-  const statusLabels: Record<string, string> = {
-    instalacao_pendente: 'aguardando instalação do rastreador',
-    inativo: 'inativo',
-    cancelado: 'cancelado',
-    bloqueado: 'bloqueado',
-  };
-  const statusLabel = statusLabels[veiculo.status] || veiculo.status;
-  
-  return new Response(
-    JSON.stringify({ 
-      success: false, 
-      error: `Não é possível registrar sinistro: veículo ${statusLabel}. Entre em contato com a central.` 
-    }),
-    ...
-  );
-}
+// Linha ~100 - Alterar de:
+// ${instancia.api_url}/message/sendText/...
+// Para:
+// ${apiUrl}/message/sendText/...
 ```
 
-### 2. `src/pages/app/AppSinistroNovo.tsx` e `src/pages/app/NovoSinistro.tsx`
+### Teste a Executar
 
-Garantir que a mensagem de erro do backend seja exibida ao usuário:
+Após a correção, enviar mensagem de boas vindas para:
+- **Associado**: MARCUS VINICIUS FAUSTINONI DE FREITAS
+- **Telefone**: 21992593830
 
-```typescript
-// Verificar se o toast já exibe a mensagem correta
-// O hook useSinistros já faz isso, mas verificar se está propagando corretamente
-```
+### Detalhes Técnicos
 
-## Arquivos a Modificar
+| Item | Antes | Depois |
+|------|-------|--------|
+| URL usada | `instancia.api_url` (banco) | `EVOLUTION_API_URL` (secret) |
+| URL real | `https://evolution.praticcar.org` | `https://evolution.controledepropostas.com/` |
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `supabase/functions/criar-sinistro/index.ts` | Melhorar mensagem de erro com labels amigáveis |
+### Passos de Implementacao
 
-## Nota sobre o Teste
+1. Editar `whatsapp-send-text/index.ts`:
+   - Adicionar leitura do secret `EVOLUTION_API_URL`
+   - Usar variavel `apiUrl` com prioridade para o secret
+   - Atualizar a chamada de fetch para usar `apiUrl`
 
-O veículo usado no teste (`MARCUS VINICIUS FAUSTINONI DE FREITAS`) está com status `instalacao_pendente` - isso significa que ainda não teve o rastreador instalado. Para testar a criação de sinistro com sucesso, será necessário:
+2. Deploy da funcao
 
-1. Usar um veículo que tenha status `ativo`, **ou**
-2. Alterar o status do veículo para `ativo` no banco de dados
+3. Verificar status atual da instancia (pode precisar atualizar banco para `open`)
 
-## Tempo Estimado
+4. Enviar mensagem de teste
 
-~5 minutos
+5. Verificar logs e confirmar entrega
+
