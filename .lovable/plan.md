@@ -1,375 +1,482 @@
 
 
-## Plano: Melhorar Identificação e Acolhimento no WhatsApp
+## Plano: Reagendamento Completo via WhatsApp com 3 Dias de Opções
 
-### Problemas Identificados
+### Objetivo
 
-A análise do código revelou que:
-
-| Problema | Causa | Impacto |
-|----------|-------|---------|
-| IA não acolhe adequadamente | System prompt sem instruções de acolhimento | Experiência fria para o associado |
-| "Nenhum veículo" quando existe | Contexto não mostra veículos com status pendente como válidos | Associado confuso |
-| Não pede CPF para desconhecidos | Fluxo envia resposta genérica sem tentar identificar | Perde oportunidade de atendimento |
-| Contexto muito simples | `getAssociadoContext` no webhook é básico vs rico no app | IA sem informações suficientes |
-
-### Estado Atual
-
-```text
-Associado: MARCUS VINICIUS
-  - telefone: 21992593830 ✅ (encontrado)
-  - whatsapp: NULL
-  - status: ativo ✅
-
-Veículo: Toyota Corolla LTB4J74
-  - status: instalacao_pendente
-  - cobertura_roubo_furto: true ✅
-  - cobertura_total: false
-
-Contexto passado para IA:
-  "Veículos: Nenhum" ❌ (deveria mostrar o veículo)
-```
+Quando o cliente responde "REAGENDAR" na confirmação de agendamento, a IA deve:
+1. Oferecer os próximos 3 dias úteis disponíveis (exceto domingo)
+2. Coletar a escolha de data e período (manhã/tarde)
+3. Criar automaticamente o novo serviço no painel
+4. Cancelar o antigo serviço liberando o horário
+5. Notificar o vistoriador sobre o reagendamento
 
 ### Arquivos a Modificar
 
 **1. `supabase/functions/whatsapp-webhook/index.ts`**
 
-#### 1.1 Atualizar System Prompt (WHATSAPP_SYSTEM_PROMPT)
+### Alterações Detalhadas
 
-Adicionar regras de acolhimento e identificação:
+#### 1.1 Atualizar REAGENDAMENTO_SYSTEM_PROMPT (~linha 379)
+
+Modificar para usar apenas 3 dias em vez de 5:
 
 ```typescript
-const WHATSAPP_SYSTEM_PROMPT = `Você é o Assistente Virtual PRATIC via WhatsApp.
+const REAGENDAMENTO_SYSTEM_PROMPT = `Você é o Assistente de Reagendamento da PRATIC.
 
-## Acolhimento (MUITO IMPORTANTE!)
-- SEMPRE cumprimente pelo PRIMEIRO NOME do associado
-- Seja ACOLHEDOR e EMPÁTICO, especialmente em situações de sinistro
-- Exemplo: "Oi, Marcus! Sinto muito pelo que aconteceu. Vou te ajudar..."
-- Pergunte "está tudo bem?" quando o contexto pedir ajuda
+## Sua Tarefa
+Ajudar o cliente a escolher uma nova data e horário para o serviço.
 
-## Regras do WhatsApp
-- Seja CONCISO (mensagens curtas)
-- Use formatação: *negrito*, _itálico_
-- NÃO use marcadores [BOTAO_*] ou [UPLOAD_*]
-- Para localização, peça endereço OU use reverse_geocode
+## DATAS DISPONÍVEIS
+Use EXATAMENTE as datas fornecidas no contexto.
 
-## Capacidades
-1. Consultar boletos pendentes e enviar PIX
-2. Histórico de pagamentos
-3. Status de sinistros
-4. Abrir sinistro (coleta dados para aprovação)
-5. Solicitar assistência 24h
-6. Informações sobre veículos
-7. Converter coordenadas em endereço
+## PERÍODOS
+- *MANHÃ*: 08:00 às 12:00
+- *TARDE*: 14:00 às 18:00
 
-## REGRAS DE COBERTURA
-Verifique a cobertura do veículo antes de criar solicitações:
+## Fluxo
+1. Apresente as 3 opções de data
+2. Peça para o cliente escolher (1, 2 ou 3)
+3. Pergunte o período (manhã ou tarde)
+4. Confirme o novo agendamento
 
-### Veículo com status "instalacao_pendente":
-- ✅ PERMITIDO: Sinistros de roubo/furto (se tiver cobertura_roubo_furto)
-- ❌ BLOQUEADO: Assistência 24h, colisão, etc. (aguardando instalação)
-- RESPONDA: "O veículo está aguardando instalação do rastreador. 
-  No momento, só posso ajudar com sinistros de roubo ou furto."
-
-### Veículo ativo com cobertura "APENAS ROUBO/FURTO":
-- ✅ PERMITIDO: Sinistros de roubo/furto
-- ❌ BLOQUEADO: Assistência 24h, colisão, incêndio
-
-### Veículo ativo com cobertura "TOTAL":
-- ✅ TUDO LIBERADO
-
-## Coleta de Dados para Sinistro
-1. Tipo do sinistro (colisão, roubo, furto, etc.)
-2. Data e hora do ocorrido
-3. Local (peça endereço ou coordenadas)
-4. Descrição detalhada
-5. B.O. foi registrado? (se sim, pedir para enviar)
-6. Pedir fotos do veículo/danos (se aplicável)
-
-## Coleta de Dados para Assistência
-1. Tipo do serviço (guincho, chaveiro, pane, etc.)
-2. Localização atual
-3. Descrição do problema
-4. Tipo de veículo (carro, moto)
-
-## Regras Gerais
-- Use a DATA ATUAL fornecida para datas relativas
-- Confirme dados antes de criar solicitações
-- Informe que solicitações passam por aprovação
-- NUNCA invente informações
-
-## Formato
-- Respostas curtas e diretas
-- Use emojis com moderação 🚗
-- Máximo 3-4 parágrafos`;
+## Resposta SEMPRE em JSON
+{
+  "etapa": "PERGUNTA_DATA" | "PERGUNTA_PERIODO" | "CONFIRMAR" | "FINALIZADO",
+  "mensagem": "Mensagem para o cliente",
+  "dados_coletados": {
+    "data": "YYYY-MM-DD ou null",
+    "periodo": "manha" | "tarde" | null,
+    "hora": "HH:MM ou null"
+  }
+}`;
 ```
 
-#### 1.2 Melhorar `getAssociadoContext()` (~linha 1215)
+#### 1.2 Nova Função: getProximasDatasDisponiveis()
 
-Adicionar mais dados e tratar veículos pendentes:
+Adicionar função para calcular os próximos 3 dias úteis (pula domingo):
 
 ```typescript
-async function getAssociadoContext(supabase: any, associadoId: string) {
-  // Buscar dados completos do associado
-  const { data: associado } = await supabase
-    .from("associados")
-    .select("nome, email, telefone, whatsapp, cpf, status, plano:planos(nome)")
-    .eq("id", associadoId)
+function getProximasDatasDisponiveis(quantidade: number = 3): { data: string; diaSemana: string; formatada: string }[] {
+  const resultado = [];
+  const hoje = new Date();
+  let diasAdicionados = 0;
+  let offset = 1; // Começa de amanhã
+
+  while (diasAdicionados < quantidade) {
+    const data = new Date(hoje);
+    data.setDate(hoje.getDate() + offset);
+    
+    const diaSemana = data.getDay();
+    
+    // Pular domingo (0)
+    if (diaSemana !== 0) {
+      const dataStr = data.toISOString().split('T')[0];
+      const diasSemana = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+      const diaFormatado = data.toLocaleDateString('pt-BR', { 
+        day: '2-digit', 
+        month: '2-digit',
+        timeZone: 'America/Sao_Paulo'
+      });
+      
+      resultado.push({
+        data: dataStr,
+        diaSemana: diasSemana[diaSemana],
+        formatada: `${diasSemana[diaSemana]}, ${diaFormatado}`
+      });
+      diasAdicionados++;
+    }
+    offset++;
+  }
+  
+  return resultado;
+}
+```
+
+#### 1.3 Modificar processarReagendamento() (~linha 1803)
+
+Substituir a versão atual que apenas diz "equipe entrará em contato" por um fluxo completo:
+
+```typescript
+async function processarReagendamento(
+  supabase: any,
+  confirmacao: any,
+  mensagemCliente: string,
+  instancia: any
+): Promise<Response> {
+  console.log(`[whatsapp-webhook] Processando reagendamento para ${confirmacao.servico_id}`);
+  
+  const apiUrl = Deno.env.get('EVOLUTION_API_URL') || instancia.api_url;
+  const apiKey = Deno.env.get('EVOLUTION_API_KEY');
+  
+  // Buscar dados do serviço original
+  const { data: servicoOriginal } = await supabase
+    .from('servicos')
+    .select(`
+      id, tipo, data_agendada, hora_agendada, periodo,
+      cep, logradouro, numero, complemento, bairro, cidade, uf,
+      latitude, longitude, associado_id, veiculo_id, contrato_id,
+      cotacao_id, local_vistoria, origem,
+      associado:associados!servicos_associado_id_fkey(nome)
+    `)
+    .eq('id', confirmacao.servico_id)
     .single();
 
-  // Buscar TODOS os veículos (incluindo pendentes)
-  const { data: veiculos } = await supabase
-    .from("veiculos")
-    .select("id, placa, marca, modelo, ano_modelo, status, cobertura_roubo_furto, cobertura_total")
-    .eq("associado_id", associadoId);
-
-  // Buscar boletos pendentes
-  const { data: boletos } = await supabase
-    .from("cobrancas")
-    .select("id, valor, data_vencimento, status, pix_copia_cola")
-    .eq("associado_id", associadoId)
-    .in("status", ["pendente", "vencido", "em_aberto"])
-    .order("data_vencimento", { ascending: true })
-    .limit(3);
-
-  // Buscar sinistros em andamento
-  const { data: sinistros } = await supabase
-    .from("sinistros")
-    .select("protocolo, tipo, status")
-    .eq("associado_id", associadoId)
-    .not("status", "in", "(finalizado,encerrado,cancelado)")
-    .limit(3);
-
-  // Buscar assistências em andamento
-  const { data: assistencias } = await supabase
-    .from("chamados_assistencia")
-    .select("protocolo, tipo_servico, status")
-    .eq("associado_id", associadoId)
-    .not("status", "in", "(concluido,cancelado)")
-    .limit(3);
-
-  // Formatar veículos com informação clara de status e cobertura
-  const veiculosFormatados = veiculos?.length > 0
-    ? veiculos.map((v: any) => {
-        const cobertura = v.cobertura_total 
-          ? "TOTAL (tudo liberado)" 
-          : v.cobertura_roubo_furto 
-            ? "APENAS ROUBO/FURTO" 
-            : "SEM COBERTURA";
-        const statusInfo = v.status === 'ativo' 
-          ? '✅ Ativo' 
-          : v.status === 'instalacao_pendente'
-            ? '⏳ Aguardando Instalação'
-            : `${v.status}`;
-        return `- ${v.placa} (${v.marca} ${v.modelo}) - Status: ${statusInfo}, Cobertura: ${cobertura}, ID: ${v.id}`;
-      }).join('\n')
-    : 'Nenhum veículo cadastrado';
-
-  // Formatar boletos
-  const boletosFormatados = boletos?.length > 0
-    ? boletos.map((b: any) => 
-        `- R$ ${(b.valor || 0).toFixed(2)} vence ${new Date(b.data_vencimento).toLocaleDateString('pt-BR')} (${b.status})${b.pix_copia_cola ? ' - PIX disponível' : ''}`
-      ).join('\n')
-    : 'Nenhum boleto pendente ✅';
-
-  // Formatar sinistros
-  const sinistrosFormatados = sinistros?.length > 0
-    ? sinistros.map((s: any) => `- ${s.protocolo}: ${s.tipo} (${s.status})`).join('\n')
-    : 'Nenhum sinistro em aberto';
-
-  // Formatar assistências
-  const assistenciasFormatadas = assistencias?.length > 0
-    ? assistencias.map((a: any) => `- ${a.protocolo}: ${a.tipo_servico} (${a.status})`).join('\n')
-    : 'Nenhuma assistência em aberto';
-
-  // Data atual em Brasília
-  const agora = new Date();
-  const dataHoraBrasilia = agora.toLocaleString('pt-BR', {
-    timeZone: 'America/Sao_Paulo',
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
-
-  const primeiroNome = associado?.nome?.split(' ')[0] || 'Associado';
-
-  return `
-## DATA E HORA ATUAL
-- **Hoje é**: ${dataHoraBrasilia} (horário de Brasília)
-- Use esta data para "hoje", "agora", "ontem"
-
-## DADOS DO ASSOCIADO
-- **Nome**: ${associado?.nome || 'N/A'} (chame de "${primeiroNome}")
-- **CPF**: ${associado?.cpf || 'N/I'}
-- **Status**: ${associado?.status || 'N/A'}
-- **Plano**: ${associado?.plano?.nome || 'Não definido'}
-
-## VEÍCULOS
-${veiculosFormatados}
-
-## BOLETOS PENDENTES
-${boletosFormatados}
-
-## SINISTROS EM ANDAMENTO
-${sinistrosFormatados}
-
-## ASSISTÊNCIAS EM ANDAMENTO
-${assistenciasFormatadas}
-
-## INSTRUÇÕES
-- Chame o associado pelo primeiro nome: "${primeiroNome}"
-- Se o veículo está "Aguardando Instalação", só pode criar sinistro de roubo/furto
-- Use SEMPRE os dados acima. NÃO invente informações!
-`;
-}
-```
-
-#### 1.3 Melhorar Fluxo para Números Desconhecidos (~linha 2333)
-
-Antes de enviar mensagem genérica, tentar identificar por CPF:
-
-```typescript
-// Número desconhecido (nem associado nem lead)
-console.log(`[whatsapp-webhook] Número desconhecido: ${telefone}`);
-
-// Salvar mensagem para histórico
-await saveWhatsAppLog(
-  supabase, 
-  instancia.id, 
-  telefone, 
-  mensagemTexto, 
-  "entrada",
-  messageId,
-  tipoPrincipal,
-  mediaArmazenada || undefined,
-  mediaMimetype || undefined,
-  mediaFilename || undefined
-);
-
-// Enviar mensagem de identificação
-await sendWhatsAppMessage(
-  apiUrl,
-  instancia.instance_name,
-  telefone,
-  `Olá! 👋 Não consegui identificar seu número em nosso sistema.
-
-Por favor, me informe seu *CPF* (apenas números) para que eu possa te ajudar.
-
-Se você ainda não é associado PRATIC, acesse nosso site ou entre em contato conosco! 📞`
-);
-
-return new Response(JSON.stringify({ ok: true, notFound: true, awaiting_cpf: true }), { headers: corsHeaders });
-```
-
-#### 1.4 Adicionar Fluxo de Identificação por CPF
-
-Criar função para processar CPF enviado por número desconhecido:
-
-```typescript
-// Verificar se é resposta com CPF (antes do fluxo de associado)
-if (!associado && tipoPrincipal === 'texto') {
-  const cpfLimpo = mensagemTexto.replace(/\D/g, '');
-  
-  // Se parece ser um CPF (11 dígitos)
-  if (cpfLimpo.length === 11) {
-    console.log(`[whatsapp-webhook] Tentando identificar por CPF: ${cpfLimpo}`);
-    
-    const { data: associadoPorCpf } = await supabase
-      .from("associados")
-      .select("id, nome, status, whatsapp, telefone")
-      .eq("cpf", cpfLimpo)
-      .eq("status", "ativo")
-      .maybeSingle();
-    
-    if (associadoPorCpf) {
-      // Atualizar o telefone/whatsapp do associado
-      await supabase
-        .from("associados")
-        .update({ 
-          whatsapp: telefone,
-          updated_at: new Date().toISOString()
-        })
-        .eq("id", associadoPorCpf.id);
-      
-      const primeiroNome = associadoPorCpf.nome.split(' ')[0];
-      
-      await sendWhatsAppMessage(
-        apiUrl,
-        instancia.instance_name,
-        telefone,
-        `Encontrei você, *${primeiroNome}*! 🎉
-
-Seu número foi vinculado ao seu cadastro. A partir de agora, posso te ajudar diretamente por aqui!
-
-Como posso te ajudar hoje?`
-      );
-      
-      await saveWhatsAppLog(supabase, instancia.id, telefone, `CPF identificado: ${cpfLimpo}`, "entrada", messageId);
-      await saveWhatsAppLog(supabase, instancia.id, telefone, `Associado vinculado: ${associadoPorCpf.nome}`, "saida");
-      
-      return new Response(JSON.stringify({ ok: true, cpf_linked: true, associado_id: associadoPorCpf.id }), { headers: corsHeaders });
-    } else {
-      await sendWhatsAppMessage(
-        apiUrl,
-        instancia.instance_name,
-        telefone,
-        `Não encontrei nenhum associado ativo com esse CPF. 😕
-
-Verifique se o CPF está correto ou entre em contato com nossa central para mais informações.
-
-📞 *Central de Atendimento*: (21) XXXX-XXXX`
-      );
-      
-      return new Response(JSON.stringify({ ok: true, cpf_not_found: true }), { headers: corsHeaders });
-    }
+  if (!servicoOriginal) {
+    const msg = "Desculpe, não encontrei os dados do seu agendamento. Por favor, entre em contato com nossa central.";
+    await sendWhatsAppMessage(apiUrl, instancia.instance_name, confirmacao.telefone, msg);
+    return new Response(JSON.stringify({ ok: false, error: 'servico_nao_encontrado' }), { headers: corsHeaders });
   }
+
+  const nomeCliente = servicoOriginal.associado?.nome?.split(' ')[0] || 'Cliente';
+  
+  // Verificar se já está em fluxo de reagendamento (contexto_ia tem dados)
+  const contextoAtual = confirmacao.contexto_ia || {};
+  const etapaAtual = contextoAtual.etapa_reagendamento || 'INICIAL';
+  const datasDisponiveis = contextoAtual.datas_disponiveis || getProximasDatasDisponiveis(3);
+  
+  // ETAPA INICIAL: Mostrar datas disponíveis
+  if (etapaAtual === 'INICIAL') {
+    const mensagemDatas = `Sem problemas, *${nomeCliente}*! 📅
+
+Escolha uma das datas disponíveis:
+
+*1️⃣* ${datasDisponiveis[0].formatada}
+*2️⃣* ${datasDisponiveis[1].formatada}
+*3️⃣* ${datasDisponiveis[2].formatada}
+
+Responda com *1*, *2* ou *3* para escolher.`;
+
+    await sendWhatsAppMessage(apiUrl, instancia.instance_name, confirmacao.telefone, mensagemDatas);
+    await saveWhatsAppLog(supabase, instancia.id, confirmacao.telefone, mensagemDatas, "saida");
+    
+    // Atualizar contexto com etapa e datas
+    await supabase.from('confirmacoes_agendamento')
+      .update({ 
+        status: 'reagendando',
+        contexto_ia: {
+          ...contextoAtual,
+          etapa_reagendamento: 'AGUARDANDO_DATA',
+          datas_disponiveis: datasDisponiveis,
+          servico_original: servicoOriginal
+        }
+      })
+      .eq('id', confirmacao.id);
+    
+    return new Response(JSON.stringify({ ok: true, etapa: 'AGUARDANDO_DATA' }), { headers: corsHeaders });
+  }
+  
+  // ETAPA AGUARDANDO_DATA: Cliente escolheu data
+  if (etapaAtual === 'AGUARDANDO_DATA') {
+    const escolha = mensagemCliente.trim();
+    let dataSelecionada = null;
+    
+    // Interpretar resposta (1, 2, 3 ou texto)
+    if (['1', '01', 'um', 'primeira', 'primeiro'].some(v => escolha.toLowerCase().includes(v))) {
+      dataSelecionada = datasDisponiveis[0];
+    } else if (['2', '02', 'dois', 'segunda', 'segundo'].some(v => escolha.toLowerCase().includes(v))) {
+      dataSelecionada = datasDisponiveis[1];
+    } else if (['3', '03', 'três', 'tres', 'terceira', 'terceiro'].some(v => escolha.toLowerCase().includes(v))) {
+      dataSelecionada = datasDisponiveis[2];
+    }
+    
+    if (!dataSelecionada) {
+      const msg = `Não entendi sua escolha. Por favor, responda *1*, *2* ou *3*:
+
+*1️⃣* ${datasDisponiveis[0].formatada}
+*2️⃣* ${datasDisponiveis[1].formatada}
+*3️⃣* ${datasDisponiveis[2].formatada}`;
+      
+      await sendWhatsAppMessage(apiUrl, instancia.instance_name, confirmacao.telefone, msg);
+      return new Response(JSON.stringify({ ok: true, etapa: 'AGUARDANDO_DATA', retry: true }), { headers: corsHeaders });
+    }
+    
+    // Verificar se é sábado (horário reduzido)
+    const dataObj = new Date(dataSelecionada.data + 'T12:00:00');
+    const isSabado = dataObj.getDay() === 6;
+    
+    const mensagemPeriodo = isSabado
+      ? `Ótimo! *${dataSelecionada.formatada}* selecionada.
+
+⚠️ Aos sábados atendemos apenas pela *MANHÃ* (08:00 às 13:00).
+
+Confirma o período da *MANHÃ*? Responda *SIM* ou digite outro dia.`
+      : `Ótimo! *${dataSelecionada.formatada}* selecionada.
+
+Qual período você prefere?
+
+*1️⃣ MANHÃ* (08:00 às 12:00)
+*2️⃣ TARDE* (14:00 às 18:00)
+
+Responda *1* ou *2*.`;
+
+    await sendWhatsAppMessage(apiUrl, instancia.instance_name, confirmacao.telefone, mensagemPeriodo);
+    await saveWhatsAppLog(supabase, instancia.id, confirmacao.telefone, mensagemPeriodo, "saida");
+    
+    await supabase.from('confirmacoes_agendamento')
+      .update({ 
+        contexto_ia: {
+          ...contextoAtual,
+          etapa_reagendamento: isSabado ? 'AGUARDANDO_CONFIRMACAO_SABADO' : 'AGUARDANDO_PERIODO',
+          data_selecionada: dataSelecionada,
+          is_sabado: isSabado
+        }
+      })
+      .eq('id', confirmacao.id);
+    
+    return new Response(JSON.stringify({ ok: true, etapa: 'AGUARDANDO_PERIODO' }), { headers: corsHeaders });
+  }
+  
+  // ETAPA AGUARDANDO_PERIODO ou CONFIRMACAO_SABADO
+  if (etapaAtual === 'AGUARDANDO_PERIODO' || etapaAtual === 'AGUARDANDO_CONFIRMACAO_SABADO') {
+    const dataSelecionada = contextoAtual.data_selecionada;
+    const isSabado = contextoAtual.is_sabado;
+    const escolha = mensagemCliente.trim().toLowerCase();
+    
+    let periodo = null;
+    let hora = null;
+    
+    if (isSabado) {
+      // Sábado: só manhã
+      if (['sim', 's', 'ok', 'confirmo', 'pode', 'manhã', 'manha', '1'].some(v => escolha.includes(v))) {
+        periodo = 'manha';
+        hora = '09:00';
+      } else {
+        // Cliente quer outro dia - voltar para seleção
+        const msg = `Entendi! Vamos escolher outro dia então.
+
+*1️⃣* ${datasDisponiveis[0].formatada}
+*2️⃣* ${datasDisponiveis[1].formatada}
+*3️⃣* ${datasDisponiveis[2].formatada}
+
+Responda *1*, *2* ou *3*.`;
+        
+        await sendWhatsAppMessage(apiUrl, instancia.instance_name, confirmacao.telefone, msg);
+        
+        await supabase.from('confirmacoes_agendamento')
+          .update({ 
+            contexto_ia: { ...contextoAtual, etapa_reagendamento: 'AGUARDANDO_DATA' }
+          })
+          .eq('id', confirmacao.id);
+        
+        return new Response(JSON.stringify({ ok: true, etapa: 'AGUARDANDO_DATA' }), { headers: corsHeaders });
+      }
+    } else {
+      // Dias úteis: manhã ou tarde
+      if (['1', 'um', 'manhã', 'manha', 'primeira'].some(v => escolha.includes(v))) {
+        periodo = 'manha';
+        hora = '09:00';
+      } else if (['2', 'dois', 'tarde', 'segunda'].some(v => escolha.includes(v))) {
+        periodo = 'tarde';
+        hora = '15:00';
+      }
+    }
+    
+    if (!periodo) {
+      const msg = `Não entendi. Por favor, responda *1* para MANHÃ ou *2* para TARDE.`;
+      await sendWhatsAppMessage(apiUrl, instancia.instance_name, confirmacao.telefone, msg);
+      return new Response(JSON.stringify({ ok: true, etapa: 'AGUARDANDO_PERIODO', retry: true }), { headers: corsHeaders });
+    }
+    
+    // CRIAR NOVO SERVIÇO
+    const servicoOriginal = contextoAtual.servico_original;
+    const tipoServico = servicoOriginal.tipo === 'instalacao' 
+      ? 'instalação do rastreador' 
+      : servicoOriginal.tipo === 'vistoria' 
+        ? 'vistoria veicular' 
+        : 'serviço';
+    
+    const { data: novoServico, error: erroNovoServico } = await supabase
+      .from('servicos')
+      .insert({
+        tipo: servicoOriginal.tipo,
+        status: 'agendada',
+        data_agendada: dataSelecionada.data,
+        hora_agendada: hora,
+        periodo: periodo,
+        permite_encaixe: true,
+        local_vistoria: servicoOriginal.local_vistoria,
+        cep: servicoOriginal.cep,
+        logradouro: servicoOriginal.logradouro,
+        numero: servicoOriginal.numero,
+        complemento: servicoOriginal.complemento,
+        bairro: servicoOriginal.bairro,
+        cidade: servicoOriginal.cidade,
+        uf: servicoOriginal.uf,
+        latitude: servicoOriginal.latitude,
+        longitude: servicoOriginal.longitude,
+        associado_id: servicoOriginal.associado_id,
+        veiculo_id: servicoOriginal.veiculo_id,
+        contrato_id: servicoOriginal.contrato_id,
+        cotacao_id: servicoOriginal.cotacao_id,
+        origem: 'reagendamento_whatsapp',
+        observacoes: `Reagendado via WhatsApp. Serviço original: ${confirmacao.servico_id}`
+      })
+      .select()
+      .single();
+
+    if (erroNovoServico) {
+      console.error('[whatsapp-webhook] Erro ao criar novo serviço:', erroNovoServico);
+      const msg = "Ocorreu um erro ao reagendar. Por favor, entre em contato com nossa central 0800 980 0001.";
+      await sendWhatsAppMessage(apiUrl, instancia.instance_name, confirmacao.telefone, msg);
+      return new Response(JSON.stringify({ ok: false, error: erroNovoServico.message }), { headers: corsHeaders });
+    }
+    
+    // CANCELAR SERVIÇO ORIGINAL
+    await supabase
+      .from('servicos')
+      .update({ 
+        status: 'cancelada',
+        confirmacao_whatsapp: 'reagendado',
+        profissional_id: null,
+        observacoes: `Reagendado via WhatsApp para ${dataSelecionada.data}. Novo serviço: ${novoServico.id}`
+      })
+      .eq('id', confirmacao.servico_id);
+    
+    // ATUALIZAR CONFIRMAÇÃO
+    await supabase.from('confirmacoes_agendamento')
+      .update({ 
+        status: 'reagendada',
+        novo_servico_id: novoServico.id,
+        contexto_ia: {
+          ...contextoAtual,
+          etapa_reagendamento: 'FINALIZADO',
+          novo_servico_id: novoServico.id
+        }
+      })
+      .eq('id', confirmacao.id);
+    
+    // MENSAGEM DE CONFIRMAÇÃO
+    const periodoTexto = periodo === 'manha' ? 'MANHÃ (08:00-12:00)' : 'TARDE (14:00-18:00)';
+    const mensagemFinal = `Pronto, *${nomeCliente}*! ✅
+
+Sua *${tipoServico}* foi reagendada com sucesso:
+
+📅 *${dataSelecionada.formatada}*
+⏰ Período: *${periodoTexto}*
+📍 ${servicoOriginal.logradouro}, ${servicoOriginal.numero} - ${servicoOriginal.bairro}
+
+Um técnico será designado e você receberá uma nova confirmação no dia.
+
+Obrigado pela compreensão! 🚗`;
+
+    await sendWhatsAppMessage(apiUrl, instancia.instance_name, confirmacao.telefone, mensagemFinal);
+    await saveWhatsAppLog(supabase, instancia.id, confirmacao.telefone, mensagemFinal, "saida");
+    
+    console.log(`[whatsapp-webhook] ✅ Reagendamento concluído: ${novoServico.id}`);
+    
+    return new Response(JSON.stringify({ 
+      ok: true, 
+      action: 'reagendamento_concluido',
+      novo_servico_id: novoServico.id,
+      data: dataSelecionada.data,
+      periodo
+    }), { headers: corsHeaders });
+  }
+  
+  // Fallback
+  return new Response(JSON.stringify({ ok: true, etapa: 'desconhecida' }), { headers: corsHeaders });
 }
 ```
 
-### Resumo das Mudanças
+#### 1.4 Modificar handleConfirmacaoAgendamento() (~linha 1690)
 
-| Alteração | Linhas | Descrição |
-|-----------|--------|-----------|
-| System Prompt | 258-301 | Adicionar regras de acolhimento, tratar veículos pendentes |
-| `getAssociadoContext()` | 1215-1248 | Enriquecer contexto com boletos, sinistros, assistências |
-| Identificação por CPF | ~2240 | Novo fluxo antes de processar como desconhecido |
-| Mensagem para desconhecidos | ~2333 | Pedir CPF em vez de só dizer "não cadastrado" |
+Atualizar para passar corretamente para o fluxo de reagendamento quando cliente quer reagendar:
 
-### Fluxo Esperado Após Correções
+```typescript
+// Dentro da função, após detectar intencao === 'REAGENDAR':
+if (resultado.intencao === 'REAGENDAR') {
+  // Atualizar confirmação para status "reagendando"
+  await supabase.from('confirmacoes_agendamento')
+    .update({ 
+      status: 'reagendando',
+      resposta_recebida_em: new Date().toISOString(),
+      resposta_cliente: mensagemCliente,
+      contexto_ia: {
+        ...confirmacao.contexto_ia,
+        etapa_reagendamento: 'INICIAL'
+      }
+    })
+    .eq('id', confirmacao.id);
+  
+  // Chamar fluxo de reagendamento
+  return await processarReagendamento(supabase, confirmacao, mensagemCliente, instancia);
+}
+```
+
+#### 1.5 Atualizar Detecção de Fluxo de Reagendamento (~linha 2050)
+
+No fluxo principal, verificar se telefone está em processo de reagendamento:
+
+```typescript
+// Antes de processar como mensagem normal, verificar se está reagendando
+const { data: confirmacaoReagendando } = await supabase
+  .from('confirmacoes_agendamento')
+  .select('*')
+  .eq('telefone', telefone)
+  .eq('status', 'reagendando')
+  .order('created_at', { ascending: false })
+  .limit(1)
+  .maybeSingle();
+
+if (confirmacaoReagendando) {
+  console.log(`[whatsapp-webhook] Continuando fluxo de reagendamento para ${telefone}`);
+  return await processarReagendamento(supabase, confirmacaoReagendando, mensagemTexto, instancia);
+}
+```
+
+### Resumo das Alterações
+
+| Componente | Alteração | Descrição |
+|------------|-----------|-----------|
+| `REAGENDAMENTO_SYSTEM_PROMPT` | Atualizado | Usar 3 dias, não 5 |
+| `getProximasDatasDisponiveis()` | Nova função | Calcula próximos 3 dias úteis |
+| `processarReagendamento()` | Reescrito | Fluxo completo com coleta de data/período |
+| `handleConfirmacaoAgendamento()` | Modificado | Iniciar corretamente o fluxo de reagendamento |
+| Detecção no serve() | Adicionado | Detectar se telefone está em reagendamento |
+
+### Fluxo Visual
 
 ```text
-Número desconhecido envia mensagem
-        |
-        v
-Busca associado por telefone --> Não encontrado
-        |
-        v
-Mensagem parece CPF? (11 dígitos)
-        |
-   Sim  |  Não
-        |    |
-        v    v
-Busca por CPF    Envia: "Informe seu CPF"
-        |
-   Encontrado?
-        |
-   Sim  |  Não
-        |    |
-        v    v
-Vincula telefone    "CPF não encontrado"
-ao cadastro
-        |
-        v
-"Encontrei você, [Nome]!"
+Cliente: "não posso hoje"
+           |
+           v
+    Detecta REAGENDAR
+           |
+           v
+    Mostra 3 datas:
+    1️⃣ Terça, 04/02
+    2️⃣ Quarta, 05/02
+    3️⃣ Quinta, 06/02
+           |
+           v
+    Cliente: "2"
+           |
+           v
+    Pergunta período:
+    1️⃣ MANHÃ
+    2️⃣ TARDE
+           |
+           v
+    Cliente: "1"
+           |
+           v
+    Cria novo serviço
+    Cancela antigo
+    Libera horário
+           |
+           v
+    "Reagendado com sucesso!
+    📅 Quarta, 05/02
+    ⏰ MANHÃ (08:00-12:00)"
 ```
 
 ### Testes Recomendados
 
-1. **Teste de acolhimento**: Enviar "bati de carro" e verificar se a IA chama pelo nome e acolhe
-2. **Teste de veículo pendente**: Verificar se mostra o veículo mesmo com status "instalacao_pendente"
-3. **Teste de identificação por CPF**: Enviar mensagem de número desconhecido e depois CPF válido
-4. **Teste de sinistro roubo/furto**: Para veículo com apenas cobertura roubo/furto, verificar se permite
+1. Enviar confirmação de agendamento (cron)
+2. Responder "quero reagendar"
+3. Escolher opção 2
+4. Escolher manhã
+5. Verificar no painel se novo serviço foi criado
+6. Verificar se serviço antigo foi cancelado
 
