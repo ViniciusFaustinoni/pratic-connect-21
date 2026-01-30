@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { ArrowLeft, Package, Shield, DollarSign, BarChart3, Edit, Plus, Trash2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,10 +7,63 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
+import { 
+  AlertDialog, 
+  AlertDialogAction, 
+  AlertDialogCancel, 
+  AlertDialogContent, 
+  AlertDialogDescription, 
+  AlertDialogFooter, 
+  AlertDialogHeader, 
+  AlertDialogTitle 
+} from '@/components/ui/alert-dialog';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
+import { 
+  VincularCoberturaModal, 
+  FaixaPrecoModal, 
+  ProdutoFormModal,
+  EditarCoberturaVinculadaModal 
+} from '@/components/diretoria';
+
+interface PlanoCobertura {
+  id: string;
+  plano_id: string;
+  cobertura_id: string;
+  percentual_cobertura: number | null;
+  valor_limite: number | null;
+  franquia_percentual: number | null;
+  franquia_valor: number | null;
+  carencia_dias: number | null;
+  obrigatoria: boolean | null;
+  cobertura: {
+    id: string;
+    nome: string;
+    descricao: string | null;
+    tipo: string;
+    percentual_cobertura: number | null;
+    carencia_dias: number | null;
+  } | null;
+}
+
+interface TabelaPreco {
+  id: string;
+  plano_id: string;
+  fipe_de: number;
+  fipe_ate: number;
+  valor_cota: number;
+  taxa_administrativa: number | null;
+  valor_rastreamento: number | null;
+  valor_assistencia: number | null;
+  taxa_aplicativo: number | null;
+  taxa_comercial: number | null;
+  valor_adesao?: number | null;
+  vigencia_inicio: string | null;
+  vigencia_fim: string | null;
+  ativo: boolean;
+}
 
 const tipoVeiculoConfig: Record<string, { label: string; class: string }> = {
   carro: { label: 'Carro', class: 'bg-blue-100 text-blue-800' },
@@ -44,6 +98,16 @@ export default function ProdutoDetalhe() {
   const queryClient = useQueryClient();
   const defaultTab = searchParams.get('tab') || 'informacoes';
 
+  // Estados dos modais
+  const [modalCoberturaOpen, setModalCoberturaOpen] = useState(false);
+  const [modalEditCoberturaOpen, setModalEditCoberturaOpen] = useState(false);
+  const [modalFaixaOpen, setModalFaixaOpen] = useState(false);
+  const [modalProdutoOpen, setModalProdutoOpen] = useState(false);
+  const [faixaEdit, setFaixaEdit] = useState<TabelaPreco | null>(null);
+  const [coberturaEdit, setCoberturaEdit] = useState<PlanoCobertura | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<{ tipo: 'cobertura' | 'preco'; id: string; nome: string } | null>(null);
+
   const { data: plano, isLoading: loadingPlano } = useQuery({
     queryKey: ['plano', id],
     queryFn: async () => {
@@ -69,7 +133,7 @@ export default function ProdutoDetalhe() {
         `)
         .eq('plano_id', id);
       if (error) throw error;
-      return data;
+      return data as PlanoCobertura[];
     },
     enabled: !!id
   });
@@ -84,7 +148,7 @@ export default function ProdutoDetalhe() {
         .eq('ativo', true)
         .order('fipe_de');
       if (error) throw error;
-      return data;
+      return data as TabelaPreco[];
     },
     enabled: !!id
   });
@@ -101,7 +165,6 @@ export default function ProdutoDetalhe() {
         supabase.from('cobrancas').select('valor_pago, associado_id').eq('status', 'pago').gte('data_pagamento', inicioMes.toISOString().split('T')[0])
       ]);
 
-      // Buscar associados do plano para filtrar receita
       const { data: associadosPlano } = await supabase
         .from('associados')
         .select('id')
@@ -134,6 +197,88 @@ export default function ProdutoDetalhe() {
       toast.success('Status atualizado!');
     }
   });
+
+  // Mutation para remover cobertura
+  const removerCobertura = useMutation({
+    mutationFn: async (coberturaId: string) => {
+      const { error } = await supabase
+        .from('planos_coberturas')
+        .delete()
+        .eq('id', coberturaId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Cobertura removida!');
+      queryClient.invalidateQueries({ queryKey: ['plano-coberturas', id] });
+      setDeleteConfirmOpen(false);
+      setItemToDelete(null);
+    },
+    onError: (error: Error) => {
+      toast.error('Erro ao remover: ' + error.message);
+    }
+  });
+
+  // Mutation para remover faixa de preço
+  const removerPreco = useMutation({
+    mutationFn: async (precoId: string) => {
+      const { error } = await supabase
+        .from('tabelas_preco')
+        .delete()
+        .eq('id', precoId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Faixa de preço removida!');
+      queryClient.invalidateQueries({ queryKey: ['plano-precos', id] });
+      setDeleteConfirmOpen(false);
+      setItemToDelete(null);
+    },
+    onError: (error: Error) => {
+      toast.error('Erro ao remover: ' + error.message);
+    }
+  });
+
+  const handleConfirmDelete = () => {
+    if (!itemToDelete) return;
+    if (itemToDelete.tipo === 'cobertura') {
+      removerCobertura.mutate(itemToDelete.id);
+    } else {
+      removerPreco.mutate(itemToDelete.id);
+    }
+  };
+
+  const handleEditCobertura = (pc: PlanoCobertura) => {
+    setCoberturaEdit(pc);
+    setModalEditCoberturaOpen(true);
+  };
+
+  const handleDeleteCobertura = (pc: PlanoCobertura) => {
+    setItemToDelete({ 
+      tipo: 'cobertura', 
+      id: pc.id, 
+      nome: pc.cobertura?.nome || 'Cobertura' 
+    });
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleEditPreco = (preco: TabelaPreco) => {
+    setFaixaEdit(preco);
+    setModalFaixaOpen(true);
+  };
+
+  const handleDeletePreco = (preco: TabelaPreco) => {
+    setItemToDelete({ 
+      tipo: 'preco', 
+      id: preco.id, 
+      nome: `${formatCurrency(preco.fipe_de)} - ${formatCurrency(preco.fipe_ate)}` 
+    });
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleNovaFaixa = () => {
+    setFaixaEdit(null);
+    setModalFaixaOpen(true);
+  };
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -195,7 +340,7 @@ export default function ProdutoDetalhe() {
               onCheckedChange={(checked) => toggleAtivo.mutate(checked)}
             />
           </div>
-          <Button>
+          <Button onClick={() => setModalProdutoOpen(true)}>
             <Edit className="h-4 w-4 mr-2" />
             Editar
           </Button>
@@ -295,7 +440,7 @@ export default function ProdutoDetalhe() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-lg">Coberturas Vinculadas</CardTitle>
-              <Button size="sm">
+              <Button size="sm" onClick={() => setModalCoberturaOpen(true)}>
                 <Plus className="h-4 w-4 mr-2" />
                 Adicionar Cobertura
               </Button>
@@ -338,10 +483,20 @@ export default function ProdutoDetalhe() {
                           </TableCell>
                           <TableCell>
                             <div className="flex gap-1">
-                              <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-8 w-8"
+                                onClick={() => handleEditCobertura(pc)}
+                              >
                                 <Edit className="h-4 w-4" />
                               </Button>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive">
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-8 w-8 text-destructive"
+                                onClick={() => handleDeleteCobertura(pc)}
+                              >
                                 <Trash2 className="h-4 w-4" />
                               </Button>
                             </div>
@@ -366,7 +521,7 @@ export default function ProdutoDetalhe() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-lg">Faixas de Preço</CardTitle>
-              <Button size="sm">
+              <Button size="sm" onClick={handleNovaFaixa}>
                 <Plus className="h-4 w-4 mr-2" />
                 Nova Faixa
               </Button>
@@ -405,10 +560,20 @@ export default function ProdutoDetalhe() {
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-1">
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8"
+                              onClick={() => handleEditPreco(preco)}
+                            >
                               <Edit className="h-4 w-4" />
                             </Button>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive">
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8 text-destructive"
+                              onClick={() => handleDeletePreco(preco)}
+                            >
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
@@ -474,6 +639,61 @@ export default function ProdutoDetalhe() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Modais */}
+      <VincularCoberturaModal
+        open={modalCoberturaOpen}
+        onClose={() => setModalCoberturaOpen(false)}
+        planoId={id || ''}
+      />
+
+      <EditarCoberturaVinculadaModal
+        open={modalEditCoberturaOpen}
+        onClose={() => {
+          setModalEditCoberturaOpen(false);
+          setCoberturaEdit(null);
+        }}
+        cobertura={coberturaEdit}
+        planoId={id || ''}
+      />
+
+      <FaixaPrecoModal
+        open={modalFaixaOpen}
+        onClose={() => {
+          setModalFaixaOpen(false);
+          setFaixaEdit(null);
+        }}
+        planoId={id || ''}
+        faixa={faixaEdit}
+      />
+
+      <ProdutoFormModal
+        open={modalProdutoOpen}
+        onClose={() => setModalProdutoOpen(false)}
+        produto={plano}
+      />
+
+      {/* Dialog de confirmação de exclusão */}
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir {itemToDelete?.tipo === 'cobertura' ? 'a cobertura' : 'a faixa de preço'}{' '}
+              <strong>{itemToDelete?.nome}</strong>? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

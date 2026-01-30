@@ -155,8 +155,9 @@ export function FaixaPrecoModal({ open, onClose, planoId, faixa }: FaixaPrecoMod
     },
     onSuccess: () => {
       toast.success(faixa ? 'Faixa atualizada!' : 'Faixa criada!');
+      queryClient.invalidateQueries({ queryKey: ['plano-precos', planoId] });
       queryClient.invalidateQueries({ queryKey: ['tabela-precos'] });
-      queryClient.invalidateQueries({ queryKey: ['tabelas-preco-check'] });
+      queryClient.invalidateQueries({ queryKey: ['tabelas-preco-check', planoId] });
       queryClient.invalidateQueries({ queryKey: ['planos-precos-info'] });
       onClose();
     },

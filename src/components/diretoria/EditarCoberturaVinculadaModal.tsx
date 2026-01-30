@@ -1,26 +1,48 @@
-import { useState } from 'react';
-import { Shield, Plus } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Shield, Save } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
-interface VincularCoberturaModalProps {
+interface PlanoCobertura {
+  id: string;
+  plano_id: string;
+  cobertura_id: string;
+  percentual_cobertura: number | null;
+  valor_limite: number | null;
+  franquia_percentual: number | null;
+  franquia_valor: number | null;
+  carencia_dias: number | null;
+  obrigatoria: boolean | null;
+  cobertura?: {
+    id: string;
+    nome: string;
+    descricao: string | null;
+    tipo: string;
+  };
+}
+
+interface EditarCoberturaVinculadaModalProps {
   open: boolean;
   onClose: () => void;
+  cobertura: PlanoCobertura | null;
   planoId: string;
 }
 
-export function VincularCoberturaModal({ open, onClose, planoId }: VincularCoberturaModalProps) {
+export function EditarCoberturaVinculadaModal({ 
+  open, 
+  onClose, 
+  cobertura, 
+  planoId 
+}: EditarCoberturaVinculadaModalProps) {
   const queryClient = useQueryClient();
   
   const [formData, setFormData] = useState({
-    cobertura_id: '',
     percentual_cobertura: '',
     valor_limite: '',
     franquia_percentual: '',
@@ -29,55 +51,40 @@ export function VincularCoberturaModal({ open, onClose, planoId }: VincularCober
     obrigatoria: false,
   });
 
-  // Coberturas disponíveis (não vinculadas)
-  const { data: coberturas, isLoading } = useQuery({
-    queryKey: ['coberturas-disponiveis', planoId],
-    queryFn: async () => {
-      const { data: vinculadas } = await supabase
-        .from('planos_coberturas')
-        .select('cobertura_id')
-        .eq('plano_id', planoId);
-      
-      const idsVinculados = vinculadas?.map(v => v.cobertura_id) || [];
-      
-      let query = supabase.from('coberturas').select('*').eq('ativo', true).order('nome');
-      if (idsVinculados.length > 0) {
-        query = query.not('id', 'in', `(${idsVinculados.join(',')})`);
-      }
-      
-      const { data, error } = await query;
-      if (error) throw error;
-      return data;
-    },
-    enabled: open && !!planoId,
-  });
+  useEffect(() => {
+    if (cobertura) {
+      setFormData({
+        percentual_cobertura: cobertura.percentual_cobertura?.toString() || '',
+        valor_limite: cobertura.valor_limite?.toString() || '',
+        franquia_percentual: cobertura.franquia_percentual?.toString() || '',
+        franquia_valor: cobertura.franquia_valor?.toString() || '',
+        carencia_dias: cobertura.carencia_dias?.toString() || '',
+        obrigatoria: cobertura.obrigatoria || false,
+      });
+    }
+  }, [cobertura, open]);
 
-  const vincularCobertura = useMutation({
+  const atualizarCobertura = useMutation({
     mutationFn: async () => {
-      if (!formData.cobertura_id) {
-        throw new Error('Selecione uma cobertura');
-      }
+      if (!cobertura) throw new Error('Cobertura não encontrada');
 
       const { error } = await supabase
         .from('planos_coberturas')
-        .insert({
-          plano_id: planoId,
-          cobertura_id: formData.cobertura_id,
+        .update({
           percentual_cobertura: formData.percentual_cobertura ? parseFloat(formData.percentual_cobertura) : null,
           valor_limite: formData.valor_limite ? parseFloat(formData.valor_limite) : null,
           franquia_percentual: formData.franquia_percentual ? parseFloat(formData.franquia_percentual) : null,
           franquia_valor: formData.franquia_valor ? parseFloat(formData.franquia_valor) : null,
           carencia_dias: formData.carencia_dias ? parseInt(formData.carencia_dias) : null,
           obrigatoria: formData.obrigatoria,
-        });
+        })
+        .eq('id', cobertura.id);
+      
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success('Cobertura vinculada!');
-      queryClient.invalidateQueries({ queryKey: ['coberturas-disponiveis', planoId] });
+      toast.success('Cobertura atualizada!');
       queryClient.invalidateQueries({ queryKey: ['plano-coberturas', planoId] });
-      queryClient.invalidateQueries({ queryKey: ['planos-coberturas-count'] });
-      resetForm();
       onClose();
     },
     onError: (error: Error) => {
@@ -85,62 +92,31 @@ export function VincularCoberturaModal({ open, onClose, planoId }: VincularCober
     }
   });
 
-  const resetForm = () => {
-    setFormData({
-      cobertura_id: '',
-      percentual_cobertura: '',
-      valor_limite: '',
-      franquia_percentual: '',
-      franquia_valor: '',
-      carencia_dias: '',
-      obrigatoria: false,
-    });
-  };
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    vincularCobertura.mutate();
+    atualizarCobertura.mutate();
   };
 
-  const selectedCobertura = coberturas?.find(c => c.id === formData.cobertura_id);
-
   return (
-    <Dialog open={open} onOpenChange={(open) => { if (!open) { resetForm(); onClose(); }}}>
+    <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Shield className="h-5 w-5" />
-            Vincular Cobertura
+            Editar Cobertura
           </DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label>Cobertura *</Label>
-            <Select
-              value={formData.cobertura_id}
-              onValueChange={(value) => setFormData({ ...formData, cobertura_id: value })}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder={isLoading ? 'Carregando...' : 'Selecione uma cobertura'} />
-              </SelectTrigger>
-              <SelectContent>
-                {coberturas?.length === 0 ? (
-                  <SelectItem value="_empty" disabled>Todas as coberturas já estão vinculadas</SelectItem>
-                ) : (
-                  coberturas?.map((cobertura) => (
-                    <SelectItem key={cobertura.id} value={cobertura.id}>
-                      {cobertura.nome}
-                    </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
-            {selectedCobertura?.descricao && (
-              <p className="text-xs text-muted-foreground">{selectedCobertura.descricao}</p>
+        {cobertura && (
+          <div className="bg-muted/50 rounded-lg p-3 mb-4">
+            <p className="font-medium">{cobertura.cobertura?.nome}</p>
+            {cobertura.cobertura?.descricao && (
+              <p className="text-sm text-muted-foreground">{cobertura.cobertura.descricao}</p>
             )}
           </div>
+        )}
 
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="percentual_cobertura">% Cobertura</Label>
@@ -213,12 +189,12 @@ export function VincularCoberturaModal({ open, onClose, planoId }: VincularCober
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => { resetForm(); onClose(); }}>
+            <Button type="button" variant="outline" onClick={onClose}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={vincularCobertura.isPending || !formData.cobertura_id}>
-              <Plus className="h-4 w-4 mr-2" />
-              {vincularCobertura.isPending ? 'Vinculando...' : 'Vincular'}
+            <Button type="submit" disabled={atualizarCobertura.isPending}>
+              <Save className="h-4 w-4 mr-2" />
+              {atualizarCobertura.isPending ? 'Salvando...' : 'Salvar'}
             </Button>
           </DialogFooter>
         </form>
