@@ -18422,6 +18422,7 @@ export type Database = {
           numero: string
           observacoes: string
           periodo: string
+          permite_encaixe: boolean
           rastreador_id: string
           rota_id: string
           status: string

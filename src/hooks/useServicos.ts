@@ -143,6 +143,7 @@ export interface TarefaAtual {
   data_agendada: string;
   hora_agendada: string | null;
   periodo: PeriodoServico;
+  permite_encaixe?: boolean;
   cliente: {
     id: string;
     nome: string;
@@ -410,6 +411,7 @@ export function useTarefaAtualServico() {
         em_rota_em: tarefa.em_rota_em,
         instalacao_origem_id: tarefa.instalacao_origem_id,
         vistoria_origem_id: tarefa.vistoria_origem_id,
+        permite_encaixe: tarefa.permite_encaixe ?? false,
       };
     },
     enabled: !!profissionalId,
