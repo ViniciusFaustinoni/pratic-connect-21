@@ -127,35 +127,62 @@ Deno.serve(async (req) => {
       console.log('[delete-cotacao] Serviços excluídos')
     }
 
-    // 3. Para cada contrato, excluir dependências
+    // 3. Excluir instalacoes_pendentes_criacao vinculadas à cotação e contratos
+    // CRÍTICO: Deve ser feito ANTES de excluir contratos (FK constraint)
+    const { error: pendentesError } = await adminClient
+      .from('instalacoes_pendentes_criacao')
+      .delete()
+      .eq('cotacao_id', cotacaoId)
+    
+    if (pendentesError) {
+      console.error('Erro ao excluir instalacoes_pendentes_criacao por cotacao:', pendentesError)
+    } else {
+      console.log('[delete-cotacao] Instalações pendentes (por cotação) excluídas')
+    }
+
+    // 3b. Excluir instalacoes_pendentes_criacao por contrato_id
+    if (contratoIds.length > 0) {
+      const { error: pendentesContratoError } = await adminClient
+        .from('instalacoes_pendentes_criacao')
+        .delete()
+        .in('contrato_id', contratoIds)
+      
+      if (pendentesContratoError) {
+        console.error('Erro ao excluir instalacoes_pendentes_criacao por contrato:', pendentesContratoError)
+      } else {
+        console.log('[delete-cotacao] Instalações pendentes (por contrato) excluídas')
+      }
+    }
+
+    // 4. Para cada contrato, excluir dependências
     for (const contratoId of contratoIds) {
       console.log(`[delete-cotacao] Processando contrato ${contratoId}`)
 
-      // 3a. Excluir contratos_documentos
+      // 4a. Excluir contratos_documentos
       await adminClient
         .from('contratos_documentos')
         .delete()
         .eq('contrato_id', contratoId)
 
-      // 3b. Excluir contratos_historico
+      // 4b. Excluir contratos_historico
       await adminClient
         .from('contratos_historico')
         .delete()
         .eq('contrato_id', contratoId)
 
-      // 3c. Excluir asaas_cobrancas
+      // 4c. Excluir asaas_cobrancas
       await adminClient
         .from('asaas_cobrancas')
         .delete()
         .eq('contrato_id', contratoId)
 
-      // 3d. Excluir instalacoes vinculadas ao contrato
+      // 4d. Excluir instalacoes vinculadas ao contrato
       await adminClient
         .from('instalacoes')
         .delete()
         .eq('contrato_id', contratoId)
 
-      // 3e. Excluir vistorias vinculadas ao contrato
+      // 4e. Excluir vistorias vinculadas ao contrato
       await adminClient
         .from('vistorias')
         .delete()
