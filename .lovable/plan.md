@@ -1,79 +1,86 @@
-# Plano: Correção do Sistema de Atribuição Automática de Tarefas
 
-## ✅ IMPLEMENTAÇÃO CONCLUÍDA
+# Plano: Corrigir RPC `buscar_tarefa_atual_profissional` que Bloqueia Atribuição Automática
 
-### Resumo das Correções Aplicadas
+## Problema Identificado
 
-| Item | Status | Descrição |
-|------|--------|-----------|
-| 1. Migração SQL | ✅ Concluído | Tabela `instalacoes_pendentes_criacao` criada |
-| 2. `criar-instalacao-pos-pagamento` | ✅ Concluído | Tratamento explícito para autovistoria + logs detalhados |
-| 3. `asaas-webhook` | ✅ Concluído | Retry com backoff (3 tentativas) + registro de falhas |
-| 4. `cron-reconciliar-instalacoes` | ✅ Concluído | Novo cron job criado e deployado |
-| 5. Instalações retroativas | ✅ Concluído | 4 contratos corrigidos |
+A RPC `buscar_tarefa_atual_profissional` está **quebrada** devido a um erro de coluna inexistente:
 
----
+```sql
+-- Linha problemática (57)
+COALESCE(a.nome, c.nome)::TEXT AS associado_nome,
+                 ^^^^^
+                 ERRO: coluna c.nome não existe
+```
 
-## Contratos Corrigidos
+A tabela `cotacoes` usa `nome_solicitante`, não `nome`.
 
-| Cliente | Cotação ID | Status Final |
-|---------|------------|--------------|
-| MARCOS VINICIUS DATIVO MACHADO | 028562d5-... | ✅ Instalação agendada |
-| THALES HENRIQUE SOILO | 16403742-... | ✅ Instalação criada |
-| LEANDRO DA SILVA FERREIRA | 2dec2d91-... | ✅ Instalação criada |
-| MARCUS VINICIUS FAUSTINONI | c34d6e95-... | ✅ Instalação em_rota (já atribuída) |
+## Impacto
 
----
+1. **RPC falha silenciosamente** quando chamada pelo cron de atribuição
+2. O cron **não detecta** que o profissional já tem tarefa ativa
+3. O cron tenta atribuir nova tarefa, mas falha no `UPDATE` (condição `profissional_id IS NULL`)
+4. Os logs mostram "já foi atribuído a outro" mesmo para serviços sem profissional
 
-## Alterações Técnicas Realizadas
+## Fluxo Atual (Quebrado)
 
-### 1. Edge Function `criar-instalacao-pos-pagamento`
+```text
+cron-atribuir-tarefas
+        │
+        ▼
+buscar_tarefa_atual_profissional(vistoriador_id)
+        │
+        ▼ ERRO: c.nome não existe
+        │
+       ❌ Retorna null/erro (não tratado)
+        │
+        ▼
+Cron assume "profissional não tem tarefa"
+        │
+        ▼
+Tenta atribuir novo serviço
+        │
+        ▼
+UPDATE falha (serviço já tem profissional_id OU race condition)
+        │
+        ▼
+Log: "já foi atribuído a outro"
+```
 
-**Arquivo**: `supabase/functions/criar-instalacao-pos-pagamento/index.ts`
+## Solução
 
-Agora trata explicitamente:
-- `tipo_vistoria = 'agendada'` → Usa campos `vistoria_*`
-- `tipo_vistoria = 'autovistoria'` → Usa campos `vistoria_completa_*` para data/hora/endereço, mantendo coordenadas compartilhadas
-- Logs detalhados para debug
+### Migração SQL: Corrigir RPC
 
-### 2. Edge Function `asaas-webhook`
+**Alterações necessárias**:
+1. Trocar `c.nome` por `c.nome_solicitante`
+2. Trocar `c.telefone` por `c.telefone_solicitante`
 
-**Arquivo**: `supabase/functions/asaas-webhook/index.ts`
+```sql
+-- Linha 57 ANTES
+COALESCE(a.nome, c.nome)::TEXT AS associado_nome,
+COALESCE(a.telefone, c.telefone)::TEXT AS associado_telefone,
 
-Melhorias:
-- Retry com backoff exponencial (3 tentativas)
-- Registro de falhas na tabela `instalacoes_pendentes_criacao`
-- Logs mais detalhados
+-- Linha 57 DEPOIS
+COALESCE(a.nome, c.nome_solicitante)::TEXT AS associado_nome,
+COALESCE(a.telefone, c.telefone_solicitante)::TEXT AS associado_telefone,
+```
 
-### 3. Nova Tabela `instalacoes_pendentes_criacao`
+### Arquivo a Criar
 
-Campos:
-- `cotacao_id`, `contrato_id` (referências)
-- `motivo`, `tentativas`, `ultima_tentativa`, `erro_detalhes`
-- `resolvido`, `resolvido_em`, `resolvido_por`
+| Tipo | Descrição |
+|------|-----------|
+| Migração SQL | Recriar a função `buscar_tarefa_atual_profissional` com colunas corretas |
 
-### 4. Novo Cron Job `cron-reconciliar-instalacoes`
+## Validação Pós-Deploy
 
-**Arquivo**: `supabase/functions/cron-reconciliar-instalacoes/index.ts`
+1. Testar RPC manualmente: `SELECT * FROM buscar_tarefa_atual_profissional('68f4857b-...')`
+2. Verificar que retorna o serviço em `em_rota` do Marcus Vinicius Faustinoni
+3. Executar cron de atribuição e confirmar que pula o profissional com tarefa ativa
+4. Quando profissional concluir tarefa atual, confirmar atribuição automática das pendentes
 
-Funcionalidades:
-- Busca contratos pagos sem instalação
-- Tenta criar instalações faltantes
-- Processa registros pendentes da tabela de rastreamento
-- Marca como resolvido quando sucesso
+## Resumo
 
----
-
-## Validação
-
-- ✅ 4 instalações criadas/corrigidas
-- ✅ Atribuição automática funcionando (aguardando profissional disponível)
-- ✅ Edge functions deployadas
-- ✅ Tabela de rastreamento criada
-
----
-
-## Próximos Passos Sugeridos
-
-1. **Configurar cron schedule** para `cron-reconciliar-instalacoes` (ex: a cada 15 minutos)
-2. **Monitorar** tabela `instalacoes_pendentes_criacao` para falhas recorrentes
+| Item | Status Atual | Ação |
+|------|--------------|------|
+| RPC `buscar_tarefa_atual_profissional` | ❌ Quebrada (c.nome) | Corrigir para c.nome_solicitante |
+| Detecção de tarefa ativa | ❌ Falha | Será corrigida com a RPC |
+| Atribuição automática | ❌ Loop infinito de tentativas | Funcionará após correção |
