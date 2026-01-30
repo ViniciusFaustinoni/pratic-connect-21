@@ -51,15 +51,21 @@ export function CriarContaAssociadoForm({ associadoId, nomeAssociado, emailCadas
         body: { associadoId, email: emailFinal.toLowerCase().trim(), senha }
       });
 
-      // Verificar erro HTTP (status não-2xx)
-      if (error) {
-        console.error('Erro HTTP da Edge Function:', error);
-        throw new Error('Erro de conexão. Tente novamente.');
+      // O Supabase SDK coloca respostas não-2xx no error, mas o body ainda vem em data
+      // Primeiro verificar se temos uma resposta estruturada da Edge Function
+      if (data && !data.success) {
+        throw new Error(data.error || 'Erro ao criar conta');
       }
-      
-      // Verificar resposta de erro da Edge Function
+
+      // Se não temos data válido mas temos error, é erro de conexão/rede
+      if (error && !data) {
+        console.error('Erro de conexão com Edge Function:', error);
+        throw new Error('Erro de conexão. Verifique sua internet e tente novamente.');
+      }
+
+      // Se nem data.success existe, algo deu errado
       if (!data?.success) {
-        throw new Error(data?.error || 'Erro ao criar conta');
+        throw new Error('Resposta inválida do servidor. Tente novamente.');
       }
 
       // 2. Fazer login automático com as credenciais recém-criadas
