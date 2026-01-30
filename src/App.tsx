@@ -204,6 +204,7 @@ import LogsAuditoria from "./pages/diretoria/LogsAuditoria";
 import RelatoriosGerenciais from "./pages/diretoria/RelatoriosGerenciais";
 import FaixasCotas from "./pages/diretoria/FaixasCotas";
 import SolicitacoesIA from "./pages/diretoria/SolicitacoesIA";
+import CampanhasDesconto from "./pages/diretoria/CampanhasDesconto";
 import AuditoriaVendedores from "./pages/auditoria/AuditoriaVendedores";
 
 // Central de Relatórios
@@ -502,6 +503,7 @@ const App = () => (
               <Route path="/diretoria/relatorios" element={<RelatoriosGerenciais />} />
               <Route path="/diretoria/faixas-cotas" element={<FaixasCotas />} />
               <Route path="/diretoria/solicitacoes-ia" element={<SolicitacoesIA />} />
+              <Route path="/diretoria/campanhas" element={<CampanhasDesconto />} />
               
               {/* Central de Relatórios */}
               <Route path="/relatorios" element={<RelatoriosCentral />} />
