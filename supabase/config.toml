@@ -1,5 +1,8 @@
 project_id = "iyxdgmukrrdkffraptsx"
 
+[functions.gerar-mensagem-whatsapp]
+verify_jwt = false
+
 [functions.transcrever-audio]
 verify_jwt = false
 
