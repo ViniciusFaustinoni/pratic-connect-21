@@ -1,334 +1,209 @@
 
-# Plano: Implementação de Campanhas de Desconto
+# Plano: Restrição de Início de Instalação por Horário Agendado
 
-## Resumo
+## Resumo do Problema
 
-Implementar um sistema completo de campanhas de desconto que permite ao diretor criar e gerenciar campanhas promocionais, e ao consultor selecionar campanhas ativas durante a cotação, aplicando descontos automáticos no valor mensal.
+Atualmente, o sistema possui validação parcial para o horário agendado:
 
-## Visão Geral da Solução
+1. **Na atribuição** (Edge Function): Bloqueia atribuição de serviços de hoje antes do horário (exceto encaixes)
+2. **No início de rota** (Hook): Valida horário antes de iniciar, mas a UI não mostra feedback adequado
 
-```text
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                        FLUXO DE CAMPANHAS DE DESCONTO                       │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  DIRETORIA                         COTAÇÃO                                  │
-│  ┌──────────────────┐              ┌──────────────────────────────────────┐ │
-│  │ CRUD Campanhas   │              │ Seleção de Campanha Ativa           │ │
-│  │ • Nome           │   ────────▶  │                                      │ │
-│  │ • Tipo (% ou R$) │              │ [v] Campanha: Black Friday -5%       │ │
-│  │ • Valor          │              │                                      │ │
-│  │ • Vigência       │              │ Valor Normal: R$ 100,00/mês         │ │
-│  │ • Meses          │              │ Valor Promocional: R$ 95,00/mês     │ │
-│  │ • Status         │              │ (Válido por 3 meses)                │ │
-│  └──────────────────┘              └──────────────────────────────────────┘ │
-│                                              │                              │
-│                                              ▼                              │
-│                              ┌─────────────────────────────────────────┐    │
-│                              │           COTAÇÃO SALVA                 │    │
-│                              │ • campanha_id: uuid                     │    │
-│                              │ • valor_mensal_original: R$ 100        │    │
-│                              │ • valor_mensal_promocional: R$ 95      │    │
-│                              │ • meses_desconto: 3                     │    │
-│                              └─────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────────────────────┘
+**Problema identificado**: O botão "Iniciar Rota" aparece habilitado mesmo quando o horário não foi atingido, e o usuário só descobre que não pode iniciar ao clicar (recebe erro). Além disso, a RPC não retorna o campo `permite_encaixe`.
+
+## Requisitos de Negócio
+
+| Cenário | Comportamento Esperado |
+|---------|------------------------|
+| Tarefa **SEM encaixe** | Só pode iniciar no horário exato agendado ou após |
+| Tarefa **COM encaixe** | Pode iniciar a qualquer momento (antecipação permitida) |
+| Tarefa atribuída manualmente pelo coordenador | Mesmas regras acima se aplicam |
+
+## Solução Proposta
+
+### Parte 1: Atualizar RPC para retornar `permite_encaixe`
+
+A RPC `buscar_tarefa_atual_profissional` precisa retornar o campo `permite_encaixe` para que a UI possa mostrar feedback adequado.
+
+**Alteração na RPC:**
+```sql
+CREATE OR REPLACE FUNCTION public.buscar_tarefa_atual_profissional(p_profissional_id uuid)
+ RETURNS TABLE(
+   -- ... campos existentes ...
+   permite_encaixe boolean  -- NOVO CAMPO
+ )
 ```
 
-## Parte 1: Estrutura de Dados
+### Parte 2: Atualizar Hook para receber o campo
 
-### Nova Tabela: `campanhas_desconto`
+O hook `useTarefaAtual` precisa incluir o novo campo no tipo e no retorno.
 
-| Coluna | Tipo | Descrição |
-|--------|------|-----------|
-| `id` | UUID | Identificador único |
-| `nome` | VARCHAR | Nome da campanha (ex: "Black Friday 2026") |
-| `descricao` | TEXT | Descrição detalhada |
-| `tipo_beneficio` | VARCHAR | `percentual` ou `valor_fixo` |
-| `valor_beneficio` | NUMERIC | Valor do desconto (ex: 5 para 5% ou 10 para R$10) |
-| `data_inicio` | DATE | Data de início da vigência |
-| `data_fim` | DATE | Data de término da vigência |
-| `meses_aplicacao` | INTEGER | Quantidade de meses com desconto |
-| `status` | VARCHAR | `ativa` ou `inativa` |
-| `criado_por` | UUID | ID do usuário que criou |
-| `created_at` | TIMESTAMPTZ | Data de criação |
-| `updated_at` | TIMESTAMPTZ | Data de atualização |
+### Parte 3: Bloquear botão "Iniciar Rota" na UI
 
-### Alterações na Tabela `cotacoes`
-
-Adicionar novos campos:
-
-| Coluna | Tipo | Descrição |
-|--------|------|-----------|
-| `campanha_desconto_id` | UUID | FK para campanhas_desconto |
-| `valor_mensal_promocional` | NUMERIC | Valor com desconto aplicado |
-| `meses_desconto_campanha` | INTEGER | Meses de duração do desconto |
-
-## Parte 2: CRUD de Campanhas (Diretoria)
-
-### Nova Página: `src/pages/diretoria/CampanhasDesconto.tsx`
-
-Interface com:
-- Lista de campanhas em tabela
-- Filtros: Status (ativa/inativa), Período
-- Botão "Nova Campanha"
-- Ações: Editar, Ativar/Desativar, Excluir
-
-### Novo Componente: `src/components/diretoria/CampanhaDescontoModal.tsx`
-
-Modal de criação/edição com campos:
-- Nome da campanha
-- Descrição
-- Tipo de benefício (select: Percentual / Valor Fixo)
-- Valor do benefício (input numérico)
-- Data início e Data fim (date pickers)
-- Quantidade de meses de aplicação
-- Status (switch ativo/inativo)
-
-### Novo Hook: `src/hooks/useCampanhasDesconto.ts`
-
-```typescript
-// Listagem de campanhas
-useCampanhasDesconto(filtros?: { status?: string })
-
-// Campanhas ativas e vigentes (para cotação)
-useCampanhasDescontoVigentes()
-
-// Mutations
-useCreateCampanhaDesconto()
-useUpdateCampanhaDesconto()
-useDeleteCampanhaDesconto()
-useToggleCampanhaDescontoStatus()
-```
-
-## Parte 3: Integração na Cotação
-
-### Modificações no `src/pages/vendas/Cotador.tsx`
-
-1. **Novo estado para campanha selecionada:**
-```typescript
-const [campanhaDesconto, setCampanhaDesconto] = useState<CampanhaDesconto | null>(null);
-```
-
-2. **Buscar campanhas vigentes:**
-```typescript
-const { data: campanhasVigentes } = useCampanhasDescontoVigentes();
-```
-
-3. **Novo componente de seleção de campanha** (antes da exibição dos planos):
-```tsx
-<SeletorCampanhaDesconto
-  campanhas={campanhasVigentes}
-  campanhaId={campanhaDesconto?.id}
-  onSelect={setCampanhaDesconto}
-/>
-```
-
-4. **Exibição de valores com desconto nos cards de plano:**
-```tsx
-// Valor promocional
-<div className="flex items-center gap-2">
-  <span className="text-3xl font-bold text-primary">
-    {formatarMoeda(valorComDesconto)}
-  </span>
-  <span className="text-sm text-muted-foreground line-through">
-    {formatarMoeda(valorOriginal)}
-  </span>
-</div>
-<p className="text-sm text-success">
-  Desconto válido por {campanhaDesconto.meses_aplicacao} meses
-</p>
-```
-
-5. **Salvar campanha na cotação:**
-```typescript
-const cotacaoData = await criarCotacao.mutateAsync({
-  // ... outros campos
-  campanha_desconto_id: campanhaDesconto?.id,
-  valor_mensal_promocional: valorComDesconto,
-  meses_desconto_campanha: campanhaDesconto?.meses_aplicacao,
-});
-```
-
-### Novo Componente: `src/components/cotador/SeletorCampanhaDesconto.tsx`
+No componente `TarefaAtualCard.tsx`, verificar se o horário agendado já foi atingido antes de habilitar o botão:
 
 ```tsx
-<Card className="border-amber-500/30 bg-amber-500/5">
-  <CardContent className="p-4">
-    <div className="flex items-center gap-2 mb-3">
-      <Ticket className="h-5 w-5 text-amber-500" />
-      <span className="font-medium">Campanha Promocional</span>
-    </div>
-    <Select value={campanhaId} onValueChange={onSelect}>
-      <SelectTrigger>
-        <SelectValue placeholder="Selecione uma campanha (opcional)" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="">Sem campanha</SelectItem>
-        {campanhas.map(c => (
-          <SelectItem key={c.id} value={c.id}>
-            {c.nome} ({c.tipo_beneficio === 'percentual' 
-              ? `-${c.valor_beneficio}%` 
-              : `-R$ ${c.valor_beneficio}`})
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  </CardContent>
-</Card>
-```
-
-## Parte 4: Cálculo de Desconto
-
-### Função de Cálculo
-
-```typescript
-function calcularValorComDesconto(
-  valorOriginal: number,
-  campanha: CampanhaDesconto | null
-): { valorPromocional: number; economia: number } {
-  if (!campanha) {
-    return { valorPromocional: valorOriginal, economia: 0 };
-  }
-
-  let valorPromocional: number;
+// Verificar se pode iniciar rota (horário respeitado)
+const podeIniciarRota = useMemo(() => {
+  // Se não é hoje, pode iniciar
+  const hoje = new Date().toISOString().split('T')[0];
+  if (tarefa.data_agendada !== hoje) return true;
   
-  if (campanha.tipo_beneficio === 'percentual') {
-    valorPromocional = valorOriginal * (1 - campanha.valor_beneficio / 100);
-  } else {
-    valorPromocional = valorOriginal - campanha.valor_beneficio;
-  }
-
-  // Garantir valor mínimo
-  valorPromocional = Math.max(valorPromocional, 0);
-
-  return {
-    valorPromocional: Math.round(valorPromocional * 100) / 100,
-    economia: Math.round((valorOriginal - valorPromocional) * 100) / 100,
-  };
-}
+  // Se é encaixe, pode iniciar
+  if (tarefa.permite_encaixe) return true;
+  
+  // Se não tem hora específica, pode iniciar
+  if (!tarefa.hora_agendada) return true;
+  
+  // Verificar se hora atual >= hora agendada
+  const horaAtual = new Date().toTimeString().slice(0, 5);
+  return horaAtual >= tarefa.hora_agendada;
+}, [tarefa.data_agendada, tarefa.hora_agendada, tarefa.permite_encaixe]);
 ```
 
-## Parte 5: Exibição na Proposta e PDF
+### Parte 4: Feedback visual ao usuário
 
-### Alterações no `EscolhaPlano.tsx` (Link Público)
+Quando o botão estiver desabilitado, mostrar mensagem explicativa:
 
-Exibir informações da campanha quando houver:
-- Badge "Promoção Ativa"
-- Valor original riscado + valor promocional
-- Texto: "Após X meses, retorna ao valor normal de R$ Y"
+```tsx
+{!podeIniciarRota && (
+  <div className="text-sm text-amber-600 flex items-center gap-1">
+    <Clock className="h-3 w-3" />
+    Disponível às {tarefa.hora_agendada?.slice(0, 5)}
+  </div>
+)}
+```
 
-### Alterações na Geração de PDF
+### Parte 5: Atualização em tempo real do botão
 
-No arquivo de geração de proposta PDF, incluir:
-- Nome da campanha
-- Período promocional (X meses)
-- Valor mensal promocional vs valor normal
-- Aviso sobre retorno ao valor normal
-
-## Arquivos a Criar
-
-| Arquivo | Descrição |
-|---------|-----------|
-| `src/pages/diretoria/CampanhasDesconto.tsx` | Página CRUD de campanhas |
-| `src/components/diretoria/CampanhaDescontoModal.tsx` | Modal de edição |
-| `src/hooks/useCampanhasDesconto.ts` | Hooks de gerenciamento |
-| `src/components/cotador/SeletorCampanhaDesconto.tsx` | Seletor na cotação |
-| `src/types/campanha-desconto.ts` | Tipos TypeScript |
+Usar um efeito para atualizar o estado a cada minuto, permitindo que o botão seja habilitado automaticamente quando o horário chegar.
 
 ## Arquivos a Modificar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/pages/vendas/Cotador.tsx` | Adicionar seleção de campanha e cálculo |
-| `src/hooks/useCotacao.ts` | Incluir campos de campanha no payload |
-| `src/components/cotacao-publica/EscolhaPlano.tsx` | Exibir valor promocional |
-| `src/lib/gerarPdfCotacao.ts` | Incluir info de campanha no PDF |
-| Rotas/Menu da Diretoria | Adicionar link para Campanhas |
+| Nova migração SQL | Atualizar RPC para retornar `permite_encaixe` |
+| `src/hooks/useTarefaAtual.ts` | Adicionar campo `permite_encaixe` ao tipo `TarefaAtual` |
+| `src/hooks/useServicos.ts` | Atualizar tipo `TarefaAtual` com `permite_encaixe` |
+| `src/components/vistoriador/TarefaAtualCard.tsx` | Lógica de bloqueio e feedback visual |
 
-## Migração SQL
+## Detalhes Técnicos
+
+### Migração SQL
 
 ```sql
--- Criar tabela de campanhas de desconto
-CREATE TABLE campanhas_desconto (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  nome VARCHAR(255) NOT NULL,
-  descricao TEXT,
-  tipo_beneficio VARCHAR(20) NOT NULL CHECK (tipo_beneficio IN ('percentual', 'valor_fixo')),
-  valor_beneficio NUMERIC(10,2) NOT NULL CHECK (valor_beneficio > 0),
-  data_inicio DATE NOT NULL,
-  data_fim DATE NOT NULL,
-  meses_aplicacao INTEGER NOT NULL DEFAULT 1 CHECK (meses_aplicacao >= 1),
-  status VARCHAR(20) NOT NULL DEFAULT 'ativa' CHECK (status IN ('ativa', 'inativa')),
-  criado_por UUID REFERENCES profiles(id),
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW(),
-  
-  CONSTRAINT data_fim_maior_inicio CHECK (data_fim >= data_inicio)
-);
-
--- Adicionar campos na tabela cotacoes
-ALTER TABLE cotacoes 
-ADD COLUMN campanha_desconto_id UUID REFERENCES campanhas_desconto(id),
-ADD COLUMN valor_mensal_promocional NUMERIC(10,2),
-ADD COLUMN meses_desconto_campanha INTEGER;
-
--- Índices
-CREATE INDEX idx_campanhas_desconto_status ON campanhas_desconto(status);
-CREATE INDEX idx_campanhas_desconto_vigencia ON campanhas_desconto(data_inicio, data_fim);
-CREATE INDEX idx_cotacoes_campanha ON cotacoes(campanha_desconto_id);
-
--- RLS
-ALTER TABLE campanhas_desconto ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Campanhas visíveis para autenticados" ON campanhas_desconto
-  FOR SELECT TO authenticated USING (true);
-
-CREATE POLICY "Campanhas editáveis por diretoria/admin" ON campanhas_desconto
-  FOR ALL TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1 FROM profiles 
-      WHERE profiles.user_id = auth.uid() 
-      AND profiles.cargo IN ('diretor', 'admin_master')
-    )
-  );
+-- Atualizar RPC para incluir campo permite_encaixe
+CREATE OR REPLACE FUNCTION public.buscar_tarefa_atual_profissional(p_profissional_id uuid)
+ RETURNS TABLE(
+   id uuid, tipo text, status text, data_agendada date, hora_agendada time,
+   periodo text, associado_id uuid, associado_nome text, associado_telefone text,
+   associado_whatsapp text, veiculo_id uuid, veiculo_placa text, veiculo_marca text,
+   veiculo_modelo text, veiculo_cor text, logradouro text, numero text, bairro text,
+   cidade text, uf text, cep text, latitude numeric, longitude numeric,
+   cotacao_id uuid, contrato_id uuid, rastreador_id uuid, imei_rastreador text,
+   local_vistoria text, observacoes text, rota_id uuid, iniciada_em timestamptz,
+   em_rota_em timestamptz, instalacao_origem_id uuid, vistoria_origem_id uuid,
+   confirmacao_whatsapp text, confirmado_via_whatsapp_em timestamptz,
+   permite_encaixe boolean  -- NOVO
+ )
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    s.id,
+    -- ... campos existentes ...
+    COALESCE(s.permite_encaixe, false)::boolean AS permite_encaixe  -- NOVO
+  FROM servicos s
+  -- ... resto igual ...
+END;
+$function$;
 ```
 
-## Regras de Negócio Implementadas
+### Lógica no TarefaAtualCard
 
-| Regra | Implementação |
-|-------|---------------|
-| Apenas campanhas ativas e vigentes aparecem na cotação | Query filtra por `status = 'ativa' AND data_inicio <= NOW() AND data_fim >= NOW()` |
-| Valor promocional exibido junto com valor original | UI mostra ambos valores lado a lado |
-| Campanha registrada na cotação e proposta | Campos `campanha_desconto_id`, `valor_mensal_promocional`, `meses_desconto_campanha` |
-| Sem campanha = valor padrão | Se `campanha_desconto_id` é null, usa `valor_total_mensal` |
-| Informação consistente em todas as visualizações | Tela, proposta e PDF usam mesmos dados |
+```tsx
+// Estado para forçar re-render a cada minuto
+const [agora, setAgora] = useState(new Date());
 
-## Fluxo Visual da Exibição de Preços
+useEffect(() => {
+  const interval = setInterval(() => setAgora(new Date()), 60000);
+  return () => clearInterval(interval);
+}, []);
+
+// Calcular se pode iniciar
+const podeIniciarPorHorario = useMemo(() => {
+  const hoje = agora.toISOString().split('T')[0];
+  
+  // Não é de hoje = pode iniciar
+  if (tarefa.data_agendada !== hoje) return true;
+  
+  // É encaixe = pode iniciar
+  if ((tarefa as any).permite_encaixe) return true;
+  
+  // Sem hora específica = pode iniciar
+  if (!tarefa.hora_agendada) return true;
+  
+  // Verificar horário
+  const horaAtual = agora.toTimeString().slice(0, 5);
+  return horaAtual >= tarefa.hora_agendada;
+}, [agora, tarefa.data_agendada, tarefa.hora_agendada, (tarefa as any).permite_encaixe]);
+
+// Tempo restante para habilitar
+const tempoRestante = useMemo(() => {
+  if (podeIniciarPorHorario || !tarefa.hora_agendada) return null;
+  
+  const [h, m] = tarefa.hora_agendada.split(':').map(Number);
+  const horaAgendada = new Date(agora);
+  horaAgendada.setHours(h, m, 0, 0);
+  
+  const diff = horaAgendada.getTime() - agora.getTime();
+  if (diff <= 0) return null;
+  
+  const minutos = Math.ceil(diff / 60000);
+  return minutos;
+}, [agora, tarefa.hora_agendada, podeIniciarPorHorario]);
+```
+
+## Fluxo Visual Final
 
 ```text
-┌──────────────────────────────────────────────────────────────────┐
-│  💰 VALORES                                                      │
-├──────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  Mensalidade:                                                    │
-│  ┌────────────────────────────────────────────────────────────┐  │
-│  │ R$ 95,00/mês ────────────── R$ 100,00 (valor normal)      │  │
-│  │ ▲ valor promocional         ▲ riscado                      │  │
-│  └────────────────────────────────────────────────────────────┘  │
-│                                                                  │
-│  ⚠️ Promoção válida por 3 meses.                                 │
-│  Após este período, a mensalidade será de R$ 100,00.            │
-│                                                                  │
-│  Economia total: R$ 15,00 (3x R$ 5,00)                          │
-│                                                                  │
-└──────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│  TAREFA SEM ENCAIXE - Agendada para 14:00                       │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  Hora Atual: 13:45                                              │
+│                                                                 │
+│  [Botão Iniciar Rota] ← DESABILITADO                           │
+│  ⏰ Disponível em 15 minutos (14:00)                            │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│  TAREFA SEM ENCAIXE - Agendada para 14:00                       │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  Hora Atual: 14:00                                              │
+│                                                                 │
+│  [Iniciar Rota] ← HABILITADO                                    │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│  TAREFA COM ENCAIXE ⚡ - Originalmente 16:00                     │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  Hora Atual: 13:45                                              │
+│                                                                 │
+│  [Iniciar Rota] ← HABILITADO (encaixe permite início antecipado)│
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ## Benefícios
 
-1. **Flexibilidade comercial** - Campanhas podem ser criadas rapidamente pela diretoria
-2. **Transparência** - Cliente vê claramente o valor promocional vs normal
-3. **Rastreabilidade** - Cada cotação registra qual campanha foi aplicada
-4. **Automação** - Sistema filtra automaticamente campanhas expiradas
-5. **Consistência** - Mesma informação em todas as visualizações (tela, PDF, proposta)
+1. **Cumprimento do horário** - Clientes que não aceitaram encaixe terão o horário respeitado
+2. **Feedback claro** - Profissional sabe exatamente quando poderá iniciar
+3. **Atualização automática** - Botão habilita sozinho quando o horário chega
+4. **Flexibilidade mantida** - Encaixes continuam podendo ser antecipados
