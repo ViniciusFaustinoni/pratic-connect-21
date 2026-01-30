@@ -127,6 +127,7 @@ export default function Cotacoes() {
   const [cotacaoParaExcluir, setCotacaoParaExcluir] = useState<string | null>(null);
   const [mesFilter, setMesFilter] = useState<string>('all');
   const [cotacaoParaDuplicar, setCotacaoParaDuplicar] = useState<CotacaoWithRelations | null>(null);
+  const [copiandoWhatsApp, setCopiandoWhatsApp] = useState<string | null>(null);
   
   // Novos filtros para finalizadas
   const [dataFilter, setDataFilter] = useState<Date | undefined>(undefined);
@@ -377,29 +378,148 @@ export default function Cotacoes() {
     handleMarkAsEnviada(cotacao.id, cotacao.lead_id);
   };
 
-  const copiarParaWhatsApp = async (cotacao: CotacaoWithRelations) => {
-    const coberturas = cotacao.planos?.coberturas as string[] | undefined;
-    const beneficiosTexto = coberturas?.slice(0, 5).map(c => `✓ ${c}`).join('\n') || '✓ Proteção completa';
+  // Função de fallback para gerar mensagem localmente (caso IA falhe)
+  const gerarMensagemFallback = (
+    cotacao: CotacaoWithRelations,
+    planos: Array<{ nome: string; valorMensal: number; coberturas: string[]; naoInclui?: string[] }>
+  ): string => {
+    const nomeCliente = cotacao.leads?.nome || cotacao.nome_solicitante || '';
+    const primeiroNome = nomeCliente.split(' ')[0];
+    const veiculo = `${cotacao.veiculo_marca} ${cotacao.veiculo_modelo} ${cotacao.veiculo_ano}`;
     
-    const mensagem = 
-      `Olá! 🚗\n\n` +
-      `Segue sua cotação de proteção veicular:\n\n` +
-      `📋 *Cotação Nº:* ${cotacao.numero}\n` +
-      `🚙 *Veículo:* ${cotacao.veiculo_marca} ${cotacao.veiculo_modelo} ${cotacao.veiculo_ano}\n` +
-      `📦 *Plano:* ${cotacao.planos?.nome || 'Proteção Veicular'}\n` +
-      `💰 *Valor FIPE:* R$ ${cotacao.valor_fipe?.toLocaleString('pt-BR')}\n\n` +
-      `💵 *VALOR MENSAL: R$ ${cotacao.valor_total_mensal?.toFixed(2)}*\n\n` +
-      `✅ *Principais Benefícios:*\n` +
-      `${beneficiosTexto}\n\n` +
-      `📝 Taxa de Adesão: R$ ${cotacao.valor_adesao?.toFixed(2)}\n\n` +
-      `⏰ Cotação válida por ${cotacao.validade_dias || 7} dias.\n\n` +
-      `Posso te ajudar com mais alguma informação?`;
+    let mensagem = `Olá${primeiroNome ? ` ${primeiroNome}` : ''}! 🚗\n\n`;
+    mensagem += `Preparamos uma cotação especial para seu *${veiculo}*.\n\n`;
+    mensagem += `💰 *Valor FIPE:* R$ ${cotacao.valor_fipe?.toLocaleString('pt-BR')}\n\n`;
+    
+    // Listar cada plano com TODOS os benefícios
+    planos.forEach((plano, index) => {
+      if (planos.length > 1) {
+        mensagem += `━━━━━━━━━━━━━━━━━━\n`;
+        mensagem += `📦 *OPÇÃO ${index + 1}: ${plano.nome}*\n`;
+      } else {
+        mensagem += `📦 *Plano:* ${plano.nome}\n`;
+      }
+      mensagem += `💵 *Mensalidade:* R$ ${plano.valorMensal.toFixed(2)}/mês\n\n`;
+      
+      if (plano.coberturas && plano.coberturas.length > 0) {
+        mensagem += `✅ *Benefícios inclusos:*\n`;
+        plano.coberturas.forEach(c => {
+          mensagem += `✓ ${c}\n`;
+        });
+        mensagem += `\n`;
+      }
+      
+      if (plano.naoInclui && plano.naoInclui.length > 0) {
+        mensagem += `❌ *Não inclui:*\n`;
+        plano.naoInclui.forEach(n => {
+          mensagem += `• ${n}\n`;
+        });
+        mensagem += `\n`;
+      }
+    });
+    
+    if (planos.length > 1) {
+      mensagem += `━━━━━━━━━━━━━━━━━━\n\n`;
+    }
+    
+    mensagem += `📝 *Taxa de Adesão:* R$ ${cotacao.valor_adesao?.toFixed(2)}\n`;
+    mensagem += `⏰ Cotação válida por ${cotacao.validade_dias || 7} dias.\n\n`;
+    
+    if (cotacao.token_publico) {
+      mensagem += `🔗 *Veja mais detalhes:*\n`;
+      mensagem += `${window.location.origin}/cotacao/${cotacao.token_publico}\n\n`;
+    }
+    
+    mensagem += `Qual opção te interessou mais? Estou à disposição! 😊`;
+    
+    return mensagem;
+  };
 
-    try {
-      await navigator.clipboard.writeText(mensagem);
+  const copiarParaWhatsApp = async (cotacao: CotacaoWithRelations) => {
+    // Extrair planos de dados_extras ou usar plano principal
+    const planosComparacao = cotacao.dados_extras?.planos_comparacao as Array<{
+      nome: string;
+      valorMensal: number;
+      coberturas?: string[];
+      naoInclui?: string[];
+    }> | undefined;
+    
+    let planos: Array<{ nome: string; valorMensal: number; coberturas: string[]; naoInclui?: string[] }> = [];
+    
+    if (planosComparacao && planosComparacao.length > 0) {
+      planos = planosComparacao.map(p => ({
+        nome: p.nome,
+        valorMensal: p.valorMensal,
+        coberturas: p.coberturas || [],
+        naoInclui: p.naoInclui || [],
+      }));
+    } else if (cotacao.planos) {
+      planos = [{
+        nome: cotacao.planos.nome,
+        valorMensal: cotacao.valor_total_mensal || 0,
+        coberturas: (cotacao.planos.coberturas as string[]) || [],
+      }];
+    }
+    
+    // Se não há planos, usar fallback simples
+    if (planos.length === 0) {
+      const mensagemSimples = 
+        `Olá! 🚗\n\n` +
+        `Segue sua cotação de proteção veicular:\n\n` +
+        `📋 *Cotação Nº:* ${cotacao.numero}\n` +
+        `🚙 *Veículo:* ${cotacao.veiculo_marca} ${cotacao.veiculo_modelo} ${cotacao.veiculo_ano}\n` +
+        `💰 *Valor FIPE:* R$ ${cotacao.valor_fipe?.toLocaleString('pt-BR')}\n\n` +
+        `💵 *VALOR MENSAL: R$ ${cotacao.valor_total_mensal?.toFixed(2)}*\n\n` +
+        `📝 Taxa de Adesão: R$ ${cotacao.valor_adesao?.toFixed(2)}\n\n` +
+        `⏰ Cotação válida por ${cotacao.validade_dias || 7} dias.\n\n` +
+        `Posso te ajudar com mais alguma informação?`;
+      
+      await navigator.clipboard.writeText(mensagemSimples);
       toast.success('Mensagem copiada! Cole no WhatsApp.');
+      return;
+    }
+    
+    // Montar dados para a IA
+    const dadosCotacao = {
+      cliente: { nome: cotacao.leads?.nome || cotacao.nome_solicitante || 'Cliente' },
+      veiculo: {
+        marca: cotacao.veiculo_marca || '',
+        modelo: cotacao.veiculo_modelo || '',
+        ano: cotacao.veiculo_ano || 0,
+        placa: cotacao.veiculo_placa,
+      },
+      valorFipe: cotacao.valor_fipe || 0,
+      valorAdesao: cotacao.valor_adesao || 0,
+      validadeDias: cotacao.validade_dias || 7,
+      planos,
+      linkCotacao: cotacao.token_publico 
+        ? `${window.location.origin}/cotacao/${cotacao.token_publico}` 
+        : undefined,
+    };
+    
+    // Chamar Edge Function com IA
+    setCopiandoWhatsApp(cotacao.id);
+    try {
+      const { data, error } = await supabase.functions.invoke('gerar-mensagem-whatsapp', {
+        body: dadosCotacao,
+      });
+      
+      if (error) throw error;
+      
+      if (data?.mensagem) {
+        await navigator.clipboard.writeText(data.mensagem);
+        toast.success('Mensagem personalizada copiada! Cole no WhatsApp.');
+      } else {
+        throw new Error('Resposta sem mensagem');
+      }
     } catch (error) {
-      toast.error('Erro ao copiar mensagem');
+      console.warn('Erro ao gerar mensagem com IA, usando fallback:', error);
+      // Fallback: usar mensagem padrão se IA falhar
+      const mensagemFallback = gerarMensagemFallback(cotacao, planos);
+      await navigator.clipboard.writeText(mensagemFallback);
+      toast.success('Mensagem copiada! Cole no WhatsApp.');
+    } finally {
+      setCopiandoWhatsApp(null);
     }
   };
 
@@ -738,6 +858,7 @@ export default function Cotacoes() {
                   onCopiarWhatsApp={copiarParaWhatsApp}
                   onGerarContrato={handleOpenContratoWizard}
                   isGerandoContrato={gerarContrato.isPending}
+                  isCopiandoWhatsApp={copiandoWhatsApp === cotacao.id}
                   permissions={cardPermissions}
                 />
               );
@@ -810,6 +931,7 @@ export default function Cotacoes() {
                         onCopiarWhatsApp={copiarParaWhatsApp}
                         onGerarContrato={handleOpenContratoWizard}
                         isGerandoContrato={gerarContrato.isPending}
+                        isCopiandoWhatsApp={copiandoWhatsApp === cotacao.id}
                         permissions={cardPermissions}
                       />
                     );

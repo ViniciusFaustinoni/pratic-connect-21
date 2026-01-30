@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { FileText, Send, Check, X, MessageCircle, FileDown, Mail, FileSignature, Eye, Link2, Copy, Trash2, MoreHorizontal, Car, User, Phone, RefreshCw, ClipboardCopy, ExternalLink } from 'lucide-react';
+import { FileText, Send, Check, X, MessageCircle, FileDown, Mail, FileSignature, Eye, Link2, Copy, Trash2, MoreHorizontal, Car, User, Phone, RefreshCw, ClipboardCopy, ExternalLink, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -234,6 +234,7 @@ interface CotacaoCardProps {
   isGerandoContrato?: boolean;
   onCopiarWhatsApp?: (cotacao: CotacaoWithRelations) => void;
   permissions?: CotacaoCardPermissions;
+  isCopiandoWhatsApp?: boolean;
 }
 
 export function CotacaoCard({
@@ -254,6 +255,7 @@ export function CotacaoCard({
   isGerandoContrato = false,
   onCopiarWhatsApp,
   permissions,
+  isCopiandoWhatsApp = false,
 }: CotacaoCardProps) {
   const status = statusConfig[cotacao.status as StatusCotacaoExtended] || statusConfig.rascunho;
   const hasLead = !!cotacao.lead_id;
@@ -429,9 +431,19 @@ export function CotacaoCard({
                 size="sm"
                 className="bg-green-600 hover:bg-green-700 text-white"
                 onClick={() => onCopiarWhatsApp(cotacao)}
+                disabled={isCopiandoWhatsApp}
               >
-                <ClipboardCopy className="h-4 w-4 mr-1" />
-                Copiar para WhatsApp
+                {isCopiandoWhatsApp ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                    Gerando...
+                  </>
+                ) : (
+                  <>
+                    <ClipboardCopy className="h-4 w-4 mr-1" />
+                    Copiar para WhatsApp
+                  </>
+                )}
               </Button>
               
               {cotacao.token_publico && (
