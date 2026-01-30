@@ -1,79 +1,87 @@
 
+# Plano: Corrigir Atualizacao em Tempo Real na Area do Cliente
 
-# Plano: Remover Badges de Status dos Documentos Anexados
+## Problema Identificado
 
-## Objetivo
+A area publica do cliente que mostra "Em Analise Cadastral" nao se atualiza automaticamente quando o analista de cadastro aprova a proposta para "Roubo e Furto".
 
-Remover os badges "Aprovado", "Pendente", "Reprovado", "Em Análise" que aparecem ao lado de cada documento na lista de "Documentos Anexados".
+## Causa Raiz
 
-## Localização do Código
+O hook `useCotacaoContratacao.ts` possui um listener Realtime que detecta mudancas na tabela `associados`, porem quando a mudanca e detectada:
 
-**Arquivo:** `src/components/cadastro/DocumentosAnexadosCard.tsx`
-
-Os badges aparecem em dois lugares:
-1. **Lista de documentos** - Linhas 166-170
-2. **Dialog de visualização** - Linhas 200-204
-
-## O Que Será Removido
-
-### Na lista de documentos (linhas 166-170):
-```tsx
-// REMOVER:
-<Badge className={cn('text-xs', statusConfig.className)}>
-  <StatusIcon className="h-3 w-3 mr-1" />
-  {statusConfig.label}
-</Badge>
+```typescript
+// Codigo atual - linha 217-220
+(payload) => {
+  console.log('[CotacaoContratacao] Realtime: associado atualizado:', payload);
+  refetch(); // <- So refaz a query "cotacao-contratacao"
+}
 ```
 
-### No dialog de visualização (linhas 200-204):
-```tsx
-// REMOVER:
-{selectedDoc && (
-  <Badge className={cn('text-xs', getStatusConfig(selectedDoc.status).className)}>
-    {getStatusConfig(selectedDoc.status).label}
-  </Badge>
-)}
+O problema e que:
+1. `refetch()` rebusca apenas a query `cotacao-contratacao` (cotacoes)
+2. O `associadoStatus` vem da query `contrato-publico-fallback` (contratos)
+3. Essa segunda query NAO e invalidada no callback
+
+### Fluxo do Problema
+
+```text
+Analista aprova       associados.status    Realtime detecta    refetch() rebusca
+  proposta      --->  muda para 'ativo' --> mudanca no BD  --> apenas cotacao
+                                                               |
+                                                               v
+                                            contrato-publico-fallback NAO rebusca
+                                                               |
+                                                               v
+                                            associadoStatus fica com valor antigo
+                                                               |
+                                                               v
+                                            Tela permanece em "Em Analise Cadastral"
 ```
 
-## Código Não Afetado
+## Solucao
 
-O badge de "Validado por IA" (linhas 171-177) será mantido, pois é uma informação diferente que indica processamento por OCR.
+Modificar o callback do listener Realtime para tambem invalidar a query `contrato-publico-fallback`:
 
-## Limpeza Adicional
-
-Após remover os badges, podemos também remover:
-- A constante `STATUS_CONFIG` (linhas 55-60) - não será mais usada na lista
-- A função `getStatusConfig` (linhas 93-95) - não será mais chamada
-- As variáveis `statusConfig` e `StatusIcon` (linhas 113, 115) - não serão mais usadas
-- Import do `Clock` e `AlertCircle` que só eram usados nos badges de status
+```typescript
+// Codigo corrigido
+.on(
+  'postgres_changes',
+  {
+    event: 'UPDATE',
+    schema: 'public',
+    table: 'associados',
+    filter: `id=eq.${associadoId}`,
+  },
+  (payload) => {
+    console.log('[CotacaoContratacao] Realtime: associado atualizado:', payload);
+    // Invalidar AMBAS as queries para garantir atualizacao
+    refetch();
+    queryClient.invalidateQueries({ queryKey: ['contrato-publico-fallback', token] });
+  }
+)
+```
 
 ## Arquivo a Modificar
 
-| Arquivo | Alteração |
+| Arquivo | Alteracao |
 |---------|-----------|
-| `src/components/cadastro/DocumentosAnexadosCard.tsx` | Remover badges de status e código relacionado |
+| `src/hooks/useCotacaoContratacao.ts` | Adicionar invalidacao da query `contrato-publico-fallback` no callback do Realtime |
 
-## Resultado Visual
+## Alteracao Detalhada
 
-Antes:
-```
-[📄] Contrato Assinado          [✓ Aprovado]  [👁]
-     30/01/2026 às 08:12
+No useEffect do Realtime (linhas 188-230), modificar o callback para:
 
-[🏠] Comprovante de Residência  [⏱ Pendente]  [👁]
-     30/01/2026 às 08:06
-```
+1. Continuar chamando `refetch()` para a query principal
+2. Adicionar `queryClient.invalidateQueries()` para a query `contrato-publico-fallback`
 
-Depois:
-```
-[📄] Contrato Assinado                        [👁]
-     30/01/2026 às 08:12
+Isso garantira que quando o analista atualizar o `associados.status`, AMBAS as queries serao recarregadas, e o `associadoStatus` sera atualizado corretamente.
 
-[🏠] Comprovante de Residência                [👁]
-     30/01/2026 às 08:06
-```
+## Impacto
+
+- A tela do cliente (`CotacaoContratacao.tsx`) atualizara automaticamente quando o analista aprovar a proposta
+- O redirecionamento para `/acompanhar/:token` funcionara em tempo real (quando `associadoStatus` mudar para `em_analise` ou `ativo`)
+- O cliente nao precisara atualizar a pagina manualmente
 
 ## Tempo Estimado
 
 ~5 minutos
-
