@@ -1,124 +1,156 @@
 
 
-# Plano: Melhorar Visualização de Benefícios Restritos na Tela de Cotação
+# Plano: Expandir Monitoramento de Exclusividade de Vendedores
 
-## Resumo
+## Resumo Executivo
 
-Ao selecionar uma condição especial para o veículo (ex: "Veículo proveniente de leilão"), os benefícios que não estão disponíveis para essa condição devem aparecer com efeito visual de riscado (strikethrough) e X vermelho, reforçando visualmente quais coberturas o cliente não terá direito.
+O sistema **já possui** um módulo de Auditoria de Vendedores completo em `/auditoria/vendedores`. Este plano expande a funcionalidade existente para detectar vendedores que possam estar realizando cotações para associações concorrentes.
 
 ## Situação Atual
 
-O sistema **já possui** a lógica de restrições implementada em alguns componentes:
+O sistema já conta com:
 
 | Componente | Status |
 |------------|--------|
-| `EscolhaPlano.tsx` | Mostra riscado |
-| `CotacaoFormDialog.tsx` (linhas 1484-1530) | Mostra riscado |
-| `PlanoCard.tsx` | Mostra riscado |
-| `PlanoCardComparativo.tsx` | Mostra riscado |
-| `PlanoDetalhesModal.tsx` | Mostra riscado |
-| `PlanoCardSelecao.tsx` | Mostra riscado |
+| Tela de Auditoria (`/auditoria/vendedores`) | Existente |
+| Tabela `auditoria_vendedores` | Existente |
+| Tabela `vendedores_monitoramento` | Existente |
+| Edge Function `analisar-exclusividade` | Existente |
+| Hooks de auditoria (`useAuditoriaVendedores`) | Existente |
+| Alertas de CPF duplicado | Existente |
+| Alertas de taxa conversão baixa | Existente |
+| Alertas de cotações abandonadas | Existente |
 
-Porém, existem **dois locais** onde a verificação de restrições **não está sendo aplicada**:
+## O Que Será Implementado
 
-1. **`src/pages/vendas/Cotador.tsx`** (linhas 1278-1283) - Detalhes do plano no resultado
-2. **`src/components/cotacoes/CotacaoFormDialog.tsx`** (linhas 1675-1695) - Preview de planos na seção de comparação
+### 1. Nova Tabela: Associações Concorrentes Cadastradas
 
-## Alterações Necessárias
+Criar uma tabela para cadastrar associações/empresas concorrentes conhecidas que serão usadas para identificar conflitos.
 
-### 1. Arquivo: `src/pages/vendas/Cotador.tsx`
-
-**Adicionar importação:**
-```tsx
-import { isCoberturaRemovida } from '@/data/restricoesCategorias';
+```sql
+CREATE TABLE associacoes_concorrentes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  nome VARCHAR(255) NOT NULL,
+  cnpj VARCHAR(20),
+  palavras_chave TEXT[], -- ex: ['proteja', 'protecao xyz', 'apv']
+  ativo BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
 ```
 
-**Modificar linhas 1278-1283:**
+### 2. Nova Tabela: Registro de Indícios
 
-De:
-```tsx
-{planoAtual.coberturas.map((cobertura, i) => (
-  <div key={i} className="flex items-center gap-2 text-sm">
-    <Check className="h-4 w-4 text-green-500 shrink-0" />
-    <span>{cobertura}</span>
-  </div>
-))}
+Armazenar evidências de possível conflito de interesse detectadas.
+
+```sql
+CREATE TABLE auditoria_indicios_concorrencia (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  vendedor_id UUID REFERENCES profiles(id) NOT NULL,
+  tipo_indicio VARCHAR(50) NOT NULL, -- 'email_corporativo', 'telefone_duplicado', 'padrao_horario', 'cliente_migrado'
+  descricao TEXT,
+  associacao_concorrente_id UUID REFERENCES associacoes_concorrentes(id),
+  dados_evidencia JSONB,
+  score_risco INTEGER DEFAULT 20,
+  status VARCHAR(20) DEFAULT 'pendente', -- pendente, analisado, confirmado, ignorado
+  analisado_por UUID REFERENCES profiles(id),
+  analisado_em TIMESTAMPTZ,
+  observacoes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
 ```
 
-Para:
-```tsx
-{planoAtual.coberturas.map((cobertura, i) => {
-  const isRemovida = isCoberturaRemovida(cobertura, categoriaVeiculo);
-  return (
-    <div key={i} className="flex items-center gap-2 text-sm">
-      {isRemovida ? (
-        <>
-          <X className="h-4 w-4 text-destructive shrink-0" />
-          <span className="text-muted-foreground line-through">{cobertura}</span>
-          <span className="text-xs text-destructive">(não cobre)</span>
-        </>
-      ) : (
-        <>
-          <Check className="h-4 w-4 text-green-500 shrink-0" />
-          <span>{cobertura}</span>
-        </>
-      )}
-    </div>
-  );
-})}
+### 3. Novo Tipo de Alerta na Edge Function
+
+Expandir a Edge Function `analisar-exclusividade` para incluir novos tipos de detecção:
+
+**Novos tipos de alerta:**
+- `email_suspeito` - Email do vendedor ou leads com domínio de concorrente
+- `padrao_multi_organizacao` - Vendedor com leads que mencionam outras associações
+- `horario_fora_expediente` - Atividade concentrada fora do horário comercial
+- `clientes_migrados` - Leads com histórico em outras associações (quando detectável)
+
+### 4. Nova View: Métricas de Conflito
+
+```sql
+CREATE VIEW vw_vendedores_conflito AS
+SELECT 
+  p.id as vendedor_id,
+  p.nome,
+  p.email,
+  COUNT(DISTINCT aic.id) as total_indicios,
+  COUNT(DISTINCT CASE WHEN aic.status = 'confirmado' THEN aic.id END) as indicios_confirmados,
+  MAX(aic.created_at) as ultimo_indicio,
+  ARRAY_AGG(DISTINCT ac.nome) FILTER (WHERE ac.nome IS NOT NULL) as associacoes_envolvidas
+FROM profiles p
+LEFT JOIN auditoria_indicios_concorrencia aic ON aic.vendedor_id = p.id
+LEFT JOIN associacoes_concorrentes ac ON ac.id = aic.associacao_concorrente_id
+WHERE aic.id IS NOT NULL
+GROUP BY p.id, p.nome, p.email;
 ```
 
-### 2. Arquivo: `src/components/cotacoes/CotacaoFormDialog.tsx`
+### 5. UI: Nova Aba na Tela de Auditoria
 
-**Modificar linhas 1675-1695** (preview dos planos selecionados para comparação):
+Adicionar uma nova aba "Conflito de Interesse" na página `/auditoria/vendedores` com:
 
-De:
-```tsx
-{plano.coberturas.slice(0, LIMIT).map((cobertura, i) => (
-  <li key={i} className="flex items-start gap-2">
-    <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-    <span>{cobertura}</span>
-  </li>
-))}
+- Lista de vendedores com indícios de trabalho para concorrentes
+- Detalhes das associações envolvidas
+- Timeline de evidências detectadas
+- Ações para analisar/confirmar/ignorar
+
+### 6. UI: Cadastro de Associações Concorrentes
+
+Criar uma seção de configuração para gerenciar a lista de associações concorrentes conhecidas (apenas para diretor/desenvolvedor).
+
+## Fluxo de Detecção
+
+```text
+1. Vendedor cria cotação/lead
+          ↓
+2. Edge Function analisa:
+   - Email tem domínio de concorrente?
+   - Telefone aparece em outra associação?
+   - Observações mencionam concorrente?
+   - Horário atípico frequente?
+          ↓
+3. Se detectado → Cria registro em auditoria_indicios_concorrencia
+          ↓
+4. Atualiza score de risco em vendedores_monitoramento
+          ↓
+5. Se score >= 70 → Notifica gestores
+          ↓
+6. Gestor analisa na tela de Auditoria
 ```
 
-Para:
-```tsx
-{plano.coberturas.slice(0, LIMIT).map((cobertura, i) => {
-  const isRemovida = isCoberturaRemovida(cobertura, categoria);
-  return (
-    <li key={i} className="flex items-start gap-2">
-      {isRemovida ? (
-        <>
-          <X className="h-4 w-4 text-destructive mt-0.5 flex-shrink-0" />
-          <span className="line-through text-muted-foreground/60">{cobertura}</span>
-        </>
-      ) : (
-        <>
-          <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-          <span>{cobertura}</span>
-        </>
-      )}
-    </li>
-  );
-})}
-```
-
-Aplicar a mesma lógica para as coberturas expandidas (linhas 1690-1695).
-
-## Resultado Visual
-
-Quando o vendedor selecionar "Veículo proveniente de leilão":
-
-- "Roubo e Furto" - check verde normal
-- "Colisão" - check verde normal  
-- "Perda Total" - check verde normal
-- ~~"Incêndio"~~ (não disponível) - X vermelho com texto riscado
-
-## Resumo de Alterações
+## Alterações em Arquivos
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/pages/vendas/Cotador.tsx` | Importar `isCoberturaRemovida` e aplicar na listagem de coberturas |
-| `src/components/cotacoes/CotacaoFormDialog.tsx` | Aplicar lógica de riscado na seção de preview dos planos |
+| `supabase/functions/analisar-exclusividade/index.ts` | Adicionar novos tipos de análise |
+| `src/hooks/useAuditoriaVendedores.ts` | Novos hooks para indícios de concorrência |
+| `src/pages/auditoria/AuditoriaVendedores.tsx` | Nova aba "Conflito de Interesse" |
+| `src/components/auditoria/AlertaDetalheModal.tsx` | Suporte a novos tipos de alerta |
+| `src/components/auditoria/IndiciosConcorrenciaTab.tsx` | **Novo** - Componente da nova aba |
+| `src/components/auditoria/CadastroAssociacoesModal.tsx` | **Novo** - Modal de cadastro |
+
+## Controle de Acesso
+
+Acesso restrito a:
+- `diretor`
+- `gerente_comercial`
+- `desenvolvedor`
+- `admin_master`
+
+Usando as permissões já existentes no `usePermissions`:
+```ts
+canManageAuditoria: isDiretor || isGerencia() || isDesenvolvedor || isAdminMaster
+```
+
+## Próximos Passos
+
+1. **Migração SQL** - Criar as novas tabelas e views
+2. **Atualizar Edge Function** - Expandir lógica de análise
+3. **Novos Hooks** - Adicionar `useIndiciosConcorrencia`, `useAssociacoesConcorrentes`
+4. **UI** - Implementar nova aba e modais
+5. **Testes** - Validar detecção e notificações
 
