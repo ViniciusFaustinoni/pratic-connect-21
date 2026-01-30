@@ -237,6 +237,12 @@ verify_jwt = false
 [functions.delete-cotacao]
 verify_jwt = false
 
+[functions.aprovar-sinistro]
+verify_jwt = false
+
+[functions.reprovar-sinistro]
+verify_jwt = false
+
 [functions.confirmar-agendamento-cron]
 verify_jwt = false
 
