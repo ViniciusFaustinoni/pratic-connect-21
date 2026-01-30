@@ -48,6 +48,7 @@ import { cn } from '@/lib/utils';
 import { useAllLeads, useUpdateLead } from '@/hooks/useLeads';
 import { useCriarCotacao } from '@/hooks/useCotacao';
 import { usePlanosCotacao } from '@/hooks/usePlanosCotacao';
+import { isCoberturaRemovida } from '@/data/restricoesCategorias';
 import { VehicleCategorySelect, CATEGORIAS_VEICULO } from '@/components/cotador/VehicleCategorySelect';
 import { supabase } from '@/integrations/supabase/client';
 import type { Tables } from '@/integrations/supabase/types';
@@ -1275,12 +1276,25 @@ _Cotação válida por 7 dias_
                     <div className="space-y-3">
                       <p className="text-sm font-medium">Coberturas incluídas:</p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {planoAtual.coberturas.map((cobertura, i) => (
-                          <div key={i} className="flex items-center gap-2 text-sm">
-                            <Check className="h-4 w-4 text-green-500 shrink-0" />
-                            <span>{cobertura}</span>
-                          </div>
-                        ))}
+                        {planoAtual.coberturas.map((cobertura, i) => {
+                          const isRemovida = isCoberturaRemovida(cobertura, categoriaVeiculo);
+                          return (
+                            <div key={i} className="flex items-center gap-2 text-sm">
+                              {isRemovida ? (
+                                <>
+                                  <X className="h-4 w-4 text-destructive shrink-0" />
+                                  <span className="text-muted-foreground line-through">{cobertura}</span>
+                                  <span className="text-xs text-destructive">(não cobre)</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Check className="h-4 w-4 text-green-500 shrink-0" />
+                                  <span>{cobertura}</span>
+                                </>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
 
                       {planoAtual.naoInclui.length > 0 && (
