@@ -1,86 +1,124 @@
 
 
-# Plano: Trocar Ações dos Botões de Link
+# Plano: Melhorar Visualização de Benefícios Restritos na Tela de Cotação
 
-## Objetivo
+## Resumo
 
-Inverter as funções dos dois botões de link:
-- **Botão externo** (fora do menu): Trocar de "Acessar" para **"Copiar Link do Cliente"**
-- **Menu dropdown**: Trocar de "Copiar Link" para **"Acessar Link do Cliente"**
+Ao selecionar uma condição especial para o veículo (ex: "Veículo proveniente de leilão"), os benefícios que não estão disponíveis para essa condição devem aparecer com efeito visual de riscado (strikethrough) e X vermelho, reforçando visualmente quais coberturas o cliente não terá direito.
 
 ## Situação Atual
 
-| Local | Texto | Ação |
-|-------|-------|------|
-| Botão externo (linha 440-444) | "Acessar Link do Cliente" | Abre em nova aba |
-| Menu dropdown (linha 497-503) | "Copiar Link" | Copia para clipboard |
-| Menu dropdown (linha 504-510) | "Acessar Link do Cliente" | Abre em nova aba (DUPLICADO) |
+O sistema **já possui** a lógica de restrições implementada em alguns componentes:
 
-## Situação Desejada
+| Componente | Status |
+|------------|--------|
+| `EscolhaPlano.tsx` | Mostra riscado |
+| `CotacaoFormDialog.tsx` (linhas 1484-1530) | Mostra riscado |
+| `PlanoCard.tsx` | Mostra riscado |
+| `PlanoCardComparativo.tsx` | Mostra riscado |
+| `PlanoDetalhesModal.tsx` | Mostra riscado |
+| `PlanoCardSelecao.tsx` | Mostra riscado |
 
-| Local | Texto | Ação |
-|-------|-------|------|
-| Botão externo | **"Copiar Link do Cliente"** | Copia para clipboard |
-| Menu dropdown | **"Acessar Link do Cliente"** | Abre em nova aba |
+Porém, existem **dois locais** onde a verificação de restrições **não está sendo aplicada**:
 
-## Alterações
+1. **`src/pages/vendas/Cotador.tsx`** (linhas 1278-1283) - Detalhes do plano no resultado
+2. **`src/components/cotacoes/CotacaoFormDialog.tsx`** (linhas 1675-1695) - Preview de planos na seção de comparação
 
-**Arquivo**: `src/components/cotacoes/CotacaoCard.tsx`
+## Alterações Necessárias
 
-### 1. Botão Externo (linhas 436-445)
+### 1. Arquivo: `src/pages/vendas/Cotador.tsx`
 
-Trocar a ação e o texto:
-
+**Adicionar importação:**
 ```tsx
-// DE:
-onClick={() => window.open(`/cotacao/${cotacao.token_publico}`, '_blank')}
-<ExternalLink className="h-4 w-4 mr-1" />
-Acessar Link do Cliente
-
-// PARA:
-onClick={() => {
-  const link = `${window.location.origin}/cotacao/${cotacao.token_publico}`;
-  navigator.clipboard.writeText(link);
-  toast.success('Link copiado!');
-}}
-<Link2 className="h-4 w-4 mr-1" />
-Copiar Link do Cliente
+import { isCoberturaRemovida } from '@/data/restricoesCategorias';
 ```
 
-### 2. Menu Dropdown (linhas 495-511)
+**Modificar linhas 1278-1283:**
 
-Remover o item duplicado "Acessar Link do Cliente" e manter apenas um item que abre o link:
-
+De:
 ```tsx
-// Manter apenas:
-<DropdownMenuItem onClick={() => {
-  const link = `${window.location.origin}/cotacao/${cotacao.token_publico}`;
-  window.open(link, '_blank');
-}}>
-  <ExternalLink className="h-4 w-4 mr-2" />
-  Acessar Link do Cliente
-</DropdownMenuItem>
+{planoAtual.coberturas.map((cobertura, i) => (
+  <div key={i} className="flex items-center gap-2 text-sm">
+    <Check className="h-4 w-4 text-green-500 shrink-0" />
+    <span>{cobertura}</span>
+  </div>
+))}
 ```
 
-## Resumo Visual
-
-```text
-ANTES                              DEPOIS
-─────────────────────────────────────────────────────
-Botão externo:                     Botão externo:
-[Acessar Link do Cliente]    →     [Copiar Link do Cliente]
-(abre nova aba)                    (copia para clipboard)
-
-Menu dropdown:                     Menu dropdown:
-├─ Copiar Link              →      ├─ Acessar Link do Cliente
-├─ Acessar Link do Cliente         (abre nova aba)
-└─ (duplicado)
+Para:
+```tsx
+{planoAtual.coberturas.map((cobertura, i) => {
+  const isRemovida = isCoberturaRemovida(cobertura, categoriaVeiculo);
+  return (
+    <div key={i} className="flex items-center gap-2 text-sm">
+      {isRemovida ? (
+        <>
+          <X className="h-4 w-4 text-destructive shrink-0" />
+          <span className="text-muted-foreground line-through">{cobertura}</span>
+          <span className="text-xs text-destructive">(não cobre)</span>
+        </>
+      ) : (
+        <>
+          <Check className="h-4 w-4 text-green-500 shrink-0" />
+          <span>{cobertura}</span>
+        </>
+      )}
+    </div>
+  );
+})}
 ```
+
+### 2. Arquivo: `src/components/cotacoes/CotacaoFormDialog.tsx`
+
+**Modificar linhas 1675-1695** (preview dos planos selecionados para comparação):
+
+De:
+```tsx
+{plano.coberturas.slice(0, LIMIT).map((cobertura, i) => (
+  <li key={i} className="flex items-start gap-2">
+    <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+    <span>{cobertura}</span>
+  </li>
+))}
+```
+
+Para:
+```tsx
+{plano.coberturas.slice(0, LIMIT).map((cobertura, i) => {
+  const isRemovida = isCoberturaRemovida(cobertura, categoria);
+  return (
+    <li key={i} className="flex items-start gap-2">
+      {isRemovida ? (
+        <>
+          <X className="h-4 w-4 text-destructive mt-0.5 flex-shrink-0" />
+          <span className="line-through text-muted-foreground/60">{cobertura}</span>
+        </>
+      ) : (
+        <>
+          <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+          <span>{cobertura}</span>
+        </>
+      )}
+    </li>
+  );
+})}
+```
+
+Aplicar a mesma lógica para as coberturas expandidas (linhas 1690-1695).
+
+## Resultado Visual
+
+Quando o vendedor selecionar "Veículo proveniente de leilão":
+
+- "Roubo e Furto" - check verde normal
+- "Colisão" - check verde normal  
+- "Perda Total" - check verde normal
+- ~~"Incêndio"~~ (não disponível) - X vermelho com texto riscado
 
 ## Resumo de Alterações
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/cotacoes/CotacaoCard.tsx` | Trocar ação do botão externo para copiar link |
-| `src/components/cotacoes/CotacaoCard.tsx` | Remover item duplicado do dropdown e manter apenas "Acessar" |
+| `src/pages/vendas/Cotador.tsx` | Importar `isCoberturaRemovida` e aplicar na listagem de coberturas |
+| `src/components/cotacoes/CotacaoFormDialog.tsx` | Aplicar lógica de riscado na seção de preview dos planos |
 
