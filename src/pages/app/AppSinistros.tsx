@@ -100,7 +100,7 @@ export default function AppSinistros() {
       const { data, error } = await supabase
         .from('sinistros')
         .select(`
-          id, protocolo, tipo, status, data_ocorrencia,
+          id, protocolo, tipo, status, data_ocorrencia, alerta_recem_ativado,
           veiculo:veiculos(placa, marca, modelo)
         `)
         .eq('associado_id', associado.id)

@@ -14705,6 +14705,7 @@ export type Database = {
       }
       sinistros: {
         Row: {
+          alerta_recem_ativado: boolean | null
           analista_id: string | null
           associado_id: string
           avaliacao_comentario: string | null
@@ -14744,6 +14745,7 @@ export type Database = {
           veiculo_id: string
         }
         Insert: {
+          alerta_recem_ativado?: boolean | null
           analista_id?: string | null
           associado_id: string
           avaliacao_comentario?: string | null
@@ -14783,6 +14785,7 @@ export type Database = {
           veiculo_id: string
         }
         Update: {
+          alerta_recem_ativado?: boolean | null
           analista_id?: string | null
           associado_id?: string
           avaliacao_comentario?: string | null

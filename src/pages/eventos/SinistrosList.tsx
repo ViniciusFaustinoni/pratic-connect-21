@@ -25,6 +25,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   AlertCircle,
+  AlertTriangle,
   Car,
   ShieldAlert,
   ShieldX,
@@ -357,9 +358,17 @@ export default function SinistrosList() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge className={statusInfo.class} variant="secondary">
-                          {statusInfo.label}
-                        </Badge>
+                        <div className="flex flex-col gap-1">
+                          <Badge className={statusInfo.class} variant="secondary">
+                            {statusInfo.label}
+                          </Badge>
+                          {sinistro.alerta_recem_ativado && (
+                            <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300 text-[10px]">
+                              <AlertTriangle className="h-3 w-3 mr-1" />
+                              Recém-ativado
+                            </Badge>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-right font-medium">
                         {formatCurrency(sinistro.veiculo?.valor_fipe || sinistro.valor_fipe)}
