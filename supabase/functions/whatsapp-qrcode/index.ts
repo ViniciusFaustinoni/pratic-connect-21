@@ -148,6 +148,35 @@ serve(async (req) => {
     }
 
     const data = await response.json();
+    console.log('[whatsapp-qrcode] Resposta /connect:', JSON.stringify(data).slice(0, 500));
+
+    // Evolution API pode retornar o QR Code em diferentes formatos
+    let qrcodeBase64 = data.base64 || data.qrcode?.base64 || data.qrcode;
+    let pairingCode = data.pairingCode || data.qrcode?.pairingCode;
+    let code = data.code || data.qrcode?.code;
+
+    // Se não tiver QR Code, tentar buscar explicitamente via /fetchQrCode
+    if (!qrcodeBase64) {
+      console.log('[whatsapp-qrcode] QR Code não retornado em /connect, tentando /fetchQrCode...');
+      
+      const qrFetchResponse = await fetch(
+        `${instancia.api_url}/instance/fetchQrCode/${instancia.instance_name}`,
+        {
+          method: 'GET',
+          headers: { 'apikey': apiKey }
+        }
+      );
+
+      if (qrFetchResponse.ok) {
+        const qrData = await qrFetchResponse.json();
+        console.log('[whatsapp-qrcode] Resposta /fetchQrCode:', JSON.stringify(qrData).slice(0, 500));
+        qrcodeBase64 = qrData.base64 || qrData.qrcode?.base64 || qrData.qrcode;
+        pairingCode = pairingCode || qrData.pairingCode || qrData.qrcode?.pairingCode;
+        code = code || qrData.code || qrData.qrcode?.code;
+      } else {
+        console.log('[whatsapp-qrcode] /fetchQrCode retornou erro:', qrFetchResponse.status);
+      }
+    }
 
     // Atualizar status
     await supabase
@@ -165,15 +194,15 @@ serve(async (req) => {
         instancia_id: instancia.id,
         tipo: 'qrcode_request',
         evento: 'connect',
-        resposta: { hasQrcode: !!data.base64 },
+        resposta: { hasQrcode: !!qrcodeBase64, hasCode: !!code, hasPairingCode: !!pairingCode },
       });
 
     return new Response(
       JSON.stringify({
         success: true,
-        qrcode: normalizeBase64(data.base64),
-        code: data.code,
-        pairingCode: data.pairingCode,
+        qrcode: normalizeBase64(qrcodeBase64),
+        code: code,
+        pairingCode: pairingCode,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
