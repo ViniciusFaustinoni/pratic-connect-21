@@ -84,8 +84,32 @@ const TEMPLATES: Record<string, {
     emailTemplate: 'generico',
   },
   proposta_aprovada_roubo_furto: {
-    titulo: '🎉 Proposta Aprovada!',
-    mensagem: 'Parabéns {nome}! Seu cadastro foi aprovado e a cobertura de Roubo e Furto já está ativa!\n\nAcesse o link abaixo para criar sua conta no app PRATIC:\n🔗 {link_acompanhamento}\n\nApós a instalação do rastreador, sua proteção será completa. Bem-vindo à PRATIC!',
+    titulo: '🎉 Bem-vindo à PRATIC!',
+    mensagem: `Parabéns {nome}! Seu cadastro foi aprovado! 🚗
+
+📋 *Veículo Protegido:*
+{placa} - {marca} {modelo}
+
+🛡️ *Cobertura Ativa:* Roubo e Furto
+⏳ *Próximo Passo:* Instalação do rastreador
+
+📱 Acesse o link abaixo para criar sua conta no app PRATIC:
+🔗 {link_acompanhamento}
+
+Após a instalação, sua *Cobertura Total* será ativada automaticamente!
+
+Bem-vindo à família PRATIC! 💙`,
+    emailTemplate: 'generico',
+  },
+  tecnico_em_rota: {
+    titulo: '🚗 Técnico a Caminho!',
+    mensagem: `Olá {nome}! Nosso técnico está a caminho do seu endereço para realizar a {tipo_servico}.
+
+👤 *Técnico:* {tecnico_nome}
+📍 *Endereço:* {endereco}
+⏰ *Período:* {periodo}
+
+Aguarde no local combinado. Qualquer dúvida, responda esta mensagem!`,
     emailTemplate: 'generico',
   },
 };

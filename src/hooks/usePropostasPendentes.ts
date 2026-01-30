@@ -1531,16 +1531,28 @@ export function useAprovarProposta() {
         try {
           const linkAcompanhamento = `${window.location.origin}/acompanhar/${contratoComLink.link_token}`;
           
+          // Buscar dados do veículo para notificação
+          const { data: veiculoNotif } = await supabase
+            .from('veiculos')
+            .select('placa, marca, modelo')
+            .eq('associado_id', associadoId)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          
           await supabase.functions.invoke('notificar-cliente', {
             body: {
               tipo: 'proposta_aprovada_roubo_furto',
               associado_id: associadoId,
               dados: {
                 link_acompanhamento: linkAcompanhamento,
+                placa: veiculoNotif?.placa || '',
+                marca: veiculoNotif?.marca || '',
+                modelo: veiculoNotif?.modelo || '',
               },
             },
           });
-          console.log('[useAprovarProposta] Notificação WhatsApp enviada com link:', linkAcompanhamento);
+          console.log('[useAprovarProposta] Notificação WhatsApp enviada com link e veículo:', linkAcompanhamento, veiculoNotif?.placa);
         } catch (notifError) {
           console.warn('[useAprovarProposta] Erro ao enviar notificação (não crítico):', notifError);
         }
