@@ -105,7 +105,15 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 2. PRIMEIRO: Excluir serviços vinculados (ANTES de excluir instalações/vistorias)
+    // 2. PRIMEIRO: Excluir instalacoes_pendentes_criacao (FK constraint)
+    console.log("[delete-ativacao] Excluindo instalacoes_pendentes_criacao...");
+    await supabaseAdmin.from("instalacoes_pendentes_criacao").delete().eq("contrato_id", contratoId);
+    if (contrato.cotacao_id) {
+      await supabaseAdmin.from("instalacoes_pendentes_criacao").delete().eq("cotacao_id", contrato.cotacao_id);
+    }
+    console.log("[delete-ativacao] instalacoes_pendentes_criacao excluídas");
+
+    // 2b. Excluir serviços vinculados (ANTES de excluir instalações/vistorias)
     console.log("[delete-ativacao] Excluindo serviços vinculados...");
     await supabaseAdmin.from("servicos").delete().eq("contrato_id", contratoId);
     if (contrato.cotacao_id) {

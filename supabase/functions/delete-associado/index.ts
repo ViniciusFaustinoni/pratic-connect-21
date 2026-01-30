@@ -133,6 +133,19 @@ Deno.serve(async (req) => {
       for (const contrato of contratos) {
         console.log(`[delete-associado] Limpando contrato: ${contrato.id}`);
 
+        // IMPORTANTE: Excluir instalacoes_pendentes_criacao PRIMEIRO (FK constraint)
+        await supabaseAdmin.from("instalacoes_pendentes_criacao").delete().eq("contrato_id", contrato.id);
+        if (contrato.cotacao_id) {
+          await supabaseAdmin.from("instalacoes_pendentes_criacao").delete().eq("cotacao_id", contrato.cotacao_id);
+        }
+        console.log(`[delete-associado] instalacoes_pendentes_criacao excluídas para contrato: ${contrato.id}`);
+
+        // Excluir serviços vinculados
+        await supabaseAdmin.from("servicos").delete().eq("contrato_id", contrato.id);
+        if (contrato.cotacao_id) {
+          await supabaseAdmin.from("servicos").delete().eq("cotacao_id", contrato.cotacao_id);
+        }
+
         // Delete Asaas related
         await supabaseAdmin.from("asaas_cobrancas").delete().eq("contrato_id", contrato.id);
         
