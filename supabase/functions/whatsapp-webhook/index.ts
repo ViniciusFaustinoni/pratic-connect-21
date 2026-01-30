@@ -2114,8 +2114,29 @@ serve(async (req) => {
       const state = payload.data?.state || payload.instance?.state;
       console.log(`[whatsapp-webhook] CONNECTION_UPDATE recebido: ${state}`);
       
-      // Mapear estado para nosso status
-      const novoStatus = state === 'open' ? 'open' : 'disconnected';
+      // IMPORTANTE: Ignorar eventos 'connecting' - são transitórios e não devem sobrescrever 'open'
+      if (state === 'connecting') {
+        console.log(`[whatsapp-webhook] Ignorando estado 'connecting' - mantendo status atual no banco`);
+        return new Response(
+          JSON.stringify({ success: true, message: "Estado connecting ignorado - transitório" }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      
+      // Mapear estado para nosso status (apenas estados definitivos)
+      let novoStatus: string;
+      if (state === 'open') {
+        novoStatus = 'open';
+      } else if (state === 'close' || state === 'qrcode') {
+        novoStatus = 'disconnected';
+      } else {
+        // Estado desconhecido - logar e ignorar para não corromper dados
+        console.log(`[whatsapp-webhook] Estado desconhecido '${state}' - ignorando`);
+        return new Response(
+          JSON.stringify({ success: true, message: `Estado ${state} ignorado` }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
       
       // Buscar instância principal
       const { data: instancia } = await supabase

@@ -44,19 +44,6 @@ serve(async (req) => {
       );
     }
 
-    // VERIFICAR SE WHATSAPP ESTÁ CONECTADO ANTES DE ENVIAR
-    if (!instancia.status || instancia.status !== 'open') {
-      console.log(`[whatsapp-send-text] WhatsApp desconectado. Status: ${instancia.status}`);
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: "WhatsApp não está conectado. Acesse as configurações para reconectar.",
-          status: instancia.status
-        }),
-        { status: 503, headers: corsHeaders }
-      );
-    }
-
     const EVOLUTION_API_KEY = Deno.env.get("EVOLUTION_API_KEY");
     if (!EVOLUTION_API_KEY) {
       return new Response(
@@ -72,6 +59,67 @@ serve(async (req) => {
         JSON.stringify({ success: false, error: "URL da Evolution API não configurada" }),
         { status: 500, headers: corsHeaders }
       );
+    }
+
+    // VERIFICAR SE WHATSAPP ESTÁ CONECTADO - COM FALLBACK PARA API EM TEMPO REAL
+    if (!instancia.status || instancia.status !== 'open') {
+      console.log(`[whatsapp-send-text] Status no banco: ${instancia.status} - verificando API em tempo real...`);
+      
+      try {
+        const statusResponse = await fetch(
+          `${apiUrl}/instance/connectionState/${instancia.instance_name}`,
+          {
+            method: 'GET',
+            headers: { 'apikey': EVOLUTION_API_KEY }
+          }
+        );
+        
+        if (statusResponse.ok) {
+          const statusData = await statusResponse.json();
+          const realStatus = statusData.instance?.state;
+          console.log(`[whatsapp-send-text] Status real da API: ${realStatus}`);
+          
+          if (realStatus === 'open') {
+            console.log(`[whatsapp-send-text] API retorna OPEN - corrigindo banco e prosseguindo`);
+            // Atualizar banco com status correto
+            await supabase
+              .from('whatsapp_instancias')
+              .update({ status: 'open', updated_at: new Date().toISOString() })
+              .eq('id', instancia.id);
+          } else {
+            // Realmente desconectado
+            return new Response(
+              JSON.stringify({ 
+                success: false, 
+                error: "WhatsApp não está conectado. Acesse as configurações para reconectar.",
+                status: realStatus
+              }),
+              { status: 503, headers: corsHeaders }
+            );
+          }
+        } else {
+          // Não conseguiu verificar API - usar status do banco
+          console.log(`[whatsapp-send-text] Falha ao verificar API: ${statusResponse.status}`);
+          return new Response(
+            JSON.stringify({ 
+              success: false, 
+              error: "WhatsApp não está conectado. Acesse as configurações para reconectar.",
+              status: instancia.status
+            }),
+            { status: 503, headers: corsHeaders }
+          );
+        }
+      } catch (apiError) {
+        console.error(`[whatsapp-send-text] Erro ao verificar API:`, apiError);
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: "WhatsApp não está conectado. Acesse as configurações para reconectar.",
+            status: instancia.status
+          }),
+          { status: 503, headers: corsHeaders }
+        );
+      }
     }
 
     console.log(`[whatsapp-send-text] Usando API URL: ${apiUrl}`);
