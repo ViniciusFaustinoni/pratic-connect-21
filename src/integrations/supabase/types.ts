@@ -8765,6 +8765,77 @@ export type Database = {
           },
         ]
       }
+      instalacoes_pendentes_criacao: {
+        Row: {
+          contrato_id: string | null
+          cotacao_id: string | null
+          created_at: string | null
+          erro_detalhes: string | null
+          id: string
+          motivo: string | null
+          resolvido: boolean | null
+          resolvido_em: string | null
+          resolvido_por: string | null
+          tentativas: number | null
+          ultima_tentativa: string | null
+        }
+        Insert: {
+          contrato_id?: string | null
+          cotacao_id?: string | null
+          created_at?: string | null
+          erro_detalhes?: string | null
+          id?: string
+          motivo?: string | null
+          resolvido?: boolean | null
+          resolvido_em?: string | null
+          resolvido_por?: string | null
+          tentativas?: number | null
+          ultima_tentativa?: string | null
+        }
+        Update: {
+          contrato_id?: string | null
+          cotacao_id?: string | null
+          created_at?: string | null
+          erro_detalhes?: string | null
+          id?: string
+          motivo?: string | null
+          resolvido?: boolean | null
+          resolvido_em?: string | null
+          resolvido_por?: string | null
+          tentativas?: number | null
+          ultima_tentativa?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "instalacoes_pendentes_criacao_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "contratos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "instalacoes_pendentes_criacao_cotacao_id_fkey"
+            columns: ["cotacao_id"]
+            isOneToOne: false
+            referencedRelation: "cotacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "instalacoes_pendentes_criacao_resolvido_por_fkey"
+            columns: ["resolvido_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "instalacoes_pendentes_criacao_resolvido_por_fkey"
+            columns: ["resolvido_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+        ]
+      }
       integracoes_credenciais: {
         Row: {
           configurado: boolean | null

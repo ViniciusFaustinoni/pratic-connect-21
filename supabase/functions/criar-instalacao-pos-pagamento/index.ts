@@ -169,7 +169,7 @@ serve(async (req) => {
       });
     }
 
-    // 4. Determinar qual conjunto de dados usar (vistoria agendada ou vistoria completa)
+    // 4. Determinar qual conjunto de dados usar baseado no tipo_vistoria
     const tipoVistoria = cotacao.tipo_vistoria;
     let dataAgendada: string | null = null;
     let horarioAgendado: string | null = null;
@@ -185,8 +185,12 @@ serve(async (req) => {
     };
     let obsResponsavel = '';
 
+    // Log detalhado para debug
+    console.log(`[CriarInstalacaoPosPagamento] tipo_vistoria: ${tipoVistoria}`);
+
     if (tipoVistoria === 'agendada') {
-      // Usar campos vistoria_* (vistoria presencial)
+      // VISTORIA PRESENCIAL SIMPLES: Usar campos vistoria_*
+      console.log('[CriarInstalacaoPosPagamento] Modo: vistoria agendada (presencial simples)');
       dataAgendada = cotacao.vistoria_data_agendada;
       horarioAgendado = cotacao.vistoria_horario_agendado;
       endereco = {
@@ -202,8 +206,29 @@ serve(async (req) => {
       obsResponsavel = cotacao.vistoria_responsavel_eu_mesmo
         ? `Responsável: ${cotacao.nome_solicitante} - ${cotacao.telefone1_solicitante}`
         : `Responsável: ${cotacao.vistoria_responsavel_nome || ''} - ${cotacao.vistoria_responsavel_telefone || ''}`;
+    } else if (tipoVistoria === 'autovistoria') {
+      // AUTOVISTORIA: Usar campos vistoria_completa_* para data/hora/endereço
+      // A instalação é agendada para APÓS a autovistoria ser aprovada (vistoria completa)
+      console.log('[CriarInstalacaoPosPagamento] Modo: autovistoria → usando dados de vistoria_completa_*');
+      dataAgendada = cotacao.vistoria_completa_data_agendada;
+      horarioAgendado = cotacao.vistoria_completa_horario_agendado;
+      endereco = {
+        cep: cotacao.vistoria_completa_endereco_cep || '',
+        logradouro: cotacao.vistoria_completa_endereco_logradouro || '',
+        numero: cotacao.vistoria_completa_endereco_numero || '',
+        bairro: cotacao.vistoria_completa_endereco_bairro || '',
+        cidade: cotacao.vistoria_completa_endereco_cidade || '',
+        estado: cotacao.vistoria_completa_endereco_estado || '',
+        // Coordenadas: compartilhadas em vistoria_endereco_* (frontend salva lá para todos os tipos)
+        latitude: cotacao.vistoria_endereco_latitude,
+        longitude: cotacao.vistoria_endereco_longitude,
+      };
+      obsResponsavel = cotacao.vistoria_completa_responsavel_eu_mesmo
+        ? `Responsável: ${cotacao.nome_solicitante} - ${cotacao.telefone1_solicitante}`
+        : `Responsável: ${cotacao.vistoria_completa_responsavel_nome || ''} - ${cotacao.vistoria_completa_responsavel_telefone || ''}`;
     } else {
-      // Usar campos vistoria_completa_* (vistoria completa)
+      // FALLBACK para outros tipos futuros: usar vistoria_completa_*
+      console.log(`[CriarInstalacaoPosPagamento] Modo: fallback (tipo=${tipoVistoria}) → usando dados de vistoria_completa_*`);
       dataAgendada = cotacao.vistoria_completa_data_agendada;
       horarioAgendado = cotacao.vistoria_completa_horario_agendado;
       endereco = {
@@ -220,6 +245,10 @@ serve(async (req) => {
         ? `Responsável: ${cotacao.nome_solicitante} - ${cotacao.telefone1_solicitante}`
         : `Responsável: ${cotacao.vistoria_completa_responsavel_nome || ''} - ${cotacao.vistoria_completa_responsavel_telefone || ''}`;
     }
+    
+    console.log(`[CriarInstalacaoPosPagamento] dataAgendada: ${dataAgendada}`);
+    console.log(`[CriarInstalacaoPosPagamento] horarioAgendado: ${horarioAgendado}`);
+    console.log(`[CriarInstalacaoPosPagamento] endereco: ${JSON.stringify(endereco)}`);
 
     // 5. Verificar se tem data agendada
     if (!dataAgendada) {
