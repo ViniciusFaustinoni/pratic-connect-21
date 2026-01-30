@@ -53,7 +53,7 @@ serve(async (req) => {
 
     // Primeiro, verificar se a instância existe na Evolution API
     const checkResponse = await fetch(
-      `${instancia.api_url}/instance/fetchInstances`,
+      `${instancia.api_url}/instance/fetchInstances?instanceName=${instancia.instance_name}`,
       {
         method: 'GET',
         headers: { 'apikey': apiKey }
@@ -63,13 +63,17 @@ serve(async (req) => {
     let instanceExists = false;
     if (checkResponse.ok) {
       const instances = await checkResponse.json();
+      // Evolution API v2.3 retorna array com instanceName (não name)
       instanceExists = Array.isArray(instances) && 
-        instances.some((i: { name?: string }) => i.name === instancia.instance_name);
+        instances.some((i: { instanceName?: string; name?: string }) => 
+          i.instanceName === instancia.instance_name || i.name === instancia.instance_name
+        );
+      console.log('[whatsapp-qrcode] Instância existente:', instanceExists, 'instances:', JSON.stringify(instances).slice(0, 300));
     }
 
     // Se não existe, criar a instância
     if (!instanceExists) {
-      console.log('Criando instância:', instancia.instance_name);
+      console.log('[whatsapp-qrcode] Criando instância:', instancia.instance_name);
       
       const createResponse = await fetch(
         `${instancia.api_url}/instance/create`,
@@ -83,53 +87,71 @@ serve(async (req) => {
             instanceName: instancia.instance_name,
             qrcode: true,
             integration: 'WHATSAPP-BAILEYS',
+            // Webhook com estrutura da v2.3
             webhook: {
-              url: WEBHOOK_URL,
               enabled: true,
-              webhook_by_events: false,
-              webhook_base64: false,
+              url: WEBHOOK_URL,
+              byEvents: false,
+              base64: false,
               events: ['MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'CONNECTION_UPDATE']
             }
           })
         }
       );
 
+      // Se der erro 403 "already in use", a instância já existe - continuar
       if (!createResponse.ok) {
-        const errorText = await createResponse.text();
-        console.error('Erro ao criar instância:', errorText);
-        throw new Error('Erro ao criar instância na Evolution API');
+        const errorData = await createResponse.json().catch(() => null);
+        console.log('[whatsapp-qrcode] Erro ao criar instância:', JSON.stringify(errorData));
+        
+        // Verificar se é erro de instância já existente
+        const isAlreadyInUse = errorData?.response?.message?.some?.((m: string) => 
+          m.includes('already in use')
+        );
+        
+        if (isAlreadyInUse) {
+          console.log('[whatsapp-qrcode] Instância já existe, continuando para connect...');
+          instanceExists = true;
+        } else {
+          throw new Error(`Erro ao criar instância: ${JSON.stringify(errorData)}`);
+        }
+      } else {
+        const createData = await createResponse.json();
+        console.log('[whatsapp-qrcode] Instância criada:', JSON.stringify(createData).slice(0, 500));
+        
+        // Log da criação
+        await supabase
+          .from('whatsapp_logs')
+          .insert({
+            instancia_id: instancia.id,
+            tipo: 'instance_create',
+            evento: 'create',
+            resposta: createData,
+          });
+
+        // Atualizar status
+        await supabase
+          .from('whatsapp_instancias')
+          .update({
+            status: 'qrcode',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', instancia.id);
+
+        // Se a criação já retornou QR Code, usar diretamente
+        const qr = createData.qrcode || createData;
+        if (qr?.base64 || qr?.code || qr?.pairingCode) {
+          return new Response(
+            JSON.stringify({
+              success: true,
+              qrcode: normalizeBase64(qr.base64),
+              code: qr.code,
+              pairingCode: qr.pairingCode,
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
       }
-
-      const createData = await createResponse.json();
-      
-      // Log da criação
-      await supabase
-        .from('whatsapp_logs')
-        .insert({
-          instancia_id: instancia.id,
-          tipo: 'instance_create',
-          evento: 'create',
-          resposta: createData,
-        });
-
-      // Atualizar status
-      await supabase
-        .from('whatsapp_instancias')
-        .update({
-          status: 'qrcode',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', instancia.id);
-
-      return new Response(
-        JSON.stringify({
-          success: true,
-          qrcode: normalizeBase64(createData.qrcode?.base64),
-          code: createData.qrcode?.code,
-          pairingCode: createData.qrcode?.pairingCode,
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
     }
 
     // Instância existe, solicitar dados de conexão (QR string / pairingCode)
