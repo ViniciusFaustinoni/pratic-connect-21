@@ -1,7 +1,9 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Camera, X, RefreshCw, Loader2, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { compressImage, createOptimizedPreview, revokePreview } from '@/lib/imageCompressor';
+import { toast } from 'sonner';
 
 interface FotoCaptureProps {
   tipo: string;
@@ -24,28 +26,60 @@ export function FotoCapture({
 }: FotoCaptureProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const [isCompressing, setIsCompressing] = useState(false);
+
+  // Limpar preview ao desmontar
+  useEffect(() => {
+    return () => {
+      if (preview) {
+        revokePreview(preview);
+      }
+    };
+  }, []);
 
   const handleClick = () => {
     inputRef.current?.click();
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Create preview
-      const reader = new FileReader();
-      reader.onload = () => {
-        setPreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+      // Limpar preview anterior
+      if (preview) {
+        revokePreview(preview);
+      }
       
-      onCapture(file);
+      // Create preview usando Object URL (mais eficiente)
+      const previewUrl = createOptimizedPreview(file);
+      setPreview(previewUrl);
+      
+      // Comprimir se necessário
+      let arquivoFinal = file;
+      if (file.size > 500 * 1024) {
+        setIsCompressing(true);
+        try {
+          arquivoFinal = await compressImage(file, { 
+            maxWidth: 1920, 
+            maxHeight: 1920, 
+            quality: 0.75,
+            maxSizeKB: 800 
+          });
+        } catch (compressError) {
+          console.warn('[FotoCapture] Erro na compressão:', compressError);
+        }
+        setIsCompressing(false);
+      }
+      
+      onCapture(arquivoFinal);
     }
     // Reset input
     e.target.value = '';
   };
 
   const handleRemove = () => {
+    if (preview) {
+      revokePreview(preview);
+    }
     setPreview(null);
     onRemove?.();
   };
