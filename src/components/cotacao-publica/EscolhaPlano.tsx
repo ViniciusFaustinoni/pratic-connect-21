@@ -395,33 +395,35 @@ export function EscolhaPlano({
         })}
       </motion.div>
 
-      {/* Botão Continuar - Premium Style */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.5 }}
-      >
-        <Button
-          className={cn(
-            'w-full h-14 text-base font-semibold transition-all rounded-xl',
-            'bg-accent hover:bg-accent-hover text-accent-foreground',
-            'shadow-lg shadow-accent/20 hover:shadow-xl hover:shadow-accent/30',
-            !planoSelecionadoId && 'opacity-50 cursor-not-allowed'
-          )}
-          size="lg"
-          onClick={onConfirmar}
-          disabled={!planoSelecionadoId || isLoading}
+      {/* Botão Continuar - Premium Style - Ocultar em modo readOnly */}
+      {!readOnly && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
         >
-          {isLoading ? (
-            <span className="flex items-center gap-2">
-              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              Carregando...
-            </span>
-          ) : (
-            'Continuar com este plano'
-          )}
-        </Button>
-      </motion.div>
+          <Button
+            className={cn(
+              'w-full h-14 text-base font-semibold transition-all rounded-xl',
+              'bg-accent hover:bg-accent-hover text-accent-foreground',
+              'shadow-lg shadow-accent/20 hover:shadow-xl hover:shadow-accent/30',
+              !planoSelecionadoId && 'opacity-50 cursor-not-allowed'
+            )}
+            size="lg"
+            onClick={onConfirmar}
+            disabled={!planoSelecionadoId || isLoading}
+          >
+            {isLoading ? (
+              <span className="flex items-center gap-2">
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                Carregando...
+              </span>
+            ) : (
+              'Continuar com este plano'
+            )}
+          </Button>
+        </motion.div>
+      )}
     </div>
   );
 }

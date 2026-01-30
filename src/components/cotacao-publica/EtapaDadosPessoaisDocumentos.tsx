@@ -502,34 +502,38 @@ export function EtapaDadosPessoaisDocumentos({
         </CardContent>
       </Card>
 
-      {/* Botão Continuar */}
-      <Button
-        onClick={handleSubmit}
-        disabled={!podeAvancar || isLoading}
-        className="w-full h-14 text-lg gap-2 bg-accent hover:bg-accent-hover text-accent-foreground"
-        size="lg"
-      >
-        {isLoading ? (
-          <>
-            <Loader2 className="h-5 w-5 animate-spin" />
-            Salvando...
-          </>
-        ) : (
-          <>
-            Continuar
-            <ArrowRight className="h-5 w-5" />
-          </>
-        )}
-      </Button>
+      {/* Botão Continuar - Ocultar em modo readOnly */}
+      {!readOnly && (
+        <>
+          <Button
+            onClick={handleSubmit}
+            disabled={!podeAvancar || isLoading}
+            className="w-full h-14 text-lg gap-2 bg-accent hover:bg-accent-hover text-accent-foreground"
+            size="lg"
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="h-5 w-5 animate-spin" />
+                Salvando...
+              </>
+            ) : (
+              <>
+                Continuar
+                <ArrowRight className="h-5 w-5" />
+              </>
+            )}
+          </Button>
 
-      {/* Indicador de status */}
-      {!podeAvancar && (
-        <p className="text-center text-sm text-muted-foreground">
-          {!temDocumentoPessoal && 'Envie CNH ou RG • '}
-          {!temCrlv && 'Envie CRLV • '}
-          {!temComprovante && 'Envie Comprovante • '}
-          {!temContato && 'Preencha e-mail e telefone'}
-        </p>
+          {/* Indicador de status */}
+          {!podeAvancar && (
+            <p className="text-center text-sm text-muted-foreground">
+              {!temDocumentoPessoal && 'Envie CNH ou RG • '}
+              {!temCrlv && 'Envie CRLV • '}
+              {!temComprovante && 'Envie Comprovante • '}
+              {!temContato && 'Preencha e-mail e telefone'}
+            </p>
+          )}
+        </>
       )}
     </div>
   );

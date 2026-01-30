@@ -20,13 +20,11 @@ export function NavegacaoEtapas({
   navegacaoManual = false,
 }: NavegacaoEtapasProps) {
   const podeVoltar = etapaAtual > 0;
-  const podeAvancar = etapaAtual < etapaMaxima;
+  // CORREÇÃO: Em modo manual, permitir avançar até a etapa máxima (para revisar etapas anteriores)
+  const podeAvancar = navegacaoManual && etapaAtual < etapaMaxima;
   
-  // Só mostra navegação se está em modo manual OU se pode navegar
+  // Só oculta se não pode fazer nenhuma ação
   if (!podeVoltar && !podeAvancar) return null;
-  
-  // Se não está em navegação manual e está na etapa máxima, não mostra
-  if (!navegacaoManual && etapaAtual >= etapaMaxima) return null;
   
   return (
     <motion.div 
