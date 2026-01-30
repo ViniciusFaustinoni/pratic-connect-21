@@ -24,35 +24,17 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
-const fluxoStatus: Record<string, string[]> = {
-  comunicado: ['em_analise', 'cancelado'],
-  em_analise: ['documentacao_pendente', 'aguardando_vistoria', 'negado', 'cancelado'],
-  documentacao_pendente: ['em_analise', 'cancelado'],
-  aguardando_vistoria: ['em_vistoria', 'cancelado'],
-  em_vistoria: ['aguardando_parecer'],
-  aguardando_parecer: ['aprovado', 'negado'],
-  aprovado: ['em_regulacao', 'pago'],
-  negado: ['encerrado'],
-  em_regulacao: ['em_reparo', 'pago'],
-  em_reparo: ['pago'],
-  pago: ['encerrado'],
-};
+import { WORKFLOW_SINISTRO, STATUS_SINISTRO_LABELS, STATUS_SINISTRO_COLORS } from '@/types/sinistros';
 
-const statusConfig: Record<string, { label: string; class: string }> = {
-  comunicado: { label: 'Comunicado', class: 'bg-yellow-100 text-yellow-800' },
-  em_analise: { label: 'Em Análise', class: 'bg-blue-100 text-blue-800' },
-  documentacao_pendente: { label: 'Doc. Pendente', class: 'bg-orange-100 text-orange-800' },
-  aguardando_vistoria: { label: 'Aguard. Vistoria', class: 'bg-purple-100 text-purple-800' },
-  em_vistoria: { label: 'Em Vistoria', class: 'bg-indigo-100 text-indigo-800' },
-  aguardando_parecer: { label: 'Aguard. Parecer', class: 'bg-cyan-100 text-cyan-800' },
-  aprovado: { label: 'Aprovado', class: 'bg-green-100 text-green-800' },
-  negado: { label: 'Negado', class: 'bg-red-100 text-red-800' },
-  em_regulacao: { label: 'Em Regulação', class: 'bg-amber-100 text-amber-800' },
-  em_reparo: { label: 'Em Reparo', class: 'bg-teal-100 text-teal-800' },
-  pago: { label: 'Pago', class: 'bg-emerald-100 text-emerald-800' },
-  encerrado: { label: 'Encerrado', class: 'bg-gray-100 text-gray-800' },
-  cancelado: { label: 'Cancelado', class: 'bg-slate-100 text-slate-800' },
-};
+// Usar workflow do types/sinistros.ts
+const fluxoStatus = WORKFLOW_SINISTRO;
+
+const statusConfig: Record<string, { label: string; class: string }> = Object.fromEntries(
+  Object.entries(STATUS_SINISTRO_LABELS).map(([key, label]) => [
+    key,
+    { label, class: STATUS_SINISTRO_COLORS[key as keyof typeof STATUS_SINISTRO_COLORS] || 'bg-gray-100 text-gray-800' }
+  ])
+);
 
 interface Sinistro {
   id: string;
