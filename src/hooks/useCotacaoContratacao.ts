@@ -216,7 +216,9 @@ export function useCotacaoContratacao(token: string | undefined) {
         },
         (payload) => {
           console.log('[CotacaoContratacao] Realtime: associado atualizado:', payload);
+          // Invalidar AMBAS as queries para garantir atualização completa da UI
           refetch();
+          queryClient.invalidateQueries({ queryKey: ['contrato-publico-fallback', token] });
         }
       )
       .subscribe((status) => {
