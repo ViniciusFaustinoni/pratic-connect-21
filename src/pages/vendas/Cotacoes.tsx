@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, Search, FileText, Send, Check, X, Loader2, MessageCircle, FileDown, Mail, FileSignature, Eye, Link2, Copy, Trash2, MoreHorizontal, Car, Calendar, User, Phone, RefreshCw, Clock, CheckCircle, TrendingUp } from 'lucide-react';
-import { formatDistanceToNow, format, startOfDay, endOfDay } from 'date-fns';
+import { Plus, Search, FileText, Send, Check, X, Loader2, MessageCircle, FileDown, Mail, FileSignature, Eye, Link2, Copy, Trash2, MoreHorizontal, Car, Calendar as CalendarIcon, User, Phone, RefreshCw, Clock, CheckCircle, TrendingUp, CalendarDays } from 'lucide-react';
+import { formatDistanceToNow, format, startOfDay, endOfDay, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,11 +33,18 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 import type { StatusCotacao } from '@/types/database';
 import { useCotacoes, useUpdateCotacao, useDuplicarCotacao, useExcluirCotacao, type CotacaoWithRelations } from '@/hooks/useCotacoes';
 import { useGerarContrato } from '@/hooks/useContratos';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useVendedores } from '@/hooks/useVendedores';
 import { PermissionGate } from '@/components/PermissionGate';
 import { CotacaoFormDialog } from '@/components/cotacoes/CotacaoFormDialog';
 import { ContratoWizard } from '@/components/contratos/ContratoWizard';
@@ -120,10 +127,17 @@ export default function Cotacoes() {
   const [cotacaoParaExcluir, setCotacaoParaExcluir] = useState<string | null>(null);
   const [mesFilter, setMesFilter] = useState<string>('all');
   const [cotacaoParaDuplicar, setCotacaoParaDuplicar] = useState<CotacaoWithRelations | null>(null);
+  
+  // Novos filtros para finalizadas
+  const [dataFilter, setDataFilter] = useState<Date | undefined>(undefined);
+  const [consultorFilter, setConsultorFilter] = useState<string>('all');
 
   // Permissões
   const permissions = usePermissions();
   const { profile, user } = useAuth();
+  
+  // Buscar vendedores para filtro de consultor (só para gestores)
+  const { data: vendedores } = useVendedores();
   
   // Buscar cotações com filtro baseado em permissão
   const { data: cotacoes, isLoading } = useCotacoes({
@@ -393,9 +407,11 @@ export default function Cotacoes() {
     setSearch('');
     setStatusFilter('all');
     setMesFilter('all');
+    setDataFilter(undefined);
+    setConsultorFilter('all');
   };
 
-  const hasActiveFilters = search || statusFilter !== 'all' || mesFilter !== 'all';
+  const hasActiveFilters = search || statusFilter !== 'all' || mesFilter !== 'all' || dataFilter || consultorFilter !== 'all';
 
   // Stats
   const stats = {
@@ -416,9 +432,47 @@ export default function Cotacoes() {
   const emAndamento = sortedCotacoes.filter(c => 
     ['rascunho', 'enviada', 'visualizada'].includes(c.status)
   );
-  const fechadas = sortedCotacoes.filter(c => 
+  
+  // Aplicar filtros adicionais nas fechadas
+  const fechadasBase = sortedCotacoes.filter(c => 
     ['aceita', 'recusada', 'expirada'].includes(c.status)
   );
+  
+  const fechadas = fechadasBase.filter(cotacao => {
+    // Filtrar por data específica
+    let matchesData = true;
+    if (dataFilter) {
+      const cotacaoDate = new Date(cotacao.created_at);
+      matchesData = isSameDay(cotacaoDate, dataFilter);
+    }
+    
+    // Filtrar por consultor
+    let matchesConsultor = true;
+    if (consultorFilter !== 'all') {
+      matchesConsultor = cotacao.vendedor_id === consultorFilter;
+    }
+    
+    return matchesData && matchesConsultor;
+  });
+  
+  // Agrupar finalizadas por data para exibição
+  const finalizadasPorData = useMemo(() => {
+    const grupos: Record<string, CotacaoWithRelations[]> = {};
+    
+    fechadas.forEach(cotacao => {
+      const data = format(new Date(cotacao.created_at), 'yyyy-MM-dd');
+      if (!grupos[data]) grupos[data] = [];
+      grupos[data].push(cotacao);
+    });
+    
+    return Object.entries(grupos)
+      .sort(([a], [b]) => b.localeCompare(a)) // Mais recente primeiro
+      .map(([data, cotacoes]) => ({
+        data,
+        dataFormatada: format(new Date(data), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }),
+        cotacoes,
+      }));
+  }, [fechadas]);
 
   if (isLoading) {
     return (
@@ -508,8 +562,8 @@ export default function Cotacoes() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
-        <div className="flex-1 space-y-1.5">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:flex-wrap">
+        <div className="flex-1 min-w-48 space-y-1.5">
           <label className="text-sm font-medium text-muted-foreground">Buscar</label>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -524,7 +578,7 @@ export default function Cotacoes() {
         <div className="space-y-1.5">
           <label className="text-sm font-medium text-muted-foreground">Status</label>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-full sm:w-44">
+            <SelectTrigger className="w-full sm:w-40">
               <SelectValue placeholder="Todos os status" />
             </SelectTrigger>
             <SelectContent>
@@ -541,8 +595,8 @@ export default function Cotacoes() {
         <div className="space-y-1.5">
           <label className="text-sm font-medium text-muted-foreground">Período</label>
           <Select value={mesFilter} onValueChange={setMesFilter}>
-            <SelectTrigger className="w-full sm:w-44">
-              <Calendar className="h-4 w-4 mr-2" />
+            <SelectTrigger className="w-full sm:w-40">
+              <CalendarIcon className="h-4 w-4 mr-2" />
               <SelectValue placeholder="Todos os períodos" />
             </SelectTrigger>
             <SelectContent>
@@ -553,6 +607,66 @@ export default function Cotacoes() {
             </SelectContent>
           </Select>
         </div>
+        
+        {/* Filtro de Data Específica (para finalizadas) */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-muted-foreground">Data</label>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button 
+                variant="outline" 
+                className={cn(
+                  "w-full sm:w-40 justify-start text-left font-normal",
+                  !dataFilter && "text-muted-foreground"
+                )}
+              >
+                <CalendarDays className="h-4 w-4 mr-2" />
+                {dataFilter ? format(dataFilter, 'dd/MM/yyyy') : 'Todos os dias'}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={dataFilter}
+                onSelect={setDataFilter}
+                initialFocus
+                className="p-3 pointer-events-auto"
+              />
+              {dataFilter && (
+                <div className="p-2 border-t">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="w-full" 
+                    onClick={() => setDataFilter(undefined)}
+                  >
+                    Limpar data
+                  </Button>
+                </div>
+              )}
+            </PopoverContent>
+          </Popover>
+        </div>
+
+        {/* Filtro de Consultor (apenas para gestores) */}
+        {permissions.cotacao.viewScope !== 'own' && (
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-muted-foreground">Consultor</label>
+            <Select value={consultorFilter} onValueChange={setConsultorFilter}>
+              <SelectTrigger className="w-full sm:w-48">
+                <User className="h-4 w-4 mr-2" />
+                <SelectValue placeholder="Todos os consultores" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os consultores</SelectItem>
+                {vendedores?.map((v) => (
+                  <SelectItem key={v.user_id} value={v.user_id}>{v.nome}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        
         {hasActiveFilters && (
           <Button variant="ghost" size="sm" onClick={clearFilters} className="h-10">
             Limpar filtros
@@ -631,55 +745,78 @@ export default function Cotacoes() {
           )}
         </TabsContent>
 
-        <TabsContent value="fechadas" className="mt-4 space-y-3">
+        <TabsContent value="fechadas" className="mt-4 space-y-6">
           {fechadas.length === 0 ? (
             <Card className="border-dashed border-green-500/50">
               <CardContent className="py-12 text-center text-muted-foreground">
                 <CheckCircle className="h-12 w-12 mx-auto mb-4 opacity-50 text-green-500" />
-                <p className="font-medium">Nenhuma proposta finalizada</p>
-                <p className="text-sm">As propostas aceitas ou recusadas aparecerão aqui</p>
+                <p className="font-medium">
+                  {dataFilter || consultorFilter !== 'all' 
+                    ? 'Nenhuma proposta encontrada com os filtros aplicados' 
+                    : 'Nenhuma proposta finalizada'}
+                </p>
+                <p className="text-sm">
+                  {dataFilter || consultorFilter !== 'all' 
+                    ? 'Tente ajustar os filtros de data ou consultor' 
+                    : 'As propostas aceitas ou recusadas aparecerão aqui'}
+                </p>
               </CardContent>
             </Card>
           ) : (
-            fechadas.map((cotacao) => {
-              // Calcular permissões específicas para cada cotação
-              const isOwner = cotacao.vendedor_id === permissions.userId;
-              const cardPermissions: CotacaoCardPermissions = {
-                canEdit: permissions.cotacao.canEdit && (!permissions.cotacao.canEditOwnOnly || isOwner),
-                canDelete: permissions.cotacao.canDelete,
-                canSend: permissions.cotacao.canSend && (!permissions.cotacao.canEditOwnOnly || isOwner),
-                canDuplicate: permissions.cotacao.canDuplicate,
-                canGenerateContract: permissions.cotacao.canGenerateContract && (!permissions.cotacao.canEditOwnOnly || isOwner),
-              };
+            finalizadasPorData.map((grupo) => (
+              <div key={grupo.data} className="space-y-3">
+                {/* Cabeçalho do grupo por data */}
+                <div className="flex items-center gap-2 py-2 px-3 bg-muted/50 rounded-lg">
+                  <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                  <span className="font-medium text-sm">{grupo.dataFormatada}</span>
+                  <Badge variant="secondary" className="ml-auto">
+                    {grupo.cotacoes.length} {grupo.cotacoes.length === 1 ? 'cotação' : 'cotações'}
+                  </Badge>
+                </div>
+                
+                {/* Cards das cotações do dia */}
+                <div className="space-y-3 pl-2 border-l-2 border-muted">
+                  {grupo.cotacoes.map((cotacao) => {
+                    const isOwner = cotacao.vendedor_id === permissions.userId;
+                    const cardPermissions: CotacaoCardPermissions = {
+                      canEdit: permissions.cotacao.canEdit && (!permissions.cotacao.canEditOwnOnly || isOwner),
+                      canDelete: permissions.cotacao.canDelete,
+                      canSend: permissions.cotacao.canSend && (!permissions.cotacao.canEditOwnOnly || isOwner),
+                      canDuplicate: permissions.cotacao.canDuplicate,
+                      canGenerateContract: permissions.cotacao.canGenerateContract && (!permissions.cotacao.canEditOwnOnly || isOwner),
+                    };
 
-              return (
-                <CotacaoCard 
-                  key={cotacao.id}
-                  cotacao={cotacao}
-                  tipo="fechada"
-                  navigate={navigate}
-                  formatRelativeTime={formatRelativeTime}
-                  formatPhone={formatPhone}
-                  formatCurrency={formatCurrency}
-                  onVincular={(c) => {
-                    setCotacaoParaVincular(c);
-                    setShowVincularModal(true);
-                  }}
-                  onWhatsApp={enviarWhatsApp}
-                  onEmail={handleOpenEmailModal}
-                  onAceitar={(id) => {
-                    updateCotacao.mutate({ id, status: 'aceita' });
-                  }}
-                  onPdf={handleBaixarPdf}
-                  onDuplicar={handleDuplicar}
-                  onExcluir={handleExcluir}
-                  onCopiarWhatsApp={copiarParaWhatsApp}
-                  onGerarContrato={handleOpenContratoWizard}
-                  isGerandoContrato={gerarContrato.isPending}
-                  permissions={cardPermissions}
-                />
-              );
-            })
+                    return (
+                      <CotacaoCard 
+                        key={cotacao.id}
+                        cotacao={cotacao}
+                        tipo="fechada"
+                        navigate={navigate}
+                        formatRelativeTime={formatRelativeTime}
+                        formatPhone={formatPhone}
+                        formatCurrency={formatCurrency}
+                        onVincular={(c) => {
+                          setCotacaoParaVincular(c);
+                          setShowVincularModal(true);
+                        }}
+                        onWhatsApp={enviarWhatsApp}
+                        onEmail={handleOpenEmailModal}
+                        onAceitar={(id) => {
+                          updateCotacao.mutate({ id, status: 'aceita' });
+                        }}
+                        onPdf={handleBaixarPdf}
+                        onDuplicar={handleDuplicar}
+                        onExcluir={handleExcluir}
+                        onCopiarWhatsApp={copiarParaWhatsApp}
+                        onGerarContrato={handleOpenContratoWizard}
+                        isGerandoContrato={gerarContrato.isPending}
+                        permissions={cardPermissions}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            ))
           )}
         </TabsContent>
       </Tabs>
