@@ -3,7 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 }
 
 // Normalizar base64 - garantir que tenha o prefixo correto
@@ -132,33 +132,79 @@ serve(async (req) => {
       );
     }
 
-    // Instância existe, solicitar QR Code para conectar
-    const response = await fetch(
-      `${instancia.api_url}/instance/connect/${instancia.instance_name}`,
-      {
-        method: 'GET',
-        headers: { 'apikey': apiKey }
-      }
-    );
+    // Instância existe, solicitar dados de conexão (QR string / pairingCode)
+    // Observação: em algumas versões da Evolution API, /connect retorna apenas {count, code, pairingCode}
+    // (sem base64). Vamos retentar por alguns segundos até o code aparecer.
+    const connectUrl = `${instancia.api_url}/instance/connect/${instancia.instance_name}`;
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Erro ao obter QR Code:', errorText);
-      throw new Error('Erro ao obter QR Code');
+    let qrcodeBase64: string | undefined;
+    let pairingCode: string | undefined;
+    let code: string | undefined;
+    let count: number | undefined;
+
+    for (let attempt = 1; attempt <= 6; attempt++) {
+      const response = await fetch(connectUrl, {
+        method: 'GET',
+        headers: { 'apikey': apiKey },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Erro ao obter QR Code:', errorText);
+        throw new Error('Erro ao obter QR Code');
+      }
+
+      const data = await response.json();
+      console.log(`[whatsapp-qrcode] Resposta /connect (tentativa ${attempt}):`, JSON.stringify(data).slice(0, 500));
+
+      // Evolution API pode retornar o QR Code em diferentes formatos
+      qrcodeBase64 = data.base64 || data.qrcode?.base64 || data.qrcode;
+      pairingCode = data.pairingCode || data.qrcode?.pairingCode;
+      code = data.code || data.qrcode?.code;
+      count = data.count ?? data.qrcode?.count;
+
+      if (qrcodeBase64 || code || pairingCode) break;
+
+      // Se ainda não veio nada, aguardar um pouco e tentar novamente
+      await new Promise((resolve) => setTimeout(resolve, 1000));
     }
 
-    const data = await response.json();
-    console.log('[whatsapp-qrcode] Resposta /connect:', JSON.stringify(data).slice(0, 500));
+    // Se a API ficar presa retornando {count: 0} sem code/pairing/base64,
+    // tentar reiniciar a instância e solicitar novamente.
+    if (!qrcodeBase64 && !code && !pairingCode && (count === 0 || typeof count === 'undefined')) {
+      try {
+        console.log('[whatsapp-qrcode] Nenhum QR retornado (count=0). Tentando restart da instância...');
+        const restartResp = await fetch(
+          `${instancia.api_url}/instance/restart/${instancia.instance_name}`,
+          { method: 'PUT', headers: { 'apikey': apiKey } }
+        );
 
-    // Evolution API pode retornar o QR Code em diferentes formatos
-    let qrcodeBase64 = data.base64 || data.qrcode?.base64 || data.qrcode;
-    let pairingCode = data.pairingCode || data.qrcode?.pairingCode;
-    let code = data.code || data.qrcode?.code;
+        console.log('[whatsapp-qrcode] Restart status:', restartResp.status);
+        // aguardar um pouco para a instância subir
+        await new Promise((resolve) => setTimeout(resolve, 2000));
 
-    // Se não tiver QR Code, tentar buscar explicitamente via /fetchQrCode
+        const response = await fetch(connectUrl, {
+          method: 'GET',
+          headers: { 'apikey': apiKey },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          console.log('[whatsapp-qrcode] Resposta /connect após restart:', JSON.stringify(data).slice(0, 500));
+          qrcodeBase64 = data.base64 || data.qrcode?.base64 || data.qrcode;
+          pairingCode = data.pairingCode || data.qrcode?.pairingCode;
+          code = data.code || data.qrcode?.code;
+          count = data.count ?? data.qrcode?.count;
+        }
+      } catch (e) {
+        console.log('[whatsapp-qrcode] Falha ao reiniciar instância:', e);
+      }
+    }
+
+    // Se não tiver base64, tentar buscar explicitamente via /fetchQrCode (se existir nesta versão)
     if (!qrcodeBase64) {
-      console.log('[whatsapp-qrcode] QR Code não retornado em /connect, tentando /fetchQrCode...');
-      
+      console.log('[whatsapp-qrcode] Base64 não retornado em /connect, tentando /fetchQrCode...');
+
       const qrFetchResponse = await fetch(
         `${instancia.api_url}/instance/fetchQrCode/${instancia.instance_name}`,
         {
@@ -173,6 +219,7 @@ serve(async (req) => {
         qrcodeBase64 = qrData.base64 || qrData.qrcode?.base64 || qrData.qrcode;
         pairingCode = pairingCode || qrData.pairingCode || qrData.qrcode?.pairingCode;
         code = code || qrData.code || qrData.qrcode?.code;
+        count = count ?? qrData.count ?? qrData.qrcode?.count;
       } else {
         console.log('[whatsapp-qrcode] /fetchQrCode retornou erro:', qrFetchResponse.status);
       }
@@ -203,6 +250,7 @@ serve(async (req) => {
         qrcode: normalizeBase64(qrcodeBase64),
         code: code,
         pairingCode: pairingCode,
+        count: count,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

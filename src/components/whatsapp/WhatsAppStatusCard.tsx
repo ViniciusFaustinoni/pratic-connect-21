@@ -3,6 +3,7 @@ import {
   MessageCircle, Wifi, WifiOff, QrCode, 
   RefreshCw, LogOut, Loader2, Phone, RotateCcw
 } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -69,6 +70,7 @@ const STATUS_CONFIG = {
 export function WhatsAppStatusCard() {
   const [qrCodeOpen, setQrCodeOpen] = useState(false);
   const [qrCodeData, setQrCodeData] = useState<string | null>(null);
+  const [qrCodeString, setQrCodeString] = useState<string | null>(null);
   const [pairingCode, setPairingCode] = useState<string | null>(null);
   const [qrCodeError, setQrCodeError] = useState<string | null>(null);
   const [isRecriando, setIsRecriando] = useState(false);
@@ -102,6 +104,7 @@ export function WhatsAppStatusCard() {
     if (connected && qrCodeOpen) {
       setQrCodeOpen(false);
       setQrCodeData(null);
+      setQrCodeString(null);
       setPairingCode(null);
       setQrCodeError(null);
     }
@@ -112,9 +115,10 @@ export function WhatsAppStatusCard() {
       const result = await obterQRCode.mutateAsync();
 
       setQrCodeData(result.qrcode || null);
+      setQrCodeString(result.code || null);
       setPairingCode(result.pairingCode || null);
       setQrCodeError(
-        result.qrcode || result.pairingCode
+        result.qrcode || result.code || result.pairingCode
           ? null
           : 'Não foi possível obter o QR Code agora. Clique em “Tentar novamente”.'
       );
@@ -285,6 +289,23 @@ export function WhatsAppStatusCard() {
                   />
                 </div>
                 
+                {pairingCode && (
+                  <div className="text-center">
+                    <p className="text-sm text-muted-foreground mb-1">
+                      Ou use o código de pareamento:
+                    </p>
+                    <code className="text-lg font-mono font-bold tracking-widest bg-muted px-4 py-2 rounded">
+                      {pairingCode}
+                    </code>
+                  </div>
+                )}
+              </>
+            ) : qrCodeString ? (
+              <>
+                <div className="p-4 bg-white rounded-lg">
+                  <QRCodeSVG value={qrCodeString} size={256} />
+                </div>
+
                 {pairingCode && (
                   <div className="text-center">
                     <p className="text-sm text-muted-foreground mb-1">
