@@ -257,48 +257,69 @@ async function vincularMidiaADocumentoPendente(
 // System prompt adaptado para WhatsApp (mais conciso) - ALINHADO COM APP
 const WHATSAPP_SYSTEM_PROMPT = `Você é o Assistente Virtual PRATIC via WhatsApp.
 
+## ACOLHIMENTO (MUITO IMPORTANTE!)
+- SEMPRE cumprimente pelo PRIMEIRO NOME do associado (fornecido no contexto)
+- Seja ACOLHEDOR e EMPÁTICO, especialmente em situações de sinistro ou emergência
+- Exemplo: "Oi, Marcus! Sinto muito pelo que aconteceu. Vou te ajudar..."
+- Pergunte "está tudo bem?" quando o associado relatar acidente ou problema
+- Demonstre compreensão antes de coletar dados
+
 ## Regras do WhatsApp
 - Seja CONCISO (mensagens curtas)
 - Use formatação: *negrito*, _itálico_
 - NÃO use marcadores especiais como [BOTAO_LOCALIZACAO] ou [UPLOAD_*]
 - Para localização, peça o endereço digitado OU use a tool reverse_geocode se receber coordenadas
-- Para fotos, oriente enviar depois no app
 
 ## Capacidades
-1. Consultar boletos pendentes
+1. Consultar boletos pendentes e enviar PIX/PDF
 2. Histórico de pagamentos
 3. Status de sinistros
-4. Abrir sinistro (coleta dados e registra para aprovação)
+4. Abrir sinistro (coleta dados para aprovação)
 5. Solicitar assistência 24h (guincho, chaveiro, etc.)
 6. Informações sobre veículos
 7. Converter coordenadas GPS em endereço (reverse_geocode)
+8. Enviar localização do veículo via GPS
 
-## REGRAS DE COBERTURA (VERIFICAR SEMPRE!)
-Antes de criar QUALQUER solicitação, verifique a cobertura do veículo:
+## REGRAS DE COBERTURA (VERIFICAR SEMPRE ANTES DE CRIAR SOLICITAÇÕES!)
 
-### Se veículo tem APENAS cobertura "Roubo/Furto" (cobertura_total = false):
+### Veículo com status "Aguardando Instalação":
+- ✅ PERMITIDO: Sinistros de roubo/furto (se tiver cobertura_roubo_furto)
+- ❌ BLOQUEADO: Assistência 24h, colisão, incêndio, etc.
+- RESPONDA: "Seu veículo está aguardando instalação do rastreador. No momento, só posso ajudar com sinistros de roubo ou furto."
+
+### Veículo ativo com cobertura "APENAS ROUBO/FURTO":
 - ✅ PERMITIDO: Sinistros de roubo/furto
 - ❌ BLOQUEADO: Assistência 24h (guincho, chaveiro, pane, etc.)
 - ❌ BLOQUEADO: Sinistros de colisão, incêndio, fenômenos naturais
 
-### Se veículo tem cobertura "Total" (cobertura_total = true):
+### Veículo ativo com cobertura "TOTAL":
 - ✅ TUDO LIBERADO
 
-### Resposta quando bloqueado:
-"Sua cobertura atual é apenas para roubo/furto. 
-Após a instalação do rastreador, você terá acesso à cobertura total com assistência 24h.
-Entre em contato com a associação para mais informações."
+## Coleta de Dados para SINISTRO
+1. Tipo do sinistro (colisão, roubo, furto, etc.)
+2. Data e hora do ocorrido
+3. Local (peça endereço ou coordenadas)
+4. Descrição detalhada do que aconteceu
+5. B.O. foi registrado? (se sim, pedir para enviar foto/PDF)
+6. Pedir fotos do veículo/danos (pode enviar direto aqui!)
+
+## Coleta de Dados para ASSISTÊNCIA 24H
+1. Tipo do serviço (guincho, chaveiro, troca de pneu, pane seca, pane elétrica)
+2. Localização atual (endereço completo ou compartilhar localização)
+3. Descrição do problema
+4. Tipo de veículo (carro ou moto)
 
 ## Regras Gerais
 - Use a DATA ATUAL fornecida para datas relativas
-- Confirme dados antes de criar solicitações
-- Informe que solicitações passam por aprovação
-- NUNCA invente informações
+- Confirme TODOS os dados antes de criar solicitações
+- Informe que solicitações passam por aprovação de um diretor
+- NUNCA invente informações - use APENAS os dados do contexto
+- Se o associado enviar foto/documento, será vinculado automaticamente
 
-## Formato
-- Respostas curtas e diretas
-- Use emojis com moderação
-- Máximo 3-4 parágrafos por mensagem`;
+## Formato de Resposta
+- Respostas curtas e diretas (máximo 3-4 parágrafos)
+- Use emojis com moderação 🚗
+- Quebre mensagens longas em partes`;
 
 // System prompt para confirmação de agendamento
 const CONFIRMACAO_SYSTEM_PROMPT = `Você é o Assistente de Confirmação de Agendamentos da PRATIC.
@@ -1211,39 +1232,123 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
   }
 }
 
-// Buscar contexto do associado - ATUALIZADO com dados de cobertura
+// Buscar contexto do associado - ENRIQUECIDO com dados completos
 async function getAssociadoContext(supabase: any, associadoId: string) {
+  // Buscar dados completos do associado
   const { data: associado } = await supabase
     .from("associados")
-    .select("nome, email, telefone, status")
+    .select("nome, email, telefone, whatsapp, cpf, status, plano:planos(nome)")
     .eq("id", associadoId)
     .single();
 
-  // ATUALIZADO: Incluir dados de cobertura dos veículos
+  // Buscar TODOS os veículos (incluindo pendentes de instalação)
   const { data: veiculos } = await supabase
     .from("veiculos")
-    .select("placa, marca, modelo, ano, status, cobertura_roubo_furto, cobertura_total")
+    .select("id, placa, marca, modelo, ano_modelo, status, cobertura_roubo_furto, cobertura_total")
+    .eq("associado_id", associadoId);
+
+  // Buscar boletos pendentes
+  const { data: boletos } = await supabase
+    .from("cobrancas")
+    .select("id, valor, data_vencimento, status, pix_copia_cola")
     .eq("associado_id", associadoId)
+    .in("status", ["pendente", "vencido", "em_aberto"])
+    .order("data_vencimento", { ascending: true })
     .limit(3);
 
-  // Formatar veículos com informação de cobertura
-  const veiculosFormatados = veiculos?.map((v: any) => {
-    const cobertura = v.cobertura_total ? "TOTAL" : "APENAS ROUBO/FURTO";
-    return `${v.placa} (${v.marca} ${v.modelo}) - Cobertura: ${cobertura}`;
-  }).join("\n  - ") || "Nenhum";
+  // Buscar sinistros em andamento
+  const { data: sinistros } = await supabase
+    .from("sinistros")
+    .select("protocolo, tipo, status")
+    .eq("associado_id", associadoId)
+    .not("status", "in", "(finalizado,encerrado,cancelado)")
+    .limit(3);
+
+  // Buscar assistências em andamento
+  const { data: assistencias } = await supabase
+    .from("chamados_assistencia")
+    .select("protocolo, tipo_servico, status")
+    .eq("associado_id", associadoId)
+    .not("status", "in", "(concluido,cancelado)")
+    .limit(3);
+
+  // Formatar veículos com informação clara de status e cobertura
+  const veiculosFormatados = veiculos?.length > 0
+    ? veiculos.map((v: any) => {
+        const cobertura = v.cobertura_total 
+          ? "TOTAL (tudo liberado)" 
+          : v.cobertura_roubo_furto 
+            ? "APENAS ROUBO/FURTO" 
+            : "SEM COBERTURA";
+        const statusInfo = v.status === 'ativo' 
+          ? '✅ Ativo' 
+          : v.status === 'instalacao_pendente'
+            ? '⏳ Aguardando Instalação'
+            : `⚠️ ${v.status}`;
+        return `- ${v.placa} (${v.marca} ${v.modelo} ${v.ano_modelo || ''}) - Status: ${statusInfo}, Cobertura: ${cobertura}, ID: ${v.id}`;
+      }).join('\n')
+    : 'Nenhum veículo cadastrado';
+
+  // Formatar boletos
+  const boletosFormatados = boletos?.length > 0
+    ? boletos.map((b: any) => 
+        `- R$ ${(b.valor || 0).toFixed(2)} vence ${new Date(b.data_vencimento).toLocaleDateString('pt-BR')} (${b.status})${b.pix_copia_cola ? ' - PIX disponível' : ''}`
+      ).join('\n')
+    : 'Nenhum boleto pendente ✅';
+
+  // Formatar sinistros
+  const sinistrosFormatados = sinistros?.length > 0
+    ? sinistros.map((s: any) => `- ${s.protocolo}: ${s.tipo} (${s.status})`).join('\n')
+    : 'Nenhum sinistro em aberto';
+
+  // Formatar assistências
+  const assistenciasFormatadas = assistencias?.length > 0
+    ? assistencias.map((a: any) => `- ${a.protocolo}: ${a.tipo_servico} (${a.status})`).join('\n')
+    : 'Nenhuma assistência em aberto';
+
+  // Data atual em Brasília
+  const agora = new Date();
+  const dataHoraBrasilia = agora.toLocaleString('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+
+  const primeiroNome = associado?.nome?.split(' ')[0] || 'Associado';
 
   return `
-## CONTEXTO DO ASSOCIADO
-- Nome: ${associado?.nome || "N/A"}
-- Status: ${associado?.status || "N/A"}
-- Veículos:
-  - ${veiculosFormatados}
-- Data atual: ${new Date().toLocaleDateString("pt-BR")} ${new Date().toLocaleTimeString("pt-BR")}
+## DATA E HORA ATUAL
+- **Hoje é**: ${dataHoraBrasilia} (horário de Brasília)
+- Use esta data para "hoje", "agora", "ontem"
 
-## IMPORTANTE - REGRAS DE COBERTURA
-Verifique SEMPRE a cobertura antes de criar solicitações:
-- Se cobertura = "APENAS ROUBO/FURTO": NÃO criar assistência 24h nem sinistros de colisão/incêndio
-- Se cobertura = "TOTAL": Pode criar qualquer solicitação
+## DADOS DO ASSOCIADO
+- **Nome Completo**: ${associado?.nome || 'N/A'}
+- **Primeiro Nome (use para cumprimentar)**: ${primeiroNome}
+- **CPF**: ${associado?.cpf || 'N/I'}
+- **Status**: ${associado?.status || 'N/A'}
+- **Plano**: ${associado?.plano?.nome || 'Não definido'}
+
+## VEÍCULOS DO ASSOCIADO
+${veiculosFormatados}
+
+## BOLETOS PENDENTES
+${boletosFormatados}
+
+## SINISTROS EM ANDAMENTO
+${sinistrosFormatados}
+
+## ASSISTÊNCIAS EM ANDAMENTO
+${assistenciasFormatadas}
+
+## INSTRUÇÕES IMPORTANTES
+- SEMPRE cumprimente usando o primeiro nome: "${primeiroNome}"
+- Se o veículo está "Aguardando Instalação", só pode criar sinistro de roubo/furto
+- Se cobertura é "APENAS ROUBO/FURTO", NÃO criar assistência 24h
+- Use SEMPRE os dados acima. NÃO invente informações!
 `;
 }
 
@@ -2330,8 +2435,72 @@ serve(async (req) => {
         return new Response(JSON.stringify({ ok: true, lead_id: lead.id }), { headers: corsHeaders });
       }
       
-      // Número desconhecido (nem associado nem lead)
+      // ========================================
+      // NÚMERO DESCONHECIDO - TENTAR IDENTIFICAR POR CPF
+      // ========================================
       console.log(`[whatsapp-webhook] Número desconhecido: ${telefone}`);
+      
+      // Verificar se a mensagem é um CPF (11 dígitos)
+      const cpfLimpo = mensagemTexto.replace(/\D/g, '');
+      
+      if (cpfLimpo.length === 11 && tipoPrincipal === 'texto') {
+        console.log(`[whatsapp-webhook] Tentando identificar por CPF: ${cpfLimpo}`);
+        
+        // Buscar associado pelo CPF
+        const { data: associadoPorCpf } = await supabase
+          .from("associados")
+          .select("id, nome, status, whatsapp, telefone")
+          .eq("cpf", cpfLimpo)
+          .eq("status", "ativo")
+          .maybeSingle();
+        
+        if (associadoPorCpf) {
+          // Atualizar o whatsapp do associado com esse número
+          await supabase
+            .from("associados")
+            .update({ 
+              whatsapp: telefone,
+              updated_at: new Date().toISOString()
+            })
+            .eq("id", associadoPorCpf.id);
+          
+          const primeiroNome = associadoPorCpf.nome.split(' ')[0];
+          
+          await sendWhatsAppMessage(
+            apiUrl,
+            instancia.instance_name,
+            telefone,
+            `Encontrei você, *${primeiroNome}*! 🎉
+
+Seu número foi vinculado ao seu cadastro. A partir de agora, posso te ajudar diretamente por aqui!
+
+Como posso te ajudar hoje? 😊`
+          );
+          
+          await saveWhatsAppLog(supabase, instancia.id, telefone, `CPF identificado: ${cpfLimpo}`, "entrada", messageId);
+          await saveWhatsAppLog(supabase, instancia.id, telefone, `Associado vinculado: ${associadoPorCpf.nome}`, "saida");
+          
+          console.log(`[whatsapp-webhook] Associado ${associadoPorCpf.nome} vinculado ao telefone ${telefone}`);
+          
+          return new Response(JSON.stringify({ ok: true, cpf_linked: true, associado_id: associadoPorCpf.id }), { headers: corsHeaders });
+        } else {
+          // CPF não encontrado
+          await saveWhatsAppLog(supabase, instancia.id, telefone, mensagemTexto, "entrada", messageId);
+          
+          await sendWhatsAppMessage(
+            apiUrl,
+            instancia.instance_name,
+            telefone,
+            `Não encontrei nenhum associado ativo com esse CPF. 😕
+
+Verifique se o CPF está correto ou entre em contato com nossa central para mais informações.
+
+📞 *Central de Atendimento*: Entre em contato pelo site praticcar.com.br`
+          );
+          
+          return new Response(JSON.stringify({ ok: true, cpf_not_found: true }), { headers: corsHeaders });
+        }
+      }
       
       // Salvar mensagem mesmo assim para histórico
       await saveWhatsAppLog(
@@ -2347,13 +2516,18 @@ serve(async (req) => {
         mediaFilename || undefined
       );
       
+      // Pedir CPF para identificação
       await sendWhatsAppMessage(
         apiUrl,
         instancia.instance_name,
         telefone,
-        "Olá! Este número não está cadastrado como associado PRATIC. Entre em contato com nossa central para mais informações. 📞"
+        `Olá! 👋 Não consegui identificar seu número em nosso sistema.
+
+Por favor, me informe seu *CPF* (apenas números) para que eu possa te ajudar.
+
+Se você ainda não é associado PRATIC, acesse nosso site ou entre em contato conosco! 📞`
       );
-      return new Response(JSON.stringify({ ok: true, notFound: true }), { headers: corsHeaders });
+      return new Response(JSON.stringify({ ok: true, notFound: true, awaiting_cpf: true }), { headers: corsHeaders });
     }
 
     // ========================================
