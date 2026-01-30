@@ -64,7 +64,7 @@ import MonitoramentoEncaixes from "./pages/monitoramento/Encaixes";
 import Estoque from "./pages/monitoramento/Estoque";
 import Rastreadores from "./pages/monitoramento/Rastreadores";
 import ConfigPlataformas from "./pages/monitoramento/ConfigPlataformas";
-import ConfigCredenciais from "./pages/monitoramento/ConfigCredenciais";
+
 import Mapa from "./pages/monitoramento/Mapa";
 import CalendarioInstalacoes from "./pages/monitoramento/CalendarioInstalacoes";
 import Vistorias from "./pages/monitoramento/Vistorias";
@@ -451,7 +451,7 @@ const App = () => (
               <Route path="/monitoramento/mapa" element={<Mapa />} />
               <Route path="/monitoramento/rastreadores" element={<Rastreadores />} />
               <Route path="/monitoramento/config-plataformas" element={<ConfigPlataformas />} />
-              <Route path="/monitoramento/credenciais" element={<ConfigCredenciais />} />
+              
               <Route path="/monitoramento/calendario" element={<CalendarioInstalacoes />} />
               <Route path="/monitoramento/vistorias" element={<FilaVistorias />} />
               <Route path="/monitoramento/vistorias-instalacoes" element={<VistoriasInstalacoes />} />
