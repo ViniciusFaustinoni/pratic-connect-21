@@ -1,209 +1,334 @@
 
-
-# Plano: Visualização de Cotações Finalizadas por Data e Consultor
+# Plano: Implementação de Campanhas de Desconto
 
 ## Resumo
 
-Adicionar filtros avançados na aba "Finalizadas" da página de Cotações para permitir que gestores, comerciais, admins e diretores visualizem cotações finalizadas organizadas por data específica e por consultor.
+Implementar um sistema completo de campanhas de desconto que permite ao diretor criar e gerenciar campanhas promocionais, e ao consultor selecionar campanhas ativas durante a cotação, aplicando descontos automáticos no valor mensal.
 
-## Situação Atual
-
-A página `src/pages/vendas/Cotacoes.tsx` já possui:
-- Tabs separando "Em Andamento" e "Finalizadas"
-- Filtro por **mês** (período mensal)
-- Filtro por **status**
-- Campo de **busca** por texto
-
-## O Que Será Implementado
-
-| Funcionalidade | Descrição |
-|---------------|-----------|
-| Filtro por Data | Seletor de data específica para ver cotações de um dia |
-| Filtro por Consultor | Dropdown com lista de vendedores para filtrar por responsável |
-| Combinação de Filtros | Ambos os filtros funcionando simultaneamente |
-| Visibilidade Condicional | Filtro de consultor aparece apenas para gestores (quem pode ver todas) |
-
-## Regras de Negócio
-
-### Visibilidade por Perfil
-
-| Perfil | Vê filtro de Consultor? | Vê quais cotações? |
-|--------|-------------------------|---------------------|
-| Vendedor CLT/Externo | Não | Apenas as próprias |
-| Supervisor de Vendas | Sim | Da equipe |
-| Gerente Comercial | Sim | Todas |
-| Diretor | Sim | Todas |
-| Admin Master | Sim | Todas |
-
-### Comportamento dos Filtros
-
-1. **Filtro de Data**:
-   - Calendário para selecionar data específica
-   - Opção "Todos os dias" para ver tudo
-   - Filtra pela data de criação (`created_at`) da cotação
-
-2. **Filtro de Consultor**:
-   - Dropdown com vendedores
-   - Opção "Todos" para ver de todos
-   - Visível apenas para quem tem `viewScope === 'all'` ou `viewScope === 'team'`
-
-3. **Combinação**:
-   - Data + Consultor funcionam juntos
-   - Ex: "30/01/2026 + João Silva" mostra só as cotações do João naquele dia
-
-## Fluxo Visual
+## Visão Geral da Solução
 
 ```text
-┌─────────────────────────────────────────────────────────────────┐
-│  Cotação                                        + Nova Cotação  │
-├─────────────────────────────────────────────────────────────────┤
-│  [Total: 50] [Enviadas: 10] [Aceitas: 35] [Taxa: 70%]          │
-├─────────────────────────────────────────────────────────────────┤
-│  [Buscar...]  [Status ▼]  [Consultor ▼]  [📅 Data ▼]           │
-├─────────────────────────────────────────────────────────────────┤
-│  [Em Andamento (15)]  [✓ Finalizadas (35)]                     │
-├─────────────────────────────────────────────────────────────────┤
-│  📅 30/01/2026 - 5 cotações                                     │
-│  ┌─────────────────────────────────────────────────────────────┐│
-│  │ ✓ ACEITA  João Silva        Toyota Corolla   R$ 211,00/mês ││
-│  │ ✓ ACEITA  João Silva        Honda Civic      R$ 195,00/mês ││
-│  │ ✗ RECUSADA Maria Costa      VW Golf          R$ 180,00/mês ││
-│  └─────────────────────────────────────────────────────────────┘│
-│                                                                 │
-│  📅 29/01/2026 - 3 cotações                                     │
-│  ┌─────────────────────────────────────────────────────────────┐│
-│  │ ✓ ACEITA  Pedro Lima        Fiat Argo        R$ 150,00/mês ││
-│  └─────────────────────────────────────────────────────────────┘│
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        FLUXO DE CAMPANHAS DE DESCONTO                       │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  DIRETORIA                         COTAÇÃO                                  │
+│  ┌──────────────────┐              ┌──────────────────────────────────────┐ │
+│  │ CRUD Campanhas   │              │ Seleção de Campanha Ativa           │ │
+│  │ • Nome           │   ────────▶  │                                      │ │
+│  │ • Tipo (% ou R$) │              │ [v] Campanha: Black Friday -5%       │ │
+│  │ • Valor          │              │                                      │ │
+│  │ • Vigência       │              │ Valor Normal: R$ 100,00/mês         │ │
+│  │ • Meses          │              │ Valor Promocional: R$ 95,00/mês     │ │
+│  │ • Status         │              │ (Válido por 3 meses)                │ │
+│  └──────────────────┘              └──────────────────────────────────────┘ │
+│                                              │                              │
+│                                              ▼                              │
+│                              ┌─────────────────────────────────────────┐    │
+│                              │           COTAÇÃO SALVA                 │    │
+│                              │ • campanha_id: uuid                     │    │
+│                              │ • valor_mensal_original: R$ 100        │    │
+│                              │ • valor_mensal_promocional: R$ 95      │    │
+│                              │ • meses_desconto: 3                     │    │
+│                              └─────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Alterações Técnicas
+## Parte 1: Estrutura de Dados
 
-### 1. Modificar `src/pages/vendas/Cotacoes.tsx`
+### Nova Tabela: `campanhas_desconto`
 
-**Novos estados**:
-```typescript
-const [dataFilter, setDataFilter] = useState<Date | undefined>(undefined);
-const [consultorFilter, setConsultorFilter] = useState<string>('all');
-```
+| Coluna | Tipo | Descrição |
+|--------|------|-----------|
+| `id` | UUID | Identificador único |
+| `nome` | VARCHAR | Nome da campanha (ex: "Black Friday 2026") |
+| `descricao` | TEXT | Descrição detalhada |
+| `tipo_beneficio` | VARCHAR | `percentual` ou `valor_fixo` |
+| `valor_beneficio` | NUMERIC | Valor do desconto (ex: 5 para 5% ou 10 para R$10) |
+| `data_inicio` | DATE | Data de início da vigência |
+| `data_fim` | DATE | Data de término da vigência |
+| `meses_aplicacao` | INTEGER | Quantidade de meses com desconto |
+| `status` | VARCHAR | `ativa` ou `inativa` |
+| `criado_por` | UUID | ID do usuário que criou |
+| `created_at` | TIMESTAMPTZ | Data de criação |
+| `updated_at` | TIMESTAMPTZ | Data de atualização |
 
-**Importar hook de vendedores**:
-```typescript
-import { useVendedores } from '@/hooks/useVendedores';
-```
+### Alterações na Tabela `cotacoes`
 
-**Nova lógica de filtragem**:
-```typescript
-// Filtrar por data específica
-let matchesData = true;
-if (dataFilter) {
-  const cotacaoDate = new Date(cotacao.created_at);
-  const filterDate = dataFilter;
-  matchesData = 
-    cotacaoDate.getDate() === filterDate.getDate() &&
-    cotacaoDate.getMonth() === filterDate.getMonth() &&
-    cotacaoDate.getFullYear() === filterDate.getFullYear();
-}
+Adicionar novos campos:
 
-// Filtrar por consultor
-let matchesConsultor = true;
-if (consultorFilter !== 'all') {
-  matchesConsultor = cotacao.vendedor_id === consultorFilter;
-}
-```
+| Coluna | Tipo | Descrição |
+|--------|------|-----------|
+| `campanha_desconto_id` | UUID | FK para campanhas_desconto |
+| `valor_mensal_promocional` | NUMERIC | Valor com desconto aplicado |
+| `meses_desconto_campanha` | INTEGER | Meses de duração do desconto |
 
-**Novo componente de filtro de data**:
-```typescript
-<Popover>
-  <PopoverTrigger asChild>
-    <Button variant="outline" className="w-full sm:w-auto">
-      <Calendar className="h-4 w-4 mr-2" />
-      {dataFilter ? format(dataFilter, 'dd/MM/yyyy') : 'Todos os dias'}
-    </Button>
-  </PopoverTrigger>
-  <PopoverContent>
-    <Calendar 
-      mode="single"
-      selected={dataFilter}
-      onSelect={setDataFilter}
-    />
-  </PopoverContent>
-</Popover>
-```
+## Parte 2: CRUD de Campanhas (Diretoria)
 
-**Filtro de consultor (condicional)**:
-```typescript
-{permissions.cotacao.viewScope !== 'own' && (
-  <Select value={consultorFilter} onValueChange={setConsultorFilter}>
-    <SelectTrigger className="w-full sm:w-48">
-      <User className="h-4 w-4 mr-2" />
-      <SelectValue placeholder="Todos os consultores" />
-    </SelectTrigger>
-    <SelectContent>
-      <SelectItem value="all">Todos os consultores</SelectItem>
-      {vendedores?.map(v => (
-        <SelectItem key={v.user_id} value={v.user_id}>{v.nome}</SelectItem>
-      ))}
-    </SelectContent>
-  </Select>
-)}
-```
+### Nova Página: `src/pages/diretoria/CampanhasDesconto.tsx`
 
-### 2. Agrupamento por Data na Visualização
+Interface com:
+- Lista de campanhas em tabela
+- Filtros: Status (ativa/inativa), Período
+- Botão "Nova Campanha"
+- Ações: Editar, Ativar/Desativar, Excluir
 
-Para cotações finalizadas, agrupar visualmente por data:
+### Novo Componente: `src/components/diretoria/CampanhaDescontoModal.tsx`
+
+Modal de criação/edição com campos:
+- Nome da campanha
+- Descrição
+- Tipo de benefício (select: Percentual / Valor Fixo)
+- Valor do benefício (input numérico)
+- Data início e Data fim (date pickers)
+- Quantidade de meses de aplicação
+- Status (switch ativo/inativo)
+
+### Novo Hook: `src/hooks/useCampanhasDesconto.ts`
 
 ```typescript
-// Agrupar finalizadas por data
-const finalizadasPorData = useMemo(() => {
-  const grupos: Record<string, CotacaoWithRelations[]> = {};
-  
-  fechadas.forEach(cotacao => {
-    const data = format(new Date(cotacao.created_at), 'yyyy-MM-dd');
-    if (!grupos[data]) grupos[data] = [];
-    grupos[data].push(cotacao);
-  });
-  
-  return Object.entries(grupos)
-    .sort(([a], [b]) => b.localeCompare(a)) // Mais recente primeiro
-    .map(([data, cotacoes]) => ({
-      data,
-      dataFormatada: format(new Date(data), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }),
-      cotacoes,
-    }));
-}, [fechadas]);
+// Listagem de campanhas
+useCampanhasDesconto(filtros?: { status?: string })
+
+// Campanhas ativas e vigentes (para cotação)
+useCampanhasDescontoVigentes()
+
+// Mutations
+useCreateCampanhaDesconto()
+useUpdateCampanhaDesconto()
+useDeleteCampanhaDesconto()
+useToggleCampanhaDescontoStatus()
 ```
 
-### 3. Renderização Agrupada
+## Parte 3: Integração na Cotação
+
+### Modificações no `src/pages/vendas/Cotador.tsx`
+
+1. **Novo estado para campanha selecionada:**
+```typescript
+const [campanhaDesconto, setCampanhaDesconto] = useState<CampanhaDesconto | null>(null);
+```
+
+2. **Buscar campanhas vigentes:**
+```typescript
+const { data: campanhasVigentes } = useCampanhasDescontoVigentes();
+```
+
+3. **Novo componente de seleção de campanha** (antes da exibição dos planos):
+```tsx
+<SeletorCampanhaDesconto
+  campanhas={campanhasVigentes}
+  campanhaId={campanhaDesconto?.id}
+  onSelect={setCampanhaDesconto}
+/>
+```
+
+4. **Exibição de valores com desconto nos cards de plano:**
+```tsx
+// Valor promocional
+<div className="flex items-center gap-2">
+  <span className="text-3xl font-bold text-primary">
+    {formatarMoeda(valorComDesconto)}
+  </span>
+  <span className="text-sm text-muted-foreground line-through">
+    {formatarMoeda(valorOriginal)}
+  </span>
+</div>
+<p className="text-sm text-success">
+  Desconto válido por {campanhaDesconto.meses_aplicacao} meses
+</p>
+```
+
+5. **Salvar campanha na cotação:**
+```typescript
+const cotacaoData = await criarCotacao.mutateAsync({
+  // ... outros campos
+  campanha_desconto_id: campanhaDesconto?.id,
+  valor_mensal_promocional: valorComDesconto,
+  meses_desconto_campanha: campanhaDesconto?.meses_aplicacao,
+});
+```
+
+### Novo Componente: `src/components/cotador/SeletorCampanhaDesconto.tsx`
 
 ```tsx
-<TabsContent value="fechadas">
-  {finalizadasPorData.map(grupo => (
-    <div key={grupo.data} className="space-y-3">
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Calendar className="h-4 w-4" />
-        <span className="font-medium">{grupo.dataFormatada}</span>
-        <Badge variant="secondary">{grupo.cotacoes.length}</Badge>
-      </div>
-      {grupo.cotacoes.map(cotacao => (
-        <CotacaoCard key={cotacao.id} ... />
-      ))}
+<Card className="border-amber-500/30 bg-amber-500/5">
+  <CardContent className="p-4">
+    <div className="flex items-center gap-2 mb-3">
+      <Ticket className="h-5 w-5 text-amber-500" />
+      <span className="font-medium">Campanha Promocional</span>
     </div>
-  ))}
-</TabsContent>
+    <Select value={campanhaId} onValueChange={onSelect}>
+      <SelectTrigger>
+        <SelectValue placeholder="Selecione uma campanha (opcional)" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="">Sem campanha</SelectItem>
+        {campanhas.map(c => (
+          <SelectItem key={c.id} value={c.id}>
+            {c.nome} ({c.tipo_beneficio === 'percentual' 
+              ? `-${c.valor_beneficio}%` 
+              : `-R$ ${c.valor_beneficio}`})
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  </CardContent>
+</Card>
 ```
+
+## Parte 4: Cálculo de Desconto
+
+### Função de Cálculo
+
+```typescript
+function calcularValorComDesconto(
+  valorOriginal: number,
+  campanha: CampanhaDesconto | null
+): { valorPromocional: number; economia: number } {
+  if (!campanha) {
+    return { valorPromocional: valorOriginal, economia: 0 };
+  }
+
+  let valorPromocional: number;
+  
+  if (campanha.tipo_beneficio === 'percentual') {
+    valorPromocional = valorOriginal * (1 - campanha.valor_beneficio / 100);
+  } else {
+    valorPromocional = valorOriginal - campanha.valor_beneficio;
+  }
+
+  // Garantir valor mínimo
+  valorPromocional = Math.max(valorPromocional, 0);
+
+  return {
+    valorPromocional: Math.round(valorPromocional * 100) / 100,
+    economia: Math.round((valorOriginal - valorPromocional) * 100) / 100,
+  };
+}
+```
+
+## Parte 5: Exibição na Proposta e PDF
+
+### Alterações no `EscolhaPlano.tsx` (Link Público)
+
+Exibir informações da campanha quando houver:
+- Badge "Promoção Ativa"
+- Valor original riscado + valor promocional
+- Texto: "Após X meses, retorna ao valor normal de R$ Y"
+
+### Alterações na Geração de PDF
+
+No arquivo de geração de proposta PDF, incluir:
+- Nome da campanha
+- Período promocional (X meses)
+- Valor mensal promocional vs valor normal
+- Aviso sobre retorno ao valor normal
+
+## Arquivos a Criar
+
+| Arquivo | Descrição |
+|---------|-----------|
+| `src/pages/diretoria/CampanhasDesconto.tsx` | Página CRUD de campanhas |
+| `src/components/diretoria/CampanhaDescontoModal.tsx` | Modal de edição |
+| `src/hooks/useCampanhasDesconto.ts` | Hooks de gerenciamento |
+| `src/components/cotador/SeletorCampanhaDesconto.tsx` | Seletor na cotação |
+| `src/types/campanha-desconto.ts` | Tipos TypeScript |
 
 ## Arquivos a Modificar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/pages/vendas/Cotacoes.tsx` | Adicionar filtros de data e consultor, agrupar por data |
+| `src/pages/vendas/Cotador.tsx` | Adicionar seleção de campanha e cálculo |
+| `src/hooks/useCotacao.ts` | Incluir campos de campanha no payload |
+| `src/components/cotacao-publica/EscolhaPlano.tsx` | Exibir valor promocional |
+| `src/lib/gerarPdfCotacao.ts` | Incluir info de campanha no PDF |
+| Rotas/Menu da Diretoria | Adicionar link para Campanhas |
+
+## Migração SQL
+
+```sql
+-- Criar tabela de campanhas de desconto
+CREATE TABLE campanhas_desconto (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  nome VARCHAR(255) NOT NULL,
+  descricao TEXT,
+  tipo_beneficio VARCHAR(20) NOT NULL CHECK (tipo_beneficio IN ('percentual', 'valor_fixo')),
+  valor_beneficio NUMERIC(10,2) NOT NULL CHECK (valor_beneficio > 0),
+  data_inicio DATE NOT NULL,
+  data_fim DATE NOT NULL,
+  meses_aplicacao INTEGER NOT NULL DEFAULT 1 CHECK (meses_aplicacao >= 1),
+  status VARCHAR(20) NOT NULL DEFAULT 'ativa' CHECK (status IN ('ativa', 'inativa')),
+  criado_por UUID REFERENCES profiles(id),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  
+  CONSTRAINT data_fim_maior_inicio CHECK (data_fim >= data_inicio)
+);
+
+-- Adicionar campos na tabela cotacoes
+ALTER TABLE cotacoes 
+ADD COLUMN campanha_desconto_id UUID REFERENCES campanhas_desconto(id),
+ADD COLUMN valor_mensal_promocional NUMERIC(10,2),
+ADD COLUMN meses_desconto_campanha INTEGER;
+
+-- Índices
+CREATE INDEX idx_campanhas_desconto_status ON campanhas_desconto(status);
+CREATE INDEX idx_campanhas_desconto_vigencia ON campanhas_desconto(data_inicio, data_fim);
+CREATE INDEX idx_cotacoes_campanha ON cotacoes(campanha_desconto_id);
+
+-- RLS
+ALTER TABLE campanhas_desconto ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Campanhas visíveis para autenticados" ON campanhas_desconto
+  FOR SELECT TO authenticated USING (true);
+
+CREATE POLICY "Campanhas editáveis por diretoria/admin" ON campanhas_desconto
+  FOR ALL TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM profiles 
+      WHERE profiles.user_id = auth.uid() 
+      AND profiles.cargo IN ('diretor', 'admin_master')
+    )
+  );
+```
+
+## Regras de Negócio Implementadas
+
+| Regra | Implementação |
+|-------|---------------|
+| Apenas campanhas ativas e vigentes aparecem na cotação | Query filtra por `status = 'ativa' AND data_inicio <= NOW() AND data_fim >= NOW()` |
+| Valor promocional exibido junto com valor original | UI mostra ambos valores lado a lado |
+| Campanha registrada na cotação e proposta | Campos `campanha_desconto_id`, `valor_mensal_promocional`, `meses_desconto_campanha` |
+| Sem campanha = valor padrão | Se `campanha_desconto_id` é null, usa `valor_total_mensal` |
+| Informação consistente em todas as visualizações | Tela, proposta e PDF usam mesmos dados |
+
+## Fluxo Visual da Exibição de Preços
+
+```text
+┌──────────────────────────────────────────────────────────────────┐
+│  💰 VALORES                                                      │
+├──────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  Mensalidade:                                                    │
+│  ┌────────────────────────────────────────────────────────────┐  │
+│  │ R$ 95,00/mês ────────────── R$ 100,00 (valor normal)      │  │
+│  │ ▲ valor promocional         ▲ riscado                      │  │
+│  └────────────────────────────────────────────────────────────┘  │
+│                                                                  │
+│  ⚠️ Promoção válida por 3 meses.                                 │
+│  Após este período, a mensalidade será de R$ 100,00.            │
+│                                                                  │
+│  Economia total: R$ 15,00 (3x R$ 5,00)                          │
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
+```
 
 ## Benefícios
 
-1. **Acompanhamento diário** - Gestores podem ver performance de cada dia
-2. **Análise por consultor** - Filtrar para ver desempenho individual
-3. **Combinação de filtros** - Visão granular (data + consultor)
-4. **Interface intuitiva** - Agrupamento visual por data facilita navegação
-5. **Controle de acesso** - Vendedores não veem filtro de consultor (só suas próprias cotações)
-
+1. **Flexibilidade comercial** - Campanhas podem ser criadas rapidamente pela diretoria
+2. **Transparência** - Cliente vê claramente o valor promocional vs normal
+3. **Rastreabilidade** - Cada cotação registra qual campanha foi aplicada
+4. **Automação** - Sistema filtra automaticamente campanhas expiradas
+5. **Consistência** - Mesma informação em todas as visualizações (tela, PDF, proposta)
