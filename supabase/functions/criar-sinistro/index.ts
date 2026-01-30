@@ -224,10 +224,18 @@ Deno.serve(async (req) => {
     // ============================================
     const { data: veiculo, error: veicError } = await supabaseAdmin
       .from('veiculos')
-      .select('id, placa, marca, modelo, ano_modelo, cor, status')
+      .select('id, placa, marca, modelo, ano_modelo, cor, status, cobertura_roubo_furto, cobertura_total')
       .eq('id', payload.veiculo_id)
       .eq('associado_id', associado.id)
       .single();
+
+    if (veicError || !veiculo) {
+      console.error('[criar-sinistro] Veículo não encontrado:', veicError);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Veículo não encontrado ou não pertence ao associado' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // ============================================
     // 4.1 BUSCAR RASTREADOR E POSIÇÃO ATUAL (EVIDÊNCIA)
@@ -278,27 +286,42 @@ Deno.serve(async (req) => {
       }
     }
 
-    if (veicError || !veiculo) {
-      console.error('[criar-sinistro] Veículo não encontrado:', veicError);
-      return new Response(
-        JSON.stringify({ success: false, error: 'Veículo não encontrado ou não pertence ao associado' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Verificar se veículo está ativo
-    if (veiculo.status !== 'ativo') {
-      console.error('[criar-sinistro] Veículo não está ativo:', veiculo.status);
+    // ============================================
+    // 4.2 VALIDAÇÃO DE COBERTURA (NOVA LÓGICA)
+    // ============================================
+    const isRouboOuFurto = ['roubo', 'furto'].includes(payload.tipo_sinistro);
+    const temCoberturaRouboFurto = veiculo.cobertura_roubo_furto === true;
+    const temCoberturaTotal = veiculo.cobertura_total === true;
+    
+    // Flag para alerta especial
+    let alertaRecemAtivado = false;
+    
+    // Labels amigáveis para status do veículo
+    const statusLabels: Record<string, string> = {
+      instalacao_pendente: 'aguardando instalação do rastreador',
+      inativo: 'inativo',
+      cancelado: 'cancelado',
+      bloqueado: 'bloqueado',
+      suspenso: 'suspenso',
+    };
+    
+    // Lógica de validação baseada em cobertura
+    if (veiculo.status === 'ativo' && temCoberturaTotal) {
+      // Cobertura total ativa: pode criar qualquer tipo de sinistro
+      console.log('[criar-sinistro] ✓ Veículo ativo com cobertura total - permitido qualquer sinistro');
+    } else if (temCoberturaRouboFurto && isRouboOuFurto) {
+      // Cobertura parcial (apenas roubo/furto): pode criar sinistro de roubo ou furto
+      console.log('[criar-sinistro] ✓ Cobertura roubo/furto ativa - permitido sinistro de', payload.tipo_sinistro);
       
-      // Labels amigáveis para status do veículo
-      const statusLabels: Record<string, string> = {
-        instalacao_pendente: 'aguardando instalação do rastreador',
-        inativo: 'inativo',
-        cancelado: 'cancelado',
-        bloqueado: 'bloqueado',
-        suspenso: 'suspenso',
-      };
+      // Se rastreador não está instalado, ativar flag de alerta
+      if (veiculo.status === 'instalacao_pendente' || !temCoberturaTotal) {
+        alertaRecemAtivado = true;
+        console.log('[criar-sinistro] ⚠️ Sinistro de roubo/furto SEM rastreador instalado - alerta ativado');
+      }
+    } else if (veiculo.status !== 'ativo') {
+      // Veículo não está ativo e não tem cobertura parcial adequada
       const statusLabel = statusLabels[veiculo.status] || veiculo.status;
+      console.error('[criar-sinistro] Veículo não está ativo:', veiculo.status);
       
       return new Response(
         JSON.stringify({ 
@@ -307,10 +330,21 @@ Deno.serve(async (req) => {
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    } else if (!isRouboOuFurto && !temCoberturaTotal) {
+      // Tentando criar sinistro que requer cobertura total, mas só tem parcial
+      console.error('[criar-sinistro] Cobertura insuficiente para tipo:', payload.tipo_sinistro);
+      
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Sua cobertura atual permite apenas sinistros de roubo e furto. Aguarde a instalação do rastreador para cobertura total.' 
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     // ============================================
-    // 4.2 VERIFICAR STATUS E ADIMPLÊNCIA NA PLATAFORMA REDE VEÍCULOS
+    // 4.3 VERIFICAR STATUS E ADIMPLÊNCIA NA PLATAFORMA REDE VEÍCULOS
     // ============================================
     if (rastreador?.plataforma === 'rede_veiculos') {
       try {
@@ -372,7 +406,7 @@ Deno.serve(async (req) => {
     // ============================================
     // 5. VERIFICAR SE JÁ EXISTE SINISTRO EM ABERTO
     // ============================================
-    const { data: sinistroExistente, error: sinistroExistenteError } = await supabaseAdmin
+    const { data: sinistroExistente } = await supabaseAdmin
       .from('sinistros')
       .select('id, protocolo, status, created_at')
       .eq('veiculo_id', payload.veiculo_id)
@@ -425,6 +459,8 @@ Deno.serve(async (req) => {
         bo_numero: payload.numero_bo || null,
         status: 'comunicado',
         canal: 'app',
+        // ===== FLAG DE ALERTA RECÉM-ATIVADO =====
+        alerta_recem_ativado: alertaRecemAtivado,
         // ===== CAMPOS DE POSIÇÃO (EVIDÊNCIA - TEMPO REAL QUANDO POSSÍVEL) =====
         latitude_informada: payload.latitude || null,
         longitude_informada: payload.longitude || null,
@@ -439,6 +475,7 @@ Deno.serve(async (req) => {
       informada: payload.latitude && payload.longitude ? `${payload.latitude}, ${payload.longitude}` : 'N/A',
       rastreador: rastreadorLatMomento ? `${rastreadorLatMomento}, ${rastreadorLngMomento}` : 'N/A',
       tempo_real: rastreador ? (rastreador.plataforma === 'softruck' || rastreador.plataforma === 'rede_veiculos') : false,
+      alerta_recem_ativado: alertaRecemAtivado,
     });
 
     if (insertError) {
@@ -449,16 +486,20 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log('[criar-sinistro] Sinistro criado:', sinistro.id, protocolo);
+    console.log('[criar-sinistro] Sinistro criado:', sinistro.id, protocolo, alertaRecemAtivado ? '⚠️ ALERTA RECÉM-ATIVADO' : '');
 
     // ============================================
     // 7. REGISTRAR NO HISTÓRICO
     // ============================================
+    const observacaoHistorico = alertaRecemAtivado 
+      ? `Sinistro comunicado via app - ${TIPO_LABELS[payload.tipo_sinistro] || payload.tipo_sinistro} - ⚠️ ALERTA: Associado recém-ativado (sem rastreador)`
+      : `Sinistro comunicado via app - ${TIPO_LABELS[payload.tipo_sinistro] || payload.tipo_sinistro}`;
+    
     await supabaseAdmin.from('sinistro_historico').insert({
       sinistro_id: sinistro.id,
       status_novo: 'comunicado',
       usuario_id: user.id,
-      observacao: `Sinistro comunicado via app - ${TIPO_LABELS[payload.tipo_sinistro] || payload.tipo_sinistro}`,
+      observacao: observacaoHistorico,
     });
 
     console.log('[criar-sinistro] Histórico registrado');
@@ -500,11 +541,16 @@ Deno.serve(async (req) => {
         destinatarios = diretores || [];
       }
 
+      // Título com alerta especial se necessário
+      const tituloNotificacao = alertaRecemAtivado 
+        ? '🆕⚠️ Sinistro Recém-Ativado (sem rastreador)'
+        : '🆕 Novo Sinistro Registrado';
+
       // Criar notificação para cada analista/diretor
       for (const dest of destinatarios) {
         await supabaseAdmin.from('notificacoes').insert({
           user_id: dest.user_id,
-          titulo: '🆕 Novo Sinistro Registrado',
+          titulo: tituloNotificacao,
           mensagem: `Sinistro ${protocolo} - ${TIPO_LABELS[payload.tipo_sinistro] || payload.tipo_sinistro} - Veículo ${veiculo.placa}`,
           tipo: 'alerta',
           categoria: 'sinistros',
@@ -521,9 +567,12 @@ Deno.serve(async (req) => {
       await supabaseAdmin.functions.invoke('send-email', {
         body: {
           to: 'sinistros@praticprotect.com.br',
-          subject: `Novo Sinistro: ${protocolo} - ${veiculo.placa}`,
+          subject: alertaRecemAtivado 
+            ? `⚠️ Sinistro Recém-Ativado: ${protocolo} - ${veiculo.placa}`
+            : `Novo Sinistro: ${protocolo} - ${veiculo.placa}`,
           html: `
-            <h2>Novo Sinistro Registrado</h2>
+            <h2>${alertaRecemAtivado ? '⚠️ Sinistro de Associado Recém-Ativado' : 'Novo Sinistro Registrado'}</h2>
+            ${alertaRecemAtivado ? '<p style="color: #d97706; font-weight: bold;">ATENÇÃO: Este sinistro foi aberto por associado que ainda não possui rastreador instalado. Requer análise especial.</p>' : ''}
             <p><strong>Protocolo:</strong> ${protocolo}</p>
             <p><strong>Tipo:</strong> ${TIPO_LABELS[payload.tipo_sinistro] || payload.tipo_sinistro}</p>
             <p><strong>Associado:</strong> ${associado.nome}</p>
@@ -591,6 +640,7 @@ Deno.serve(async (req) => {
           modelo: `${veiculo.marca} ${veiculo.modelo}`,
         },
         data_criacao: dataCriacao,
+        alerta_recem_ativado: alertaRecemAtivado,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

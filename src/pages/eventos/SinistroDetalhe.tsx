@@ -8,7 +8,7 @@ import {
   ArrowLeft, Phone, Mail, MessageCircle, MapPin, Calendar, 
   Car, ShieldAlert, ShieldX, Flame, CloudRain, Square, 
   HelpCircle, FileText, Clock, MoreHorizontal, Loader2,
-  ExternalLink, Download, CheckCircle, XCircle, AlertCircle,
+  ExternalLink, Download, CheckCircle, XCircle, AlertCircle, AlertTriangle,
   User, FileCheck, FilePlus, Scale, Plus, Link as LinkIcon, Trash2,
   Bot, Wrench, Radio, Lock
 } from 'lucide-react';
@@ -329,6 +329,12 @@ export default function SinistroDetalhe() {
           <Badge className={`${statusInfo.class} text-sm px-3 py-1`}>
             {statusInfo.label}
           </Badge>
+          {sinistro.alerta_recem_ativado && (
+            <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300 text-sm px-3 py-1">
+              <AlertTriangle className="h-4 w-4 mr-1" />
+              Recém-ativado
+            </Badge>
+          )}
         </div>
 
         <DropdownMenu modal={false}>
