@@ -191,12 +191,6 @@ const menuConfig: {
           icon: Map,
           permission: 'canManageRastreadores',
         },
-        { 
-          title: 'Credenciais API', 
-          url: '/monitoramento/credenciais', 
-          icon: Key,
-          permission: 'isGerencia',
-        },
       ],
     },
     {
